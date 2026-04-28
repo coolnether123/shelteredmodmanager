@@ -7,7 +7,7 @@ namespace ShelteredAPI.Scenarios
         ScenarioBuildPlacementAuthoringService BuildPlacement { get; }
         ScenarioGameplayScheduleAuthoringService GameplaySchedule { get; }
 
-        bool Update(ScenarioAuthoringState state, ScenarioEditorSession editorSession, out string statusMessage);
+        bool Update(ScenarioAuthoringContext context, out string statusMessage);
         bool SynchronizeAfterAction(ScenarioAuthoringState state, out string statusMessage);
         void ResetInteractiveSubsystems();
         void RefreshAuthoringArtifacts();
@@ -52,10 +52,12 @@ namespace ShelteredAPI.Scenarios
             get { return _gameplaySchedule; }
         }
 
-        public bool Update(ScenarioAuthoringState state, ScenarioEditorSession editorSession, out string statusMessage)
+        public bool Update(ScenarioAuthoringContext context, out string statusMessage)
         {
             bool changed = false;
             statusMessage = null;
+            ScenarioAuthoringState state = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
 
             string buildPlacementMessage;
             if (_buildPlacement.Update(state, editorSession, out buildPlacementMessage))

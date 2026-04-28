@@ -8,13 +8,16 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringCaptureService
     {
+        private readonly IScenarioDraftMutationService _draftMutationService;
+
         public static ScenarioAuthoringCaptureService Instance
         {
             get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCaptureService>(); }
         }
 
-        internal ScenarioAuthoringCaptureService()
+        internal ScenarioAuthoringCaptureService(IScenarioDraftMutationService draftMutationService)
         {
+            _draftMutationService = draftMutationService;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -134,7 +137,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            BunkerEditsDefinition bunkerEdits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+            BunkerEditsDefinition bunkerEdits = _draftMutationService.EnsureBunkerEdits();
             List<ObjectPlacement> preserved = new List<ObjectPlacement>();
             for (int i = 0; i < bunkerEdits.ObjectPlacements.Count; i++)
             {
@@ -161,7 +164,7 @@ namespace ShelteredAPI.Scenarios
                 bunkerEdits.ObjectPlacements.Add(captured[i]);
 
             session.WorkingDefinition.BunkerEdits = bunkerEdits;
-            ScenarioBunkerDraftService.MarkBunkerDirty(session);
+            _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             int liveCapturedCount = Math.Max(0, captured.Count - preserved.Count);
             message = captured.Count > 0
                 ? "Captured " + liveCapturedCount + " live spawned shelter object placement(s)."
@@ -181,7 +184,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            BunkerEditsDefinition bunkerEdits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+            BunkerEditsDefinition bunkerEdits = _draftMutationService.EnsureBunkerEdits();
             ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(obj);
             int existingIndex = ScenarioBunkerDraftService.FindPlacementIndex(bunkerEdits.ObjectPlacements, obj);
             if (existingIndex >= 0)
@@ -196,7 +199,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             bunkerEdits.ObjectPlacements.Sort(ComparePlacements);
-            ScenarioBunkerDraftService.MarkBunkerDirty(session);
+            _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -226,7 +229,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             session.WorkingDefinition.BunkerEdits.ObjectPlacements.RemoveAt(index);
-            ScenarioBunkerDraftService.MarkBunkerDirty(session);
+            _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
             message = "Removed captured placement for '" + SafeObjectName(obj) + "'.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;

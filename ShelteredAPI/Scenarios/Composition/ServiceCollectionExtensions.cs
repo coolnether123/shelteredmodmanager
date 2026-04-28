@@ -35,9 +35,11 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectIdentityAssignmentService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioBunkerSupportResolver(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioBunkerGridCaptureService(resolver.Get<ScenarioBunkerSupportResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDraftMutationService(resolver.Get<IScenarioEditorSessionStore>()); });
+            services.AddSingleton<IScenarioDraftMutationService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDraftMutationService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new StructurePlacementService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ObjectPlacementService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new WallWiringEditService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ObjectPlacementService(resolver.Get<IScenarioDraftMutationService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new WallWiringEditService(resolver.Get<IScenarioDraftMutationService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementPaletteService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementGhostSessionService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

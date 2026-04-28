@@ -7,7 +7,12 @@ namespace ShelteredAPI.Scenarios
     {
         public ObjectPlacement CreateRoomPlacement(int gridX, int gridY, Vector3 position, string identity)
         {
-            return CreatePlacement(ScenarioPlacementDefinitions.Room, gridX, gridY, position, identity, null);
+            return CreateRoomPlacement(gridX, gridY, position, identity, ScenarioPlacementDefinitions.Room);
+        }
+
+        public ObjectPlacement CreateRoomPlacement(int gridX, int gridY, Vector3 position, string identity, string definitionReference)
+        {
+            return CreatePlacement(NormalizeRoomDefinitionReference(definitionReference), gridX, gridY, position, identity, null);
         }
 
         public ObjectPlacement CreateLadderPlacement(int gridX, int gridY, Vector3 position, string identity, float horizontalPos)
@@ -45,6 +50,13 @@ namespace ShelteredAPI.Scenarios
             if (extraProperty != null)
                 placement.CustomProperties.Add(extraProperty);
             return placement;
+        }
+
+        private static string NormalizeRoomDefinitionReference(string definitionReference)
+        {
+            return string.Equals(definitionReference, ScenarioPlacementDefinitions.RoomTop, System.StringComparison.OrdinalIgnoreCase)
+                ? ScenarioPlacementDefinitions.RoomTop
+                : ScenarioPlacementDefinitions.Room;
         }
     }
 }

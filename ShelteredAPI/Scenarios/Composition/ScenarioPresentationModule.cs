@@ -18,7 +18,6 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioAuthoringWindowRegistry>(),
                     resolver.Get<ScenarioAuthoringSettingsService>(),
                     resolver.Get<ScenarioAuthoringLayoutService>(),
-                    resolver.Get<IScenarioEditorService>(),
                     resolver.Get<ScenarioSpriteRuntimeResolver>(),
                     resolver.Get<ShellChromeViewModelBuilder>(),
                     resolver.Get<StageNavigationViewModelBuilder>(),

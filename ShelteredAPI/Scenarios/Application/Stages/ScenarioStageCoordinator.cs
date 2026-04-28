@@ -27,6 +27,14 @@ namespace ShelteredAPI.Scenarios
             get { return _registry.Find(_activeStageKind); }
         }
 
+        public ScenarioStageDefinition Synchronize(ScenarioAuthoringContext authoringContext)
+        {
+            ScenarioAuthoringState state = authoringContext != null ? authoringContext.State : null;
+            ScenarioEditorSession editorSession = authoringContext != null ? authoringContext.EditorSession : null;
+            ScenarioAuthoringSession authoringSession = authoringContext != null ? authoringContext.AuthoringSession : null;
+            return Synchronize(state, editorSession, authoringSession);
+        }
+
         public ScenarioStageDefinition Synchronize(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession authoringSession)
         {
             ScenarioStageKind nextKind = ResolveStageKind(state);

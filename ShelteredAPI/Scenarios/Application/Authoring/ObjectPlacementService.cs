@@ -4,14 +4,26 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ObjectPlacementService
     {
+        private readonly IScenarioDraftMutationService _draftMutationService;
+
+        public ObjectPlacementService(IScenarioDraftMutationService draftMutationService)
+        {
+            _draftMutationService = draftMutationService;
+        }
+
         public ObjectPlacement CapturePlacement(Obj_Base obj)
         {
             return ScenarioBunkerDraftService.CreatePlacement(obj);
         }
 
-        public void UpsertPlacement(ScenarioEditorSession session, ObjectPlacement placement)
+        public bool CanRecordPlacement(out string message)
         {
-            ScenarioBunkerDraftService.UpsertPlacement(session, placement);
+            return _draftMutationService.CanMutateActiveDraft(out message);
+        }
+
+        public bool UpsertPlacement(ObjectPlacement placement)
+        {
+            return _draftMutationService.TryUpsertPlacement(placement);
         }
     }
 }

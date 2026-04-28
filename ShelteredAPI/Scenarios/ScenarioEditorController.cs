@@ -8,7 +8,7 @@ namespace ShelteredAPI.Scenarios
 {
     public sealed class ScenarioEditorController : IScenarioEditorService
     {
-        private readonly object _sync = new object();
+        private readonly IScenarioEditorSessionStore _sessionStore;
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionValidator _validator;
         private readonly IScenarioPlaytestOrchestrator _playtestOrchestrator;
@@ -17,8 +17,6 @@ namespace ShelteredAPI.Scenarios
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
-        private ScenarioEditorSession _session;
-        private string _lastScenarioFilePath;
 
         public static ScenarioEditorController Instance
         {
@@ -27,16 +25,11 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioEditorSession CurrentSession
         {
-            get
-            {
-                lock (_sync)
-                {
-                    return _session;
-                }
-            }
+            get { return _sessionStore.Current; }
         }
 
         internal ScenarioEditorController(
+            IScenarioEditorSessionStore sessionStore,
             IScenarioDefinitionSerializer serializer,
             IScenarioDefinitionValidator validator,
             IScenarioPlaytestOrchestrator playtestOrchestrator,
@@ -46,6 +39,7 @@ namespace ShelteredAPI.Scenarios
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
             ScenarioObjectIdentityAssignmentService identityAssignmentService)
         {
+            _sessionStore = sessionStore;
             _serializer = serializer;
             _validator = validator;
             _playtestOrchestrator = playtestOrchestrator;
@@ -60,10 +54,7 @@ namespace ShelteredAPI.Scenarios
         {
             ScenarioDefinition definition = CreateBlankDefinition(baseMode);
             ScenarioEditorSession session = CreateSession(definition);
-            lock (_sync)
-            {
-                _session = session;
-            }
+            _sessionStore.Set(session, null);
 
             PauseForEditor();
             MMLog.WriteInfo("[ScenarioEditorController] Entered scenario edit mode for base mode " + baseMode + ".");
@@ -75,11 +66,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioDefinition definition = _serializer.Load(scenarioFilePath);
             ScenarioEditorSession session = CreateSession(definition);
             ScenarioObjectIdentityAssignmentSummary migration = _identityAssignmentService.AssignMissingIds(session);
-            lock (_sync)
-            {
-                _session = session;
-                _lastScenarioFilePath = scenarioFilePath;
-            }
+            _sessionStore.Set(session, scenarioFilePath);
 
             PauseForEditor();
             if (migration.AssignedCount > 0)
@@ -91,7 +78,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioValidationResult CommitChanges(string scenarioFilePath)
         {
             ScenarioEditorSession session = RequireSession();
-            string path = !string.IsNullOrEmpty(scenarioFilePath) ? scenarioFilePath : _lastScenarioFilePath;
+            string path = !string.IsNullOrEmpty(scenarioFilePath) ? scenarioFilePath : _sessionStore.CurrentFilePath;
             if (string.IsNullOrEmpty(path))
             {
                 ScenarioValidationResult missingPath = new ScenarioValidationResult();
@@ -106,7 +93,7 @@ namespace ShelteredAPI.Scenarios
             _serializer.Save(session.WorkingDefinition, path);
             session.OriginalDefinition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
             session.DirtyFlags.Clear();
-            _lastScenarioFilePath = path;
+            _sessionStore.Set(session, path);
             MMLog.WriteInfo("[ScenarioEditorController] Saved scenario definition to " + path + ".");
             return validation;
         }
@@ -114,7 +101,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioApplyResult BeginPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
-            return _playtestOrchestrator.BeginPlaytest(session, _lastScenarioFilePath);
+            return _playtestOrchestrator.BeginPlaytest(session, _sessionStore.CurrentFilePath);
         }
 
         public bool TryGetActiveWorkingDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath)
@@ -122,21 +109,19 @@ namespace ShelteredAPI.Scenarios
             definition = null;
             scenarioFilePath = null;
 
-            lock (_sync)
+            ScenarioEditorSession session = _sessionStore.Current;
+            if (session == null || session.WorkingDefinition == null)
+                return false;
+
+            if (!string.IsNullOrEmpty(scenarioId)
+                && !string.Equals(session.WorkingDefinition.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
             {
-                if (_session == null || _session.WorkingDefinition == null)
-                    return false;
-
-                if (!string.IsNullOrEmpty(scenarioId)
-                    && !string.Equals(_session.WorkingDefinition.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-
-                definition = ScenarioDefinitionCloner.Clone(_session.WorkingDefinition);
-                scenarioFilePath = _lastScenarioFilePath;
-                return definition != null;
+                return false;
             }
+
+            definition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
+            scenarioFilePath = _sessionStore.CurrentFilePath;
+            return definition != null;
         }
 
         public void EndPlaytest()
@@ -159,13 +144,8 @@ namespace ShelteredAPI.Scenarios
 
         public void CloseEditor(bool resumeGame)
         {
-            ScenarioEditorSession previous;
-            lock (_sync)
-            {
-                previous = _session;
-                _session = null;
-                _lastScenarioFilePath = null;
-            }
+            ScenarioEditorSession previous = _sessionStore.Current;
+            _sessionStore.Clear();
 
             _spriteSwapEngine.Clear("Scenario editor closed.");
             _sceneSpritePlacementEngine.Clear("Scenario editor closed.");
@@ -215,12 +195,10 @@ namespace ShelteredAPI.Scenarios
 
         private ScenarioEditorSession RequireSession()
         {
-            lock (_sync)
-            {
-                if (_session == null)
-                    throw new InvalidOperationException("No scenario editor session is active.");
-                return _session;
-            }
+            ScenarioEditorSession session = _sessionStore.Current;
+            if (session == null)
+                throw new InvalidOperationException("No scenario editor session is active.");
+            return session;
         }
 
         private void PauseForEditor()

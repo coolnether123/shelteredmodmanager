@@ -81,6 +81,7 @@
     <Compile Include="Scenarios\Application\Authoring\PlacementPaletteService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
+    <Compile Include="Scenarios\Application\Bunker\ScenarioDraftMutationService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioBunkerGridCaptureService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioBunkerSupportResolver.cs" />
     <Compile Include="Scenarios\Application\Compatibility\IScenarioModAuthoringExtension.cs" />
@@ -110,6 +111,7 @@
     <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineNavigationService.cs" />
     <Compile Include="Scenarios\Application\Objects\ScenarioObjectIdentityAssignmentService.cs" />
     <Compile Include="Scenarios\Application\Validation\PublishValidationSummaryBuilder.cs" />
+    <Compile Include="Scenarios\Authoring\ScenarioAuthoringContext.cs" />
     <Compile Include="Scenarios\Authoring\ScenarioAuthoringSectionHub.cs" />
     <Compile Include="Scenarios\Composition\ServiceCollectionExtensions.cs" />
     <Compile Include="Scenarios\Composition\ScenarioAuthoringModule.cs" />
@@ -219,6 +221,7 @@
     <Compile Include="Scenarios\ScenarioHoverVisualService.cs" />
     <Compile Include="Scenarios\ScenarioEditorController.cs" />
     <Compile Include="Scenarios\ScenarioEditorSession.cs" />
+    <Compile Include="Scenarios\ScenarioEditorSessionStore.cs" />
     <Compile Include="Scenarios\ScenarioSpriteFamilyMatcher.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapPlanner.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapRenderer.cs" />

@@ -73,7 +73,6 @@ namespace ShelteredAPI.Scenarios
         private readonly WallWiringEditService _wallWiringEditService;
         private readonly PlacementPaletteService _placementPaletteService;
         private readonly PlacementGhostSessionService _placementGhostSessionService;
-        private readonly IScenarioEditorService _editorService;
         private ActivePlacementSession _activePlacement;
 
         public static ScenarioBuildPlacementAuthoringService Instance
@@ -91,15 +90,13 @@ namespace ShelteredAPI.Scenarios
             ObjectPlacementService objectPlacementService,
             WallWiringEditService wallWiringEditService,
             PlacementPaletteService placementPaletteService,
-            PlacementGhostSessionService placementGhostSessionService,
-            IScenarioEditorService editorService)
+            PlacementGhostSessionService placementGhostSessionService)
         {
             _structurePlacementService = structurePlacementService;
             _objectPlacementService = objectPlacementService;
             _wallWiringEditService = wallWiringEditService;
             _placementPaletteService = placementPaletteService;
             _placementGhostSessionService = placementGhostSessionService;
-            _editorService = editorService;
         }
 
         public void Reset()
@@ -336,7 +333,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             ghost.ImitateObject(objectType, level);
-            ghost.SetIgnoresObjects(false);
+            ghost.SetIgnoresObjects(ResolveIgnoreMovementCollision(prefabComponent));
             session.ObjectType = objectType;
             session.Level = level;
             session.DefinitionReference = objectType.ToString();
@@ -469,6 +466,9 @@ namespace ShelteredAPI.Scenarios
                 return CancelActivePlacement(null);
             }
 
+            if (!_objectPlacementService.CanRecordPlacement(out message))
+                return CancelActivePlacement(message, out message);
+
             Vector3 position = ghost.transform.position;
             ghost.OnPlacementFinished();
             ObjectManager.Instance.RemoveObject(ghost);
@@ -481,7 +481,12 @@ namespace ShelteredAPI.Scenarios
                 return true;
             }
 
-            _objectPlacementService.UpsertPlacement(session, _objectPlacementService.CapturePlacement(spawned));
+            if (!_objectPlacementService.UpsertPlacement(_objectPlacementService.CapturePlacement(spawned)))
+            {
+                message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ", but the scenario draft became unavailable before the placement could be recorded.";
+                return true;
+            }
+
             message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + " and recorded it in the scenario draft.";
             return true;
         }
@@ -503,6 +508,9 @@ namespace ShelteredAPI.Scenarios
                 return CancelActivePlacement("Room placement could not resolve a shelter cell.", out message);
             }
 
+            if (!_objectPlacementService.CanRecordPlacement(out message))
+                return CancelActivePlacement(message, out message);
+
             ghost.OnPlacementFinished();
             bool applied = CraftingManager.FinishCraft_Room(null, null, ghost);
             _activePlacement = null;
@@ -517,13 +525,17 @@ namespace ShelteredAPI.Scenarios
             string definitionReference = cell != null && cell.type == ShelterRoomGrid.CellType.RoomTop
                 ? ScenarioPlacementDefinitions.RoomTop
                 : ScenarioPlacementDefinitions.Room;
-            _objectPlacementService.UpsertPlacement(
-                session,
-                _structurePlacementService.CreateRoomPlacement(
+            if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateRoomPlacement(
                     gridX,
                     gridY,
                     ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY),
-                    BuildRoomIdentity(gridX, gridY)));
+                    BuildRoomIdentity(gridX, gridY),
+                    definitionReference)))
+            {
+                message = "Placed a room tile at " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                return true;
+            }
+
             message = "Placed a room tile at " + gridX + "," + gridY + " and stored it in the draft.";
             return true;
         }
@@ -547,6 +559,9 @@ namespace ShelteredAPI.Scenarios
 
             float horizontalPos = ComputeHorizontalPosition(grid, ghost.transform.position, gridX);
             Vector3 ladderPosition = ghost.transform.position;
+            if (!_objectPlacementService.CanRecordPlacement(out message))
+                return CancelActivePlacement(message, out message);
+
             ghost.OnPlacementFinished();
             bool applied = CraftingManager.FinishCraft_Ladder(null, null, ghost);
             _activePlacement = null;
@@ -557,14 +572,17 @@ namespace ShelteredAPI.Scenarios
                 return true;
             }
 
-            _objectPlacementService.UpsertPlacement(
-                session,
-                _structurePlacementService.CreateLadderPlacement(
+            if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateLadderPlacement(
                     gridX,
                     gridY,
                     ladderPosition,
                     BuildLadderIdentity(gridX, gridY),
-                    horizontalPos));
+                    horizontalPos)))
+            {
+                message = "Placed a ladder for room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                return true;
+            }
+
             message = "Placed a ladder for room " + gridX + "," + gridY + " and stored it in the draft.";
             return true;
         }
@@ -586,6 +604,9 @@ namespace ShelteredAPI.Scenarios
                 return CancelActivePlacement("Room light placement could not resolve a shelter cell.", out message);
             }
 
+            if (!_objectPlacementService.CanRecordPlacement(out message))
+                return CancelActivePlacement(message, out message);
+
             ghost.OnPlacementFinished();
             bool applied = CraftingManager.FinishCraft_Light(null, null, ghost);
             _activePlacement = null;
@@ -596,13 +617,16 @@ namespace ShelteredAPI.Scenarios
                 return true;
             }
 
-            _objectPlacementService.UpsertPlacement(
-                session,
-                _structurePlacementService.CreateRoomLightPlacement(
+            if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateRoomLightPlacement(
                     gridX,
                     gridY,
                     ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY),
-                    BuildLightIdentity(gridX, gridY)));
+                    BuildLightIdentity(gridX, gridY))))
+            {
+                message = "Placed a room light at " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                return true;
+            }
+
             message = "Placed a room light at " + gridX + "," + gridY + " and stored it in the draft.";
             return true;
         }
@@ -626,15 +650,20 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
+            if (!_wallWiringEditService.CanRecordEdit(out message))
+                return false;
+
             if (grid == null || !grid.SetWall(gridX, gridY, wallIndex))
             {
                 message = "The selected wall sprite could not be applied to " + gridX + "," + gridY + ".";
                 return false;
             }
 
-            ScenarioEditorSession editorSession = _editorService.CurrentSession;
-            if (editorSession != null)
-                _wallWiringEditService.ApplyWall(editorSession, gridX, gridY, wallIndex);
+            if (!_wallWiringEditService.ApplyWall(gridX, gridY, wallIndex))
+            {
+                message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                return true;
+            }
 
             message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ".";
             return true;
@@ -660,15 +689,20 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
+            if (!_wallWiringEditService.CanRecordEdit(out message))
+                return false;
+
             if (grid == null || !grid.SetWiring(gridX, gridY, wireSprites[wireIndex]))
             {
                 message = "The selected wiring sprite could not be applied to " + gridX + "," + gridY + ".";
                 return false;
             }
 
-            ScenarioEditorSession editorSession = _editorService.CurrentSession;
-            if (editorSession != null)
-                _wallWiringEditService.ApplyWire(editorSession, gridX, gridY, wireIndex);
+            if (!_wallWiringEditService.ApplyWire(gridX, gridY, wireIndex))
+            {
+                message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                return true;
+            }
 
             message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ".";
             return true;
@@ -990,6 +1024,11 @@ namespace ShelteredAPI.Scenarios
 
             models.Sort(ComparePaletteEntries);
             return models;
+        }
+
+        private static bool ResolveIgnoreMovementCollision(Obj_Base prefabComponent)
+        {
+            return prefabComponent != null && prefabComponent.IgnoreMovementCollision;
         }
 
         private static bool TryResolveRoomTarget(ScenarioAuthoringTarget target, out ShelterRoom room, out int gridX, out int gridY)

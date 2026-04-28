@@ -37,8 +37,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ObjectPlacementService>(),
                     resolver.Get<WallWiringEditService>(),
                     resolver.Get<PlacementPaletteService>(),
-                    resolver.Get<PlacementGhostSessionService>(),
-                    resolver.Get<IScenarioEditorService>());
+                    resolver.Get<PlacementGhostSessionService>());
             });
             services.AddSingleton<IScenarioAuthoringSectionHub>(delegate(IServiceResolver resolver)
             {
@@ -95,6 +94,7 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioEditorController(
+                    resolver.Get<IScenarioEditorSessionStore>(),
                     resolver.Get<IScenarioDefinitionSerializer>(),
                     resolver.Get<IScenarioDefinitionValidator>(),
                     resolver.Get<IScenarioPlaytestOrchestrator>(),
@@ -109,7 +109,7 @@ namespace ShelteredAPI.Scenarios
             {
                 return new ScenarioAuthoringBackendService(
                     resolver.Get<ScenarioAuthoringSelectionService>(),
-                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<IScenarioEditorSessionStore>(),
                     resolver.Get<ScenarioAuthoringPresentationBuilder>(),
                     resolver.Get<ScenarioAuthoringContextMenuService>(),
                     resolver.Get<ScenarioAuthoringCommandService>(),

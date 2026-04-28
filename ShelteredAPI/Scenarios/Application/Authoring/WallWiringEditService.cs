@@ -5,19 +5,29 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class WallWiringEditService
     {
-        public void ApplyWall(ScenarioEditorSession session, int gridX, int gridY, int wallSpriteIndex)
+        private readonly IScenarioDraftMutationService _draftMutationService;
+
+        public WallWiringEditService(IScenarioDraftMutationService draftMutationService)
         {
-            ScenarioBunkerDraftService.UpsertRoomEdit(
-                session,
+            _draftMutationService = draftMutationService;
+        }
+
+        public bool CanRecordEdit(out string message)
+        {
+            return _draftMutationService.CanMutateActiveDraft(out message);
+        }
+
+        public bool ApplyWall(int gridX, int gridY, int wallSpriteIndex)
+        {
+            return _draftMutationService.TryUpsertRoomEdit(
                 gridX,
                 gridY,
                 delegate(RoomEdit room) { room.WallSpriteIndex = wallSpriteIndex; });
         }
 
-        public void ApplyWire(ScenarioEditorSession session, int gridX, int gridY, int wireSpriteIndex)
+        public bool ApplyWire(int gridX, int gridY, int wireSpriteIndex)
         {
-            ScenarioBunkerDraftService.UpsertRoomEdit(
-                session,
+            return _draftMutationService.TryUpsertRoomEdit(
                 gridX,
                 gridY,
                 delegate(RoomEdit room) { room.WireSpriteIndex = wireSpriteIndex; });

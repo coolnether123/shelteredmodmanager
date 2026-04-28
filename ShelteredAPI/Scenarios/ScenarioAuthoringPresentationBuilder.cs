@@ -14,7 +14,6 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringWindowRegistry _windowRegistry;
         private readonly ScenarioAuthoringSettingsService _settingsService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
-        private readonly IScenarioEditorService _editorService;
         private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
         private readonly ShellChromeViewModelBuilder _shellChromeBuilder;
         private readonly StageNavigationViewModelBuilder _stageNavigationBuilder;
@@ -35,7 +34,6 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowRegistry windowRegistry,
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
-            IScenarioEditorService editorService,
             ScenarioSpriteRuntimeResolver runtimeResolver,
             ShellChromeViewModelBuilder shellChromeBuilder,
             StageNavigationViewModelBuilder stageNavigationBuilder,
@@ -54,7 +52,6 @@ namespace ShelteredAPI.Scenarios
             _windowRegistry = windowRegistry;
             _settingsService = settingsService;
             _layoutService = layoutService;
-            _editorService = editorService;
             _runtimeResolver = runtimeResolver;
             _shellChromeBuilder = shellChromeBuilder;
             _stageNavigationBuilder = stageNavigationBuilder;
@@ -71,11 +68,12 @@ namespace ShelteredAPI.Scenarios
         }
 
         public ScenarioAuthoringShellViewModel BuildShellViewModel(
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
-            ScenarioAuthoringSession session,
+            ScenarioAuthoringContext context,
             ScenarioAuthoringContextMenuModel contextMenu)
         {
+            ScenarioAuthoringState state = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
+            ScenarioAuthoringSession session = context != null ? context.AuthoringSession : null;
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
             List<ScenarioAuthoringShellWindowViewModel> windows = new List<ScenarioAuthoringShellWindowViewModel>();
             AppendShellWindowViewModels(windows, state, editorSession, session, definition);
@@ -127,11 +125,11 @@ namespace ShelteredAPI.Scenarios
             return "Editing Draft";
         }
 
-        public ScenarioAuthoringInspectorDocument BuildShellDocument(
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
-            ScenarioAuthoringSession session)
+        public ScenarioAuthoringInspectorDocument BuildShellDocument(ScenarioAuthoringContext context)
         {
+            ScenarioAuthoringState state = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
+            ScenarioAuthoringSession session = context != null ? context.AuthoringSession : null;
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             string selectedObjectStatus;
@@ -145,6 +143,7 @@ namespace ShelteredAPI.Scenarios
             sections.Add(BuildToolPickerSection(state.ActiveTool));
             sections.Add(BuildToolSection(
                 state,
+                editorSession,
                 state.ActiveTool,
                 definition,
                 state.SelectedTarget,
@@ -187,10 +186,10 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        public ScenarioAuthoringInspectorDocument BuildInspectorDocument(
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession)
+        public ScenarioAuthoringInspectorDocument BuildInspectorDocument(ScenarioAuthoringContext context)
         {
+            ScenarioAuthoringState state = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
             ScenarioAuthoringTarget target = state.SelectedTarget ?? state.HoveredTarget;
             if (target == null)
             {
@@ -916,9 +915,9 @@ namespace ShelteredAPI.Scenarios
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Layers, delegate { return BuildLayerWindowSections(); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Hierarchy, delegate(ScenarioAuthoringWindowContentContext context) { return BuildHierarchyWindowSections(context.State, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.SelectionStack, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSelectionStackWindowSections(context.State); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.TilesPalette, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPaletteWindowSections(context.State, context.Definition); });
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.TilesPalette, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPaletteWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Inspector, delegate(ScenarioAuthoringWindowContentContext context) { return BuildInspectorShellSections(context.State, context.EditorSession, context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.Definition); });
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Triggers, delegate(ScenarioAuthoringWindowContentContext context) { return BuildTriggerWindowSections(context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
@@ -1274,12 +1273,14 @@ namespace ShelteredAPI.Scenarios
 
         private ScenarioAuthoringInspectorSection[] BuildPaletteWindowSections(
             ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
             if (state.ActiveStage == ScenarioStageKind.BunkerInside && state.ActiveTool == ScenarioAuthoringTool.Assets)
             {
                 ScenarioAuthoringInspectorSection section = BuildToolSection(
                     state,
+                    editorSession,
                     ScenarioAuthoringTool.Assets,
                     definition,
                     state.SelectedTarget,
@@ -1298,12 +1299,12 @@ namespace ShelteredAPI.Scenarios
                 || state.ActiveTool == ScenarioAuthoringTool.Wiring)
             {
                 List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-                ScenarioBuildPlacementAuthoringService.StatusModel status = _sectionHub.BuildPlacement.GetStatusModel(state, _editorService.CurrentSession);
+                ScenarioBuildPlacementAuthoringService.StatusModel status = _sectionHub.BuildPlacement.GetStatusModel(state, editorSession);
                 sections.Add(BuildPlacementStatusSection(status));
 
                 List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _sectionHub.BuildPlacement.GetPaletteSections(
                     state,
-                    _editorService.CurrentSession);
+                    editorSession);
                 for (int i = 0; paletteSections != null && i < paletteSections.Count; i++)
                     sections.Add(BuildPlacementPaletteSection(paletteSections[i]));
 
@@ -1632,7 +1633,11 @@ namespace ShelteredAPI.Scenarios
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
-            ScenarioAuthoringInspectorDocument document = BuildInspectorDocument(state, editorSession);
+            ScenarioAuthoringInspectorDocument document = BuildInspectorDocument(new ScenarioAuthoringContext
+            {
+                State = state,
+                EditorSession = editorSession
+            });
             if (document == null || document.Sections == null || document.Sections.Length == 0)
             {
                 return new[]
@@ -1663,13 +1668,17 @@ namespace ShelteredAPI.Scenarios
             return items.ToArray();
         }
 
-        private ScenarioAuthoringInspectorSection[] BuildBuildToolsWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
+        private ScenarioAuthoringInspectorSection[] BuildBuildToolsWindowSections(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
             {
                 sections.Add(BuildToolSection(
                     state,
+                    editorSession,
                     state.ActiveTool,
                     definition,
                     state.SelectedTarget,
@@ -1678,7 +1687,7 @@ namespace ShelteredAPI.Scenarios
                     null));
 
                 ScenarioAuthoringTarget target = state.SelectedTarget ?? state.HoveredTarget;
-                List<ScenarioAuthoringInspectorSection> assetSections = _assetAuthoringContentBuilder.BuildAssetSections(state, _editorService.CurrentSession, target);
+                List<ScenarioAuthoringInspectorSection> assetSections = _assetAuthoringContentBuilder.BuildAssetSections(state, editorSession, target);
                 for (int i = 0; i < assetSections.Count; i++)
                     sections.Add(assetSections[i]);
 
@@ -1688,6 +1697,7 @@ namespace ShelteredAPI.Scenarios
             sections.Add(BuildToolPickerSection(state.ActiveTool));
             sections.Add(BuildToolSection(
                 state,
+                editorSession,
                 state.ActiveTool,
                 definition,
                 state.SelectedTarget,
@@ -3211,6 +3221,7 @@ namespace ShelteredAPI.Scenarios
 
         private ScenarioAuthoringInspectorSection BuildToolSection(
             ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
             ScenarioAuthoringTool activeTool,
             ScenarioDefinition definition,
             ScenarioAuthoringTarget selectedTarget,
@@ -3224,7 +3235,7 @@ namespace ShelteredAPI.Scenarios
                 || activeTool == ScenarioAuthoringTool.Objects
                 || activeTool == ScenarioAuthoringTool.Wiring
                 || activeTool == ScenarioAuthoringTool.Select
-                    ? _sectionHub.BuildPlacement.GetStatusModel(state, _editorService.CurrentSession)
+                    ? _sectionHub.BuildPlacement.GetStatusModel(state, editorSession)
                     : null;
             string title;
             switch (activeTool)

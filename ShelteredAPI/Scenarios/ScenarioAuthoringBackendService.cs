@@ -9,7 +9,7 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly object _sync = new object();
         private readonly ScenarioAuthoringSelectionService _selectionService;
-        private readonly IScenarioEditorService _editorService;
+        private readonly IScenarioEditorSessionStore _sessionStore;
         private readonly ScenarioAuthoringPresentationBuilder _presentationBuilder;
         private readonly ScenarioAuthoringContextMenuService _contextMenuService;
         private readonly ScenarioAuthoringCommandService _commandService;
@@ -42,7 +42,7 @@ namespace ShelteredAPI.Scenarios
 
         internal ScenarioAuthoringBackendService(
             ScenarioAuthoringSelectionService selectionService,
-            IScenarioEditorService editorService,
+            IScenarioEditorSessionStore sessionStore,
             ScenarioAuthoringPresentationBuilder presentationBuilder,
             ScenarioAuthoringContextMenuService contextMenuService,
             ScenarioAuthoringCommandService commandService,
@@ -54,7 +54,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioSelectionScopeService selectionScopeService)
         {
             _selectionService = selectionService;
-            _editorService = editorService;
+            _sessionStore = sessionStore;
             _presentationBuilder = presentationBuilder;
             _contextMenuService = contextMenuService;
             _commandService = commandService;
@@ -100,7 +100,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioSpriteSwapClipboard.Clear();
             ScenarioHoverVisualService.Instance.ClearSecondary();
             _layoutService.ApplyStageWorkspace(_state);
-            _stageCoordinator.Synchronize(CurrentState, _editorService.CurrentSession, session);
+            _stageCoordinator.Synchronize(BuildContext(CurrentState, session));
             MMLog.WriteInfo("[ScenarioAuthoringBackend] Active session set. DraftId=" + session.DraftId
                 + ", ScenarioFile=" + session.ScenarioFilePath + ".");
             RaiseStateChanged();
@@ -140,6 +140,7 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             bool changed = false;
+            ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
             _contextMenuService.SyncTarget(snapshot.SelectedTarget);
 
             if (InputActionRegistry.IsDown(ScenarioAuthoringActionIds.ToggleShell))
@@ -161,7 +162,7 @@ namespace ShelteredAPI.Scenarios
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapRevert);
 
             string sectionMessage;
-            if (_sectionHub.Update(snapshot, _editorService.CurrentSession, out sectionMessage))
+            if (_sectionHub.Update(context, out sectionMessage))
             {
                 changed = true;
                 if (!string.IsNullOrEmpty(sectionMessage))
@@ -170,7 +171,7 @@ namespace ShelteredAPI.Scenarios
 
             changed |= _selectionService.Update(snapshot);
 
-            _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
+            _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
             ScenarioAuthoringUiDebugService.Instance.DumpSceneEntities(snapshot);
 
@@ -205,6 +206,7 @@ namespace ShelteredAPI.Scenarios
             if (snapshot == null || !snapshot.IsActive)
                 return false;
 
+            ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
             bool changed = _commandService.Execute(snapshot, actionId);
             string sectionMessage;
             if (_sectionHub.SynchronizeAfterAction(snapshot, out sectionMessage))
@@ -213,7 +215,7 @@ namespace ShelteredAPI.Scenarios
                 if (!string.IsNullOrEmpty(sectionMessage))
                     snapshot.StatusMessage = sectionMessage;
             }
-            _stageCoordinator.Synchronize(snapshot, _editorService.CurrentSession, GetActiveSession());
+            _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
             lock (_sync)
             {
@@ -232,22 +234,20 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioAuthoringShellViewModel GetShellViewModel()
         {
-            ScenarioAuthoringState state = CurrentState;
+            ScenarioAuthoringContext context = BuildContext(CurrentState, GetActiveSession());
             return _presentationBuilder.BuildShellViewModel(
-                state,
-                _editorService.CurrentSession,
-                GetActiveSession(),
+                context,
                 _contextMenuService.Current);
         }
 
         public ScenarioAuthoringInspectorDocument GetShellDocument()
         {
-            return _presentationBuilder.BuildShellDocument(CurrentState, _editorService.CurrentSession, GetActiveSession());
+            return _presentationBuilder.BuildShellDocument(BuildContext(CurrentState, GetActiveSession()));
         }
 
         public ScenarioAuthoringInspectorDocument GetInspectorDocument()
         {
-            return _presentationBuilder.BuildInspectorDocument(CurrentState, _editorService.CurrentSession);
+            return _presentationBuilder.BuildInspectorDocument(BuildContext(CurrentState, GetActiveSession()));
         }
 
         public ScenarioAuthoringInspectorDocument GetHoverDocument()
@@ -277,6 +277,16 @@ namespace ShelteredAPI.Scenarios
             {
                 return _activeSession;
             }
+        }
+
+        private ScenarioAuthoringContext BuildContext(ScenarioAuthoringState state, ScenarioAuthoringSession authoringSession)
+        {
+            return new ScenarioAuthoringContext
+            {
+                State = state,
+                EditorSession = _sessionStore.Current,
+                AuthoringSession = authoringSession
+            };
         }
 
         private void ResetInteractiveSubsystems()
