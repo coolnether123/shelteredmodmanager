@@ -34,7 +34,7 @@ namespace ShelteredAPI.Scenarios
             RegisterToggle("layers.lock_background", "Layers", "Lock Background Layer", "Prevent accidental background selection.", "false");
             RegisterToggle("layers.lock_surface", "Layers", "Lock Surface Layer", "Prevent accidental surface selection.", "false");
             RegisterToggle("layers.lock_inside", "Layers", "Lock Inside Layer", "Prevent accidental bunker-inside selection.", "false");
-            RegisterChoice("shell.renderer_mode", "Shell", "Renderer Mode", "Preferred scenario editor renderer.", "ngui", new[] { "ngui", "imgui" }, new[] { "NGUI", "IMGUI Fallback" });
+            RegisterChoice("shell.renderer_mode", "Shell", "Renderer Mode", "Preferred scenario editor renderer.", "imgui", new[] { "imgui", "ngui" }, new[] { "Shell IMGUI", "NGUI Experimental" });
             RegisterToggle("input.playtest_auto_pause", "Input", "Playtest Auto-Pause On Open", "Pause the scenario when the shell reopens during playtest.", "false");
             RegisterToggle("input.block_vanilla_camera", "Input", "Block Vanilla Camera Input While Shell Focused", "Suppress vanilla camera pan and zoom while the shell owns pointer focus.", "true");
             RegisterFloat("input.scroll_speed", "Input", "Scroll Speed", "Scroll speed for lists and event timelines.", "1.00", 0.50f, 3f, 0.10f);

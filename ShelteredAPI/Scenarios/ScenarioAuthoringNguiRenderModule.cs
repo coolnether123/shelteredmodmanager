@@ -45,7 +45,7 @@ namespace ShelteredAPI.Scenarios
 
         public int Priority
         {
-            get { return 300; }
+            get { return 50; }
         }
 
         public bool CanRender()

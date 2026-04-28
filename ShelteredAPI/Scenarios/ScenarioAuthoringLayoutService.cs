@@ -36,6 +36,7 @@ namespace ShelteredAPI.Scenarios
             _settingsService.ApplyDefinitionDefaults(state.Settings);
             EnsureWindowStates(state);
             LoadLayout(state);
+            HideStartupUtilityWindows(state);
             ApplyStageWorkspace(state);
         }
 
@@ -353,6 +354,29 @@ namespace ShelteredAPI.Scenarios
             catch (Exception ex)
             {
                 ModAPI.Core.MMLog.WriteWarning("[ScenarioAuthoringLayout] Failed to load layout: " + ex.Message);
+            }
+        }
+
+        private static void HideStartupUtilityWindows(ScenarioAuthoringState state)
+        {
+            SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.Hierarchy);
+            SetStartupUtilityWindowHidden(state, ScenarioAuthoringWindowIds.SelectionStack);
+        }
+
+        private static void SetStartupUtilityWindowHidden(ScenarioAuthoringState state, string windowId)
+        {
+            if (state == null || string.IsNullOrEmpty(windowId))
+                return;
+
+            for (int i = 0; i < state.WindowStates.Count; i++)
+            {
+                ScenarioAuthoringWindowState window = state.WindowStates[i];
+                if (window == null || !string.Equals(window.Id, windowId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                window.Visible = false;
+                window.Collapsed = false;
+                return;
             }
         }
 
