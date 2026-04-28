@@ -7,7 +7,6 @@ using UnityEngine;
 using ModAPI.Harmony;
 using ModAPI.Core;
 using ModAPI.Spine;
-using ModAPI.Events;
 
 namespace ModAPI.Core
 {
@@ -104,7 +103,7 @@ namespace ModAPI.Core
 
             // Persist Spine settings on every game save boundary (including Save & Exit).
             // This ensures in-session changes are flushed even if the settings UI was left open.
-            Action<SaveData> beforeSaveHandler = delegate(SaveData _)
+            Action<object> beforeSaveHandler = delegate(object _)
             {
                 try
                 {
@@ -117,8 +116,8 @@ namespace ModAPI.Core
                 }
             };
             Events.Bind(
-                delegate { GameEvents.OnBeforeSave += beforeSaveHandler; },
-                delegate { GameEvents.OnBeforeSave -= beforeSaveHandler; });
+                delegate { GameLifecycleSources.AddBeforeSave(beforeSaveHandler); },
+                delegate { GameLifecycleSources.RemoveBeforeSave(beforeSaveHandler); });
             
             ScanForPersistence();
         }

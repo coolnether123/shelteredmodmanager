@@ -1,8 +1,8 @@
 using System;
 using HarmonyLib;
 using ModAPI.Core;
-using ModAPI.Harmony;
 using ModAPI.Reflection;
+using ModAPI.Harmony;
 
 namespace ModAPI.Events
 {
@@ -10,10 +10,11 @@ namespace ModAPI.Events
     /// Events related to the game's Faction system.
     /// Allows mods to react to faction behavior without individual Harmony patches.
     /// </summary>
-    [PatchPolicy(PatchDomain.Events, "ShelteredFactionEvents",
-        TargetBehavior = "Sheltered faction spawn and territory event bridge",
-        FailureMode = "Sheltered faction-related callbacks stop firing.",
-        RollbackStrategy = "Disable the Events patch domain or remove the Sheltered faction bridge.")]
+    [PatchPolicy(PatchDomain.Events, "FactionEvents",
+        TargetBehavior = "Faction spawn and territory growth event bridge",
+        FailureMode = "Faction-related callbacks stop firing for mods.",
+        RollbackStrategy = "Disable the Events patch domain or remove the faction event bridge.")]
+    [Obsolete("1.3 source migration alias hosted in ShelteredAPI.dll; reference ShelteredAPI for Sheltered faction hooks.", false)]
     public static class FactionEvents
     {
         /// <summary>

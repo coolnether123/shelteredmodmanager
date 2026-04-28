@@ -38,7 +38,7 @@ These surfaces need neutral contracts or framework pieces in `ModAPI`, with Shel
 | --- | --- | --- |
 | `IGameHelper` and `IPluginContext.Game` | Game-helper abstraction using neutral IDs/contracts | Sheltered `FamilyMember`, `ItemManager`, and manager-backed implementation/adapters. |
 | Actor system | Registry/component/binding/event/simulation contracts | Sheltered family, party, encounter, and live-sync adapters. |
-| Character abstractions/models | Neutral character identity/effect contracts if still needed by framework | `FamilyMember`, party, effect runtime, and Sheltered character proxy implementations. |
+| Character abstractions/models | Future neutral character identity/effect contracts only if separated from host runtime types | 1.3 Sheltered character effect/proxy surface, `FamilyMember`, party, effect runtime, and Sheltered character proxy implementations. |
 | Save system | `ISaveSystem` contract and mod data registration model | `SaveManager` hooks, slot routing, expanded save storage, UI, and migration runtime. |
 | UI hooks | Neutral hook registration contracts and lifecycle abstractions | NGUI widgets, `BasePanel`, `UIPanelManager`, mod-manager panels, settings panels, and injection runtime. |
 | Input | Neutral binding/action contracts | Sheltered vanilla actions, Unity legacy/touchpad readers, keybind persistence, and conflict UI. |
@@ -53,11 +53,11 @@ These current `ModAPI` surfaces encode Sheltered runtime concepts and should mov
 
 | Surface | Why |
 | --- | --- |
-| `Characters/PartyHelper.cs`, `Characters/PartyPatches.cs` | `FamilyManager`, `ExplorationManager`, `ExplorationParty`, and Sheltered party semantics. |
+| Remaining character contracts or helpers that still mention Sheltered runtime types | Prompt 4 moved the current character/party helper surface to `ShelteredAPI`; any future `ModAPI.Characters` surface must be game-neutral. |
 | `Items/InventoryHelper.cs` | `ItemManager` and `InventoryManager` integration. |
-| `GameState/ManagerStateHelper.cs` | Manager runtime state is host-specific. |
-| `Events/GameEvents.cs`, `Events/FactionEvents.cs`, `Events/UIEvents.cs`, `Events/GameTimeTriggerHelper.cs` | Sheltered gameplay and UI event hooks. |
-| `Interactions/InteractionRegistry.cs`, `Hooks/WorldHooks.cs`, `Hooks/UIHooks.cs` | Sheltered world/UI hook vocabulary and runtime targets. |
+| Remaining manager-state helpers that name Sheltered managers | Prompt 4 moved `ManagerStateHelper` to `ShelteredAPI`. |
+| Remaining event helpers backed by Sheltered managers or panels | Prompt 4 moved `GameEvents`, `FactionEvents`, `UIEvents`, and `GameTimeTriggerHelper` to `ShelteredAPI`. |
+| `Hooks/WorldHooks.cs`, `Hooks/UIHooks.cs` and remaining interaction-style helpers outside the moved registry | Sheltered world/UI hook vocabulary and runtime targets. Prompt 4 moved `InteractionRegistry` to `ShelteredAPI`. |
 | `Util/GameUtil.cs`, `Util/PersistentDataAPI.cs` | Sheltered exploration/save manager helpers. |
 | Remaining typed compatibility bridge in `Core/ShelteredContentBridge.cs` | It still exposes Sheltered item runtime types for 1.3 compatibility, but Prompt 2 removed its direct reflection dependency on ShelteredAPI. Future phases should delete this adapter when item/content helpers move. |
 | `Core/SaveSystemImpl.cs`, `Core/SaveProtection.cs`, `Core/SaveExitTracer.cs` where they depend on Sheltered save/quit flow | Sheltered save/runtime implementation, not a neutral framework contract. |
@@ -73,7 +73,8 @@ These are compatibility debts, not long-term framework surfaces:
 
 | Surface | Replacement Direction |
 | --- | --- |
-| v1.2 compatibility helpers retained in `ModAPI` (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `GameUtil`, `PersistentDataAPI`) | Move to `ShelteredAPI` and leave only explicit migration documentation or obsolete forwarding shims in the next breaking line. |
+| v1.2 compatibility helpers still retained in `ModAPI` (`GameUtil`, `PersistentDataAPI`) | Move to `ShelteredAPI` and leave only explicit migration documentation or obsolete forwarding shims in the next breaking line. |
+| 1.3 source migration aliases now hosted in `ShelteredAPI` (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `ManagerStateHelper`) | Keep documented as Sheltered-owned aliases until a later breaking line can rename or replace them cleanly. |
 | Duplicate compatibility files that already have ShelteredAPI equivalents | Keep one Sheltered-owned implementation and remove the `ModAPI` copy when the compatibility window closes. |
 | Examples that compile or accidentally patch runtime behavior | Keep as documentation/sample source only, not compiled framework behavior. |
 | Reflection bridges whose only purpose is to let `ModAPI` call `ShelteredAPI` | Replace with host-owned registration/composition in `ShelteredAPI`. |
@@ -137,6 +138,21 @@ Boundary baseline shrink from Prompt 3:
 - removed `sheltered-filename ModAPI/Scenarios/ScenarioDefinition.cs ScenarioDef`,
 - removed `sheltered-filename ModAPI/Scenarios/ScenarioDefinitionSerializer.cs ScenarioDef`,
 - removed `source-symbol ModAPI/Scenarios/Domain/Validation/SchedulingValidationRule.cs ItemManager`.
+
+## Prompt 4 Sheltered Hooks Split
+
+Prompt 4 moved Sheltered-backed event, party, interaction, character, and manager-state helper surfaces out of `ModAPI`:
+
+- `ModAPI.Events` in `ModAPI.dll` now contains only `ModEventBus`.
+- `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, and `FactionEvents` are hosted by `ShelteredAPI.dll` and keep `ModAPI.Events` namespaces as 1.3 source migration aliases.
+- `PartyHelper`, party patches, character effect/proxy surfaces, and character runtime models are hosted by `ShelteredAPI.dll` and keep `ModAPI.Characters` namespaces as 1.3 source migration aliases.
+- `InteractionRegistry` and `ManagerStateHelper` are hosted by `ShelteredAPI.dll` and keep old namespaces as 1.3 source migration aliases.
+- `ModAPI.Core.IGameLifecycleSource` and `IUiLifecycleEventSink` were added as narrow neutral runtime ports so existing ModAPI internals can receive Sheltered lifecycle/UI notifications without owning Sheltered event implementations.
+
+Boundary baseline shrink from Prompt 4:
+
+- removed 32 event/character/game-state/interaction entries,
+- baseline count changed from `264` to `232`.
 
 ## Prompt 1 Scope Lock
 

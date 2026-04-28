@@ -29,9 +29,9 @@ Custom scenario authoring guidance: `documentation/Custom_Scenarios_Guide.md`.
 
 Add assembly references:
 - always: `ModAPI.dll`
-- optional: `ShelteredAPI.dll` if you use `ShelteredAPI.*` namespaces directly
+- required for Sheltered hooks: `ShelteredAPI.dll` if you use Sheltered content, scenario, event, party, interaction, or manager-state helpers, even when the namespace remains `ModAPI.*` for 1.3 source migration
 
-If you only use `IPluginContext.Game` or `IPluginContext.Actors`, the public types come from `ModAPI.dll`.
+If you only use neutral `IPluginContext` contracts, the public types come from `ModAPI.dll`; Sheltered runtime implementations are still supplied by `ShelteredAPI`.
 
 Common imports:
 
@@ -111,7 +111,7 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 
 ## 4. Operational Notes
 
-- scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ModAPI.dll` in the 1.3 line
+- scheduler/events compatibility surfaces such as `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, and `ManagerStateHelper` are hosted in `ShelteredAPI.dll` in the 1.3 line while retaining old `ModAPI.*` namespaces as migration aliases
 - actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
 - item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
 - custom scenario registration contracts, lifecycle state/events, opaque definition factories, catalog metadata, dependency manifest conversion, and validation result containers live in `ModAPI.Scenarios`

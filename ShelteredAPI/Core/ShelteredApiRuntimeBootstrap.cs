@@ -3,6 +3,7 @@ using ModAPI.Actors;
 using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
+using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 using ShelteredAPI.Scenarios;
 using UnityEngine;
@@ -64,6 +65,14 @@ namespace ShelteredAPI.Core
             IContentResolutionService contentResolution = new ShelteredContentResolutionService();
             RegisterApi(GameRuntimeApiIds.ContentResolution, contentResolution);
             RegisterApi("ShelteredAPI.ContentResolution", contentResolution);
+
+            IGameLifecycleSource lifecycleSource = new ShelteredGameLifecycleSource();
+            RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);
+            RegisterApi("ShelteredAPI.GameLifecycle", lifecycleSource);
+
+            IUiLifecycleEventSink uiLifecycleEvents = new ShelteredUiLifecycleEventSink();
+            RegisterApi(GameRuntimeApiIds.UiLifecycleEvents, uiLifecycleEvents);
+            RegisterApi("ShelteredAPI.UiLifecycleEvents", uiLifecycleEvents);
 
             IActorSystem actors = ActorSystem.Instance;
             RegisterApi(GameRuntimeApiIds.Actors, actors);

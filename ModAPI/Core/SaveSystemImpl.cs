@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using ModAPI.Saves;
-using ModAPI.Events;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -29,8 +28,8 @@ namespace ModAPI.Core
             _modId = modId;
             // Save blobs need to be available before scene saveables start deserializing.
             ModAPI.Saves.Events.OnBeforeSave += HandleBeforeSave;
-            GameEvents.OnBeforeLoadSceneContents += HandleBeforeLoadSceneContents;
-            GameEvents.OnAfterLoad += HandleAfterLoad;
+            GameLifecycleSources.AddBeforeLoadSceneContents(HandleBeforeLoadSceneContents);
+            GameLifecycleSources.AddAfterLoad(HandleAfterLoad);
             _instances.Add(this);
         }
 
@@ -211,14 +210,14 @@ namespace ModAPI.Core
             }
         }
 
-        private void HandleBeforeLoadSceneContents(SaveData data)
+        private void HandleBeforeLoadSceneContents(object data)
         {
-            PrepareRegisteredDataForLoad(data);
+            PrepareRegisteredDataForLoad(data as SaveData);
         }
 
-        private void HandleAfterLoad(SaveData data)
+        private void HandleAfterLoad(object data)
         {
-            PrepareRegisteredDataForLoad(data);
+            PrepareRegisteredDataForLoad(data as SaveData);
             ApplyAfterLoadCallbacks();
         }
 

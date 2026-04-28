@@ -274,7 +274,7 @@ index f4afa8a..fb99931 100644
  }
  ```
 @@ -80,6 +102,7 @@ public class MyPlugin : IModPlugin
- - scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ModAPI.dll` in the 1.3 line
+ - scheduler/events compatibility surfaces such as `GameEvents` and `GameTimeTriggerHelper` are hosted in `ShelteredAPI.dll` in the 1.3 line while retaining old `ModAPI.Events` namespaces as migration aliases
  - actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
  - item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
 +- custom scenario contracts live in `ModAPI.Scenarios`; Sheltered `ScenarioDef` creation and in-game hooks live in `ShelteredAPI.Scenarios`

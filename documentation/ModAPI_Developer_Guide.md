@@ -6,7 +6,7 @@
 |------|----------|--------|
 | Core plugin lifecycle, context, settings APIs | `ModAPI.dll` | Current |
 | Sheltered content APIs and content runtime | `ShelteredAPI.dll` | Current |
-| Backward-compat game helpers/events used by v1.2 mods | `ModAPI.dll` | Current (Deprecated for future major) |
+| Sheltered game helpers/events used by v1.2 mods | `ShelteredAPI.dll` with old `ModAPI.*` namespaces | Current 1.3 migration aliases |
 | Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Current |
 | Docs labeled `v1.2` in this repo | Historical reference | Deprecated where conflicting |
 
@@ -135,6 +135,8 @@ Use A unless you explicitly need B. Full examples are in:
 
 ## 5. Events (ModAPI + ShelteredAPI)
 
+`ModEventBus` is neutral and lives in `ModAPI.dll`. Sheltered gameplay/UI hooks such as `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, and `InteractionRegistry` live in `ShelteredAPI.dll` in the 1.3 line, while retaining old `ModAPI.*` namespaces as source migration aliases.
+
 ```csharp
 using ModAPI.Events;
 
@@ -148,7 +150,7 @@ public void Start(IPluginContext ctx)
 
 ## 6. ShelteredAPI-Specific Helpers
 
-`ShelteredAPI` ships additional helpers under existing namespaces (`ModAPI.Core`, `ModAPI.Events`).
+`ShelteredAPI` ships additional helpers under existing namespaces (`ModAPI.Core`, `ModAPI.Events`) for 1.3 source migration.
 
 Example: explicit trigger registration and priority ordering.
 

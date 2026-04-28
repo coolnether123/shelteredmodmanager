@@ -10,15 +10,17 @@ Related usage guide:
 | Surface | Assembly | Status |
 |---------|----------|--------|
 | Core loader/plugin/content/settings APIs | `ModAPI.dll` | Current |
-| Backward-compat event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `GameUtil`, `PersistentDataAPI`) | `ModAPI.dll` | Current (Deprecated for future major) |
+| Neutral event bus (`ModEventBus`) | `ModAPI.dll` | Current |
+| Sheltered event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
+| Remaining compatibility helpers (`GameUtil`, `PersistentDataAPI`) | `ModAPI.dll` | Deprecated boundary debt |
 | `IGameHelper` adapters and Sheltered-specific implementations | `ShelteredAPI.dll` | Current |
 | Old v1.2 docs/snippets with conflicting signatures | mixed | Deprecated |
 
 ## v1.2 Compatibility (1.3 Line)
 
-The v1.2 mod ecosystem was built against key gameplay helper/event types in `ModAPI.dll`.
-For `1.3`, those surfaces remain in `ModAPI.dll` to preserve backward compatibility.
-They are marked `[Obsolete(..., false)]` to signal migration planning without breaking builds.
+The v1.2 mod ecosystem was built against key gameplay helper/event types in `ModAPI.*` namespaces.
+For `1.3`, Sheltered-backed event, party, interaction, and manager-state helpers are hosted by `ShelteredAPI.dll`.
+Some types intentionally keep old `ModAPI.*` namespaces as source migration aliases, but mod authors must reference `ShelteredAPI.dll` when using those Sheltered hooks.
 
 ## Plugin Lifecycle (`ModAPI.Core`)
 
@@ -369,7 +371,7 @@ Localization behavior for content injection (ShelteredAPI v1.3):
 ## Event + Registry APIs
 
 ```csharp
-// ModAPI.Events.GameEvents
+// ShelteredAPI-owned 1.3 source alias: ModAPI.Events.GameEvents
 public static event Action<int> OnNewDay;
 public static event Action<SaveData> OnBeforeSave;
 public static event Action<SaveData> OnAfterLoad;
@@ -380,14 +382,14 @@ public static event Action<ExplorationParty> OnPartyReturned;
 public static event Action<TimeTriggerBatch> OnSixHourTick;
 public static event Action<TimeTriggerBatch> OnStaggeredTick;
 
-// ModAPI.Events.UIEvents
+// ShelteredAPI-owned 1.3 source alias: ModAPI.Events.UIEvents
 public static event Action<BasePanel> OnPanelOpened;
 public static event Action<BasePanel> OnPanelClosed;
 public static event Action<BasePanel> OnPanelResumed;
 public static event Action<BasePanel> OnPanelPaused;
 public static event Action<GameObject, string> OnButtonClicked;
 
-// ModAPI.Events.ModEventBus
+// ModAPI.Events.ModEventBus, neutral and hosted by ModAPI.dll
 public static void Publish<T>(string eventName, T data);
 public static void Subscribe<T>(string eventName, Action<T> handler);
 public static void Unsubscribe<T>(string eventName, Action<T> handler);
@@ -402,6 +404,25 @@ public static bool TryGetAPI<T>(string apiName, out T api) where T : class;
 public static bool IsAPIRegistered(string apiName);
 public static bool UnregisterAPI(string apiName, string providerModId = null);
 public static List<string> GetRegisteredAPIs();
+
+// ModAPI.Core neutral runtime ports, implemented by ShelteredAPI at runtime
+public interface IGameLifecycleSource
+{
+    event Action<object> BeforeSave;
+    event Action<object> BeforeLoadSceneContents;
+    event Action<object> AfterLoad;
+    event Action SessionStarted;
+    event Action NewGame;
+}
+
+public interface IUiLifecycleEventSink
+{
+    void RaisePanelOpened(object panel);
+    void RaisePanelClosed(object panel);
+    void RaisePanelResumed(object panel);
+    void RaisePanelPaused(object panel);
+    void RaiseButtonClicked(object button, string buttonName);
+}
 
 // ModAPI.Scenarios neutral scenario registration/lifecycle contracts
 public static class GameRuntimeApiIds

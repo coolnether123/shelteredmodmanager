@@ -63,27 +63,16 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Items\InventoryHelper.cs" />
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
     <Compile Include="Actors\Abstractions\ActorAdapterBase.cs" />
     <Compile Include="Actors\Models\ActorModels.cs" />
     <Compile Include="Actors\Models\ActorComponents.cs" />
     <Compile Include="Actors\Models\ActorRuntimeModels.cs" />
-    <Compile Include="Characters\PartyHelper.cs" />
-    <Compile Include="Characters\PartyPatches.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterAttributes.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterData.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterEffect.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterEffects.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterEffectSystem.cs" />
-    <Compile Include="Characters\Abstractions\ICharacterProxy.cs" />
-    <Compile Include="Characters\Models\AttributeModifier.cs" />
-    <Compile Include="Characters\Models\CharacterQuery.cs" />
-    <Compile Include="Characters\Models\CharacterSaveData.cs" />
-    <Compile Include="Characters\Models\EffectInstance.cs" />
     <Compile Include="Core\IGameHelper.cs" />
     <Compile Include="Core\IContentResolutionService.cs" />
+    <Compile Include="Core\IGameLifecycleSource.cs" />
+    <Compile Include="Core\IUiLifecycleEventSink.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\ModRegistry.cs" />
     <Compile Include="Core\ModLog.cs" />
@@ -227,12 +216,6 @@
     <Compile Include="Hooks\WorldHooks.cs" />
     <Compile Include="Hooks\UIHooks.cs" />
     <Compile Include="Events\ModEventBus.cs" />
-    <!-- Backward-compat: game-specific events kept here until next breaking release -->
-    <Compile Include="Events\GameTimeTriggerHelper.cs" />
-    <Compile Include="Events\GameEvents.cs" />
-    <Compile Include="Events\FactionEvents.cs" />
-    <Compile Include="Events\UIEvents.cs" />
-    <Compile Include="Interactions\InteractionRegistry.cs" />
     <Compile Include="Util\GameUtil.cs" />
     <Compile Include="Util\PersistentDataAPI.cs" />
     <Compile Include="Core\ModAPIRegistry.cs" />

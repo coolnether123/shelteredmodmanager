@@ -1,4 +1,4 @@
-# ModAPI Events Guide
+# ModAPI + ShelteredAPI Events Guide
 ## Current v1.3 Line
 
 Use `documentation/API_Signatures_Reference.md` for exact current signatures.
@@ -7,8 +7,7 @@ Use `documentation/API_Signatures_Reference.md` for exact current signatures.
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
-| Event concepts and examples | Current `ModAPI.dll` | Supported |
-| Scheduler trigger examples | Current `ModAPI.dll` | Supported |
+| Sheltered gameplay/UI events and scheduler examples | Current `ShelteredAPI.dll` with old `ModAPI.Events` namespaces | Supported 1.3 migration aliases |
 | Inter-mod communication examples | Current `ModAPI.dll` | Supported |
 
 ## 1. Event Systems
@@ -17,16 +16,16 @@ Available event systems:
 
 | System | Purpose | Location |
 |--------|---------|----------|
-| `GameEvents` | Core game lifecycle | `ModAPI.Events.GameEvents` |
-| `GameTimeTriggerHelper` | Deterministic time-trigger scheduler | `ModAPI.Events.GameTimeTriggerHelper` |
-| `UIEvents` | Panel open/close/resume/pause | `ModAPI.Events.UIEvents` |
-| `ModEventBus` | Inter-mod custom events | `ModAPI.Events.ModEventBus` |
+| `GameEvents` | Sheltered game lifecycle | `ModAPI.Events.GameEvents` in `ShelteredAPI.dll` |
+| `GameTimeTriggerHelper` | Deterministic Sheltered time-trigger scheduler | `ModAPI.Events.GameTimeTriggerHelper` in `ShelteredAPI.dll` |
+| `UIEvents` | Sheltered panel open/close/resume/pause | `ModAPI.Events.UIEvents` in `ShelteredAPI.dll` |
+| `ModEventBus` | Inter-mod custom events | `ModAPI.Events.ModEventBus` in `ModAPI.dll` |
 | `ModAPIRegistry` | Service discovery | `ModAPI.Core.ModAPIRegistry` |
 | `ModAPI.Saves.Events` | Custom save lifecycle | `ModAPI.Saves.Events` |
 
 ## 2. `GameEvents`
 
-Use `GameEvents` when you want the compatibility event surface.
+Use `GameEvents` when you want the Sheltered compatibility event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; the namespace remains `ModAPI.Events` during the 1.3 migration window.
 
 Important events:
 
@@ -65,7 +64,7 @@ public class MyMod : IModPlugin
 
 ## 3. `GameTimeTriggerHelper`
 
-Use `GameTimeTriggerHelper` when you want explicit named trigger registration and priority ordering.
+Use `GameTimeTriggerHelper` when you want explicit named trigger registration and priority ordering in Sheltered runtime time.
 
 Typical APIs:
 
@@ -102,7 +101,7 @@ public class SchedulerMod : IModPlugin
 
 ## 4. `UIEvents`
 
-Use `UIEvents` when you need panel lifecycle hooks without adding your own Harmony patches.
+Use `UIEvents` when you need Sheltered panel lifecycle hooks without adding your own Harmony patches.
 
 Available events:
 

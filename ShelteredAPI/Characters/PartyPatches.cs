@@ -1,47 +1,51 @@
-using System;
 using HarmonyLib;
 using ModAPI.Characters;
 using ModAPI.Harmony;
+using UnityEngine;
 
-namespace ModAPI.Harmony
+namespace ModAPI.Characters.Internal
 {
-    [PatchPolicy(PatchDomain.Characters, "ShelteredPartyEvents",
-        TargetBehavior = "Sheltered expedition party membership change notifications",
-        FailureMode = "Sheltered party callbacks stop reflecting party membership changes.",
-        RollbackStrategy = "Disable the Characters patch domain or remove the Sheltered party patch host.")]
-    [HarmonyPatch(typeof(ExplorationParty), "AddMember")]
-    internal static class ExplorationParty_AddMember_Patch
+    [PatchPolicy(PatchDomain.Characters, "PartyEvents",
+        TargetBehavior = "Expedition party composition change notifications",
+        FailureMode = "Party helper callbacks stop tracking member changes accurately.",
+        RollbackStrategy = "Disable the Characters patch domain or remove the party event bridge.")]
+    [HarmonyPatch]
+    internal static class PartyPatches
     {
-        private static void Postfix(ExplorationParty __instance)
+        [HarmonyPatch(typeof(ExplorationManager), "CreateExplorationParty")]
+        [HarmonyPostfix]
+        static void Postfix_CreateParty(bool __result, ref int partyId)
         {
-            PartyHelper.NotifyPartyChanged(__instance.id);
+            if (__result) PartyHelper.NotifyPartyChanged(partyId);
         }
-    }
 
-    [HarmonyPatch(typeof(ExplorationParty), "RemoveMember")]
-    internal static class ExplorationParty_RemoveMember_Patch
-    {
-        private static void Postfix(ExplorationParty __instance)
+        [HarmonyPatch(typeof(ExplorationManager), "DisbandExplorationParty")]
+        [HarmonyPostfix]
+        static void Postfix_DisbandParty(bool __result, int partyId)
         {
-            PartyHelper.NotifyPartyChanged(__instance.id);
+            if (__result) PartyHelper.NotifyPartyChanged(partyId);
         }
-    }
 
-    [HarmonyPatch(typeof(ExplorationManager), "CreateParty")]
-    internal static class ExplorationManager_CreateParty_Patch
-    {
-        private static void Postfix(int __result)
+        [HarmonyPatch(typeof(ExplorationParty), "AddMember")]
+        [HarmonyPostfix]
+        static void Postfix_AddMember(ExplorationParty __instance, bool __result)
         {
-            PartyHelper.NotifyPartyChanged(__result);
+            if (__result) PartyHelper.NotifyPartyChanged(__instance.id);
         }
-    }
 
-    [HarmonyPatch(typeof(ExplorationManager), "DisbandParty")]
-    internal static class ExplorationManager_DisbandParty_Patch
-    {
-        private static void Postfix(int id)
+        [HarmonyPatch(typeof(ExplorationParty), "RemoveMember")]
+        [HarmonyPostfix]
+        static void Postfix_RemoveMember(ExplorationParty __instance, bool __result)
         {
-            PartyHelper.NotifyPartyChanged(id);
+            if (__result) PartyHelper.NotifyPartyChanged(__instance.id);
+        }
+
+        [HarmonyPatch(typeof(ExplorationManager), "PartyHasReturned")]
+        [HarmonyPostfix]
+        static void Postfix_PartyReturned(int partyId)
+        {
+            // Disband is called inside PartyHasReturned, but notifying here is also good
+            PartyHelper.NotifyPartyChanged(partyId);
         }
     }
 }

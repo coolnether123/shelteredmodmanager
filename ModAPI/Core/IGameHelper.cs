@@ -39,6 +39,8 @@ namespace ModAPI.Core
         public const string ActorEvents = "GameRuntime.ActorEvents";
         public const string ActorSerialization = "GameRuntime.ActorSerialization";
         public const string ContentResolution = "GameRuntime.ContentResolution";
+        public const string GameLifecycle = "GameRuntime.GameLifecycle";
+        public const string UiLifecycleEvents = "GameRuntime.UiLifecycleEvents";
         public const string CustomScenarios = "GameRuntime.CustomScenarios";
         public const string ScenarioAuthoring = "GameRuntime.ScenarioAuthoring";
     }

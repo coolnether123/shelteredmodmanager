@@ -1,4 +1,4 @@
-using ModAPI.Events;
+using ModAPI.Core;
 
 namespace ModAPI.Internal.UI
 {
@@ -8,7 +8,7 @@ namespace ModAPI.Internal.UI
         {
             UIRuntimeServiceHelper.Run("UIPanelManager.PushPanel", delegate
             {
-                UIEvents.RaisePanelOpened(panel);
+                UiLifecycleEventSinks.RaisePanelOpened(panel);
             });
         }
 
@@ -17,7 +17,7 @@ namespace ModAPI.Internal.UI
             UIRuntimeServiceHelper.Run("UIPanelManager.PopPanel", delegate
             {
                 if (panel != null)
-                    UIEvents.RaisePanelClosed(panel);
+                    UiLifecycleEventSinks.RaisePanelClosed(panel);
             });
         }
 
@@ -25,7 +25,7 @@ namespace ModAPI.Internal.UI
         {
             UIRuntimeServiceHelper.Run("BasePanel.OnResume", delegate
             {
-                UIEvents.RaisePanelResumed(panel);
+                UiLifecycleEventSinks.RaisePanelResumed(panel);
             });
         }
     }

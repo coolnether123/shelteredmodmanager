@@ -9,7 +9,6 @@ using ModAPI.Harmony;
 using ModAPI.Hooks;
 using ModAPI.Spine;
 using ModAPI.Actors;
-using ModAPI.Events;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -236,8 +235,8 @@ namespace ModAPI.Core
                 // Initialize Core Systems
                 ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;
                 ModAPI.Saves.Events.OnBeforeSave += ModRandomState.Save;
-                GameEvents.OnSessionStarted += OnSessionStarted;
-                GameEvents.OnNewGame += OnNewGame;
+                GameLifecycleSources.AddSessionStarted(OnSessionStarted);
+                GameLifecycleSources.AddNewGame(OnNewGame);
             }
             catch (Exception ex)
             {

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using ModAPI.Core;
-using ModAPI.Events;
 using ModAPI.Harmony;
 using ModAPI.Internal.UI;
 
@@ -117,7 +116,7 @@ namespace ModAPI.UI
         {
             try
             {
-                UIEvents.RaisePanelPaused(__instance);
+                UiLifecycleEventSinks.RaisePanelPaused(__instance);
             }
             catch (Exception ex)
             {

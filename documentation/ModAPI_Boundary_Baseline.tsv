@@ -38,8 +38,6 @@ ngui-symbol	ModAPI/Custom Saves/paging/SaveVerification.cs	UISprite	4
 ngui-symbol	ModAPI/Custom Saves/paging/SaveVerification.cs	UITexture	4
 ngui-symbol	ModAPI/Custom Saves/paging/SaveVerification.cs	UIWidget	3
 ngui-symbol	ModAPI/Custom Saves/paging/SlotSelectionPatchCoordinator.cs	UILabel	1
-ngui-symbol	ModAPI/Events/UIEvents.cs	NGUI	1
-ngui-symbol	ModAPI/Events/UIEvents.cs	UIButton	1
 ngui-symbol	ModAPI/Examples/SpineHarmonyShowcase.cs	UILabel	1
 ngui-symbol	ModAPI/Harmony/MainMenuPatches.cs	UIButton	2
 ngui-symbol	ModAPI/Harmony/MainMenuPatches.cs	UILabel	2
@@ -189,16 +187,6 @@ sheltered-filename	ModAPI/Custom Saves/saves/SaveManagerInspector.cs	SaveManager
 sheltered-filename	ModAPI/Harmony/Transpilers/ShelteredPatterns.cs	Sheltered	1
 sheltered-filename	ModAPI/UI/NGUIHelper.cs	NGUI	1
 sheltered-filename	ModAPI/UI/NGUIScrollHelper.cs	NGUI	1
-source-symbol	ModAPI/Characters/Abstractions/ICharacterEffectSystem.cs	EncounterCharacter	2
-source-symbol	ModAPI/Characters/Abstractions/ICharacterEffectSystem.cs	FamilyMember	1
-source-symbol	ModAPI/Characters/Abstractions/ICharacterProxy.cs	FamilyMember	1
-source-symbol	ModAPI/Characters/PartyHelper.cs	ExplorationManager	4
-source-symbol	ModAPI/Characters/PartyHelper.cs	ExplorationParty	1
-source-symbol	ModAPI/Characters/PartyHelper.cs	FamilyManager	4
-source-symbol	ModAPI/Characters/PartyHelper.cs	FamilyMember	1
-source-symbol	ModAPI/Characters/PartyHelper.cs	ShelteredAPI	1
-source-symbol	ModAPI/Characters/PartyPatches.cs	ExplorationManager	3
-source-symbol	ModAPI/Characters/PartyPatches.cs	ExplorationParty	4
 source-symbol	ModAPI/Core/IGameHelper.cs	FamilyMember	1
 source-symbol	ModAPI/Core/PluginContextImpl.cs	FamilyMember	1
 source-symbol	ModAPI/Core/PluginManager.cs	SaveManager	2
@@ -221,25 +209,6 @@ source-symbol	ModAPI/Custom Saves/saves/SaveManager_SaveGlobalData_Patch.cs	Save
 source-symbol	ModAPI/Custom Saves/saves/SaveManagerInspector.cs	SaveManager	3
 source-symbol	ModAPI/Debugging/CrashCorridorMapDiagnostics.cs	SaveManager	3
 source-symbol	ModAPI/Debugging/CrashCorridorMapDiagnostics.cs	UIPanelManager	8
-source-symbol	ModAPI/Events/FactionEvents.cs	ShelteredAPI	1
-source-symbol	ModAPI/Events/GameEvents.cs	EncounterCharacter	4
-source-symbol	ModAPI/Events/GameEvents.cs	EncounterManager	3
-source-symbol	ModAPI/Events/GameEvents.cs	ExplorationManager	3
-source-symbol	ModAPI/Events/GameEvents.cs	ExplorationParty	1
-source-symbol	ModAPI/Events/GameEvents.cs	SaveManager	17
-source-symbol	ModAPI/Events/GameTimeTriggerHelper.cs	SaveManager	1
-source-symbol	ModAPI/Events/GameTimeTriggerHelper.cs	ShelteredAPI	1
-source-symbol	ModAPI/Events/UIEvents.cs	ShelteredAPI	1
-source-symbol	ModAPI/Events/UIEvents.cs	UIPanelManager	3
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	EncounterCharacter	6
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	EncounterManager	5
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	ExplorationManager	6
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	ExplorationParty	3
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	FamilyManager	4
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	FamilyMember	5
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	InventoryManager	2
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	ItemManager	2
-source-symbol	ModAPI/GameState/ManagerStateHelper.cs	WeatherManager	5
 source-symbol	ModAPI/Harmony/HarmonyBootstrap.cs	ShelteredAPI	9
 source-symbol	ModAPI/Harmony/HarmonyBootstrap.cs	UIPanelManager	2
 source-symbol	ModAPI/Harmony/HarmonyUtil.cs	ExplorationParty	1
@@ -248,7 +217,6 @@ source-symbol	ModAPI/Harmony/HarmonyUtil.cs	SaveManager	2
 source-symbol	ModAPI/Harmony/MainMenuPatches.cs	SaveManager	3
 source-symbol	ModAPI/Harmony/Transpilers/ShelteredPatterns.cs	InventoryManager	1
 source-symbol	ModAPI/Hooks/UIHooks.cs	UIPanelManager	1
-source-symbol	ModAPI/Interactions/InteractionRegistry.cs	ShelteredAPI	1
 source-symbol	ModAPI/Items/InventoryHelper.cs	InventoryManager	2
 source-symbol	ModAPI/Items/InventoryHelper.cs	ItemManager	1
 source-symbol	ModAPI/Persistence/ModPersistence.cs	SaveManager	8

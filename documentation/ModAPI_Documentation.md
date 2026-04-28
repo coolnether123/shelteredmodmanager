@@ -74,11 +74,13 @@ These remain available in the 1.3 line to preserve older mod integrations:
 - `PersistentDataAPI`
 
 Current location:
-- `ModAPI.dll`
+- `ShelteredAPI.dll` for `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, and `InteractionRegistry`
+- `ModAPI.dll` for remaining legacy helpers not yet moved
 
 Status:
-- supported in 1.3
-- deprecated for a future major version where cleaner replacements exist
+- supported in 1.3 as source migration aliases where applicable
+- Sheltered-backed helpers require a `ShelteredAPI.dll` reference even when they keep old `ModAPI.*` namespaces
+- remaining `ModAPI.dll` compatibility helpers are deprecated boundary debt
 
 ## 4. Content System
 
@@ -138,11 +140,11 @@ Responsibilities:
 - deterministic scheduler triggers
 
 Key files:
-- `GameEvents.cs`
-- `GameTimeTriggerHelper.cs`
-- `UIEvents.cs`
-- `FactionEvents.cs`
-- `ModEventBus.cs`
+- `ShelteredAPI/Events/GameEvents.cs`
+- `ShelteredAPI/Events/GameTimeTriggerHelper.cs`
+- `ShelteredAPI/Events/UIEvents.cs`
+- `ShelteredAPI/Events/FactionEvents.cs`
+- `ModAPI/Events/ModEventBus.cs`
 
 Related guide:
 - `documentation/Events_Guide.md`
