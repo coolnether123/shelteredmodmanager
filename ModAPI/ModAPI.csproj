@@ -341,22 +341,9 @@ SET BIN_DIR=%25BASE%25Dist\SMM\bin
 
 :: Ensure directories exist
 if not exist "%25BIN_DIR%25" mkdir "%25BIN_DIR%25"
-if not exist "%25BIN_DIR%25\decompiler" mkdir "%25BIN_DIR%25\decompiler"
 
 :: Keep Harmony deployment centralized in the SMM bin folder only.
 if exist "%25BASE%25Dist\SMM\0Harmony.dll" del /q "%25BASE%25Dist\SMM\0Harmony.dll"
-
-:: Decompiler Tool (Isolated .NET 8 environment)
-for %%C in (Debug Release) do (
-    if exist "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" (
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.dll" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.exe" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.runtimeconfig.json" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\Decompiler.deps.json" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\ICSharpCode.Decompiler.dll" "%25BIN_DIR%25\decompiler\"
-        copy /y "%25BASE%25Decompiler\bin\%%C\net8.0\System.CommandLine.dll" "%25BIN_DIR%25\decompiler\"
-    )
- )
 exit /b 0
 </PostBuildEvent>
   </PropertyGroup>

@@ -15,6 +15,8 @@ namespace Cortex.Host.Sheltered.Runtime
 
         private readonly string _applicationRootPath;
         private readonly string _hostRootPath;
+        private readonly string _legacyHostBinPath;
+        private readonly string _cortexRootPath;
         private readonly string _hostBinPath;
         private readonly string _bundledPluginSearchRoots;
         private readonly string _configuredPluginSearchRoots;
@@ -32,18 +34,20 @@ namespace Cortex.Host.Sheltered.Runtime
         {
             _applicationRootPath = NormalizePath(applicationRootPath);
             _hostRootPath = CombinePath(_applicationRootPath, "SMM");
-            _hostBinPath = CombinePath(_hostRootPath, "bin");
+            _legacyHostBinPath = CombinePath(_hostRootPath, "bin");
+            _cortexRootPath = CombinePath(_hostRootPath, "Cortex");
+            _hostBinPath = CombinePath(_cortexRootPath, "runtime");
             _referenceAssemblyRootPath = CombinePath(CombinePath(_applicationRootPath, "Sheltered_Data"), "Managed");
             _runtimeContentRootPath = CombinePath(_hostRootPath, "mods");
-            _bundledPluginSearchRoots = CombinePath(_hostBinPath, "plugins");
+            _bundledPluginSearchRoots = CombinePath(_cortexRootPath, "plugins");
             _configuredPluginSearchRoots = JoinRoots(_runtimeContentRootPath, CombinePath(_runtimeContentRootPath, "Plugins"));
-            _bundledToolRootPath = CombinePath(_hostBinPath, "tools");
-            _settingsFilePath = CombinePath(_hostBinPath, "cortex_settings.json");
-            _workbenchPersistenceFilePath = CombinePath(_hostBinPath, "cortex_workbench.json");
+            _bundledToolRootPath = CombinePath(_cortexRootPath, "tools");
+            _settingsFilePath = CombinePath(_legacyHostBinPath, "cortex_settings.json");
+            _workbenchPersistenceFilePath = CombinePath(_legacyHostBinPath, "cortex_workbench.json");
             _logFilePath = CombinePath(_hostRootPath, "mod_manager.log");
-            _projectCatalogPath = CombinePath(_hostBinPath, "cortex_projects.json");
-            _decompilerCachePath = CombinePath(_hostBinPath, "cortex_cache");
-            _modManagerIniPath = CombinePath(_hostBinPath, "mod_manager.ini");
+            _projectCatalogPath = CombinePath(_legacyHostBinPath, "cortex_projects.json");
+            _decompilerCachePath = CombinePath(_legacyHostBinPath, "cortex_cache");
+            _modManagerIniPath = CombinePath(_legacyHostBinPath, "mod_manager.ini");
         }
 
         public string ApplicationRootPath
@@ -118,12 +122,12 @@ namespace Cortex.Host.Sheltered.Runtime
 
         public string GetBundledToolPath(string componentId, string fileName)
         {
-            return BuildBundledToolPath(_hostBinPath, componentId, fileName);
+            return CombinePath(CombinePath(_bundledToolRootPath, componentId), fileName);
         }
 
         public string GetLegacyDecompilerToolPath(string fileName)
         {
-            return BuildLegacyDecompilerToolPath(_hostBinPath, fileName);
+            return CombinePath(CombinePath(_bundledToolRootPath, "decompiler"), fileName);
         }
 
         public static ShelteredHostPathLayout FromApplicationRoot(string applicationRootPath)
@@ -155,12 +159,19 @@ namespace Cortex.Host.Sheltered.Runtime
 
         public static string BuildBundledToolPath(string hostBinPath, string componentId, string fileName)
         {
-            return CombinePath(CombinePath(CombinePath(hostBinPath, "tools"), componentId), fileName);
+            var root = NormalizePath(hostBinPath);
+            if (string.Equals(GetLeafName(root), "runtime", StringComparison.OrdinalIgnoreCase))
+            {
+                var runtimeDirectory = Directory.GetParent(root);
+                root = runtimeDirectory != null ? runtimeDirectory.FullName : root;
+            }
+
+            return CombinePath(CombinePath(CombinePath(root, "tools"), componentId), fileName);
         }
 
         public static string BuildLegacyDecompilerToolPath(string hostBinPath, string fileName)
         {
-            return CombinePath(CombinePath(hostBinPath, "decompiler"), fileName);
+            return CombinePath(CombinePath(CombinePath(hostBinPath, "tools"), "decompiler"), fileName);
         }
 
         public static IList<string> EnumerateHostBinCandidates(string baseDirectory)
@@ -194,6 +205,8 @@ namespace Cortex.Host.Sheltered.Runtime
                 AddCandidate(candidates, CombinePath(normalizedBaseDirectory, "bin"));
             }
 
+            AddCandidate(candidates, CombinePath(CombinePath(normalizedBaseDirectory, "Cortex"), "runtime"));
+            AddCandidate(candidates, CombinePath(CombinePath(CombinePath(normalizedBaseDirectory, "SMM"), "Cortex"), "runtime"));
             AddCandidate(candidates, CombinePath(CombinePath(normalizedBaseDirectory, "SMM"), "bin"));
             return candidates;
         }

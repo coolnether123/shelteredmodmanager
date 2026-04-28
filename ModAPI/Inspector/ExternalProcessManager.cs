@@ -27,6 +27,12 @@ namespace ModAPI.Inspector
         public string ResolveDecompilerPath()
         {
             var modApiDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? string.Empty;
+            var bundled = SharedAssemblyResolver.GetCortexToolPath("decompiler", "Decompiler.exe");
+            if (File.Exists(bundled))
+            {
+                return bundled;
+            }
+
             var local = Path.Combine(Path.Combine(Path.Combine(modApiDir, "bin"), "decompiler"), "Decompiler.exe");
             if (File.Exists(local))
             {

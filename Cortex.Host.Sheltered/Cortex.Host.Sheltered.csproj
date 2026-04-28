@@ -17,6 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
+    <OutputPath>..\Dist\SMM\Cortex\runtime\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -24,11 +25,44 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
+    <OutputPath>..\Dist\SMM\Cortex\runtime\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Cortex">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Core">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Core.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Host.Unity">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Host.Unity.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Plugins.Abstractions">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Plugins.Abstractions.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Presentation">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Presentation.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Rendering">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Rendering.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Rendering.RuntimeUi">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Rendering.RuntimeUi.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Shell.Unity.Imgui">
+      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Shell.Unity.Imgui.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
   </ItemGroup>
@@ -44,48 +78,6 @@
     <Compile Include="Runtime\ShelteredHostPathLayout.cs" />
     <Compile Include="Runtime\ShelteredUnityHostComposition.cs" />
     <Compile Include="Runtime\ShelteredUnityWorkbenchContributionRegistrar.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Cortex\Cortex.csproj">
-      <Project>{D982DFB0-FEA1-4DC8-A001-35F5181F212A}</Project>
-      <Name>Cortex</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Core\Cortex.Core.csproj">
-      <Project>{A5F28666-878B-4C48-A7DA-4A19BFC79F02}</Project>
-      <Name>Cortex.Core</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Shell.Unity.Imgui\Cortex.Shell.Unity.Imgui.csproj">
-      <Project>{6CB42E40-4058-4A0D-BEFA-F117F8F0F5D3}</Project>
-      <Name>Cortex.Shell.Unity.Imgui</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
-      <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
-      <Name>Cortex.Host.Unity</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Rendering\Cortex.Rendering.csproj">
-      <Project>{5B4B178C-9BB0-4297-A07A-5C69FA861A26}</Project>
-      <Name>Cortex.Rendering</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj">
-      <Project>{8F6A2F38-54DF-4B49-8FC4-7F909D1AF6D3}</Project>
-      <Name>Cortex.Rendering.RuntimeUi</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj">
-      <Project>{638F6D72-7BC0-4235-A3E4-A6C5B4CBA4A1}</Project>
-      <Name>Cortex.Plugins.Abstractions</Name>
-      <Private>False</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Presentation\Cortex.Presentation.csproj">
-      <Project>{ADAEC1F0-6882-42D6-9016-E79C9EBA1605}</Project>
-      <Name>Cortex.Presentation</Name>
-      <Private>False</Private>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 

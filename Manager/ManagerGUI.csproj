@@ -50,6 +50,15 @@
     <StartupObject>Manager.Program</StartupObject>
   </PropertyGroup>
   <PropertyGroup>
+    <CortexBundleProject>$(AdjacentCortexRepositoryRoot)build\Cortex.Bundle.proj</CortexBundleProject>
+    <CortexBundleDist>$(AdjacentCortexDistRoot)</CortexBundleDist>
+    <SmmCortexRoot>$(MSBuildProjectDirectory)\..\Dist\SMM\Cortex\</SmmCortexRoot>
+    <SmmCortexRootFullPath>$([System.IO.Path]::GetFullPath('$(SmmCortexRoot)'))</SmmCortexRootFullPath>
+    <BuildCortexBundle Condition="'$(BuildCortexBundle)' == ''">true</BuildCortexBundle>
+    <BuildCortexAdapter Condition="'$(BuildCortexAdapter)' == '' and '$(BuildCortexBundle)' == 'true' and Exists('$(CortexBundleProject)')">true</BuildCortexAdapter>
+    <BuildCortexAdapter Condition="'$(BuildCortexAdapter)' == ''">false</BuildCortexAdapter>
+  </PropertyGroup>
+  <PropertyGroup>
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
@@ -159,19 +168,7 @@
       <Private>False</Private>
       <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
     </ProjectReference>
-    <ProjectReference Include="..\Cortex\Cortex.csproj">
-      <Project>{D982DFB0-FEA1-4DC8-A001-35F5181F212A}</Project>
-      <Name>Cortex</Name>
-      <Private>False</Private>
-      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj">
-      <Project>{7A570620-E51D-499E-A28E-13A1D8156417}</Project>
-      <Name>Cortex.Host.Unity</Name>
-      <Private>False</Private>
-      <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
-    </ProjectReference>
-    <ProjectReference Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj">
+    <ProjectReference Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj" Condition="'$(BuildCortexAdapter)' == 'true'">
       <Project>{2343835F-8DA6-4CAB-B5A9-D86C83A9A40D}</Project>
       <Name>Cortex.Platform.ModAPI</Name>
       <Private>False</Private>
@@ -203,39 +200,39 @@
     </BootstrapperPackage>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target Name="BuildCortexRuntime" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
-    <ItemGroup>
-      <CortexRuntimeProjects Include="..\Cortex.Core\Cortex.Core.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Plugins.Abstractions\Cortex.Plugins.Abstractions.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Presentation\Cortex.Presentation.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Rendering\Cortex.Rendering.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Rendering.RuntimeUi\Cortex.Rendering.RuntimeUi.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.CompletionProviders\Cortex.CompletionProviders.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Tabby\Cortex.Tabby.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Ollama\Cortex.Ollama.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.OpenRouter\Cortex.OpenRouter.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex\Cortex.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Renderers.DearImgui\Cortex.Renderers.DearImgui.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Renderers.Imgui\Cortex.Renderers.Imgui.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Host.Avalonia\Cortex.Host.Avalonia.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Host.Unity\Cortex.Host.Unity.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Host.Sheltered\Cortex.Host.Sheltered.csproj" />
-      <CortexRuntimeProjects Include="..\Cortex.Platform.ModAPI\Cortex.Platform.ModAPI.csproj" />
+  <Target Name="PrepareCortexRuntimeLayout" BeforeTargets="ResolveProjectReferences" Condition="'$(DesignTimeBuild)' != 'true' and Exists('$(SmmCortexRootFullPath)') and '$(BuildCortexBundle)' != 'true'">
+    <RemoveDir Directories="$(SmmCortexRootFullPath)" />
+  </Target>
+  <Target Name="BuildCortexRuntime" BeforeTargets="ResolveProjectReferences" Condition="'$(DesignTimeBuild)' != 'true' and '$(BuildCortexBundle)' == 'true'">
+    <RemoveDir Condition="Exists('$(SmmCortexRootFullPath)')" Directories="$(SmmCortexRootFullPath)" />
+    <Warning Condition="!Exists('$(CortexBundleProject)')" Text="Cortex bundle project was not found at '$(CortexBundleProject)'. SMM will build without the optional Cortex runtime bundle." />
+    <MSBuild Condition="Exists('$(CortexBundleProject)')"
+             Projects="$(CortexBundleProject)"
+             Targets="Bundle"
+             Properties="Configuration=$(Configuration);Platform=AnyCPU"
+             BuildInParallel="false" />
+    <MakeDir Condition="Exists('$(CortexBundleDist)')" Directories="$(SmmCortexRootFullPath)" />
+    <ItemGroup Condition="Exists('$(CortexBundleDist)')">
+      <CortexBundleFiles Include="$(CortexBundleDist)**\*" />
     </ItemGroup>
-    <MSBuild Projects="@(CortexRuntimeProjects)" Targets="Rebuild" Properties="Configuration=$(Configuration);Platform=AnyCPU;CortexBundleProfile=Sheltered" BuildInParallel="false" />
+    <Copy Condition="Exists('$(CortexBundleDist)')"
+          SourceFiles="@(CortexBundleFiles)"
+          DestinationFiles="@(CortexBundleFiles->'$(SmmCortexRootFullPath)%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="WarnWhenCortexRuntimeMissing" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(SmmCortexRootFullPath)runtime\Cortex.dll')">
+    <Warning Text="Cortex runtime was not found at '$(SmmCortexRootFullPath)runtime\Cortex.dll'. SMM will run, but the optional Cortex shell will be unavailable." />
   </Target>
   <PropertyGroup>
     <PostBuildEvent>SET BASE=$(MSBuildProjectDirectory)\..\
 SET CONFIG=$(Configuration)
 SET SMM_DIR=%25BASE%25Dist\SMM
 SET BIN_DIR=%25SMM_DIR%25\bin
-SET DECOMPILER_DIR=%25BIN_DIR%25\decompiler
 SET MODS_DIR=%25BASE%25Dist\mods
 SET HARMONY_DLL=%25BASE%25libs\0Harmony.dll
 
 mkdir "%25SMM_DIR%25" 2&gt;nul
 mkdir "%25BIN_DIR%25" 2&gt;nul
-mkdir "%25DECOMPILER_DIR%25" 2&gt;nul
 mkdir "%25MODS_DIR%25" 2&gt;nul
 
 if exist "%25HARMONY_DLL%25" copy /y "%25HARMONY_DLL%25" "%25BIN_DIR%25\"
@@ -246,15 +243,6 @@ if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" copy /y "%
 if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" "%25MODS_DIR%25\PluginConsole\Assemblies\"
 if exist "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" copy /y "%25BASE%25PluginDebugGUI\bin\%25CONFIG%25\PluginDebugGUI.dll" "%25MODS_DIR%25\PluginDebugGUI\Assemblies\"
 if exist "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" copy /y "%25BASE%25PluginInitializer\bin\%25CONFIG%25\PluginInitializer.dll" "%25MODS_DIR%25\PluginInitializer\Assemblies\"
-
-:: Decompiler Tool &amp; Dependencies
-if exist "%25BASE%25Decompiler\Decompiler.csproj" dotnet build "%25BASE%25Decompiler\Decompiler.csproj" -c %25CONFIG%25
-if exist "%25BASE%25Cortex.Tabby.Server\Cortex.Tabby.Server.csproj" dotnet build "%25BASE%25Cortex.Tabby.Server\Cortex.Tabby.Server.csproj" -c %25CONFIG%25
-if exist "%25BASE%25Cortex.Roslyn.Worker\Cortex.Roslyn.Worker.csproj" dotnet build "%25BASE%25Cortex.Roslyn.Worker\Cortex.Roslyn.Worker.csproj" -c %25CONFIG%25
-if exist "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.dll" copy /y "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.dll" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.deps.json" copy /y "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.deps.json" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.runtimeconfig.json" copy /y "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.runtimeconfig.json" "%25DECOMPILER_DIR%25\"
-if exist "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.pdb" copy /y "%25BASE%25Dist\SMM\bin\roslyn\Cortex.Roslyn.Worker.pdb" "%25DECOMPILER_DIR%25\"
 </PostBuildEvent>
   </PropertyGroup>
 </Project>

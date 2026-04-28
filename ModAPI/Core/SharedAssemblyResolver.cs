@@ -13,15 +13,16 @@ namespace ModAPI.Core
             "ModAPI.Core",
             "ShelteredAPI",
             "0Harmony",
-            "Cortex",
-            "Cortex.Host.Unity",
-            "Cortex.Platform.ModAPI"
+            "GameModding.Shared"
         };
 
         internal static bool IsSharedRuntimeAssemblyName(string simpleName)
         {
             if (string.IsNullOrEmpty(simpleName))
                 return false;
+
+            if (IsCortexAssemblyName(simpleName))
+                return true;
 
             for (int i = 0; i < SharedRuntimeAssemblyNames.Length; i++)
             {
@@ -30,6 +31,13 @@ namespace ModAPI.Core
             }
 
             return false;
+        }
+
+        internal static bool IsCortexAssemblyName(string simpleName)
+        {
+            return !string.IsNullOrEmpty(simpleName) &&
+                (string.Equals(simpleName, "Cortex", StringComparison.OrdinalIgnoreCase) ||
+                 simpleName.StartsWith("Cortex.", StringComparison.OrdinalIgnoreCase));
         }
 
         internal static bool ShouldSkipModAssembly(string assemblyPath)
@@ -77,31 +85,117 @@ namespace ModAPI.Core
             return FindLoadedAssembly(simpleName, null);
         }
 
+        internal static string GetSmmRootPath()
+        {
+            try
+            {
+                var dataPath = Application.dataPath;
+                if (!string.IsNullOrEmpty(dataPath))
+                {
+                    var gameRoot = Directory.GetParent(dataPath);
+                    if (gameRoot != null)
+                    {
+                        return Path.Combine(gameRoot.FullName, "SMM");
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (string.IsNullOrEmpty(assemblyDir))
+                    return string.Empty;
+
+                if (string.Equals(Path.GetFileName(assemblyDir), "bin", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parent = Directory.GetParent(assemblyDir);
+                    return parent != null ? parent.FullName : assemblyDir;
+                }
+
+                return assemblyDir;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        internal static string GetCortexRootPath()
+        {
+            var smmRoot = GetSmmRootPath();
+            return string.IsNullOrEmpty(smmRoot) ? string.Empty : Path.Combine(smmRoot, "Cortex");
+        }
+
+        internal static string GetCortexRuntimePath()
+        {
+            var cortexRoot = GetCortexRootPath();
+            return string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "runtime");
+        }
+
+        internal static string GetCortexToolRootPath()
+        {
+            var cortexRoot = GetCortexRootPath();
+            return string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "tools");
+        }
+
+        internal static string GetCortexToolPath(string componentId, string fileName)
+        {
+            var toolRoot = GetCortexToolRootPath();
+            if (string.IsNullOrEmpty(toolRoot) || string.IsNullOrEmpty(componentId) || string.IsNullOrEmpty(fileName))
+                return string.Empty;
+
+            return Path.Combine(Path.Combine(toolRoot, componentId), fileName);
+        }
+
         internal static string GetCanonicalAssemblyPath(string simpleName)
         {
             if (string.IsNullOrEmpty(simpleName))
                 return null;
 
-            try
+            var candidates = GetCanonicalAssemblyCandidates(simpleName);
+            for (int i = 0; i < candidates.Length; i++)
             {
-                string gameRoot = Directory.GetParent(Application.dataPath).FullName;
-                string smmDir = Path.Combine(gameRoot, "SMM");
-                string[] candidates = new[]
-                {
-                    Path.Combine(Path.Combine(smmDir, "bin"), simpleName + ".dll"),
-                    Path.Combine(Path.Combine(Path.Combine(smmDir, "bin"), "decompiler"), simpleName + ".dll"),
-                    Path.Combine(smmDir, simpleName + ".dll")
-                };
-
-                for (int i = 0; i < candidates.Length; i++)
-                {
-                    if (File.Exists(candidates[i]))
-                        return candidates[i];
-                }
+                if (!string.IsNullOrEmpty(candidates[i]) && File.Exists(candidates[i]))
+                    return candidates[i];
             }
-            catch { }
 
             return null;
+        }
+
+        private static string[] GetCanonicalAssemblyCandidates(string simpleName)
+        {
+            var smmRoot = GetSmmRootPath();
+            var smmBin = string.IsNullOrEmpty(smmRoot) ? string.Empty : Path.Combine(smmRoot, "bin");
+            var cortexRuntime = GetCortexRuntimePath();
+            var fileName = simpleName + ".dll";
+
+            if (IsCortexAssemblyName(simpleName))
+            {
+                return new[]
+                {
+                    Path.Combine(cortexRuntime, fileName),
+                    Path.Combine(smmBin, fileName),
+                    Path.Combine(smmRoot, fileName)
+                };
+            }
+
+            if (string.Equals(simpleName, "GameModding.Shared", StringComparison.OrdinalIgnoreCase))
+            {
+                return new[]
+                {
+                    Path.Combine(smmBin, fileName),
+                    Path.Combine(cortexRuntime, fileName)
+                };
+            }
+
+            return new[]
+            {
+                Path.Combine(smmBin, fileName),
+                Path.Combine(smmRoot, fileName)
+            };
         }
 
         private static Assembly FindLoadedAssembly(string simpleName, string preferredPath)

@@ -1,6 +1,12 @@
 <Project>
   <PropertyGroup>
     <CortexRepositoryRoot>$(MSBuildThisFileDirectory)</CortexRepositoryRoot>
+    <AdjacentCortexRepositoryRoot Condition="'$(AdjacentCortexRepositoryRoot)' == ''">$([System.IO.Path]::GetFullPath('$(CortexRepositoryRoot)..\Cortex\'))</AdjacentCortexRepositoryRoot>
+    <AdjacentCortexDistRoot Condition="'$(AdjacentCortexDistRoot)' == ''">$(AdjacentCortexRepositoryRoot)dist\</AdjacentCortexDistRoot>
+    <NuGetPackageRoot Condition="'$(NuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)</NuGetPackageRoot>
+    <NuGetPackageRoot Condition="'$(NuGetPackageRoot)' == ''">$(UserProfile)\.nuget\packages\</NuGetPackageRoot>
+    <CortexNet35ReferenceAssembliesPath>$(NuGetPackageRoot)microsoft.netframework.referenceassemblies.net35\1.0.3\build\.NETFramework\v3.5\</CortexNet35ReferenceAssembliesPath>
+    <FrameworkPathOverride Condition="'$(FrameworkPathOverride)' == '' and Exists('$(CortexNet35ReferenceAssembliesPath)mscorlib.dll')">$(CortexNet35ReferenceAssembliesPath)</FrameworkPathOverride>
   </PropertyGroup>
 
   <PropertyGroup Condition="
@@ -106,6 +112,8 @@
     <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and '$(CORTEX_UNITY_ENGINE_PATH)' != ''">$(CORTEX_UNITY_ENGINE_PATH)</CortexUnityEngineReferencePath>
     <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and '$(CortexUnityManagedDir)' != ''">$([System.IO.Path]::Combine('$(CortexUnityManagedDir)', 'UnityEngine.dll'))</CortexUnityEngineReferencePath>
     <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and Exists('$(CortexRepositoryRoot)libs\UnityEngine.dll')">$(CortexRepositoryRoot)libs\UnityEngine.dll</CortexUnityEngineReferencePath>
+    <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and Exists('D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll')">D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</CortexUnityEngineReferencePath>
+    <CortexUnityEngineReferencePath Condition="'$(CortexUnityEngineReferencePath)' == '' and Exists('D:\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll')">D:\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</CortexUnityEngineReferencePath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Cortex.Tests'">

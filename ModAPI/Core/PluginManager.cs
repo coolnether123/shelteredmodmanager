@@ -207,35 +207,11 @@ namespace ModAPI.Core
             runner.Manager = this;
 
             SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
-            var cortexAssembly = SharedAssemblyResolver.ResolveSharedAssembly("Cortex");
-            if (cortexAssembly != null)
-            {
-                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + cortexAssembly.GetName().Name + " @ " + cortexAssembly.Location);
-            }
-            else
-            {
-                MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex' was not resolved. Cortex shell bootstrap will be unavailable.");
-            }
-
-            var cortexHostAssembly = SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Host.Unity");
-            if (cortexHostAssembly != null)
-            {
-                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + cortexHostAssembly.GetName().Name + " @ " + cortexHostAssembly.Location);
-            }
-            else
-            {
-                MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex.Host.Unity' was not resolved. Unity host bootstrap will be unavailable.");
-            }
-
-            var cortexPlatformAssembly = SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Platform.ModAPI");
-            if (cortexPlatformAssembly != null)
-            {
-                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + cortexPlatformAssembly.GetName().Name + " @ " + cortexPlatformAssembly.Location);
-            }
-            else
-            {
-                MMLog.WriteWarning("[PluginManager] Optional runtime assembly 'Cortex.Platform.ModAPI' was not resolved. Cortex ModAPI bootstrap will be unavailable.");
-            }
+            LogCortexBundleAvailability();
+            LogOptionalRuntimeAssembly("Cortex", "Cortex shell bootstrap");
+            LogOptionalRuntimeAssembly("Cortex.Host.Unity", "Unity host bootstrap");
+            LogOptionalRuntimeAssembly("Cortex.Host.Sheltered", "Sheltered host adapter");
+            LogOptionalRuntimeAssembly("Cortex.Platform.ModAPI", "Cortex ModAPI bootstrap");
             HarmonyBootstrap.EnsurePatched();
             
             // Force injection in case SaveManager.Awake already ran before we could patch it
@@ -287,9 +263,55 @@ namespace ModAPI.Core
             failures += LogAssembly("ShelteredAPI", SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI"));
             failures += LogAssembly("Cortex", SharedAssemblyResolver.ResolveSharedAssembly("Cortex"));
             failures += LogAssembly("Cortex.Host.Unity", SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Host.Unity"));
+            failures += LogAssembly("Cortex.Host.Sheltered", SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Host.Sheltered"));
             failures += LogAssembly("Cortex.Platform.ModAPI", SharedAssemblyResolver.ResolveSharedAssembly("Cortex.Platform.ModAPI"));
 
             MMLog.WriteDebug($"Assembly Resolution: Failed Assemblies: {failures}");
+        }
+
+        private void LogCortexBundleAvailability()
+        {
+            var cortexRoot = SharedAssemblyResolver.GetCortexRootPath();
+            var runtimeRoot = SharedAssemblyResolver.GetCortexRuntimePath();
+            var decompilerPath = SharedAssemblyResolver.GetCortexToolPath("decompiler", "Decompiler.exe");
+            var roslynPath = SharedAssemblyResolver.GetCortexToolPath("roslyn", "Cortex.Roslyn.Worker.exe");
+            var pluginRoot = string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "plugins");
+
+            if (!Directory.Exists(cortexRoot) || !File.Exists(Path.Combine(runtimeRoot, "Cortex.dll")))
+            {
+                MMLog.WriteWarning("[Cortex] Optional Cortex bundle is missing or incomplete.");
+                MMLog.WriteWarning("[Cortex] Expected root: " + cortexRoot);
+                MMLog.WriteWarning("[Cortex] Expected runtime: " + runtimeRoot);
+                MMLog.WriteWarning("[Cortex] SMM will continue without the Cortex shell.");
+                return;
+            }
+
+            MMLog.WriteInfo("[Cortex] Bundle root: " + cortexRoot);
+            MMLog.WriteInfo("[Cortex] Runtime: " + runtimeRoot);
+            MMLog.WriteInfo("[Cortex] Tools: " + SharedAssemblyResolver.GetCortexToolRootPath());
+            MMLog.WriteInfo("[Cortex] Plugins: " + pluginRoot);
+
+            if (!File.Exists(decompilerPath))
+            {
+                MMLog.WriteWarning("[Cortex] Decompiler tool is missing at '" + decompilerPath + "'. Advanced developer source tools will be disabled.");
+            }
+
+            if (!File.Exists(roslynPath))
+            {
+                MMLog.WriteWarning("[Cortex] Roslyn worker is missing at '" + roslynPath + "'. Language intelligence will be unavailable.");
+            }
+        }
+
+        private void LogOptionalRuntimeAssembly(string assemblyName, string featureName)
+        {
+            var assembly = SharedAssemblyResolver.ResolveSharedAssembly(assemblyName);
+            if (assembly != null)
+            {
+                MMLog.WriteInfo("[PluginManager] Optional runtime assembly available: " + assembly.GetName().Name + " @ " + SafeAssemblyLocation(assembly));
+                return;
+            }
+
+            MMLog.WriteWarning("[PluginManager] Optional runtime assembly '" + assemblyName + "' was not resolved. " + featureName + " will be unavailable.");
         }
 
         private int LogAssembly(string name, Assembly asm)
