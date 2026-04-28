@@ -197,7 +197,7 @@ Applied now:
 - family names and gender
 - base stats: `Strength`, `Dexterity`, `Intelligence`, `Charisma`, `Perception`
 - traits using `Strength:TraitName` or `Weakness:TraitName`
-- starting inventory items resolvable by `InventoryHelper.ResolveItemType`
+- starting inventory items resolvable by `InventoryHelper.ResolveItemType` from `ShelteredAPI.dll` (`ModAPI.Items` namespace retained as a 1.3 migration alias)
 - bunker wall and wiring sprite indexes
 - vanilla object placements by `ObjectManager.ObjectType` via `definition="Generator"` and optional `level`, `movable`, `lockDeconstruct` properties
 - asset path validation and sprite preloading

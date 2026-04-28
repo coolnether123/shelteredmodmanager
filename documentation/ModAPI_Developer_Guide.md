@@ -7,6 +7,7 @@
 | Core plugin lifecycle, context, settings APIs | `ModAPI.dll` | Current |
 | Sheltered content APIs and content runtime | `ShelteredAPI.dll` | Current |
 | Sheltered game helpers/events used by v1.2 mods | `ShelteredAPI.dll` with old `ModAPI.*` namespaces | Current 1.3 migration aliases |
+| Sheltered UI/input/item helpers used by v1.2 mods | `ShelteredAPI.dll` with old `ModAPI.*` namespaces | Current 1.3 migration aliases |
 | Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Current |
 | Docs labeled `v1.2` in this repo | Historical reference | Deprecated where conflicting |
 
@@ -150,7 +151,9 @@ public void Start(IPluginContext ctx)
 
 ## 6. ShelteredAPI-Specific Helpers
 
-`ShelteredAPI` ships additional helpers under existing namespaces (`ModAPI.Core`, `ModAPI.Events`) for 1.3 source migration.
+`ShelteredAPI` ships additional helpers under existing namespaces (`ModAPI.Core`, `ModAPI.Events`, `ModAPI.UI`, `ModAPI.Hooks`, and `ModAPI.Items`) for 1.3 source migration.
+
+Sheltered UI and item helpers such as `InventoryHelper`, `UIHooks`, `ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, `ModManagerPanel`, and NGUI/Spine settings UI helpers require `ShelteredAPI.dll` even when the source namespace starts with `ModAPI`. `ModAPI.dll` keeps neutral input bindings, `UIFlowGuard`, scroll/touch input shims, and Unity scene helpers.
 
 Example: explicit trigger registration and priority ordering.
 

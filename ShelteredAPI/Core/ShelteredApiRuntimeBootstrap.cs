@@ -57,6 +57,9 @@ namespace ShelteredAPI.Core
 
             if (runtimeRoot.GetComponent<ShelteredKeybindPersistenceGuard>() == null)
                 runtimeRoot.AddComponent<ShelteredKeybindPersistenceGuard>();
+
+            if (runtimeRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
+                runtimeRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
         }
 
         private static void EnsureApiRegistrations()

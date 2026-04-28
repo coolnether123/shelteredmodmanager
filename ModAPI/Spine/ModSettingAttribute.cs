@@ -116,7 +116,7 @@ namespace ModAPI.Spine
     }
 
     /// <summary>
-    /// Inherit from this to handle your own NGUI drawing entirely, skipping the auto-grid.
+    /// Inherit from this to handle your own host UI drawing entirely, skipping the auto-grid.
     /// </summary>
     public interface ICustomSettingsUI
     {

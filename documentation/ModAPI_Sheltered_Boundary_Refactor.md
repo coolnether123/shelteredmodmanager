@@ -22,8 +22,9 @@ These surfaces are intended to remain in `ModAPI` after Sheltered references are
 | `Core` plugin lifecycle contracts (`IModPlugin`, optional lifecycle interfaces), mod metadata, discovery, logging, registry helpers, and main-thread scheduling contracts | Framework behavior that applies to any game host. |
 | `ModAPIRegistry`, shared assembly resolution, and basic plugin host wiring | Neutral runtime infrastructure, once Sheltered bootstrap details are moved behind host adapters. |
 | `ISaveSystem`, `ModPersistenceData`, `SaveLoadDictionary`, neutral persistence callbacks, and `ISaveRuntimeAdapter` | Framework persistence primitives and ports that do not require Sheltered managers. |
-| `Spine` settings metadata, scanning, and neutral settings definitions | Game-neutral settings contract/model layer. |
+| `Spine` settings metadata, scanning, and neutral settings definitions | Game-neutral settings contract/model layer. ShelteredAPI owns the NGUI rendering pack for those definitions. |
 | `Input` binding models, action registry, scroll query/source contracts | Neutral input description and dispatch contracts. |
+| `UIFlowGuard`, `ScrollInputBridge`, `TouchInputBridge`, `SceneUtil`, and `SceneCompat` | Small Unity-level shims that do not name Sheltered panels, managers, NGUI widgets, or item runtime types. |
 | `Actors/Abstractions` and most `Actors/Models` | Neutral actor registry/component contracts, after Sheltered-specific enum values or adapters are split. |
 | `Events/ModEventBus` | Game-neutral event bus. |
 | `Harmony` fluent transpiler, cooperative patcher, safety policy, and diagnostics | General patching framework, excluding Sheltered pattern helpers and game-menu patches. |
@@ -54,17 +55,17 @@ These current `ModAPI` surfaces encode Sheltered runtime concepts and should mov
 | Surface | Why |
 | --- | --- |
 | Remaining character contracts or helpers that still mention Sheltered runtime types | Prompt 4 moved the current character/party helper surface to `ShelteredAPI`; any future `ModAPI.Characters` surface must be game-neutral. |
-| `Items/InventoryHelper.cs` | `ItemManager` and `InventoryManager` integration. |
+| `Items/InventoryHelper.cs` | `ItemManager` and `InventoryManager` integration. Prompt 6 moved this implementation to `ShelteredAPI`. |
 | Remaining manager-state helpers that name Sheltered managers | Prompt 4 moved `ManagerStateHelper` to `ShelteredAPI`. |
 | Remaining event helpers backed by Sheltered managers or panels | Prompt 4 moved `GameEvents`, `FactionEvents`, `UIEvents`, and `GameTimeTriggerHelper` to `ShelteredAPI`. |
-| `Hooks/WorldHooks.cs`, `Hooks/UIHooks.cs` and remaining interaction-style helpers outside the moved registry | Sheltered world/UI hook vocabulary and runtime targets. Prompt 4 moved `InteractionRegistry` to `ShelteredAPI`. |
+| `Hooks/WorldHooks.cs` and remaining interaction-style helpers outside the moved registry | Sheltered world hook vocabulary and runtime targets. Prompt 4 moved `InteractionRegistry` to `ShelteredAPI`; Prompt 6 moved `UIHooks` to `ShelteredAPI`. |
 | `GameUtil`, `PersistentDataAPI`, and `ModAPI.Persistence.ModList/ModDictionary` 1.3 aliases | Sheltered exploration/save manager helpers and `SaveData`/`ISaveable` integrations. Prompt 5 moved these implementations to `ShelteredAPI`. |
-| Remaining typed compatibility bridge in `Core/ShelteredContentBridge.cs` | It still exposes Sheltered item runtime types for 1.3 compatibility, but Prompt 2 removed its direct reflection dependency on ShelteredAPI. Future phases should delete this adapter when item/content helpers move. |
+| Remaining typed compatibility bridge in `Core/ShelteredContentBridge.cs` | Prompt 6 replaced the `ModAPI` copy with `ShelteredAPI.Content.ShelteredItemContentBridge`, which owns the `ItemManager.ItemType` adapter for 1.3 compatibility helpers. |
 | `Core/SaveProtection.cs` and `Core/SaveRuntimeState.cs` | Sheltered save/runtime implementation, not a neutral framework contract. Prompt 5 moved these implementations to `ShelteredAPI`. |
 | `Custom Saves/**` | Sheltered `SaveManager`, slot selection UI, save verification, and expanded vanilla save implementation. Prompt 5 moved this tree to `ShelteredAPI`. |
-| NGUI/UI implementation files under `UI/**` | NGUI widgets, panel injection, settings panel, mod-manager panel, and UI patch runtime. |
+| NGUI/UI implementation files under `UI/**` | NGUI widgets, panel injection, settings panel, mod-manager panel, and UI patch runtime. Prompt 6 moved the Sheltered/NGUI implementation pack to `ShelteredAPI`. |
 | `Harmony/MainMenuPatches.cs` and `Harmony/Transpilers/ShelteredPatterns.cs` | Sheltered menu/runtime patch targets and Sheltered-specific IL helpers. |
-| `Debugging/CrashCorridorMapDiagnostics.cs` | Sheltered map/panel diagnostics and manager patches. |
+| `Debugging/CrashCorridorMapDiagnostics.cs` | Sheltered map/panel diagnostics and manager patches. Prompt 6 moved this diagnostic patch host to `ShelteredAPI`. |
 | Remaining scenario runtime application and authoring UI vocabulary outside the neutral `ModAPI.Scenarios` contracts | Sheltered scenario domain and runtime integration. Prompt 3 moved the scenario XML/domain schema, serializers, validation pipeline, catalog/loader implementation, and runtime binding to `ShelteredAPI.Scenarios`. |
 
 ### Delete Or Replace After 1.3 Compatibility
@@ -75,6 +76,7 @@ These are compatibility debts, not long-term framework surfaces:
 | --- | --- |
 | v1.2 compatibility helpers now hosted in `ShelteredAPI` (`GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, custom-save APIs) | Keep documented as Sheltered-owned aliases until a later breaking line can rename or replace them cleanly. |
 | 1.3 source migration aliases now hosted in `ShelteredAPI` (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `ManagerStateHelper`) | Keep documented as Sheltered-owned aliases until a later breaking line can rename or replace them cleanly. |
+| 1.3 source migration aliases now hosted in `ShelteredAPI` (`InventoryHelper`, `UIHooks`, `ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, `ModManagerPanel`, NGUI helpers, Spine settings UI renderers, and `UIDebug`) | Keep documented as Sheltered-owned aliases until a later breaking line can rename or replace them cleanly. |
 | Duplicate compatibility files that already have ShelteredAPI equivalents | Keep one Sheltered-owned implementation and remove the `ModAPI` copy when the compatibility window closes. |
 | Examples that compile or accidentally patch runtime behavior | Keep as documentation/sample source only, not compiled framework behavior. |
 | Reflection bridges whose only purpose is to let `ModAPI` call `ShelteredAPI` | Replace with host-owned registration/composition in `ShelteredAPI`. |
@@ -168,6 +170,21 @@ Boundary baseline shrink from Prompt 5:
 
 - removed 64 save/custom-save/persistence entries,
 - baseline count changed from `232` to `168`.
+
+## Prompt 6 UI/Input/Content Ownership Split
+
+Prompt 6 moved concrete Sheltered UI, item/content, and diagnostic runtime hooks out of `ModAPI`:
+
+- `InventoryHelper` is now hosted by `ShelteredAPI.dll` under `ShelteredAPI/Content/ModAPICompat` while retaining the old `ModAPI.Items` namespace as a 1.3 source migration alias.
+- `ShelteredAPI.Content.ShelteredItemContentBridge` owns the temporary typed conversion from neutral content runtime keys to Sheltered `ItemManager.ItemType` values.
+- NGUI panel helpers, mod-manager and settings panels, `ModUIHooks`, `ContextMenuHelper`, `UIHooks`, `UIPatches`, item-panel augmentation, panel lifecycle patch forwarding, `UIDebug`, and the Spine settings UI renderers are hosted by `ShelteredAPI.dll` under `ShelteredAPI/UI/ModAPICompat`.
+- `CrashCorridorMapDiagnostics` is hosted by `ShelteredAPI.dll` because it patches Sheltered loading, save, and UI managers.
+- `ModAPI` keeps only neutral UI/input framework pieces: `UIFlowGuard`, `ScrollInputBridge`, `TouchInputBridge`, input binding/action contracts, and Unity scene helpers that do not name Sheltered managers or NGUI widgets.
+
+Boundary baseline shrink from Prompt 6:
+
+- removed 153 UI/input/item/content/debug entries,
+- baseline count changed from `168` to `15`.
 
 ## Prompt 1 Scope Lock
 

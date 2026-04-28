@@ -13,6 +13,7 @@ Canonical signatures: `documentation/API_Signatures_Reference.md`.
 - runtime injection into `ItemManager`
 - runtime injection into `CraftingManager`
 - inventory slot expansion for custom items
+- inventory helper operations and string-ID-to-`ItemType` resolution for Sheltered runtime items
 - content-localized text fallback and generated keys
 - loot table injection
 
@@ -27,6 +28,7 @@ Every content mod should follow these rules:
 5. Keep asset paths relative to the mod root, usually under `Assets/...`.
 6. Treat `ItemManager.ItemType` as runtime-owned. Do not hardcode numeric custom IDs unless you have a specific compatibility reason.
 7. Resolve items by string ID in gameplay code when possible.
+8. Reference `ShelteredAPI.dll` when using `InventoryHelper`; the 1.3 type keeps the old `ModAPI.Items` namespace but is Sheltered-owned.
 
 What mod authors should not do:
 - do not register content in constructors
@@ -162,7 +164,7 @@ Generated keys use the pattern:
 2. Register the item in `Start(...)`.
 3. Register any recipe that produces it.
 4. Add icon and other supporting assets under `Assets/...`.
-5. Use `InventoryHelper.ResolveItemType(...)` or `ctx.Game` helpers when interacting with the item at runtime.
+5. Use `InventoryHelper.ResolveItemType(...)` from `ShelteredAPI.dll` or `ctx.Game` helpers when interacting with the item at runtime.
 6. Test these flows:
    - new family
    - return to main menu
@@ -222,6 +224,7 @@ Start with these types:
 - `ShelteredAPI.Content.ItemPatch`
 - `ShelteredAPI.Content.RecipePatch`
 - `ShelteredAPI.Content.AssetLoader`
+- `ModAPI.Items.InventoryHelper` (1.3 migration alias hosted by `ShelteredAPI.dll`)
 
 If you only need to add a normal item with a crafting recipe, you usually only need:
 - `ItemDefinition`

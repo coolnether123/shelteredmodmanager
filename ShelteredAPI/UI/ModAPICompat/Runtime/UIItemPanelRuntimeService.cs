@@ -1,4 +1,5 @@
 using ModAPI.Core;
+using ShelteredAPI.Content;
 
 namespace ModAPI.Internal.UI
 {
@@ -12,7 +13,7 @@ namespace ModAPI.Internal.UI
                     return;
 
                 int itemsAdded = 0;
-                foreach (var type in ShelteredContentBridge.GetRegisteredTypes())
+                foreach (var type in ShelteredItemContentBridge.GetRegisteredTypes())
                 {
                     int count = InventoryManager.Instance.GetNumItemsOfType(type);
                     if (count > 0 && panel.m_items.AddItem(type, count))
@@ -31,7 +32,7 @@ namespace ModAPI.Internal.UI
                 if (panel == null || ItemManager.Instance == null || InventoryManager.Instance == null)
                     return;
 
-                foreach (var type in ShelteredContentBridge.GetRegisteredTypes())
+                foreach (var type in ShelteredItemContentBridge.GetRegisteredTypes())
                 {
                     ItemDefinition itemDefinition = ItemManager.Instance.GetItemDefinition(type);
                     if (itemDefinition == null || itemDefinition.ItemBaseParts.Count == 0)
@@ -51,7 +52,7 @@ namespace ModAPI.Internal.UI
                 if (panel == null || ItemManager.Instance == null || InventoryManager.Instance == null)
                     return;
 
-                foreach (var type in ShelteredContentBridge.GetRegisteredTypes())
+                foreach (var type in ShelteredItemContentBridge.GetRegisteredTypes())
                 {
                     ItemDefinition def = ItemManager.Instance.GetItemDefinition(type);
                     if (def == null)
@@ -77,7 +78,7 @@ namespace ModAPI.Internal.UI
                 if (panel == null || InventoryManager.Instance == null)
                     return;
 
-                foreach (var type in ShelteredContentBridge.GetRegisteredTypes())
+                foreach (var type in ShelteredItemContentBridge.GetRegisteredTypes())
                 {
                     int count = InventoryManager.Instance.GetNumItemsOfType(type);
                     if (count > 0)

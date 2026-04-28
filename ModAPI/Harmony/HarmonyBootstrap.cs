@@ -107,8 +107,10 @@ namespace ModAPI.Harmony
                 LogPatchStatus("PlatformInput_PC.GetButtonDown(InputButton)", "PlatformInput_PC", "GetButtonDown", "PlatformInput+InputButton");
                 LogPatchStatus("PlatformInput_PC.GetButtonDown(MenuInputButton)", "PlatformInput_PC", "GetButtonDown", "PlatformInput+MenuInputButton");
 
-                // Explicitly verify UIPatches was discovered and patched
-                var uiPatches = asm.GetType("ModAPI.UI.UIPatches");
+                // Explicitly verify the Sheltered-owned UI patch host was discovered.
+                var uiPatches = shelteredAssembly != null ? shelteredAssembly.GetType("ModAPI.UI.UIPatches") : null;
+                if (uiPatches == null)
+                    uiPatches = asm.GetType("ModAPI.UI.UIPatches");
                 if (uiPatches != null)
                 {
                     MMLog.WriteDebug("Discovered UIPatches for verification.");

@@ -513,8 +513,6 @@ namespace ModAPI.Core
                     _loaderRoot.AddComponent<ModAPI.Inspector.RuntimeInspector>();
                 if (_loaderRoot.GetComponent<ModAPI.Inspector.BoundsHighlighter>() == null)
                     _loaderRoot.AddComponent<ModAPI.Inspector.BoundsHighlighter>();
-                if (_loaderRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
-                    _loaderRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
 
                 // Advanced developer tools (Disabled if decompiler is missing)
                 // This ensures F10 and F12 tools are not accessible in production builds.

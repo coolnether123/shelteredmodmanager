@@ -13,6 +13,7 @@ Related usage guide:
 | Neutral event bus (`ModEventBus`) | `ModAPI.dll` | Current |
 | Sheltered event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
 | Sheltered save compatibility helpers (`GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, custom-save APIs) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
+| Sheltered UI/content compatibility helpers (`InventoryHelper`, `UIHooks`, `ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, NGUI helpers, Spine settings UI renderers) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
 | `IGameHelper` adapters and Sheltered-specific implementations | `ShelteredAPI.dll` | Current |
 | Old v1.2 docs/snippets with conflicting signatures | mixed | Deprecated |
 
@@ -368,6 +369,35 @@ public static Sprite LoadSprite(string modRootPath, string relativePath, float p
 public static AssetBundle LoadBundle(Assembly asm, string relativePath);
 public static AssetBundle LoadBundle(string modRootPath, string relativePath);
 public static GameObject LoadPrefabFromBundle(AssetBundle bundle, string assetPath);
+```
+
+Sheltered inventory helper compatibility API:
+
+```csharp
+// ShelteredAPI-owned 1.3 source alias: ModAPI.Items.InventoryHelper
+public static bool ResolveItemType(string itemId, out ItemManager.ItemType type);
+public static ItemInstance CreateItem(string itemId);
+public static bool TryAddToInventory(ItemInstance item);
+public static bool TryAddToInventory(string itemId, int quantity = 1);
+public static bool TryRemoveFromInventory(string itemId, int quantity = 1);
+public static int GetItemCount(string itemId, bool includeParties = false);
+public static ReadOnlyCollection<ItemStack> GetAllItems();
+public static int GetStorageCapacity();
+public static int GetUsedStorage();
+```
+
+Sheltered UI compatibility APIs:
+
+```csharp
+// ShelteredAPI-owned 1.3 source aliases under ModAPI.UI / ModAPI.Hooks
+public static void ModUIHooks.RegisterButton(TargetMenu menu, string buttonText, Action onClick);
+public static void ContextMenuHelper.RegisterAddon(string optionName, string displayText, Action onSelected, Func<Obj_Base, bool> predicate = null);
+public static GameObject UIHooks.GetUIRoot();
+public static GameObject UIHooks.GetExpeditionMapPanel();
+public static GameObject UIHooks.GetHUD();
+public static GameObject UIHooks.GetRadioPanel();
+public static GameObject UIHooks.GetActivePanel();
+public static Camera UIHooks.GetMapCamera();
 ```
 
 `ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
