@@ -48,12 +48,6 @@ namespace ShelteredAPI.Scenarios
         private bool _windowMenuOpen;
         private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
         private Vector2 _settingsScrollPosition = Vector2.zero;
-        private readonly IScenarioAuthoringSectionHub _sectionHub;
-
-        internal ScenarioAuthoringShellImguiRenderModule(IScenarioAuthoringSectionHub sectionHub)
-        {
-            _sectionHub = sectionHub;
-        }
 
         public string ModuleId
         {
@@ -864,7 +858,9 @@ namespace ShelteredAPI.Scenarios
         private void DrawCustomSpriteEditor()
         {
             ScenarioSpriteSwapAuthoringService.CustomEditorModel editor =
-                _sectionHub.SpriteSwap.GetCustomEditorModel(_snapshot != null ? _snapshot.State : null);
+                _snapshot != null && _snapshot.ShellViewModel != null
+                    ? _snapshot.ShellViewModel.CustomSpriteEditor
+                    : null;
             if (editor == null || !editor.Visible)
                 return;
 

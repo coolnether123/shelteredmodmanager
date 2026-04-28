@@ -721,6 +721,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
         public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
         public ScenarioAuthoringInspectorDocument SpritePickerDocument { get; set; }
+        internal ScenarioSpriteSwapAuthoringService.CustomEditorModel CustomSpriteEditor { get; set; }
         public ScenarioAuthoringSettingsViewModel Settings { get; set; }
         public ScenarioAuthoringContextMenuModel ContextMenu { get; set; }
         public string[] StatusEntries { get; set; }

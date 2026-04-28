@@ -131,6 +131,13 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver) { return new InspectorViewModelBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new StatusBarViewModelBuilder(resolver.Get<ScenarioSelectionScopeService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineNavigationService(resolver.Get<ScenarioAuthoringLayoutService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAssetAuthoringContentBuilder(
+                    resolver.Get<IScenarioAuthoringSectionHub>(),
+                    resolver.Get<ScenarioSelectionScopeService>(),
+                    resolver.Get<ScenarioSpriteRuntimeResolver>());
+            });
         }
 
         public static void AddScenarioInfrastructure(this ServiceCollection services)
