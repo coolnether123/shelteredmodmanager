@@ -273,7 +273,10 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWeatherRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\TriggerRuntimeAdapter.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionScopeService.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioBrowserPanelAdapter.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioBrowserState.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioCatalogEntry.cs" />
+    <Compile Include="Scenarios\Application\Selection\ScenarioLaunchCoordinator.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSaveLibrary.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionCatalogService.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionIds.cs" />

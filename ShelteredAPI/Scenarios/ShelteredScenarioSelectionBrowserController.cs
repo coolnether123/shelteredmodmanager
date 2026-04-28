@@ -114,6 +114,33 @@ namespace ShelteredAPI.Scenarios
             get { return ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>(); }
         }
 
+        private IScenarioSelectionCatalogService Catalog
+        {
+            get { return ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>(); }
+        }
+
+        private ScenarioLaunchCoordinator LaunchCoordinator
+        {
+            get { return ScenarioCompositionRoot.Resolve<ScenarioLaunchCoordinator>(); }
+        }
+
+        private static ScenarioCatalogEntry TryGetCatalogEntry(string scenarioId)
+        {
+            try
+            {
+                ScenarioCatalogEntry entry;
+                if (ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>().TryGet(scenarioId, out entry))
+                    return entry;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Catalog lookup failed for "
+                    + (scenarioId ?? "<null>") + ": " + ex.Message);
+            }
+
+            return null;
+        }
+
         private ShelteredScenarioSelectionBrowserController()
         {
         }
@@ -653,35 +680,35 @@ namespace ShelteredAPI.Scenarios
             if (scenario == null)
                 return false;
 
-            if (!ShelteredCustomScenarioService.Instance.MarkSelected(scenario.Id))
+            ScenarioCatalogEntry entry = TryGetCatalogEntry(scenario.Id);
+            if (entry == null || !entry.IsModded)
             {
-                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] MarkSelected failed for scenario " + scenario.Id + ".");
+                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] No catalog entry for scenario " + scenario.Id + ".");
                 return false;
             }
 
-            SaveEntry startupSave = SaveLibrary.CreateNext(scenario.Id, new SaveCreateOptions
+            // Validate + allocate first, while still in custom mode. If anything
+            // fails here (locked deps, MarkSelected, save allocation) the browser
+            // stays open so the player can pick a different scenario.
+            ScenarioLaunchCoordinator coordinator = LaunchCoordinator;
+            ScenarioLaunchCoordinator.NewGamePreparation preparation;
+            string prepareError;
+            if (!coordinator.PrepareNewGame(entry, scenario.DisplayName, out preparation, out prepareError))
             {
-                name = scenario.DisplayName
-            });
-            if (startupSave == null)
-            {
-                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Failed to allocate startup save for scenario " + scenario.Id + ".");
-                ShelteredCustomScenarioService.Instance.ClearState();
+                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Prepare failed for '" + scenario.Id + "': " + prepareError);
                 return false;
             }
 
+            // Allocation succeeded — only now do we tear down the custom mode UI
+            // and commit the queued target + customisation transition.
             ExitCustomMode(panel, state, scenarioButtons);
             ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-            QueueNewGameSaveTarget(startupSave.scenarioId, startupSave, GetLaunchVirtualSaveType());
-            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Selected custom scenario: " + scenario.Id
-                + " startupSaveId=" + startupSave.id + " startupSlot=" + startupSave.absoluteSlot + ".");
 
-            if (!BeginScenarioLaunchTransition(panel, "custom scenario '" + scenario.Id + "'", GetLaunchVirtualSaveType()))
+            ScenarioBrowserPanelAdapter adapter = new ScenarioBrowserPanelAdapter(panel);
+            string commitError;
+            if (!coordinator.CommitNewGame(adapter, preparation, out commitError))
             {
-                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Launch transition failed for custom scenario '" + scenario.Id + "'.");
-                SaveLibrary.ClearQueuedNewGameSave(GetLaunchVirtualSaveType());
-                SaveLibrary.Delete(startupSave.scenarioId, startupSave.id);
-                ShelteredCustomScenarioService.Instance.ClearState();
+                MMLog.WriteWarning("[ShelteredCustomScenarioSelection] Commit failed for '" + scenario.Id + "': " + commitError);
                 return false;
             }
 
@@ -764,9 +791,18 @@ namespace ShelteredAPI.Scenarios
                 if (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(id, out draftStartupSave) || draftStartupSave == null)
                     throw new InvalidOperationException("Could not resolve the draft save entry for '" + id + "'.");
 
-                QueueNewGameSaveTarget(ScenarioAuthoringDraftRepository.DraftStorageScenarioId, draftStartupSave, launchSaveType);
-                if (!BeginScenarioLaunchTransition(panel, "authoring draft '" + id + "'", launchSaveType))
-                    throw new InvalidOperationException("Scenario selection transition could not be started for draft '" + id + "'.");
+                ScenarioBrowserPanelAdapter draftAdapter = new ScenarioBrowserPanelAdapter(panel);
+                string draftError;
+                if (!LaunchCoordinator.QueueAuthoringDraftLaunch(
+                        draftAdapter,
+                        ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                        draftStartupSave,
+                        launchSaveType,
+                        "authoring draft '" + id + "'",
+                        out draftError))
+                {
+                    throw new InvalidOperationException(draftError ?? ("Scenario selection transition could not be started for draft '" + id + "'."));
+                }
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Queued authoring bootstrap for draft: " + id
                     + " startupSaveId=" + draftStartupSave.id + " startupSlot=" + draftStartupSave.absoluteSlot + ".");
             }

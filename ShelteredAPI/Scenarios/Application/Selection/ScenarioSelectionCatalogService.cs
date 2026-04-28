@@ -31,6 +31,7 @@ namespace ShelteredAPI.Scenarios
             List<ScenarioCatalogEntry> entries = new List<ScenarioCatalogEntry>();
             AddVanillaEntries(entries);
             AddModdedEntries(entries);
+            AddDraftEntries(entries);
             entries.Sort(CompareEntries);
             return entries.ToArray();
         }
@@ -155,6 +156,54 @@ namespace ShelteredAPI.Scenarios
                     DependencyState = dependencyState,
                     DependencyManifest = manifest,
                     CustomScenario = scenario
+                });
+            }
+        }
+
+        // Drafts live in a dedicated storage scenario id (ScenarioAuthoringDrafts)
+        // so their saves are physically separated from published modded scenarios.
+        // Surfacing them as ScenarioCatalogSource.Draft keeps the browser's
+        // Modded tab to published mods only.
+        private void AddDraftEntries(List<ScenarioCatalogEntry> entries)
+        {
+            ScenarioAuthoringDraftRepository repo;
+            try { repo = ScenarioAuthoringDraftRepository.Instance; }
+            catch { return; }
+
+            if (repo == null)
+                return;
+
+            ScenarioInfo[] drafts;
+            try { drafts = repo.ListAll(); }
+            catch (System.Exception ex)
+            {
+                ModAPI.Core.MMLog.WriteWarning("[ScenarioSelectionCatalogService] Draft enumeration failed: " + ex.Message);
+                return;
+            }
+
+            int order = 1000;
+            for (int i = 0; i < drafts.Length; i++)
+            {
+                ScenarioInfo draft = drafts[i];
+                if (draft == null || string.IsNullOrEmpty(draft.Id))
+                    continue;
+
+                entries.Add(new ScenarioCatalogEntry
+                {
+                    ScenarioId = draft.Id,
+                    StorageScenarioId = ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                    Source = ScenarioCatalogSource.Draft,
+                    LaunchMode = ScenarioLaunchMode.AuthoringDraft,
+                    BaseGameMode = ScenarioBaseGameMode.Survival,
+                    DefaultSaveType = SaveManager.SaveType.Slot1,
+                    DisplayName = string.IsNullOrEmpty(draft.DisplayName) ? draft.Id : draft.DisplayName,
+                    Description = "Authoring draft. Open the editor to continue working on this scenario.",
+                    Version = draft.Version,
+                    OwnerModId = draft.OwnerModId,
+                    Order = order + i,
+                    SaveCount = _saveLibrary.CountSaves(ScenarioAuthoringDraftRepository.DraftStorageScenarioId),
+                    CanStart = true,
+                    DependencyState = ScenarioDependencyVerificationState.Match
                 });
             }
         }
