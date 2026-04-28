@@ -74,13 +74,13 @@ These remain available in the 1.3 line to preserve older mod integrations:
 - `PersistentDataAPI`
 
 Current location:
-- `ShelteredAPI.dll` for `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, and `InteractionRegistry`
-- `ModAPI.dll` for remaining legacy helpers not yet moved
+- `ShelteredAPI.dll` for `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `GameUtil`, `PersistentDataAPI`, and custom-save APIs
+- `ModAPI.dll` for neutral loader, settings, event bus, scenario registration, and per-mod persistence contracts
 
 Status:
 - supported in 1.3 as source migration aliases where applicable
 - Sheltered-backed helpers require a `ShelteredAPI.dll` reference even when they keep old `ModAPI.*` namespaces
-- remaining `ModAPI.dll` compatibility helpers are deprecated boundary debt
+- `ModAPI.dll` no longer owns Sheltered save integration in the 1.3 refactor branch
 
 ## 4. Content System
 
@@ -111,12 +111,13 @@ Primary areas:
 - `ModAPI/Spine`
 - `ModAPI/Core`
 - `ModAPI/Util`
+- `ShelteredAPI/Core` and `ShelteredAPI/Persistence` for Sheltered save-backed compatibility helpers
 
 Responsibilities:
 - settings metadata scanning
 - settings UI/controller generation
-- per-save mod state
-- convenience save/load helpers
+- neutral per-save mod state through `ISaveSystem`
+- Sheltered save-backed compatibility helpers through `ShelteredAPI.dll`
 
 Main patterns:
 - `ModManagerBase<T>`
@@ -197,7 +198,7 @@ Representative files:
 ## 9. Save Expansion
 
 Primary area:
-- `ModAPI/Custom Saves`
+- `ShelteredAPI/Custom Saves`
 
 Responsibilities:
 - expanded save slots
@@ -206,7 +207,7 @@ Responsibilities:
 - verification and diagnostics
 - preview capture
 
-Treat this as a standalone subsystem layered under the loader rather than a small helper.
+Treat this as a Sheltered-owned subsystem layered under the loader rather than a neutral ModAPI helper.
 
 ## 10. Inspector and Debugging
 

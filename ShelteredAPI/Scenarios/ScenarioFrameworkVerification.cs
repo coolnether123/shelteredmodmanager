@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using ModAPI.Saves;
-
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -66,7 +64,7 @@ namespace ShelteredAPI.Scenarios
 
         private static void VerifyDependencies(ScenarioValidationResult result)
         {
-            LoadedModInfo parsed = ScenarioDependencyManifest.ParseDependency("Required.Mod@1.2.0");
+            ScenarioModDependency parsed = ScenarioDependencyManifest.ParseDependency("Required.Mod@1.2.0");
             Assert(parsed != null && parsed.modId == "Required.Mod" && parsed.version == "1.2.0",
                 "Dependency parser did not split mod id and version.", result);
 

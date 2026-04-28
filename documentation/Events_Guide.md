@@ -21,7 +21,7 @@ Available event systems:
 | `UIEvents` | Sheltered panel open/close/resume/pause | `ModAPI.Events.UIEvents` in `ShelteredAPI.dll` |
 | `ModEventBus` | Inter-mod custom events | `ModAPI.Events.ModEventBus` in `ModAPI.dll` |
 | `ModAPIRegistry` | Service discovery | `ModAPI.Core.ModAPIRegistry` |
-| `ModAPI.Saves.Events` | Custom save lifecycle | `ModAPI.Saves.Events` |
+| `ModAPI.Saves.Events` | Sheltered custom save lifecycle | `ModAPI.Saves.Events` in `ShelteredAPI.dll` |
 
 ## 2. `GameEvents`
 
@@ -136,7 +136,8 @@ public class CraftingHelperMod : IModPlugin
 
 ## 5. Save Lifecycle Events
 
-The custom saves layer exposes additional save/load events under `ModAPI.Saves.Events`.
+The Sheltered custom saves layer exposes additional save/load events under `ModAPI.Saves.Events`.
+Reference `ShelteredAPI.dll` for these APIs; the namespace is retained for 1.3 source migration.
 
 Common ones:
 - `OnBeforeSave`

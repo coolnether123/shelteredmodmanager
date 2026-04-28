@@ -1,4 +1,3 @@
-using ModAPI.Saves;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -25,7 +24,7 @@ namespace ShelteredAPI.Scenarios
     /// </summary>
     public interface IShelteredCustomScenarioDependencies
     {
-        LoadedModInfo[] RequiredMods { get; }
+        ScenarioModDependency[] RequiredMods { get; }
     }
 
     /// <summary>
@@ -73,9 +72,9 @@ namespace ShelteredAPI.Scenarios
             get { return null; }
         }
 
-        public virtual LoadedModInfo[] RequiredMods
+        public virtual ScenarioModDependency[] RequiredMods
         {
-            get { return new LoadedModInfo[0]; }
+            get { return new ScenarioModDependency[0]; }
         }
 
         public abstract ScenarioDef BuildDefinition(CustomScenarioBuildContext context);

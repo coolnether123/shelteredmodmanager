@@ -70,27 +70,7 @@ namespace ModAPI
 
         public static string GetSaveSlotKey(SaveManager.SaveType type)
         {
-            if (type == SaveManager.SaveType.GlobalData) return "Global";
-            if (type == SaveManager.SaveType.Invalid) return "Invalid";
-
-            // Note: Reflection here is used to avoid cross-plugin dependency issues
-            try
-            {
-                Type proxyType = Type.GetType("ModAPI.Hooks.PlatformSaveProxy, ModAPI");
-                if (proxyType != null)
-                {
-                    var activeField = proxyType.GetField("ActiveCustomSave");
-                    var active = activeField?.GetValue(null);
-                    if (active != null)
-                    {
-                        // Logic simplified for clarity, assuming target is known
-                        return type.ToString(); // Placeholder for actual ID logic
-                    }
-                }
-            }
-            catch { }
-
-            return type.ToString();
+            return SaveRuntimeState.GetSaveSlotKey(type);
         }
     }
 }

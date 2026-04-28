@@ -15,7 +15,6 @@ Reference `ModAPI.dll` and `ShelteredAPI.dll`, then register during plugin start
 
 ```csharp
 using ModAPI.Core;
-using ModAPI.Saves;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios;
 
@@ -32,7 +31,7 @@ public sealed class MyPlugin : IModPlugin
         CustomScenarioRegistration registration = new LongRoadScenario().ToRegistration();
         registration.RequiredMods = new[]
         {
-            new LoadedModInfo { modId = "com.example.content", version = "1.2.0" }
+            new ScenarioModDependency { modId = "com.example.content", version = "1.2.0" }
         };
 
         scenarios.Register(registration);
@@ -48,13 +47,13 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
     public override string DescriptionKey { get { return "scenario.example.longroad.desc"; } }
     public override string Version { get { return "1.0.0"; } }
 
-    public override LoadedModInfo[] RequiredMods
+    public override ScenarioModDependency[] RequiredMods
     {
         get
         {
             return new[]
             {
-                new LoadedModInfo { modId = "com.example.content", version = "1.2.0" }
+                new ScenarioModDependency { modId = "com.example.content", version = "1.2.0" }
             };
         }
     }

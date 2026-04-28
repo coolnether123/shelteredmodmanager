@@ -1,6 +1,5 @@
 using System;
 using System.Reflection;
-using ModAPI.Saves;
 
 namespace ModAPI.Scenarios
 {
@@ -37,7 +36,7 @@ namespace ModAPI.Scenarios
         public int Order { get; set; }
         public string OwnerModId { get; set; }
         public Assembly OwnerAssembly { get; set; }
-        public LoadedModInfo[] RequiredMods { get; set; }
+        public ScenarioModDependency[] RequiredMods { get; set; }
         public object Definition { get; set; }
         public CustomScenarioDefinitionFactory DefinitionFactory { get; set; }
         public Action<CustomScenarioEventArgs> OnSelected { get; set; }
@@ -57,7 +56,7 @@ namespace ModAPI.Scenarios
             string version,
             int order,
             string ownerModId,
-            LoadedModInfo[] requiredMods,
+            ScenarioModDependency[] requiredMods,
             bool hasDefinition,
             bool hasDefinitionFactory)
         {
@@ -78,7 +77,7 @@ namespace ModAPI.Scenarios
         public string Version { get; private set; }
         public int Order { get; private set; }
         public string OwnerModId { get; private set; }
-        public LoadedModInfo[] RequiredMods { get; private set; }
+        public ScenarioModDependency[] RequiredMods { get; private set; }
         public bool HasDefinition { get; private set; }
         public bool HasDefinitionFactory { get; private set; }
     }

@@ -1,4 +1,6 @@
+using System;
 using ModAPI.Core;
+using ModAPI.Harmony;
 using ModAPI.Actors;
 using ModAPI.InputServices;
 using ModAPI.Scenarios;
@@ -35,6 +37,7 @@ namespace ShelteredAPI.Core
                 ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
                 EnsurePersistenceGuard();
                 EnsureApiRegistrations();
+                EnsureSaveProtectionPatches();
 
                 _initialized = true;
                 MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Core ShelteredAPI input and keybind systems initialized.");
@@ -70,6 +73,11 @@ namespace ShelteredAPI.Core
             RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);
             RegisterApi("ShelteredAPI.GameLifecycle", lifecycleSource);
 
+            ISaveRuntimeAdapter saveRuntime = new ShelteredSaveRuntimeAdapter();
+            RegisterApi(GameRuntimeApiIds.SaveRuntime, saveRuntime);
+            RegisterApi("ShelteredAPI.SaveRuntime", saveRuntime);
+            saveRuntime.EnsureRuntimeReady();
+
             IUiLifecycleEventSink uiLifecycleEvents = new ShelteredUiLifecycleEventSink();
             RegisterApi(GameRuntimeApiIds.UiLifecycleEvents, uiLifecycleEvents);
             RegisterApi("ShelteredAPI.UiLifecycleEvents", uiLifecycleEvents);
@@ -102,6 +110,34 @@ namespace ShelteredAPI.Core
             RegisterApi("ShelteredAPI.CustomScenarios", customScenarios);
             RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);
             RegisterApi("ShelteredAPI.ScenarioAuthoring", scenarioAuthoring);
+        }
+
+        private static void EnsureSaveProtectionPatches()
+        {
+            try
+            {
+                var harmony = new HarmonyLib.Harmony("ShelteredModManager.ShelteredAPI.SaveProtection");
+                var patchOptions = new HarmonyUtil.PatchOptions
+                {
+                    AllowDebugPatches = HarmonyBootstrap.ReadManagerBool("EnableDebugPatches", false),
+                    AllowDangerousPatches = HarmonyBootstrap.ReadManagerBool("AllowDangerousPatches", false),
+                    AllowStructReturns = HarmonyBootstrap.ReadManagerBool("AllowStructReturns", false)
+                };
+                var registryOptions = PatchRegistry.CreateManagerOptions(
+                    patchOptions,
+                    "ShelteredAPI",
+                    key => HarmonyBootstrap.ReadManagerString(key, null));
+
+                PatchRegistry.ApplyManualModule(
+                    harmony,
+                    typeof(SaveProtectionPatches),
+                    delegate { SaveProtectionPatches.ApplyPatches(harmony); },
+                    registryOptions);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ShelteredApiRuntimeBootstrap.SaveProtection", "Failed to apply Sheltered save protection patches: " + ex.Message);
+            }
         }
 
         private static void RegisterApi<T>(string apiId, T implementation) where T : class

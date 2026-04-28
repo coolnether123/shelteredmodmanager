@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using ModAPI.Saves;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -24,11 +23,10 @@ namespace ModAPI.Core
             public ulong[] streamSteps;
         }
 
-        public static void Load(SaveEntry entry)
+        public static void Load(object payload)
         {
-            if (entry == null) return;
-
-            string filePath = GetSeedFilePath(entry);
+            string filePath = GetSeedFilePath();
+            if (string.IsNullOrEmpty(filePath)) return;
             SeedData data = null;
 
             if (File.Exists(filePath))
@@ -84,13 +82,12 @@ namespace ModAPI.Core
             ModRandom.NotifySeedChanged();
         }
 
-        public static void Save(SaveEntry entry)
+        public static void Save(object payload)
         {
-            if (entry == null) return;
-
             try
             {
-                string filePath = GetSeedFilePath(entry);
+                string filePath = GetSeedFilePath();
+                if (string.IsNullOrEmpty(filePath)) return;
                 ModRandomStateSnapshot snapshot = ModRandom.CreateSnapshot();
                 var data = new SeedData();
                 data.masterSeed = snapshot.MasterSeed;
@@ -104,7 +101,7 @@ namespace ModAPI.Core
 
                 string json = JsonUtility.ToJson(data, true);
                 File.WriteAllText(filePath, json);
-                MMLog.WriteDebug(string.Format("[ModRandom] Saved seed.json to {0}. Deterministic={1}", entry.id, data.isDeterministic));
+                MMLog.WriteDebug(string.Format("[ModRandom] Saved seed.json. Deterministic={0}", data.isDeterministic));
             }
             catch (Exception ex)
             {
@@ -112,11 +109,10 @@ namespace ModAPI.Core
             }
         }
 
-        private static string GetSeedFilePath(SaveEntry entry)
+        private static string GetSeedFilePath()
         {
-            // We use the same directory logic as SaveSystemImpl
-            string scenario = string.IsNullOrEmpty(entry.scenarioId) ? "Standard" : entry.scenarioId;
-            string slotDir = DirectoryProvider.SlotRoot(scenario, entry.absoluteSlot, false);
+            string slotDir = SaveRuntimeAdapters.GetCurrentSlotPath();
+            if (string.IsNullOrEmpty(slotDir)) return null;
             
             if (!Directory.Exists(slotDir)) Directory.CreateDirectory(slotDir);
             

@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using UnityEngine;
+using ModAPI.Core;
 
 namespace ModAPI.Saves
 {
@@ -8,55 +8,24 @@ namespace ModAPI.Saves
     {
         public static string ModsRoot
         {
-            get
-            {
-                try
-                {
-                    // Prefer <GameRoot>/mods (lowercase) to align with manager
-                    var gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-                    var a = Path.Combine(gameRoot, "mods");
-                    var b = Path.Combine(gameRoot, "Mods");
-                    if (Directory.Exists(a)) return a;
-                    if (Directory.Exists(b)) return b;
-                    Directory.CreateDirectory(a);
-                    return a;
-                }
-                catch
-                {
-                    return Path.Combine(Directory.GetCurrentDirectory(), "mods");
-                }
-            }
+            get { return ModApiPaths.ModsRoot; }
         }
 
         public static string SmmRoot
         {
-            get
-            {
-                string gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
-                return Path.Combine(gameRoot, "SMM");
-            }
+            get { return ModApiPaths.SmmRoot; }
         }
 
-        public static string ConfigPath => Path.Combine(Path.Combine(SmmRoot, "bin"), "mod_manager.ini");
+        public static string ConfigPath => ModApiPaths.ConfigPath;
 
         public static string ModApiRoot
         {
-            get
-            {
-                var root = Path.Combine(ModsRoot, "ModAPI");
-                EnsureDir(root);
-                return root;
-            }
+            get { return ModApiPaths.ModApiRoot; }
         }
 
         public static string UserRoot
         {
-            get
-            {
-                var root = Path.Combine(ModApiRoot, "User");
-                EnsureDir(root);
-                return root;
-            }
+            get { return ModApiPaths.UserRoot; }
         }
 
         public static string SavesRoot
@@ -127,12 +96,7 @@ namespace ModAPI.Saves
 
         public static string LibsRoot
         {
-            get
-            {
-                var root = Path.Combine(Directory.GetCurrentDirectory(), "libs");
-                EnsureDir(root);
-                return root;
-            }
+            get { return ModApiPaths.LibsRoot; }
         }
 
         private static void EnsureDir(string path)

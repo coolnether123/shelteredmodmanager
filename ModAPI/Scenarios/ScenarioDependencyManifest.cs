@@ -1,33 +1,55 @@
 using System;
 using System.Collections.Generic;
-using ModAPI.Saves;
 
 namespace ModAPI.Scenarios
 {
     /// <summary>
-    /// Converts scenario dependency declarations into the same manifest shape used by save verification.
+    /// Neutral mod dependency declaration used by custom scenario registration.
+    /// </summary>
+    [Serializable]
+    public sealed class ScenarioModDependency
+    {
+        public string modId;
+        public string version;
+        public string[] warnings;
+    }
+
+    /// <summary>
+    /// Neutral dependency manifest produced by ModAPI scenario contracts.
+    /// Game-specific assemblies translate it into their runtime save/selection format.
+    /// </summary>
+    [Serializable]
+    public sealed class ScenarioDependencyManifestData
+    {
+        public string name;
+        public string lastModified;
+        public ScenarioModDependency[] requiredMods;
+    }
+
+    /// <summary>
+    /// Converts scenario dependency declarations into a game-neutral manifest shape.
     /// </summary>
     public static class ScenarioDependencyManifest
     {
-        public static SlotManifest Create(string scenarioName, LoadedModInfo[] requiredMods)
+        public static ScenarioDependencyManifestData Create(string scenarioName, ScenarioModDependency[] requiredMods)
         {
-            return new SlotManifest
+            return new ScenarioDependencyManifestData
             {
-                family_name = scenarioName ?? string.Empty,
+                name = scenarioName ?? string.Empty,
                 lastModified = DateTime.UtcNow.ToString("o"),
-                lastLoadedMods = CloneRequiredMods(requiredMods)
+                requiredMods = CloneRequiredMods(requiredMods)
             };
         }
 
-        public static LoadedModInfo[] FromDependencyStrings(IList<string> dependencies)
+        public static ScenarioModDependency[] FromDependencyStrings(IList<string> dependencies)
         {
             if (dependencies == null || dependencies.Count == 0)
-                return new LoadedModInfo[0];
+                return new ScenarioModDependency[0];
 
-            List<LoadedModInfo> result = new List<LoadedModInfo>();
+            List<ScenarioModDependency> result = new List<ScenarioModDependency>();
             for (int i = 0; i < dependencies.Count; i++)
             {
-                LoadedModInfo dependency = ParseDependency(dependencies[i]);
+                ScenarioModDependency dependency = ParseDependency(dependencies[i]);
                 if (dependency != null)
                     AddOrMerge(result, dependency);
             }
@@ -35,7 +57,7 @@ namespace ModAPI.Scenarios
             return result.ToArray();
         }
 
-        public static LoadedModInfo ParseDependency(string dependency)
+        public static ScenarioModDependency ParseDependency(string dependency)
         {
             string raw = TrimToNull(dependency);
             if (raw == null)
@@ -57,7 +79,7 @@ namespace ModAPI.Scenarios
             if (modId == null)
                 return null;
 
-            return new LoadedModInfo
+            return new ScenarioModDependency
             {
                 modId = modId,
                 version = TrimToNull(version),
@@ -65,38 +87,38 @@ namespace ModAPI.Scenarios
             };
         }
 
-        public static LoadedModInfo[] Merge(LoadedModInfo[] first, LoadedModInfo[] second)
+        public static ScenarioModDependency[] Merge(ScenarioModDependency[] first, ScenarioModDependency[] second)
         {
-            List<LoadedModInfo> merged = new List<LoadedModInfo>();
+            List<ScenarioModDependency> merged = new List<ScenarioModDependency>();
             AppendAll(merged, first);
             AppendAll(merged, second);
             return merged.ToArray();
         }
 
-        public static LoadedModInfo[] CloneRequiredMods(LoadedModInfo[] requiredMods)
+        public static ScenarioModDependency[] CloneRequiredMods(ScenarioModDependency[] requiredMods)
         {
             if (requiredMods == null || requiredMods.Length == 0)
-                return new LoadedModInfo[0];
+                return new ScenarioModDependency[0];
 
-            List<LoadedModInfo> result = new List<LoadedModInfo>();
+            List<ScenarioModDependency> result = new List<ScenarioModDependency>();
             AppendAll(result, requiredMods);
             return result.ToArray();
         }
 
-        private static void AppendAll(List<LoadedModInfo> target, LoadedModInfo[] mods)
+        private static void AppendAll(List<ScenarioModDependency> target, ScenarioModDependency[] mods)
         {
             if (target == null || mods == null)
                 return;
 
             for (int i = 0; i < mods.Length; i++)
             {
-                LoadedModInfo normalized = Normalize(mods[i]);
+                ScenarioModDependency normalized = Normalize(mods[i]);
                 if (normalized != null)
                     AddOrMerge(target, normalized);
             }
         }
 
-        private static LoadedModInfo Normalize(LoadedModInfo mod)
+        private static ScenarioModDependency Normalize(ScenarioModDependency mod)
         {
             if (mod == null)
                 return null;
@@ -105,7 +127,7 @@ namespace ModAPI.Scenarios
             if (modId == null)
                 return null;
 
-            return new LoadedModInfo
+            return new ScenarioModDependency
             {
                 modId = modId,
                 version = TrimToNull(mod.version),
@@ -113,7 +135,7 @@ namespace ModAPI.Scenarios
             };
         }
 
-        private static void AddOrMerge(List<LoadedModInfo> target, LoadedModInfo dependency)
+        private static void AddOrMerge(List<ScenarioModDependency> target, ScenarioModDependency dependency)
         {
             for (int i = 0; i < target.Count; i++)
             {

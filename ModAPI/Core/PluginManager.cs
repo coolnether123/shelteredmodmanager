@@ -4,9 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
-using HarmonyLib;
 using ModAPI.Harmony;
-using ModAPI.Hooks;
 using ModAPI.Spine;
 using ModAPI.Actors;
 using UnityEngine;
@@ -207,40 +205,21 @@ namespace ModAPI.Core
 
             SharedAssemblyResolver.ResolveSharedAssembly("ShelteredAPI");
             HarmonyBootstrap.EnsurePatched();
-            
-            // Force injection in case SaveManager.Awake already ran before we could patch it
-            try { SaveManager_Injection_Patch.Inject(SaveManager.instance); } catch { }
 
             try
             {
-                var harmony = new HarmonyLib.Harmony("ShelteredModManager.PluginManager");
-                var patchOptions = new ModAPI.Harmony.HarmonyUtil.PatchOptions
-                {
-                    AllowDebugPatches = HarmonyBootstrap.ReadManagerBool("EnableDebugPatches", false),
-                    AllowDangerousPatches = HarmonyBootstrap.ReadManagerBool("AllowDangerousPatches", false),
-                    AllowStructReturns = HarmonyBootstrap.ReadManagerBool("AllowStructReturns", false)
-                };
-                var registryOptions = ModAPI.Harmony.PatchRegistry.CreateManagerOptions(
-                    patchOptions,
-                    "PluginManager",
-                    key => HarmonyBootstrap.ReadManagerString(key, null));
-                ModAPI.Harmony.PatchRegistry.ApplyManualModule(
-                    harmony,
-                    typeof(SaveProtectionPatches),
-                    delegate { SaveProtectionPatches.ApplyPatches(harmony); },
-                    registryOptions);
-
                 InitializeLoadedGameRuntimeBootstraps();
+                SaveRuntimeAdapters.EnsureRuntimeReady();
 
                 // Initialize Core Systems
-                ModAPI.Saves.Events.OnAfterLoad += ModRandomState.Load;
-                ModAPI.Saves.Events.OnBeforeSave += ModRandomState.Save;
+                GameLifecycleSources.AddAfterLoad(ModRandomState.Load);
+                GameLifecycleSources.AddBeforeSave(ModRandomState.Save);
                 GameLifecycleSources.AddSessionStarted(OnSessionStarted);
                 GameLifecycleSources.AddNewGame(OnNewGame);
             }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("PluginManager.InitializeLoader", "Failed to apply save protection patches: " + ex.Message);
+                MMLog.WarnOnce("PluginManager.InitializeLoader", "Failed to initialize runtime bootstrap hooks: " + ex.Message);
             }
         }
 

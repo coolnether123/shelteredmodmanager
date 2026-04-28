@@ -187,6 +187,9 @@ public void Start(IPluginContext ctx)
 
 ## 7. Persistence
 
+`ModAPI.dll` owns neutral per-mod JSON persistence through `ctx.SaveSystem`.
+The active game supplies slot paths through the `GameRuntime.SaveRuntime` adapter; Sheltered's adapter is hosted by `ShelteredAPI.dll`.
+
 ```csharp
 public class SaveState { public int Counter; }
 private readonly SaveState _state = new SaveState();
@@ -196,6 +199,8 @@ public void Initialize(IPluginContext ctx)
     ctx.SaveSystem.RegisterModData("state", _state);
 }
 ```
+
+Sheltered save-backed compatibility helpers such as `ctx.SaveData(...)`, `ctx.LoadData(...)`, `GameUtil`, `ModList`, and `ModDictionary` are hosted by `ShelteredAPI.dll` in the 1.3 line, even when their namespaces remain `ModAPI.*` for source migration.
 
 ```csharp
 ctx.SaveData("stats", myStats);

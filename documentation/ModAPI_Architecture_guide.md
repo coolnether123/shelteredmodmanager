@@ -111,6 +111,8 @@ Per-plugin context exposes:
 - `FindPanel(...)`
 - `AddComponentToPanel<T>(...)`
 
+`SaveSystem` is neutral ModAPI per-mod persistence. It receives the active host slot path through `GameRuntime.SaveRuntime`; Sheltered's `SaveManager`, custom save slots, and save verification live in `ShelteredAPI.dll`.
+
 `Actors` is the registry-first actor facade. It combines:
 - registry CRUD
 - component storage
@@ -130,6 +132,8 @@ Per-plugin context exposes:
 - event registry/disposal support
 - automatic settings discovery and loading
 - automatic persistence scanning
+
+Sheltered save-backed helpers such as `PersistentDataAPI`, `GameUtil`, `ModList`, and `ModDictionary` are hosted by `ShelteredAPI.dll` in the current refactor branch.
 
 `ModManagerBase<T>` adds a strongly typed `Config` surface.
 

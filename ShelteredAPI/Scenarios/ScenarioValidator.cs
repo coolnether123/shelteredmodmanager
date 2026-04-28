@@ -76,7 +76,7 @@ namespace ShelteredAPI.Scenarios
 
             for (int i = 0; i < definition.Dependencies.Count; i++)
             {
-                ModAPI.Saves.LoadedModInfo dependency = ScenarioDependencyManifest.ParseDependency(definition.Dependencies[i]);
+                ScenarioModDependency dependency = ScenarioDependencyManifest.ParseDependency(definition.Dependencies[i]);
                 if (dependency == null)
                     continue;
 

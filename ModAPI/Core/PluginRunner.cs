@@ -69,7 +69,7 @@ namespace ModAPI.Core
             if (Instance == null) Instance = this;
             MainThreadId = Thread.CurrentThread.ManagedThreadId;
             IsQuitting = false;
-            ModAPI.Hooks.PlatformSaveProxy.ResetStatus();
+            SaveRuntimeAdapters.ResetRuntimeState();
             ModThreads.FlushPendingMainThreadCallbacks();
             HookUnityLogBridge();
             _useModernApi = TryHookModernSceneEvents();
@@ -310,23 +310,7 @@ namespace ModAPI.Core
             if (IsQuitting && Time.realtimeSinceStartup >= _nextQuitHeartbeatAt)
             {
                 _nextQuitHeartbeatAt = Time.realtimeSinceStartup + 0.5f;
-                string detail = string.Empty;
-                try
-                {
-                    var sm = SaveManager.instance;
-                    if (sm != null)
-                    {
-                        detail = "isSaving=" + sm.isSaving + ", isLoading=" + sm.isLoading;
-                    }
-                    else
-                    {
-                        detail = "SaveManager.instance=null";
-                    }
-                }
-                catch (Exception ex)
-                {
-                    detail = "SaveManager read failed: " + ex.Message;
-                }
+                string detail = SaveRuntimeAdapters.GetQuitHeartbeatDetail();
                 SaveExitTracker.Mark("QuittingHeartbeat", detail);
             }
 

@@ -4,6 +4,8 @@ using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Harmony;
+using ModAPI.Hooks;
+using ModAPI.Saves;
 
 namespace ModAPI.Events
 {
@@ -357,27 +359,16 @@ namespace ModAPI.Events
         {
             try
             {
-                Type proxyType = Type.GetType("ModAPI.Hooks.PlatformSaveProxy, ModAPI", false);
-                if (proxyType == null)
-                    return;
-
-                FieldInfo activeCustomSave = proxyType.GetField("ActiveCustomSave", BindingFlags.Public | BindingFlags.Static);
-                if (activeCustomSave == null)
-                    return;
-
-                object customEntry = activeCustomSave.GetValue(null);
+                SaveEntry customEntry = PlatformSaveProxy.ActiveCustomSave;
                 if (customEntry == null)
                     return;
 
-                Type eventsType = Type.GetType("ModAPI.Saves.Events, ModAPI", false);
-                if (eventsType == null)
-                    return;
-
-                MethodInfo raiseMethod = eventsType.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
-                if (raiseMethod == null)
-                    return;
-
-                raiseMethod.Invoke(null, new object[] { customEntry });
+                if (methodName == "RaiseBeforeSave")
+                    ModAPI.Saves.Events.RaiseBeforeSave(customEntry);
+                else if (methodName == "RaiseAfterLoad")
+                    ModAPI.Saves.Events.RaiseAfterLoad(customEntry);
+                else if (methodName == "RaiseBeforeLoad")
+                    ModAPI.Saves.Events.RaiseBeforeLoad(customEntry);
             }
             catch (Exception ex)
             {

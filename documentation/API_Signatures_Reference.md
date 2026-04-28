@@ -12,7 +12,7 @@ Related usage guide:
 | Core loader/plugin/content/settings APIs | `ModAPI.dll` | Current |
 | Neutral event bus (`ModEventBus`) | `ModAPI.dll` | Current |
 | Sheltered event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
-| Remaining compatibility helpers (`GameUtil`, `PersistentDataAPI`) | `ModAPI.dll` | Deprecated boundary debt |
+| Sheltered save compatibility helpers (`GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, custom-save APIs) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
 | `IGameHelper` adapters and Sheltered-specific implementations | `ShelteredAPI.dll` | Current |
 | Old v1.2 docs/snippets with conflicting signatures | mixed | Deprecated |
 
@@ -92,9 +92,29 @@ public interface IContentResolutionService
     IEnumerable<object> GetRegisteredRuntimeItemKeys();
 }
 
+public interface IModSaveContext
+{
+    string SlotPath { get; }
+    int SlotIndex { get; }
+    string SaveScopeId { get; }
+    string SaveId { get; }
+    object HostSaveDescriptor { get; }
+}
+
+public interface ISaveRuntimeAdapter
+{
+    string GetCurrentSlotPath();
+    int ActiveSlotIndex { get; }
+    IModSaveContext GetCurrentSaveContext();
+    void EnsureRuntimeReady();
+    void ResetRuntimeState();
+    string GetQuitHeartbeatDetail();
+}
+
 public static class GameRuntimeApiIds
 {
     public const string ContentResolution = "GameRuntime.ContentResolution";
+    public const string SaveRuntime = "GameRuntime.SaveRuntime";
 }
 ```
 
@@ -424,9 +444,20 @@ public interface IUiLifecycleEventSink
     void RaiseButtonClicked(object button, string buttonName);
 }
 
+public interface ISaveRuntimeAdapter
+{
+    string GetCurrentSlotPath();
+    int ActiveSlotIndex { get; }
+    IModSaveContext GetCurrentSaveContext();
+    void EnsureRuntimeReady();
+    void ResetRuntimeState();
+    string GetQuitHeartbeatDetail();
+}
+
 // ModAPI.Scenarios neutral scenario registration/lifecycle contracts
 public static class GameRuntimeApiIds
 {
+    public const string SaveRuntime = "GameRuntime.SaveRuntime";
     public const string CustomScenarios = "GameRuntime.CustomScenarios";
 }
 
@@ -455,7 +486,7 @@ public class CustomScenarioRegistration
     public int Order { get; set; }
     public string OwnerModId { get; set; }
     public Assembly OwnerAssembly { get; set; }
-    public LoadedModInfo[] RequiredMods { get; set; }
+    public ScenarioModDependency[] RequiredMods { get; set; }
     public object Definition { get; set; }
     public CustomScenarioDefinitionFactory DefinitionFactory { get; set; }
     public Action<CustomScenarioEventArgs> OnSelected { get; set; }
@@ -475,11 +506,11 @@ public sealed class ScenarioInfo
 
 public static class ScenarioDependencyManifest
 {
-    public static SlotManifest Create(string scenarioName, LoadedModInfo[] requiredMods);
-    public static LoadedModInfo[] FromDependencyStrings(IList<string> dependencies);
-    public static LoadedModInfo ParseDependency(string dependency);
-    public static LoadedModInfo[] Merge(LoadedModInfo[] first, LoadedModInfo[] second);
-    public static LoadedModInfo[] CloneRequiredMods(LoadedModInfo[] requiredMods);
+    public static ScenarioDependencyManifestData Create(string scenarioName, ScenarioModDependency[] requiredMods);
+    public static ScenarioModDependency[] FromDependencyStrings(IList<string> dependencies);
+    public static ScenarioModDependency ParseDependency(string dependency);
+    public static ScenarioModDependency[] Merge(ScenarioModDependency[] first, ScenarioModDependency[] second);
+    public static ScenarioModDependency[] CloneRequiredMods(ScenarioModDependency[] requiredMods);
 }
 
 public sealed class ScenarioValidationResult
@@ -615,9 +646,18 @@ public static void RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainT
 protected void RunInBackground<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError = null);
 ```
 
-## Persistent Data (`ModAPI.Util`)
+## Persistent Data (`ModAPI.Core`, ShelteredAPI)
 
 ```csharp
+// ModAPI.dll
+public interface ISaveSystem
+{
+    string GetCurrentSlotPath();
+    int ActiveSlotIndex { get; }
+    void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class;
+}
+
+// ShelteredAPI.dll, namespace retained for 1.3 source migration
 public static void SaveData<T>(this IPluginContext ctx, string key, T data);
 public static bool LoadData<T>(this IPluginContext ctx, string key, out T value);
 ```

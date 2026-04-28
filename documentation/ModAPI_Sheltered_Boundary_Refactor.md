@@ -21,7 +21,7 @@ These surfaces are intended to remain in `ModAPI` after Sheltered references are
 | --- | --- |
 | `Core` plugin lifecycle contracts (`IModPlugin`, optional lifecycle interfaces), mod metadata, discovery, logging, registry helpers, and main-thread scheduling contracts | Framework behavior that applies to any game host. |
 | `ModAPIRegistry`, shared assembly resolution, and basic plugin host wiring | Neutral runtime infrastructure, once Sheltered bootstrap details are moved behind host adapters. |
-| `Persistence` containers and generic mod persistence models | Framework persistence primitives that do not require Sheltered managers. |
+| `ISaveSystem`, `ModPersistenceData`, `SaveLoadDictionary`, neutral persistence callbacks, and `ISaveRuntimeAdapter` | Framework persistence primitives and ports that do not require Sheltered managers. |
 | `Spine` settings metadata, scanning, and neutral settings definitions | Game-neutral settings contract/model layer. |
 | `Input` binding models, action registry, scroll query/source contracts | Neutral input description and dispatch contracts. |
 | `Actors/Abstractions` and most `Actors/Models` | Neutral actor registry/component contracts, after Sheltered-specific enum values or adapters are split. |
@@ -39,7 +39,7 @@ These surfaces need neutral contracts or framework pieces in `ModAPI`, with Shel
 | `IGameHelper` and `IPluginContext.Game` | Game-helper abstraction using neutral IDs/contracts | Sheltered `FamilyMember`, `ItemManager`, and manager-backed implementation/adapters. |
 | Actor system | Registry/component/binding/event/simulation contracts | Sheltered family, party, encounter, and live-sync adapters. |
 | Character abstractions/models | Future neutral character identity/effect contracts only if separated from host runtime types | 1.3 Sheltered character effect/proxy surface, `FamilyMember`, party, effect runtime, and Sheltered character proxy implementations. |
-| Save system | `ISaveSystem` contract and mod data registration model | `SaveManager` hooks, slot routing, expanded save storage, UI, and migration runtime. |
+| Save system | `ISaveSystem`, per-mod JSON persistence mechanics, `IModSaveContext`, `ISaveRuntimeAdapter`, and generic mod data registration models | `SaveManager` hooks, slot routing, expanded save storage, custom-save UI, manifest verification, and migration runtime. |
 | UI hooks | Neutral hook registration contracts and lifecycle abstractions | NGUI widgets, `BasePanel`, `UIPanelManager`, mod-manager panels, settings panels, and injection runtime. |
 | Input | Neutral binding/action contracts | Sheltered vanilla actions, Unity legacy/touchpad readers, keybind persistence, and conflict UI. |
 | Content | `IContentResolutionService` for resolving mod-facing IDs to opaque host runtime keys; future neutral content extension point contracts if needed | Sheltered item, recipe, loot, localization, asset, inventory integrations, and host key resolution. |
@@ -58,10 +58,10 @@ These current `ModAPI` surfaces encode Sheltered runtime concepts and should mov
 | Remaining manager-state helpers that name Sheltered managers | Prompt 4 moved `ManagerStateHelper` to `ShelteredAPI`. |
 | Remaining event helpers backed by Sheltered managers or panels | Prompt 4 moved `GameEvents`, `FactionEvents`, `UIEvents`, and `GameTimeTriggerHelper` to `ShelteredAPI`. |
 | `Hooks/WorldHooks.cs`, `Hooks/UIHooks.cs` and remaining interaction-style helpers outside the moved registry | Sheltered world/UI hook vocabulary and runtime targets. Prompt 4 moved `InteractionRegistry` to `ShelteredAPI`. |
-| `Util/GameUtil.cs`, `Util/PersistentDataAPI.cs` | Sheltered exploration/save manager helpers. |
+| `GameUtil`, `PersistentDataAPI`, and `ModAPI.Persistence.ModList/ModDictionary` 1.3 aliases | Sheltered exploration/save manager helpers and `SaveData`/`ISaveable` integrations. Prompt 5 moved these implementations to `ShelteredAPI`. |
 | Remaining typed compatibility bridge in `Core/ShelteredContentBridge.cs` | It still exposes Sheltered item runtime types for 1.3 compatibility, but Prompt 2 removed its direct reflection dependency on ShelteredAPI. Future phases should delete this adapter when item/content helpers move. |
-| `Core/SaveSystemImpl.cs`, `Core/SaveProtection.cs`, `Core/SaveExitTracer.cs` where they depend on Sheltered save/quit flow | Sheltered save/runtime implementation, not a neutral framework contract. |
-| `Custom Saves/**` | Sheltered `SaveManager`, slot selection UI, save verification, and expanded vanilla save implementation. |
+| `Core/SaveProtection.cs` and `Core/SaveRuntimeState.cs` | Sheltered save/runtime implementation, not a neutral framework contract. Prompt 5 moved these implementations to `ShelteredAPI`. |
+| `Custom Saves/**` | Sheltered `SaveManager`, slot selection UI, save verification, and expanded vanilla save implementation. Prompt 5 moved this tree to `ShelteredAPI`. |
 | NGUI/UI implementation files under `UI/**` | NGUI widgets, panel injection, settings panel, mod-manager panel, and UI patch runtime. |
 | `Harmony/MainMenuPatches.cs` and `Harmony/Transpilers/ShelteredPatterns.cs` | Sheltered menu/runtime patch targets and Sheltered-specific IL helpers. |
 | `Debugging/CrashCorridorMapDiagnostics.cs` | Sheltered map/panel diagnostics and manager patches. |
@@ -73,7 +73,7 @@ These are compatibility debts, not long-term framework surfaces:
 
 | Surface | Replacement Direction |
 | --- | --- |
-| v1.2 compatibility helpers still retained in `ModAPI` (`GameUtil`, `PersistentDataAPI`) | Move to `ShelteredAPI` and leave only explicit migration documentation or obsolete forwarding shims in the next breaking line. |
+| v1.2 compatibility helpers now hosted in `ShelteredAPI` (`GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, custom-save APIs) | Keep documented as Sheltered-owned aliases until a later breaking line can rename or replace them cleanly. |
 | 1.3 source migration aliases now hosted in `ShelteredAPI` (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `ManagerStateHelper`) | Keep documented as Sheltered-owned aliases until a later breaking line can rename or replace them cleanly. |
 | Duplicate compatibility files that already have ShelteredAPI equivalents | Keep one Sheltered-owned implementation and remove the `ModAPI` copy when the compatibility window closes. |
 | Examples that compile or accidentally patch runtime behavior | Keep as documentation/sample source only, not compiled framework behavior. |
@@ -153,6 +153,21 @@ Boundary baseline shrink from Prompt 4:
 
 - removed 32 event/character/game-state/interaction entries,
 - baseline count changed from `264` to `232`.
+
+## Prompt 5 Save Ownership Split
+
+Prompt 5 split generic mod persistence from Sheltered save-system integration:
+
+- `ModAPI.Core.ISaveRuntimeAdapter` and `IModSaveContext` were added as narrow neutral save ports. `ModAPI` uses them for per-mod JSON persistence, deterministic RNG seed storage, startup readiness, and quit heartbeat diagnostics without naming `SaveManager`, `SaveData`, custom save slots, or `SaveEntry`.
+- `ModAPI.Core.SaveSystemImpl` remains in `ModAPI` because it now owns only generic per-mod JSON persistence under the host-provided slot path.
+- `ShelteredAPI.Core.ShelteredSaveRuntimeAdapter` owns Sheltered slot-path resolution, active custom-save descriptors, proxy injection readiness, and SaveManager heartbeat details.
+- `SaveProtectionPatches`, `SaveRuntimeState`, `Custom Saves/**`, `GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, `ModPersistence`, and `MainMenuPatches` are hosted by `ShelteredAPI.dll`. Several keep old `ModAPI.*` namespaces as 1.3 source migration aliases.
+- `ModAPI.Scenarios` no longer depends on custom-save manifest DTOs. Scenario dependency declarations now use `ScenarioModDependency` and `ScenarioDependencyManifestData`; `ShelteredAPI` converts those to Sheltered `SlotManifest` data for locked scenario/save verification.
+
+Boundary baseline shrink from Prompt 5:
+
+- removed 64 save/custom-save/persistence entries,
+- baseline count changed from `232` to `168`.
 
 ## Prompt 1 Scope Lock
 

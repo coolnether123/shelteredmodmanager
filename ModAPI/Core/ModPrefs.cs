@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using ModAPI.Saves;
 
 namespace ModAPI.Core
 {
@@ -13,8 +12,8 @@ namespace ModAPI.Core
     {
         private static Dictionary<string, string> _values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static bool _loaded = false;
-        private static string SettingsPath => Path.Combine(DirectoryProvider.UserRoot, "settings.json");
-        public static string UserRoot => DirectoryProvider.UserRoot;
+        private static string SettingsPath => Path.Combine(ModApiPaths.UserRoot, "settings.json");
+        public static string UserRoot => ModApiPaths.UserRoot;
 
         public static bool DebugTranspilers
         {
@@ -160,7 +159,7 @@ namespace ModAPI.Core
                 File.WriteAllText(SettingsPath, json);
                 
                 // Also ensure the descriptive .md file exists as requested
-                string mdPath = Path.Combine(DirectoryProvider.UserRoot, "settings.md");
+                string mdPath = Path.Combine(ModApiPaths.UserRoot, "settings.md");
                 if (!File.Exists(mdPath))
                 {
                     File.WriteAllText(mdPath, "# ModAPI User Settings\n\nThis folder contains internal state and user settings for the Sheltered Modding API.\n\n- `settings.json`: Contains technical flags (e.g., tutorial seen status).");

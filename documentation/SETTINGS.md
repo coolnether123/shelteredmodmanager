@@ -98,6 +98,9 @@ public void Initialize(IPluginContext ctx)
 
 ## 5. SaveData/LoadData (`PersistentDataAPI` Extensions)
 
+`ctx.SaveSystem.RegisterModData(...)` is the neutral ModAPI persistence path.
+`ctx.SaveData(...)` and `ctx.LoadData(...)` are Sheltered `SaveManager`-backed compatibility extensions hosted by `ShelteredAPI.dll` in the 1.3 line.
+
 ```csharp
 ctx.SaveData("custom_blob", myData);
 if (ctx.LoadData("custom_blob", out MyData loaded))

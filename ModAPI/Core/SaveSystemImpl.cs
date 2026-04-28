@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
-using ModAPI.Saves;
+using ModAPI.Persistence;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -15,7 +14,7 @@ namespace ModAPI.Core
     {
         private static readonly List<SaveSystemImpl> _instances = new List<SaveSystemImpl>();
         private string _shutdownCache = null;
-        private SaveData _preparedLoadData = null;
+        private string _preparedLoadKey = null;
         private bool _afterLoadCallbacksApplied;
         private readonly HashSet<string> _loadedKeysForPreparedData = new HashSet<string>(StringComparer.Ordinal);
 
@@ -27,7 +26,7 @@ namespace ModAPI.Core
         {
             _modId = modId;
             // Save blobs need to be available before scene saveables start deserializing.
-            ModAPI.Saves.Events.OnBeforeSave += HandleBeforeSave;
+            GameLifecycleSources.AddBeforeSave(HandleBeforeSave);
             GameLifecycleSources.AddBeforeLoadSceneContents(HandleBeforeLoadSceneContents);
             GameLifecycleSources.AddAfterLoad(HandleAfterLoad);
             _instances.Add(this);
@@ -35,71 +34,12 @@ namespace ModAPI.Core
 
         public string GetCurrentSlotPath()
         {
-            var active = SaveRuntimeState.ActiveCustomSave;
-            if (active != null)
-            {
-                // scenarioId is preferred. Fallback to "Standard" if not set.
-                string scenario = string.IsNullOrEmpty(active.scenarioId) ? "Standard" : active.scenarioId;
-                return DirectoryProvider.SlotRoot(scenario, active.absoluteSlot, false);
-            }
-
-            // Fallback for vanilla Slot1/Slot2/Slot3 sessions.
-            int vanillaSlot = ResolveVanillaSlotIndex();
-            if (vanillaSlot <= 0) return null;
-            return DirectoryProvider.SlotRoot("Standard", vanillaSlot, false);
+            return SaveRuntimeAdapters.GetCurrentSlotPath();
         }
 
         public int ActiveSlotIndex
         {
-            get
-            {
-                var custom = SaveRuntimeState.ActiveCustomSave;
-                if (custom != null) return custom.absoluteSlot;
-
-                int vanillaSlot = ResolveVanillaSlotIndex();
-                return vanillaSlot > 0 ? vanillaSlot : -1;
-            }
-        }
-
-        private static int ResolveVanillaSlotIndex()
-        {
-            try
-            {
-                var mgr = SaveManager.instance;
-                if (mgr == null) return -1;
-
-                // SaveManager uses m_slotInUse for active save slot in normal gameplay.
-                var slotField = mgr.GetType().GetField("m_slotInUse", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (slotField != null)
-                {
-                    int slotFromSlotInUse = SaveTypeToSlotIndex(slotField.GetValue(mgr));
-                    if (slotFromSlotInUse > 0) return slotFromSlotInUse;
-                }
-
-                // Fallback used during some transitions.
-                var currentTypeField = mgr.GetType().GetField("m_currentType", BindingFlags.Instance | BindingFlags.NonPublic);
-                if (currentTypeField != null)
-                {
-                    int slotFromCurrentType = SaveTypeToSlotIndex(currentTypeField.GetValue(mgr));
-                    if (slotFromCurrentType > 0) return slotFromCurrentType;
-                }
-            }
-            catch { }
-
-            return -1;
-        }
-
-        private static int SaveTypeToSlotIndex(object rawValue)
-        {
-            if (rawValue == null) return -1;
-
-            int numeric;
-            try { numeric = (int)rawValue; }
-            catch { return -1; }
-
-            // SaveManager.SaveType typically maps Slot1..Slot3 to 1..3.
-            if (numeric >= 1 && numeric <= 3) return numeric;
-            return -1;
+            get { return SaveRuntimeAdapters.GetActiveSlotIndex(); }
         }
 
         public void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class
@@ -137,18 +77,22 @@ namespace ModAPI.Core
             }
         }
 
-        private void HandleBeforeSave(SaveEntry gameData)
+        private void HandleBeforeSave(object gameData)
         {
             try
             {
                 MMLog.WriteDebug($"[SaveSystem] HandleBeforeSave for {_modId}. IsQuitting={PluginRunner.IsQuitting}.");
 
-                var rootPath = GetCurrentSlotPath();
+                IModSaveContext saveContext = SaveRuntimeAdapters.GetCurrentSaveContext();
+                var rootPath = saveContext != null ? saveContext.SlotPath : GetCurrentSlotPath();
                 if (string.IsNullOrEmpty(rootPath)) 
                 {
                     MMLog.WriteDebug($"[SaveSystem] No active slot for {_modId}, skipping save.");
                     return;
                 }
+
+                if (saveContext == null)
+                    saveContext = new ModSaveContext(rootPath, ActiveSlotIndex, null, null, null);
 
                 // Path: {SlotRoot}/mods/{ModId}/data.json
                 var modDataFolder = Path.Combine(Path.Combine(rootPath, "mods"), _modId);
@@ -167,16 +111,15 @@ namespace ModAPI.Core
                 {
                     MMLog.WriteDebug($"[SaveSystem] Serializing live mod data for {_modId} to {modFilePath}");
                     
-                    var saveEntry = SaveRuntimeState.ActiveCustomSave;
                     var containerObj = new ModPersistenceData();
                     foreach (var kv in _registeredData)
                     {
-                        if (kv.Value is ModAPI.Persistence.IModPersistenceLogic) 
+                        if (kv.Value is IModPersistenceLogic)
                         {
                             try 
                             { 
                                 MMLog.WriteDebug($"[SaveSystem] Invoking OnSaving hook for {kv.Key} in {_modId}");
-                                (kv.Value as ModAPI.Persistence.IModPersistenceLogic).OnSaving(saveEntry); 
+                                (kv.Value as IModPersistenceLogic).OnSaving(saveContext);
                             }
                             catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {kv.Key}.OnSaving failed: {logicEx.Message}"); }
                         }
@@ -212,26 +155,27 @@ namespace ModAPI.Core
 
         private void HandleBeforeLoadSceneContents(object data)
         {
-            PrepareRegisteredDataForLoad(data as SaveData);
+            PrepareRegisteredDataForLoad();
         }
 
         private void HandleAfterLoad(object data)
         {
-            PrepareRegisteredDataForLoad(data as SaveData);
+            PrepareRegisteredDataForLoad();
             ApplyAfterLoadCallbacks();
         }
 
-        private void PrepareRegisteredDataForLoad(SaveData data)
+        private void PrepareRegisteredDataForLoad()
         {
-            if (data == null) return;
-            if (ReferenceEquals(_preparedLoadData, data)) return;
+            IModSaveContext saveContext = SaveRuntimeAdapters.GetCurrentSaveContext();
+            var rootPath = saveContext != null ? saveContext.SlotPath : GetCurrentSlotPath();
+            if (string.IsNullOrEmpty(rootPath)) return;
 
-            _preparedLoadData = data;
+            string loadKey = BuildLoadKey(saveContext, rootPath);
+            if (string.Equals(_preparedLoadKey, loadKey, StringComparison.Ordinal)) return;
+
+            _preparedLoadKey = loadKey;
             _afterLoadCallbacksApplied = false;
             _loadedKeysForPreparedData.Clear();
-
-            var rootPath = GetCurrentSlotPath();
-            if (string.IsNullOrEmpty(rootPath)) return;
 
             // Priority: 1. mods/{ModId}/data.json, 2. mod_{ModId}_data.json (Legacy root)
             var newFilePath = Path.Combine(Path.Combine(Path.Combine(rootPath, "mods"), _modId), "data.json");
@@ -306,12 +250,20 @@ namespace ModAPI.Core
             {
                 if (!_registeredData.TryGetValue(key, out var dataObj)) continue;
 
-                var persistenceLogic = dataObj as ModAPI.Persistence.IModPersistenceLogic;
+                var persistenceLogic = dataObj as IModPersistenceLogic;
                 if (persistenceLogic == null) continue;
 
                 try
                 {
-                    persistenceLogic.OnLoaded(SaveRuntimeState.ActiveCustomSave);
+                    IModSaveContext saveContext = SaveRuntimeAdapters.GetCurrentSaveContext();
+                    if (saveContext == null)
+                    {
+                        string rootPath = GetCurrentSlotPath();
+                        if (!string.IsNullOrEmpty(rootPath))
+                            saveContext = new ModSaveContext(rootPath, ActiveSlotIndex, null, null, null);
+                    }
+
+                    persistenceLogic.OnLoaded(saveContext);
                 }
                 catch (Exception logicEx)
                 {
@@ -320,6 +272,19 @@ namespace ModAPI.Core
             }
 
             _afterLoadCallbacksApplied = true;
+        }
+
+        private static string BuildLoadKey(IModSaveContext saveContext, string rootPath)
+        {
+            if (saveContext == null)
+                return rootPath ?? string.Empty;
+
+            return string.Format(
+                "{0}|{1}|{2}|{3}",
+                saveContext.SaveScopeId ?? string.Empty,
+                saveContext.SaveId ?? string.Empty,
+                saveContext.SlotIndex,
+                rootPath ?? string.Empty);
         }
     }
 }

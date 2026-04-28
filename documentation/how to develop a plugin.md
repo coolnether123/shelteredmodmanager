@@ -176,14 +176,14 @@ Implement only what you need:
 
 High-value members:
 - `Log`: mod-prefixed logging
-- `SaveSystem`: per-save mod data
+- `SaveSystem`: neutral per-save mod data stored under the active host slot path
 - `Actors`: registry/components/bindings/adapters/simulation facade
 - `RunNextFrame(Action)`: defer to next Unity frame
 - `StartCoroutine(...)`: run coroutine from loader host
 - `FindPanel(...)` and `AddComponentToPanel<T>(...)`: UI integration
 - `GameRoot` / `ModsRoot`: path roots
 
-If you use actor adapters or `ShelteredAPI.*` namespaces directly, add a reference to `ShelteredAPI.dll` too.
+If you use actor adapters, Sheltered save helpers (`ctx.SaveData`, `GameUtil`, `ModList`, custom-save APIs), or `ShelteredAPI.*` namespaces directly, add a reference to `ShelteredAPI.dll` too.
 
 ## 9. Common Pitfalls
 

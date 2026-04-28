@@ -24,12 +24,13 @@ Custom scenario authoring guidance: `documentation/Custom_Scenarios_Guide.md`.
 - Sheltered-specific UI and input helpers under `ShelteredAPI.*`
 - Sheltered-specific content registration and runtime injection under `ShelteredAPI.Content`
 - Sheltered-specific custom scenario XML definitions, serializers, validators, authoring helpers, runtime binding, apply services, and runtime hooks under `ShelteredAPI.Scenarios`
+- Sheltered save integration: `SaveManager` patches, expanded/custom save slots, `PersistentDataAPI`, `GameUtil`, `ModList`, `ModDictionary`, and custom-save APIs under old `ModAPI.*` namespaces for 1.3 source migration
 
 ## 2. Referencing It
 
 Add assembly references:
 - always: `ModAPI.dll`
-- required for Sheltered hooks: `ShelteredAPI.dll` if you use Sheltered content, scenario, event, party, interaction, or manager-state helpers, even when the namespace remains `ModAPI.*` for 1.3 source migration
+- required for Sheltered hooks: `ShelteredAPI.dll` if you use Sheltered content, scenario, event, party, interaction, save, or manager-state helpers, even when the namespace remains `ModAPI.*` for 1.3 source migration
 
 If you only use neutral `IPluginContext` contracts, the public types come from `ModAPI.dll`; Sheltered runtime implementations are still supplied by `ShelteredAPI`.
 
@@ -86,7 +87,7 @@ public class MyPlugin : IModPlugin
             CustomScenarioRegistration registration = new LongRoadScenario().ToRegistration();
             registration.RequiredMods = new[]
             {
-                new LoadedModInfo { modId = "com.mymod.contentpack", version = "1.2.0" }
+                new ScenarioModDependency { modId = "com.mymod.contentpack", version = "1.2.0" }
             };
             scenarios.Register(registration);
         }
@@ -116,6 +117,7 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 - item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
 - custom scenario registration contracts, lifecycle state/events, opaque definition factories, catalog metadata, dependency manifest conversion, and validation result containers live in `ModAPI.Scenarios`
 - Sheltered scenario definitions, XML serializers, validators, runtime binding, `ScenarioDef` creation, and in-game hooks live in `ShelteredAPI.Scenarios`
+- Sheltered save APIs live in `ShelteredAPI.dll`; `ModAPI.dll` owns only neutral per-mod persistence contracts and the `GameRuntime.SaveRuntime` port
 - the content injector is manager-scoped and will rebind when a new family/session recreates Sheltered runtime managers
 - register triggers and runtime behavior in `Start(...)`, not constructors
 - use unique IDs for triggers, actor bindings, components, and adapters
