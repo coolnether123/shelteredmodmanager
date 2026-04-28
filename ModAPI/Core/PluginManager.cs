@@ -272,22 +272,36 @@ namespace ModAPI.Core
         private void LogCortexBundleAvailability()
         {
             var cortexRoot = SharedAssemblyResolver.GetCortexRootPath();
+            var bundleRoot = SharedAssemblyResolver.GetCortexBundleRootPath();
+            var manifestPath = SharedAssemblyResolver.GetCortexManifestPath();
             var runtimeRoot = SharedAssemblyResolver.GetCortexRuntimePath();
+            var portableRuntimeRoot = SharedAssemblyResolver.GetCortexPortableRuntimePath();
             var decompilerPath = SharedAssemblyResolver.GetCortexToolPath("decompiler", "Decompiler.exe");
             var roslynPath = SharedAssemblyResolver.GetCortexToolPath("roslyn", "Cortex.Roslyn.Worker.exe");
-            var pluginRoot = string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "plugins");
+            var pluginRoot = SharedAssemblyResolver.GetCortexPluginRootPath();
 
-            if (!Directory.Exists(cortexRoot) || !File.Exists(Path.Combine(runtimeRoot, "Cortex.dll")))
+            if (!Directory.Exists(cortexRoot) ||
+                !Directory.Exists(bundleRoot) ||
+                !File.Exists(manifestPath) ||
+                !File.Exists(Path.Combine(runtimeRoot, "Cortex.dll")) ||
+                !File.Exists(Path.Combine(portableRuntimeRoot, "Cortex.Core.dll")))
             {
                 MMLog.WriteWarning("[Cortex] Optional Cortex bundle is missing or incomplete.");
                 MMLog.WriteWarning("[Cortex] Expected root: " + cortexRoot);
-                MMLog.WriteWarning("[Cortex] Expected runtime: " + runtimeRoot);
+                MMLog.WriteWarning("[Cortex] Expected bundle: " + bundleRoot);
+                MMLog.WriteWarning("[Cortex] Expected manifest: " + manifestPath);
+                MMLog.WriteWarning("[Cortex] Expected host runtime: " + runtimeRoot);
+                MMLog.WriteWarning("[Cortex] Expected portable runtime: " + portableRuntimeRoot);
                 MMLog.WriteWarning("[Cortex] SMM will continue without the Cortex shell.");
                 return;
             }
 
             MMLog.WriteInfo("[Cortex] Bundle root: " + cortexRoot);
-            MMLog.WriteInfo("[Cortex] Runtime: " + runtimeRoot);
+            MMLog.WriteInfo("[Cortex] Active profile: unity-hosted");
+            MMLog.WriteInfo("[Cortex] Active bundle: " + bundleRoot);
+            MMLog.WriteInfo("[Cortex] Manifest: " + manifestPath);
+            MMLog.WriteInfo("[Cortex] Host runtime: " + runtimeRoot);
+            MMLog.WriteInfo("[Cortex] Portable runtime: " + portableRuntimeRoot);
             MMLog.WriteInfo("[Cortex] Tools: " + SharedAssemblyResolver.GetCortexToolRootPath());
             MMLog.WriteInfo("[Cortex] Plugins: " + pluginRoot);
 

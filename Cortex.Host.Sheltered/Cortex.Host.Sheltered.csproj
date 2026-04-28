@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\Dist\SMM\Cortex\runtime\</OutputPath>
+    <OutputPath>$(SmmCortexHostRuntimeRoot)</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -25,42 +25,46 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\Dist\SMM\Cortex\runtime\</OutputPath>
+    <OutputPath>$(SmmCortexHostRuntimeRoot)</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Cortex">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.dll</HintPath>
+      <HintPath>$(AdjacentCortexHostRuntimeRoot)Cortex.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Cortex.Contracts">
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Contracts.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Core">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Core.dll</HintPath>
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Host.Unity">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Host.Unity.dll</HintPath>
+      <HintPath>$(AdjacentCortexHostRuntimeRoot)Cortex.Host.Unity.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Plugins.Abstractions">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Plugins.Abstractions.dll</HintPath>
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Plugins.Abstractions.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Presentation">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Presentation.dll</HintPath>
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Presentation.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Rendering">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Rendering.dll</HintPath>
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Rendering.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Rendering.RuntimeUi">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Rendering.RuntimeUi.dll</HintPath>
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Rendering.RuntimeUi.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Shell.Unity.Imgui">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Shell.Unity.Imgui.dll</HintPath>
+      <HintPath>$(AdjacentCortexHostRuntimeRoot)Cortex.Shell.Unity.Imgui.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
@@ -76,6 +80,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Runtime\ShelteredCortexHostEnvironment.cs" />
     <Compile Include="Runtime\ShelteredHostPathLayout.cs" />
+    <Compile Include="Runtime\ShelteredProductAdapter.cs" />
     <Compile Include="Runtime\ShelteredUnityHostComposition.cs" />
     <Compile Include="Runtime\ShelteredUnityWorkbenchContributionRegistrar.cs" />
   </ItemGroup>

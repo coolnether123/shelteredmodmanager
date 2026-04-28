@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using Cortex.Contracts.Restart;
 using Cortex.Core.Abstractions;
 using Cortex.Core.Diagnostics;
 using Cortex.Core.Models;
+using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Inspector;
-using GameModding.Shared.Restart;
-using UnityEngine;
 using ModApiMMLog = ModAPI.Core.MMLog;
 
 namespace Cortex.Platform.ModAPI.Runtime

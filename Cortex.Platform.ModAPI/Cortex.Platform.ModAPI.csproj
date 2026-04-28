@@ -17,7 +17,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\Dist\SMM\Cortex\runtime\</OutputPath>
+    <OutputPath>$(SmmCortexHostRuntimeRoot)</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -25,18 +25,22 @@
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\Dist\SMM\Cortex\runtime\</OutputPath>
+    <OutputPath>$(SmmCortexHostRuntimeRoot)</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Cortex.Contracts">
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Contracts.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="Cortex.Core">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Core.dll</HintPath>
+      <HintPath>$(AdjacentCortexPortableRuntimeRoot)Cortex.Core.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Cortex.Host.Unity">
-      <HintPath>..\Dist\SMM\Cortex\runtime\Cortex.Host.Unity.dll</HintPath>
+      <HintPath>$(AdjacentCortexHostRuntimeRoot)Cortex.Host.Unity.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />

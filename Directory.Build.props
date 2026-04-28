@@ -3,6 +3,20 @@
     <CortexRepositoryRoot>$(MSBuildThisFileDirectory)</CortexRepositoryRoot>
     <AdjacentCortexRepositoryRoot Condition="'$(AdjacentCortexRepositoryRoot)' == ''">$([System.IO.Path]::GetFullPath('$(CortexRepositoryRoot)..\Cortex\'))</AdjacentCortexRepositoryRoot>
     <AdjacentCortexDistRoot Condition="'$(AdjacentCortexDistRoot)' == ''">$(AdjacentCortexRepositoryRoot)dist\</AdjacentCortexDistRoot>
+    <CortexExternalConsumerProfileId Condition="'$(CortexExternalConsumerProfileId)' == ''">unity-hosted</CortexExternalConsumerProfileId>
+    <AdjacentCortexBundleProfileRoot Condition="'$(AdjacentCortexBundleProfileRoot)' == ''">$(AdjacentCortexDistRoot)$(CortexExternalConsumerProfileId)\</AdjacentCortexBundleProfileRoot>
+    <AdjacentCortexPortableRuntimeRoot Condition="'$(AdjacentCortexPortableRuntimeRoot)' == ''">$(AdjacentCortexBundleProfileRoot)portable\lib\</AdjacentCortexPortableRuntimeRoot>
+    <AdjacentCortexHostRuntimeRoot Condition="'$(AdjacentCortexHostRuntimeRoot)' == ''">$(AdjacentCortexBundleProfileRoot)host\lib\</AdjacentCortexHostRuntimeRoot>
+    <AdjacentCortexToolRoot Condition="'$(AdjacentCortexToolRoot)' == ''">$(AdjacentCortexBundleProfileRoot)tooling\</AdjacentCortexToolRoot>
+    <AdjacentCortexPluginRoot Condition="'$(AdjacentCortexPluginRoot)' == ''">$(AdjacentCortexBundleProfileRoot)plugins\</AdjacentCortexPluginRoot>
+    <SmmCortexRoot Condition="'$(SmmCortexRoot)' == ''">$(CortexRepositoryRoot)Dist\SMM\Cortex\</SmmCortexRoot>
+    <SmmCortexRootFullPath Condition="'$(SmmCortexRootFullPath)' == ''">$([System.IO.Path]::GetFullPath('$(SmmCortexRoot)'))</SmmCortexRootFullPath>
+    <SmmCortexBundleProfileRoot Condition="'$(SmmCortexBundleProfileRoot)' == ''">$(SmmCortexRoot)$(CortexExternalConsumerProfileId)\</SmmCortexBundleProfileRoot>
+    <SmmCortexBundleProfileRootFullPath Condition="'$(SmmCortexBundleProfileRootFullPath)' == ''">$([System.IO.Path]::GetFullPath('$(SmmCortexBundleProfileRoot)'))</SmmCortexBundleProfileRootFullPath>
+    <SmmCortexPortableRuntimeRoot Condition="'$(SmmCortexPortableRuntimeRoot)' == ''">$(SmmCortexBundleProfileRoot)portable\lib\</SmmCortexPortableRuntimeRoot>
+    <SmmCortexHostRuntimeRoot Condition="'$(SmmCortexHostRuntimeRoot)' == ''">$(SmmCortexBundleProfileRoot)host\lib\</SmmCortexHostRuntimeRoot>
+    <SmmCortexToolRoot Condition="'$(SmmCortexToolRoot)' == ''">$(SmmCortexBundleProfileRoot)tooling\</SmmCortexToolRoot>
+    <SmmCortexPluginRoot Condition="'$(SmmCortexPluginRoot)' == ''">$(SmmCortexBundleProfileRoot)plugins\</SmmCortexPluginRoot>
     <NuGetPackageRoot Condition="'$(NuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)</NuGetPackageRoot>
     <NuGetPackageRoot Condition="'$(NuGetPackageRoot)' == ''">$(UserProfile)\.nuget\packages\</NuGetPackageRoot>
     <CortexNet35ReferenceAssembliesPath>$(NuGetPackageRoot)microsoft.netframework.referenceassemblies.net35\1.0.3\build\.NETFramework\v3.5\</CortexNet35ReferenceAssembliesPath>

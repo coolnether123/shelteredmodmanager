@@ -7,6 +7,8 @@ namespace ModAPI.Core
 {
     internal static class SharedAssemblyResolver
     {
+        private const string DefaultCortexBundleProfileId = "unity-hosted";
+
         private static readonly string[] SharedRuntimeAssemblyNames = new[]
         {
             "ModAPI",
@@ -129,16 +131,64 @@ namespace ModAPI.Core
             return string.IsNullOrEmpty(smmRoot) ? string.Empty : Path.Combine(smmRoot, "Cortex");
         }
 
+        internal static string GetCortexBundleRootPath()
+        {
+            var cortexRoot = GetCortexRootPath();
+            return string.IsNullOrEmpty(cortexRoot)
+                ? string.Empty
+                : Path.Combine(cortexRoot, DefaultCortexBundleProfileId);
+        }
+
         internal static string GetCortexRuntimePath()
         {
+            var bundleRoot = GetCortexBundleRootPath();
+            var hostRuntimeRoot = string.IsNullOrEmpty(bundleRoot)
+                ? string.Empty
+                : Path.Combine(Path.Combine(bundleRoot, "host"), "lib");
+            if (Directory.Exists(hostRuntimeRoot))
+                return hostRuntimeRoot;
+
             var cortexRoot = GetCortexRootPath();
             return string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "runtime");
         }
 
+        internal static string GetCortexPortableRuntimePath()
+        {
+            var bundleRoot = GetCortexBundleRootPath();
+            if (string.IsNullOrEmpty(bundleRoot))
+                return string.Empty;
+
+            return Path.Combine(Path.Combine(bundleRoot, "portable"), "lib");
+        }
+
         internal static string GetCortexToolRootPath()
         {
+            var bundleRoot = GetCortexBundleRootPath();
+            var toolingRoot = string.IsNullOrEmpty(bundleRoot) ? string.Empty : Path.Combine(bundleRoot, "tooling");
+            if (Directory.Exists(toolingRoot))
+                return toolingRoot;
+
             var cortexRoot = GetCortexRootPath();
             return string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "tools");
+        }
+
+        internal static string GetCortexPluginRootPath()
+        {
+            var bundleRoot = GetCortexBundleRootPath();
+            var pluginRoot = string.IsNullOrEmpty(bundleRoot) ? string.Empty : Path.Combine(bundleRoot, "plugins");
+            if (Directory.Exists(pluginRoot))
+                return pluginRoot;
+
+            var cortexRoot = GetCortexRootPath();
+            return string.IsNullOrEmpty(cortexRoot) ? string.Empty : Path.Combine(cortexRoot, "plugins");
+        }
+
+        internal static string GetCortexManifestPath()
+        {
+            var bundleRoot = GetCortexBundleRootPath();
+            return string.IsNullOrEmpty(bundleRoot)
+                ? string.Empty
+                : Path.Combine(Path.Combine(bundleRoot, "manifest"), "cortex.bundle.manifest.json");
         }
 
         internal static string GetCortexToolPath(string componentId, string fileName)
@@ -147,7 +197,19 @@ namespace ModAPI.Core
             if (string.IsNullOrEmpty(toolRoot) || string.IsNullOrEmpty(componentId) || string.IsNullOrEmpty(fileName))
                 return string.Empty;
 
-            return Path.Combine(Path.Combine(toolRoot, componentId), fileName);
+            var preferredPath = Path.Combine(Path.Combine(toolRoot, componentId), fileName);
+            if (File.Exists(preferredPath))
+                return preferredPath;
+
+            var cortexRoot = GetCortexRootPath();
+            if (!string.IsNullOrEmpty(cortexRoot))
+            {
+                var legacyPath = Path.Combine(Path.Combine(Path.Combine(cortexRoot, "tools"), componentId), fileName);
+                if (File.Exists(legacyPath))
+                    return legacyPath;
+            }
+
+            return preferredPath;
         }
 
         internal static string GetCanonicalAssemblyPath(string simpleName)
@@ -170,6 +232,7 @@ namespace ModAPI.Core
             var smmRoot = GetSmmRootPath();
             var smmBin = string.IsNullOrEmpty(smmRoot) ? string.Empty : Path.Combine(smmRoot, "bin");
             var cortexRuntime = GetCortexRuntimePath();
+            var cortexPortableRuntime = GetCortexPortableRuntimePath();
             var fileName = simpleName + ".dll";
 
             if (IsCortexAssemblyName(simpleName))
@@ -177,6 +240,8 @@ namespace ModAPI.Core
                 return new[]
                 {
                     Path.Combine(cortexRuntime, fileName),
+                    Path.Combine(cortexPortableRuntime, fileName),
+                    Path.Combine(Path.Combine(GetCortexRootPath(), "runtime"), fileName),
                     Path.Combine(smmBin, fileName),
                     Path.Combine(smmRoot, fileName)
                 };
@@ -187,7 +252,8 @@ namespace ModAPI.Core
                 return new[]
                 {
                     Path.Combine(smmBin, fileName),
-                    Path.Combine(cortexRuntime, fileName)
+                    Path.Combine(cortexRuntime, fileName),
+                    Path.Combine(cortexPortableRuntime, fileName)
                 };
             }
 

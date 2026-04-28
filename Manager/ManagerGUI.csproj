@@ -52,8 +52,8 @@
   <PropertyGroup>
     <CortexBundleProject>$(AdjacentCortexRepositoryRoot)build\Cortex.Bundle.proj</CortexBundleProject>
     <CortexBundleDist>$(AdjacentCortexDistRoot)</CortexBundleDist>
-    <SmmCortexRoot>$(MSBuildProjectDirectory)\..\Dist\SMM\Cortex\</SmmCortexRoot>
-    <SmmCortexRootFullPath>$([System.IO.Path]::GetFullPath('$(SmmCortexRoot)'))</SmmCortexRootFullPath>
+    <CortexBundleProfileId>$(CortexExternalConsumerProfileId)</CortexBundleProfileId>
+    <CortexBundleProfileSourceRoot>$(AdjacentCortexDistRoot)$(CortexBundleProfileId)\</CortexBundleProfileSourceRoot>
     <BuildCortexBundle Condition="'$(BuildCortexBundle)' == ''">true</BuildCortexBundle>
     <BuildCortexAdapter Condition="'$(BuildCortexAdapter)' == '' and '$(BuildCortexBundle)' == 'true' and Exists('$(CortexBundleProject)')">true</BuildCortexAdapter>
     <BuildCortexAdapter Condition="'$(BuildCortexAdapter)' == ''">false</BuildCortexAdapter>
@@ -208,20 +208,35 @@
     <Warning Condition="!Exists('$(CortexBundleProject)')" Text="Cortex bundle project was not found at '$(CortexBundleProject)'. SMM will build without the optional Cortex runtime bundle." />
     <MSBuild Condition="Exists('$(CortexBundleProject)')"
              Projects="$(CortexBundleProject)"
-             Targets="Bundle"
-             Properties="Configuration=$(Configuration);Platform=AnyCPU"
+             Targets="BundleProfiles"
+             Properties="Configuration=$(Configuration);Platform=AnyCPU;BundleProfiles=$(CortexBundleProfileId)"
              BuildInParallel="false" />
-    <MakeDir Condition="Exists('$(CortexBundleDist)')" Directories="$(SmmCortexRootFullPath)" />
-    <ItemGroup Condition="Exists('$(CortexBundleDist)')">
-      <CortexBundleFiles Include="$(CortexBundleDist)**\*" />
+    <MakeDir Condition="Exists('$(CortexBundleProfileSourceRoot)')" Directories="$(SmmCortexRootFullPath)" />
+    <ItemGroup Condition="Exists('$(CortexBundleDist)cortex.bundle.index.json')">
+      <CortexBundleIndexFile Include="$(CortexBundleDist)cortex.bundle.index.json" />
     </ItemGroup>
-    <Copy Condition="Exists('$(CortexBundleDist)')"
+    <ItemGroup Condition="Exists('$(CortexBundleProfileSourceRoot)')">
+      <CortexBundleFiles Include="$(CortexBundleProfileSourceRoot)**\*" />
+    </ItemGroup>
+    <Copy Condition="Exists('$(CortexBundleDist)cortex.bundle.index.json')"
+          SourceFiles="@(CortexBundleIndexFile)"
+          DestinationFiles="@(CortexBundleIndexFile->'$(SmmCortexRootFullPath)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="Exists('$(CortexBundleProfileSourceRoot)')"
           SourceFiles="@(CortexBundleFiles)"
-          DestinationFiles="@(CortexBundleFiles->'$(SmmCortexRootFullPath)%(RecursiveDir)%(Filename)%(Extension)')"
+          DestinationFiles="@(CortexBundleFiles->'$(SmmCortexRootFullPath)$(CortexBundleProfileId)\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
   </Target>
-  <Target Name="WarnWhenCortexRuntimeMissing" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' and !Exists('$(SmmCortexRootFullPath)runtime\Cortex.dll')">
-    <Warning Text="Cortex runtime was not found at '$(SmmCortexRootFullPath)runtime\Cortex.dll'. SMM will run, but the optional Cortex shell will be unavailable." />
+  <Target Name="ValidatePackagedCortexRuntime" AfterTargets="Build" Condition="'$(DesignTimeBuild)' != 'true' and '$(BuildCortexBundle)' == 'true' and Exists('$(CortexBundleProject)')">
+    <Error Condition="!Exists('$(SmmCortexRootFullPath)cortex.bundle.index.json')" Text="Packaged Cortex bundle index is missing at '$(SmmCortexRootFullPath)cortex.bundle.index.json'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)manifest\cortex.bundle.manifest.json')" Text="Packaged Cortex bundle manifest is missing at '$(SmmCortexBundleProfileRootFullPath)manifest\cortex.bundle.manifest.json'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)host\lib\Cortex.dll')" Text="Packaged Cortex Unity host runtime is missing at '$(SmmCortexBundleProfileRootFullPath)host\lib\Cortex.dll'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)portable\lib\Cortex.Core.dll')" Text="Packaged Cortex portable runtime is missing at '$(SmmCortexBundleProfileRootFullPath)portable\lib\Cortex.Core.dll'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)tooling\decompiler\Decompiler.exe')" Text="Packaged Cortex decompiler tool is missing at '$(SmmCortexBundleProfileRootFullPath)tooling\decompiler\Decompiler.exe'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)tooling\roslyn\Cortex.Roslyn.Worker.exe')" Text="Packaged Cortex Roslyn worker is missing at '$(SmmCortexBundleProfileRootFullPath)tooling\roslyn\Cortex.Roslyn.Worker.exe'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)plugins\Harmony\cortex.plugin.json')" Text="Packaged Cortex Harmony plugin manifest is missing at '$(SmmCortexBundleProfileRootFullPath)plugins\Harmony\cortex.plugin.json'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)host\lib\Cortex.Host.Sheltered.dll')" Text="Packaged SMM Cortex host adapter is missing at '$(SmmCortexBundleProfileRootFullPath)host\lib\Cortex.Host.Sheltered.dll'." />
+    <Error Condition="!Exists('$(SmmCortexBundleProfileRootFullPath)host\lib\Cortex.Platform.ModAPI.dll')" Text="Packaged SMM Cortex ModAPI bridge is missing at '$(SmmCortexBundleProfileRootFullPath)host\lib\Cortex.Platform.ModAPI.dll'." />
   </Target>
   <PropertyGroup>
     <PostBuildEvent>SET BASE=$(MSBuildProjectDirectory)\..\

@@ -10,6 +10,7 @@ namespace Cortex.Host.Sheltered.Runtime
     /// </summary>
     public sealed class ShelteredHostPathLayout
     {
+        public const string DefaultBundleProfileId = "unity-hosted";
         public const string ExampleApplicationRootPath = @"D:\Games\Sheltered";
         public const string ExampleWorkspaceRootPath = @"D:\Projects\MyWorkspace";
 
@@ -17,6 +18,8 @@ namespace Cortex.Host.Sheltered.Runtime
         private readonly string _hostRootPath;
         private readonly string _legacyHostBinPath;
         private readonly string _cortexRootPath;
+        private readonly string _bundleRootPath;
+        private readonly string _portableRuntimeRootPath;
         private readonly string _hostBinPath;
         private readonly string _bundledPluginSearchRoots;
         private readonly string _configuredPluginSearchRoots;
@@ -36,12 +39,14 @@ namespace Cortex.Host.Sheltered.Runtime
             _hostRootPath = CombinePath(_applicationRootPath, "SMM");
             _legacyHostBinPath = CombinePath(_hostRootPath, "bin");
             _cortexRootPath = CombinePath(_hostRootPath, "Cortex");
-            _hostBinPath = CombinePath(_cortexRootPath, "runtime");
+            _bundleRootPath = CombinePath(_cortexRootPath, DefaultBundleProfileId);
+            _portableRuntimeRootPath = CombinePath(CombinePath(_bundleRootPath, "portable"), "lib");
+            _hostBinPath = CombinePath(CombinePath(_bundleRootPath, "host"), "lib");
             _referenceAssemblyRootPath = CombinePath(CombinePath(_applicationRootPath, "Sheltered_Data"), "Managed");
             _runtimeContentRootPath = CombinePath(_hostRootPath, "mods");
-            _bundledPluginSearchRoots = CombinePath(_cortexRootPath, "plugins");
+            _bundledPluginSearchRoots = CombinePath(_bundleRootPath, "plugins");
             _configuredPluginSearchRoots = JoinRoots(_runtimeContentRootPath, CombinePath(_runtimeContentRootPath, "Plugins"));
-            _bundledToolRootPath = CombinePath(_cortexRootPath, "tools");
+            _bundledToolRootPath = CombinePath(_bundleRootPath, "tooling");
             _settingsFilePath = CombinePath(_legacyHostBinPath, "cortex_settings.json");
             _workbenchPersistenceFilePath = CombinePath(_legacyHostBinPath, "cortex_workbench.json");
             _logFilePath = CombinePath(_hostRootPath, "mod_manager.log");
@@ -63,6 +68,16 @@ namespace Cortex.Host.Sheltered.Runtime
         public string HostBinPath
         {
             get { return _hostBinPath; }
+        }
+
+        public string BundleRootPath
+        {
+            get { return _bundleRootPath; }
+        }
+
+        public string PortableRuntimeRootPath
+        {
+            get { return _portableRuntimeRootPath; }
         }
 
         public string BundledPluginSearchRoots
@@ -160,17 +175,41 @@ namespace Cortex.Host.Sheltered.Runtime
         public static string BuildBundledToolPath(string hostBinPath, string componentId, string fileName)
         {
             var root = NormalizePath(hostBinPath);
+            if (string.Equals(GetLeafName(root), "lib", StringComparison.OrdinalIgnoreCase))
+            {
+                var hostDirectory = Directory.GetParent(root);
+                if (hostDirectory != null && string.Equals(GetLeafName(hostDirectory.FullName), "host", StringComparison.OrdinalIgnoreCase))
+                {
+                    var bundleRoot = Directory.GetParent(hostDirectory.FullName);
+                    root = bundleRoot != null ? bundleRoot.FullName : root;
+                    return CombinePath(CombinePath(CombinePath(root, "tooling"), componentId), fileName);
+                }
+            }
+
             if (string.Equals(GetLeafName(root), "runtime", StringComparison.OrdinalIgnoreCase))
             {
                 var runtimeDirectory = Directory.GetParent(root);
                 root = runtimeDirectory != null ? runtimeDirectory.FullName : root;
+                return CombinePath(CombinePath(CombinePath(root, "tools"), componentId), fileName);
             }
 
-            return CombinePath(CombinePath(CombinePath(root, "tools"), componentId), fileName);
+            return CombinePath(CombinePath(CombinePath(root, "tooling"), componentId), fileName);
         }
 
         public static string BuildLegacyDecompilerToolPath(string hostBinPath, string fileName)
         {
+            var root = NormalizePath(hostBinPath);
+            if (string.Equals(GetLeafName(root), "lib", StringComparison.OrdinalIgnoreCase))
+            {
+                var hostDirectory = Directory.GetParent(root);
+                if (hostDirectory != null && string.Equals(GetLeafName(hostDirectory.FullName), "host", StringComparison.OrdinalIgnoreCase))
+                {
+                    var bundleRoot = Directory.GetParent(hostDirectory.FullName);
+                    root = bundleRoot != null ? bundleRoot.FullName : root;
+                    return CombinePath(CombinePath(CombinePath(root, "tooling"), "decompiler"), fileName);
+                }
+            }
+
             return CombinePath(CombinePath(CombinePath(hostBinPath, "tools"), "decompiler"), fileName);
         }
 
@@ -190,14 +229,23 @@ namespace Cortex.Host.Sheltered.Runtime
 
             if (string.Equals(normalizedLeaf, "decompiler", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(normalizedLeaf, "plugins", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(normalizedLeaf, "tools", StringComparison.OrdinalIgnoreCase))
+                string.Equals(normalizedLeaf, "tools", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalizedLeaf, "tooling", StringComparison.OrdinalIgnoreCase))
             {
                 AddCandidate(candidates, parent != null ? parent.FullName : string.Empty);
             }
-            else if (parent != null && string.Equals(GetLeafName(parent.FullName), "tools", StringComparison.OrdinalIgnoreCase))
+            else if (parent != null &&
+                (string.Equals(GetLeafName(parent.FullName), "tools", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(GetLeafName(parent.FullName), "tooling", StringComparison.OrdinalIgnoreCase)))
             {
                 var grandParent = Directory.GetParent(parent.FullName);
                 AddCandidate(candidates, grandParent != null ? grandParent.FullName : string.Empty);
+            }
+            else if (string.Equals(normalizedLeaf, "lib", StringComparison.OrdinalIgnoreCase) &&
+                parent != null &&
+                string.Equals(GetLeafName(parent.FullName), "host", StringComparison.OrdinalIgnoreCase))
+            {
+                AddCandidate(candidates, normalizedBaseDirectory);
             }
 
             if (!string.Equals(normalizedLeaf, "bin", StringComparison.OrdinalIgnoreCase))
@@ -205,6 +253,8 @@ namespace Cortex.Host.Sheltered.Runtime
                 AddCandidate(candidates, CombinePath(normalizedBaseDirectory, "bin"));
             }
 
+            AddCandidate(candidates, CombinePath(CombinePath(CombinePath(CombinePath(normalizedBaseDirectory, "Cortex"), DefaultBundleProfileId), "host"), "lib"));
+            AddCandidate(candidates, CombinePath(CombinePath(CombinePath(CombinePath(CombinePath(normalizedBaseDirectory, "SMM"), "Cortex"), DefaultBundleProfileId), "host"), "lib"));
             AddCandidate(candidates, CombinePath(CombinePath(normalizedBaseDirectory, "Cortex"), "runtime"));
             AddCandidate(candidates, CombinePath(CombinePath(CombinePath(normalizedBaseDirectory, "SMM"), "Cortex"), "runtime"));
             AddCandidate(candidates, CombinePath(CombinePath(normalizedBaseDirectory, "SMM"), "bin"));
