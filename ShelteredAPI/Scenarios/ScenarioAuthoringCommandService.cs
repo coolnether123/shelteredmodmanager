@@ -53,13 +53,13 @@ namespace ShelteredAPI.Scenarios
             return new IScenarioCommandHandler[]
             {
                 new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService),
-                new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, selectionScopeService),
-                new BuildCommandHandler(sectionHub.BuildPlacement),
+                new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),
+                new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new ShellCommandHandler(layoutService, settingsService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
-                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement),
+                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new SelectionCommandHandler(),
                 new AssetModeCommandHandler(),
                 new ToolCommandHandler(layoutService)

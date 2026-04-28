@@ -16,7 +16,8 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioSpriteCatalogService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),
-                    resolver.Get<IScenarioEditorService>());
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<ScenarioObjectIdentityAssignmentService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

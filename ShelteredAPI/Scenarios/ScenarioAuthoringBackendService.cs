@@ -178,7 +178,15 @@ namespace ShelteredAPI.Scenarios
                     snapshot.StatusMessage = sectionMessage;
             }
 
-            changed |= _selectionService.Update(snapshot);
+            if (_sectionHub.ShouldSuppressSelection)
+            {
+                changed |= ClearTransientSelection(snapshot);
+                ScenarioHoverVisualService.Instance.UpdateFromState(snapshot);
+            }
+            else
+            {
+                changed |= _selectionService.Update(snapshot);
+            }
 
             _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
@@ -286,6 +294,35 @@ namespace ShelteredAPI.Scenarios
             {
                 return _activeSession;
             }
+        }
+
+        private static bool ClearTransientSelection(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return false;
+
+            bool changed = false;
+            if (state.SelectionModeActive)
+            {
+                state.SelectionModeActive = false;
+                changed = true;
+            }
+
+            if (state.HoveredTarget != null)
+            {
+                state.HoveredTarget = null;
+                changed = true;
+            }
+
+            if (state.SelectionStack != null && state.SelectionStack.Count > 0)
+            {
+                state.SelectionStack.Clear();
+                state.SelectionStackSignature = null;
+                state.ActiveSelectionStackIndex = 0;
+                changed = true;
+            }
+
+            return changed;
         }
 
         private ScenarioAuthoringContext BuildContext(ScenarioAuthoringState state, ScenarioAuthoringSession authoringSession)

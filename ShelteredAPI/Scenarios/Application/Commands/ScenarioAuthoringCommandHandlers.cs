@@ -55,11 +55,16 @@ namespace ShelteredAPI.Scenarios
     internal sealed class SceneSpriteCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioSceneSpritePlacementAuthoringService _service;
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
         private readonly ScenarioSelectionScopeService _scopeService;
 
-        public SceneSpriteCommandHandler(ScenarioSceneSpritePlacementAuthoringService service, ScenarioSelectionScopeService scopeService)
+        public SceneSpriteCommandHandler(
+            ScenarioSceneSpritePlacementAuthoringService service,
+            ScenarioBuildPlacementAuthoringService buildPlacement,
+            ScenarioSelectionScopeService scopeService)
         {
             _service = service;
+            _buildPlacement = buildPlacement;
             _scopeService = scopeService;
         }
 
@@ -70,23 +75,39 @@ namespace ShelteredAPI.Scenarios
             if (_service == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("scene_sprite.", StringComparison.Ordinal))
                 return false;
 
-            if (!_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
+            if (state != null
+                && state.SelectedTarget != null
+                && !_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
             {
                 handled = true;
                 return true;
             }
 
-            return _service.TryHandleAction(state, actionId, out handled, out message);
+            bool changed = _service.TryHandleAction(state, actionId, out handled, out message);
+            if (changed && handled && IsSceneSpritePlacementStartAction(actionId) && _service.HasActivePlacement && _buildPlacement != null)
+                _buildPlacement.Reset();
+
+            return changed;
+        }
+
+        private static bool IsSceneSpritePlacementStartAction(string actionId)
+        {
+            return !string.IsNullOrEmpty(actionId)
+                && actionId.StartsWith(ScenarioAuthoringActionIds.ActionSceneSpritePlacementApplyPrefix, StringComparison.Ordinal);
         }
     }
 
     internal sealed class BuildCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioBuildPlacementAuthoringService _service;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacement;
 
-        public BuildCommandHandler(ScenarioBuildPlacementAuthoringService service)
+        public BuildCommandHandler(
+            ScenarioBuildPlacementAuthoringService service,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacement)
         {
             _service = service;
+            _sceneSpritePlacement = sceneSpritePlacement;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -96,7 +117,19 @@ namespace ShelteredAPI.Scenarios
             if (_service == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("build.", StringComparison.Ordinal))
                 return false;
 
-            return _service.TryHandleAction(state, actionId, out handled, out message);
+            bool changed = _service.TryHandleAction(state, actionId, out handled, out message);
+            if (changed && handled && IsBuildPlacementStartAction(actionId) && _service.HasActivePlacement && _sceneSpritePlacement != null)
+                _sceneSpritePlacement.Reset();
+
+            return changed;
+        }
+
+        private static bool IsBuildPlacementStartAction(string actionId)
+        {
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureRoom, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureLadder, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureLight, StringComparison.Ordinal)
+                || (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix, StringComparison.Ordinal));
         }
     }
 
@@ -586,13 +619,16 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementService;
 
         public EditorLifecycleCommandHandler(
             IScenarioEditorService editorService,
-            ScenarioBuildPlacementAuthoringService buildPlacementService)
+            ScenarioBuildPlacementAuthoringService buildPlacementService,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementService)
         {
             _editorService = editorService;
             _buildPlacementService = buildPlacementService;
+            _sceneSpritePlacementService = sceneSpritePlacementService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -655,6 +691,13 @@ namespace ShelteredAPI.Scenarios
                 string placementMessage = null;
                 if (_buildPlacementService != null && _buildPlacementService.HasActivePlacement)
                     _buildPlacementService.CancelForPlaytest(out placementMessage);
+
+                if (_sceneSpritePlacementService != null && _sceneSpritePlacementService.HasActivePlacement)
+                {
+                    _sceneSpritePlacementService.Reset();
+                    if (string.IsNullOrEmpty(placementMessage))
+                        placementMessage = "Placement cancelled before playtest started.";
+                }
 
                 ScenarioApplyResult result = _editorService.BeginPlaytest();
                 string playtestMessage = BuildPlaytestStatus(result);
