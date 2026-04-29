@@ -244,12 +244,13 @@ namespace ShelteredAPI.Saves
 
         public SaveEntry CreateSave(SaveCreateOptions opts)
         {
+            SaveCreateOptions normalized = NormalizeCreateOptions(opts);
             var now = DateTime.UtcNow.ToString("o");
             var entry = new SaveEntry
             {
-                id = $"{_scenarioId}_{opts.absoluteSlot}",
-                absoluteSlot = opts.absoluteSlot,
-                name = NameSanitizer.SanitizeName(opts?.name) ?? $"Slot {opts.absoluteSlot}",
+                id = $"{_scenarioId}_{normalized.absoluteSlot}",
+                absoluteSlot = normalized.absoluteSlot,
+                name = NameSanitizer.SanitizeName(normalized.name) ?? $"Slot {normalized.absoluteSlot}",
                 createdAt = now,
                 updatedAt = now,
                 gameVersion = Application.version,
@@ -260,10 +261,40 @@ namespace ShelteredAPI.Saves
             };
 
             // Ensure slot directory exists
-            DirectoryProvider.SlotRoot(_scenarioId, opts.absoluteSlot, true);
+            DirectoryProvider.SlotRoot(_scenarioId, normalized.absoluteSlot, true);
             
             InvalidateCache();
             return entry;
+        }
+
+        private SaveCreateOptions NormalizeCreateOptions(SaveCreateOptions opts)
+        {
+            SaveCreateOptions normalized = new SaveCreateOptions();
+            if (opts != null)
+            {
+                normalized.name = opts.name;
+                normalized.extraJson = opts.extraJson;
+                normalized.absoluteSlot = opts.absoluteSlot;
+            }
+
+            if (normalized.absoluteSlot <= 0)
+                normalized.absoluteSlot = GetNextCreatableSlot();
+
+            return normalized;
+        }
+
+        internal int GetNextCreatableSlot()
+        {
+            int firstSlot = ExpandedVanillaSaves.IsStandardScenario(_scenarioId) ? 4 : 1;
+            int maxSlot = firstSlot - 1;
+
+            foreach (int slot in GetAllEntries().Keys)
+            {
+                if (slot >= firstSlot && slot > maxSlot)
+                    maxSlot = slot;
+            }
+
+            return maxSlot + 1;
         }
 
         public SaveEntry OverwriteSave(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes)

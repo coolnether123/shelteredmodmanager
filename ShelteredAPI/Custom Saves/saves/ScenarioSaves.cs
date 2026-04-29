@@ -73,16 +73,7 @@ namespace ShelteredAPI.Saves
                 return 0;
             }
 
-            SaveEntry[] entries = GetRegistry(scenarioId).ListSaves();
-            int maxSlot = 0;
-            for (int i = 0; i < entries.Length; i++)
-            {
-                SaveEntry entry = entries[i];
-                if (entry != null && entry.absoluteSlot > maxSlot)
-                    maxSlot = entry.absoluteSlot;
-            }
-
-            return Math.Max(1, maxSlot + 1);
+            return GetRegistry(scenarioId).GetNextCreatableSlot();
         }
 
         public static bool Delete(string scenarioId, string saveId)

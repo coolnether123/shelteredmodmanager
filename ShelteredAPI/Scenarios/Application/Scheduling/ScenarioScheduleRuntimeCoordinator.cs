@@ -54,8 +54,15 @@ namespace ShelteredAPI.Scenarios
                     continue;
                 if (!IsDue(action.DueTime))
                     continue;
-                if (!IsRepeatable(action) && _journal.HasExecuted(action.Id))
+                if (IsRepeatable(action))
+                {
+                    if (!CanRunRepeatable(action))
+                        continue;
+                }
+                else if (_journal.HasExecuted(action.Id))
+                {
                     continue;
+                }
 
                 string reason;
                 if (!_conditions.IsGateSatisfied(_definition, action.GateId, _journal.State, out reason)
@@ -117,6 +124,26 @@ namespace ShelteredAPI.Scenarios
         private static bool IsRepeatable(ScenarioScheduledActionDefinition action)
         {
             return action != null && action.Policy != null && action.Policy.Repeatable;
+        }
+
+        private bool CanRunRepeatable(ScenarioScheduledActionDefinition action)
+        {
+            ScenarioExecutedActionRecord lastRecord;
+            if (!_journal.TryGetLastExecutionAttempt(action.Id, out lastRecord))
+                return true;
+
+            long elapsedMinutes = ToGameMinutes(GameTime.Day, GameTime.Hour, GameTime.Minute)
+                - ToGameMinutes(lastRecord.FiredDay, lastRecord.FiredHour, lastRecord.FiredMinute);
+            if (elapsedMinutes <= 0)
+                return false;
+
+            int cooldownMinutes = action.Policy != null ? Math.Max(0, action.Policy.CooldownMinutes) : 0;
+            return cooldownMinutes <= 0 || elapsedMinutes >= cooldownMinutes;
+        }
+
+        private static long ToGameMinutes(int day, int hour, int minute)
+        {
+            return ((long)day * 24L * 60L) + ((long)hour * 60L) + minute;
         }
 
         private static bool IsDue(ScenarioScheduleTime time)

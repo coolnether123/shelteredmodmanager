@@ -16,7 +16,7 @@ namespace ShelteredAPI.Saves
         /// <summary>
         /// Checks if a given scenario ID is the one used for expanded vanilla saves.
         /// </summary>
-        internal static bool IsStandardScenario(string scenarioId) => scenarioId == StandardScenarioId;
+        internal static bool IsStandardScenario(string scenarioId) => string.Equals(scenarioId, StandardScenarioId, StringComparison.OrdinalIgnoreCase);
 
         public static SaveEntry[] List() => _registry.ListSaves();
         public static SaveEntry[] List(int page, int pageSize) => _registry.ListSaves(page, pageSize);

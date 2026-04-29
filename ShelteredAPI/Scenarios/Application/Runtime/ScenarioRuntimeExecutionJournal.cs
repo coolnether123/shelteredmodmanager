@@ -53,6 +53,30 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
+        public bool TryGetLastExecutionAttempt(string actionKey, out ScenarioExecutedActionRecord lastRecord)
+        {
+            lastRecord = null;
+            if (string.IsNullOrEmpty(actionKey) || State == null || State.ExecutedActions == null)
+                return false;
+
+            for (int i = 0; i < State.ExecutedActions.Count; i++)
+            {
+                ScenarioExecutedActionRecord record = State.ExecutedActions[i];
+                if (record == null
+                    || !string.Equals(record.ActionKey, actionKey, StringComparison.OrdinalIgnoreCase)
+                    || (record.Status != ScenarioExecutedActionStatus.Succeeded
+                        && record.Status != ScenarioExecutedActionStatus.Failed))
+                {
+                    continue;
+                }
+
+                if (lastRecord == null || CompareExecutionTime(record, lastRecord) >= 0)
+                    lastRecord = record;
+            }
+
+            return lastRecord != null;
+        }
+
         public void Record(ScenarioScheduledActionDefinition action, ScenarioExecutedActionStatus status, string message)
         {
             if (State == null || action == null)
@@ -80,6 +104,21 @@ namespace ShelteredAPI.Scenarios
             State.LastProcessedDay = GameTime.Day;
             State.LastProcessedHour = GameTime.Hour;
             State.LastProcessedMinute = GameTime.Minute;
+        }
+
+        private static int CompareExecutionTime(ScenarioExecutedActionRecord left, ScenarioExecutedActionRecord right)
+        {
+            if (left == null && right == null) return 0;
+            if (left == null) return -1;
+            if (right == null) return 1;
+
+            int day = left.FiredDay.CompareTo(right.FiredDay);
+            if (day != 0) return day;
+
+            int hour = left.FiredHour.CompareTo(right.FiredHour);
+            if (hour != 0) return hour;
+
+            return left.FiredMinute.CompareTo(right.FiredMinute);
         }
     }
 }

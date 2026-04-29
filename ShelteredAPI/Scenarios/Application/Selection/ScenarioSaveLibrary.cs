@@ -29,16 +29,7 @@ namespace ShelteredAPI.Scenarios
 
         public int GetNextAvailableSlot(string scenarioId)
         {
-            SaveEntry[] entries = ListSaves(scenarioId);
-            int maxSlot = 0;
-            for (int i = 0; i < entries.Length; i++)
-            {
-                SaveEntry entry = entries[i];
-                if (entry != null && entry.absoluteSlot > maxSlot)
-                    maxSlot = entry.absoluteSlot;
-            }
-
-            return Math.Max(1, maxSlot + 1);
+            return GetRegistry(scenarioId).GetNextCreatableSlot();
         }
 
         public SaveEntry Get(string scenarioId, string saveId)

@@ -70,6 +70,20 @@ namespace ModAPI.Hooks
             }
             try
             {
+                if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid)
+                {
+                    if (ModRuntime.IsQuitting)
+                    {
+                        ModRuntime.MarkSaveExit("PlatformSave.FallbackVanilla.Reserved", "type=" + type);
+                    }
+                    bool reservedSuccess = _inner.PlatformSave(type, data);
+                    if (reservedSuccess)
+                    {
+                        MMLog.WriteInfo($"Save finished {slotName} (vanilla reserved type)");
+                    }
+                    return reservedSuccess;
+                }
+
                 // CRASH FIX: During quit, the save system can be triggered multiple times.
                 // If we've already completed a save during this quit sequence, skip redundant saves
                 // to avoid accessing destroyed objects in the vanilla code that runs after.
@@ -137,7 +151,7 @@ namespace ModAPI.Hooks
                 }
 
                 // 2. CHECK FOR EXISTING LOADED CUSTOM GAME
-                if (SaveRuntimeState.HasActiveCustomSave)
+                if (SaveRuntimeState.HasActiveCustomSessionFor(type))
                 {
                     // Update the file and metadata
                     var active = SaveRuntimeState.ActiveCustomSave;
