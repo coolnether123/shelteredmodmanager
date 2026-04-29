@@ -50,7 +50,14 @@ namespace ShelteredAPI.Scenarios
             {
                 QuestInstance quest = quests[i];
                 if (quest != null && quest.definition != null && string.Equals(quest.definition.id, condition.TargetId, StringComparison.OrdinalIgnoreCase))
-                    return condition.Kind == ScenarioConditionKind.QuestActive;
+                {
+                    if (condition.Kind == ScenarioConditionKind.QuestActive)
+                        return quest.state == QuestInstance.QuestState.Active;
+                    if (condition.Kind == ScenarioConditionKind.QuestCompleted)
+                        return quest.state == QuestInstance.QuestState.Completed;
+                    if (condition.Kind == ScenarioConditionKind.QuestFailed)
+                        return quest.state == QuestInstance.QuestState.Failed;
+                }
             }
 
             reason = "Quest condition not satisfied: " + condition.TargetId;

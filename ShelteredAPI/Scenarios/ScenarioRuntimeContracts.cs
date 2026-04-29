@@ -81,6 +81,22 @@ namespace ShelteredAPI.Scenarios
         ScenarioRuntimeBinding GetActiveBindingForStartup();
     }
 
+    internal interface IScenarioQuestInstanceResolver
+    {
+        bool TryResolve(ScenarioRuntimeBinding binding, out QuestInstance instance, out string reason);
+    }
+
+    internal interface IScenarioWinLossConditionAdapter
+    {
+        bool TryCreateConditionRef(ScenarioDefinition definition, ScenarioRuntimeBinding binding, ConditionDef condition, out ScenarioConditionRef conditionRef, out string reason);
+    }
+
+    internal interface IScenarioWinLossOutcomeService
+    {
+        void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding);
+        void Tick(ScenarioRuntimeState state);
+    }
+
     internal interface IScenarioSpriteAssetResolver
     {
         Sprite ResolveSprite(ScenarioDefinition definition, string packRoot, string spriteId, string relativePath, string runtimeSpriteKey, string contextLabel);

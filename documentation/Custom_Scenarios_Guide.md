@@ -187,6 +187,7 @@ When a custom scenario successfully spawns, the runtime stores a `ScenarioRuntim
 - `IsActive = true`
 - `IsConvertedToNormalSave = false`
 - `DayCreated`
+- `ScenarioQuestInstanceId` after the `ScenarioDef` is spawned successfully
 
 Failed spawns, dependency failures, and canceled startup flows clear pending scenario state and do not write a new binding. On later loads, active bindings let ShelteredAPI re-load the XML definition by `ScenarioId` and apply supported scenario data after the world is ready. Code-only scenarios still keep identity/version metadata in the save, but reload-time XML application requires a matching `scenario.xml` pack.
 
@@ -203,13 +204,13 @@ Applied now:
 - bunker wall and wiring sprite indexes
 - vanilla object placements by `ObjectManager.ObjectType` via `definition="Generator"` and optional `level`, `movable`, `lockDeconstruct` properties
 - asset path validation and sprite preloading
+- win/loss conditions when the active binding has a spawned `ScenarioQuestInstanceId`; supported condition types are `surviveDays`, `timeReached`/`dayReached`, `itemQuantityAvailable`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `bunkerExpansionUnlocked`, `technologyUnlocked`, `scenarioFlagSet`, and `customTrigger`
 
 Explicitly deferred:
 
 - skills, because Sheltered does not expose a stable runtime skill/save API comparable to `BaseStats` and `Traits`
 - direct `PrefabReference` object placement, because raw prefab-path instantiation can create unsaved or invalid live objects
-- triggers, because the XML schema does not yet define a safe runtime action target
-- win/loss conditions, because active bindings do not yet persist the spawned `QuestInstance` id needed to complete or fail the scenario safely
+- trigger-started quest loops, because `StartTriggerId` and `CompletionConditionId` are structurally validated references only until an authored trigger action is wired to start, complete, or fail that quest at runtime
 
 Deferred categories are reported through `ScenarioApplyResult.Messages`.
 

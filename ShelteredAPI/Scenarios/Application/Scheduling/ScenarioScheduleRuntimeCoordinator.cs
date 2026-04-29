@@ -11,6 +11,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioRuntimeExecutionJournal _journal;
         private readonly ScenarioConditionEvaluatorRegistry _conditions;
         private readonly ScenarioEffectDispatcher _effects;
+        private readonly IScenarioWinLossOutcomeService _winLossOutcomeService;
         private readonly IScenarioScheduledActionProvider[] _providers;
         private ScenarioDefinition _definition;
         private List<ScenarioScheduledActionDefinition> _actions = new List<ScenarioScheduledActionDefinition>();
@@ -20,12 +21,14 @@ namespace ShelteredAPI.Scenarios
             ScenarioRuntimeExecutionJournal journal,
             ScenarioConditionEvaluatorRegistry conditions,
             ScenarioEffectDispatcher effects,
+            IScenarioWinLossOutcomeService winLossOutcomeService,
             IScenarioScheduledActionProvider[] providers)
         {
             _stateService = stateService;
             _journal = journal;
             _conditions = conditions;
             _effects = effects;
+            _winLossOutcomeService = winLossOutcomeService;
             _providers = providers ?? new IScenarioScheduledActionProvider[0];
         }
 
@@ -34,6 +37,8 @@ namespace ShelteredAPI.Scenarios
             _definition = definition;
             _stateService.EnsureHooked();
             _stateService.Bind(definition, binding);
+            if (_winLossOutcomeService != null)
+                _winLossOutcomeService.Initialize(definition, binding);
             _actions = BuildActions(definition);
         }
 
@@ -63,6 +68,9 @@ namespace ShelteredAPI.Scenarios
 
                 ExecuteAction(action);
             }
+
+            if (_winLossOutcomeService != null)
+                _winLossOutcomeService.Tick(_journal.State);
 
             _journal.UpdateLastProcessedTime();
         }

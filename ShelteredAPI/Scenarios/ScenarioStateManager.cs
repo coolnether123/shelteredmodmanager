@@ -132,7 +132,8 @@ namespace ShelteredAPI.Scenarios
                 IsActive = binding.IsActive,
                 IsConvertedToNormalSave = binding.IsConvertedToNormalSave,
                 DayCreated = binding.DayCreated,
-                LastEditorSaveTick = binding.LastEditorSaveTick
+                LastEditorSaveTick = binding.LastEditorSaveTick,
+                ScenarioQuestInstanceId = binding.ScenarioQuestInstanceId
             };
         }
     }

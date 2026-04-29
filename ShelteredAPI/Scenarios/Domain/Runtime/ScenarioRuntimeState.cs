@@ -17,6 +17,8 @@ namespace ShelteredAPI.Scenarios
         public string ScenarioId { get; set; }
         public string ScenarioVersion { get; set; }
         public string RuntimeBindingId { get; set; }
+        public string ScenarioOutcome { get; set; }
+        public string ScenarioOutcomeConditionId { get; set; }
         public int LastProcessedDay { get; set; }
         public int LastProcessedHour { get; set; }
         public int LastProcessedMinute { get; set; }

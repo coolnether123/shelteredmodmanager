@@ -67,6 +67,8 @@ namespace ShelteredAPI.Scenarios
             string scenarioId = state.ScenarioId ?? string.Empty;
             string scenarioVersion = state.ScenarioVersion ?? string.Empty;
             string runtimeBindingId = state.RuntimeBindingId ?? string.Empty;
+            string scenarioOutcome = state.ScenarioOutcome ?? string.Empty;
+            string scenarioOutcomeConditionId = state.ScenarioOutcomeConditionId ?? string.Empty;
             int lastDay = state.LastProcessedDay;
             int lastHour = state.LastProcessedHour;
             int lastMinute = state.LastProcessedMinute;
@@ -74,6 +76,8 @@ namespace ShelteredAPI.Scenarios
             data.SaveLoad("ScenarioId", ref scenarioId);
             data.SaveLoad("ScenarioVersion", ref scenarioVersion);
             data.SaveLoad("RuntimeBindingId", ref runtimeBindingId);
+            data.SaveLoad("ScenarioOutcome", ref scenarioOutcome);
+            data.SaveLoad("ScenarioOutcomeConditionId", ref scenarioOutcomeConditionId);
             data.SaveLoad("LastProcessedDay", ref lastDay);
             data.SaveLoad("LastProcessedHour", ref lastHour);
             data.SaveLoad("LastProcessedMinute", ref lastMinute);
@@ -81,6 +85,8 @@ namespace ShelteredAPI.Scenarios
             state.ScenarioId = scenarioId;
             state.ScenarioVersion = scenarioVersion;
             state.RuntimeBindingId = runtimeBindingId;
+            state.ScenarioOutcome = scenarioOutcome;
+            state.ScenarioOutcomeConditionId = scenarioOutcomeConditionId;
             state.LastProcessedDay = lastDay;
             state.LastProcessedHour = lastHour;
             state.LastProcessedMinute = lastMinute;

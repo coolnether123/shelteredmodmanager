@@ -263,8 +263,11 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioApplyCoordinator.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFlagRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStartStateApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioQuestInstanceResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioSceneSpriteStartStateApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioScheduledGameplayRuntime.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossConditionAdapter.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossOutcomeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledBunkerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledInventoryRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledObjectRuntimeService.cs" />

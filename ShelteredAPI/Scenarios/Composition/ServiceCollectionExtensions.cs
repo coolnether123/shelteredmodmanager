@@ -76,6 +76,10 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournal(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpriteStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestInstanceResolver(); });
+            services.AddSingleton<IScenarioQuestInstanceResolver>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioQuestInstanceResolver>(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioWinLossConditionAdapter(); });
+            services.AddSingleton<IScenarioWinLossConditionAdapter>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossConditionAdapter>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledInventoryRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWeatherRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledSurvivorRuntimeService(); });
@@ -105,6 +109,14 @@ namespace ShelteredAPI.Scenarios
                 dispatcher.Register(resolver.Get<ScenarioFlagRuntimeService>());
                 return dispatcher;
             });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioWinLossOutcomeService(
+                    resolver.Get<IScenarioQuestInstanceResolver>(),
+                    resolver.Get<IScenarioWinLossConditionAdapter>(),
+                    resolver.Get<ScenarioConditionEvaluatorRegistry>());
+            });
+            services.AddSingleton<IScenarioWinLossOutcomeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossOutcomeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDefinitionScheduledActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioLegacyScheduleActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
@@ -114,6 +126,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioRuntimeExecutionJournal>(),
                     resolver.Get<ScenarioConditionEvaluatorRegistry>(),
                     resolver.Get<ScenarioEffectDispatcher>(),
+                    resolver.Get<IScenarioWinLossOutcomeService>(),
                     new IScenarioScheduledActionProvider[]
                     {
                         resolver.Get<ScenarioDefinitionScheduledActionProvider>(),

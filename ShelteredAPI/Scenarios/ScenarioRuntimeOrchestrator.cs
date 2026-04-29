@@ -66,7 +66,14 @@ namespace ShelteredAPI.Scenarios
                 return;
             }
 
-            _customScenarioService.MarkSpawned(state.ScenarioId);
+            if (!_customScenarioService.MarkSpawned(state.ScenarioId))
+            {
+                MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] Failed to mark custom scenario as spawned: " + state.ScenarioId);
+                _customScenarioService.ClearState();
+                return;
+            }
+
+            BindSpawnedQuestInstance(instance);
             MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Spawned custom scenario: " + state.ScenarioId);
         }
 
@@ -136,6 +143,21 @@ namespace ShelteredAPI.Scenarios
                 if (issues[i] != null)
                     MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] " + scenarioId + " " + issues[i].Severity + ": " + issues[i].Message);
             }
+        }
+
+        private void BindSpawnedQuestInstance(QuestInstance instance)
+        {
+            if (instance == null)
+                return;
+
+            ScenarioRuntimeBinding binding = _runtimeBindingService.CurrentBinding;
+            if (binding == null)
+                return;
+
+            binding.ScenarioQuestInstanceId = instance.id;
+            _runtimeBindingService.SetBinding(binding);
+            MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Bound scenario QuestInstance id "
+                + instance.id.ToString() + " to scenario '" + (binding.ScenarioId ?? string.Empty) + "'.");
         }
     }
 }

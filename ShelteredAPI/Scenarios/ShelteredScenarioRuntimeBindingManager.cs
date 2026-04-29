@@ -9,6 +9,7 @@ namespace ShelteredAPI.Scenarios
     {
         private const string SaveGroupName = "CustomScenarioBinding";
         private const string HasLastEditorTickName = "HasLastEditorSaveTick";
+        private const string HasScenarioQuestInstanceIdName = "HasScenarioQuestInstanceId";
         private readonly IScenarioStateManager _stateManager;
         private readonly object _sync = new object();
         private bool _hooked;
@@ -126,6 +127,8 @@ namespace ShelteredAPI.Scenarios
             int dayCreated = 0;
             int lastEditorTick = 0;
             bool hasLastEditorTick = false;
+            int scenarioQuestInstanceId = -1;
+            bool hasScenarioQuestInstanceId = false;
 
             data.SaveLoad("ScenarioId", ref scenarioId);
             data.SaveLoad("VersionApplied", ref versionApplied);
@@ -134,6 +137,8 @@ namespace ShelteredAPI.Scenarios
             data.SaveLoad("DayCreated", ref dayCreated);
             data.SaveLoad(HasLastEditorTickName, ref hasLastEditorTick);
             data.SaveLoad("LastEditorSaveTick", ref lastEditorTick);
+            data.SaveLoad(HasScenarioQuestInstanceIdName, ref hasScenarioQuestInstanceId);
+            data.SaveLoad("ScenarioQuestInstanceId", ref scenarioQuestInstanceId);
             data.GroupEnd();
 
             if (string.IsNullOrEmpty(scenarioId))
@@ -145,6 +150,7 @@ namespace ShelteredAPI.Scenarios
             binding.IsConvertedToNormalSave = isConverted;
             binding.DayCreated = dayCreated;
             binding.LastEditorSaveTick = hasLastEditorTick ? new int?(lastEditorTick) : null;
+            binding.ScenarioQuestInstanceId = hasScenarioQuestInstanceId ? new int?(scenarioQuestInstanceId) : null;
             return binding;
         }
 
@@ -158,6 +164,8 @@ namespace ShelteredAPI.Scenarios
             int dayCreated = binding.DayCreated;
             bool hasLastEditorTick = binding.LastEditorSaveTick.HasValue;
             int lastEditorTick = binding.LastEditorSaveTick.HasValue ? binding.LastEditorSaveTick.Value : 0;
+            bool hasScenarioQuestInstanceId = binding.ScenarioQuestInstanceId.HasValue;
+            int scenarioQuestInstanceId = binding.ScenarioQuestInstanceId.HasValue ? binding.ScenarioQuestInstanceId.Value : -1;
 
             data.SaveLoad("ScenarioId", ref scenarioId);
             data.SaveLoad("VersionApplied", ref versionApplied);
@@ -166,6 +174,8 @@ namespace ShelteredAPI.Scenarios
             data.SaveLoad("DayCreated", ref dayCreated);
             data.SaveLoad(HasLastEditorTickName, ref hasLastEditorTick);
             data.SaveLoad("LastEditorSaveTick", ref lastEditorTick);
+            data.SaveLoad(HasScenarioQuestInstanceIdName, ref hasScenarioQuestInstanceId);
+            data.SaveLoad("ScenarioQuestInstanceId", ref scenarioQuestInstanceId);
             data.GroupEnd();
         }
 

@@ -15,5 +15,6 @@ namespace ShelteredAPI.Scenarios
         public bool IsConvertedToNormalSave { get; set; }
         public int DayCreated { get; set; }
         public int? LastEditorSaveTick { get; set; }
+        public int? ScenarioQuestInstanceId { get; set; }
     }
 }
