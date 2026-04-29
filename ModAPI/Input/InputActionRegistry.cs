@@ -12,6 +12,10 @@ namespace ModAPI.InputActions
         private static readonly Dictionary<string, InputBinding> _bindings = new Dictionary<string, InputBinding>(StringComparer.OrdinalIgnoreCase);
         private static readonly object _sync = new object();
 
+        /// <summary>
+        /// Raised after a new input action is registered and its default binding is available.
+        /// </summary>
+        public static event Action<ModInputAction> OnActionRegistered;
         public static event Action<string, InputBinding> OnBindingChanged;
 
         public static bool Register(ModInputAction action)
@@ -23,8 +27,11 @@ namespace ModAPI.InputActions
                 if (_actions.ContainsKey(action.Id)) return false;
                 _actions[action.Id] = action;
                 _bindings[action.Id] = action.DefaultBinding;
-                return true;
             }
+
+            var handler = OnActionRegistered;
+            if (handler != null) handler(action);
+            return true;
         }
 
         public static bool IsRegistered(string actionId)

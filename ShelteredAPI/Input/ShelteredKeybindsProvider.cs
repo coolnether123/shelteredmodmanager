@@ -59,6 +59,7 @@ namespace ShelteredAPI.Input
         private ShelteredKeybindsProvider()
         {
             IsReady = true;
+            InputActionRegistry.OnActionRegistered += HandleActionRegistered;
         }
 
         /// <summary>
@@ -266,35 +267,44 @@ namespace ShelteredAPI.Input
             int normalizedCount = 0;
             for (int i = 0; i < actions.Count; i++)
             {
-                var action = actions[i];
-                var defaults = action.DefaultBinding;
-                InputContext context = ResolveContext(action.Id, action.Category);
-
-                string primaryRaw = ModPrefs.GetString(BuildPrefKey(action.Id, true), defaults.Primary.ToString());
-                string secondaryRaw = ModPrefs.GetString(BuildPrefKey(action.Id, false), defaults.Secondary.ToString());
-
-                KeyCode primary = KeyValidationPolicy.ParseKeyCodeSafe(primaryRaw, defaults.Primary, action.Id + ".Primary", context);
-                KeyCode secondary = KeyValidationPolicy.ParseKeyCodeSafe(secondaryRaw, defaults.Secondary, action.Id + ".Secondary", context);
-
-                var loaded = new InputBinding(primary, secondary);
-                if (!KeyValidationPolicy.IsValidForContext(loaded.Primary, context))
-                    loaded.Primary = defaults.Primary;
-                if (!KeyValidationPolicy.IsValidForContext(loaded.Secondary, context))
-                    loaded.Secondary = defaults.Secondary;
-
-                if (loaded.Primary != KeyCode.None && loaded.Primary == loaded.Secondary)
-                {
-                    loaded.Secondary = KeyCode.None;
+                if (LoadActionBindingFromPrefs(actions[i]))
                     normalizedCount++;
-                }
-
-                InputActionRegistry.SetBinding(action.Id, loaded);
             }
             ZoomSpeed = LoadFloatPref(ZoomSpeedPrefKey, ShelteredInputTuning.DefaultZoomSpeed);
             TouchpadMovementSpeed = LoadFloatPref(TouchpadMovementSpeedPrefKey, ShelteredInputTuning.DefaultTouchpadMovementSpeed);
             MouseScrollSpeed = LoadFloatPref(MouseScrollSpeedPrefKey, ShelteredInputTuning.DefaultMouseScrollSpeed);
             ApplyRuntimeTuning();
             MMLog.WriteDebug("[ShelteredKeybindsProvider] Loaded " + actions.Count + " actions from ModPrefs. NormalizedDuplicates=" + normalizedCount + ".");
+        }
+
+        private bool LoadActionBindingFromPrefs(ModInputAction action)
+        {
+            if (action == null) return false;
+
+            var defaults = action.DefaultBinding;
+            InputContext context = ResolveContext(action.Id, action.Category);
+
+            string primaryRaw = ModPrefs.GetString(BuildPrefKey(action.Id, true), defaults.Primary.ToString());
+            string secondaryRaw = ModPrefs.GetString(BuildPrefKey(action.Id, false), defaults.Secondary.ToString());
+
+            KeyCode primary = KeyValidationPolicy.ParseKeyCodeSafe(primaryRaw, defaults.Primary, action.Id + ".Primary", context);
+            KeyCode secondary = KeyValidationPolicy.ParseKeyCodeSafe(secondaryRaw, defaults.Secondary, action.Id + ".Secondary", context);
+
+            var loaded = new InputBinding(primary, secondary);
+            if (!KeyValidationPolicy.IsValidForContext(loaded.Primary, context))
+                loaded.Primary = defaults.Primary;
+            if (!KeyValidationPolicy.IsValidForContext(loaded.Secondary, context))
+                loaded.Secondary = defaults.Secondary;
+
+            bool normalized = false;
+            if (loaded.Primary != KeyCode.None && loaded.Primary == loaded.Secondary)
+            {
+                loaded.Secondary = KeyCode.None;
+                normalized = true;
+            }
+
+            InputActionRegistry.SetBinding(action.Id, loaded);
+            return normalized;
         }
 
         private List<SettingDefinition> BuildDefinitions()
@@ -673,6 +683,21 @@ namespace ShelteredAPI.Input
         private static void EnsureActionsRegistered()
         {
             ShelteredVanillaInputActions.EnsureRegistered();
+        }
+
+        private void HandleActionRegistered(ModInputAction action)
+        {
+            if (action == null) return;
+
+            lock (_sync)
+            {
+                if (!_loaded) return;
+
+                LoadActionBindingFromPrefs(action);
+                _definitions = null;
+            }
+
+            MMLog.WriteDebug("[ShelteredKeybindsProvider] Registered late input action '" + action.Id + "'; keybind definitions invalidated.");
         }
 
         private static bool IsManagedActionId(string actionId)
