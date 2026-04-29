@@ -27,18 +27,20 @@ The 1.3 line is a breaking clean API line. `ModAPI.dll` is the neutral framework
 
 ## 1. Start Here
 
-- Plugin lifecycle and context usage: `documentation/how to develop a plugin.md`
-- Harmony + transpilers: `documentation/how to develop a patch with harmony.md`
-- Transpiler safety/debugging: `documentation/Transpiler_and_Debugging_Guide.md`
-- Loader/runtime architecture: `documentation/ModAPI_Architecture_guide.md`
-- Spine settings UI: `documentation/Spine_Settings_Guide.md`
-- Settings + persistence patterns: `documentation/SETTINGS.md`
-- ShelteredAPI helper surface: `documentation/ShelteredAPI_Guide.md`
-- Input/keybinding registration: `documentation/Input_Keybindings_Guide.md`
-- Custom scenario registration and authoring: `documentation/Custom_Scenarios_Guide.md`
-- Sheltered content registration/runtime: `documentation/ShelteredAPI_Content_Guide.md`
-- Actor registry/components/bindings/adapters: `documentation/ShelteredAPI_Characters_Guide.md`
-- Failures and log signatures: `documentation/API_Troubleshooting.md`
+For a guided reading path, start with the root [README documentation section](../readme.md#documentation). For specific tasks:
+
+- Plugin lifecycle and context usage: [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md)
+- Harmony + transpilers: [How to Develop a Harmony Patch](how%20to%20develop%20a%20patch%20with%20harmony.md)
+- Transpiler safety/debugging: [Transpiler and Debugging Guide](Transpiler_and_Debugging_Guide.md)
+- Loader/runtime architecture: [ModAPI Architecture Guide](ModAPI_Architecture_guide.md)
+- Spine settings UI: [Spine Settings Guide](Spine_Settings_Guide.md)
+- Settings + persistence patterns: [Settings and Persistence](SETTINGS.md)
+- ShelteredAPI helper surface: [ShelteredAPI Guide](ShelteredAPI_Guide.md)
+- Input/keybinding registration: [Input Keybindings Guide](Input_Keybindings_Guide.md)
+- Custom scenario registration and authoring: [Custom Scenarios Guide](Custom_Scenarios_Guide.md)
+- Sheltered content registration/runtime: [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md)
+- Actor registry/components/bindings/adapters: [ShelteredAPI Actors Guide](ShelteredAPI_Characters_Guide.md)
+- Failures and log signatures: [API Troubleshooting](API_Troubleshooting.md)
 
 ## 2. Minimal Plugin Template
 

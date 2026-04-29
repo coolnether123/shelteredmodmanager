@@ -19,6 +19,16 @@ Custom scenarios can be authored in two ways:
 - code registration through `ShelteredScenarios`
 - XML packs discovered from a loaded mod's `Scenarios/**/scenario.xml` files
 
+Choose XML when the scenario is mostly data: starting family, inventory, bunker edits, triggers, quests, and win/loss conditions. Choose code registration when you need runtime logic, custom selection behavior, or direct construction of a Sheltered `ScenarioDef`.
+
+Authoring checklist:
+
+1. Pick a stable scenario id, such as `com.author.mod.scenario.longroad`.
+2. Put XML packs under `Scenarios/<ScenarioName>/scenario.xml`, or register code scenarios from `Start(...)`.
+3. Add required mod dependencies when the scenario depends on another content pack.
+4. Keep asset paths relative to the scenario pack folder.
+5. Test a new game, save/load, dependency-missing startup, and return-to-menu/reload.
+
 Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub is always available from the scenario book, even when there are no existing custom scenarios, so authors can use `Add New Scenario`.
 
 `ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime pack: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, the `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` facades, plus the `ShelteredScenarioDefBuilder` escape hatch. Serializers, validators, runtime binding, browser controllers, and apply services are implementation details.
@@ -256,13 +266,3 @@ ScenarioValidationResult result = ShelteredScenarioAuthoring.RunFrameworkVerific
 ```
 
 `result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, or asset escape validation fails.
-
-Manual refactor verification covered:
-
-- registration validation for null, missing id, missing display name, missing definition/factory, and non-`ScenarioDef` definitions
-- replacement result and event semantics
-- `List()` ordering by order, display name, then id
-- dependency manifest merge from registration and XML definitions
-- pending spawn dependency failure clearing state
-- definition factory wrong-type and thrown-exception error messages
-- builder compatibility failure paths for missing stages and selection fields

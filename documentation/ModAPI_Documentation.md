@@ -242,8 +242,9 @@ Related guide:
 
 ## 12. Recommended Reading Order
 
-1. `documentation/API_Signatures_Reference.md`
-2. `documentation/ModAPI_Developer_Guide.md`
-3. `documentation/how to develop a plugin.md`
-4. `documentation/ShelteredAPI_Guide.md`
-5. task-specific guides such as events, settings, actors, or transpilers
+1. Root [README documentation section](../readme.md#documentation)
+2. [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md)
+3. [ModAPI Developer Guide](ModAPI_Developer_Guide.md)
+4. [ShelteredAPI Guide](ShelteredAPI_Guide.md)
+5. [API Signatures Reference](API_Signatures_Reference.md) when you need exact callable signatures
+6. Task-specific guides such as events, settings, actors, content, scenarios, or transpilers

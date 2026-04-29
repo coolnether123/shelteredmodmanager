@@ -4,7 +4,7 @@
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.3_Beta.3-blue)]()
+![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.3_Beta.3-blue)
 
 > **Credit:** Originally created by benjaminfoo (2019)
 > **Maintained by:** Coolnether123 (2025-Present)
@@ -52,7 +52,7 @@ The 1.3 line is a breaking clean API line. It separates the neutral modding fram
 - **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
 
 > [!TIP]
-> Start with the [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md), then add [ShelteredAPI](documentation/ShelteredAPI_Guide.md) when your mod needs Sheltered content, saves, UI, input, events, actors, or scenarios.
+> Start with the [Documentation](#documentation) section below. For a first mod, use [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md), then add [ShelteredAPI](documentation/ShelteredAPI_Guide.md) when your mod needs Sheltered content, saves, UI, input, events, actors, or scenarios.
 
 The API is in beta. See the documentation for current capabilities.
 
@@ -122,8 +122,6 @@ A "Mods" button is added to the main menu.
 
 ![In-Game Mod Manager](documentation/screenshots/mod_ingame_modsmenu.png)
 *Access full mod details, versions, and descriptions directly from the Sheltered main menu.*
-
-## Support
 
 ## Uninstall
 
@@ -221,15 +219,10 @@ Currently available:
 
 - Neutral plugin lifecycle, settings, persistence, event-bus, actor-contract, and Harmony helper APIs via `ModAPI.dll`
 - Item, food, recipe, scenario, save, UI, input, event, and manager-backed hooks via `ShelteredAPI.dll`
-- Event subscriptions for day cycles, save/load, UI panels, and inter-mod messages
+- Event subscriptions for day cycles, save/load, UI panels, combat starts, faction events, party returns, and inter-mod messages
 - Custom scenario XML packs, code registrations, trigger runtime, scheduled effects, and win/loss runtime
 - Rebindable vanilla and mod-defined keybindings
 - Runtime inspector (F9)
-
-Planned for future updates:
-
-- Combat encounter events
-- Faction hooks
 
 ---
 
@@ -250,20 +243,15 @@ Planned for future updates:
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) | Getting started with mod development |
-| [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) | Comprehensive API usage guide |
-| [API Signatures Reference](documentation/API_Signatures_Reference.md) | Canonical current signatures |
-| [ShelteredAPI Guide](documentation/ShelteredAPI_Guide.md) | Sheltered runtime facades and integration APIs |
-| [Input Keybindings Guide](documentation/Input_Keybindings_Guide.md) | Rebindable vanilla and mod-defined controls |
-| [Custom Scenarios Guide](documentation/Custom_Scenarios_Guide.md) | XML packs, authoring, triggers, and scenario runtime |
-| [ShelteredAPI Content Guide](documentation/ShelteredAPI_Content_Guide.md) | Items, recipes, loot, assets, and localization |
-| [ShelteredAPI Actors Guide](documentation/ShelteredAPI_Characters_Guide.md) | Actor registry, bindings, adapters, and character bridges |
-| [Spine Settings Guide](documentation/Spine_Settings_Guide.md) | Attribute-based settings API |
-| [Settings and Persistence](documentation/SETTINGS.md) | Pattern A/B settings and save APIs |
-| [API Troubleshooting](documentation/API_Troubleshooting.md) | Common failures and log signatures |
-| [Events Guide](documentation/Events_Guide.md) | Game and UI event subscriptions |
-| [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) | Runtime code patching |
-| [Patch Governance](documentation/Patch_Governance.md) | Patch ownership, domains, and safety controls |
-| [ModAPI File Roles](documentation/ModAPI_Documentation.md) | Project file-role reference |
+Use this table to choose the shortest useful path.
+
+| Task | Start Here |
+|------|------------|
+| Make your first mod | [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) |
+| Add items, recipes, loot, or assets | [ShelteredAPI Content Guide](documentation/ShelteredAPI_Content_Guide.md) |
+| Add settings or persisted mod data | [Settings and Persistence](documentation/SETTINGS.md) |
+| Subscribe to game, UI, save, or time events | [Events Guide](documentation/Events_Guide.md) |
+| Add rebindable controls | [Input Keybindings Guide](documentation/Input_Keybindings_Guide.md) |
+| Author custom scenarios | [Custom Scenarios Guide](documentation/Custom_Scenarios_Guide.md) |
+| Patch game code with Harmony | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) |
+| Check exact API signatures | [API Signatures Reference](documentation/API_Signatures_Reference.md) |

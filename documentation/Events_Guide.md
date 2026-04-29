@@ -35,6 +35,8 @@ Available event systems:
 | `ModAPIRegistry` | Service discovery | `ModAPI.Core.ModAPIRegistry` |
 | `ShelteredSaveEvents` | Sheltered custom save lifecycle | `ShelteredAPI.Saves.ShelteredSaveEvents` in `ShelteredAPI.dll` |
 
+Use `ShelteredEvents` for gameplay/UI lifecycle hooks. Use `ShelteredSaveEvents` only when you are integrating with the expanded save-slot system itself.
+
 ## 2. `ShelteredEvents`
 
 Use `ShelteredEvents` when you want the Sheltered event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; if your handlers mention Sheltered game types such as `SaveData`, `EncounterCharacter`, `BasePanel`, or `ExplorationParty`, also reference `Assembly-CSharp.dll`.
@@ -46,11 +48,15 @@ public static event Action<int> NewDay;
 public static event Action<TimeTriggerBatch> SixHourTick;
 public static event Action<TimeTriggerBatch> StaggeredTick;
 public static event Action<SaveData> BeforeSave;
+public static event Action<SaveData> BeforeLoadSceneContents;
 public static event Action<SaveData> AfterLoad;
 public static event Action<EncounterCharacter, EncounterCharacter> CombatStarted;
 public static event Action SessionStarted;
 public static event Action NewGame;
 public static event Action<ExplorationParty> PartyReturned;
+public static event Action<int> FactionSpawned;
+public static event Action<int, int> FactionZoneGrew;
+public static event Action<int, int> FactionTerritoryChanged;
 ```
 
 Time events and named trigger registration are exposed through the same facade.
@@ -152,13 +158,25 @@ The Sheltered custom saves layer exposes additional save/load events under `Shel
 Reference `ShelteredAPI.dll` for these APIs.
 
 Common ones:
-- `OnBeforeSave`
-- `OnAfterSave`
-- `OnBeforeLoad`
-- `OnAfterLoad`
-- `OnPageChanged`
+- `BeforeSave`
+- `AfterSave`
+- `BeforeLoad`
+- `AfterLoad`
+- `PageChanged`
+- `ReservationChanged`
 
 Use these when you are integrating with the expanded save-slot system rather than the base gameplay lifecycle.
+
+Example:
+
+```csharp
+using ShelteredAPI.Saves;
+
+ShelteredSaveEvents.BeforeSave += save =>
+{
+    // Inspect or prepare expanded-save metadata here.
+};
+```
 
 ## 6. Inter-Mod Communication
 
@@ -201,4 +219,4 @@ When events do not fire:
 2. confirm registration/subscription code executed
 3. search logs for exact event-helper signatures
 4. confirm the game state actually reached the expected lifecycle boundary
-5. if using triggers, inspect `GetPriorityList(...)` for your cadence
+5. if using triggers, inspect `ShelteredEvents.GetTimeTriggerPriorityList(...)` for your cadence
