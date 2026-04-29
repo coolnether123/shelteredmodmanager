@@ -45,6 +45,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<PlacementPaletteService>(),
                     resolver.Get<PlacementGhostSessionService>());
             });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapDraftService(); });
             services.AddSingleton<IScenarioAuthoringSectionHub>(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringSectionHub(

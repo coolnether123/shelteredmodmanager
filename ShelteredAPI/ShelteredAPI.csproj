@@ -179,6 +179,7 @@
     <Compile Include="Scenarios\Domain\Validation\BunkerDependencyValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\GateConditionValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\IScenarioValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\MapValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ObjectStartStateValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioValidationPipeline.cs" />
     <Compile Include="Scenarios\Domain\Validation\SchedulingValidationRule.cs" />
@@ -199,6 +200,7 @@
     <Compile Include="Scenarios\Serialization\GateConditionScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Serialization\InventoryScenarioSectionSerializer.cs" />
     <Compile Include="Scenarios\Serialization\QuestMapScenarioSectionSerializer.cs" />
+    <Compile Include="Scenarios\Serialization\ScenarioMapXmlSerializer.cs" />
     <Compile Include="Scenarios\Serialization\ScenarioXmlSerializationContext.cs" />
     <Compile Include="Scenarios\Serialization\ScenarioXmlSerializerUtil.cs" />
     <Compile Include="Scenarios\Serialization\ScheduledActionScenarioSectionSerializer.cs" />
@@ -226,6 +228,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
+    <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeExecutionJournal.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeStateService.cs" />
     <Compile Include="Scenarios\Application\Scheduling\IScenarioScheduledActionProvider.cs" />
@@ -299,6 +302,7 @@
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Compatibility\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAssetAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Shell\ScenarioMapAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAuthoringWindowContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAuthoringShellLayout.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ShellChromeViewModelBuilder.cs" />

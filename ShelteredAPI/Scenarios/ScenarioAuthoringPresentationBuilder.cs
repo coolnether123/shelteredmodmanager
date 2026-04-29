@@ -26,6 +26,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioSelectionScopeService _selectionScopeService;
         private readonly ScenarioTargetClassifier _targetClassifier;
         private readonly ScenarioAssetAuthoringContentBuilder _assetAuthoringContentBuilder;
+        private readonly ScenarioMapAuthoringContentBuilder _mapAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
 
         public ScenarioAuthoringPresentationBuilder(
@@ -45,7 +46,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioModCompatibilityViewModelBuilder modCompatibilityViewModelBuilder,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioTargetClassifier targetClassifier,
-            ScenarioAssetAuthoringContentBuilder assetAuthoringContentBuilder)
+            ScenarioAssetAuthoringContentBuilder assetAuthoringContentBuilder,
+            ScenarioMapAuthoringContentBuilder mapAuthoringContentBuilder)
         {
             _captureService = captureService;
             _sectionHub = sectionHub;
@@ -64,6 +66,7 @@ namespace ShelteredAPI.Scenarios
             _selectionScopeService = selectionScopeService;
             _targetClassifier = targetClassifier;
             _assetAuthoringContentBuilder = assetAuthoringContentBuilder;
+            _mapAuthoringContentBuilder = mapAuthoringContentBuilder;
             _windowSectionBuilders = CreateWindowSectionBuilders();
         }
 
@@ -922,7 +925,7 @@ namespace ShelteredAPI.Scenarios
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Quests, delegate(ScenarioAuthoringWindowContentContext context) { return BuildQuestWindowSections(context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Map, delegate(ScenarioAuthoringWindowContentContext context) { return BuildMapWindowSections(context.Definition); });
+            builders[ScenarioAuthoringWindowContentKind.Map] = _mapAuthoringContentBuilder;
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Publish, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPublishWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Calendar, delegate(ScenarioAuthoringWindowContentContext context) { return BuildCalendarWindowSections(context.State, context.Definition); });
             return builders;
@@ -1322,26 +1325,6 @@ namespace ShelteredAPI.Scenarios
                     Items = new[]
                     {
                         Text("Pick a build tool to see its palette here.")
-                    }
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection[] BuildMapWindowSections(ScenarioDefinition definition)
-        {
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "map_stage",
-                    Title = "Map",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
-                    Items = new[]
-                    {
-                        Text("Map stage is active."),
-                        Text("This stage keeps expedition-facing scenario seams separate from bunker authoring."),
-                        Text("Current scenario: " + Safe(definition != null ? definition.DisplayName : null))
                     }
                 }
             };
