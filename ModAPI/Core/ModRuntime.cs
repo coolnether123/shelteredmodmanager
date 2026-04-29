@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace ModAPI.Core
 {
@@ -10,12 +11,22 @@ namespace ModAPI.Core
         public static bool IsQuitting
         {
             get { return PluginRunner.IsQuitting; }
-            set { PluginRunner.IsQuitting = value; }
         }
 
-        public static List<ModEntry> LoadedMods
+        public static ReadOnlyCollection<ModEntry> LoadedMods
         {
-            get { return PluginManager.LoadedMods; }
+            get { return GetLoadedModsSnapshot().AsReadOnly(); }
+        }
+
+        public static List<ModEntry> GetLoadedModsSnapshot()
+        {
+            List<ModEntry> loadedMods = PluginManager.LoadedMods;
+            if (loadedMods == null) return new List<ModEntry>();
+
+            lock (loadedMods)
+            {
+                return new List<ModEntry>(loadedMods);
+            }
         }
 
         public static IEnumerable<IModPlugin> GetPlugins()
@@ -31,6 +42,11 @@ namespace ModAPI.Core
         public static void MarkSaveExit(string step, string detail = null)
         {
             SaveExitTracker.Mark(step, detail);
+        }
+
+        internal static void ResetQuitStateForHost()
+        {
+            PluginRunner.IsQuitting = false;
         }
     }
 }

@@ -12,7 +12,20 @@ namespace ShelteredAPI.Persistence
         TargetBehavior = "Automatic saveable registration when SaveManager starts",
         FailureMode = "Registered mod persistence collections may not attach to the active SaveManager.",
         RollbackStrategy = "Disable the SaveFlow patch domain or remove the ModPersistence registration hook.")]
-    public static class ModPersistence
+    public static class ShelteredPersistence
+    {
+        public static ShelteredPersistentList<T> CreateList<T>(string uniqueId)
+        {
+            return new ShelteredPersistentList<T>(uniqueId);
+        }
+
+        public static ShelteredPersistentDictionary<TValue> CreateDictionary<TValue>(string uniqueId)
+        {
+            return new ShelteredPersistentDictionary<TValue>(uniqueId);
+        }
+    }
+
+    internal static class ModPersistence
     {
         private static readonly List<ISaveable> _registeredCollections = new List<ISaveable>();
 

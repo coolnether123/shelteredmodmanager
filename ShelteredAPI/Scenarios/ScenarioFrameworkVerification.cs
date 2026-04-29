@@ -64,14 +64,14 @@ namespace ShelteredAPI.Scenarios
 
         private static void VerifyDependencies(ScenarioValidationResult result)
         {
-            ScenarioModDependency parsed = ScenarioDependencyManifest.ParseDependency("Required.Mod@1.2.0");
-            Assert(parsed != null && parsed.modId == "Required.Mod" && parsed.version == "1.2.0",
+            ScenarioModDependency parsed = ScenarioDependencyManifest.ParseDependency("Required.Mod@1.3.0");
+            Assert(parsed != null && parsed.modId == "Required.Mod" && parsed.version == "1.3.0",
                 "Dependency parser did not split mod id and version.", result);
 
             ScenarioDefinition definition = CreateDefinition("Scenario.Dependency");
-            definition.Dependencies.Add("Required.Mod@1.2.0");
+            definition.Dependencies.Add("Required.Mod@1.3.0");
 
-            ScenarioValidationResult matched = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.2.0")).Validate(definition, null);
+            ScenarioValidationResult matched = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(definition, null);
             Assert(matched.IsValid, "Matched required dependency was reported invalid.", result);
 
             ScenarioValidationResult missing = new ScenarioValidator(new VerificationDependencyResolver(null, null)).Validate(definition, null);
@@ -93,7 +93,7 @@ namespace ShelteredAPI.Scenarios
             definition.AssetReferences.CustomIcons.Clear();
             definition.AssetReferences.CustomIcons.Add(new IconRef { Id = "escaped", RelativePath = "..\\Pack2\\file.png" });
 
-            ScenarioValidationResult validation = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.2.0")).Validate(definition, pack1File);
+            ScenarioValidationResult validation = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(definition, pack1File);
             Assert(ContainsIssue(validation, "escapes the scenario pack folder"), "Sibling-prefix asset escape was not blocked.", result);
         }
 
@@ -105,7 +105,7 @@ namespace ShelteredAPI.Scenarios
             File.WriteAllBytes(assetFullPath, new byte[] { 137, 80, 78, 71 });
 
             ScenarioDefinition definition = CreateDefinition(scenarioId);
-            definition.Dependencies.Add("Required.Mod@1.2.0");
+            definition.Dependencies.Add("Required.Mod@1.3.0");
             definition.Dependencies.Add("Optional.Mod");
             definition.AssetReferences.CustomIcons.Add(new IconRef { Id = "main", RelativePath = assetPath });
 

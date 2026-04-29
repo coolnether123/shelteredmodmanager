@@ -19,9 +19,9 @@ Add references to:
 - `0Harmony.dll`
 - `UnityEngine.dll`
 - `Assembly-CSharp.dll` when your patch references Sheltered game target types directly
-- `ShelteredAPI.dll` when your patch uses Sheltered-owned helpers, `ShelteredAPI.*` namespaces, or old `ModAPI.*` migration aliases
+- `ShelteredAPI.dll` when your patch uses Sheltered-owned helpers or `ShelteredAPI.*` namespaces
 
-`ModAPI.dll` no longer references Sheltered game assemblies. Sheltered-specific patch helpers such as `ShelteredPatterns` are hosted by `ShelteredAPI.dll` during the 1.3 migration window.
+`ModAPI.dll` no longer references Sheltered game assemblies. Sheltered-specific patch helpers such as `ShelteredPatterns` are hosted by `ShelteredAPI.dll`.
 
 ## 2. Apply Patches in `Start(...)`
 

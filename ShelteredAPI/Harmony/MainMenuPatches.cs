@@ -61,7 +61,7 @@ namespace ModAPI.Harmony
                 // must not run with stale quit state.
                 if (ModRuntime.IsQuitting)
                 {
-                    ModRuntime.IsQuitting = false;
+                    ResetModRuntimeQuitState();
                     MMLog.WriteDebug("[MainMenu_OnShow] Resetting IsQuitting flag to FALSE.");
                 }
 
@@ -132,6 +132,21 @@ namespace ModAPI.Harmony
                 }
             }
             catch (Exception ex) { MMLog.Write("Exception: " + ex.Message); }
+        }
+
+        private static void ResetModRuntimeQuitState()
+        {
+            MethodInfo resetMethod = typeof(ModRuntime).GetMethod(
+                "ResetQuitStateForHost",
+                BindingFlags.Static | BindingFlags.NonPublic);
+
+            if (resetMethod == null)
+            {
+                MMLog.WriteError("[MainMenu_OnShow] Could not find ModRuntime quit-state reset method.");
+                return;
+            }
+
+            resetMethod.Invoke(null, null);
         }
 
         private static void HandleModsClick(MainMenu menu)

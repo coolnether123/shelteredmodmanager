@@ -85,7 +85,7 @@ namespace ShelteredAPI.Content
         /// </summary>
         public static void NotifyManagerReady(string name) => TryBootstrap();
 
-        [Obsolete("Use ContentRegistry.RegisterItem(...) for new code. This wrapper is retained for binary compatibility.", false)]
+        // Internal adapter for legacy game-shaped item definitions. Public mod code should use ShelteredContent.RegisterItem.
         public static void RegisterCustomItem(ItemManager.ItemType itemType, ItemDefinition definition)
         {
             if (definition == null)
@@ -106,7 +106,7 @@ namespace ShelteredAPI.Content
                 throw new InvalidOperationException("Legacy item registration failed for " + itemType + ": " + result.ErrorMessage);
         }
 
-        [Obsolete("Use ContentRegistry.RegisterRecipe(...) for new code. This wrapper is retained for binary compatibility.", false)]
+        // Internal adapter for legacy game-shaped recipes. Public mod code should use ShelteredContent.RegisterRecipe.
         public static void RegisterCustomRecipe(CraftingManager.Recipe recipe)
         {
             if (recipe == null)

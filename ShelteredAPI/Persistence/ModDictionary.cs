@@ -8,7 +8,7 @@ namespace ShelteredAPI.Persistence
     /// A Dictionary that automatically saves and loads its contents.
     /// Keys must be strings. Values support: int, float, bool, string, Vector2, Vector3, Color.
     /// </summary>
-    public class ModDictionary<TValue> : Dictionary<string, TValue>, ISaveable
+    public class ShelteredPersistentDictionary<TValue> : Dictionary<string, TValue>, ISaveable
     {
         private string _id;
 
@@ -16,7 +16,7 @@ namespace ShelteredAPI.Persistence
         /// Creates a new auto-persisted dictionary.
         /// </summary>
         /// <param name="uniqueId">A unique ID for this dictionary, ideally prefixed with your mod ID (e.g. "MyMod_Settings")</param>
-        public ModDictionary(string uniqueId)
+        public ShelteredPersistentDictionary(string uniqueId)
         {
             this._id = uniqueId;
             ModPersistence.Register(this);
@@ -79,6 +79,13 @@ namespace ShelteredAPI.Persistence
             if (typeof(TValue) == typeof(UnityEngine.Color)) { UnityEngine.Color v = (UnityEngine.Color)(object)value; bool r = data.SaveLoad(name, ref v); value = (TValue)(object)v; return r; }
             
             return false;
+        }
+    }
+
+    internal sealed class ModDictionary<TValue> : ShelteredPersistentDictionary<TValue>
+    {
+        internal ModDictionary(string uniqueId) : base(uniqueId)
+        {
         }
     }
 }

@@ -15,7 +15,6 @@ namespace ShelteredAPI.Events
     ///       }
     ///   };
     /// </summary>
-    [Obsolete("1.3 source migration alias hosted in ShelteredAPI.dll; reference ShelteredAPI for Sheltered UI hooks.", false)]
     internal static class UIEvents
     {
         // Panel lifecycle events

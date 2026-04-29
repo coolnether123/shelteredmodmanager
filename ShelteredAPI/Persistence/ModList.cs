@@ -8,7 +8,7 @@ namespace ShelteredAPI.Persistence
     /// A List that automatically saves and loads its contents.
     /// Supports: int, float, bool, string, Vector2, Vector3, Color.
     /// </summary>
-    public class ModList<T> : List<T>, ISaveable
+    public class ShelteredPersistentList<T> : List<T>, ISaveable
     {
         private string _id;
 
@@ -16,7 +16,7 @@ namespace ShelteredAPI.Persistence
         /// Creates a new auto-persisted list.
         /// </summary>
         /// <param name="uniqueId">A unique ID for this list, ideally prefixed with your mod ID (e.g. "MyMod_Players")</param>
-        public ModList(string uniqueId)
+        public ShelteredPersistentList(string uniqueId)
         {
             this._id = uniqueId;
             ModPersistence.Register(this);
@@ -69,6 +69,13 @@ namespace ShelteredAPI.Persistence
             if (typeof(T) == typeof(UnityEngine.Color)) { UnityEngine.Color v = (UnityEngine.Color)(object)value; bool r = data.SaveLoad(name, ref v); value = (T)(object)v; return r; }
             
             return false;
+        }
+    }
+
+    internal sealed class ModList<T> : ShelteredPersistentList<T>
+    {
+        internal ModList(string uniqueId) : base(uniqueId)
+        {
         }
     }
 }

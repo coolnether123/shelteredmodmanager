@@ -1402,7 +1402,7 @@ namespace ShelteredAPI.Scenarios
                 return "Scenario dependency metadata is unavailable.";
 
             List<SaveVerification.ModCompareEntry> comparison = SaveVerification.BuildModComparison(
-                ModRuntime.LoadedMods,
+                ModRuntime.GetLoadedModsSnapshot(),
                 manifest.lastLoadedMods,
                 false);
 

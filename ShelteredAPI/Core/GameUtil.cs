@@ -8,7 +8,7 @@ namespace ShelteredAPI.GameState
     /// <summary>
     /// Helpers to safely access game state without fragile reflection.
     /// </summary>
-    public static class GameUtil
+    internal static class GameUtil
     {
         public static bool TryGetShelterRadio(out Obj_Radio radio)
         {

@@ -376,20 +376,17 @@ namespace ShelteredAPI.Saves
         {
             var currentMods = new List<LoadedModInfo>();
 
-            lock (ModRuntime.LoadedMods)
+            foreach (var mod in ModRuntime.GetLoadedModsSnapshot())
             {
-                foreach (var mod in ModRuntime.LoadedMods)
-                {
-                    if (mod == null) continue;
+                if (mod == null) continue;
 
-                    string warning = mod.About?.missingModWarning;
-                    currentMods.Add(new LoadedModInfo
-                    {
-                        modId = mod.Id,
-                        version = mod.Version,
-                        warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
-                    });
-                }
+                string warning = mod.About?.missingModWarning;
+                currentMods.Add(new LoadedModInfo
+                {
+                    modId = mod.Id,
+                    version = mod.Version,
+                    warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
+                });
             }
 
             return new SlotManifest

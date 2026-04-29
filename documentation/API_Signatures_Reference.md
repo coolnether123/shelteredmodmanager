@@ -876,6 +876,22 @@ public interface ISaveSystem
 }
 
 // ShelteredAPI.dll
+public static class ShelteredPersistence
+{
+    public static ShelteredPersistentList<T> CreateList<T>(string uniqueId);
+    public static ShelteredPersistentDictionary<TValue> CreateDictionary<TValue>(string uniqueId);
+}
+
+public class ShelteredPersistentList<T> : List<T>, ISaveable
+{
+    public ShelteredPersistentList(string uniqueId);
+}
+
+public class ShelteredPersistentDictionary<TValue> : Dictionary<string, TValue>, ISaveable
+{
+    public ShelteredPersistentDictionary(string uniqueId);
+}
+
 public static class ShelteredSaves
 {
     public static SaveEntry[] ListStandard(int page, int pageSize);

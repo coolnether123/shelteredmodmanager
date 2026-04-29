@@ -14,7 +14,6 @@ namespace ShelteredAPI.Events
         TargetBehavior = "Faction spawn and territory growth event bridge",
         FailureMode = "Faction-related callbacks stop firing for mods.",
         RollbackStrategy = "Disable the Events patch domain or remove the faction event bridge.")]
-    [Obsolete("1.3 source migration alias hosted in ShelteredAPI.dll; reference ShelteredAPI for Sheltered faction hooks.", false)]
     internal static class FactionEvents
     {
         /// <summary>

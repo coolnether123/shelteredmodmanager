@@ -105,7 +105,7 @@ namespace ShelteredAPI.Events
             _beforeSaveRaised = true;
             if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
 
-            // ALSO RAISE THE V1.2 CUSTOM SAVE EVENT
+            // Also raise the Sheltered custom-save event bridge.
             try
             {
                 TryRaiseCustomSaveEvent("RaiseBeforeSave", "BeforeSave");
@@ -132,7 +132,7 @@ namespace ShelteredAPI.Events
             _afterLoadRaised = true;
             if (OnAfterLoad != null) SafeInvoke(delegate { OnAfterLoad(data); }, "OnAfterLoad");
 
-            // ALSO RAISE THE V1.2 CUSTOM SAVE EVENT
+            // Also raise the Sheltered custom-save event bridge.
             try
             {
                 TryRaiseCustomSaveEvent("RaiseAfterLoad", "AfterLoad");

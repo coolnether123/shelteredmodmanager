@@ -369,7 +369,7 @@ namespace ModAPI.Hooks.Paging
             if (manifest == null) return VerificationState.Unknown; 
             if (manifest.lastLoadedMods == null) return VerificationState.Unknown;
 
-            var comparison = BuildModComparison(ModRuntime.LoadedMods, manifest.lastLoadedMods, includeExtraMods);
+            var comparison = BuildModComparison(ModRuntime.GetLoadedModsSnapshot(), manifest.lastLoadedMods, includeExtraMods);
             if (comparison.Any(c => c.status == ModCompareStatus.Missing))
                 return VerificationState.Missing;
 

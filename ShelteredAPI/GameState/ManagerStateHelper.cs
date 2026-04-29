@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using ModAPI.Reflection;
 using UnityEngine;
+using ModAPI.Core;
 
 namespace ShelteredAPI.GameState
 {
@@ -173,6 +174,26 @@ namespace ShelteredAPI.GameState
                 }
             }
             return list.AsReadOnly();
+        }
+
+        public static bool TryGetShelterRadio(out Obj_Radio radio)
+        {
+            return GameUtil.TryGetShelterRadio(out radio);
+        }
+
+        public static bool TryGetParties(out IDictionary<int, ExplorationParty> parties)
+        {
+            return GameUtil.TryGetParties(out parties);
+        }
+
+        public static bool TryGetMembers(ExplorationParty party, out IList<PartyMember> members)
+        {
+            return GameUtil.TryGetMembers(party, out members);
+        }
+
+        public static string GetSaveSlotKey(SaveManager.SaveType type)
+        {
+            return GameUtil.GetSaveSlotKey(type);
         }
     }
 }

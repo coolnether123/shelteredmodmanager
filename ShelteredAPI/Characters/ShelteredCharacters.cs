@@ -39,6 +39,12 @@ namespace ShelteredAPI.Characters
             remove { CharacterEffectSystem.InternalInstance.SyntheticCharacterUnloaded -= value; }
         }
 
+        public static event Action<PartyChangedEventArgs> PartyCompositionChanged
+        {
+            add { PartyHelper.OnPartyCompositionChanged += value; }
+            remove { PartyHelper.OnPartyCompositionChanged -= value; }
+        }
+
         public static void RegisterEffectType<T>(string effectId) where T : ICharacterEffect, new()
         {
             CharacterEffectSystem.InternalInstance.RegisterEffectType<T>(effectId);
@@ -135,6 +141,26 @@ namespace ShelteredAPI.Characters
             Action<EncounterCharacter> onSwapComplete = null)
         {
             CharacterEffectSystem.InternalInstance.SwapEncounterCharacter(encounterActor, newCharacter, onSwapComplete);
+        }
+
+        public static System.Collections.ObjectModel.ReadOnlyCollection<CharacterInfo> ListFamilyMemberInfo()
+        {
+            return PartyHelper.GetAllFamilyMembers();
+        }
+
+        public static CharacterInfo? GetCharacterInfo(string characterId)
+        {
+            return PartyHelper.GetCharacter(characterId);
+        }
+
+        public static System.Collections.ObjectModel.ReadOnlyCollection<ExpeditionPartyInfo> ListActiveParties()
+        {
+            return PartyHelper.GetActiveParties();
+        }
+
+        public static ExpeditionPartyInfo? GetPartyInfo(int partyId)
+        {
+            return PartyHelper.GetParty(partyId);
         }
     }
 }

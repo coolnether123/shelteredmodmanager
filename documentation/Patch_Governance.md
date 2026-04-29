@@ -7,7 +7,7 @@ This document defines how Harmony patches are governed inside SMM during the Mod
 - keep patch ownership explicit
 - keep invasive behavior routed through owned subsystems
 - make patch activation auditable
-- preserve compatibility for 1.2.2 mods that still reference ModAPI only
+- keep the 1.3 public API routed through explicit ModAPI and ShelteredAPI ownership boundaries
 
 ## Domains
 

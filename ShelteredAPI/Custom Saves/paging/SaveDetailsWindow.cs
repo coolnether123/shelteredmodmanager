@@ -189,7 +189,7 @@ namespace ModAPI.Hooks.Paging
                 });
             
             // === ANALYZE MODS ===
-            var activeMods = ModRuntime.LoadedMods;
+            var activeMods = ModRuntime.GetLoadedModsSnapshot();
             var savedMods = manifest?.lastLoadedMods ?? new LoadedModInfo[0];
             var discovered = ModRuntime.DiscoverAllMods();
             var comparison = SaveVerification.BuildModComparison(activeMods, savedMods, options.IncludeExtraMods);

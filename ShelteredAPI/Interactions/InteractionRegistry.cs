@@ -7,7 +7,7 @@ using ModAPI.Reflection;
 
 namespace ShelteredAPI.Interactions
 {
-    public enum InteractionInsertMode
+    internal enum InteractionInsertMode
     {
         Last,
         First,
@@ -18,7 +18,7 @@ namespace ShelteredAPI.Interactions
         CustomIndex
     }
 
-    public sealed class InteractionInsertContext
+    internal sealed class InteractionInsertContext
     {
         private readonly Obj_Base _targetObject;
         private readonly IList<string> _currentInteractions;
@@ -36,7 +36,7 @@ namespace ShelteredAPI.Interactions
         public string InteractionName { get { return _interactionName; } }
     }
 
-    public sealed class InteractionTargetBuilder
+    internal sealed class InteractionTargetBuilder
     {
         private readonly ObjectManager.ObjectType _targetType;
 
@@ -58,7 +58,7 @@ namespace ShelteredAPI.Interactions
         public ObjectManager.ObjectType TargetType { get { return _targetType; } }
     }
 
-    public sealed class InteractionButtonBuilder
+    internal sealed class InteractionButtonBuilder
     {
         private readonly InteractionTargetBuilder _parent;
         private readonly ObjectManager.ObjectType _targetType;
@@ -191,8 +191,7 @@ namespace ShelteredAPI.Interactions
         TargetBehavior = "Object interaction injection and menu reordering",
         FailureMode = "Registered interaction buttons will not inject or appear in the intended order.",
         RollbackStrategy = "Disable the Interactions patch domain or remove the interaction registry patch host.")]
-    [Obsolete("1.3 source migration alias hosted in ShelteredAPI.dll; prefer ShelteredAPI.Interactions.ObjectButtonInjector for new Sheltered object buttons.", false)]
-    public static class InteractionRegistry
+    internal static class InteractionRegistry
     {
         private struct InteractionEntry
         {

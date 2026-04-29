@@ -197,7 +197,7 @@ namespace ShelteredAPI.Characters
     /// <summary>
     /// Safe, read-only access to family and expedition party data.
     /// </summary>
-    public static class PartyHelper
+    internal static class PartyHelper
     {
         /// <summary>
         /// Raised when an expedition party's composition changes (member added/removed) 

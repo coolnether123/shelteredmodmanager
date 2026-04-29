@@ -487,9 +487,9 @@ namespace ShelteredAPI.Content
         public bool IsRawFood;
         /// <summary>Multiplier applied to RationValue when this food is cooked via a Stove.</summary>
         public float CookedHungerMultiplier = 1.1f;
-        /// <summary>Legacy v1.0 placeholder retained for binary compatibility. Use CookingRecipe in new code.</summary>
+        /// <summary>Internal legacy schema placeholder. Public mod code should use CookingRecipe.</summary>
         public ItemManager.ItemType CookingResult;
-        /// <summary>Legacy v1.0 placeholder retained for binary compatibility. Combat tuning still depends on game item defs.</summary>
+        /// <summary>Internal legacy schema placeholder. Combat tuning still depends on game item defs.</summary>
         public bool CanUseInCombat;
 
         /// <summary>Type of placeable object this item creates (requires matching level).</summary>
