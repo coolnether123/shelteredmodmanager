@@ -10,19 +10,25 @@ namespace ShelteredAPI.Input
 
         public static float ReadHorizontalPan(bool raw, params string[] fallbackAxisNames)
         {
-            float strongest = ReadTouchpadPanVector().x;
+            float strongest = ReadCurrentTouchpadPanVector().x;
             strongest = UnityLegacyAxisReader.PickStronger(strongest, UnityLegacyAxisReader.ReadStrongest(raw, fallbackAxisNames));
             return UnityLegacyAxisReader.IsSignificant(strongest) ? strongest : 0f;
         }
 
         public static float ReadVerticalPan(bool raw, params string[] fallbackAxisNames)
         {
-            float strongest = ReadTouchpadPanVector().y;
+            float strongest = ReadCurrentTouchpadPanVector().y;
             strongest = UnityLegacyAxisReader.PickStronger(strongest, UnityLegacyAxisReader.ReadStrongest(raw, fallbackAxisNames));
             return UnityLegacyAxisReader.IsSignificant(strongest) ? strongest : 0f;
         }
 
-        private static Vector2 ReadTouchpadPanVector()
+        public static bool TryReadCurrentPanVector(out Vector2 pan)
+        {
+            pan = ReadCurrentTouchpadPanVector();
+            return UnityLegacyAxisReader.IsSignificant(pan.x) || UnityLegacyAxisReader.IsSignificant(pan.y);
+        }
+
+        private static Vector2 ReadCurrentTouchpadPanVector()
         {
             UnityScrollGestureSample sample = UnityIndirectScrollClassifier.GetCurrentSample();
             if (sample.Kind != UnityScrollGestureKind.Indirect)

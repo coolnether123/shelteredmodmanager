@@ -1,6 +1,7 @@
 using System;
 using ModAPI.InputServices;
 using ModAPI.InputActions;
+using UnityEngine;
 
 namespace ShelteredAPI.Input
 {
@@ -37,21 +38,21 @@ namespace ShelteredAPI.Input
             switch (axis)
             {
                 case PlatformInput.InputAxis.CameraHorizontal:
-                    if (!ScrollInputService.IsIndirectScrollActive())
+                    if (!ShouldRouteGameplayTouchpadPan())
                     {
                         value = 0f;
                         return false;
                     }
-                    value = UnityTouchpadPanReader.ReadHorizontalPan(raw, CameraHorizontalAxes);
+                    value = ReadTouchpadOrFallbackHorizontal(raw, CameraHorizontalAxes);
                     return true;
 
                 case PlatformInput.InputAxis.CameraVertical:
-                    if (!ScrollInputService.IsIndirectScrollActive())
+                    if (!ShouldRouteGameplayTouchpadPan())
                     {
                         value = 0f;
                         return false;
                     }
-                    value = UnityTouchpadPanReader.ReadVerticalPan(raw, CameraVerticalAxes);
+                    value = ReadTouchpadOrFallbackVertical(raw, CameraVerticalAxes);
                     return true;
 
                 case PlatformInput.InputAxis.InfoPaneScroll:
@@ -75,21 +76,21 @@ namespace ShelteredAPI.Input
             switch (axis)
             {
                 case PlatformInput.MenuInputAxis.UIhorizontal:
-                    if (!ScrollInputService.IsIndirectScrollActive())
+                    if (!ShouldRouteMenuTouchpadPan())
                     {
                         value = 0f;
                         return false;
                     }
-                    value = UnityTouchpadPanReader.ReadHorizontalPan(raw, MenuHorizontalAxes);
+                    value = ReadTouchpadOrFallbackHorizontal(raw, MenuHorizontalAxes);
                     return true;
 
                 case PlatformInput.MenuInputAxis.UIvertical:
-                    if (!ScrollInputService.IsIndirectScrollActive())
+                    if (!ShouldRouteMenuTouchpadPan())
                     {
                         value = 0f;
                         return false;
                     }
-                    value = UnityTouchpadPanReader.ReadVerticalPan(raw, MenuVerticalAxes);
+                    value = ReadTouchpadOrFallbackVertical(raw, MenuVerticalAxes);
                     return true;
 
                 case PlatformInput.MenuInputAxis.UIscroll:
@@ -121,6 +122,24 @@ namespace ShelteredAPI.Input
                 value *= ShelteredInputTuning.ZoomSpeed;
         }
 
+        private static float ReadTouchpadOrFallbackHorizontal(bool raw, params string[] fallbackAxisNames)
+        {
+            Vector2 pan;
+            if (UnityTouchpadPanReader.TryReadCurrentPanVector(out pan))
+                return UnityLegacyAxisReader.IsSignificant(pan.x) ? pan.x : 0f;
+
+            return UnityTouchpadPanReader.ReadHorizontalPan(raw, fallbackAxisNames);
+        }
+
+        private static float ReadTouchpadOrFallbackVertical(bool raw, params string[] fallbackAxisNames)
+        {
+            Vector2 pan;
+            if (UnityTouchpadPanReader.TryReadCurrentPanVector(out pan))
+                return UnityLegacyAxisReader.IsSignificant(pan.y) ? pan.y : 0f;
+
+            return UnityTouchpadPanReader.ReadVerticalPan(raw, fallbackAxisNames);
+        }
+
         private static void TryGetInfoPaneScroll(bool raw, out float value)
         {
             value = 0f;
@@ -149,7 +168,7 @@ namespace ShelteredAPI.Input
                 return false;
 
             value *= ShelteredInputTuning.MouseScrollSpeed;
-            if (IsPartyMapPanelOpen())
+            if (IsMapPanPanelOpen())
                 value *= ShelteredInputTuning.ZoomSpeed;
 
             return true;
@@ -164,7 +183,7 @@ namespace ShelteredAPI.Input
 
         private static bool ShouldSuppressIndirectInfoPaneScroll()
         {
-            return IsPartyMapPanelOpen() || IsZoomModifierHeld();
+            return IsMapPanPanelOpen() || IsZoomModifierHeld();
         }
 
         private static bool ShouldRouteMenuScrollToUi()
@@ -177,20 +196,63 @@ namespace ShelteredAPI.Input
             if (topPanel == null)
                 return false;
 
-            return !string.Equals(topPanel.GetType().Name, "PartyMapPanel", StringComparison.Ordinal);
+            return !IsMapPanPanel(topPanel);
         }
 
-        private static bool IsPartyMapPanelOpen()
+        private static bool ShouldRouteGameplayTouchpadPan()
+        {
+            if (!UnityIndirectScrollClassifier.IsCurrentFrameIndirectScroll())
+                return false;
+
+            return GetTopPanel() == null;
+        }
+
+        private static bool ShouldRouteMenuTouchpadPan()
+        {
+            if (!UnityIndirectScrollClassifier.IsCurrentFrameIndirectScroll())
+                return false;
+
+            return IsMapPanPanelOpen();
+        }
+
+        private static bool IsMapPanPanelOpen()
+        {
+            BasePanel topPanel = GetTopPanel();
+            return IsMapPanPanel(topPanel);
+        }
+
+        private static bool IsMapPanPanel(BasePanel panel)
+        {
+            if (panel == null)
+                return false;
+
+            string panelName = panel.GetType().Name;
+            if (string.Equals(panelName, "PartyMapPanel", StringComparison.Ordinal))
+                return true;
+
+            if (!string.Equals(panelName, "ExpeditionMainPanelNew", StringComparison.Ordinal))
+                return false;
+
+            return IsPanelMapScreenVisible(panel);
+        }
+
+        private static bool IsPanelMapScreenVisible(BasePanel panel)
+        {
+            var field = panel.GetType().GetField("MapScreen");
+            if (field == null)
+                return false;
+
+            var mapScreen = field.GetValue(panel) as GameObject;
+            return mapScreen != null && mapScreen.activeInHierarchy;
+        }
+
+        private static BasePanel GetTopPanel()
         {
             var panelManager = UIPanelManager.instance;
             if (panelManager == null)
-                return false;
+                return null;
 
-            BasePanel topPanel = panelManager.GetTopPanel();
-            if (topPanel == null)
-                return false;
-
-            return string.Equals(topPanel.GetType().Name, "PartyMapPanel", StringComparison.Ordinal);
+            return panelManager.GetTopPanel();
         }
     }
 }
