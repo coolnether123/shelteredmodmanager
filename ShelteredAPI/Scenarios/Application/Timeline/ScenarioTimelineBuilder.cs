@@ -37,6 +37,7 @@ namespace ShelteredAPI.Scenarios
             AddFutureSurvivors(definition, runtimeState, entries);
             AddInventory(definition, runtimeState, entries);
             AddWeather(definition, runtimeState, entries);
+            AddTriggers(definition, runtimeState, entries);
             AddQuests(definition, runtimeState, entries);
             AddBunker(definition, runtimeState, entries);
             AddObjectActivations(definition, runtimeState, entries);
@@ -81,9 +82,23 @@ namespace ShelteredAPI.Scenarios
             for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
             {
                 QuestDefinition quest = definition.Quests.Quests[i];
-                if (quest == null || !string.IsNullOrEmpty(quest.StartTriggerId))
+                if (quest == null)
                     continue;
                 entries.Add(NewEntry("legacy.quest." + BuildId(quest.Id, i), ScenarioTimelineEntryKind.Quest, quest.ScheduledStart, "Quest " + Safe(quest.Title ?? quest.Id), "Quest", "Quests", quest.Id, runtimeState, "legacy"));
+            }
+        }
+
+        private static void AddTriggers(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, List<ScenarioTimelineEntry> entries)
+        {
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                ScenarioScheduledActionDefinition action;
+                string reason;
+                if (!ScenarioTriggerDefinitionCompiler.TryCreateAction(trigger, i, out action, out reason))
+                    continue;
+
+                entries.Add(NewEntry(action.Id, ScenarioTimelineEntryKind.CustomModded, action.DueTime, "Trigger " + Safe(trigger.Id), "Trigger", "Events", trigger.Id, runtimeState, "legacy"));
             }
         }
 
@@ -208,6 +223,7 @@ namespace ShelteredAPI.Scenarios
                 if (!string.IsNullOrEmpty(effect.TargetId)) return effect.TargetId;
                 if (!string.IsNullOrEmpty(effect.ObjectId)) return effect.ObjectId;
                 if (!string.IsNullOrEmpty(effect.QuestId)) return effect.QuestId;
+                if (!string.IsNullOrEmpty(effect.TriggerId)) return effect.TriggerId;
                 if (!string.IsNullOrEmpty(effect.SurvivorId)) return effect.SurvivorId;
                 if (!string.IsNullOrEmpty(effect.ItemId)) return effect.ItemId;
                 if (!string.IsNullOrEmpty(effect.BunkerExpansionId)) return effect.BunkerExpansionId;

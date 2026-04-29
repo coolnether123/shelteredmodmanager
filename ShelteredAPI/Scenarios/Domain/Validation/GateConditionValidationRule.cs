@@ -87,9 +87,14 @@ namespace ShelteredAPI.Scenarios
                         summary.AddError("inventory.condition.quantity", scope + " item quantity condition must be greater than zero.");
                     break;
                 case ScenarioConditionKind.TechnologyUnlocked:
+                    if (target == null)
+                        summary.AddError("events.condition.target_required", scope + " condition is missing target id.");
+                    break;
                 case ScenarioConditionKind.CustomTrigger:
                     if (target == null)
                         summary.AddError("events.condition.target_required", scope + " condition is missing target id.");
+                    else if (!HasTrigger(definition, target))
+                        summary.AddError("events.condition.unknown_trigger", scope + " references unknown trigger '" + target + "'.");
                     break;
             }
         }
@@ -159,6 +164,14 @@ namespace ShelteredAPI.Scenarios
         {
             for (int i = 0; definition.BunkerGrid != null && definition.BunkerGrid.Expansions != null && i < definition.BunkerGrid.Expansions.Count; i++)
                 if (definition.BunkerGrid.Expansions[i] != null && string.Equals(definition.BunkerGrid.Expansions[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static bool HasTrigger(ScenarioDefinition definition, string id)
+        {
+            for (int i = 0; definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+                if (definition.TriggersAndEvents.Triggers[i] != null && string.Equals(definition.TriggersAndEvents.Triggers[i].Id, id, StringComparison.OrdinalIgnoreCase))
                     return true;
             return false;
         }

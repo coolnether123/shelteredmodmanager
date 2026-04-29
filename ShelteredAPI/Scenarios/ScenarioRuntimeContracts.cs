@@ -97,6 +97,13 @@ namespace ShelteredAPI.Scenarios
         void Tick(ScenarioRuntimeState state);
     }
 
+    internal interface IScenarioTriggerRuntimeService
+    {
+        bool Fire(string triggerId, string source, out string message);
+        bool Fire(ScenarioRuntimeState state, string triggerId, string source, out string message);
+        bool HasFired(ScenarioRuntimeState state, string triggerId);
+    }
+
     internal interface IScenarioSpriteAssetResolver
     {
         Sprite ResolveSprite(ScenarioDefinition definition, string packRoot, string spriteId, string relativePath, string runtimeSpriteKey, string contextLabel);

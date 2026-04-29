@@ -20,9 +20,6 @@ namespace ShelteredAPI.Scenarios
             if (definition == null)
                 return;
 
-            if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && definition.TriggersAndEvents.Triggers.Count > 0)
-                result.AddMessage("Trigger runtime application remains deferred to the existing safe adapter boundary.");
-
             ScenarioScheduledGameplayRuntime.Install(
                 definition,
                 _scheduleCoordinator,

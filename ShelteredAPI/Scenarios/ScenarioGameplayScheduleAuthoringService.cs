@@ -207,6 +207,11 @@ namespace ShelteredAPI.Scenarios
             if (TrySignedIndex(actionId, dayPrefix, count, out index, out delta))
             {
                 ScenarioScheduleTime time = getter(index);
+                if (time == null)
+                {
+                    message = "This item is trigger-started and has no schedule to edit.";
+                    return false;
+                }
                 time.Day = Math.Max(1, time.Day + delta);
                 MarkDirty(session, section, category);
                 message = "Updated scheduled day to " + time.Day + ".";
@@ -215,6 +220,11 @@ namespace ShelteredAPI.Scenarios
             if (TrySignedIndex(actionId, hourPrefix, count, out index, out delta))
             {
                 ScenarioScheduleTime time = getter(index);
+                if (time == null)
+                {
+                    message = "This item is trigger-started and has no schedule to edit.";
+                    return false;
+                }
                 time.Hour = Clamp(time.Hour + delta, 0, 23);
                 MarkDirty(session, section, category);
                 message = "Updated scheduled hour to " + time.Hour + ".";

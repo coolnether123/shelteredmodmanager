@@ -150,6 +150,12 @@ Minimal XML:
 
 XML packs are refreshed when the custom scenario UI opens. If a code registration and an XML pack share the same scenario id, the code registration wins.
 
+### Triggers
+
+`<Trigger>` definitions become persisted runtime signals. Automatic trigger types include `immediate`, `startup`, `timeReached`/`dayReached`, `scenarioFlagSet`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `itemQuantityAvailable`, `bunkerExpansionUnlocked`, and `technologyUnlocked`. `manual`, `custom`, blank, and `code` triggers are reserved for explicit `FireTrigger` scheduled effects or mod code calling `ScenarioTriggerRuntime.Fire("triggerId")`.
+
+Quests with `startTriggerId` are now scheduled behind a `CustomTrigger` condition and start after the referenced trigger fires. To avoid ambiguous starts, omit `<ScheduledStart>` on trigger-started quests.
+
 ## Scenario Book Browser
 
 The scenario book adds a `Custom Scenarios` button. Selecting it replaces the vanilla scenario buttons with:
@@ -204,13 +210,15 @@ Applied now:
 - bunker wall and wiring sprite indexes
 - vanilla object placements by `ObjectManager.ObjectType` via `definition="Generator"` and optional `level`, `movable`, `lockDeconstruct` properties
 - asset path validation and sprite preloading
+- trigger runtime state: automatic trigger definitions can fire persisted `CustomTrigger` records, scheduled actions can use `FireTrigger`, and code can call `ScenarioTriggerRuntime.Fire(...)`
+- trigger-started quests through `StartTriggerId`; the quest starts after the referenced trigger has fired
 - win/loss conditions when the active binding has a spawned `ScenarioQuestInstanceId`; supported condition types are `surviveDays`, `timeReached`/`dayReached`, `itemQuantityAvailable`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `bunkerExpansionUnlocked`, `technologyUnlocked`, `scenarioFlagSet`, and `customTrigger`
 
 Explicitly deferred:
 
 - skills, because Sheltered does not expose a stable runtime skill/save API comparable to `BaseStats` and `Traits`
 - direct `PrefabReference` object placement, because raw prefab-path instantiation can create unsaved or invalid live objects
-- trigger-started quest loops, because `StartTriggerId` and `CompletionConditionId` are structurally validated references only until an authored trigger action is wired to start, complete, or fail that quest at runtime
+- direct quest `CompletionConditionId` completion loops, because completion still depends on authored scheduled actions or win/loss conditions rather than an automatic per-quest completion adapter
 
 Deferred categories are reported through `ScenarioApplyResult.Messages`.
 

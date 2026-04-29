@@ -473,7 +473,7 @@ namespace ShelteredAPI.Scenarios
                 quest.Description = ReadText(questElement, "Description");
                 quest.StartTriggerId = AttributeOrChild(questElement, "startTriggerId", "StartTriggerId");
                 quest.CompletionConditionId = AttributeOrChild(questElement, "completionConditionId", "CompletionConditionId");
-                quest.ScheduledStart = ReadScheduleTime(Child(questElement, "ScheduledStart"));
+                quest.ScheduledStart = ReadOptionalScheduleTime(Child(questElement, "ScheduledStart"));
                 ReadProperties(Child(questElement, "Properties"), quest.Properties);
                 result.Quests.Add(quest);
             }
@@ -944,7 +944,7 @@ namespace ShelteredAPI.Scenarios
                 WriteAttribute(writer, "title", quest.Title);
                 WriteAttribute(writer, "startTriggerId", quest.StartTriggerId);
                 WriteAttribute(writer, "completionConditionId", quest.CompletionConditionId);
-                WriteScheduleTime(writer, "ScheduledStart", quest.ScheduledStart);
+                WriteOptionalScheduleTime(writer, "ScheduledStart", quest.ScheduledStart);
                 WriteElement(writer, "Description", quest.Description);
                 WriteProperties(writer, "Properties", quest.Properties);
                 writer.WriteEndElement();
@@ -1470,6 +1470,7 @@ namespace ShelteredAPI.Scenarios
                 effect.BunkerExpansionId = AttributeOrChild(node, "bunkerExpansionId", "BunkerExpansionId");
                 effect.FlagId = AttributeOrChild(node, "flagId", "FlagId");
                 effect.FlagValue = AttributeOrChild(node, "flagValue", "FlagValue");
+                effect.TriggerId = AttributeOrChild(node, "triggerId", "TriggerId");
                 ReadProperties(Child(node, "Properties"), effect.Properties);
                 target.Add(effect);
             }
@@ -1497,6 +1498,7 @@ namespace ShelteredAPI.Scenarios
                 WriteAttribute(writer, "bunkerExpansionId", effect.BunkerExpansionId);
                 WriteAttribute(writer, "flagId", effect.FlagId);
                 WriteAttribute(writer, "flagValue", effect.FlagValue);
+                WriteAttribute(writer, "triggerId", effect.TriggerId);
                 WriteProperties(writer, "Properties", effect.Properties);
                 writer.WriteEndElement();
             }

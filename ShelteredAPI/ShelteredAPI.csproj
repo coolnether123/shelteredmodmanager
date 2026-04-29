@@ -224,6 +224,8 @@
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeStateService.cs" />
     <Compile Include="Scenarios\Application\Scheduling\IScenarioScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioDefinitionScheduledActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerDefinitionCompiler.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioLegacyScheduleActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleRuntimeCoordinator.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleTimelineBuilder.cs" />
@@ -266,6 +268,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioQuestInstanceResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioSceneSpriteStartStateApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioScheduledGameplayRuntime.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioTriggerRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossConditionAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWinLossOutcomeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledBunkerRuntimeService.cs" />
@@ -339,6 +342,7 @@
     <Compile Include="Scenarios\ScenarioPlaytestOrchestrator.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeContracts.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeOrchestrator.cs" />
+    <Compile Include="Scenarios\ScenarioTriggerRuntime.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementMarker.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementService.cs" />

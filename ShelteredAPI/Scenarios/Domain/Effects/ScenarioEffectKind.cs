@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios
         StartQuest = 6,
         SetWeather = 7,
         SetScenarioFlag = 8,
-        RestoreWeather = 9
+        RestoreWeather = 9,
+        FireTrigger = 10
     }
 }

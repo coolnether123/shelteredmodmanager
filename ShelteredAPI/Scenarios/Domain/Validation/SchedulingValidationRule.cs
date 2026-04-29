@@ -47,6 +47,8 @@ namespace ShelteredAPI.Scenarios
                     summary.AddError("inventory.schedule.quantity", "[Inventory / Storage] Timed inventory '" + (id ?? ("#" + i)) + "' quantity must be greater than zero.");
             }
 
+            ValidateTriggers(definition, summary, actionIds);
+
             for (int i = 0; definition.TriggersAndEvents != null && definition.TriggersAndEvents.WeatherEvents != null && i < definition.TriggersAndEvents.WeatherEvents.Count; i++)
             {
                 WeatherEventDefinition weather = definition.TriggersAndEvents.WeatherEvents[i];
@@ -74,6 +76,38 @@ namespace ShelteredAPI.Scenarios
                     summary.AddError("quests.start_ambiguous", "[Quests] Quest '" + (id ?? ("#" + i)) + "' has both trigger start and scheduled start.");
                 if (hasSchedule)
                     ValidateTime(summary, quest.ScheduledStart, "[Quests] Scheduled quest '" + (id ?? ("#" + i)) + "'");
+            }
+        }
+
+        private static void ValidateTriggers(ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
+        {
+            HashSet<string> triggerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                string id = TrimToNull(trigger != null ? trigger.Id : null);
+                if (id == null)
+                {
+                    summary.AddError("events.trigger.id_required", "[Events] Trigger #" + i + " is missing id.");
+                    continue;
+                }
+
+                if (triggerIds.Contains(id))
+                    summary.AddError("events.trigger.id_duplicate", "[Events] Duplicate trigger id: " + id);
+                else
+                    triggerIds.Add(id);
+
+                ScenarioScheduledActionDefinition action;
+                string reason;
+                if (ScenarioTriggerDefinitionCompiler.TryCreateAction(trigger, i, out action, out reason))
+                {
+                    AddActionId(summary, actionIds, "trigger:" + id, "[Events] Duplicate trigger schedule id: " + id);
+                    ValidateTime(summary, action.DueTime, "[Events] Trigger '" + id + "'");
+                    continue;
+                }
+
+                if (!ScenarioTriggerDefinitionCompiler.IsManual(trigger) && !string.IsNullOrEmpty(reason))
+                    summary.AddWarning("events.trigger.unsupported_type", "[Events] " + reason);
             }
         }
 
@@ -138,6 +172,10 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioEffectKind.SetScenarioFlag:
                     if (TrimToNull(effect.FlagId) == null && TrimToNull(effect.TargetId) == null)
                         summary.AddError("events.effect.flag_required", scope + " flag effect is missing flag id.");
+                    break;
+                case ScenarioEffectKind.FireTrigger:
+                    if (TrimToNull(effect.TriggerId) == null && TrimToNull(effect.TargetId) == null)
+                        summary.AddError("events.effect.trigger_required", scope + " trigger effect is missing triggerId/targetId.");
                     break;
             }
         }

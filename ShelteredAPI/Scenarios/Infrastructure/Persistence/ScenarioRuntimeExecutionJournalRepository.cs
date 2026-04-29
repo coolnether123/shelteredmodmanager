@@ -93,6 +93,7 @@ namespace ShelteredAPI.Scenarios
 
             SaveLoadExecuted(data, state);
             SaveLoadFlags(data, state);
+            SaveLoadFiredTriggers(data, state);
             SaveLoadBunker(data, state);
             SaveLoadObjects(data, state);
             data.GroupEnd();
@@ -187,6 +188,51 @@ namespace ShelteredAPI.Scenarios
             data.SaveLoad("Value", ref value);
             flag.FlagId = id;
             flag.Value = value;
+        }
+
+        private static void SaveLoadFiredTriggers(SaveData data, ScenarioRuntimeState state)
+        {
+            ArrayList loaded = new ArrayList();
+            data.SaveLoadList("FiredTriggers", (IList)state.FiredTriggers,
+                delegate(int i)
+                {
+                    ScenarioFiredTriggerRecord record = state.FiredTriggers[i];
+                    SaveLoadFiredTrigger(data, record);
+                },
+                delegate(int i)
+                {
+                    ScenarioFiredTriggerRecord record = new ScenarioFiredTriggerRecord();
+                    SaveLoadFiredTrigger(data, record);
+                    loaded.Add(record);
+                });
+            if (data.isLoading)
+            {
+                state.FiredTriggers.Clear();
+                for (int i = 0; i < loaded.Count; i++)
+                    state.FiredTriggers.Add((ScenarioFiredTriggerRecord)loaded[i]);
+            }
+        }
+
+        private static void SaveLoadFiredTrigger(SaveData data, ScenarioFiredTriggerRecord record)
+        {
+            string triggerId = record.TriggerId ?? string.Empty;
+            string source = record.Source ?? string.Empty;
+            int day = record.FiredDay;
+            int hour = record.FiredHour;
+            int minute = record.FiredMinute;
+            int fireCount = record.FireCount;
+            data.SaveLoad("TriggerId", ref triggerId);
+            data.SaveLoad("Source", ref source);
+            data.SaveLoad("FiredDay", ref day);
+            data.SaveLoad("FiredHour", ref hour);
+            data.SaveLoad("FiredMinute", ref minute);
+            data.SaveLoad("FireCount", ref fireCount);
+            record.TriggerId = triggerId;
+            record.Source = source;
+            record.FiredDay = day;
+            record.FiredHour = hour;
+            record.FiredMinute = minute;
+            record.FireCount = fireCount;
         }
 
         private static void SaveLoadBunker(SaveData data, ScenarioRuntimeState state)

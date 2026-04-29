@@ -85,9 +85,20 @@ namespace ShelteredAPI.Scenarios
             for (int i = 0; definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
             {
                 QuestDefinition quest = definition.Quests.Quests[i];
-                if (quest == null || !string.IsNullOrEmpty(quest.StartTriggerId))
+                if (quest == null)
                     continue;
+
                 ScenarioScheduledActionDefinition action = NewAction("legacy.quest." + BuildId(quest.Id, i), "StartQuest", quest.ScheduledStart);
+                if (!string.IsNullOrEmpty(quest.StartTriggerId))
+                {
+                    action.ConditionRefs.Add(new ScenarioConditionRef
+                    {
+                        Id = "quest." + BuildId(quest.Id, i) + ".startTrigger",
+                        Kind = ScenarioConditionKind.CustomTrigger,
+                        TargetId = quest.StartTriggerId
+                    });
+                }
+
                 action.Effects.Add(new ScenarioEffectDefinition
                 {
                     Kind = ScenarioEffectKind.StartQuest,

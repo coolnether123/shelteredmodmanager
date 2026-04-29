@@ -10,6 +10,7 @@ namespace ShelteredAPI.Scenarios
         {
             ExecutedActions = new List<ScenarioExecutedActionRecord>();
             Flags = new List<ScenarioRuntimeFlag>();
+            FiredTriggers = new List<ScenarioFiredTriggerRecord>();
             UnlockedBunker = new List<ScenarioUnlockedBunkerRecord>();
             ObjectStates = new List<ScenarioObjectRuntimeStateRecord>();
         }
@@ -24,6 +25,7 @@ namespace ShelteredAPI.Scenarios
         public int LastProcessedMinute { get; set; }
         public List<ScenarioExecutedActionRecord> ExecutedActions { get; private set; }
         public List<ScenarioRuntimeFlag> Flags { get; private set; }
+        public List<ScenarioFiredTriggerRecord> FiredTriggers { get; private set; }
         public List<ScenarioUnlockedBunkerRecord> UnlockedBunker { get; private set; }
         public List<ScenarioObjectRuntimeStateRecord> ObjectStates { get; private set; }
     }
@@ -32,6 +34,16 @@ namespace ShelteredAPI.Scenarios
     {
         public string FlagId { get; set; }
         public string Value { get; set; }
+    }
+
+    public class ScenarioFiredTriggerRecord
+    {
+        public string TriggerId { get; set; }
+        public string Source { get; set; }
+        public int FiredDay { get; set; }
+        public int FiredHour { get; set; }
+        public int FiredMinute { get; set; }
+        public int FireCount { get; set; }
     }
 
     public class ScenarioUnlockedBunkerRecord

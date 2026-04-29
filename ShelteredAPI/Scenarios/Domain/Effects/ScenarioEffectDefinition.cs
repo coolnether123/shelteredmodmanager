@@ -25,6 +25,7 @@ namespace ShelteredAPI.Scenarios
         public string BunkerExpansionId { get; set; }
         public string FlagId { get; set; }
         public string FlagValue { get; set; }
+        public string TriggerId { get; set; }
         public List<ScenarioProperty> Properties { get; private set; }
     }
 }
