@@ -4,7 +4,19 @@ Use this page for common runtime failures and the exact log signatures to check.
 
 ## Compatibility
 
-Applies to current `ModAPI.dll` and `ShelteredAPI.dll`.
+Applies to the current 1.3 breaking clean API line.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are stable.
+- Implementation classes are internal.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
 
 ## 1. Setting Exists in Code but Not Visible in UI
 
@@ -70,7 +82,7 @@ Log lines to look for:
 - `[ModManagerBase] Session-started settings re-load failed: <message>`
 - `NG+ Merge failed for <key>: <message>`
 
-## 6. Trigger Callbacks Not Firing (`GameTimeTriggerHelper`)
+## 6. Trigger Callbacks Not Firing (`ShelteredEvents`)
 
 Likely causes:
 - No listeners/callbacks registered.
@@ -79,13 +91,13 @@ Likely causes:
 - Trigger ID was reused and overwritten by a later registration.
 
 Log lines to look for:
-- `GameTimeTriggerHelper.SubscribeLifecycle`
-- `GameTimeTriggerHelper.Catchup`
+- `ShelteredEvents.RegisterTimeTrigger`
+- `ShelteredEvents.SixHourTick`
 - `Trigger callback threw for '<triggerId>': <message>`
 
 Quick checks:
-- Confirm `RegisterTrigger(...)` runs in `Start(...)`.
-- Confirm `GetPriorityList(...)` contains your trigger for the expected cadence.
+- Confirm `ShelteredEvents.RegisterTimeTrigger(...)` runs in `Start(...)`.
+- Confirm `ShelteredEvents.GetTimeTriggerPriorityList(...)` contains your trigger for the expected cadence.
 
 ## 7. Quick Verification Checklist
 

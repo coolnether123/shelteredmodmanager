@@ -9,7 +9,7 @@ namespace ShelteredAPI.Input
     /// <summary>
     /// Registers and resolves vanilla Sheltered PC input actions through ModAPI bindings.
     /// </summary>
-    public static class ShelteredVanillaInputActions
+    internal static class ShelteredVanillaInputActions
     {
         private const string InputPrefix = "sheltered.vanilla.input.";
         private const string MenuPrefix = "sheltered.vanilla.menu.";

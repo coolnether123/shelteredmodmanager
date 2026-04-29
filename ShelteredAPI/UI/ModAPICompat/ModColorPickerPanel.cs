@@ -7,7 +7,7 @@ using ModAPI.Core;
 namespace ModAPI.UI
 {
     // [LOCKED OFF] - This feature has been intentionally disabled.
-    public class ModColorPickerPanel : MonoBehaviour
+    internal class ModColorPickerPanel : MonoBehaviour
     {
         private static void Log(string msg) { MMLog.Write($"[ModColorPicker] {msg}"); }
         

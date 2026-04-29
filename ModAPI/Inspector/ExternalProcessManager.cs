@@ -6,9 +6,9 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    public sealed class ExternalProcessManager
+    internal sealed class ExternalProcessManager
     {
-        public sealed class ProcessResult
+        internal sealed class ProcessResult
         {
             public int ExitCode;
             public bool TimedOut;
@@ -16,7 +16,7 @@ namespace ModAPI.Inspector
             public string StandardError;
         }
 
-        public sealed class PrivacyProbeResult
+        internal sealed class PrivacyProbeResult
         {
             public PrivacyLevel Level;
             public string Reason;

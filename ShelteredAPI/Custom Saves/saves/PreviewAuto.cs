@@ -2,11 +2,11 @@ using System.Collections;
 using UnityEngine;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
     internal class PreviewAutoRunner : MonoBehaviour { }
 
-    public static class PreviewAuto
+    internal static class PreviewAuto
     {
         private static bool _hooked;
 

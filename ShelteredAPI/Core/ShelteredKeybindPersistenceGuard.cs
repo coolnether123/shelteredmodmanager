@@ -7,7 +7,7 @@ namespace ShelteredAPI.Core
     /// <summary>
     /// Flushes keybind changes to ModPrefs during quit/unload to avoid edge-case data loss.
     /// </summary>
-    public sealed class ShelteredKeybindPersistenceGuard : MonoBehaviour
+    internal sealed class ShelteredKeybindPersistenceGuard : MonoBehaviour
     {
         private static bool _flushed;
 

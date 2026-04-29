@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public static class ScenarioWorldReady
+    internal static class ScenarioWorldReady
     {
         public static bool IsReady()
         {

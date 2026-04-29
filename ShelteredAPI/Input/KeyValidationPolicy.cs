@@ -8,7 +8,7 @@ namespace ShelteredAPI.Input
     /// <summary>
     /// Centralized key-validation and parsing policy for all keybind flows.
     /// </summary>
-    public static class KeyValidationPolicy
+    internal static class KeyValidationPolicy
     {
         private static readonly HashSet<KeyCode> ReservedSystemKeys = new HashSet<KeyCode>();
         private static readonly HashSet<KeyCode> MenuDisallowedKeys = new HashSet<KeyCode>
@@ -27,14 +27,14 @@ namespace ShelteredAPI.Input
             AddReservedIfPresent("Break");
         }
 
-        public static bool IsKeyBindable(KeyCode key)
+        internal static bool IsKeyBindable(KeyCode key)
         {
             if (key == KeyCode.None) return false;
             if (ReservedSystemKeys.Contains(key)) return false;
             return Enum.IsDefined(typeof(KeyCode), key);
         }
 
-        public static bool IsValidForContext(KeyCode key, InputContext context)
+        internal static bool IsValidForContext(KeyCode key, InputContext context)
         {
             if (key == KeyCode.None) return true; // Explicit unbind operation.
             if (!IsKeyBindable(key)) return false;
@@ -54,7 +54,7 @@ namespace ShelteredAPI.Input
             }
         }
 
-        public static KeyCode ParseKeyCodeSafe(object rawValue, KeyCode fallback, string actionId, InputContext context)
+        internal static KeyCode ParseKeyCodeSafe(object rawValue, KeyCode fallback, string actionId, InputContext context)
         {
             KeyCode parsed;
             if (TryParseRawKey(rawValue, out parsed) && IsValidForContext(parsed, context))

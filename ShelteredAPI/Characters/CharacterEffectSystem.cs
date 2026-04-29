@@ -1,12 +1,12 @@
-using ModAPI.Characters.Internal;
+using ShelteredAPI.Characters.Internal;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
-    public static class CharacterEffectSystem
+    internal static class CharacterEffectSystem
     {
         private static ICharacterEffectSystem _instance;
 
-        public static ICharacterEffectSystem Instance
+        internal static ICharacterEffectSystem Instance
         {
             get
             {

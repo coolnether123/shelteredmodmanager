@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
     /// <summary>
     /// Provides central logic for managing mod-aware save files.
@@ -376,9 +376,9 @@ namespace ModAPI.Saves
         {
             var currentMods = new List<LoadedModInfo>();
 
-            lock (PluginManager.LoadedMods)
+            lock (ModRuntime.LoadedMods)
             {
-                foreach (var mod in PluginManager.LoadedMods)
+                foreach (var mod in ModRuntime.LoadedMods)
                 {
                     if (mod == null) continue;
 
@@ -1196,7 +1196,7 @@ namespace ModAPI.Saves
     /// <summary>
     /// Handles one-time startup check for save slot gaps and user preference for auto-condensing.
     /// </summary>
-    public static class SaveCondenseManager
+    internal static class SaveCondenseManager
     {
         private static bool _checked = false;
         private static bool _pendingPrompt = false;

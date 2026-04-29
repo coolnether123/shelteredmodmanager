@@ -28,7 +28,7 @@ namespace ModAPI.Hooks
         FailureMode = "Quit/save sequencing falls back to vanilla timing and becomes harder to diagnose.",
         RollbackStrategy = "Disable the SaveFlow patch domain or remove the managed shutdown patch host.")]
     [HarmonyPatch(typeof(MainMenuPanel), "OnMessageBoxClosed")]
-    public static class ManagedShutdown_Interceptor
+    internal static class ManagedShutdown_Interceptor
     {
         public static bool Prefix(MainMenuPanel __instance, int response)
         {
@@ -36,11 +36,11 @@ namespace ModAPI.Hooks
             if (response == 1)
             {
                 MMLog.WriteInfo("[ManagedShutdown] 'Save & Exit' confirmed. Letting vanilla logic run.");
-                SaveExitTracker.Mark("OnMessageBoxClosed(response=1)", "User confirmed Save & Exit");
+                ModRuntime.MarkSaveExit("OnMessageBoxClosed(response=1)", "User confirmed Save & Exit");
 
                 // Reset save-completion flag for new quit sequence
                 PlatformSaveProxy.ResetStatus();
-                SaveExitTracker.Mark("IsQuitting set true");
+                ModRuntime.MarkSaveExit("IsQuitting set true");
 
                 // We no longer block vanilla logic, as requested.
                 // return false; 
@@ -54,7 +54,7 @@ namespace ModAPI.Hooks
         /// preventing it from accessing destroyed objects.
         /// </summary>
         [HarmonyPatch(typeof(SaveManager), "Update")]
-        public static class SaveManager_Update_Patch
+        internal static class SaveManager_Update_Patch
         {
             private static float _nextPassthroughLogAt = 0f;
 
@@ -62,12 +62,12 @@ namespace ModAPI.Hooks
             {
                 // Do NOT hard-block SaveManager.Update during quit.
                 // Corridor traces showed this can deadlock the shutdown path after a successful save.
-                if (PluginRunner.IsQuitting && !__instance.isSaving && !__instance.isLoading)
+                if (ModRuntime.IsQuitting && !__instance.isSaving && !__instance.isLoading)
                 {
                     if (Time.realtimeSinceStartup >= _nextPassthroughLogAt)
                     {
                         _nextPassthroughLogAt = Time.realtimeSinceStartup + 0.75f;
-                        SaveExitTracker.Mark("SaveManager.Update passthrough", "isSaving=false, isLoading=false");
+                        ModRuntime.MarkSaveExit("SaveManager.Update passthrough", "isSaving=false, isLoading=false");
                     }
                     return true;
                 }

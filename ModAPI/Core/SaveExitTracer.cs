@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace ModAPI.Core
 {
-    public static class SaveExitTracker
+    internal static class SaveExitTracker
     {
         private static int _stepCounter;
         private static string _lastStep = string.Empty;

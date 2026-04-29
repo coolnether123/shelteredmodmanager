@@ -21,7 +21,7 @@ namespace ShelteredAPI.Content
     /// Central registry for adding items, crafting recipes, loot entries, and tuning flags.
     /// Use relative paths rooted at the mod directory (e.g., Assets/Textures/icon.png).
     /// </summary>
-    public static class ContentRegistry
+    internal static class ContentRegistry
     {
         private const int CustomItemTypeStart = 10000;
         private const int CustomItemTypeRange = 900000;

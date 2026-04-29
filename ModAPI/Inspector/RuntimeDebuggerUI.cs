@@ -9,7 +9,7 @@ using ModAPI.Harmony;
 
 namespace ModAPI.Inspector
 {
-    public class RuntimeDebuggerUI : MonoBehaviour
+    internal class RuntimeDebuggerUI : MonoBehaviour
     {
         private bool _active;
         private Rect _windowRect = new Rect(60, 60, 1040, 700);

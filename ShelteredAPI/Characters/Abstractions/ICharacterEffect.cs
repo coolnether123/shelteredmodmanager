@@ -1,6 +1,6 @@
 using System;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     public interface ICharacterEffect
     {

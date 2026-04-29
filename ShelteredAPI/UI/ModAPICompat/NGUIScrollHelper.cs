@@ -9,7 +9,7 @@ namespace ModAPI.UI
     /// Helper class to add mouse wheel scrolling to a list of NGUI elements.
     /// Useful for lists that exceed their container bounds.
     /// </summary>
-    public class NGUIScrollHelper : MonoBehaviour
+    internal class NGUIScrollHelper : MonoBehaviour
     {
         private const float ScrollStepThreshold = 1f;
         private const float ScrollSensitivity = 0.45f;

@@ -2,7 +2,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public class ScenarioObjectRuntimeStateRecord
+    internal class ScenarioObjectRuntimeStateRecord
     {
         public string ScenarioObjectId { get; set; }
         public string RuntimeBindingKey { get; set; }

@@ -8,14 +8,14 @@ namespace ModAPI.UI
     /// <summary>
     /// Caches fonts to prevent expensive repeated lookups during UI construction.
     /// </summary>
-    public static class UIFontCache
+    internal static class UIFontCache
     {
         private static UIFont _cachedBitmapFont;
         private static Font _cachedTTFFont;
         private static bool _initialized = false;
         private static UIFont _preferredBitmapFont;
 
-        public struct FontResult
+        internal struct FontResult
         {
             public UIFont Bitmap;
             public Font TTF;

@@ -12,7 +12,7 @@ namespace ModAPI.UI
     /// <summary>
     /// Supported menus for UI injection.
     /// </summary>
-    public enum TargetMenu
+    internal enum TargetMenu
     {
         Radio,
         Intercom,
@@ -28,7 +28,7 @@ namespace ModAPI.UI
         TargetBehavior = "Shared button injection into supported runtime panels",
         FailureMode = "Registered ModUIHooks buttons do not appear when panels open.",
         RollbackStrategy = "Disable the UI patch domain or remove the ModUIHooks patch host.")]
-    public static class ModUIHooks
+    internal static class ModUIHooks
     {
         /// <summary>
         /// Registers a button to be injected into a specific game menu when it opens.

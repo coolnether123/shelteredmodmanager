@@ -7,7 +7,7 @@ namespace ModAPI.Hooks
     /// High-level hooks for common UI elements in Sheltered.
     /// Provides safe access to NGUI elements and their controllers.
     /// </summary>
-    public static class UIHooks
+    internal static class UIHooks
     {
         /// <summary>
         /// Gets the main UI Root object.

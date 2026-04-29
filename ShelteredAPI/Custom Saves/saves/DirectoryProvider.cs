@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
     internal static class DirectoryProvider
     {

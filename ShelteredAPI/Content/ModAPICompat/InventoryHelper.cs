@@ -4,14 +4,14 @@ using System.Collections.ObjectModel;
 using ShelteredAPI.Content;
 using UnityEngine;
 
-namespace ModAPI.Items
+namespace ShelteredAPI.Content
 {
     /// <summary>
     /// Safe item operations for mod developers.
     /// Provides high-level methods for creating, adding, and removing items without 
     /// needing to interact with the game's internal manager logic directly.
     /// </summary>
-    public static class InventoryHelper
+    internal static class InventoryHelper
     {
         private static InventoryManager Mgr => InventoryManager.Instance;
 

@@ -10,7 +10,7 @@ namespace ShelteredAPI.Content
     /// Bridges registry metadata to loaded assets (sprites/prefabs) with graceful fallbacks.
     /// Call ResolveItems() during game init to prepare assets for registration into game systems.
     /// </summary>
-    public static class ContentResolver
+    internal static class ContentResolver
     {
         public static List<ResolvedItem> ResolveItems()
         {
@@ -91,7 +91,7 @@ namespace ShelteredAPI.Content
     /// <summary>
     /// Item definition paired with loaded assets.
     /// </summary>
-    public class ResolvedItem
+    internal class ResolvedItem
     {
         public ItemDefinition Definition;
         public Sprite Icon;

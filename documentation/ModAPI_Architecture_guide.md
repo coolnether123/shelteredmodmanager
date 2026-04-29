@@ -1,8 +1,20 @@
 # ModAPI v1.3 Architecture Guide
 
-This document summarizes the current loader/runtime architecture.
+This document summarizes the current loader/runtime architecture. The 1.3 line is a breaking clean API line.
 
 For exact signatures, use `documentation/API_Signatures_Reference.md`.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are the stable mod-author surface.
+- Implementation classes are internal and may move.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
 
 ## Compatibility Matrix
 
@@ -36,7 +48,7 @@ High-level flow:
 - wiring save/session lifecycle hooks through neutral `GameRuntime.*` registry IDs
 - leaving Sheltered-specific content, save, UI, input, actor, and scenario ownership to `ShelteredAPI`
 
-ShelteredAPI registers both neutral runtime IDs and 1.3 migration aliases when it is present. Neutral IDs used by `ModAPI` include:
+ShelteredAPI registers neutral runtime IDs when it is present. Neutral IDs used by `ModAPI` include:
 - `GameRuntime.Actors`
 - `GameRuntime.ActorRegistry`
 - `GameRuntime.ActorComponents`
@@ -123,6 +135,10 @@ Per-plugin context exposes:
 - simulation scheduling
 - serialization
 
+`ModAPI.Actors` is host-neutral. Sheltered-specific character access,
+`FamilyMember`/`NpcVisitor` escape hatches, and actor-id helpers live in
+`ShelteredAPI.Actors` and `ShelteredAPI.Characters`.
+
 ## 7. `ModManagerBase`
 
 `ModManagerBase` is the high-level base class for larger mods. It provides:
@@ -134,7 +150,7 @@ Per-plugin context exposes:
 - automatic settings discovery and loading
 - automatic persistence scanning
 
-Sheltered save-backed helpers such as `PersistentDataAPI`, `GameUtil`, `ModList`, and `ModDictionary` are hosted by `ShelteredAPI.dll` in the current refactor branch.
+Sheltered save-slot APIs are exposed through `ShelteredSaves` and `ShelteredSaveEvents` in `ShelteredAPI.dll`.
 
 `ModManagerBase<T>` adds a strongly typed `Config` surface.
 

@@ -1,7 +1,7 @@
 using System;
 using System.Reflection;
 using ModAPI.Hooks.Paging;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -9,7 +9,7 @@ namespace ShelteredAPI.Scenarios
     /// <summary>
     /// Sheltered runtime implementation of the neutral custom scenario service contract.
     /// </summary>
-    public sealed class ShelteredCustomScenarioService : ICustomScenarioService, IShelteredCustomScenarioService
+    internal sealed class ShelteredCustomScenarioService : ICustomScenarioService, IShelteredCustomScenarioService
     {
         private readonly IScenarioRegistrationStore _registrations;
         private readonly ScenarioRegistrationService _registrationService;

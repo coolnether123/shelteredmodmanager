@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios

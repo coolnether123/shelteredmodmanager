@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using ModAPI.Reflection;
 using UnityEngine;
 
-namespace ModAPI.GameState
+namespace ShelteredAPI.GameState
 {
     // --- Interfaces for Read-Only access ---
 
@@ -123,7 +123,7 @@ namespace ModAPI.GameState
     /// Safe access to game singletons and state.
     /// Provides read-only interfaces to prevent mods from accidentally corrupting game state.
     /// </summary>
-    public static class ManagerStateHelper
+    public static class ShelteredGameState
     {
         private static readonly IReadOnlyInventory _inventory = new InventoryWrapper();
         private static readonly IReadOnlyFamilyRoster _family = new FamilyRosterWrapper();

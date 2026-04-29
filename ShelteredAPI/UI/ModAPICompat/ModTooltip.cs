@@ -3,7 +3,7 @@ using ModAPI.Core;
 
 namespace ModAPI.UI
 {
-    public class ModTooltip : MonoBehaviour
+    internal class ModTooltip : MonoBehaviour
     {
         private static ModTooltip _instance;
         private GameObject _root;

@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     public class CharacterQuery
     {
+        private static readonly IReadOnlyList<ICharacterProxy> EmptySource =
+            new ModAPI.Util.ReadOnlyListWrapper<ICharacterProxy>(new List<ICharacterProxy>(0));
+
         private readonly Func<IReadOnlyList<ICharacterProxy>> _source;
         private readonly List<Func<ICharacterProxy, bool>> _predicates = new List<Func<ICharacterProxy, bool>>();
 
@@ -100,7 +103,7 @@ namespace ModAPI.Characters
 
         public List<ICharacterProxy> ToList()
         {
-            IReadOnlyList<ICharacterProxy> source = _source != null ? _source() : new List<ICharacterProxy>().ToReadOnlyList();
+            IReadOnlyList<ICharacterProxy> source = _source != null ? _source() : EmptySource;
             return source.Where(delegate(ICharacterProxy c) { return _predicates.All(delegate(Func<ICharacterProxy, bool> p) { return p(c); }); }).ToList();
         }
 

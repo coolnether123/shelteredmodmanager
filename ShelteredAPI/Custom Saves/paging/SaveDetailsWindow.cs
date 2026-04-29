@@ -5,7 +5,7 @@ using System.IO;
 using UnityEngine;
 using ModAPI.Core;
 using ModAPI.InputServices;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.UI;
 
 namespace ModAPI.Hooks.Paging
@@ -189,9 +189,9 @@ namespace ModAPI.Hooks.Paging
                 });
             
             // === ANALYZE MODS ===
-            var activeMods = PluginManager.LoadedMods;
+            var activeMods = ModRuntime.LoadedMods;
             var savedMods = manifest?.lastLoadedMods ?? new LoadedModInfo[0];
-            var discovered = ModDiscovery.DiscoverAllMods();
+            var discovered = ModRuntime.DiscoverAllMods();
             var comparison = SaveVerification.BuildModComparison(activeMods, savedMods, options.IncludeExtraMods);
             
             // === COLUMN HEADERS ===

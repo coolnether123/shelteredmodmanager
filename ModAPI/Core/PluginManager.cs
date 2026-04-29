@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,7 +14,7 @@ namespace ModAPI.Core
     /// <summary>
     /// Discovers mods, loads assemblies, and wires plugin lifecycle callbacks.
     /// </summary>
-    public class PluginManager
+    internal class PluginManager
     {
         private static PluginManager instance;
 
@@ -256,12 +256,12 @@ namespace ModAPI.Core
         {
             if (asm == null)
             {
-                MMLog.Write($"{name}.dll: <missing> ✗");
+                MMLog.Write($"{name}.dll: <missing> ?");
                 return 1;
             }
 
             var path = SafeAssemblyPath(asm);
-            MMLog.WriteDebug($"{name}.dll: {path} ✓");
+            MMLog.WriteDebug($"{name}.dll: {path} ?");
             return 0;
         }
 

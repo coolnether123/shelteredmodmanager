@@ -4,7 +4,7 @@ using ModAPI.Core;
 using ModAPI.Reflection;
 using ModAPI.Harmony;
 
-namespace ModAPI.Events
+namespace ShelteredAPI.Events
 {
     /// <summary>
     /// Events related to the game's Faction system.
@@ -15,7 +15,7 @@ namespace ModAPI.Events
         FailureMode = "Faction-related callbacks stop firing for mods.",
         RollbackStrategy = "Disable the Events patch domain or remove the faction event bridge.")]
     [Obsolete("1.3 source migration alias hosted in ShelteredAPI.dll; reference ShelteredAPI for Sheltered faction hooks.", false)]
-    public static class FactionEvents
+    internal static class FactionEvents
     {
         /// <summary>
         /// Fired when a new faction has been spawned.

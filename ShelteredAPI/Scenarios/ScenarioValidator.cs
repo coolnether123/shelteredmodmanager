@@ -8,17 +8,17 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public interface IScenarioDependencyResolver
+    internal interface IScenarioDependencyResolver
     {
         bool IsLoaded(string modId);
     }
 
-    public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
+    internal interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
     {
         string GetLoadedVersion(string modId);
     }
 
-    public sealed class ModRegistryScenarioDependencyResolver : IScenarioDependencyVersionResolver
+    internal sealed class ModRegistryScenarioDependencyResolver : IScenarioDependencyVersionResolver
     {
         public bool IsLoaded(string modId)
         {
@@ -32,7 +32,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioValidator
+    internal sealed class ScenarioValidator
     {
         private readonly IScenarioDependencyResolver _dependencyResolver;
         private readonly ScenarioValidationPipeline _pipeline;

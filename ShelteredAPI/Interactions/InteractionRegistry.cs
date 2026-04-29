@@ -5,7 +5,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using ModAPI.Reflection;
 
-namespace ModAPI.Interactions
+namespace ShelteredAPI.Interactions
 {
     public enum InteractionInsertMode
     {

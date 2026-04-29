@@ -5,7 +5,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Hooks;
 using ModAPI.Hooks.Paging;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using ModAPI.UI;
 using UnityEngine;
@@ -1402,7 +1402,7 @@ namespace ShelteredAPI.Scenarios
                 return "Scenario dependency metadata is unavailable.";
 
             List<SaveVerification.ModCompareEntry> comparison = SaveVerification.BuildModComparison(
-                PluginManager.LoadedMods,
+                ModRuntime.LoadedMods,
                 manifest.lastLoadedMods,
                 false);
 

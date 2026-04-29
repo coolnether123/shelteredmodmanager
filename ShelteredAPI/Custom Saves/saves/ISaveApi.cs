@@ -1,4 +1,4 @@
-﻿namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
     /// <summary>
     /// Defines the common contract for a save registry, allowing the PlatformSaveProxy

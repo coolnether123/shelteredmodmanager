@@ -2,7 +2,7 @@ using System;
 
 namespace ShelteredAPI.Scenarios
 {
-    public static class ScenarioTriggerRuntime
+    internal static class ScenarioTriggerRuntime
     {
         public static bool Fire(string triggerId)
         {

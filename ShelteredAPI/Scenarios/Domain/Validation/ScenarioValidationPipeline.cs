@@ -5,7 +5,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioValidationPipeline
+    internal sealed class ScenarioValidationPipeline
     {
         private readonly List<IScenarioValidationRule> _rules = new List<IScenarioValidationRule>();
 

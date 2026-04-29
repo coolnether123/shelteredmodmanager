@@ -11,7 +11,7 @@ using ModAPI.Core;
 namespace ModAPI.Inspector
 {
     // Live IL Inspector. Toggle with F10.
-    public class RuntimeILInspector : MonoBehaviour
+    internal class RuntimeILInspector : MonoBehaviour
     {
         private Rect _window = new Rect(20, 50, 900, 600);
         private bool _visible = false; // F10

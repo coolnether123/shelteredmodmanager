@@ -5,7 +5,7 @@ using ModAPI.Harmony;
 using ModAPI.Reflection;
 using UnityEngine;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     /// <summary>
     /// Information about a family member.
@@ -43,7 +43,7 @@ namespace ModAPI.Characters
         public float Trauma;
         public float Loyalty;
 
-        public CharacterInfo(FamilyMember member)
+        internal CharacterInfo(FamilyMember member)
         {
             if (member == null)
             {
@@ -139,7 +139,7 @@ namespace ModAPI.Characters
         public int CombatKills;
         public float WaterContamination;
 
-        public ExpeditionPartyInfo(ExplorationParty party)
+        internal ExpeditionPartyInfo(ExplorationParty party)
         {
             if (party == null)
             {

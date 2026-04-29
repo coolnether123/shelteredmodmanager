@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace ModAPI.Spine.UI
 {
-    public static class SpineWidgetFactory
+    internal static class SpineWidgetFactory
     {
         public static GameObject ButtonTemplate;
         public static GameObject SliderTemplate;

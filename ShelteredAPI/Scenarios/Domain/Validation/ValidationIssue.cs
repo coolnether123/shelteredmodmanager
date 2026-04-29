@@ -2,7 +2,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ValidationIssue
+    internal sealed class ValidationIssue
     {
         public ValidationIssue(ScenarioIssueSeverity severity, string code, string message)
         {

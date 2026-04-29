@@ -63,16 +63,19 @@
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\ShelteredContent.cs" />
     <Compile Include="Content\ShelteredContentResolutionService.cs" />
     <Compile Include="Core\ShelteredGameLifecycleSource.cs" />
     <Compile Include="Events\FactionEvents.cs" />
     <Compile Include="Events\GameEvents.cs" />
     <Compile Include="Events\GameTimeTriggerHelper.cs" />
+    <Compile Include="Events\ShelteredEvents.cs" />
     <Compile Include="Events\ShelteredUiLifecycleEventSink.cs" />
     <Compile Include="Events\UIEvents.cs" />
     <Compile Include="GameState\ManagerStateHelper.cs" />
     <Compile Include="Interactions\InteractionRegistry.cs" />
     <Compile Include="Characters\CharacterEffectSystem.cs" />
+    <Compile Include="Characters\ShelteredCharacters.cs" />
     <Compile Include="Characters\PartyHelper.cs" />
     <Compile Include="Characters\PartyPatches.cs" />
     <Compile Include="Characters\Abstractions\ICharacterAttributes.cs" />
@@ -137,6 +140,8 @@
     <Compile Include="Custom Saves\saves\SaveRegistryCore.cs" />
     <Compile Include="Custom Saves\saves\ScenarioRegistry.cs" />
     <Compile Include="Custom Saves\saves\ScenarioSaves.cs" />
+    <Compile Include="Custom Saves\saves\ShelteredSaveEvents.cs" />
+    <Compile Include="Custom Saves\saves\ShelteredSaves.cs" />
     <Compile Include="Scenarios\IShelteredCustomScenario.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioCatalog.cs" />
     <Compile Include="Scenarios\Domain\Assets\SpritePatchDefinition.cs" />
@@ -342,6 +347,9 @@
     <Compile Include="Scenarios\ScenarioPlaytestOrchestrator.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeContracts.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeOrchestrator.cs" />
+    <Compile Include="Scenarios\ShelteredScenarioAuthoring.cs" />
+    <Compile Include="Scenarios\ShelteredScenarios.cs" />
+    <Compile Include="Scenarios\ShelteredScenarioRuntime.cs" />
     <Compile Include="Scenarios\ScenarioTriggerRuntime.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementMarker.cs" />
@@ -381,6 +389,7 @@
     <Compile Include="Scenarios\ShelteredScenarioDefBuilder.cs" />
     <Compile Include="Scenarios\ShelteredScenarioRegistration.cs" />
     <Compile Include="Input\ShelteredTouchpadInputRouter.cs" />
+    <Compile Include="Input\ShelteredInput.cs" />
     <Compile Include="Input\ShelteredInputActions.cs" />
     <Compile Include="Input\ShelteredVanillaInputActions.cs" />
     <Compile Include="Input\InputContext.cs" />
@@ -395,6 +404,7 @@
     <Compile Include="Input\UnityTouchDragTracker.cs" />
     <Compile Include="UI\UITakeover.cs" />
     <Compile Include="UI\UIPanelTakeover.cs" />
+    <Compile Include="UI\ShelteredUI.cs" />
     <Compile Include="UI\ShelteredControllerModePromptDialog.cs" />
     <Compile Include="UI\ShelteredKeybindConflictDialog.cs" />
     <Compile Include="Input\ShelteredKeybindsProvider.cs" />

@@ -3,9 +3,9 @@ using System.IO;
 using UnityEngine;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
-    public static class PreviewCapture
+    internal static class PreviewCapture
     {
         public static void CapturePNG(string scenarioId, string saveId, Texture2D frame)
         {

@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 
 namespace ShelteredAPI.UI
 {
     /// <summary>
     /// Registers reusable panel takeover handlers that run on panel open/resume.
     /// </summary>
-    public static class UIPanelTakeover
+    internal static class UIPanelTakeover
     {
         private sealed class Registration : IDisposable
         {

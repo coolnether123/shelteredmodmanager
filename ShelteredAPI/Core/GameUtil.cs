@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ModAPI.Core;
 
-namespace ModAPI
+namespace ShelteredAPI.GameState
 {
     /// <summary>
     /// Helpers to safely access game state without fragile reflection.

@@ -3,14 +3,14 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public enum ScenarioPlaytestState
+    internal enum ScenarioPlaytestState
     {
         Idle = 0,
         Playtesting = 1,
         Paused = 2
     }
 
-    public enum ScenarioEditCategory
+    internal enum ScenarioEditCategory
     {
         Family = 0,
         Inventory = 1,
@@ -20,7 +20,7 @@ namespace ShelteredAPI.Scenarios
         WinLoss = 5
     }
 
-    public enum ScenarioDirtySection
+    internal enum ScenarioDirtySection
     {
         None = 0,
         Meta = 1,
@@ -37,7 +37,7 @@ namespace ShelteredAPI.Scenarios
     /// serializer; never serialize this session object directly, because dirty and
     /// playtest state are editor concerns and should not leak into scenario packs.
     /// </summary>
-    public sealed class ScenarioEditorSession
+    internal sealed class ScenarioEditorSession
     {
         public ScenarioEditorSession()
         {

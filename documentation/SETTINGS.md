@@ -1,5 +1,19 @@
 # Settings and Persistence (Current v1.3 Line)
 
+The 1.3 line is a breaking clean API line.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are stable.
+- Implementation classes are internal.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
+
 ## Compatibility Matrix
 
 | Pattern / API | Applies To | Status |
@@ -7,8 +21,8 @@
 | `ModManagerBase<T>` auto-settings | `ModAPI.dll` current | Recommended |
 | `ISettingsProvider` + `SpineSettingsHelper.Scan` | `ModAPI.dll` current | Supported |
 | `ISaveSystem.RegisterModData` | `ModAPI.dll` current | Recommended |
-| `ctx.SaveData/ctx.LoadData` extensions | `ShelteredAPI.dll` with old `ModAPI.Core` namespace | Supported 1.3 migration aliases |
-| Legacy `ctx.Settings.GetInt/SetInt/SaveUser` style | Older API style | Deprecated |
+| `ShelteredSaves` / `ShelteredSaveEvents` | `ShelteredAPI.dll` | Sheltered save-slot APIs |
+| Older settings accessor snippets | Older API style | Historical |
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.
 
@@ -96,15 +110,15 @@ public void Initialize(IPluginContext ctx)
 }
 ```
 
-## 5. SaveData/LoadData (`PersistentDataAPI` Extensions)
+## 5. Sheltered Save Slots
 
 `ctx.SaveSystem.RegisterModData(...)` is the neutral ModAPI persistence path.
-`ctx.SaveData(...)` and `ctx.LoadData(...)` are Sheltered `SaveManager`-backed compatibility extensions hosted by `ShelteredAPI.dll` in the 1.3 line.
+Use `ShelteredSaves` and `ShelteredSaveEvents` only when you intentionally work with Sheltered save slots, descriptors, or save lifecycle.
 
 ```csharp
-ctx.SaveData("custom_blob", myData);
-if (ctx.LoadData("custom_blob", out MyData loaded))
+SaveEntry[] saves = ShelteredSaves.ListStandard(page: 0, pageSize: 20);
+foreach (SaveEntry save in saves)
 {
-    myData = loaded;
+    // inspect or display save metadata
 }
 ```

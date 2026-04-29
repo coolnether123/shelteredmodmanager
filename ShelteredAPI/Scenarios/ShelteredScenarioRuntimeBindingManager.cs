@@ -1,11 +1,11 @@
 using System;
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ShelteredScenarioRuntimeBindingManager : IScenarioRuntimeBindingService
+    internal sealed class ShelteredScenarioRuntimeBindingManager : IScenarioRuntimeBindingService
     {
         private const string SaveGroupName = "CustomScenarioBinding";
         private const string HasLastEditorTickName = "HasLastEditorSaveTick";

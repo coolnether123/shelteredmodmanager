@@ -1,8 +1,20 @@
 # ShelteredAPI Content Guide
 
-This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 1.3 line.
+This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 1.3 breaking clean API line.
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are stable.
+- Implementation classes are internal.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
 
 ## 1. What Lives Here
 
@@ -28,7 +40,7 @@ Every content mod should follow these rules:
 5. Keep asset paths relative to the mod root, usually under `Assets/...`.
 6. Treat `ItemManager.ItemType` as runtime-owned. Do not hardcode numeric custom IDs unless you have a specific compatibility reason.
 7. Resolve items by string ID in gameplay code when possible.
-8. Reference `ShelteredAPI.dll` when using `InventoryHelper`; the 1.3 type keeps the old `ModAPI.Items` namespace but is Sheltered-owned.
+8. Use `ShelteredContent` for runtime inventory helpers and item-ID resolution.
 
 What mod authors should not do:
 - do not register content in constructors
@@ -59,14 +71,14 @@ public class MyPlugin : IModPlugin
             .WithScrapValue(5f)
             .WithIcon("Assets/Icons/power_cell.png");
 
-        var result = ContentRegistry.RegisterItem(item);
+        var result = ShelteredContent.RegisterItem(item);
         if (!result.Success)
         {
             ctx.Log.Error("Item registration failed: " + result.ErrorMessage);
             return;
         }
 
-        ContentRegistry.RegisterRecipe(
+        ShelteredContent.RegisterRecipe(
             new RecipeDefinition()
                 .WithId("recipe.power_cell")
                 .WithResultItem("com.mymod.power_cell")
@@ -81,12 +93,11 @@ public class MyPlugin : IModPlugin
 
 ## 4. Item Registration Checklist
 
-Before calling `ContentRegistry.RegisterItem(...)`, make sure the item has:
+Before calling `ShelteredContent.RegisterItem(...)`, make sure the item has:
 - a stable `Id`
 - a display name source
   - `WithDisplayNameKey(...)`
   - `WithDisplayNameText(...)`
-  - legacy `WithDisplayName(...)`
 - a sensible `Category`
 - a valid icon path if the item should be visible in UI
 
@@ -105,19 +116,19 @@ Optional but commonly useful:
 
 ### 5.1 Registration Phase
 
-Your mod writes metadata into `ContentRegistry`:
-- `Items`
-- `Recipes`
-- `CookingRecipes`
-- `ItemPatches`
-- `RecipePatches`
-- `LootEntries`
+Your mod writes metadata through the `ShelteredContent` facade:
+- `RegisterItem(...)`
+- `RegisterRecipe(...)`
+- `RegisterCookingRecipe(...)`
+- `PatchItem(...)`
+- `PatchRecipe(...)`
+- `AddLoot(...)`
 
 At this stage nothing is in the live game managers yet.
 
 ### 5.2 Resolution Phase
 
-`ContentResolver` converts registered metadata into runtime-ready assets:
+The internal content resolver converts registered metadata into runtime-ready assets:
 - resolves owning assembly
 - loads icons
 - loads prefabs from bundles when configured
@@ -125,7 +136,7 @@ At this stage nothing is in the live game managers yet.
 
 ### 5.3 Injection Phase
 
-`ContentInjector` binds to the active Sheltered runtime managers:
+The internal content injector binds to the active Sheltered runtime managers:
 - reads `ItemManager.Instance`
 - reads `CraftingManager.Instance`
 - creates runtime `ItemDefinition` objects for the game
@@ -164,7 +175,7 @@ Generated keys use the pattern:
 2. Register the item in `Start(...)`.
 3. Register any recipe that produces it.
 4. Add icon and other supporting assets under `Assets/...`.
-5. Use `InventoryHelper.ResolveItemType(...)` from `ShelteredAPI.dll` or `ctx.Game` helpers when interacting with the item at runtime.
+5. Use `ShelteredContent.ResolveItemType(...)` or `ctx.Game` helpers when interacting with the item at runtime.
 6. Test these flows:
    - new family
    - return to main menu
@@ -217,16 +228,17 @@ Check the log for:
 ## 10. API Surface To Learn First
 
 Start with these types:
-- `ShelteredAPI.Content.ContentRegistry`
+- `ShelteredAPI.Content.ShelteredContent`
 - `ShelteredAPI.Content.ItemDefinition`
 - `ShelteredAPI.Content.RecipeDefinition`
 - `ShelteredAPI.Content.CookingRecipe`
 - `ShelteredAPI.Content.ItemPatch`
 - `ShelteredAPI.Content.RecipePatch`
-- `ShelteredAPI.Content.AssetLoader`
-- `ModAPI.Items.InventoryHelper` (1.3 migration alias hosted by `ShelteredAPI.dll`)
+- `ShelteredAPI.Content.ItemDefinition`
+- `ShelteredAPI.Content.RecipeDefinition`
+- `ShelteredAPI.Content.LootEntry`
 
 If you only need to add a normal item with a crafting recipe, you usually only need:
 - `ItemDefinition`
 - `RecipeDefinition`
-- `ContentRegistry`
+- `ShelteredContent`

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
-    public class CharacterDataModel : ICharacterData
+    internal class CharacterDataModel : ICharacterData
     {
         private readonly object _customDataLock = new object();
         private readonly Dictionary<string, object> _customData = new Dictionary<string, object>(StringComparer.Ordinal);

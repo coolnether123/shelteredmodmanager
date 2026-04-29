@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
-    public static class ScenarioSaves
+    internal static class ScenarioSaves
     {
         private static readonly Dictionary<string, SaveRegistryCore> _registries = new Dictionary<string, SaveRegistryCore>(StringComparer.OrdinalIgnoreCase);
         private static readonly object _lock = new object();

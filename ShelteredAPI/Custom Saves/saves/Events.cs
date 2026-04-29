@@ -1,9 +1,9 @@
 using System;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
-    public static class Events
+    internal static class Events
     {
         public static event SaveEvent OnBeforeSave;
         public static event SaveEvent OnAfterSave;

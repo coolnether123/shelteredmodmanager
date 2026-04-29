@@ -1,6 +1,7 @@
 using HarmonyLib;
 using ModAPI.Actors;
-using ModAPI.Events;
+using ShelteredAPI.Events;
+using ShelteredAPI.Actors;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,7 +11,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 using ModAPI.Util;
 
-namespace ModAPI.Characters.Internal
+namespace ShelteredAPI.Characters.Internal
 {
     internal sealed class CharacterEffectSystemImpl : ICharacterEffectSystem, ICharacterFactory, ISaveable
     {
@@ -158,7 +159,7 @@ namespace ModAPI.Characters.Internal
 
             if (destroyActor)
             {
-                try { ActorSystem.Instance.Destroy(actorId, ActorDestroyReason.Explicit); }
+                try { ShelteredActors.Instance.Destroy(actorId, ActorDestroyReason.Explicit); }
                 catch { }
             }
         }
@@ -193,7 +194,7 @@ namespace ModAPI.Characters.Internal
                 created = p;
             }
 
-            EnsureActorMirror(ActorSystem.Instance, created);
+            EnsureActorMirror(ShelteredActors.Instance, created);
             return created;
         }
 
@@ -293,7 +294,7 @@ namespace ModAPI.Characters.Internal
                 created = p;
             }
 
-            EnsureActorMirror(ActorSystem.Instance, created);
+            EnsureActorMirror(ShelteredActors.Instance, created);
             return created;
         }
 
@@ -335,7 +336,7 @@ namespace ModAPI.Characters.Internal
                 restored = p;
             }
 
-            EnsureActorMirror(ActorSystem.Instance, restored);
+            EnsureActorMirror(ShelteredActors.Instance, restored);
             return restored;
         }
 
@@ -437,7 +438,7 @@ namespace ModAPI.Characters.Internal
             var evt = DataChanged;
             if (evt != null) evt(c, key, value);
 
-            try { EnsureActorMirror(ActorSystem.Instance, c); }
+            try { EnsureActorMirror(ShelteredActors.Instance, c); }
             catch { }
         }
 
@@ -656,7 +657,7 @@ namespace ModAPI.Characters.Internal
                 characters.AddRange(_syntheticById.Values.Cast<ICharacterProxy>());
             }
 
-            IActorSystem actors = ActorSystem.Instance;
+            IActorSystem actors = ShelteredActors.Instance;
             if (actors == null) return;
 
             for (int i = 0; i < characters.Count; i++)

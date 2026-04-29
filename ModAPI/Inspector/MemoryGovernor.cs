@@ -3,7 +3,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    public static class MemoryGovernor
+    internal static class MemoryGovernor
     {
         private const long SOFT_LIMIT_32BIT = 150L * 1024L * 1024L;
         private const long SOFT_LIMIT_64BIT = 512L * 1024L * 1024L;

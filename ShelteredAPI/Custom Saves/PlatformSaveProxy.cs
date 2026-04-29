@@ -1,5 +1,5 @@
 using HarmonyLib;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -9,9 +9,9 @@ using ModAPI.Core;
 
 namespace ModAPI.Hooks
 {
-    public class PlatformSaveProxy : PlatformSave_Base
+    internal class PlatformSaveProxy : PlatformSave_Base
     {
-        public class Target { public string scenarioId; public string saveId; }
+        internal class Target { public string scenarioId; public string saveId; }
 
         public static readonly object _nextLoadLock = new object();
         public static readonly object _nextSaveLock = new object();
@@ -64,20 +64,20 @@ namespace ModAPI.Hooks
             string slotName = type.ToString();
             MMLog.WriteInfo($"Saving triggered! Saving to {slotName}");
             
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
-                SaveExitTracker.Mark("PlatformSave.Enter", "type=" + type + ", bytes=" + (data != null ? data.Length.ToString() : "null"));
+                ModRuntime.MarkSaveExit("PlatformSave.Enter", "type=" + type + ", bytes=" + (data != null ? data.Length.ToString() : "null"));
             }
             try
             {
                 // CRASH FIX: During quit, the save system can be triggered multiple times.
                 // If we've already completed a save during this quit sequence, skip redundant saves
                 // to avoid accessing destroyed objects in the vanilla code that runs after.
-                if (PluginRunner.IsQuitting && _quitSaveCompleted)
+                if (ModRuntime.IsQuitting && _quitSaveCompleted)
                 {
-                    if (PluginRunner.IsQuitting)
+                    if (ModRuntime.IsQuitting)
                     {
-                        SaveExitTracker.Mark("PlatformSave.Skip", "quit save already completed");
+                        ModRuntime.MarkSaveExit("PlatformSave.Skip", "quit save already completed");
                     }
                     MMLog.WriteInfo($"Save finished {slotName} (skipped - already completed)");
                     return true; // Tell vanilla "save succeeded" without doing anything
@@ -87,9 +87,9 @@ namespace ModAPI.Hooks
                 Target target;
                 if (SaveRuntimeState.TryGetPendingSave(type, out target) && target != null)
                 {
-                    if (PluginRunner.IsQuitting)
+                    if (ModRuntime.IsQuitting)
                     {
-                        SaveExitTracker.Mark("PlatformSave.Redirect", "saveId=" + target.saveId);
+                        ModRuntime.MarkSaveExit("PlatformSave.Redirect", "saveId=" + target.saveId);
                     }
 
                     // Route the save through the owning scenario registry instead of assuming
@@ -124,12 +124,12 @@ namespace ModAPI.Hooks
                     SaveRuntimeState.ClearPendingSave(type);
 
                     MMLog.WriteDebug($"Saved custom slot: {entry.id} (scenario={entry.scenarioId}, absoluteSlot={entry.absoluteSlot})");
-                    if (PluginRunner.IsQuitting)
+                    if (ModRuntime.IsQuitting)
                     {
-                        SaveExitTracker.Mark("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
+                        ModRuntime.MarkSaveExit("PlatformSave.Redirect.Done", entry != null ? ("entry=" + entry.id) : "entry=null");
                     }
 
-                    if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
+                    if (ModRuntime.IsQuitting) _quitSaveCompleted = true;
 
                     // Regular log: Save complete
                     MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"}, scenario: {entry?.scenarioId ?? target.scenarioId ?? "unknown"})");
@@ -155,12 +155,12 @@ namespace ModAPI.Hooks
                     }
                     
                     SaveRuntimeState.SetActiveCustomSession(type, result);
-                    if (PluginRunner.IsQuitting)
+                    if (ModRuntime.IsQuitting)
                     {
-                        SaveExitTracker.Mark("PlatformSave.ActiveCustom.Done", result != null ? ("entry=" + result.id) : "result=null");
+                        ModRuntime.MarkSaveExit("PlatformSave.ActiveCustom.Done", result != null ? ("entry=" + result.id) : "result=null");
                     }
 
-                    if (PluginRunner.IsQuitting) _quitSaveCompleted = true;
+                    if (ModRuntime.IsQuitting) _quitSaveCompleted = true;
                     
                     // Regular log: Save complete
                     MMLog.WriteInfo($"Save finished {slotName} (custom slot: {result.id}, scenario: {result.scenarioId}, absoluteSlot: {result.absoluteSlot})");
@@ -169,9 +169,9 @@ namespace ModAPI.Hooks
 
                 // 3. FALLBACK TO VANILLA
                 // This happens if the user selected Slot 1/2/3 normally
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
-                    SaveExitTracker.Mark("PlatformSave.FallbackVanilla", "type=" + type);
+                    ModRuntime.MarkSaveExit("PlatformSave.FallbackVanilla", "type=" + type);
                 }
                 bool success = _inner.PlatformSave(type, data);
                 if (success)
@@ -183,9 +183,9 @@ namespace ModAPI.Hooks
             catch (Exception ex)
             {
                 MMLog.WriteException(ex, "PlatformSaveProxy.PlatformSave");
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
-                    SaveExitTracker.Mark("PlatformSave.Exception", ex.GetType().Name + ": " + ex.Message);
+                    ModRuntime.MarkSaveExit("PlatformSave.Exception", ex.GetType().Name + ": " + ex.Message);
                 }
                 MMLog.Flush();
                 throw;
@@ -243,9 +243,9 @@ namespace ModAPI.Hooks
             }
 
             MMLog.WriteDebug($"No custom load target. Passing load for slot={type} to vanilla handler.");
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
-                SaveExitTracker.Mark("PlatformLoad.FallbackVanilla", "type=" + type);
+                ModRuntime.MarkSaveExit("PlatformLoad.FallbackVanilla", "type=" + type);
             }
             SaveRuntimeState.ClearActiveCustomSession();
             return _inner.PlatformLoad(type);

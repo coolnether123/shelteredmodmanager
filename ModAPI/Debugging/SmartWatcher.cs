@@ -11,7 +11,7 @@ namespace ModAPI.Debugging
     /// Watches fields and properties for changes, logging only when values differ.
     /// Thread-safe and exception-safe.
     /// </summary>
-    public class SmartWatcher : MonoBehaviour
+    internal class SmartWatcher : MonoBehaviour
     {
         #region Singleton
         

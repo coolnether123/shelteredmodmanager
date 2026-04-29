@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public interface IScenarioAuthoringBackend
+    internal interface IScenarioAuthoringBackend
     {
         event Action<ScenarioAuthoringState> StateChanged;
 
@@ -18,7 +18,7 @@ namespace ShelteredAPI.Scenarios
         void Refresh();
     }
 
-    public static class ScenarioAuthoringActionIds
+    internal static class ScenarioAuthoringActionIds
     {
         public const string ToggleShell = "sheltered.scenario_authoring.toggle_shell";
         public const string SelectionModifier = "sheltered.scenario_authoring.selection_modifier";
@@ -157,7 +157,7 @@ namespace ShelteredAPI.Scenarios
         public const string ActionToolWinLoss = "tool.win_loss";
     }
 
-    public enum ScenarioAuthoringTool
+    internal enum ScenarioAuthoringTool
     {
         Select = 0,
         Family = 1,
@@ -171,13 +171,13 @@ namespace ShelteredAPI.Scenarios
         Assets = 9
     }
 
-    public enum ScenarioAssetAuthoringMode
+    internal enum ScenarioAssetAuthoringMode
     {
         ReplaceExisting = 0,
         PlaceNew = 1
     }
 
-    public enum ScenarioAuthoringShellTab
+    internal enum ScenarioAuthoringShellTab
     {
         Shelter = 0,
         Build = 1,
@@ -193,7 +193,7 @@ namespace ShelteredAPI.Scenarios
         Shell = 11
     }
 
-    public enum ScenarioAuthoringInspectorTab
+    internal enum ScenarioAuthoringInspectorTab
     {
         Properties = 0,
         Interactions = 1,
@@ -202,7 +202,7 @@ namespace ShelteredAPI.Scenarios
         Notes = 4
     }
 
-    public enum ScenarioAuthoringShellDock
+    internal enum ScenarioAuthoringShellDock
     {
         Top = 0,
         Left = 1,
@@ -213,14 +213,14 @@ namespace ShelteredAPI.Scenarios
         Status = 6
     }
 
-    public enum ScenarioAuthoringShellRendererKind
+    internal enum ScenarioAuthoringShellRendererKind
     {
         Standard = 0,
         Inspector = 1,
         BottomTray = 2
     }
 
-    public enum ScenarioAuthoringWindowContentKind
+    internal enum ScenarioAuthoringWindowContentKind
     {
         Empty = 0,
         Scenario = 1,
@@ -239,7 +239,7 @@ namespace ShelteredAPI.Scenarios
         SelectionStack = 14
     }
 
-    public enum ScenarioAuthoringSettingKind
+    internal enum ScenarioAuthoringSettingKind
     {
         Toggle = 0,
         Float = 1,
@@ -248,7 +248,7 @@ namespace ShelteredAPI.Scenarios
         ReadOnly = 4
     }
 
-    public enum ScenarioAuthoringTargetKind
+    internal enum ScenarioAuthoringTargetKind
     {
         None = 0,
         Unknown = 1,
@@ -264,7 +264,7 @@ namespace ShelteredAPI.Scenarios
         SceneSprite = 11
     }
 
-    public sealed class ScenarioAuthoringTarget
+    internal sealed class ScenarioAuthoringTarget
     {
         public string Id { get; set; }
         public ScenarioAuthoringTargetKind Kind { get; set; }
@@ -305,7 +305,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringState
+    internal sealed class ScenarioAuthoringState
     {
         public ScenarioAuthoringState()
         {
@@ -409,7 +409,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioSpriteSwapPickerState
+    internal sealed class ScenarioSpriteSwapPickerState
     {
         public bool IsOpen { get; set; }
         public ScenarioAuthoringTarget Target { get; set; }
@@ -434,7 +434,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringWindowDefinition
+    internal sealed class ScenarioAuthoringWindowDefinition
     {
         public string Id { get; set; }
         public string Title { get; set; }
@@ -459,7 +459,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringWindowState
+    internal sealed class ScenarioAuthoringWindowState
     {
         public string Id { get; set; }
         public bool Visible { get; set; }
@@ -484,7 +484,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringPanelScrollState
+    internal sealed class ScenarioAuthoringPanelScrollState
     {
         public string PanelId { get; set; }
         public float X { get; set; }
@@ -501,7 +501,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringSettingDefinition
+    internal sealed class ScenarioAuthoringSettingDefinition
     {
         public string Id { get; set; }
         public string Section { get; set; }
@@ -516,7 +516,7 @@ namespace ShelteredAPI.Scenarios
         public string[] ChoiceLabels { get; set; }
     }
 
-    public sealed class ScenarioAuthoringSettingValue
+    internal sealed class ScenarioAuthoringSettingValue
     {
         public string Id { get; set; }
         public string Value { get; set; }
@@ -531,7 +531,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringSettingsSnapshot
+    internal sealed class ScenarioAuthoringSettingsSnapshot
     {
         private readonly List<ScenarioAuthoringSettingValue> _values = new List<ScenarioAuthoringSettingValue>();
 
@@ -615,7 +615,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringShellWindowViewModel
+    internal sealed class ScenarioAuthoringShellWindowViewModel
     {
         public string Id { get; set; }
         public string Title { get; set; }
@@ -632,7 +632,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorSection[] Sections { get; set; }
     }
 
-    public sealed class ScenarioAuthoringSettingsItemViewModel
+    internal sealed class ScenarioAuthoringSettingsItemViewModel
     {
         public string Id { get; set; }
         public string Label { get; set; }
@@ -648,14 +648,14 @@ namespace ShelteredAPI.Scenarios
         public int SelectedChoiceIndex { get; set; }
     }
 
-    public sealed class ScenarioAuthoringSettingsSectionViewModel
+    internal sealed class ScenarioAuthoringSettingsSectionViewModel
     {
         public string Id { get; set; }
         public string Title { get; set; }
         public ScenarioAuthoringSettingsItemViewModel[] Items { get; set; }
     }
 
-    public sealed class ScenarioAuthoringSettingsViewModel
+    internal sealed class ScenarioAuthoringSettingsViewModel
     {
         public string Title { get; set; }
         public string Subtitle { get; set; }
@@ -663,7 +663,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringSettingsSectionViewModel[] Sections { get; set; }
     }
 
-    public sealed class ScenarioAuthoringGraphNodeViewModel
+    internal sealed class ScenarioAuthoringGraphNodeViewModel
     {
         public string Id { get; set; }
         public string Label { get; set; }
@@ -673,7 +673,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorAction PrimaryAction { get; set; }
     }
 
-    public sealed class ScenarioAuthoringGraphEdgeViewModel
+    internal sealed class ScenarioAuthoringGraphEdgeViewModel
     {
         public string FromNodeId { get; set; }
         public string ToNodeId { get; set; }
@@ -681,7 +681,7 @@ namespace ShelteredAPI.Scenarios
         public string Status { get; set; }
     }
 
-    public sealed class ScenarioAuthoringContextMenuModel
+    internal sealed class ScenarioAuthoringContextMenuModel
     {
         public bool Visible { get; set; }
         public string Title { get; set; }
@@ -711,7 +711,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioAuthoringShellViewModel
+    internal sealed class ScenarioAuthoringShellViewModel
     {
         public string Title { get; set; }
         public string Subtitle { get; set; }
@@ -730,7 +730,7 @@ namespace ShelteredAPI.Scenarios
         public string[] StatusEntries { get; set; }
     }
 
-    public sealed class ScenarioAuthoringInspectorDocument
+    internal sealed class ScenarioAuthoringInspectorDocument
     {
         public string Title { get; set; }
         public string Subtitle { get; set; }
@@ -738,7 +738,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorSection[] Sections { get; set; }
     }
 
-    public sealed class ScenarioAuthoringInspectorAction
+    internal sealed class ScenarioAuthoringInspectorAction
     {
         public string Id { get; set; }
         public string Label { get; set; }
@@ -751,7 +751,7 @@ namespace ShelteredAPI.Scenarios
         public bool Emphasized { get; set; }
     }
 
-    public enum ScenarioAuthoringInspectorSectionLayout
+    internal enum ScenarioAuthoringInspectorSectionLayout
     {
         Default = 0,
         MetricGrid = 1,
@@ -763,7 +763,7 @@ namespace ShelteredAPI.Scenarios
         CandidateGrid = 7
     }
 
-    public sealed class ScenarioAuthoringInspectorSection
+    internal sealed class ScenarioAuthoringInspectorSection
     {
         public string Id { get; set; }
         public string Title { get; set; }
@@ -772,14 +772,14 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
     }
 
-    public enum ScenarioAuthoringInspectorItemKind
+    internal enum ScenarioAuthoringInspectorItemKind
     {
         Text = 0,
         Property = 1,
         Action = 2
     }
 
-    public sealed class ScenarioAuthoringInspectorItem
+    internal sealed class ScenarioAuthoringInspectorItem
     {
         public ScenarioAuthoringInspectorItemKind Kind { get; set; }
         public string Label { get; set; }
@@ -792,7 +792,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorAction Action { get; set; }
     }
 
-    public sealed class ScenarioAuthoringTargetContext
+    internal sealed class ScenarioAuthoringTargetContext
     {
         public Camera Camera { get; set; }
         public Ray Ray { get; set; }
@@ -802,14 +802,14 @@ namespace ShelteredAPI.Scenarios
         public Vector3 WorldPoint { get; set; }
     }
 
-    public interface IScenarioAuthoringTargetAdapter
+    internal interface IScenarioAuthoringTargetAdapter
     {
         string AdapterId { get; }
         int Priority { get; }
         bool TryCreateTarget(ScenarioAuthoringTargetContext context, out ScenarioAuthoringTarget target);
     }
 
-    public sealed class ScenarioAuthoringPresentationSnapshot
+    internal sealed class ScenarioAuthoringPresentationSnapshot
     {
         public ScenarioAuthoringState State { get; set; }
         public ScenarioAuthoringShellViewModel ShellViewModel { get; set; }
@@ -818,7 +818,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorDocument HoverDocument { get; set; }
     }
 
-    public interface IScenarioAuthoringRenderModule
+    internal interface IScenarioAuthoringRenderModule
     {
         string ModuleId { get; }
         int Priority { get; }

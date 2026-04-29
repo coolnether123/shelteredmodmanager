@@ -9,7 +9,7 @@ namespace ShelteredAPI.Content
     /// ShelteredAPI-managed localization table to preserve literal casing and avoid
     /// fallback key mangling in vanilla Localization.Get.
     /// </summary>
-    public static class ModLocalization
+    internal static class ModLocalization
     {
         private static readonly Dictionary<string, string> _entries = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private static readonly object Sync = new object();

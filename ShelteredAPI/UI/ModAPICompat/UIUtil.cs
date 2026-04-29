@@ -9,7 +9,7 @@ namespace ModAPI.UI
     /// NGUI helpers for cloning, labeling, spacing, click blocking, and creating
     /// overlay/labels with sane defaults (panel, font, depth, anchors).
     /// </summary>
-    public static class UIUtil
+    internal static class UIUtil
     {
         private static readonly Stack<GameObject> _clickBlockers = new Stack<GameObject>();
         private static Texture2D _cachedWhiteTex;
@@ -249,7 +249,7 @@ namespace ModAPI.UI
             return cloneGo != null ? cloneGo.GetComponent<T>() : null;
         }
 
-        public enum AnchorCorner
+        internal enum AnchorCorner
         {
             TopLeft,
             TopRight,
@@ -262,7 +262,7 @@ namespace ModAPI.UI
         /// Options for UIUtil.CreateLabel covering text/font/color/size/alignment, depth, and placement.
         /// </summary>
         [Serializable]
-        public class UILabelOptions
+        internal class UILabelOptions
         {
             public string text = "Label";
             public Color color = Color.white;

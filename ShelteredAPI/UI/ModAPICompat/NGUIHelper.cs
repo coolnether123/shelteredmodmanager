@@ -6,7 +6,7 @@ namespace ModAPI.UI
     /// <summary>
     /// Helpers for interacting with NGUI components in a safe way.
     /// </summary>
-    public static class NGUIHelper
+    internal static class NGUIHelper
     {
         /// <summary>
         /// Finds the maximum depth currently used by widgets in a panel.

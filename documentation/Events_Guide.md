@@ -1,13 +1,27 @@
 # ModAPI + ShelteredAPI Events Guide
 ## Current v1.3 Line
 
+The 1.3 line is a breaking clean API line.
+
 Use `documentation/API_Signatures_Reference.md` for exact current signatures.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are stable.
+- Implementation classes are internal.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
 
 ## Compatibility Matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
-| Sheltered gameplay/UI events and scheduler examples | Current `ShelteredAPI.dll` with old `ModAPI.Events` namespaces | Supported 1.3 migration aliases |
+| Sheltered gameplay/UI events and scheduler examples | Current `ShelteredAPI.dll` under `ShelteredAPI.Events` | Supported |
 | Inter-mod communication examples | Current `ModAPI.dll` | Supported |
 
 ## 1. Event Systems
@@ -16,38 +30,36 @@ Available event systems:
 
 | System | Purpose | Location |
 |--------|---------|----------|
-| `GameEvents` | Sheltered game lifecycle | `ModAPI.Events.GameEvents` in `ShelteredAPI.dll` |
-| `GameTimeTriggerHelper` | Deterministic Sheltered time-trigger scheduler | `ModAPI.Events.GameTimeTriggerHelper` in `ShelteredAPI.dll` |
-| `UIEvents` | Sheltered panel open/close/resume/pause | `ModAPI.Events.UIEvents` in `ShelteredAPI.dll` |
+| `ShelteredEvents` | Sheltered game/UI/faction lifecycle and time scheduler | `ShelteredAPI.Events.ShelteredEvents` in `ShelteredAPI.dll` |
 | `ModEventBus` | Inter-mod custom events | `ModAPI.Events.ModEventBus` in `ModAPI.dll` |
 | `ModAPIRegistry` | Service discovery | `ModAPI.Core.ModAPIRegistry` |
-| `ModAPI.Saves.Events` | Sheltered custom save lifecycle | `ModAPI.Saves.Events` in `ShelteredAPI.dll` |
+| `ShelteredSaveEvents` | Sheltered custom save lifecycle | `ShelteredAPI.Saves.ShelteredSaveEvents` in `ShelteredAPI.dll` |
 
-## 2. `GameEvents`
+## 2. `ShelteredEvents`
 
-Use `GameEvents` when you want the Sheltered compatibility event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; if your handlers mention Sheltered game types such as `SaveData`, `EncounterCharacter`, or `ExplorationParty`, also reference `Assembly-CSharp.dll`. The namespace remains `ModAPI.Events` during the 1.3 migration window.
+Use `ShelteredEvents` when you want the Sheltered event surface. Reference both `ModAPI.dll` and `ShelteredAPI.dll`; if your handlers mention Sheltered game types such as `SaveData`, `EncounterCharacter`, `BasePanel`, or `ExplorationParty`, also reference `Assembly-CSharp.dll`.
 
 Important events:
 
 ```csharp
-public static event Action<int> OnNewDay;
-public static event Action<TimeTriggerBatch> OnSixHourTick;
-public static event Action<TimeTriggerBatch> OnStaggeredTick;
-public static event Action<SaveData> OnBeforeSave;
-public static event Action<SaveData> OnAfterLoad;
-public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
-public static event Action OnSessionStarted;
-public static event Action OnNewGame;
-public static event Action<ExplorationParty> OnPartyReturned;
+public static event Action<int> NewDay;
+public static event Action<TimeTriggerBatch> SixHourTick;
+public static event Action<TimeTriggerBatch> StaggeredTick;
+public static event Action<SaveData> BeforeSave;
+public static event Action<SaveData> AfterLoad;
+public static event Action<EncounterCharacter, EncounterCharacter> CombatStarted;
+public static event Action SessionStarted;
+public static event Action NewGame;
+public static event Action<ExplorationParty> PartyReturned;
 ```
 
-`OnSixHourTick` and `OnStaggeredTick` are forwarded from `GameTimeTriggerHelper`.
+Time events and named trigger registration are exposed through the same facade.
 
 Example:
 
 ```csharp
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 
 public class MyMod : IModPlugin
 {
@@ -55,34 +67,34 @@ public class MyMod : IModPlugin
 
     public void Start(IPluginContext ctx)
     {
-        GameEvents.OnNewDay += day => ctx.Log.Info("Day " + day);
-        GameEvents.OnSixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
-        GameEvents.OnCombatStarted += (player, enemy) => ctx.Log.Info("Combat started");
+        ShelteredEvents.NewDay += day => ctx.Log.Info("Day " + day);
+        ShelteredEvents.SixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
+        ShelteredEvents.CombatStarted += (player, enemy) => ctx.Log.Info("Combat started");
     }
 }
 ```
 
-## 3. `GameTimeTriggerHelper`
+## 3. Time Triggers
 
-Use `GameTimeTriggerHelper` when you want explicit named trigger registration and priority ordering in Sheltered runtime time.
+Use `ShelteredEvents` when you want explicit named trigger registration and priority ordering in Sheltered runtime time.
 
 Typical APIs:
 
 ```csharp
-GameTimeTriggerHelper.RegisterTrigger(string triggerId);
-GameTimeTriggerHelper.RegisterTrigger(string triggerId, int priority);
-GameTimeTriggerHelper.RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence);
-GameTimeTriggerHelper.RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
-GameTimeTriggerHelper.UnregisterTrigger(string triggerId);
-GameTimeTriggerHelper.GetPriorityList(TimeTriggerCadence cadence);
-GameTimeTriggerHelper.ConfigureStaggeredRange(int minInclusive, int maxInclusive);
+ShelteredEvents.RegisterTimeTrigger(string triggerId);
+ShelteredEvents.RegisterTimeTrigger(string triggerId, int priority);
+ShelteredEvents.RegisterTimeTrigger(string triggerId, int priority, TimeTriggerCadence cadence);
+ShelteredEvents.RegisterTimeTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
+ShelteredEvents.UnregisterTimeTrigger(string triggerId);
+ShelteredEvents.GetTimeTriggerPriorityList(TimeTriggerCadence cadence);
+ShelteredEvents.ConfigureStaggeredTimeRange(int minInclusiveHours, int maxInclusiveHours);
 ```
 
 Example:
 
 ```csharp
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 
 public class SchedulerMod : IModPlugin
 {
@@ -90,7 +102,7 @@ public class SchedulerMod : IModPlugin
 
     public void Start(IPluginContext ctx)
     {
-        GameTimeTriggerHelper.RegisterTrigger(
+        ShelteredEvents.RegisterTimeTrigger(
             triggerId: "com.mymod.economy.tick",
             priority: 50,
             cadence: TimeTriggerCadence.SixHour,
@@ -99,25 +111,25 @@ public class SchedulerMod : IModPlugin
 }
 ```
 
-## 4. `UIEvents`
+## 4. UI Events
 
-Use `UIEvents` when you need Sheltered panel lifecycle hooks without adding your own Harmony patches.
+Use `ShelteredEvents` when you need Sheltered panel lifecycle hooks without adding your own Harmony patches.
 
 Available events:
 
 ```csharp
-public static event Action<BasePanel> OnPanelOpened;
-public static event Action<BasePanel> OnPanelClosed;
-public static event Action<BasePanel> OnPanelResumed;
-public static event Action<BasePanel> OnPanelPaused;
-public static event Action<GameObject, string> OnButtonClicked;
+public static event Action<BasePanel> PanelOpened;
+public static event Action<BasePanel> PanelClosed;
+public static event Action<BasePanel> PanelResumed;
+public static event Action<BasePanel> PanelPaused;
+public static event Action<GameObject, string> ButtonClicked;
 ```
 
 Example:
 
 ```csharp
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 
 public class CraftingHelperMod : IModPlugin
 {
@@ -125,7 +137,7 @@ public class CraftingHelperMod : IModPlugin
 
     public void Start(IPluginContext ctx)
     {
-        UIEvents.OnPanelOpened += panel =>
+        ShelteredEvents.PanelOpened += panel =>
         {
             if (panel.GetType().Name == "CraftingPanel")
                 ctx.Log.Info("Crafting panel opened");
@@ -136,8 +148,8 @@ public class CraftingHelperMod : IModPlugin
 
 ## 5. Save Lifecycle Events
 
-The Sheltered custom saves layer exposes additional save/load events under `ModAPI.Saves.Events`.
-Reference `ShelteredAPI.dll` for these APIs; the namespace is retained for 1.3 source migration.
+The Sheltered custom saves layer exposes additional save/load events under `ShelteredAPI.Saves.ShelteredSaveEvents`.
+Reference `ShelteredAPI.dll` for these APIs.
 
 Common ones:
 - `OnBeforeSave`
@@ -180,7 +192,7 @@ if (ModAPIRegistry.TryGetAPI<IMyApi>("com.mymod.api", out api))
 - Keep handlers lightweight.
 - Use unique IDs for triggers and registry keys.
 - Prefer named callbacks over anonymous lambdas when you need clean unsubscription.
-- Use `ctx.SaveData(...)` and `ctx.LoadData(...)` or `ISaveSystem.RegisterModData(...)` for persisted state instead of static globals.
+- Use `ISaveSystem.RegisterModData(...)` for neutral persisted state instead of static globals.
 
 ## 8. Troubleshooting
 

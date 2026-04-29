@@ -12,7 +12,7 @@ namespace ModAPI.UI
     /// Provides methods to inspect atlases, widgets, hierarchies, and raycast targets.
     /// Useful for troubleshooting invisible sprites, click issues, and layer problems.
     /// </summary>
-    public static class UIDebug
+    internal static class UIDebug
     {
         private static float _startTime = -1f;
 

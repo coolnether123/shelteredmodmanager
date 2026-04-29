@@ -1,8 +1,8 @@
 using System;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
-    public class SyntheticCharacterProxy : ICharacterProxy
+    internal class SyntheticCharacterProxy : ICharacterProxy
     {
         public int UniqueId { get; private set; }
         public string Name
@@ -27,8 +27,8 @@ namespace ModAPI.Characters
                 return CharacterLocation.Away;
             }
         }
-        public FamilyMember UnderlyingMember { get { return null; } }
-        public NpcVisitor UnderlyingNpc { get { return null; } }
+        internal FamilyMember UnderlyingMember { get { return null; } }
+        internal NpcVisitor UnderlyingNpc { get { return null; } }
         public bool IsActive { get; private set; }
         public bool IsPersistent { get { return Data != null && Data.IsPersistent; } }
         public bool IsLoadedOnShelterEntry { get; internal set; }

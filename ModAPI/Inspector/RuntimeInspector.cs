@@ -8,7 +8,7 @@ using ModAPI.Core;
 namespace ModAPI.Inspector
 {
     // Simple in-game object explorer + inspector with click-to-select + bounds highlight
-    public class RuntimeInspector : MonoBehaviour
+    internal class RuntimeInspector : MonoBehaviour
     {
         private Rect _window = new Rect(20, 20, 800, 500);
         private bool _visible = false; // F9

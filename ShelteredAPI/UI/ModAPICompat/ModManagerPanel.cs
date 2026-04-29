@@ -10,7 +10,7 @@ namespace ModAPI.UI
     /// Mod Manager panel that displays installed mods in a book-style UI similar to Scenario Selection.
     /// Manages widget positioning, depth management, and mod details display.
     /// </summary>
-    public class ModManagerPanel : BasePanel
+    internal class ModManagerPanel : BasePanel
     {
         public static bool IsShowingModManager = false;
         private static ModManagerPanel _instance;
@@ -118,7 +118,7 @@ namespace ModAPI.UI
                 CreateSettingsButton(buttonTemplate);
 
                 // Show first mod by default
-                var mods = PluginManager.LoadedMods;
+                var mods = ModRuntime.LoadedMods;
                 if (mods.Count > 0) ShowDetails(mods[0]);
                 
                 // --- SETUP SCROLLING for mod list ---
@@ -149,7 +149,7 @@ namespace ModAPI.UI
 
         private void CreateModButtons(UIButton template, Color textColor)
         {
-            var mods = PluginManager.LoadedMods;
+            var mods = ModRuntime.LoadedMods;
             
             // Position on left page - need to center the buttons
             float startY = 160f;

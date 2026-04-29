@@ -15,7 +15,7 @@ namespace ModAPI.UI
         TargetBehavior = "Context menu addon injection and selection interception",
         FailureMode = "Custom context-menu actions do not appear or do not execute correctly.",
         RollbackStrategy = "Disable the UI patch domain or remove the context menu patch host.")]
-    public static class ContextMenuHelper
+    internal static class ContextMenuHelper
     {
         private struct ContextMenuAddon
         {

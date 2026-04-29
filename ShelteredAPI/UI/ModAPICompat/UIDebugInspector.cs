@@ -13,7 +13,7 @@ using ModAPI.Inspector;
 
 namespace ModAPI.UI
 {
-    public class UIDebugInspector : MonoBehaviour
+    internal class UIDebugInspector : MonoBehaviour
     {
         private bool _active = false;
         private GameObject _lastHover;
@@ -1050,7 +1050,7 @@ namespace ModAPI.UI
             var mappedIl = -1;
             if (_selectedMethod != null && _selectedSourceLineNumber > 0)
             {
-                mappedIl = SourceCacheManager.MapSourceLineToILOffset(_selectedMethod, _selectedSourceLineNumber);
+                mappedIl = DebugSourceCache.MapSourceLineToILOffset(_selectedMethod, _selectedSourceLineNumber);
             }
 
             var sb = new StringBuilder();
@@ -1201,7 +1201,7 @@ namespace ModAPI.UI
                 var frame = frames[i];
                 var il = frame.CurrentILIndex;
                 var ilLabel = il >= 0 ? "IL_" + il.ToString("X4") : "IL_----";
-                var sourceLine = (_selectedMethod != null && il >= 0) ? SourceCacheManager.MapILToSourceLine(_selectedMethod, il) : -1;
+                var sourceLine = (_selectedMethod != null && il >= 0) ? DebugSourceCache.MapILToSourceLine(_selectedMethod, il) : -1;
                 var sourceLabel = sourceLine > 0 ? ("L" + sourceLine) : "L?";
                 var values = BuildFrameValuePreview(frame);
                 GUILayout.Label(frame.Timestamp.ToString("HH:mm:ss.fff") + " | " + ilLabel + " | " + sourceLabel + " | " + values);
@@ -1340,7 +1340,7 @@ namespace ModAPI.UI
             {
                 var f = frames[i];
                 var il = f.CurrentILIndex;
-                var sourceLine = (_selectedMethod != null && il >= 0) ? SourceCacheManager.MapILToSourceLine(_selectedMethod, il) : -1;
+                var sourceLine = (_selectedMethod != null && il >= 0) ? DebugSourceCache.MapILToSourceLine(_selectedMethod, il) : -1;
                 sb.AppendLine(f.Timestamp.ToString("HH:mm:ss.fff") + " | IL_" + (il >= 0 ? il.ToString("X4") : "----") + " | L" + (sourceLine > 0 ? sourceLine.ToString() : "?") + " | " + BuildFrameValuePreview(f));
             }
             return sb.ToString();
@@ -1612,8 +1612,8 @@ namespace ModAPI.UI
             {
                 try
                 {
-                    var cachePath = SourceCacheManager.GetCachePath(_selectedMethod);
-                    var mapPath = SourceCacheManager.GetMapPath(_selectedMethod);
+                    var cachePath = DebugSourceCache.GetCachePath(_selectedMethod);
+                    var mapPath = DebugSourceCache.GetMapPath(_selectedMethod);
                     if (File.Exists(cachePath)) File.Delete(cachePath);
                     if (File.Exists(mapPath)) File.Delete(mapPath);
                 }
@@ -1623,15 +1623,15 @@ namespace ModAPI.UI
                 }
             }
 
-            _sourceText = SourceCacheManager.GetSource(_selectedMethod);
+            _sourceText = DebugSourceCache.GetSource(_selectedMethod);
             _patchedSourceText = BuildPatchedSourcePreview(_sourceText, _selectedSnapshot);
             if (string.IsNullOrEmpty(_patchedSourceRewrittenText))
             {
                 _patchedSourceRewrittenText = _sourceText;
             }
-            if (!string.IsNullOrEmpty(SourceCacheManager.LastError))
+            if (!string.IsNullOrEmpty(DebugSourceCache.LastError))
             {
-                _sourceStatus = SourceCacheManager.LastError;
+                _sourceStatus = DebugSourceCache.LastError;
             }
             else
             {
@@ -1865,7 +1865,7 @@ namespace ModAPI.UI
                 }
             }
 
-            var currentSourceLine = currentIlIndex >= 0 ? SourceCacheManager.MapILToSourceLine(previewMethod, currentIlIndex) : -1;
+            var currentSourceLine = currentIlIndex >= 0 ? DebugSourceCache.MapILToSourceLine(previewMethod, currentIlIndex) : -1;
             AutoFollowLiveSourceLine(currentSourceLine);
             if (!string.IsNullOrEmpty(_liveSourceStatus))
             {
@@ -1926,7 +1926,7 @@ namespace ModAPI.UI
             }
 
             _liveSourceMethodId = methodId;
-            _liveSourceText = SourceCacheManager.GetSource(attached);
+            _liveSourceText = DebugSourceCache.GetSource(attached);
             _liveSourceStatus = string.IsNullOrEmpty(_liveSourceText)
                 ? "Live source unavailable for " + methodId
                 : "Loaded live source for " + methodId;
@@ -2260,7 +2260,7 @@ namespace ModAPI.UI
             if (go == null)
             {
                 // NO HOVER: Show Mod List Summary
-                var plugins = ModAPI.Core.PluginManager.getInstance().GetPlugins();
+                var plugins = ModRuntime.GetPlugins();
                 string modSummary = $"<b>Active Mods ({plugins.Count()}):</b>\n";
                 foreach (var p in plugins)
                 {
@@ -2323,7 +2323,7 @@ namespace ModAPI.UI
             GUILayout.Space(10);
             _scrollPos = GUILayout.BeginScrollView(_scrollPos);
             
-            var plugins = ModAPI.Core.PluginManager.getInstance().GetPlugins().ToList();
+            var plugins = ModRuntime.GetPlugins().ToList();
             foreach (var plugin in plugins)
             {
                 ModAPI.Core.ModEntry entry;

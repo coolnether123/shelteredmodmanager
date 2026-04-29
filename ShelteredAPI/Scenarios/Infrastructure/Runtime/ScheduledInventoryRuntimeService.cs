@@ -1,5 +1,5 @@
 using System;
-using ModAPI.Items;
+using ShelteredAPI.Content;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios

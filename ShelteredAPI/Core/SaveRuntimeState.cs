@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using ModAPI.Hooks;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 
 namespace ModAPI.Core
 {

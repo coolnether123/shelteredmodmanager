@@ -1,4 +1,4 @@
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     public class AttributeModifier
     {

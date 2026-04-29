@@ -4,7 +4,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public class ScenarioRuntimeState
+    internal class ScenarioRuntimeState
     {
         public ScenarioRuntimeState()
         {
@@ -30,13 +30,13 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioObjectRuntimeStateRecord> ObjectStates { get; private set; }
     }
 
-    public class ScenarioRuntimeFlag
+    internal class ScenarioRuntimeFlag
     {
         public string FlagId { get; set; }
         public string Value { get; set; }
     }
 
-    public class ScenarioFiredTriggerRecord
+    internal class ScenarioFiredTriggerRecord
     {
         public string TriggerId { get; set; }
         public string Source { get; set; }
@@ -46,7 +46,7 @@ namespace ShelteredAPI.Scenarios
         public int FireCount { get; set; }
     }
 
-    public class ScenarioUnlockedBunkerRecord
+    internal class ScenarioUnlockedBunkerRecord
     {
         public string ExpansionId { get; set; }
         public int Day { get; set; }

@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
-    public interface ICharacterEffectSystem
+    internal interface ICharacterEffectSystem
     {
         void RegisterEffectType<T>(string effectId) where T : ICharacterEffect, new();
 
@@ -44,7 +44,7 @@ namespace ModAPI.Characters
         event Action<ICharacterProxy> SyntheticCharacterUnloaded;
     }
 
-    public interface ICharacterFactory
+    internal interface ICharacterFactory
     {
         ICharacterProxy CreateSyntheticCharacter(
             string name,

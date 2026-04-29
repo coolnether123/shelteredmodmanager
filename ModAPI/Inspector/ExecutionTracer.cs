@@ -13,7 +13,7 @@ namespace ModAPI.Inspector
     /// Captures runtime execution frames for a selected method and streams them to snapshot files.
     /// This tracer is intentionally conservative to keep Unity 5.x main-thread overhead low.
     /// </summary>
-    public class ExecutionTracer : MonoBehaviour
+    internal class ExecutionTracer : MonoBehaviour
     {
         public static ExecutionTracer Instance;
 
@@ -580,7 +580,7 @@ namespace ModAPI.Inspector
         }
     }
 
-    public class SnapshotBuffer
+    internal class SnapshotBuffer
     {
         public MethodBase StartMethod;
         public int StartOffset;
@@ -594,7 +594,7 @@ namespace ModAPI.Inspector
     }
 
     [Serializable]
-    public class TraceFrame
+    internal class TraceFrame
     {
         public DateTime Timestamp;
         public string MethodName;

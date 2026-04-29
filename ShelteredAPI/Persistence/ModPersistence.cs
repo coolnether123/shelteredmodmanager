@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Harmony;
 
-namespace ModAPI.Persistence
+namespace ShelteredAPI.Persistence
 {
     /// <summary>
     /// Manages automatic persistence for mod data.

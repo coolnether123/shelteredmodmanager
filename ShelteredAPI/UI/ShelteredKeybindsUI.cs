@@ -7,7 +7,7 @@ namespace ShelteredAPI.UI
     /// <summary>
     /// Opens Sheltered input bindings inside the shared SMM settings window.
     /// </summary>
-    public static class ShelteredKeybindsUI
+    internal static class ShelteredKeybindsUI
     {
         private const string EntryId = "ShelteredAPI.Keybinds";
 

@@ -16,7 +16,7 @@ namespace ShelteredAPI.Input
     /// Settings provider bridging Sheltered and mod-defined input actions into the shared Spine settings window.
     /// Applies a full validation/conflict/persist pipeline for every bind change.
     /// </summary>
-    public sealed class ShelteredKeybindsProvider : ISettingsProvider2
+    internal sealed class ShelteredKeybindsProvider : ISettingsProvider2
     {
         private const string PrefKeyPrefix = "ShelteredAPI.Keybind.";
         private const string ZoomSpeedPrefKey = PrefKeyPrefix + "ZoomSpeed";
@@ -34,7 +34,7 @@ namespace ShelteredAPI.Input
         /// <summary>
         /// Gets the singleton controls provider used by the Sheltered controls screen.
         /// </summary>
-        public static ShelteredKeybindsProvider Instance { get { return _instance; } }
+        internal static ShelteredKeybindsProvider Instance { get { return _instance; } }
 
         /// <summary>
         /// Gets a value indicating whether the provider can serve settings to the UI.
@@ -163,7 +163,7 @@ namespace ShelteredAPI.Input
         /// <summary>
         /// Registers Sheltered input actions, loads persisted values, and builds UI definitions on first use.
         /// </summary>
-        public void EnsureLoaded()
+        internal void EnsureLoaded()
         {
             if (_loaded) return;
             lock (_sync)
@@ -192,7 +192,7 @@ namespace ShelteredAPI.Input
         /// <see langword="true"/> when the binding was applied immediately; otherwise <see langword="false"/>
         /// when the request was rejected or deferred to a conflict prompt callback.
         /// </returns>
-        public bool ApplyBindingWithConflictFlow(string actionId, bool primary, KeyCode keyCode, InputContext context)
+        internal bool ApplyBindingWithConflictFlow(string actionId, bool primary, KeyCode keyCode, InputContext context)
         {
             EnsureLoaded();
             if (string.IsNullOrEmpty(actionId)) return false;

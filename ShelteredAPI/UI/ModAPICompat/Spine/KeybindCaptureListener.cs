@@ -8,9 +8,9 @@ namespace ModAPI.Spine.UI
     /// <summary>
     /// Captures the next pressed key and reports it through callbacks.
     /// </summary>
-    public class KeybindCaptureListener : MonoBehaviour
+    internal class KeybindCaptureListener : MonoBehaviour
     {
-        public enum CaptureState
+        internal enum CaptureState
         {
             Idle = 0,
             Listening = 1,

@@ -7,7 +7,7 @@ namespace ShelteredAPI.Scenarios
     /// purpose: a scenario is reusable data, while a binding only records whether one
     /// save slot is currently governed by that data.
     /// </summary>
-    public class ScenarioRuntimeBinding
+    internal class ScenarioRuntimeBinding
     {
         public string ScenarioId { get; set; }
         public string VersionApplied { get; set; }

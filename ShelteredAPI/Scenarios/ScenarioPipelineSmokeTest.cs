@@ -12,7 +12,7 @@ namespace ShelteredAPI.Scenarios
     /// bad scenario XML should never block normal game boot; call this from a debug mod
     /// or immediate window when validating a handmade scenario.xml.
     /// </summary>
-    public static class ScenarioPipelineSmokeTest
+    internal static class ScenarioPipelineSmokeTest
     {
         public static ScenarioValidationResult Run(string modsRootOrSingleScenarioFile)
         {

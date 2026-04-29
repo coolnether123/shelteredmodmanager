@@ -5,14 +5,14 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using ModAPI.Core;
-using ModAPI.Items;
+using ShelteredAPI.Content;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioApplyResult
+    internal sealed class ScenarioApplyResult
     {
         private readonly List<string> _messages = new List<string>();
 
@@ -35,7 +35,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public sealed class ScenarioApplier : IScenarioApplier
+    internal sealed class ScenarioApplier : IScenarioApplier
     {
         private readonly IScenarioSpriteAssetResolver _assetResolver;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;

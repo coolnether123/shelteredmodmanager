@@ -5,8 +5,9 @@ using System.Reflection.Emit;
 using HarmonyLib;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.Harmony;
 
-namespace ModAPI.Harmony
+namespace ShelteredAPI.Harmony
 {
     /// <summary>
     /// Specialized transpiler helpers for Sheltered-specific patterns.

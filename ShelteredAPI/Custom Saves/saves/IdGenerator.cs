@@ -1,6 +1,6 @@
 using System;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
     internal static class IdGenerator
     {

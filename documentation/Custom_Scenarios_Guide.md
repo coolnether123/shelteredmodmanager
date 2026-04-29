@@ -1,20 +1,33 @@
 # Custom Scenarios Guide
 
+The 1.3 line is a breaking clean API line.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are stable.
+- Implementation classes are internal.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
+
 Custom scenarios can be authored in two ways:
 
-- code registration through `ICustomScenarioService`
+- code registration through `ShelteredScenarios`
 - XML packs discovered from a loaded mod's `Scenarios/**/scenario.xml` files
 
 Both paths appear under the in-game `Custom Scenarios` scenario-selection hub. Missing or version-mismatched required mods are shown as locked entries and cannot be started until the dependency state matches. The hub is always available from the scenario book, even when there are no existing custom scenarios, so authors can use `Add New Scenario`.
 
-`ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime pack: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, serializers, validators, runtime binding, `ScenarioDef` helpers, and in-game apply services.
+`ModAPI.Scenarios` is the neutral registration and lifecycle surface: custom scenario registrations, opaque definition factories, lifecycle state/events, portable catalog metadata, dependency manifest conversion, and validation result containers. `ShelteredAPI.Scenarios` is the Sheltered scenario authoring/runtime pack: Sheltered XML definitions, family/survivor/bunker/inventory/quest/weather sections, the `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` facades, plus the `ShelteredScenarioDefBuilder` escape hatch. Serializers, validators, runtime binding, browser controllers, and apply services are implementation details.
 
 ## Code-Driven Registration
 
 Reference `ModAPI.dll` for neutral registration contracts and `ShelteredAPI.dll` for Sheltered scenario authoring/runtime helpers. Code-driven scenarios that return `ScenarioDef` also need a compile reference to `Assembly-CSharp.dll`.
 
 ```csharp
-using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios;
 
@@ -24,17 +37,13 @@ public sealed class MyPlugin : IModPlugin
 
     public void Start(IPluginContext ctx)
     {
-        ICustomScenarioService scenarios;
-        if (!ModAPIRegistry.TryGetAPI(GameRuntimeApiIds.CustomScenarios, out scenarios))
-            return;
-
         CustomScenarioRegistration registration = new LongRoadScenario().ToRegistration();
         registration.RequiredMods = new[]
         {
-            new ScenarioModDependency { modId = "com.example.content", version = "1.2.0" }
+            new ScenarioModDependency { modId = "com.example.content", version = "1.0.0" }
         };
 
-        scenarios.Register(registration);
+        ShelteredScenarios.Register(registration);
     }
 }
 
@@ -53,7 +62,7 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
         {
             return new[]
             {
-                new ScenarioModDependency { modId = "com.example.content", version = "1.2.0" }
+                new ScenarioModDependency { modId = "com.example.content", version = "1.0.0" }
             };
         }
     }
@@ -101,7 +110,7 @@ Minimal XML:
     <Version>1.0.0</Version>
   </Meta>
   <Dependencies>
-    <Requires id="com.example.content" version="1.2.0" />
+    <Requires id="com.example.content" version="1.0.0" />
   </Dependencies>
   <BaseMode>Survival</BaseMode>
   <FamilySetup>
@@ -152,7 +161,7 @@ XML packs are refreshed when the custom scenario UI opens. If a code registratio
 
 ### Triggers
 
-`<Trigger>` definitions become persisted runtime signals. Automatic trigger types include `immediate`, `startup`, `timeReached`/`dayReached`, `scenarioFlagSet`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `itemQuantityAvailable`, `bunkerExpansionUnlocked`, and `technologyUnlocked`. `manual`, `custom`, blank, and `code` triggers are reserved for explicit `FireTrigger` scheduled effects or mod code calling `ScenarioTriggerRuntime.Fire("triggerId")`.
+`<Trigger>` definitions become persisted runtime signals. Automatic trigger types include `immediate`, `startup`, `timeReached`/`dayReached`, `scenarioFlagSet`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `itemQuantityAvailable`, `bunkerExpansionUnlocked`, and `technologyUnlocked`. `manual`, `custom`, blank, and `code` triggers are reserved for explicit `FireTrigger` scheduled effects or mod code calling `ShelteredScenarioRuntime.FireTrigger("triggerId")`.
 
 Quests with `startTriggerId` are now scheduled behind a `CustomTrigger` condition and start after the referenced trigger fires. To avoid ambiguous starts, omit `<ScheduledStart>` on trigger-started quests.
 
@@ -166,20 +175,30 @@ The scenario book adds a `Custom Scenarios` button. Selecting it replaces the va
 
 This keeps the browser usable for arbitrarily large scenario catalogs without instantiating one on-screen button per scenario, and it behaves like the regular custom-save paging flow.
 
-`Add New Scenario` starts `ScenarioEditorController.EnterEditMode(ScenarioBaseGameMode.Survival)` and creates an in-memory draft with the default id `com.author.scenario.new`. The editor backend can create, load, validate, save, and playtest scenario definitions. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
+`Add New Scenario` creates an in-memory draft with the default id `com.author.scenario.new` through internal browser/editor services. XML and code authors should use `ShelteredScenarioAuthoring` to create, load, validate, save, and run framework verification for scenario definitions; browser controllers and editor backend services are not public API. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
+
+Public XML authoring helpers:
+
+```csharp
+ScenarioDefinition definition = ShelteredScenarioAuthoring.LoadDefinition(filePath);
+ScenarioValidationResult validation = ShelteredScenarioAuthoring.ValidateDefinition(definition, filePath);
+
+if (validation.IsValid)
+    ShelteredScenarioAuthoring.SaveDefinition(definition, filePath);
+```
 
 ## Dependencies And UI Blocking
 
 Dependencies use the same shape as save verification:
 
 ```xml
-<Requires id="com.example.content" version="1.2.0" />
+<Requires id="com.example.content" version="1.0.0" />
 ```
 
 or the compact string form used by the serializer:
 
 ```xml
-<Requires>com.example.content@1.2.0</Requires>
+<Requires>com.example.content@1.0.0</Requires>
 ```
 
 The scenario list labels unsatisfied entries as `[LOCKED]`. The description states whether required mods are missing, version-mismatched, or unverifiable. Starting is blocked by `ShelteredCustomScenarioService.MarkSelected`; even if a confirmation window is shown, a mismatch does not leave pending scenario state behind.
@@ -206,11 +225,11 @@ Applied now:
 - base stats: `Strength`, `Dexterity`, `Intelligence`, `Charisma`, `Perception`
 - traits using `Strength:TraitName` or `Weakness:TraitName`
 - future survivor auto-join spawns and ask-to-join recruit arrivals using the same name, gender, stat, trait, and appearance config shape as starting family members
-- starting inventory items resolvable by `InventoryHelper.ResolveItemType` from `ShelteredAPI.dll` (`ModAPI.Items` namespace retained as a 1.3 migration alias)
+- starting inventory items resolvable by `ShelteredContent.ResolveItemType` from `ShelteredAPI.dll`
 - bunker wall and wiring sprite indexes
 - vanilla object placements by `ObjectManager.ObjectType` via `definition="Generator"` and optional `level`, `movable`, `lockDeconstruct` properties
 - asset path validation and sprite preloading
-- trigger runtime state: automatic trigger definitions can fire persisted `CustomTrigger` records, scheduled actions can use `FireTrigger`, and code can call `ScenarioTriggerRuntime.Fire(...)`
+- trigger runtime state: automatic trigger definitions can fire persisted `CustomTrigger` records, scheduled actions can use `FireTrigger`, and code can call `ShelteredScenarioRuntime.FireTrigger(...)`
 - trigger-started quests through `StartTriggerId`; the quest starts after the referenced trigger has fired
 - win/loss conditions when the active binding has a spawned `ScenarioQuestInstanceId`; supported condition types are `surviveDays`, `timeReached`/`dayReached`, `itemQuantityAvailable`, `questActive`, `questCompleted`, `questFailed`, `survivorPresent`, `bunkerExpansionUnlocked`, `technologyUnlocked`, `scenarioFlagSet`, and `customTrigger`
 
@@ -233,7 +252,7 @@ Asset paths must be relative to the scenario pack folder. Paths that escape the 
 Run the built-in harness from a debug mod or immediate window when validating the framework:
 
 ```csharp
-ScenarioValidationResult result = ScenarioFrameworkVerification.Run();
+ScenarioValidationResult result = ShelteredScenarioAuthoring.RunFrameworkVerification();
 ```
 
 `result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, or asset escape validation fails.

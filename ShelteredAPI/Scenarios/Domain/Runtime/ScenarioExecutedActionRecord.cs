@@ -2,7 +2,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public enum ScenarioExecutedActionStatus
+    internal enum ScenarioExecutedActionStatus
     {
         Succeeded = 0,
         Failed = 1,
@@ -10,7 +10,7 @@ namespace ShelteredAPI.Scenarios
         Skipped = 3
     }
 
-    public class ScenarioExecutedActionRecord
+    internal class ScenarioExecutedActionRecord
     {
         public string ScenarioId { get; set; }
         public string ScenarioVersion { get; set; }

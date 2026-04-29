@@ -1,27 +1,21 @@
 # ModAPI + ShelteredAPI v1.3 API Signatures Reference
 
-This is the source-of-truth signature sheet for the current code in this repo.
+This is the source-of-truth signature sheet for the current code in this repo. The 1.3 line is a breaking clean API line.
 
 Related usage guide:
 - `documentation/ShelteredAPI_Characters_Guide.md`
 
-## Compatibility Matrix
+## Assembly Rule
 
-| Surface | Assembly | Status |
-|---------|----------|--------|
-| Core loader/plugin/settings APIs and neutral runtime ports | `ModAPI.dll` | Current |
-| Neutral event bus (`ModEventBus`) | `ModAPI.dll` | Current |
-| Sheltered event/helper APIs used by v1.2 mods (`GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
-| Sheltered save compatibility helpers (`GameUtil`, `PersistentDataAPI`, `ModList`, `ModDictionary`, custom-save APIs) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
-| Sheltered UI/content compatibility helpers (`InventoryHelper`, `UIHooks`, `ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, NGUI helpers, Spine settings UI renderers) | `ShelteredAPI.dll` | Current 1.3 migration aliases using old `ModAPI.*` namespaces |
-| `IGameHelper` adapters and Sheltered-specific implementations | `ShelteredAPI.dll` | Current |
-| Old v1.2 docs/snippets with conflicting signatures | mixed | Deprecated |
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
 
-## v1.2 Compatibility (1.3 Line)
+## API Stability Rules
 
-The v1.2 mod ecosystem was built against key gameplay helper/event types in `ModAPI.*` namespaces.
-For `1.3`, Sheltered-backed event, party, interaction, and manager-state helpers are hosted by `ShelteredAPI.dll`.
-Some types intentionally keep old `ModAPI.*` namespaces as source migration aliases, but mod authors must reference `ShelteredAPI.dll` when using those Sheltered hooks.
+- Public facades are stable mod-author entry points.
+- Implementation classes are internal and may move.
+- Typed Sheltered escape hatches are explicit in their names and signatures.
+- Future migrations should happen behind facades.
 
 ## Plugin Lifecycle (`ModAPI.Core`)
 
@@ -116,6 +110,87 @@ public static class GameRuntimeApiIds
 {
     public const string ContentResolution = "GameRuntime.ContentResolution";
     public const string SaveRuntime = "GameRuntime.SaveRuntime";
+}
+```
+
+## Input Actions (`ModAPI.InputActions`)
+
+```csharp
+public class ModInputAction
+{
+    public string Id { get; }
+    public string Label { get; }
+    public string Category { get; }
+    public string Description { get; }
+    public InputBinding DefaultBinding { get; }
+
+    public ModInputAction(string id, string label, string category, InputBinding defaultBinding, string description = null);
+}
+
+public struct InputBinding
+{
+    public KeyCode Primary;
+    public KeyCode Secondary;
+
+    public InputBinding(KeyCode primary, KeyCode secondary);
+    public bool IsUnbound { get; }
+    public bool ContainsKey(KeyCode key);
+    public bool Overlaps(InputBinding other);
+    public bool IsDown();
+    public bool IsHeld();
+    public bool IsUp();
+}
+
+public static class InputActionRegistry
+{
+    public static event Action<ModInputAction> OnActionRegistered;
+    public static event Action<string, InputBinding> OnBindingChanged;
+
+    public static bool Register(ModInputAction action);
+    public static bool IsRegistered(string actionId);
+    public static List<ModInputAction> GetAllActions();
+    public static bool TryGetAction(string actionId, out ModInputAction action);
+    public static InputBinding GetBinding(string actionId);
+    public static bool TryGetBinding(string actionId, out InputBinding binding);
+    public static bool SetBinding(string actionId, InputBinding binding);
+    public static bool ResetBinding(string actionId);
+    public static void ResetAllBindings();
+    public static List<ModInputAction> FindConflicts(string actionId, InputBinding candidate);
+    public static bool IsDown(string actionId);
+    public static bool IsHeld(string actionId);
+    public static bool IsUp(string actionId);
+}
+```
+
+## Sheltered Input Facade (`ShelteredAPI.Input`)
+
+```csharp
+public enum InputContext { Unknown = 0, Gameplay = 1, Menu = 2, System = 3 }
+
+public static class ShelteredInputActions
+{
+    public const string IdPrefix = "sheltered.";
+    public static bool IsShelteredAction(string actionId);
+}
+
+public static class ShelteredInput
+{
+    public static void EnsureReady();
+    public static void RegisterVanillaActions();
+    public static bool IsShelteredAction(string actionId);
+    public static InputContext GetContextForActionId(string actionId);
+
+    public static float ZoomSpeed { get; set; }
+    public static float TouchpadMovementSpeed { get; set; }
+    public static float MouseScrollSpeed { get; set; }
+    public static float NormalizeSpeedScale(float value, float fallback);
+
+    public static float DefaultZoomSpeed { get; }
+    public static float DefaultTouchpadMovementSpeed { get; }
+    public static float DefaultMouseScrollSpeed { get; }
+    public static float MinSpeedScale { get; }
+    public static float MaxSpeedScale { get; }
+    public static float SpeedStep { get; }
 }
 ```
 
@@ -257,7 +332,59 @@ Built-in actor API registration names used by `ModAPI`:
 - `GameRuntime.ActorEvents`
 - `GameRuntime.ActorSerialization`
 
-ShelteredAPI also registers `ShelteredAPI.*` aliases for 1.3 source migration.
+ShelteredAPI supplies the default runtime implementation and Sheltered-facing facade helpers.
+
+## Sheltered Actors And Characters (`ShelteredAPI.Actors`, `ShelteredAPI.Characters`)
+
+```csharp
+public static class ShelteredActors
+{
+    public static IActorSystem Instance { get; }
+    public static ActorId FamilyMemberActorId(int uniqueMemberId);
+    public static ActorId VisitorActorId(int uniqueVisitorId);
+    public static ActorId SyntheticCharacterActorId(int uniqueCharacterId, string sourceModId);
+    public static bool TryGetCharacter(ActorId actorId, out ICharacterProxy character);
+}
+
+public static class ShelteredCharacters
+{
+    public static event Action<ICharacterProxy, EffectInstance> EffectApplied;
+    public static event Action<ICharacterProxy, EffectInstance, RemovalReason> EffectRemoved;
+    public static event Action<ICharacterProxy, string, object> DataChanged;
+    public static event Action<ICharacterProxy> SyntheticCharacterCreated;
+    public static event Action<ICharacterProxy> SyntheticCharacterUnloaded;
+
+    public static void RegisterEffectType<T>(string effectId) where T : ICharacterEffect, new();
+    public static ICharacterProxy GetByUniqueId(int uniqueMemberId);
+    public static CharacterQuery Query();
+    public static IReadOnlyList<ICharacterProxy> ListAll();
+    public static IReadOnlyList<ICharacterProxy> ListPersistent();
+    public static IReadOnlyList<ICharacterProxy> ListTemporary();
+    public static ICharacterProxy CreateSyntheticCharacter(string firstName, string lastName, string persistenceKey, string sourceModId, bool isPersistent = true);
+    public static ICharacterProxy CreateTemporaryCharacter(string firstName, string lastName, string sourceModId);
+    public static ICharacterProxy FindSyntheticCharacter(string persistenceKey);
+    public static void Unregister(ICharacterProxy character);
+    public static int UnloadTemporaryCharacters(string sourceModId);
+
+    // Explicit Sheltered runtime escape hatches.
+    public static ICharacterProxy FromFamilyMember(FamilyMember member);
+    public static ICharacterProxy FromNpcVisitor(NpcVisitor npc);
+    public static FamilyMember FindFamilyMember(ICharacterProxy character);
+    public static NpcVisitor FindNpcVisitor(ICharacterProxy character);
+    public static void SwapEncounterCharacter(EncounterCharacter encounterActor, ICharacterProxy newCharacter, Action<EncounterCharacter> onSwapComplete = null);
+}
+
+public interface ICharacterProxy : ICharacterDefinition
+{
+    CharacterState State { get; }
+    CharacterLocation Location { get; }
+    bool IsActive { get; }
+    ICharacterEffects Effects { get; }
+    ICharacterAttributes Attributes { get; }
+    ICharacterData Data { get; }
+    event Action<ICharacterProxy> OnUnregistered;
+}
+```
 
 ## Spine Settings (`ModAPI.Spine`, `ModAPI.Attributes`)
 
@@ -356,50 +483,58 @@ Note on type collisions:
   `using ContentItemDefinition = ShelteredAPI.Content.ItemDefinition;`
 
 ```csharp
-public static RegistrationResult RegisterItem(ItemDefinition def);
-public static RegistrationResult RegisterItemWithFixedId(string modId, string itemId, ItemDefinition def);
-public static void PatchItem(ItemPatch patch);
-public static void RegisterRecipe(RecipeDefinition def);
-public static void RegisterCookingRecipe(CookingRecipe recipe);
-public static void PatchRecipe(RecipePatch patch);
-public static void AddLoot(LootEntry entry);
+public static class ShelteredContent
+{
+    public static RegistrationResult RegisterItem(ItemDefinition definition);
+    public static RegistrationResult RegisterItem(string modId, string itemId, ItemDefinition definition);
+    public static void PatchItem(ItemPatch patch);
+    public static void RegisterRecipe(RecipeDefinition definition);
+    public static void RegisterCookingRecipe(CookingRecipe recipe);
+    public static void PatchRecipe(RecipePatch patch);
+    public static void AddLoot(LootEntry entry);
+    public static void SetLocalization(string key, string value);
+    public static bool TryGetLocalization(string key, out string value);
 
-public static Texture2D LoadTexture(Assembly asm, string relativePath);
-public static Texture2D LoadTexture(string modRootPath, string relativePath);
-public static Sprite LoadSprite(Assembly asm, string relativePath, float pixelsPerUnit = 100f);
-public static Sprite LoadSprite(string modRootPath, string relativePath, float pixelsPerUnit = 100f);
-public static AssetBundle LoadBundle(Assembly asm, string relativePath);
-public static AssetBundle LoadBundle(string modRootPath, string relativePath);
-public static GameObject LoadPrefabFromBundle(AssetBundle bundle, string assetPath);
+    public static Texture2D LoadTexture(Assembly assembly, string relativePath);
+    public static Texture2D LoadTexture(string modRootPath, string relativePath);
+    public static Sprite LoadSprite(Assembly assembly, string relativePath);
+    public static Sprite LoadSprite(Assembly assembly, string relativePath, float pixelsPerUnit);
+    public static Sprite LoadSprite(string modRootPath, string relativePath);
+    public static Sprite LoadSprite(string modRootPath, string relativePath, float pixelsPerUnit);
+    public static AssetBundle LoadBundle(Assembly assembly, string relativePath);
+    public static AssetBundle LoadBundle(string modRootPath, string relativePath);
+    public static GameObject LoadPrefabFromBundle(AssetBundle bundle, string assetPath);
+
+    public static bool ResolveItemType(string itemId, out ItemManager.ItemType type);
+    public static bool TryGetCookingRecipe(ItemManager.ItemType rawItemType, out CookingRecipe recipe);
+    public static bool IsRawFood(ItemManager.ItemType itemType);
+    public static ItemInstance CreateItem(string itemId);
+    public static bool TryAddToInventory(ItemInstance item);
+    public static bool TryAddToInventory(string itemId, int quantity);
+    public static bool TryRemoveFromInventory(string itemId, int quantity);
+    public static int GetItemCount(string itemId);
+    public static int GetItemCount(string itemId, bool includeParties);
+    public static ReadOnlyCollection<ItemStack> GetAllInventoryItems();
+    public static int GetStorageCapacity();
+    public static int GetUsedStorage();
+}
 ```
 
-Sheltered inventory helper compatibility API:
+Sheltered UI facade:
 
 ```csharp
-// ShelteredAPI-owned 1.3 source alias: ModAPI.Items.InventoryHelper
-public static bool ResolveItemType(string itemId, out ItemManager.ItemType type);
-public static ItemInstance CreateItem(string itemId);
-public static bool TryAddToInventory(ItemInstance item);
-public static bool TryAddToInventory(string itemId, int quantity = 1);
-public static bool TryRemoveFromInventory(string itemId, int quantity = 1);
-public static int GetItemCount(string itemId, bool includeParties = false);
-public static ReadOnlyCollection<ItemStack> GetAllItems();
-public static int GetStorageCapacity();
-public static int GetUsedStorage();
-```
-
-Sheltered UI compatibility APIs:
-
-```csharp
-// ShelteredAPI-owned 1.3 source aliases under ModAPI.UI / ModAPI.Hooks
-public static void ModUIHooks.RegisterButton(TargetMenu menu, string buttonText, Action onClick);
-public static void ContextMenuHelper.RegisterAddon(string optionName, string displayText, Action onSelected, Func<Obj_Base, bool> predicate = null);
-public static GameObject UIHooks.GetUIRoot();
-public static GameObject UIHooks.GetExpeditionMapPanel();
-public static GameObject UIHooks.GetHUD();
-public static GameObject UIHooks.GetRadioPanel();
-public static GameObject UIHooks.GetActivePanel();
-public static Camera UIHooks.GetMapCamera();
+public static class ShelteredUI
+{
+    public static UITakeoverSession For(BasePanel panel);
+    public static UITakeoverSession For(GameObject root);
+    public static UITakeoverSession For(Transform root);
+    public static IDisposable RegisterPanelTakeover<TPanel>(string key, Action<TPanel, UITakeoverSession> apply)
+        where TPanel : BasePanel;
+    public static IDisposable RegisterPanelTakeover<TPanel>(string key, Action<TPanel, UITakeoverSession> apply, bool applyOnOpened, bool applyOnResumed)
+        where TPanel : BasePanel;
+    public static void UnregisterPanelTakeover(string key);
+    public static void ShowShelteredKeybinds();
+}
 ```
 
 `ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
@@ -423,23 +558,66 @@ Localization behavior for content injection (ShelteredAPI v1.3):
 ## Event + Registry APIs
 
 ```csharp
-// ShelteredAPI-owned 1.3 source alias: ModAPI.Events.GameEvents
-public static event Action<int> OnNewDay;
-public static event Action<SaveData> OnBeforeSave;
-public static event Action<SaveData> OnAfterLoad;
-public static event Action OnNewGame;
-public static event Action OnSessionStarted;
-public static event Action<EncounterCharacter, EncounterCharacter> OnCombatStarted;
-public static event Action<ExplorationParty> OnPartyReturned;
-public static event Action<TimeTriggerBatch> OnSixHourTick;
-public static event Action<TimeTriggerBatch> OnStaggeredTick;
+public static class ShelteredEvents
+{
+    public static event Action<int> NewDay;
+    public static event Action<SaveData> BeforeSave;
+    public static event Action<SaveData> BeforeLoadSceneContents;
+    public static event Action<SaveData> AfterLoad;
+    public static event Action NewGame;
+    public static event Action SessionStarted;
+    public static event Action<EncounterCharacter, EncounterCharacter> CombatStarted;
+    public static event Action<ExplorationParty> PartyReturned;
 
-// ShelteredAPI-owned 1.3 source alias: ModAPI.Events.UIEvents
-public static event Action<BasePanel> OnPanelOpened;
-public static event Action<BasePanel> OnPanelClosed;
-public static event Action<BasePanel> OnPanelResumed;
-public static event Action<BasePanel> OnPanelPaused;
-public static event Action<GameObject, string> OnButtonClicked;
+    public static event Action<BasePanel> PanelOpened;
+    public static event Action<BasePanel> PanelClosed;
+    public static event Action<BasePanel> PanelResumed;
+    public static event Action<BasePanel> PanelPaused;
+    public static event Action<GameObject, string> ButtonClicked;
+
+    public static event Action<int> FactionSpawned;
+    public static event Action<int, int> FactionZoneGrew;
+    public static event Action<int, int> FactionTerritoryChanged;
+
+    public static event Action<TimeTriggerBatch> SixHourTick;
+    public static event Action<TimeTriggerBatch> StaggeredTick;
+    public static void RegisterTimeTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
+    public static bool UnregisterTimeTrigger(string triggerId);
+    public static List<TimeTriggerInfo> GetTimeTriggerPriorityList(TimeTriggerCadence cadence);
+    public static void ConfigureStaggeredTimeRange(int minInclusiveHours, int maxInclusiveHours);
+}
+
+public static class ShelteredSaveEvents
+{
+    public static event SaveEvent BeforeSave;
+    public static event SaveEvent AfterSave;
+    public static event LoadEvent BeforeLoad;
+    public static event LoadEvent AfterLoad;
+    public static event PageChangedEvent PageChanged;
+    public static event ReservationChangedEvent ReservationChanged;
+}
+
+public static class ShelteredSaves
+{
+    public static SaveEntry[] ListStandard();
+    public static SaveEntry[] ListStandard(int page, int pageSize);
+    public static int CountStandard();
+    public static int GetMaxStandardSlot();
+    public static SaveEntry GetStandard(string saveId);
+    public static SaveEntry GetStandardSlot(int absoluteSlot);
+    public static SaveEntry CreateStandard(SaveCreateOptions options);
+    public static SaveEntry OverwriteStandard(string saveId, SaveOverwriteOptions options, byte[] xmlBytes);
+    public static bool DeleteStandard(string saveId);
+    public static bool DeleteStandardSlot(int absoluteSlot);
+
+    public static SaveEntry[] ListScenario(string scenarioId, int page, int pageSize);
+    public static SaveEntry GetScenario(string scenarioId, string saveId);
+    public static SaveEntry CreateScenario(string scenarioId, SaveCreateOptions options);
+    public static SaveEntry CreateNextScenario(string scenarioId, SaveCreateOptions options);
+    public static int GetNextScenarioSlot(string scenarioId);
+    public static SaveEntry OverwriteScenario(string scenarioId, string saveId, SaveOverwriteOptions options, byte[] xmlBytes);
+    public static bool DeleteScenario(string scenarioId, string saveId);
+}
 
 // ModAPI.Events.ModEventBus, neutral and hosted by ModAPI.dll
 public static void Publish<T>(string eventName, T data);
@@ -554,6 +732,44 @@ public sealed class ScenarioValidationResult
 }
 
 // ShelteredAPI.Scenarios Sheltered scenario authoring/runtime pack
+public static class ShelteredScenarios
+{
+    public static ICustomScenarioService Service { get; }
+    public static CustomScenarioRegistrationResult Register(IShelteredCustomScenario scenario);
+    public static CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration);
+    public static bool Unregister(string scenarioId);
+    public static bool TryGet(string scenarioId, out CustomScenarioInfo scenario);
+    public static CustomScenarioInfo[] List();
+    public static CustomScenarioRegistration FromDefinition(string id, string displayName, ScenarioDef definition);
+    public static CustomScenarioRegistration FromScenario(IShelteredCustomScenario scenario);
+    public static CustomScenarioRegistration FromFactory(string id, string displayName, ShelteredScenarioDefinitionFactory factory);
+    public static ShelteredScenarioDefBuilder CreateScenarioDefBuilder();
+    public static ShelteredScenarioDefBuilderCompatibility CheckScenarioDefBuilderCompatibility();
+    public static ScenarioInfo[] ListXmlDefinitions();
+    public static void RefreshXmlDefinitions();
+}
+
+public static class ShelteredScenarioAuthoring
+{
+    public const string DefaultFileName = "scenario.xml";
+    public static ScenarioDefinition CreateDefinition();
+    public static ScenarioDefinition CreateDefinition(ScenarioBaseGameMode baseGameMode);
+    public static ScenarioDefinition LoadDefinition(string filePath);
+    public static ScenarioDefinition FromXml(string xml);
+    public static void SaveDefinition(ScenarioDefinition definition, string filePath);
+    public static string ToXml(ScenarioDefinition definition);
+    public static ScenarioValidationResult ValidateDefinition(ScenarioDefinition definition, string scenarioFilePath);
+    public static ScenarioValidationResult ValidateXmlDefinition(string scenarioId);
+    public static bool TryLoadXmlDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation);
+    public static ScenarioValidationResult RunFrameworkVerification();
+}
+
+public static class ShelteredScenarioRuntime
+{
+    public static bool FireTrigger(string triggerId);
+    public static bool FireTrigger(string triggerId, string source, out string message);
+}
+
 public interface IShelteredCustomScenario
 {
     string Id { get; }
@@ -594,38 +810,6 @@ public class ScenarioDefinition
     public AssetReferencesDefinition AssetReferences { get; set; }
 }
 
-public class ScenarioDefinitionSerializer
-{
-    public const string DefaultFileName = "scenario.xml";
-    public ScenarioDefinition Load(string filePath);
-    public ScenarioDefinition FromXml(string xml);
-    public void Save(ScenarioDefinition definition, string filePath);
-    public string ToXml(ScenarioDefinition definition);
-    public ScenarioInfo LoadInfo(string filePath, string ownerModId);
-}
-
-public sealed class ScenarioValidator
-{
-    public ScenarioValidator();
-    public ScenarioValidator(IScenarioDependencyResolver dependencyResolver);
-    public ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath);
-}
-
-public interface IScenarioDependencyResolver
-{
-    bool IsLoaded(string modId);
-}
-
-public interface IScenarioDependencyVersionResolver : IScenarioDependencyResolver
-{
-    string GetLoadedVersion(string modId);
-}
-
-public static class ScenarioFrameworkVerification
-{
-    public static ScenarioValidationResult Run();
-}
-
 // ModAPI.Core.ModRegistry
 public static bool Find(string modId);
 public static ModEntry GetMod(string modId);
@@ -633,27 +817,27 @@ public static bool TryGetMod(string modId, out ModEntry entry);
 public static List<string> GetLoadedModIds();
 ```
 
-## ShelteredAPI Trigger Scheduler (`ModAPI.Events`)
+## ShelteredAPI Trigger Scheduler (`ShelteredAPI.Events`)
 
 ```csharp
 public enum TimeTriggerCadence { SixHour = 1, Staggered = 2, Both = 3 }
 public enum TimeTriggerKind { SixHour = 1, Staggered = 2 }
 
-public static class GameTimeTriggerHelper
+public static class ShelteredEvents
 {
-    public static event Action<TimeTriggerBatch> OnSixHourTick;
-    public static event Action<TimeTriggerBatch> OnStaggeredTick;
+    public static event Action<TimeTriggerBatch> SixHourTick;
+    public static event Action<TimeTriggerBatch> StaggeredTick;
 
     public static int StaggeredMinHours { get; }
     public static int StaggeredMaxHours { get; }
 
-    public static void RegisterTrigger(string triggerId);
-    public static void RegisterTrigger(string triggerId, int priority);
-    public static void RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence);
-    public static void RegisterTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
-    public static bool UnregisterTrigger(string triggerId);
-    public static List<TimeTriggerInfo> GetPriorityList(TimeTriggerCadence cadence);
-    public static void ConfigureStaggeredRange(int minInclusive, int maxInclusive);
+    public static void RegisterTimeTrigger(string triggerId);
+    public static void RegisterTimeTrigger(string triggerId, int priority);
+    public static void RegisterTimeTrigger(string triggerId, int priority, TimeTriggerCadence cadence);
+    public static void RegisterTimeTrigger(string triggerId, int priority, TimeTriggerCadence cadence, Action<TimeTriggerBatch> callback);
+    public static bool UnregisterTimeTrigger(string triggerId);
+    public static List<TimeTriggerInfo> GetTimeTriggerPriorityList(TimeTriggerCadence cadence);
+    public static void ConfigureStaggeredTimeRange(int minInclusiveHours, int maxInclusiveHours);
 }
 ```
 
@@ -680,7 +864,7 @@ public static void RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainT
 protected void RunInBackground<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError = null);
 ```
 
-## Persistent Data (`ModAPI.Core`, ShelteredAPI)
+## Persistence And Sheltered Saves (`ModAPI.Core`, `ShelteredAPI.Saves`)
 
 ```csharp
 // ModAPI.dll
@@ -691,9 +875,12 @@ public interface ISaveSystem
     void RegisterModData<T>(string key, T data, Action<T> migrationCallback = null) where T : class;
 }
 
-// ShelteredAPI.dll, namespace retained for 1.3 source migration
-public static void SaveData<T>(this IPluginContext ctx, string key, T data);
-public static bool LoadData<T>(this IPluginContext ctx, string key, out T value);
+// ShelteredAPI.dll
+public static class ShelteredSaves
+{
+    public static SaveEntry[] ListStandard(int page, int pageSize);
+    public static SaveEntry[] ListScenario(string scenarioId, int page, int pageSize);
+    public static SaveEntry GetStandard(string saveId);
+    public static SaveEntry GetScenario(string scenarioId, string saveId);
+}
 ```
-
-Note: these are extension methods on `IPluginContext` (`ctx.SaveData(...)`, `ctx.LoadData(...)`).

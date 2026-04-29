@@ -4,11 +4,11 @@ using System.Reflection;
 namespace ModAPI.Inspector
 {
     // Backward-compatible alias for older code paths.
-    public class VariableInspector : RuntimeVariableEditor
+    internal class VariableInspector : RuntimeVariableEditor
     {
     }
     
-    public struct VariableEditRequest 
+    internal struct VariableEditRequest
     {
         public object Target;
         public FieldInfo Field;

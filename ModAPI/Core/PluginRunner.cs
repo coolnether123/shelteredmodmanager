@@ -9,7 +9,7 @@ namespace ModAPI.Core
     /// <summary>
     /// Hosts plugin lifecycle, update ticks, and scene events with 5.3/5.6 compatibility.
     /// </summary>
-    public class PluginRunner : MonoBehaviour
+    internal class PluginRunner : MonoBehaviour
     {
         /// <summary>
         /// True when modern SceneManager event APIs are active.

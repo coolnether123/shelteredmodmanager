@@ -4,6 +4,7 @@ using ModAPI.Harmony;
 using ModAPI.Actors;
 using ModAPI.InputServices;
 using ModAPI.Scenarios;
+using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
@@ -15,7 +16,7 @@ namespace ShelteredAPI.Core
     /// <summary>
     /// Initializes ShelteredAPI core systems even when no mod plugins are enabled.
     /// </summary>
-    public static class ShelteredApiRuntimeBootstrap
+    internal static class ShelteredApiRuntimeBootstrap
     {
         private static bool _initialized;
         private static readonly object Sync = new object();
@@ -52,7 +53,7 @@ namespace ShelteredAPI.Core
             if (runtimeRoot == null)
             {
                 runtimeRoot = new GameObject(runtimeObjectName);
-                Object.DontDestroyOnLoad(runtimeRoot);
+                UnityEngine.Object.DontDestroyOnLoad(runtimeRoot);
             }
 
             if (runtimeRoot.GetComponent<ShelteredKeybindPersistenceGuard>() == null)
@@ -85,7 +86,7 @@ namespace ShelteredAPI.Core
             RegisterApi(GameRuntimeApiIds.UiLifecycleEvents, uiLifecycleEvents);
             RegisterApi("ShelteredAPI.UiLifecycleEvents", uiLifecycleEvents);
 
-            IActorSystem actors = ActorSystem.Instance;
+            IActorSystem actors = ShelteredActors.Instance;
             RegisterApi(GameRuntimeApiIds.Actors, actors);
             RegisterApi("ShelteredAPI.Actors", actors);
             RegisterApi(GameRuntimeApiIds.ActorRegistry, (IActorRegistry)actors);

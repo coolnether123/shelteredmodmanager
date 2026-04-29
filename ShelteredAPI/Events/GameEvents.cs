@@ -5,9 +5,9 @@ using System.Reflection;
 using UnityEngine;
 using ModAPI.Harmony;
 using ModAPI.Hooks;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 
-namespace ModAPI.Events
+namespace ShelteredAPI.Events
 {
     /// <summary>
     /// Central event bus so mods can subscribe instead of duplicating Harmony patches.
@@ -16,7 +16,7 @@ namespace ModAPI.Events
         TargetBehavior = "Session, save/load, combat, and party event bridges",
         FailureMode = "Event callbacks stop firing and mods may fall back to their own Harmony patches.",
         RollbackStrategy = "Disable the Events patch domain or remove the affected event bridge host.")]
-    public static class GameEvents
+    internal static class GameEvents
     {
         public static event Action<int> OnNewDay;
         public static event Action<SaveData> OnBeforeSave;
@@ -46,7 +46,7 @@ namespace ModAPI.Events
         private static readonly object WarnOnceSync = new object();
         private static readonly HashSet<string> LocalWarnOnceKeys = new HashSet<string>(StringComparer.Ordinal);
 
-        public static void HookDayEvents()
+        internal static void HookDayEvents()
         {
             if (_dayHooked)
                 return;
@@ -61,7 +61,7 @@ namespace ModAPI.Events
             }
         }
 
-        public static void HookPartyEvents()
+        internal static void HookPartyEvents()
         {
             if (_partyHooked)
                 return;
@@ -364,11 +364,11 @@ namespace ModAPI.Events
                     return;
 
                 if (methodName == "RaiseBeforeSave")
-                    ModAPI.Saves.Events.RaiseBeforeSave(customEntry);
+                    ShelteredAPI.Saves.Events.RaiseBeforeSave(customEntry);
                 else if (methodName == "RaiseAfterLoad")
-                    ModAPI.Saves.Events.RaiseAfterLoad(customEntry);
+                    ShelteredAPI.Saves.Events.RaiseAfterLoad(customEntry);
                 else if (methodName == "RaiseBeforeLoad")
-                    ModAPI.Saves.Events.RaiseBeforeLoad(customEntry);
+                    ShelteredAPI.Saves.Events.RaiseBeforeLoad(customEntry);
             }
             catch (Exception ex)
             {

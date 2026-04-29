@@ -160,8 +160,8 @@ namespace ShelteredAPI.Interactions
 
         public ObjectButtonTargetBuilder Register()
         {
-            ModAPI.Interactions.InteractionButtonBuilder builder =
-                ModAPI.Interactions.InteractionRegistry.For(_targetType).Add(_interactionName, _interactionType);
+            ShelteredAPI.Interactions.InteractionButtonBuilder builder =
+                ShelteredAPI.Interactions.InteractionRegistry.For(_targetType).Add(_interactionName, _interactionType);
 
             switch (_mode)
             {
@@ -184,7 +184,7 @@ namespace ShelteredAPI.Interactions
                     builder.WithPriority(_priority);
                     break;
                 case ObjectButtonInsertMode.CustomIndex:
-                    builder.UsingIndexResolver(delegate(ModAPI.Interactions.InteractionInsertContext ctx)
+                    builder.UsingIndexResolver(delegate(ShelteredAPI.Interactions.InteractionInsertContext ctx)
                     {
                         if (_customIndexResolver == null)
                             return ctx != null && ctx.CurrentInteractions != null ? ctx.CurrentInteractions.Count : 0;
@@ -234,7 +234,7 @@ namespace ShelteredAPI.Interactions
 
         public static void Register(ObjectManager.ObjectType targetType, string interactionName, Type interactionType)
         {
-            ModAPI.Interactions.InteractionRegistry.Register(targetType, interactionName, interactionType);
+            ShelteredAPI.Interactions.InteractionRegistry.Register(targetType, interactionName, interactionType);
         }
     }
 }

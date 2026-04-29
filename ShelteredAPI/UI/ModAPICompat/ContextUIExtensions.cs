@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ModAPI.UI
 {
-    public static class ContextUIExtensions
+    internal static class ContextUIExtensions
     {
         /// <summary>
         /// Waits until a GameObject at name/path exists and is activeInHierarchy,

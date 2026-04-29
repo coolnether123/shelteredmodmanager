@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
     [Serializable]
     public class SaveInfo

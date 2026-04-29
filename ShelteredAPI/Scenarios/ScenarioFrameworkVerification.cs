@@ -10,7 +10,7 @@ namespace ShelteredAPI.Scenarios
     /// existing smoke-test style and avoids a test framework so it can run under the
     /// .NET Framework 3.5 game runtime.
     /// </summary>
-    public static class ScenarioFrameworkVerification
+    internal static class ScenarioFrameworkVerification
     {
         public static ScenarioValidationResult Run()
         {

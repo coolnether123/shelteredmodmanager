@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Events;
+using ShelteredAPI.Events;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios

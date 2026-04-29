@@ -4,7 +4,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ValidationSummary
+    internal sealed class ValidationSummary
     {
         private readonly List<ValidationIssue> _issues = new List<ValidationIssue>();
 

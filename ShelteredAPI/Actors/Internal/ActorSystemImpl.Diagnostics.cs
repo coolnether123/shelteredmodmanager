@@ -1,9 +1,10 @@
 using ModAPI.Core;
+using ModAPI.Actors;
 using ModAPI.Util;
 using System;
 using System.Collections.Generic;
 
-namespace ModAPI.Actors.Internal
+namespace ShelteredAPI.Actors.Internal
 {
     internal sealed partial class ActorSystemImpl
     {

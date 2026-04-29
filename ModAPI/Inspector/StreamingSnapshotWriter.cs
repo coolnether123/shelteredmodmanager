@@ -5,7 +5,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    public sealed class StreamingSnapshotWriter : IDisposable
+    internal sealed class StreamingSnapshotWriter : IDisposable
     {
         private const ushort SNAPSHOT_VERSION = 4;
         private static readonly byte[] SNAPSHOT_MAGIC = Encoding.ASCII.GetBytes("MODT");

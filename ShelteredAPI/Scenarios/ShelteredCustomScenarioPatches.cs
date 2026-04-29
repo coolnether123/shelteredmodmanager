@@ -6,7 +6,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using ModAPI.Hooks;
 using ModAPI.Hooks.Paging;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using ModAPI.UI;
 using UnityEngine;

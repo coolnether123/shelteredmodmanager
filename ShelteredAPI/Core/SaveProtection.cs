@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using UnityEngine;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.Hooks.Paging;
 using ModAPI.Harmony;
 
@@ -15,12 +15,12 @@ namespace ModAPI.Core
     /// Serialized mod manifest payload embedded into save data for load verification.
     /// </summary>
     [Serializable]
-    public class ModManifestData
+    internal class ModManifestData
     {
         public ModInfo[] mods;
 
         [Serializable]
-        public class ModInfo
+        internal class ModInfo
         {
             public string id;
             public string version;
@@ -30,7 +30,7 @@ namespace ModAPI.Core
         {
             var data = new ModManifestData();
             var list = new List<ModInfo>();
-            foreach (var modEntry in PluginManager.LoadedMods)
+            foreach (var modEntry in ModRuntime.LoadedMods)
             {
                 list.Add(new ModInfo
                 {
@@ -107,7 +107,7 @@ namespace ModAPI.Core
                 if (type == SaveManager.SaveType.GlobalData || type == SaveManager.SaveType.Invalid) return;
 
                 // SAFETY: Do not attempt to inject mod data during application quit.
-                if (PluginRunner.IsQuitting) return;
+                if (ModRuntime.IsQuitting) return;
 
                 try
                 {
@@ -136,7 +136,7 @@ namespace ModAPI.Core
                             return;
                         }
 
-                        var info = new ModAPI.Saves.SaveInfo
+                        var info = new ShelteredAPI.Saves.SaveInfo
                         {
                             familyName = data.info != null ? data.info.m_familyName : "Unknown",
                             daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
@@ -144,7 +144,7 @@ namespace ModAPI.Core
                         };
                         
                         MMLog.WriteDebug(string.Format("[SaveGamePatch] Updating manifest for vanilla slot {0}", (int)type));
-                        ModAPI.Saves.ExpandedVanillaSaves.UpdateManifest((int)type, info);
+                        ShelteredAPI.Saves.ExpandedVanillaSaves.UpdateManifest((int)type, info);
                     }
                     catch (Exception ex)
                     {
@@ -187,7 +187,7 @@ namespace ModAPI.Core
                 // SAFETY: If quitting is still flagged here, fail-open to avoid hard-locking
                 // SaveManager in a perpetual loading state when returning to menu after
                 // a managed "Save & Exit" flow that did not fully terminate the process.
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
                     MMLog.WriteWarning("[LoadGamePatch] IsQuitting was true during load verification. Bypassing verification for this load tick.");
                     return true;
@@ -237,7 +237,7 @@ namespace ModAPI.Core
                             MMLog.WriteDebug(string.Format("[LoadGamePatch] Checking manifest for scenario '{0}' slot {1} (vanilla type={2}, custom={3})",
                                 context.ScenarioId, context.AbsoluteSlot, type, context.IsCustom));
 
-                            var manifest = ModAPI.Saves.SaveRegistryCore.ReadSlotManifest(context.ScenarioId, context.AbsoluteSlot);
+                            var manifest = ShelteredAPI.Saves.SaveRegistryCore.ReadSlotManifest(context.ScenarioId, context.AbsoluteSlot);
                             if (manifest != null && manifest.lastLoadedMods != null)
                             {
                                 savedMods = new List<ModManifestData.ModInfo>();
@@ -270,10 +270,10 @@ namespace ModAPI.Core
                     }
 
                     // 3. Compare with active mods
-                    var manifestForUI = new ModAPI.Saves.SlotManifest();
-                    var loadedModsList = new List<ModAPI.Saves.LoadedModInfo>();
+                    var manifestForUI = new ShelteredAPI.Saves.SlotManifest();
+                    var loadedModsList = new List<ShelteredAPI.Saves.LoadedModInfo>();
                     foreach (var m in savedMods)
-                        loadedModsList.Add(new ModAPI.Saves.LoadedModInfo { modId = m.id, version = m.version });
+                        loadedModsList.Add(new ShelteredAPI.Saves.LoadedModInfo { modId = m.id, version = m.version });
                     manifestForUI.lastLoadedMods = loadedModsList.ToArray();
 
                     var currentState = SaveVerification.Verify(manifestForUI);
@@ -290,12 +290,12 @@ namespace ModAPI.Core
                         // Hiding it here and then having vanilla show it again after "Load Anyway" causes visible flashing.
                         
                         // Create dummy entry for UI (needs family name)
-                        var entry = new ModAPI.Saves.SaveEntry
+                        var entry = new ShelteredAPI.Saves.SaveEntry
                         {
                             id = "temp_load_entry",
                             absoluteSlot = context.AbsoluteSlot,
                             scenarioId = context.ScenarioId,
-                            saveInfo = new ModAPI.Saves.SaveInfo 
+                            saveInfo = new ShelteredAPI.Saves.SaveInfo
                             { 
                                 familyName = data.info != null ? data.info.m_familyName : "Unknown",
                                 daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
@@ -333,18 +333,18 @@ namespace ModAPI.Core
                 _isWaitingForUser = true;
                 _loadingScreenAlreadyManaged = true;
 
-                var manifestForUI = new ModAPI.Saves.SlotManifest
+                var manifestForUI = new ShelteredAPI.Saves.SlotManifest
                 {
                     family_name = data.info != null ? data.info.m_familyName : "Unknown",
                     lastLoadedMods = null
                 };
 
-                var entry = new ModAPI.Saves.SaveEntry
+                var entry = new ShelteredAPI.Saves.SaveEntry
                 {
                     id = "temp_blocked_entry",
                     absoluteSlot = context.AbsoluteSlot,
                     scenarioId = context.ScenarioId,
-                    saveInfo = new ModAPI.Saves.SaveInfo
+                    saveInfo = new ShelteredAPI.Saves.SaveInfo
                     {
                         familyName = data.info != null ? data.info.m_familyName : "Unknown",
                         daysSurvived = data.info != null ? data.info.m_daysSurvived : 0,
@@ -389,8 +389,8 @@ namespace ModAPI.Core
                 context.IsCustom = true;
                 context.ScenarioId = string.IsNullOrEmpty(pending.scenarioId) ? "Standard" : pending.scenarioId;
                 var pendingEntry = string.Equals(context.ScenarioId, "Standard", StringComparison.OrdinalIgnoreCase)
-                    ? ModAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
-                    : ModAPI.Saves.ScenarioSaves.Get(context.ScenarioId, pending.saveId);
+                    ? ShelteredAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
+                    : ShelteredAPI.Saves.ScenarioSaves.Get(context.ScenarioId, pending.saveId);
                 if (pendingEntry != null)
                 {
                     context.AbsoluteSlot = pendingEntry.absoluteSlot;

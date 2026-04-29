@@ -7,7 +7,7 @@ namespace ModAPI.Core
     /// <summary>
     /// Encapsulates About.json discovery and parsing so ModDiscovery stays DRY.
     /// </summary>
-    public static class ModAboutReader
+    internal static class ModAboutReader
     {
         public static ModEntry TryRead(string modDirectory)
         {

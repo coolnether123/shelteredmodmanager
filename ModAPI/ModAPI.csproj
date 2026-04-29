@@ -67,6 +67,7 @@
     <Compile Include="Core\IUiLifecycleEventSink.cs" />
     <Compile Include="Core\IPlugin.cs" />
     <Compile Include="Core\ModRegistry.cs" />
+    <Compile Include="Core\ModRuntime.cs" />
     <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
     <Compile Include="Core\ModApiPaths.cs" />
@@ -98,6 +99,7 @@
     <Compile Include="Core\ModPrivacyAttribute.cs" />
     <Compile Include="Inspector\ExternalProcessManager.cs" />
     <Compile Include="Inspector\SourceCacheManager.cs" />
+    <Compile Include="Inspector\DebugSourceCache.cs" />
     <Compile Include="Inspector\MemoryGovernor.cs" />
     <Compile Include="Inspector\StreamingSnapshotWriter.cs" />
     <Compile Include="Inspector\RuntimeVariableEditor.cs" />

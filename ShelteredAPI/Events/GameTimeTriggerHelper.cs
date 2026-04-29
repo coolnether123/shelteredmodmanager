@@ -5,7 +5,7 @@ using HarmonyLib;
 using ModAPI.Harmony;
 using UnityEngine;
 
-namespace ModAPI.Events
+namespace ShelteredAPI.Events
 {
     /// <summary>
     /// Trigger cadence for time-based mod workloads.
@@ -18,7 +18,7 @@ namespace ModAPI.Events
     }
 
     /// <summary>
-    /// Runtime tick type emitted by <see cref="GameTimeTriggerHelper"/>.
+    /// Runtime tick type emitted by <see cref="ShelteredEvents"/>.
     /// </summary>
     public enum TimeTriggerKind
     {
@@ -90,7 +90,7 @@ namespace ModAPI.Events
         TargetBehavior = "Time-based event scheduling driven from GameTime lifecycle ticks",
         FailureMode = "Scheduled mod triggers stop firing or drift after load and session transitions.",
         RollbackStrategy = "Disable the Events patch domain or remove the GameTime trigger helper patch host.")]
-    public static class GameTimeTriggerHelper
+    internal static class GameTimeTriggerHelper
     {
         public static event Action<TimeTriggerBatch> OnSixHourTick;
         public static event Action<TimeTriggerBatch> OnStaggeredTick;

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     public class EffectInstance
     {

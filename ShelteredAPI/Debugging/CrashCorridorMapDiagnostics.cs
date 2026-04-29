@@ -45,8 +45,8 @@ namespace ModAPI.Debugging
 
         private static void Mark(string step, string detail = null)
         {
-            if (!PluginRunner.IsQuitting) return;
-            SaveExitTracker.Mark(step, detail);
+            if (!ModRuntime.IsQuitting) return;
+            ModRuntime.MarkSaveExit(step, detail);
         }
 
         private static Exception LogException(string step, Exception ex)
@@ -164,13 +164,13 @@ namespace ModAPI.Debugging
         {
             private static void Prefix(object scene, object mode)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("UIPanelManager.OnLevelFinishedLoading.Begin", "scene=" + TrySceneName(scene));
             }
 
             private static void Postfix(object scene, object mode)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("UIPanelManager.OnLevelFinishedLoading.End", "scene=" + TrySceneName(scene));
             }
 
@@ -185,7 +185,7 @@ namespace ModAPI.Debugging
         {
             private static void Prefix(UIPanelManager __instance)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 if (__instance == null) return;
                 if (Time.realtimeSinceStartup < _nextUiPanelUpdateLogAt) return;
                 _nextUiPanelUpdateLogAt = Time.realtimeSinceStartup + 0.1f;
@@ -219,7 +219,7 @@ namespace ModAPI.Debugging
         {
             private static void Prefix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingScreen.OnClearComplete", "nextLevel=" + (LoadingScreen.nextLevel ?? string.Empty));
             }
 
@@ -234,7 +234,7 @@ namespace ModAPI.Debugging
         {
             private static void Prefix(LoadingScreen __instance)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 if (__instance == null) return;
                 if (Time.realtimeSinceStartup < _nextLoadingScreenUpdateLogAt) return;
                 _nextLoadingScreenUpdateLogAt = Time.realtimeSinceStartup + 0.1f;
@@ -273,7 +273,7 @@ namespace ModAPI.Debugging
             private static void Prefix(LoadingLevel __instance, out bool __state)
             {
                 __state = false;
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
 
                 if (__instance == null || LoadingLevelLoadTimeField == null) return;
                 try
@@ -307,7 +307,7 @@ namespace ModAPI.Debugging
 
             private static void Postfix(bool __state)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 if (!__state) return;
 
                 // If this appears, LoadingLevel.Update returned after trigger path.
@@ -326,13 +326,13 @@ namespace ModAPI.Debugging
         {
             private static void Prefix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingManager.Awake.Begin", "state=" + GetLoadingManagerState() + ", waiting=" + GetWaitingManagerCount());
             }
 
             private static void Postfix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingManager.Awake.End", "state=" + GetLoadingManagerState() + ", waiting=" + GetWaitingManagerCount());
             }
 
@@ -348,7 +348,7 @@ namespace ModAPI.Debugging
             private static void Prefix(out string __state)
             {
                 __state = null;
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
 
                 string state = GetLoadingManagerState();
                 int waiting = GetWaitingManagerCount();
@@ -359,7 +359,7 @@ namespace ModAPI.Debugging
 
             private static void Postfix(string __state)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 if (string.IsNullOrEmpty(__state)) return;
                 Mark("LoadingManager.Update", __state);
             }
@@ -376,13 +376,13 @@ namespace ModAPI.Debugging
         {
             private static void Prefix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingManager.SetLoadingFinished.Begin", "state=" + GetLoadingManagerState() + ", waiting=" + GetWaitingManagerCount());
             }
 
             private static void Postfix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingManager.SetLoadingFinished.End", "state=" + GetLoadingManagerState() + ", waiting=" + GetWaitingManagerCount());
             }
 
@@ -397,13 +397,13 @@ namespace ModAPI.Debugging
         {
             private static void Prefix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingManager.OnDestroy.Begin", "state=" + GetLoadingManagerState() + ", waiting=" + GetWaitingManagerCount());
             }
 
             private static void Postfix()
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 Mark("LoadingManager.OnDestroy.End", "state=" + GetLoadingManagerState() + ", waiting=" + GetWaitingManagerCount());
             }
 
@@ -418,7 +418,7 @@ namespace ModAPI.Debugging
         {
             private static void Postfix(LoadingLevel __instance)
             {
-                if (!PluginRunner.IsQuitting) return;
+                if (!ModRuntime.IsQuitting) return;
                 if (__instance == null || LoadingLevelLoadTimeField == null)
                 {
                     Mark("LoadingLevel.Awake");
@@ -580,14 +580,14 @@ namespace ModAPI.Debugging
         // Transpiler wrappers: mid-method probes with exact exception capture.
         private static void ContinueTransition_WithLog(SaveManager manager)
         {
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
                 Mark("LoadingLevel.Call.ContinueTransition.Begin");
             }
             try
             {
                 if (manager != null) manager.ContinueTransition();
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
                     Mark("LoadingLevel.Call.ContinueTransition.End");
                 }
@@ -606,14 +606,14 @@ namespace ModAPI.Debugging
 
         private static AsyncOperation LoadSceneAsync_WithLog(string sceneName)
         {
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
                 Mark("LoadingLevel.Call.LoadSceneAsync.Begin", "scene=" + sceneName);
             }
             try
             {
                 var op = SceneManager.LoadSceneAsync(sceneName);
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
                     Mark("LoadingLevel.Call.LoadSceneAsync.End", "opNull=" + (op == null));
                 }
@@ -633,14 +633,14 @@ namespace ModAPI.Debugging
 
         private static void ClearNextLevel_WithLog()
         {
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
                 Mark("LoadingLevel.Call.ClearNextLevel.Begin");
             }
             try
             {
                 LoadingScreen.ClearNextLevel();
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
                     Mark("LoadingLevel.Call.ClearNextLevel.End", "nextLevel=" + (LoadingScreen.nextLevel ?? string.Empty));
                 }

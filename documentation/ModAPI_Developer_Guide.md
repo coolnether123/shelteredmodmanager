@@ -5,15 +5,25 @@
 | Area | Assembly | Status |
 |------|----------|--------|
 | Core plugin lifecycle, context, settings APIs | `ModAPI.dll` | Current |
-| Sheltered content APIs and content runtime | `ShelteredAPI.dll` | Current |
-| Sheltered game helpers/events used by v1.2 mods | `ShelteredAPI.dll` with old `ModAPI.*` namespaces | Current 1.3 migration aliases |
-| Sheltered UI/input/item helpers used by v1.2 mods | `ShelteredAPI.dll` with old `ModAPI.*` namespaces | Current 1.3 migration aliases |
-| Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Current |
-| Docs labeled `v1.2` in this repo | Historical reference | Deprecated where conflicting |
+| Neutral input, actor, event-bus, scenario, and persistence contracts | `ModAPI.dll` | Current |
+| Sheltered content, saves, UI, input, events, actors, and scenarios | `ShelteredAPI.dll` | Current |
+| Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Internal unless exposed by a facade |
 
 Exact signatures: `documentation/API_Signatures_Reference.md`.
 
-`ModAPI.dll` is now the neutral framework assembly. It no longer references Sheltered `Assembly-CSharp` or the manager application; Sheltered runtime behavior is provided by `ShelteredAPI.dll` through neutral `GameRuntime.*` services and documented migration aliases.
+The 1.3 line is a breaking clean API line. `ModAPI.dll` is the neutral framework assembly and no longer references Sheltered `Assembly-CSharp` or the manager application. Sheltered runtime behavior is provided by `ShelteredAPI.dll` through public facades and neutral `GameRuntime.*` services.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are the stable mod-author surface.
+- Implementation classes are internal and may move.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
 
 ## 1. Start Here
 
@@ -24,6 +34,8 @@ Exact signatures: `documentation/API_Signatures_Reference.md`.
 - Spine settings UI: `documentation/Spine_Settings_Guide.md`
 - Settings + persistence patterns: `documentation/SETTINGS.md`
 - ShelteredAPI helper surface: `documentation/ShelteredAPI_Guide.md`
+- Input/keybinding registration: `documentation/Input_Keybindings_Guide.md`
+- Custom scenario registration and authoring: `documentation/Custom_Scenarios_Guide.md`
 - Sheltered content registration/runtime: `documentation/ShelteredAPI_Content_Guide.md`
 - Actor registry/components/bindings/adapters: `documentation/ShelteredAPI_Characters_Guide.md`
 - Failures and log signatures: `documentation/API_Troubleshooting.md`
@@ -49,7 +61,7 @@ public class MyPlugin : IModPlugin
 
 ## 3. Content Registration (Current API)
 
-Register via `ShelteredAPI.Content.ContentRegistry` in `Start(...)` (safe lifecycle guidance below).
+Register via `ShelteredAPI.Content.ShelteredContent` in `Start(...)` (safe lifecycle guidance below).
 
 ### 3.1 Type-Name Collision Warning
 
@@ -78,14 +90,14 @@ public void Start(IPluginContext ctx)
         .WithScrapValue(5f)
         .WithIcon("Assets/Icons/power_cell.png");
 
-    var result = ContentRegistry.RegisterItem(item);
+    var result = ShelteredContent.RegisterItem(item);
     if (!result.Success)
     {
         ctx.Log.Error("Item registration failed: " + result.ErrorMessage);
         return;
     }
 
-    ContentRegistry.RegisterRecipe(
+    ShelteredContent.RegisterRecipe(
         new RecipeDefinition()
             .WithId("recipe.power_cell")
             .WithResultItem("com.mymod.power_cell")
@@ -105,11 +117,7 @@ Use explicit APIs when possible:
 - `.WithDisplayNameText("Power Cell")`
 - `.WithDescriptionText("A high-capacity energy cell")`
 
-Backward-compatible behavior:
-- Legacy `.WithDisplayName(...)` / `.WithDescription(...)` still work.
-- Values are treated as keys if they look like keys (`.` and no spaces), otherwise treated as literal text.
-- For literal text, ShelteredAPI generates and registers internal keys before item UI reads localization.
-- This prevents vanilla fallback lowercasing issues when key lookup misses.
+Avoid ambiguous display-name helpers in new 1.3 code. Prefer explicit key/text methods so future content migrations can happen behind the facade.
 
 ### 3.4 Registration Timing and Lifecycle
 
@@ -123,7 +131,7 @@ Rationale:
 - Registering in constructors is unsafe and can race before loader context exists.
 
 Guaranteed-safe recipe:
-- Put all `ContentRegistry.RegisterItem/RegisterRecipe/RegisterCookingRecipe` calls in `Start(...)`.
+- Put all `ShelteredContent.RegisterItem/RegisterRecipe/RegisterCookingRecipe` calls in `Start(...)`.
 - Do not require managers directly in `Start(...)`; let injector consume registry entries.
 
 ## 4. Settings Patterns
@@ -138,33 +146,38 @@ Use A unless you explicitly need B. Full examples are in:
 
 ## 5. Events (ModAPI + ShelteredAPI)
 
-`ModEventBus` is neutral and lives in `ModAPI.dll`. Sheltered gameplay/UI hooks such as `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, and `InteractionRegistry` live in `ShelteredAPI.dll` in the 1.3 line, while retaining old `ModAPI.*` namespaces as source migration aliases.
+`ModEventBus` is neutral and lives in `ModAPI.dll`. Sheltered gameplay/UI/faction/time events are exposed through `ShelteredAPI.Events.ShelteredEvents`.
 
 ```csharp
-using ModAPI.Events;
+using ShelteredAPI.Events;
 
 public void Start(IPluginContext ctx)
 {
-    GameEvents.OnNewDay += day => ctx.Log.Info("Day " + day);
-    GameEvents.OnSixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
-    GameEvents.OnStaggeredTick += batch => ctx.Log.Info("Staggered every " + batch.IntervalHours + "h");
+    ShelteredEvents.NewDay += day => ctx.Log.Info("Day " + day);
+    ShelteredEvents.SixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
+    ShelteredEvents.StaggeredTick += batch => ctx.Log.Info("Staggered every " + batch.IntervalHours + "h");
 }
 ```
 
 ## 6. ShelteredAPI-Specific Helpers
 
-`ShelteredAPI` ships additional helpers under existing namespaces (`ModAPI.Core`, `ModAPI.Events`, `ModAPI.UI`, `ModAPI.Hooks`, and `ModAPI.Items`) for 1.3 source migration.
-
-Sheltered UI and item helpers such as `InventoryHelper`, `UIHooks`, `ContextMenuHelper`, `ModUIHooks`, `ModSettingsPanel`, `ModManagerPanel`, and NGUI/Spine settings UI helpers require `ShelteredAPI.dll` even when the source namespace starts with `ModAPI`. `ModAPI.dll` keeps neutral input bindings, `UIFlowGuard`, scroll/touch input shims, and Unity scene helpers.
+Use the Sheltered facades directly:
+- `ShelteredContent` for content registration and item resolution.
+- `ShelteredSaves` and `ShelteredSaveEvents` for Sheltered save slots and lifecycle.
+- `ShelteredUI` for intended UI helpers.
+- `ShelteredInput` for Sheltered input tuning and vanilla action IDs.
+- `ShelteredEvents` for Sheltered events.
+- `ShelteredActors` and `ShelteredCharacters` for actor/character integration.
+- `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` for scenarios.
 
 Example: explicit trigger registration and priority ordering.
 
 ```csharp
-using ModAPI.Events;
+using ShelteredAPI.Events;
 
 public void Start(IPluginContext ctx)
 {
-    GameTimeTriggerHelper.RegisterTrigger(
+    ShelteredEvents.RegisterTimeTrigger(
         triggerId: "com.mymod.economy.tick",
         priority: 50,
         cadence: TimeTriggerCadence.SixHour,
@@ -205,13 +218,13 @@ public void Initialize(IPluginContext ctx)
 }
 ```
 
-Sheltered save-backed compatibility helpers such as `ctx.SaveData(...)`, `ctx.LoadData(...)`, `GameUtil`, `ModList`, and `ModDictionary` are hosted by `ShelteredAPI.dll` in the 1.3 line, even when their namespaces remain `ModAPI.*` for source migration.
+Use `ShelteredSaves` when your mod intentionally works with Sheltered save slots or descriptors. Keep ordinary per-mod state on `ctx.SaveSystem`.
 
 ```csharp
-ctx.SaveData("stats", myStats);
-if (ctx.LoadData("stats", out MyStats loaded))
+SaveEntry[] saves = ShelteredSaves.ListStandard(page: 0, pageSize: 20);
+foreach (SaveEntry save in saves)
 {
-    myStats = loaded;
+    ctx.Log.Info(save.DisplayName);
 }
 ```
 

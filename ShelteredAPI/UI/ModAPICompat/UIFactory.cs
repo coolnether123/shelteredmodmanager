@@ -8,7 +8,7 @@ namespace ModAPI.UI
     /// Wrapper for a created interactive UI element, providing direct access to its components
     /// without needing to use GetComponent or Find.
     /// </summary>
-    public class InteractiveUIElement
+    internal class InteractiveUIElement
     {
         public GameObject GameObject { get; internal set; }
         public UISprite Sprite { get; internal set; }
@@ -19,7 +19,7 @@ namespace ModAPI.UI
     /// <summary>
     /// Configuration options for creating an interactive UI element.
     /// </summary>
-    public class UIElementOptions
+    internal class UIElementOptions
     {
         public int Depth = 0;
         public Vector3 Scale = Vector3.one;
@@ -44,13 +44,13 @@ namespace ModAPI.UI
         public string Name = "ModdedUIElement";
     }
 
-    public enum ArrowDirection { Left, Right, Up, Down }
+    internal enum ArrowDirection { Left, Right, Up, Down }
 
     /// <summary>
     /// A tiered factory system for creating modded interactive UI elements.
     /// Provides simple one-liners for common cases and a flexible options pattern for complex ones.
     /// </summary>
-    public static class UIFactory
+    internal static class UIFactory
     {
         private static readonly Color DefaultHover = new Color(0.8f, 0.8f, 0.8f, 1f);
         private static readonly Color DefaultPress = new Color(0.6f, 0.6f, 0.6f, 1f);

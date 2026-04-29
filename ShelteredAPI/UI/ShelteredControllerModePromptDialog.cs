@@ -9,7 +9,7 @@ namespace ShelteredAPI.UI
     /// Temporary confirmation dialog shown after switching to controller mode.
     /// If the countdown expires, the previous input mode is restored automatically.
     /// </summary>
-    public sealed class ShelteredControllerModePromptDialog : MonoBehaviour
+    internal sealed class ShelteredControllerModePromptDialog : MonoBehaviour
     {
         private const float DefaultTimeoutSeconds = 10f;
         private const int WindowWidth = 720;

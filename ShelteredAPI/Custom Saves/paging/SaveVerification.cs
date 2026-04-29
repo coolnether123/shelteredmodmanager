@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using ModAPI.Core;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.UI;
 using ModAPI.Hooks;
 using HarmonyLib;
@@ -201,7 +201,7 @@ namespace ModAPI.Hooks.Paging
                     try 
                     { 
                         string json = File.ReadAllText(manPath);
-                        manifest = ModAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(json);
+                        manifest = ShelteredAPI.Saves.SaveRegistryCore.DeserializeSlotManifest(json);
                         state = Verify(manifest);
                     } 
                     catch (Exception ex)
@@ -369,7 +369,7 @@ namespace ModAPI.Hooks.Paging
             if (manifest == null) return VerificationState.Unknown; 
             if (manifest.lastLoadedMods == null) return VerificationState.Unknown;
 
-            var comparison = BuildModComparison(PluginManager.LoadedMods, manifest.lastLoadedMods, includeExtraMods);
+            var comparison = BuildModComparison(ModRuntime.LoadedMods, manifest.lastLoadedMods, includeExtraMods);
             if (comparison.Any(c => c.status == ModCompareStatus.Missing))
                 return VerificationState.Missing;
 

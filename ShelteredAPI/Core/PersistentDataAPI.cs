@@ -10,7 +10,7 @@ namespace ModAPI.Util
     /// <summary>
     /// Sheltered save-backed compatibility helper for JSON blobs keyed by mod id.
     /// </summary>
-    public static class PersistentDataAPI
+    internal static class PersistentDataAPI
     {
         public static void SaveData<T>(this IPluginContext ctx, string key, T data)
         {
@@ -36,7 +36,7 @@ namespace ModAPI.Util
     /// Implements ISaveable to persist mod data in a dedicated "ModAPI_Data" group.
     /// Stores one JSON blob per mod id, containing that mod's key/value pairs.
     /// </summary>
-    public sealed class ModSaveDataProxy : ISaveable
+    internal sealed class ModSaveDataProxy : ISaveable
     {
         private const string GroupName = "ModAPI_Data";
         private const string ModsGroup = "mods";

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     [Serializable]
-    public class CharacterSaveData
+    internal class CharacterSaveData
     {
         public int UniqueId { get; set; }
         public string PersistenceKey { get; set; }
@@ -25,7 +25,7 @@ namespace ModAPI.Characters
     }
 
     [Serializable]
-    public class EffectSaveData
+    internal class EffectSaveData
     {
         public string EffectId { get; set; }
         public float Duration { get; set; }
@@ -38,7 +38,7 @@ namespace ModAPI.Characters
     }
 
     [Serializable]
-    public class AttributeSaveData
+    internal class AttributeSaveData
     {
         public string AttributeName { get; set; }
         public float Value { get; set; }

@@ -1,6 +1,6 @@
 using System;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     public interface ICharacterDefinition
     {
@@ -17,8 +17,6 @@ namespace ModAPI.Characters
     {
         CharacterState State { get; }
         CharacterLocation Location { get; }
-        FamilyMember UnderlyingMember { get; }
-        NpcVisitor UnderlyingNpc { get; }
         bool IsActive { get; }
 
         ICharacterEffects Effects { get; }

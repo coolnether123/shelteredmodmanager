@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public static class ScenarioAuthoringInputActions
+    internal static class ScenarioAuthoringInputActions
     {
         private static bool _registered;
 

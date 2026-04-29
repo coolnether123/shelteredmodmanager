@@ -4,7 +4,7 @@ using System.Reflection;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.UI;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.Hooks;
 using ModAPI.Hooks.Paging;
 using UnityEngine;
@@ -43,7 +43,7 @@ namespace ModAPI.Harmony
         FailureMode = "Mods entry or manager-driven auto-load flow fails to start from the main menu.",
         RollbackStrategy = "Disable the UI patch domain or remove the main menu patch host.")]
     [HarmonyPatch(typeof(MainMenu), "OnShow")]
-    public static class MainMenu_OnShow_Patch
+    internal static class MainMenu_OnShow_Patch
     {
         private static bool _autoLoadChecked = false;
 
@@ -59,9 +59,9 @@ namespace ModAPI.Harmony
 
                 // If we returned to Main Menu, the app is still alive and future load/save flows
                 // must not run with stale quit state.
-                if (PluginRunner.IsQuitting)
+                if (ModRuntime.IsQuitting)
                 {
-                    PluginRunner.IsQuitting = false;
+                    ModRuntime.IsQuitting = false;
                     MMLog.WriteDebug("[MainMenu_OnShow] Resetting IsQuitting flag to FALSE.");
                 }
 
@@ -217,7 +217,7 @@ namespace ModAPI.Harmony
         FailureMode = "Main menu transitions return to vanilla flow instead of opening the Mod Manager panel.",
         RollbackStrategy = "Disable the UI patch domain or remove the menu transition redirect patch.")]
     [HarmonyPatch(typeof(MainMenu), "OnTweenFinished")]
-    public static class MainMenu_OnTweenFinished_Patch
+    internal static class MainMenu_OnTweenFinished_Patch
     {
         public static bool TransitioningToMods = false;
 

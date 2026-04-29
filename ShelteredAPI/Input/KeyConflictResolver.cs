@@ -6,20 +6,20 @@ using UnityEngine;
 
 namespace ShelteredAPI.Input
 {
-    public enum KeyConflictUserChoice
+    internal enum KeyConflictUserChoice
     {
         Cancel = 0,
         Override = 1,
         Swap = 2
     }
 
-    public enum KeyBindingSlot
+    internal enum KeyBindingSlot
     {
         Primary = 0,
         Secondary = 1
     }
 
-    public sealed class KeyConflictEntry
+    internal sealed class KeyConflictEntry
     {
         public string ActionId;
         public string ActionLabel;
@@ -28,7 +28,7 @@ namespace ShelteredAPI.Input
         public KeyCode Key;
     }
 
-    public sealed class KeyConflictDetection
+    internal sealed class KeyConflictDetection
     {
         public bool Conflicted;
         public List<KeyConflictEntry> ActionList = new List<KeyConflictEntry>();
@@ -36,7 +36,7 @@ namespace ShelteredAPI.Input
         public KeyConflictUserChoice RecommendedChoice = KeyConflictUserChoice.Cancel;
     }
 
-    public sealed class KeyConflictResolution
+    internal sealed class KeyConflictResolution
     {
         public bool Applied;
         public bool Cancelled;
@@ -47,9 +47,9 @@ namespace ShelteredAPI.Input
     /// <summary>
     /// Centralized conflict detection and deterministic resolution strategies.
     /// </summary>
-    public static class KeyConflictResolver
+    internal static class KeyConflictResolver
     {
-        public static KeyConflictDetection DetectConflicts(
+        internal static KeyConflictDetection DetectConflicts(
             KeyCode proposedKey,
             string targetActionId,
             InputContext targetContext)
@@ -122,7 +122,7 @@ namespace ShelteredAPI.Input
             return result;
         }
 
-        public static KeyConflictResolution ResolveConflict(
+        internal static KeyConflictResolution ResolveConflict(
             string targetActionId,
             KeyBindingSlot targetSlot,
             KeyCode targetOldKey,

@@ -5,7 +5,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    public static class HierarchyUtil
+    internal static class HierarchyUtil
     {
         public static List<Transform> GetRootTransforms()
         {

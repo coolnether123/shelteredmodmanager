@@ -5,7 +5,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioAuthoringBackendService : IScenarioAuthoringBackend
+    internal sealed class ScenarioAuthoringBackendService : IScenarioAuthoringBackend
     {
         private readonly object _sync = new object();
         private readonly ScenarioAuthoringSelectionService _selectionService;

@@ -2,7 +2,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
 using ModAPI.Hooks;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using System;
 
 namespace ModAPI.Hooks

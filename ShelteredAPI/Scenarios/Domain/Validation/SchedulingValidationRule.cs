@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using ModAPI.Items;
+using ShelteredAPI.Content;
 
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class SchedulingValidationRule : IScenarioValidationRule
+    internal sealed class SchedulingValidationRule : IScenarioValidationRule
     {
         public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
         {

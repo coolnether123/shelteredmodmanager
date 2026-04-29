@@ -1,6 +1,6 @@
 using System.Collections;
 using System.Reflection;
-using ModAPI.Items;
+using ShelteredAPI.Content;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 

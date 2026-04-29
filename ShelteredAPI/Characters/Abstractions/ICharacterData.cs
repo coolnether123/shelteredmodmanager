@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace ModAPI.Characters
+namespace ShelteredAPI.Characters
 {
     public interface ICharacterData
     {

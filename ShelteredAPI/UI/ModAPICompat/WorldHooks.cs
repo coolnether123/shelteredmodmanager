@@ -10,7 +10,7 @@ namespace ModAPI.Hooks
     /// Mods are responsible for patching GameModeManager.shelterMapWorldPosition
     /// if they wish to relocate the bunker.
     /// </summary>
-    public static class WorldHooks
+    internal static class WorldHooks
     {
         /// <summary>
         /// Gets the absolute world position of the primary shelter.

@@ -1,5 +1,5 @@
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 using UnityEngine;
 
 namespace ShelteredAPI.Events

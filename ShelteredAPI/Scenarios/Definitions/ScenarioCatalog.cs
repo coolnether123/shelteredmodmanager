@@ -9,7 +9,7 @@ namespace ShelteredAPI.Scenarios
     /// <summary>
     /// Indexes Sheltered scenario.xml files from each loaded mod's Scenarios folder.
     /// </summary>
-    public sealed class ScenarioCatalog
+    internal sealed class ScenarioCatalog
     {
         private readonly IScenarioModFolderSource _modFolderSource;
         private readonly ScenarioDefinitionSerializer _serializer;

@@ -7,7 +7,7 @@ using ShelteredAPI.Content;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioValidatorImpl
+    internal sealed class ScenarioValidatorImpl
     {
         private readonly ScenarioValidator _neutralValidator;
 

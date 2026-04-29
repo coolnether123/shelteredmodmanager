@@ -1,6 +1,7 @@
 using HarmonyLib;
+using ModAPI.Actors;
 using ModAPI.Core;
-using ModAPI.Events;
+using ShelteredAPI.Events;
 using ModAPI.Harmony;
 using ModAPI.Util;
 using System;
@@ -8,7 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace ModAPI.Actors.Internal
+namespace ShelteredAPI.Actors.Internal
 {
     [PatchPolicy(PatchDomain.World, "ShelteredActorSystemTicks",
         TargetBehavior = "Sheltered actor system registration and ticking from GameTime lifecycle updates",
@@ -1591,7 +1592,7 @@ namespace ModAPI.Actors.Internal
         {
             private static void Postfix()
             {
-                ActorSystem.InternalInstance.EnsureRegistered();
+                ShelteredActors.InternalInstance.EnsureRegistered();
             }
         }
 
@@ -1600,7 +1601,7 @@ namespace ModAPI.Actors.Internal
         {
             private static void Postfix()
             {
-                ActorSystem.InternalInstance.Update();
+                ShelteredActors.InternalInstance.Update();
             }
         }
     }

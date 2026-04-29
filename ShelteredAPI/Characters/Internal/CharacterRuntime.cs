@@ -6,7 +6,7 @@ using System.Reflection;
 using UnityEngine;
 using ModAPI.Util;
 
-namespace ModAPI.Characters.Internal
+namespace ShelteredAPI.Characters.Internal
 {
     internal sealed class LiveCharacterProxy : ICharacterProxy
     {
@@ -49,8 +49,8 @@ namespace ModAPI.Characters.Internal
                 return CharacterLocation.Unknown;
             }
         }
-        public FamilyMember UnderlyingMember { get { return _member; } }
-        public NpcVisitor UnderlyingNpc { get { return _npc; } }
+        internal FamilyMember UnderlyingMember { get { return _member; } }
+        internal NpcVisitor UnderlyingNpc { get { return _npc; } }
         public bool IsActive { get; private set; }
         public bool IsPersistent { get { return _data.IsPersistent; } }
         public bool IsLoadedOnShelterEntry { get; private set; }

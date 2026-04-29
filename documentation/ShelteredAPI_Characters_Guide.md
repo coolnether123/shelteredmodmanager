@@ -1,5 +1,19 @@
 # ShelteredAPI Actors Guide
 
+The 1.3 line is a breaking clean API line.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are stable.
+- Implementation classes are internal.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
+
 This guide covers the actor system exposed through:
 
 ```csharp
@@ -38,6 +52,21 @@ var id = new ActorId(ActorKind.Citizen, 1, "mymod");
 - `Kind` prevents collisions between players, visitors, factions, and synthetic actors.
 - `Domain` is the mod namespace for custom actor spaces.
 - `LocalId` is stable inside that `(Kind, Domain)` scope.
+
+Sheltered character actors can be addressed without depending on the internal
+mirror rules:
+
+```csharp
+ActorId alice = ShelteredActors.FamilyMemberActorId(uniqueMemberId);
+ActorId visitor = ShelteredActors.VisitorActorId(uniqueVisitorId);
+ActorId synthetic = ShelteredActors.SyntheticCharacterActorId(uniqueCharacterId, "mymod");
+
+ICharacterProxy character;
+if (ShelteredActors.TryGetCharacter(alice, out character))
+{
+    ctx.Log.Info(character.Name);
+}
+```
 
 ## 3. Creating Actors
 
@@ -221,3 +250,41 @@ _actors.Subscribe(evt =>
 - Persistent bindings are saved with the actor entry and restored on load.
 - Unknown component payloads are preserved until a serializer is available.
 - Component ids must be namespaced like `modid.component_name`.
+
+## 11. Sheltered Characters
+
+`ModAPI.Actors` is the neutral registry/component/event/simulation layer. Use
+`ShelteredAPI.Characters.ShelteredCharacters` when the API needs actual
+Sheltered character data.
+
+```csharp
+using ShelteredAPI.Characters;
+
+ICharacterProxy firstShelterMember = ShelteredCharacters.Query()
+    .FromSource(CharacterSource.RealFamily)
+    .InState(CharacterState.InShelter)
+    .FirstOrDefault();
+
+ICharacterProxy persistentNpc = ShelteredCharacters.CreateSyntheticCharacter(
+    "Mara",
+    "Vale",
+    "mymod.mara",
+    "mymod");
+```
+
+The stable character surface is `ICharacterProxy`, `ICharacterData`,
+`ICharacterEffects`, `ICharacterAttributes`, `AttributeModifier`, and
+`EffectInstance`. The implementation service and save DTOs are internal.
+
+Raw Sheltered runtime types are available only through explicit escape hatches:
+
+```csharp
+ICharacterProxy proxy = ShelteredCharacters.FromFamilyMember(member);
+FamilyMember member = ShelteredCharacters.FindFamilyMember(proxy);
+
+ShelteredCharacters.SwapEncounterCharacter(encounterCharacter, proxy);
+```
+
+Prefer actor ids, proxies, and DTOs for normal mod logic. Use the raw
+`FamilyMember`, `NpcVisitor`, or `EncounterCharacter` escape hatches only when a
+mod is intentionally integrating with Sheltered runtime objects.

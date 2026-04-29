@@ -12,7 +12,7 @@ namespace ShelteredAPI.Scenarios
     /// XML serializer for persistent scenario definitions. It uses System.Xml only so it
     /// works under the .NET 3.5 runtime used by the Sheltered mod stack.
     /// </summary>
-    public class ScenarioDefinitionSerializer
+    internal class ScenarioDefinitionSerializer
     {
         public const string DefaultFileName = "scenario.xml";
 

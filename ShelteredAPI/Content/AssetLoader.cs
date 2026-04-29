@@ -13,7 +13,7 @@ namespace ShelteredAPI.Content
     ///   - Icons/Textures:  <c>Assets/Textures/icon.png</c>
     ///   - Bundles/Prefabs: <c>Assets/Prefabs/item.prefab</c> or <c>Assets/Bundles/items.bundle</c>
     /// </summary>
-    public static class AssetLoader
+    internal static class AssetLoader
     {
         private static readonly Dictionary<string, Texture2D> _textureCache = new Dictionary<string, Texture2D>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, Sprite> _spriteCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);

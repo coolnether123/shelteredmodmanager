@@ -1,5 +1,5 @@
 using HarmonyLib;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using System;
 using System.Linq;
 using ModAPI.Core;
@@ -19,9 +19,9 @@ namespace ModAPI.Hooks
             // 1. FORCE INJECTION NOW
             // If the Awake patch was missed, this line saves the day.
             SaveManager_Injection_Patch.Inject(__instance);
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
-                SaveExitTracker.Mark("SaveToCurrentSlot.Prefix", "Entering save-to-slot while quitting");
+                ModRuntime.MarkSaveExit("SaveToCurrentSlot.Prefix", "Entering save-to-slot while quitting");
             }
 
             // 2. Logging - Use reflection to get the slot since currentSlot doesn't exist
@@ -45,13 +45,13 @@ namespace ModAPI.Hooks
                 // We have a pending custom REDIRECT. Let the proxy handle this in PlatformSave.
                 // The redirect target has already been queued by SlotSelectionPanel, MainMenuPanel, etc.
                 // Just return true and let vanilla code call into the proxy.
-                if (PluginRunner.IsQuitting) SaveExitTracker.Mark("SaveToCurrentSlot.Prefix", "Pending NEW GAME for " + slot);
+                if (ModRuntime.IsQuitting) ModRuntime.MarkSaveExit("SaveToCurrentSlot.Prefix", "Pending NEW GAME for " + slot);
                 return true;
             }
 
             if (SaveRuntimeState.ActiveCustomSave != null && SaveRuntimeState.ActiveCustomSave.absoluteSlot == (int)slot)
             {
-                if (PluginRunner.IsQuitting) SaveExitTracker.Mark("SaveToCurrentSlot.Prefix", "Active custom session for " + slot);
+                if (ModRuntime.IsQuitting) ModRuntime.MarkSaveExit("SaveToCurrentSlot.Prefix", "Active custom session for " + slot);
             }
 
             // 3. Return true to let vanilla logic run
@@ -60,9 +60,9 @@ namespace ModAPI.Hooks
 
         static void Postfix()
         {
-            if (PluginRunner.IsQuitting)
+            if (ModRuntime.IsQuitting)
             {
-                SaveExitTracker.Mark("SaveToCurrentSlot.Postfix", "SaveToCurrentSlot finished");
+                ModRuntime.MarkSaveExit("SaveToCurrentSlot.Postfix", "SaveToCurrentSlot finished");
             }
         }
     }

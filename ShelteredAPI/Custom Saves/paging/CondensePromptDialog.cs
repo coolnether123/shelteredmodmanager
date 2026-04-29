@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 using ModAPI.Core;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.UI;
 
 namespace ModAPI.Hooks.Paging

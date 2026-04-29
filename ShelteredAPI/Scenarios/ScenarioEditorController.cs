@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioEditorController : IScenarioEditorService
+    internal sealed class ScenarioEditorController : IScenarioEditorService
     {
         private readonly IScenarioEditorSessionStore _sessionStore;
         private readonly IScenarioDefinitionSerializer _serializer;

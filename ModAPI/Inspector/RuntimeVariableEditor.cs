@@ -5,7 +5,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    public class RuntimeVariableEditor
+    internal class RuntimeVariableEditor
     {
         private readonly Queue<VariableEditRequest> _pendingEdits = new Queue<VariableEditRequest>();
 

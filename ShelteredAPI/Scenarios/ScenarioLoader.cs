@@ -6,7 +6,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioLoader
+    internal sealed class ScenarioLoader
     {
         private readonly ScenarioCatalog _catalog;
         private readonly ScenarioDefinitionSerializer _serializer;
@@ -107,7 +107,7 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    public static class ScenarioDefinitionCloner
+    internal static class ScenarioDefinitionCloner
     {
         public static ScenarioDefinition Clone(ScenarioDefinition definition)
         {

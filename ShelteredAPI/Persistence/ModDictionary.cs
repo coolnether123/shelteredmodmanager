@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 
-namespace ModAPI.Persistence
+namespace ShelteredAPI.Persistence
 {
     /// <summary>
     /// A Dictionary that automatically saves and loads its contents.

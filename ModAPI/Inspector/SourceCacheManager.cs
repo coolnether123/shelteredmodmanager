@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -6,7 +6,7 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    public static class SourceCacheManager
+    internal static class SourceCacheManager
     {
         private static readonly string APPDATA_ROOT = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ModAPI");
         private static readonly string CACHE_ROOT = Path.Combine(APPDATA_ROOT, "Cache");

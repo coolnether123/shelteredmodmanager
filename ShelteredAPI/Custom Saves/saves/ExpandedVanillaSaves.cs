@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
-    public static class ExpandedVanillaSaves
+    internal static class ExpandedVanillaSaves
     {
         private const string StandardScenarioId = "Standard";
         private static readonly SaveRegistryCore _registry = new SaveRegistryCore(StandardScenarioId);

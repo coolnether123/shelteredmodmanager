@@ -15,7 +15,7 @@ namespace ModAPI.UI
     /// Shared runtime settings window used by ModAPI and ShelteredAPI providers.
     /// Supports presets, search, pagination, keybind pairing, and external input locking for nested dialogs.
     /// </summary>
-    public class ModSettingsPanel : MonoBehaviour
+    internal class ModSettingsPanel : MonoBehaviour
     {
         /// <summary>
         /// Raised after the settings panel finishes closing and destroys its runtime root.
@@ -1231,7 +1231,7 @@ namespace ModAPI.UI
             return go;
         }
 
-        public static class ReflectionHelper
+        internal static class ReflectionHelper
         {
             public static object GetValue(SettingDefinition def, object obj)
             {

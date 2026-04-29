@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 
-namespace ModAPI.Saves
+namespace ShelteredAPI.Saves
 {
-    public static class ScenarioRegistry
+    internal static class ScenarioRegistry
     {
         private static readonly Dictionary<string, ScenarioDescriptor> _map = new Dictionary<string, ScenarioDescriptor>(StringComparer.OrdinalIgnoreCase);
 

@@ -10,7 +10,7 @@ namespace ModAPI.Core
     /// <summary>
     /// Scans the mods directory and loads mod assemblies from discovered entries.
     /// </summary>
-    public static class ModDiscovery
+    internal static class ModDiscovery
     {
         /// <summary>
         /// Finds mods with About/About.json and returns descriptors.

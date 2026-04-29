@@ -2,7 +2,7 @@ using System;
 using ModAPI.Core;
 using UnityEngine;
 
-namespace ModAPI.Events
+namespace ShelteredAPI.Events
 {
     /// <summary>
     /// UI panel lifecycle events. Provides panel open/close tracking
@@ -16,7 +16,7 @@ namespace ModAPI.Events
     ///   };
     /// </summary>
     [Obsolete("1.3 source migration alias hosted in ShelteredAPI.dll; reference ShelteredAPI for Sheltered UI hooks.", false)]
-    public static class UIEvents
+    internal static class UIEvents
     {
         // Panel lifecycle events
         /// <summary>
@@ -93,7 +93,7 @@ namespace ModAPI.Events
 
         private static void SafeInvoke(Action action, string eventName, object context = null)
         {
-            if (action == null || PluginRunner.IsQuitting)
+            if (action == null || ModRuntime.IsQuitting)
                 return;
 
             try

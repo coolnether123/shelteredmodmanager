@@ -10,7 +10,7 @@ namespace ModAPI.UI
     /// Higher-level UI utilities for finding panels, cloning elements, and managing depths.
     /// Complementary to UIUtil but focuses on ease of use for modders.
     /// </summary>
-    public static class UIHelper
+    internal static class UIHelper
     {
         private static int _nextReservedDepth = 100000;
         private static readonly FieldInfo _panelStackField = typeof(UIPanelManager).GetField("m_panel_stack", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -281,7 +281,7 @@ namespace ModAPI.UI
     /// Helper component that shows a tooltip when hovering over an element.
     /// Attach to any GameObject with a collider to show a tooltip on hover.
     /// </summary>
-    public class TooltipHelper : MonoBehaviour
+    internal class TooltipHelper : MonoBehaviour
     {
         private static Texture2D _tooltipBgTexture;
         private GameObject _tooltipObj;

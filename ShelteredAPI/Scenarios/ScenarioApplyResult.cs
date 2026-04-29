@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class ScenarioApplyResult
+    internal sealed class ScenarioApplyResult
     {
         private readonly List<string> _messages = new List<string>();
 

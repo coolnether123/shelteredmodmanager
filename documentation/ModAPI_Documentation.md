@@ -4,13 +4,27 @@ This document is the current high-level map of the codebase. It is intentionally
 
 For exact callable signatures, use `documentation/API_Signatures_Reference.md`.
 
+The 1.3 line is a breaking clean API line.
+
+## Assembly Rule
+
+- Always reference `ModAPI.dll`.
+- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+## API Stability Rules
+
+- Public facades are the stable mod-author surface.
+- Implementation classes are internal and may move.
+- Typed Sheltered escape hatches are explicit.
+- Future migrations should happen behind facades.
+
 ## Compatibility Matrix
 
 | Scope | Applies To | Status |
 |-------|------------|--------|
 | Module roles and architecture intent | Current codebase | Supported |
 | Public signatures | Current codebase | Prefer signature reference |
-| Historical v1.2 file-role notes | Older docs/snippets | Deprecated where conflicting |
+| Historical file-role notes | Older docs/snippets | Historical only |
 
 ## 1. Core Runtime
 
@@ -60,26 +74,18 @@ Capabilities:
 Related guide:
 - `documentation/ShelteredAPI_Characters_Guide.md`
 
-## 3. Compatibility Surfaces
+## 3. Public Facades
 
-These remain available in the 1.3 line to preserve older mod integrations:
-- `GameEvents`
-- `GameTimeTriggerHelper`
-- `UIEvents`
-- `FactionEvents`
-- `PartyHelper`
-- `InteractionRegistry`
-- `GameUtil`
-- `PersistentDataAPI`
+Preferred 1.3 entry points:
+- `ShelteredContent` for content registration, assets, localization, loot, recipes, and runtime item resolution
+- `ShelteredSaves` and `ShelteredSaveEvents` for Sheltered save slots and save lifecycle
+- `ShelteredEvents` for Sheltered game, UI, faction, and time events
+- `ShelteredUI` for intended UI helpers
+- `ShelteredInput` for Sheltered input integration and tuning
+- `ShelteredActors` and `ShelteredCharacters` for Sheltered actor/character integration
+- `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` for scenarios
 
-Current location:
-- `ShelteredAPI.dll` for `GameEvents`, `GameTimeTriggerHelper`, `UIEvents`, `FactionEvents`, `PartyHelper`, `InteractionRegistry`, `GameUtil`, `PersistentDataAPI`, and custom-save APIs
-- `ModAPI.dll` for neutral loader, settings, event bus, scenario registration, and per-mod persistence contracts
-
-Status:
-- supported in 1.3 as source migration aliases where applicable
-- Sheltered-backed helpers require a `ShelteredAPI.dll` reference even when they keep old `ModAPI.*` namespaces
-- `ModAPI.dll` no longer owns Sheltered save integration in the 1.3 refactor branch
+Implementation classes, patch hosts, serializers, controllers, repositories, and manager-binding services are internal.
 
 ## 4. Content System
 
@@ -94,7 +100,7 @@ Responsibilities:
 - inventory/content integration
 
 Key files:
-- `ContentRegistry.cs`
+- `ShelteredContent.cs`
 - `ContentResolver.cs`
 - `ContentInjector.cs`
 - `InventoryIntegration.cs`
@@ -116,13 +122,13 @@ Responsibilities:
 - settings metadata scanning
 - settings UI/controller generation
 - neutral per-save mod state through `ISaveSystem`
-- Sheltered save-backed compatibility helpers through `ShelteredAPI.dll`
+- Sheltered save-slot facades through `ShelteredAPI.dll`
 
 Main patterns:
 - `ModManagerBase<T>`
 - `ISettingsProvider`
 - `ISaveSystem.RegisterModData(...)`
-- `ctx.SaveData(...)` / `ctx.LoadData(...)`
+- `ShelteredSaves` / `ShelteredSaveEvents` when a mod intentionally works with Sheltered save slots
 
 Related guides:
 - `documentation/Spine_Settings_Guide.md`
@@ -139,10 +145,7 @@ Responsibilities:
 - `ShelteredAPI/Events` owns Sheltered gameplay lifecycle events, UI lifecycle events, and deterministic scheduler triggers
 
 Key files:
-- `ShelteredAPI/Events/GameEvents.cs`
-- `ShelteredAPI/Events/GameTimeTriggerHelper.cs`
-- `ShelteredAPI/Events/UIEvents.cs`
-- `ShelteredAPI/Events/FactionEvents.cs`
+- `ShelteredAPI/Events/ShelteredEvents.cs`
 - `ModAPI/Events/ModEventBus.cs`
 
 Related guide:
@@ -177,11 +180,11 @@ Related guides:
 
 Primary areas:
 - `ModAPI/UI`
-- `ShelteredAPI/UI/ModAPICompat`
+- `ShelteredAPI/UI`
 
 Responsibilities:
 - `ModAPI/UI` owns neutral Unity-level scroll/touch/input flow shims
-- `ShelteredAPI/UI/ModAPICompat` owns Sheltered panel lifecycle bridging, UI factory helpers, settings UI, NGUI helpers, and debug UI migration aliases
+- `ShelteredAPI/UI` owns Sheltered panel lifecycle bridging, UI factory helpers, settings UI, NGUI helpers, and debug UI internals
 
 Representative files:
 - `ModAPI/UI/UIFlowGuard.cs`

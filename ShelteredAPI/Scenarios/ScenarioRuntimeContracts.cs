@@ -1,12 +1,12 @@
 using System;
 using ModAPI.Hooks.Paging;
-using ModAPI.Saves;
+using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
-    public enum ScenarioDependencyVerificationState
+    internal enum ScenarioDependencyVerificationState
     {
         Match = 0,
         VersionMismatch = 1,

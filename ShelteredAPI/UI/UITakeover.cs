@@ -8,7 +8,7 @@ namespace ShelteredAPI.UI
     /// <summary>
     /// Entry points for fluent NGUI/UI takeover operations.
     /// </summary>
-    public static class UITakeover
+    internal static class UITakeover
     {
         public static UITakeoverSession For(BasePanel panel)
         {

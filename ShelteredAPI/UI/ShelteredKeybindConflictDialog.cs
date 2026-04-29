@@ -8,7 +8,7 @@ namespace ShelteredAPI.UI
     /// <summary>
     /// Sheltered-specific modal dialog used by the controls UI when a requested keybind conflicts with another action.
     /// </summary>
-    public sealed class ShelteredKeybindConflictDialog : MonoBehaviour
+    internal sealed class ShelteredKeybindConflictDialog : MonoBehaviour
     {
         private static GameObject _instance;
 

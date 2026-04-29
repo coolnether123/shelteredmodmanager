@@ -5,7 +5,7 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    public sealed class BunkerDependencyValidationRule : IScenarioValidationRule
+    internal sealed class BunkerDependencyValidationRule : IScenarioValidationRule
     {
         public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
         {
