@@ -172,6 +172,10 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("InstalledModApiVersion", out apiVersion))
                 settings.InstalledModApiVersion = apiVersion;
 
+            string shelteredApiVersion;
+            if (raw.TryGetValue("InstalledShelteredApiVersion", out shelteredApiVersion))
+                settings.InstalledShelteredApiVersion = shelteredApiVersion;
+
             string enableNexus;
             if (raw.TryGetValue("EnableNexusIntegration", out enableNexus))
             {
@@ -290,6 +294,7 @@ namespace Manager.Core.Services
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
+            data["InstalledShelteredApiVersion"] = settings.InstalledShelteredApiVersion ?? string.Empty;
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
             data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
             string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;

@@ -506,6 +506,8 @@ namespace Manager.Views
             item.SecondaryText = state == NexusItemState.UpdateAvailable
                 ? FormatVersion(mod.Version) + " -> " + FormatVersion(mod.NexusRemoteVersion)
                 : FormatVersion(mod.Version) + (mod.HasNexusReference ? " linked to Nexus" : " not linked");
+            if (HasApiIssue(mod))
+                item.SecondaryText += " | " + GetApiIssueText(mod);
             item.BadgeText = GetBadgeText(state);
             return item;
         }
@@ -775,7 +777,7 @@ namespace Manager.Views
             if (!string.IsNullOrEmpty(errorMessage))
                 _summaryLabel.Text = "Installed check failed";
             else
-                _summaryLabel.Text = "Installed " + _installedMods.Count + "   Linked " + _installedByNexusKey.Count + "   Updates " + CountUpdates(_installedMods) + BuildLastCheckedSuffix();
+                _summaryLabel.Text = "Installed " + _installedMods.Count + "   Linked " + _installedByNexusKey.Count + "   Updates " + CountUpdates(_installedMods) + "   Compatibility " + CountApiIssues(_installedMods) + BuildLastCheckedSuffix();
 
             if (string.IsNullOrEmpty(_managerStatusLabel.Text))
                 _managerStatusLabel.Text = "SMM: not checked";
@@ -871,6 +873,9 @@ namespace Manager.Views
             details.Website = local.Website ?? string.Empty;
             details.PreviewPath = local.PreviewPath ?? string.Empty;
             details.RequiredModApiVersion = local.RequiredModApiVersion;
+            details.DeclaredModApiVersion = local.DeclaredModApiVersion;
+            details.DeclaredShelteredApiVersion = local.DeclaredShelteredApiVersion;
+            details.ApiCompatibility = local.ApiCompatibility;
             details.IsModApiCompatible = local.IsModApiCompatible;
             details.Status = local.Status;
             details.StatusMessage = local.StatusMessage;
@@ -910,8 +915,9 @@ namespace Manager.Views
         {
             if (mod == null) return 100;
             if (mod.HasUpdateAvailable) return 0;
-            if (mod.HasNexusReference) return 1;
-            return 2;
+            if (HasApiIssue(mod)) return 1;
+            if (mod.HasNexusReference) return 2;
+            return 3;
         }
 
         private static int CountUpdates(List<ModItem> mods)
@@ -923,6 +929,35 @@ namespace Manager.Views
                     count++;
             }
             return count;
+        }
+
+        private static int CountApiIssues(List<ModItem> mods)
+        {
+            int count = 0;
+            for (int i = 0; i < mods.Count; i++)
+            {
+                if (HasApiIssue(mods[i]))
+                    count++;
+            }
+            return count;
+        }
+
+        private static bool HasApiIssue(ModItem mod)
+        {
+            return mod != null &&
+                mod.ApiCompatibility != null &&
+                mod.ApiCompatibility.Severity >= ApiCompatibilitySeverity.Warning;
+        }
+
+        private static string GetApiIssueText(ModItem mod)
+        {
+            if (mod == null || mod.ApiCompatibility == null)
+                return "compatibility issue";
+
+            if (mod.ApiCompatibility.Severity == ApiCompatibilitySeverity.Error)
+                return "needs mod update";
+
+            return "compatibility warning";
         }
 
         private string GetGameDomain()

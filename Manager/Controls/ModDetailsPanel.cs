@@ -17,7 +17,7 @@ namespace Manager.Controls
     /// </summary>
     public class ModDetailsPanel : UserControl
     {
-        private const int InfoLabelColumnWidth = 84;
+        private const int InfoLabelColumnWidth = 104;
 
         // Header section
         private PictureBox _previewImage;
@@ -143,9 +143,9 @@ namespace Manager.Controls
             _dependsOnValue.Size = new Size(180, 40);
             _dependsOnValue.AutoEllipsis = true;
 
-            // ModAPI Status
+            // Compatibility status
             _modApiLabel = new Label();
-            _modApiLabel.Text = "API:";
+            _modApiLabel.Text = "Compatibility:";
             _modApiLabel.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
             _modApiLabel.AutoSize = true;
             _modApiLabel.Location = new Point(12, 253);
@@ -340,7 +340,7 @@ namespace Manager.Controls
                 _dependsOnValue.Text = "None";
             }
 
-            // ModAPI compatibility
+            // Compatibility
             UpdateModApiStatus(mod);
 
             // Tags
@@ -365,11 +365,11 @@ namespace Manager.Controls
             // Description
             if (!string.IsNullOrEmpty(mod.Description))
             {
-                _descriptionBox.Text = mod.Description;
+                _descriptionBox.Text = BuildDescriptionText(mod);
             }
             else
             {
-                _descriptionBox.Text = "No description provided.";
+                _descriptionBox.Text = BuildDescriptionText(mod);
             }
 
             LayoutDetailContent();
@@ -377,29 +377,68 @@ namespace Manager.Controls
 
         private void UpdateModApiStatus(ModItem mod)
         {
-            if (!string.IsNullOrEmpty(mod.RequiredModApiVersion))
+            if (mod.ApiCompatibility != null && mod.ApiCompatibility.Requirements.Count > 0)
             {
-                string statusIcon = mod.IsModApiCompatible ? "OK" : "!";
-                Color statusColor = mod.IsModApiCompatible 
+                string statusText = GetCompatibilityStatusText(mod.ApiCompatibility);
+                Color statusColor;
+                if (mod.ApiCompatibility.Severity == ApiCompatibilitySeverity.Error)
+                    statusColor = Color.Orange;
+                else if (mod.ApiCompatibility.Severity == ApiCompatibilitySeverity.Warning)
+                    statusColor = Color.Goldenrod;
+                else
+                    statusColor = _isDarkMode ? Color.LightGreen : Color.Green;
+
+                _modApiValue.Text = statusText;
+                _modApiValue.ForeColor = statusColor;
+            }
+            else if (!string.IsNullOrEmpty(mod.RequiredModApiVersion))
+            {
+                string statusText = mod.IsModApiCompatible ? "Compatible" : "Needs mod update";
+                Color statusColor = mod.IsModApiCompatible
                     ? (_isDarkMode ? Color.LightGreen : Color.Green)
                     : Color.Orange;
-                
-                _modApiValue.Text = mod.RequiredModApiVersion + " " + statusIcon;
-                _modApiValue.ForeColor = statusColor;
 
-                if (!mod.IsModApiCompatible && !string.IsNullOrEmpty(_installedModApiVersion))
-                {
-                    _modApiValue.Text += " (Installed: " + _installedModApiVersion + ")";
-                }
+                _modApiValue.Text = statusText;
+                _modApiValue.ForeColor = statusColor;
             }
             else
             {
-                if (!string.IsNullOrEmpty(_installedModApiVersion))
-                    _modApiValue.Text = "Not declared (Installed: " + _installedModApiVersion + ")";
-                else
-                    _modApiValue.Text = "Not declared";
+                _modApiValue.Text = "Not declared";
                 _modApiValue.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
             }
+        }
+
+        private static string GetCompatibilityStatusText(ApiCompatibilityReport report)
+        {
+            if (report == null)
+                return "Not declared";
+
+            if (report.Severity == ApiCompatibilitySeverity.Error)
+                return "Needs mod update";
+
+            if (report.Severity == ApiCompatibilitySeverity.Warning)
+                return "May need update";
+
+            return "Compatible";
+        }
+
+        private static string BuildDescriptionText(ModItem mod)
+        {
+            string description = !string.IsNullOrEmpty(mod.Description)
+                ? mod.Description.Trim()
+                : "No description provided.";
+
+            if (!string.IsNullOrEmpty(mod.StatusMessage))
+                description += Environment.NewLine + Environment.NewLine + "Status: " + mod.StatusMessage;
+
+            if (mod.ApiCompatibility == null || mod.ApiCompatibility.Messages.Count == 0)
+                return description;
+
+            string text = description + Environment.NewLine + Environment.NewLine + "Compatibility:";
+            for (int i = 0; i < mod.ApiCompatibility.Messages.Count; i++)
+                text += Environment.NewLine + "- " + mod.ApiCompatibility.Messages[i];
+
+            return text;
         }
 
         private void UpdateNexusStatus(ModItem mod)

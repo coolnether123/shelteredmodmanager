@@ -390,7 +390,10 @@ namespace Manager.Views
                 if (validation.HardIssueModIds.Contains(mod.Id))
                 {
                     mod.Status = ModStatus.Error;
-                    mod.StatusMessage = "Missing dependency or load order issue";
+                    string missingDependency = FindMissingDependencyMessage(validation.MissingDependencies, mod.Id);
+                    mod.StatusMessage = !string.IsNullOrEmpty(missingDependency)
+                        ? missingDependency
+                        : "Missing dependency or load order issue";
                 }
                 else if (validation.SoftIssueModIds.Contains(mod.Id))
                 {
@@ -860,6 +863,25 @@ namespace Manager.Views
                     filtered.Append(c);
             }
             return filtered.ToString();
+        }
+
+        private static string FindMissingDependencyMessage(List<string> missingDependencies, string modId)
+        {
+            if (missingDependencies == null || string.IsNullOrEmpty(modId))
+                return string.Empty;
+
+            string prefix = "Mod '" + modId + "' has a missing hard dependency:";
+            for (int i = 0; i < missingDependencies.Count; i++)
+            {
+                string message = missingDependencies[i];
+                if (string.IsNullOrEmpty(message))
+                    continue;
+
+                if (message.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return message;
+            }
+
+            return string.Empty;
         }
 
         private bool IsWithinNexusSyncCooldown()

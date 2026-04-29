@@ -117,21 +117,39 @@ namespace Manager
             // Settings loaded first to get ModAPI version path
             _settings = _settingsService.Load();
             
-            // Get installed ModAPI version for discovery service
-            string modApiVersion = null;
-            if (_settings.IsGamePathValid)
-            {
-                try
-                {
-                    string smmPath = Path.Combine(Path.GetDirectoryName(_settings.GamePath), "SMM");
-                    modApiVersion = AssemblyVersionChecker.GetInstalledModApiVersion(smmPath);
-                    _settings.InstalledModApiVersion = modApiVersion;
-                }
-                catch { }
-            }
-            
-            _discoveryService = new ModDiscoveryService(modApiVersion);
+            var installedApiVersions = DetectInstalledApiVersions(_settings);
+            ApplyInstalledApiVersions(_settings, installedApiVersions);
+
+            _discoveryService = new ModDiscoveryService(installedApiVersions);
             _nexusService = new NexusModsService(_settings.NexusApiKey);
+        }
+
+        private static Dictionary<string, string> DetectInstalledApiVersions(AppSettings settings)
+        {
+            if (settings == null || !settings.IsGamePathValid)
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                string smmPath = Path.Combine(Path.GetDirectoryName(settings.GamePath), "SMM");
+                return AssemblyVersionChecker.GetInstalledApiVersions(smmPath);
+            }
+            catch
+            {
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        private static void ApplyInstalledApiVersions(AppSettings settings, Dictionary<string, string> versions)
+        {
+            if (settings == null || versions == null)
+                return;
+
+            string version;
+            if (versions.TryGetValue("ModAPI", out version))
+                settings.InstalledModApiVersion = version;
+            if (versions.TryGetValue("ShelteredAPI", out version))
+                settings.InstalledShelteredApiVersion = version;
         }
 
         private void RecreateNexusService()
@@ -609,16 +627,11 @@ namespace Manager
                 _settings.GamePath = newPath;
                 _settings.ModsPath = Path.Combine(Path.GetDirectoryName(newPath), "mods");
                 
-                // Update ModAPI version
-                try
-                {
-                    string smmPath = Path.Combine(Path.GetDirectoryName(newPath), "SMM");
-                    _settings.InstalledModApiVersion = AssemblyVersionChecker.GetInstalledModApiVersion(smmPath);
-                }
-                catch { }
+                var installedApiVersions = DetectInstalledApiVersions(_settings);
+                ApplyInstalledApiVersions(_settings, installedApiVersions);
                 
                 // Recreate discovery service with new version
-                _discoveryService = new ModDiscoveryService(_settings.InstalledModApiVersion);
+                _discoveryService = new ModDiscoveryService(installedApiVersions);
                 _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
                 _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
                 
@@ -978,6 +991,10 @@ namespace Manager
                 string modapiDll = Path.Combine(smmDir, "ModAPI.dll");
                 if (!File.Exists(modapiDll)) missing.Add("SMM/ModAPI.dll");
 
+                string shelteredApiDllRoot = Path.Combine(smmDir, "ShelteredAPI.dll");
+                string shelteredApiDllBin = Path.Combine(Path.Combine(smmDir, "bin"), "ShelteredAPI.dll");
+                if (!File.Exists(shelteredApiDllRoot) && !File.Exists(shelteredApiDllBin)) missing.Add("SMM/bin/ShelteredAPI.dll");
+
                 if (missing.Count == 0) return true;
 
                 string msg = "Some required files for mod injection are missing:\n\n  - "
@@ -1231,22 +1248,26 @@ namespace Manager
 
             var previous = _settings;
 
-            // Preserve or re-detect mod API version as it's not always in the INI if it's edited externally
+            // Preserve or re-detect API versions as they are derived from installed SMM files.
             string version = _settings?.InstalledModApiVersion;
+            string shelteredVersion = _settings?.InstalledShelteredApiVersion;
             _settings = settings;
 
             if (string.IsNullOrEmpty(_settings.InstalledModApiVersion) && !string.IsNullOrEmpty(version))
             {
                 _settings.InstalledModApiVersion = version;
             }
-            else if (string.IsNullOrEmpty(_settings.InstalledModApiVersion) && _settings.IsGamePathValid)
+
+            if (string.IsNullOrEmpty(_settings.InstalledShelteredApiVersion) && !string.IsNullOrEmpty(shelteredVersion))
             {
-                try
-                {
-                    string smmPath = Path.Combine(Path.GetDirectoryName(_settings.GamePath), "SMM");
-                    _settings.InstalledModApiVersion = AssemblyVersionChecker.GetInstalledModApiVersion(smmPath);
-                }
-                catch { }
+                _settings.InstalledShelteredApiVersion = shelteredVersion;
+            }
+
+            if ((string.IsNullOrEmpty(_settings.InstalledModApiVersion) || string.IsNullOrEmpty(_settings.InstalledShelteredApiVersion)) && _settings.IsGamePathValid)
+            {
+                var installedApiVersions = DetectInstalledApiVersions(_settings);
+                ApplyInstalledApiVersions(_settings, installedApiVersions);
+                _discoveryService = new ModDiscoveryService(installedApiVersions);
             }
 
             RecreateNexusService();
@@ -1383,12 +1404,12 @@ namespace Manager
                 var enabledMods = _orderService.GetEnabledMods(allMods, _settings.ModsPath);
                 int count = enabledMods.Count;
 
-                string apiVersion = _settings.InstalledModApiVersion ?? "Unknown";
+                string apiVersion = FormatInstalledApiVersions(_settings);
 
                 _statusLabel.Text = "Status: Ready";
                 _statusLabel.ForeColor = _settings.DarkMode ? Color.LightGreen : Color.Green;
                 _modsCountLabel.Text = "Active Mods: " + count;
-                _modApiVersionLabel.Text = "ModAPI Version: " + apiVersion;
+                _modApiVersionLabel.Text = "API Versions: " + apiVersion;
                 if (!_settings.EnableNexusIntegration)
                     _nexusUpdatesLabel.Text = "Nexus Updates: disabled";
 
@@ -1400,9 +1421,24 @@ namespace Manager
                 _statusLabel.Text = "Status: Not Ready";
                 _statusLabel.ForeColor = Color.Red;
                 _modsCountLabel.Text = "Active Mods: 0";
-                _modApiVersionLabel.Text = "ModAPI Version: Unknown";
+                _modApiVersionLabel.Text = "API Versions: Unknown";
                 _nexusUpdatesLabel.Text = _settings.EnableNexusIntegration ? "Nexus Updates: --" : "Nexus Updates: disabled";
             }
+        }
+
+        private static string FormatInstalledApiVersions(AppSettings settings)
+        {
+            if (settings == null)
+                return "Unknown";
+
+            string modApi = string.IsNullOrEmpty(settings.InstalledModApiVersion)
+                ? "missing"
+                : settings.InstalledModApiVersion;
+            string shelteredApi = string.IsNullOrEmpty(settings.InstalledShelteredApiVersion)
+                ? "missing"
+                : settings.InstalledShelteredApiVersion;
+
+            return "ModAPI " + modApi + " / ShelteredAPI " + shelteredApi;
         }
 
         private void ApplyTheme(bool isDark)

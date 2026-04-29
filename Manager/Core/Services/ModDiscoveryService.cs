@@ -12,11 +12,19 @@ namespace Manager.Core.Services
     /// </summary>
     public class ModDiscoveryService
     {
-        private readonly string _installedModApiVersion;
+        private readonly ApiCompatibilityService _apiCompatibilityService;
 
         public ModDiscoveryService(string installedModApiVersion)
         {
-            _installedModApiVersion = installedModApiVersion;
+            var installedVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(installedModApiVersion))
+                installedVersions["ModAPI"] = installedModApiVersion;
+            _apiCompatibilityService = new ApiCompatibilityService(installedVersions);
+        }
+
+        public ModDiscoveryService(Dictionary<string, string> installedApiVersions)
+        {
+            _apiCompatibilityService = new ApiCompatibilityService(installedApiVersions);
         }
 
         /// <summary>
@@ -106,62 +114,23 @@ namespace Manager.Core.Services
             try
             {
                 var assemblies = AssemblyVersionChecker.ScanModAssemblies(mod.RootPath);
+                var report = _apiCompatibilityService.Evaluate(assemblies, mod.DeclaredModApiVersion, mod.DeclaredShelteredApiVersion);
+                mod.ApiCompatibility = report;
 
-                var apiVersions = new List<string>();
-                foreach (var a in assemblies)
+                if (report.Requirements.Count > 0)
                 {
-                    if (string.IsNullOrEmpty(a.ApiVersion))
-                        continue;
+                    mod.RequiredModApiVersion = report.RequirementSummary;
+                    mod.IsModApiCompatible = report.IsCompatible;
 
-                    bool exists = false;
-                    for (int i = 0; i < apiVersions.Count; i++)
-                    {
-                        if (string.Equals(apiVersions[i], a.ApiVersion, StringComparison.OrdinalIgnoreCase))
-                        {
-                            exists = true;
-                            break;
-                        }
-                    }
-
-                    if (!exists)
-                        apiVersions.Add(a.ApiVersion);
-                }
-
-                if (apiVersions.Count > 0)
-                {
-                    string requirement = SelectPreferredRequirement(apiVersions, _installedModApiVersion);
-                    mod.RequiredModApiVersion = requirement;
-
-                    if (!string.IsNullOrEmpty(_installedModApiVersion))
-                    {
-                        bool isCompatible = true;
-                        for (int i = 0; i < apiVersions.Count; i++)
-                        {
-                            if (!AssemblyVersionChecker.IsCompatible(_installedModApiVersion, apiVersions[i]))
-                            {
-                                isCompatible = false;
-                                break;
-                            }
-                        }
-
-                        mod.IsModApiCompatible = isCompatible;
-                        if (!isCompatible)
-                        {
-                            mod.Status = ModStatus.VersionMismatch;
-                            mod.StatusMessage = "Requires ModAPI " + requirement + " (installed: " + _installedModApiVersion + ")";
-                        }
-                    }
-                }
-                else if (!string.IsNullOrEmpty(mod.RequiredModApiVersion) && !string.IsNullOrEmpty(_installedModApiVersion))
-                {
-                    // Fallback for mods that declare required API in About.json but do not expose
-                    // a readable ModAPI/ShelteredAPI assembly reference.
-                    bool isCompatible = AssemblyVersionChecker.IsCompatible(_installedModApiVersion, mod.RequiredModApiVersion);
-                    mod.IsModApiCompatible = isCompatible;
-                    if (!isCompatible)
+                    if (report.Severity == ApiCompatibilitySeverity.Error)
                     {
                         mod.Status = ModStatus.VersionMismatch;
-                        mod.StatusMessage = "Requires ModAPI " + mod.RequiredModApiVersion + " (installed: " + _installedModApiVersion + ")";
+                        mod.StatusMessage = report.Summary;
+                    }
+                    else if (report.Severity == ApiCompatibilitySeverity.Warning && mod.Status == ModStatus.Ok)
+                    {
+                        mod.Status = ModStatus.Warning;
+                        mod.StatusMessage = report.Summary;
                     }
                 }
             }
@@ -182,46 +151,5 @@ namespace Manager.Core.Services
             return folderName.StartsWith("_smm_", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string SelectPreferredRequirement(List<string> apiVersions, string installedModApiVersion)
-        {
-            if (apiVersions == null || apiVersions.Count == 0)
-                return string.Empty;
-
-            if (!string.IsNullOrEmpty(installedModApiVersion))
-            {
-                for (int i = 0; i < apiVersions.Count; i++)
-                {
-                    if (!AssemblyVersionChecker.IsCompatible(installedModApiVersion, apiVersions[i]))
-                        return apiVersions[i];
-                }
-            }
-
-            // Fallback: choose highest declared API version for stable display.
-            string selected = apiVersions[0];
-            for (int i = 1; i < apiVersions.Count; i++)
-            {
-                if (CompareVersionStrings(apiVersions[i], selected) > 0)
-                    selected = apiVersions[i];
-            }
-
-            return selected;
-        }
-
-        private static int CompareVersionStrings(string left, string right)
-        {
-            if (string.IsNullOrEmpty(left))
-                return string.IsNullOrEmpty(right) ? 0 : -1;
-            if (string.IsNullOrEmpty(right))
-                return 1;
-
-            try
-            {
-                return new Version(left).CompareTo(new Version(right));
-            }
-            catch
-            {
-                return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
-            }
-        }
     }
 }

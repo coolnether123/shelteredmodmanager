@@ -99,6 +99,7 @@
     <Compile Include="Core\Models\ModItem.cs" />
     <Compile Include="Core\Models\AppSettings.cs" />
     <Compile Include="Core\Models\SaveSlotInfo.cs" />
+    <Compile Include="Core\Models\ApiCompatibility.cs" />
     <Compile Include="Core\Models\NexusModReference.cs" />
     <Compile Include="Core\Models\NexusRemoteMod.cs" />
     <Compile Include="Core\Models\NexusRemoteModFile.cs" />
@@ -106,6 +107,7 @@
     <!-- Core Services -->
     <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />
+    <Compile Include="Core\Services\ApiCompatibilityService.cs" />
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />

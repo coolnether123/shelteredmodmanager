@@ -20,6 +20,7 @@ namespace Manager.Core.Models
         private bool _skipHarmonyDependencyCheck = false;
         private string _gameBitness;
         private string _installedModApiVersion;
+        private string _installedShelteredApiVersion;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
         private bool _enableNexusIntegration = true;
         private string _nexusGameDomain = "sheltered";
@@ -104,6 +105,12 @@ namespace Manager.Core.Models
         { 
             get { return _installedModApiVersion; } 
             set { _installedModApiVersion = value; } 
+        }
+
+        public string InstalledShelteredApiVersion
+        {
+            get { return _installedShelteredApiVersion; }
+            set { _installedShelteredApiVersion = value; }
         }
         
         public string AutoCondenseSaves 

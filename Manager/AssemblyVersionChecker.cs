@@ -13,6 +13,7 @@ namespace Manager
         public struct ModAssemblyVersion
         {
             public string DllName;
+            public string ApiName;
             public string ApiVersion;
         }
 
@@ -23,17 +24,26 @@ namespace Manager
         /// <returns>Version string (e.g., "1.0.0.0") or null if not found</returns>
         public static string GetInstalledModApiVersion(string smmPath)
         {
+            return GetInstalledApiVersion(smmPath, "ModAPI");
+        }
+
+        /// <summary>
+        /// Gets the version of a known API assembly from the SMM folder.
+        /// </summary>
+        public static string GetInstalledApiVersion(string smmPath, string apiName)
+        {
             try
             {
-                string modApiPath = Path.Combine(smmPath, "ModAPI.dll");
-                if (!File.Exists(modApiPath)) return null;
+                string apiPath = FindInstalledApiAssemblyPath(smmPath, apiName);
+                if (string.IsNullOrEmpty(apiPath)) return null;
 
                 // Use FileVersionInfo as it's more stable on Windows 7 than ReflectionOnlyLoad
-                var versionInfo = System.Diagnostics.FileVersionInfo.GetVersionInfo(modApiPath);
+                var versionInfo = System.Diagnostics.FileVersionInfo.GetVersionInfo(apiPath);
                 
-                // prefer ProductVersion if available, fallback to FileVersion
-                string v = versionInfo.ProductVersion;
-                if (string.IsNullOrEmpty(v)) v = versionInfo.FileVersion;
+                // FileVersion tracks assembly compatibility. ProductVersion may use
+                // informational labels such as "v0.1" that are not reference versions.
+                string v = versionInfo.FileVersion;
+                if (string.IsNullOrEmpty(v)) v = versionInfo.ProductVersion;
                 return v;
             }
             catch (Exception ex)
@@ -41,6 +51,14 @@ namespace Manager
                 System.Diagnostics.Debug.WriteLine($"[AssemblyVersionChecker] Error reading ModAPI version: {ex.Message}");
                 return null;
             }
+        }
+
+        public static Dictionary<string, string> GetInstalledApiVersions(string smmPath)
+        {
+            var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            AddInstalledApiVersion(versions, smmPath, "ModAPI");
+            AddInstalledApiVersion(versions, smmPath, "ShelteredAPI");
+            return versions;
         }
 
         /// <summary>
@@ -52,24 +70,11 @@ namespace Manager
         {
             try
             {
-                if (!File.Exists(modDllPath))
-                {
-                    return null;
-                }
-
-                // Load assembly bytes to avoid file locking
-                byte[] assemblyBytes = File.ReadAllBytes(modDllPath);
-                var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
-                var references = assembly.GetReferencedAssemblies();
-
-                // Find the ModAPI/ShelteredAPI reference
+                var references = GetModApiReferences(modDllPath);
                 foreach (var reference in references)
                 {
-                    if (string.Equals(reference.Name, "ModAPI", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(reference.Name, "ShelteredAPI", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return reference.Version?.ToString();
-                    }
+                    if (!string.IsNullOrEmpty(reference.ApiVersion))
+                        return reference.ApiVersion;
                 }
 
                 return null; // No ModAPI reference found
@@ -79,6 +84,46 @@ namespace Manager
                 Console.WriteLine($"[AssemblyVersionChecker] Error reading mod API version from {Path.GetFileName(modDllPath)}: {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Gets every ModAPI/ShelteredAPI assembly reference used by a mod DLL.
+        /// </summary>
+        public static List<ModAssemblyVersion> GetModApiReferences(string modDllPath)
+        {
+            var results = new List<ModAssemblyVersion>();
+
+            try
+            {
+                if (!File.Exists(modDllPath))
+                    return results;
+
+                string dllName = Path.GetFileName(modDllPath);
+
+                // Load assembly bytes to avoid file locking
+                byte[] assemblyBytes = File.ReadAllBytes(modDllPath);
+                var assembly = Assembly.ReflectionOnlyLoad(assemblyBytes);
+                var references = assembly.GetReferencedAssemblies();
+
+                foreach (var reference in references)
+                {
+                    if (!IsKnownApiAssembly(reference.Name))
+                        continue;
+
+                    results.Add(new ModAssemblyVersion
+                    {
+                        DllName = dllName,
+                        ApiName = reference.Name,
+                        ApiVersion = reference.Version != null ? reference.Version.ToString() : null
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AssemblyVersionChecker] Error reading API references from {Path.GetFileName(modDllPath)}: {ex.Message}");
+            }
+
+            return results;
         }
 
         /// <summary>
@@ -140,8 +185,15 @@ namespace Manager
                         continue;
                     }
 
-                    string apiVersion = GetModRequiredApiVersion(dllPath);
-                    results.Add(new ModAssemblyVersion { DllName = fileName, ApiVersion = apiVersion });
+                    var references = GetModApiReferences(dllPath);
+                    if (references.Count == 0)
+                    {
+                        results.Add(new ModAssemblyVersion { DllName = fileName, ApiName = string.Empty, ApiVersion = string.Empty });
+                        continue;
+                    }
+
+                    for (int i = 0; i < references.Count; i++)
+                        results.Add(references[i]);
                 }
             }
             catch (Exception ex)
@@ -150,6 +202,43 @@ namespace Manager
             }
 
             return results;
+        }
+
+        private static void AddInstalledApiVersion(Dictionary<string, string> versions, string smmPath, string apiName)
+        {
+            string version = GetInstalledApiVersion(smmPath, apiName);
+            if (!string.IsNullOrEmpty(version))
+                versions[apiName] = version;
+        }
+
+        private static string FindInstalledApiAssemblyPath(string smmPath, string apiName)
+        {
+            if (string.IsNullOrEmpty(smmPath) || string.IsNullOrEmpty(apiName))
+                return null;
+
+            string dllName = apiName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
+                ? apiName
+                : apiName + ".dll";
+
+            string[] candidates = new string[]
+            {
+                Path.Combine(smmPath, dllName),
+                Path.Combine(Path.Combine(smmPath, "bin"), dllName)
+            };
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                if (File.Exists(candidates[i]))
+                    return candidates[i];
+            }
+
+            return null;
+        }
+
+        private static bool IsKnownApiAssembly(string assemblyName)
+        {
+            return string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(assemblyName, "ShelteredAPI", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

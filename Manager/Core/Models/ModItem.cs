@@ -41,6 +41,9 @@ namespace Manager.Core.Models
         public ModStatus Status { get; set; }
         public string StatusMessage { get; set; }
         public string RequiredModApiVersion { get; set; }
+        public string DeclaredModApiVersion { get; set; }
+        public string DeclaredShelteredApiVersion { get; set; }
+        public ApiCompatibilityReport ApiCompatibility { get; set; }
         public bool IsModApiCompatible { get; set; }
 
         // Nexus integration state
@@ -71,6 +74,9 @@ namespace Manager.Core.Models
             _loadAfter = new string[0];
             _loadBefore = new string[0];
             Status = ModStatus.Ok;
+            DeclaredModApiVersion = string.Empty;
+            DeclaredShelteredApiVersion = string.Empty;
+            ApiCompatibility = new ApiCompatibilityReport();
             IsModApiCompatible = true;
             NexusGameDomain = string.Empty;
             NexusModId = 0;
@@ -124,6 +130,8 @@ namespace Manager.Core.Models
                     about.modApiVersion,
                     about.requiredShelteredApiVersion,
                     about.shelteredApiVersion);
+                item.DeclaredModApiVersion = FirstNonEmpty(about.requiredModApiVersion, about.modApiVersion);
+                item.DeclaredShelteredApiVersion = FirstNonEmpty(about.requiredShelteredApiVersion, about.shelteredApiVersion);
                 item.NexusGameDomain = about.nexusGameDomain ?? string.Empty;
                 item.NexusModId = about.nexusModId;
                 item.HasValidAbout = !string.IsNullOrEmpty(about.id);
