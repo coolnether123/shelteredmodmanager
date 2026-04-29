@@ -16,7 +16,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioTimelineBuilder timelineBuilder,
             ScenarioTimelineNavigationService timelineNavigationService,
             ScenarioSelectionScopeService selectionScopeService,
-            ScenarioCharacterEditorAuthoringService characterEditorService)
+            ScenarioCharacterEditorAuthoringService characterEditorService,
+            ScenarioEventAuthoringService eventAuthoringService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -27,7 +28,8 @@ namespace ShelteredAPI.Scenarios
                 timelineBuilder,
                 timelineNavigationService,
                 selectionScopeService,
-                characterEditorService));
+                characterEditorService,
+                eventAuthoringService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -51,7 +53,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioTimelineBuilder timelineBuilder,
             ScenarioTimelineNavigationService timelineNavigationService,
             ScenarioSelectionScopeService selectionScopeService,
-            ScenarioCharacterEditorAuthoringService characterEditorService)
+            ScenarioCharacterEditorAuthoringService characterEditorService,
+            ScenarioEventAuthoringService eventAuthoringService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -62,6 +65,7 @@ namespace ShelteredAPI.Scenarios
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
+                new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new SelectionCommandHandler(),

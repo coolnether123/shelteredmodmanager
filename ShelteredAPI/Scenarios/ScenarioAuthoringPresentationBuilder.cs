@@ -1707,16 +1707,18 @@ namespace ShelteredAPI.Scenarios
         private static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> triggerItems = new List<ScenarioAuthoringInspectorItem>();
+            triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddManual, "Add Manual Trigger", "Create a trigger that can be fired by code or another scheduled effect.", true, true, "T+")));
+            triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Add Scheduled Trigger", "Create a trigger that fires on a specific scenario day and hour.", true, true, "TS")));
             if (definition != null && definition.TriggersAndEvents != null)
             {
                 for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
                 {
                     TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
-                    triggerItems.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (i + 1)) : trigger.Id, trigger != null ? trigger.Type : "Unknown"));
+                    AddTriggerItems(triggerItems, trigger, i);
                 }
             }
 
-            if (triggerItems.Count == 0)
+            if (triggerItems.Count == 2)
                 triggerItems.Add(Text("No authored triggers are in this draft yet."));
 
             List<ScenarioAuthoringInspectorItem> weatherItems = new List<ScenarioAuthoringInspectorItem>();
@@ -2313,6 +2315,40 @@ namespace ShelteredAPI.Scenarios
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix + index.ToString(), "Remove Weather Event", "Remove this scheduled weather event.", true, false, "RM")));
         }
 
+        private static void AddTriggerItems(List<ScenarioAuthoringInspectorItem> items, TriggerDef trigger, int index)
+        {
+            if (items == null || trigger == null)
+                return;
+
+            string schedule = FormatTriggerSchedule(trigger);
+            items.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, Safe(trigger.Type) + " / " + schedule));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTypePrefix + index.ToString(CultureInfo.InvariantCulture), "Cycle Trigger Type", "Switch between manual, scheduled, flag, quest, and item trigger templates.", true, false, "TY")));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, index);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerDeletePrefix + index.ToString(CultureInfo.InvariantCulture), "Remove Trigger", "Remove this authored trigger.", true, false, "RM")));
+        }
+
+        private static void AddConditionItems(List<ScenarioAuthoringInspectorItem> items, ScenarioConditionRef condition, int gateIndex, int conditionIndex)
+        {
+            if (items == null || condition == null)
+                return;
+
+            string prefix = gateIndex.ToString(CultureInfo.InvariantCulture) + "." + conditionIndex.ToString(CultureInfo.InvariantCulture);
+            items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), condition.Kind + " / " + FormatConditionTarget(condition)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionKindPrefix + prefix, "Cycle Condition Kind", "Switch this gate condition to the next supported template.", true, false, "CK")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionDeletePrefix + prefix, "Remove Condition", "Remove this gate condition.", true, false, "RM")));
+        }
+
+        private static void AddEffectItems(List<ScenarioAuthoringInspectorItem> items, ScenarioEffectDefinition effect, int actionIndex, int effectIndex)
+        {
+            if (items == null || effect == null)
+                return;
+
+            string prefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + effectIndex.ToString(CultureInfo.InvariantCulture);
+            items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), effect.Kind + " / " + FormatEffectTarget(effect)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectKindPrefix + prefix, "Cycle Effect Kind", "Switch this effect to the next supported template.", true, false, "EK")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectDeletePrefix + prefix, "Remove Effect", "Remove this scheduled action effect.", true, false, "RM")));
+        }
+
         private static void AddQuestItems(List<ScenarioAuthoringInspectorItem> items, QuestDefinition quest, int index)
         {
             if (items == null || quest == null)
@@ -2424,6 +2460,37 @@ namespace ShelteredAPI.Scenarios
             return "day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2");
         }
 
+        private static string FormatTriggerSchedule(TriggerDef trigger)
+        {
+            if (trigger == null || trigger.Properties == null)
+                return "manual";
+
+            int day = ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "day", 0);
+            if (day <= 0)
+                return "manual";
+
+            int hour = ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "hour", 8);
+            int minute = ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "minute", 0);
+            return "day " + day.ToString(CultureInfo.InvariantCulture) + " " + hour.ToString("D2") + ":" + minute.ToString("D2");
+        }
+
+        private static string FormatConditionTarget(ScenarioConditionRef condition)
+        {
+            if (condition == null)
+                return "missing condition";
+            if (condition.Kind == ScenarioConditionKind.TimeReached)
+                return FormatSchedule(condition.Time);
+            if (!string.IsNullOrEmpty(condition.FlagId))
+                return "flag " + condition.FlagId + "=" + condition.FlagValue;
+            if (!string.IsNullOrEmpty(condition.TargetId))
+                return "target " + condition.TargetId;
+            if (!string.IsNullOrEmpty(condition.StatId))
+                return "stat " + condition.StatId + ">=" + condition.StatValue.ToString(CultureInfo.InvariantCulture);
+            if (!string.IsNullOrEmpty(condition.TraitId))
+                return "trait " + condition.TraitId;
+            return condition.Kind.ToString();
+        }
+
         private static ScenarioAuthoringInspectorSection BuildBunkerRuntimeSection(ScenarioDefinition definition, ScenarioAuthoringState state)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -2461,14 +2528,21 @@ namespace ShelteredAPI.Scenarios
         private static List<ScenarioAuthoringInspectorItem> BuildGateItems(ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateAdd, "Add Gate", "Create a reusable gate with editable conditions for scheduled actions and unlocks.", true, true, "G+")));
             for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
             {
                 ScenarioGateDefinition gate = definition.Gates[i];
                 if (gate == null)
                     continue;
-                items.Add(Property(Safe(gate.Id), CountConditions(gate.Conditions).ToString() + " condition(s)"));
+                ScenarioConditionGroup group = gate.Conditions;
+                items.Add(Property(Safe(gate.Id), (group != null ? group.Mode.ToString() : "All") + " / " + CountConditions(group).ToString() + " condition(s)"));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateModePrefix + i.ToString(CultureInfo.InvariantCulture), "Toggle Gate Mode", "Switch this gate between requiring all conditions and any condition.", true, group != null && group.Mode == ScenarioConditionGroupMode.Any, "GM")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Gate Condition", "Add another condition to this gate.", true, false, "C+")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Gate", "Remove this gate and clear scheduled action references to it.", true, false, "RM")));
+                for (int c = 0; group != null && group.Conditions != null && c < group.Conditions.Count; c++)
+                    AddConditionItems(items, group.Conditions[c], i, c);
             }
-            if (items.Count == 0)
+            if (items.Count == 1)
                 items.Add(Text("No shared gates or scenario flags have been authored yet."));
             return items;
         }
@@ -2476,14 +2550,27 @@ namespace ShelteredAPI.Scenarios
         private static List<ScenarioAuthoringInspectorItem> BuildScheduledActionItems(ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Add Scheduled Action", "Create a first-class scheduled action with gate, repeat policy, and effects.", true, true, "A+")));
             for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action == null)
                     continue;
-                items.Add(Property(Safe(action.Id), Safe(action.ActionType) + " / " + FormatSchedule(action.DueTime)));
+                string gate = string.IsNullOrEmpty(action.GateId) ? "no gate" : "gate " + action.GateId;
+                string repeat = action.Policy != null && action.Policy.Repeatable ? "repeat " + action.Policy.CooldownMinutes.ToString(CultureInfo.InvariantCulture) + "m" : "once";
+                items.Add(Property(Safe(action.Id), Safe(action.ActionType) + " / " + FormatSchedule(action.DueTime) + " / " + gate + " / " + repeat));
+                AddScheduleActions(items, ScenarioAuthoringActionIds.ActionScheduledActionDayPrefix, ScenarioAuthoringActionIds.ActionScheduledActionHourPrefix, i);
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionTypePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Action Type", "Cycle the primary effect template for this scheduled action.", true, false, "TY")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Gate", "Attach the next authored gate, or clear the gate when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "GT", gate)));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionRepeatPrefix + i.ToString(CultureInfo.InvariantCulture), "Toggle Repeat", "Switch this action between once-only and repeatable execution.", true, action.Policy != null && action.Policy.Repeatable, "RP")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + i.ToString(CultureInfo.InvariantCulture) + ".30", "Cooldown +30", "Increase repeat cooldown by 30 game minutes.", true, false, "C+")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + i.ToString(CultureInfo.InvariantCulture) + ".-30", "Cooldown -30", "Decrease repeat cooldown by 30 game minutes.", true, false, "C-")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Effect", "Add another effect to this scheduled action.", true, false, "E+")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Scheduled Action", "Remove this first-class scheduled action.", true, false, "RM")));
+                for (int e = 0; action.Effects != null && e < action.Effects.Count; e++)
+                    AddEffectItems(items, action.Effects[e], i, e);
             }
-            if (items.Count == 0)
+            if (items.Count == 1)
                 items.Add(Text("No shared scheduled actions have been authored yet. Legacy schedules are converted at runtime."));
             return items;
         }

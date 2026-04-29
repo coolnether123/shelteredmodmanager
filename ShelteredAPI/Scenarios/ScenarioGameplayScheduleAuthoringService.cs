@@ -46,13 +46,13 @@ namespace ShelteredAPI.Scenarios
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
             survivor.Id = "future_survivor_" + (family.FutureSurvivors.Count + 1).ToString();
-            survivor.Arrival = NextScheduleTime();
+            survivor.Arrival = ScenarioAuthoringSchedule.NextTime();
             survivor.Survivor = ScenarioFamilyMemberFactory.CreateDefaultConfig(
                 "New Survivor " + (family.FutureSurvivors.Count + 1).ToString(),
                 ScenarioGender.Any);
             family.FutureSurvivors.Add(survivor);
-            MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
-            message = "Added future survivor arrival for " + FormatTime(survivor.Arrival) + ".";
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+            message = "Added future survivor arrival for " + ScenarioAuthoringSchedule.Format(survivor.Arrival) + ".";
             return true;
         }
 
@@ -64,10 +64,10 @@ namespace ShelteredAPI.Scenarios
             change.Kind = kind;
             change.ItemId = "Food";
             change.Quantity = 1;
-            change.When = NextScheduleTime();
+            change.When = ScenarioAuthoringSchedule.NextTime();
             inventory.ScheduledChanges.Add(change);
-            MarkDirty(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
-            message = "Added timed inventory " + kind.ToString().ToLowerInvariant() + " for " + FormatTime(change.When) + ".";
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+            message = "Added timed inventory " + kind.ToString().ToLowerInvariant() + " for " + ScenarioAuthoringSchedule.Format(change.When) + ".";
             return true;
         }
 
@@ -77,10 +77,10 @@ namespace ShelteredAPI.Scenarios
             WeatherEventDefinition weather = new WeatherEventDefinition();
             weather.Id = "weather_" + (events.WeatherEvents.Count + 1).ToString();
             weather.WeatherState = "Rain";
-            weather.When = NextScheduleTime();
+            weather.When = ScenarioAuthoringSchedule.NextTime();
             events.WeatherEvents.Add(weather);
-            MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
-            message = "Added weather event for " + FormatTime(weather.When) + ".";
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Added weather event for " + ScenarioAuthoringSchedule.Format(weather.When) + ".";
             return true;
         }
 
@@ -91,10 +91,10 @@ namespace ShelteredAPI.Scenarios
             quest.Id = "quest_" + (quests.Quests.Count + 1).ToString();
             quest.Title = "Scheduled Quest " + (quests.Quests.Count + 1).ToString();
             quest.Description = "Created from the scenario editor.";
-            quest.ScheduledStart = NextScheduleTime();
+            quest.ScheduledStart = ScenarioAuthoringSchedule.NextTime();
             quests.Quests.Add(quest);
-            MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
-            message = "Added scheduled quest for " + FormatTime(quest.ScheduledStart) + ".";
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Added scheduled quest for " + ScenarioAuthoringSchedule.Format(quest.ScheduledStart) + ".";
             return true;
         }
 
@@ -126,7 +126,7 @@ namespace ShelteredAPI.Scenarios
                 quests.Quests.Add(quest);
             }
 
-            MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
             message = "Captured active quest list: " + quests.Quests.Count + " quest(s).";
             return true;
         }
@@ -136,18 +136,18 @@ namespace ShelteredAPI.Scenarios
             message = null;
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             int removeIndex;
-            if (TryRemove(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix, family.FutureSurvivors.Count, out removeIndex))
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix, family.FutureSurvivors.Count, out removeIndex))
             {
                 family.FutureSurvivors.RemoveAt(removeIndex);
-                MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
                 message = "Removed future survivor.";
                 return true;
             }
             int askIndex;
-            if (TryIndex(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix, family.FutureSurvivors.Count, out askIndex))
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix, family.FutureSurvivors.Count, out askIndex))
             {
                 family.FutureSurvivors[askIndex].AskToJoin = !family.FutureSurvivors[askIndex].AskToJoin;
-                MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
                 message = "Updated future survivor join mode.";
                 return true;
             }
@@ -159,10 +159,10 @@ namespace ShelteredAPI.Scenarios
             message = null;
             StartingInventoryDefinition inventory = EnsureInventory(session.WorkingDefinition);
             int removeIndex;
-            if (TryRemove(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix, inventory.ScheduledChanges.Count, out removeIndex))
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix, inventory.ScheduledChanges.Count, out removeIndex))
             {
                 inventory.ScheduledChanges.RemoveAt(removeIndex);
-                MarkDirty(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
                 message = "Removed timed inventory change.";
                 return true;
             }
@@ -174,10 +174,10 @@ namespace ShelteredAPI.Scenarios
             message = null;
             TriggersAndEventsDefinition events = EnsureEvents(session.WorkingDefinition);
             int removeIndex;
-            if (TryRemove(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix, events.WeatherEvents.Count, out removeIndex))
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix, events.WeatherEvents.Count, out removeIndex))
             {
                 events.WeatherEvents.RemoveAt(removeIndex);
-                MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
                 message = "Removed weather event.";
                 return true;
             }
@@ -189,10 +189,10 @@ namespace ShelteredAPI.Scenarios
             message = null;
             QuestAuthoringDefinition quests = EnsureQuests(session.WorkingDefinition);
             int removeIndex;
-            if (TryRemove(actionId, ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix, quests.Quests.Count, out removeIndex))
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix, quests.Quests.Count, out removeIndex))
             {
                 quests.Quests.RemoveAt(removeIndex);
-                MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
                 message = "Removed quest.";
                 return true;
             }
@@ -204,7 +204,7 @@ namespace ShelteredAPI.Scenarios
             message = null;
             int index;
             int delta;
-            if (TrySignedIndex(actionId, dayPrefix, count, out index, out delta))
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, dayPrefix, count, out index, out delta))
             {
                 ScenarioScheduleTime time = getter(index);
                 if (time == null)
@@ -213,11 +213,11 @@ namespace ShelteredAPI.Scenarios
                     return false;
                 }
                 time.Day = Math.Max(1, time.Day + delta);
-                MarkDirty(session, section, category);
+                ScenarioAuthoringMutation.MarkDirty(session, section, category);
                 message = "Updated scheduled day to " + time.Day + ".";
                 return true;
             }
-            if (TrySignedIndex(actionId, hourPrefix, count, out index, out delta))
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, hourPrefix, count, out index, out delta))
             {
                 ScenarioScheduleTime time = getter(index);
                 if (time == null)
@@ -225,30 +225,12 @@ namespace ShelteredAPI.Scenarios
                     message = "This item is trigger-started and has no schedule to edit.";
                     return false;
                 }
-                time.Hour = Clamp(time.Hour + delta, 0, 23);
-                MarkDirty(session, section, category);
+                time.Hour = ScenarioAuthoringSchedule.Clamp(time.Hour + delta, 0, 23);
+                ScenarioAuthoringMutation.MarkDirty(session, section, category);
                 message = "Updated scheduled hour to " + time.Hour + ".";
                 return true;
             }
             return false;
-        }
-
-        private static ScenarioScheduleTime NextScheduleTime()
-        {
-            ScenarioScheduleTime time = new ScenarioScheduleTime();
-            try
-            {
-                time.Day = Math.Max(1, GameTime.Day + 1);
-                time.Hour = Clamp(GameTime.Hour, 0, 23);
-                time.Minute = Clamp(GameTime.Minute, 0, 59);
-            }
-            catch
-            {
-                time.Day = 2;
-                time.Hour = 8;
-                time.Minute = 0;
-            }
-            return time;
         }
 
         private static FamilySetupDefinition EnsureFamily(ScenarioDefinition definition)
@@ -277,55 +259,6 @@ namespace ShelteredAPI.Scenarios
             if (definition.Quests == null)
                 definition.Quests = new QuestAuthoringDefinition();
             return definition.Quests;
-        }
-
-        private static void MarkDirty(ScenarioEditorSession session, ScenarioDirtySection section, ScenarioEditCategory category)
-        {
-            if (!session.DirtyFlags.Contains(section))
-                session.DirtyFlags.Add(section);
-            session.CurrentEditCategory = category;
-            session.HasAppliedToCurrentWorld = true;
-        }
-
-        private static bool TryRemove(string actionId, string prefix, int count, out int index)
-        {
-            return TryIndex(actionId, prefix, count, out index);
-        }
-
-        private static bool TryIndex(string actionId, string prefix, int count, out int index)
-        {
-            index = -1;
-            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
-                return false;
-            if (!int.TryParse(actionId.Substring(prefix.Length), out index))
-                return false;
-            return index >= 0 && index < count;
-        }
-
-        private static bool TrySignedIndex(string actionId, string prefix, int count, out int index, out int delta)
-        {
-            index = -1;
-            delta = 0;
-            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
-                return false;
-            string[] parts = actionId.Substring(prefix.Length).Split('.');
-            if (parts.Length != 2 || !int.TryParse(parts[0], out index) || !int.TryParse(parts[1], out delta))
-                return false;
-            return index >= 0 && index < count && delta != 0;
-        }
-
-        private static int Clamp(int value, int min, int max)
-        {
-            if (value < min)
-                return min;
-            return value > max ? max : value;
-        }
-
-        private static string FormatTime(ScenarioScheduleTime time)
-        {
-            if (time == null)
-                return "unscheduled";
-            return "day " + time.Day + " at " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2");
         }
 
         private delegate ScenarioScheduleTime ScheduleGetter(int index);

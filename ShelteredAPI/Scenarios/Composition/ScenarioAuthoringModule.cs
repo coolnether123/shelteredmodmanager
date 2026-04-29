@@ -97,7 +97,8 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioTimelineBuilder>(),
                     resolver.Get<ScenarioTimelineNavigationService>(),
                     resolver.Get<ScenarioSelectionScopeService>(),
-                    resolver.Get<ScenarioCharacterEditorAuthoringService>());
+                    resolver.Get<ScenarioCharacterEditorAuthoringService>(),
+                    resolver.Get<ScenarioEventAuthoringService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

@@ -346,6 +346,8 @@
     <Compile Include="Scenarios\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\ScenarioGameplayScheduleAuthoringService.cs" />
+    <Compile Include="Scenarios\ScenarioAuthoringMutationHelpers.cs" />
+    <Compile Include="Scenarios\ScenarioEventAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioCharacterEditorAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioFamilyMemberFactory.cs" />
     <Compile Include="Scenarios\ScenarioApplyResult.cs" />
