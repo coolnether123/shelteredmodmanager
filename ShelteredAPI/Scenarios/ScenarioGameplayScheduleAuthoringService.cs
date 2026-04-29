@@ -47,8 +47,9 @@ namespace ShelteredAPI.Scenarios
             FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
             survivor.Id = "future_survivor_" + (family.FutureSurvivors.Count + 1).ToString();
             survivor.Arrival = NextScheduleTime();
-            survivor.Survivor.Name = "New Survivor " + (family.FutureSurvivors.Count + 1).ToString();
-            survivor.Survivor.Gender = ScenarioGender.Any;
+            survivor.Survivor = ScenarioFamilyMemberFactory.CreateDefaultConfig(
+                "New Survivor " + (family.FutureSurvivors.Count + 1).ToString(),
+                ScenarioGender.Any);
             family.FutureSurvivors.Add(survivor);
             MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
             message = "Added future survivor arrival for " + FormatTime(survivor.Arrival) + ".";

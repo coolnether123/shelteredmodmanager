@@ -12,6 +12,11 @@ namespace ShelteredAPI.Scenarios
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
+                return new ScenarioCharacterEditorAuthoringService(
+                    resolver.Get<ScenarioCharacterAppearanceService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
                 return new ScenarioSceneSpritePlacementAuthoringService(
                     resolver.Get<ScenarioSpriteCatalogService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
@@ -90,7 +95,8 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioStageCoordinator>(),
                     resolver.Get<ScenarioTimelineBuilder>(),
                     resolver.Get<ScenarioTimelineNavigationService>(),
-                    resolver.Get<ScenarioSelectionScopeService>());
+                    resolver.Get<ScenarioSelectionScopeService>(),
+                    resolver.Get<ScenarioCharacterEditorAuthoringService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

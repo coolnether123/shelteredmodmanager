@@ -63,15 +63,34 @@ namespace ShelteredAPI.Scenarios
                 if (candidate == null)
                     continue;
 
-                if (string.Equals(candidate.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(candidate.StorageScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(candidate.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
                 {
                     entry = candidate;
                     return true;
                 }
             }
 
-            return false;
+            ScenarioCatalogEntry storageMatch = null;
+            for (int i = 0; i < all.Length; i++)
+            {
+                ScenarioCatalogEntry candidate = all[i];
+                if (candidate == null)
+                    continue;
+
+                if (candidate.Source == ScenarioCatalogSource.Draft)
+                    continue;
+
+                if (!string.Equals(candidate.StorageScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (storageMatch != null)
+                    return false;
+
+                storageMatch = candidate;
+            }
+
+            entry = storageMatch;
+            return entry != null;
         }
 
         private void AddVanillaEntries(List<ScenarioCatalogEntry> entries)

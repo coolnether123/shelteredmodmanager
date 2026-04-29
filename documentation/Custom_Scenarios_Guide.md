@@ -160,7 +160,7 @@ The scenario book adds a `Custom Scenarios` button. Selecting it replaces the va
 
 This keeps the browser usable for arbitrarily large scenario catalogs without instantiating one on-screen button per scenario, and it behaves like the regular custom-save paging flow.
 
-`Add New Scenario` starts `ScenarioEditorController.EnterEditMode(ScenarioBaseGameMode.Survival)` and creates an in-memory draft with the default id `com.author.scenario.new`. The editor backend can create, load, validate, save, and playtest scenario definitions, but the full visual authoring form for editing every field from this menu is still a separate UI task.
+`Add New Scenario` starts `ScenarioEditorController.EnterEditMode(ScenarioBaseGameMode.Survival)` and creates an in-memory draft with the default id `com.author.scenario.new`. The editor backend can create, load, validate, save, and playtest scenario definitions. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
 
 ## Dependencies And UI Blocking
 
@@ -195,8 +195,10 @@ Failed spawns, dependency failures, and canceled startup flows clear pending sce
 Applied now:
 
 - family names and gender
+- extra starting family members when `OverrideVanillaFamily` defines more people than the vanilla startup spawned
 - base stats: `Strength`, `Dexterity`, `Intelligence`, `Charisma`, `Perception`
 - traits using `Strength:TraitName` or `Weakness:TraitName`
+- future survivor auto-join spawns and ask-to-join recruit arrivals using the same name, gender, stat, trait, and appearance config shape as starting family members
 - starting inventory items resolvable by `InventoryHelper.ResolveItemType` from `ShelteredAPI.dll` (`ModAPI.Items` namespace retained as a 1.3 migration alias)
 - bunker wall and wiring sprite indexes
 - vanilla object placements by `ObjectManager.ObjectType` via `definition="Generator"` and optional `level`, `movable`, `lockDeconstruct` properties

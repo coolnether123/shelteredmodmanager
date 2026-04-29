@@ -2030,17 +2030,22 @@ namespace ShelteredAPI.Scenarios
             currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Capture Current Survivors", "Snapshot every current live family member into the starting survivor list.", true, true, "FM")));
 
             List<ScenarioAuthoringInspectorItem> startingItems = new List<ScenarioAuthoringInspectorItem>();
+            startingItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, "Add Starting Survivor", "Create a new editable starting crew member.", true, true, "S+")));
             if (definition != null && definition.FamilySetup != null)
             {
                 for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
                 {
                     FamilyMemberConfig member = definition.FamilySetup.Members[i];
-                    string role = member != null && member.Traits != null && member.Traits.Count > 0 ? member.Traits[0] : "Survivor";
-                    startingItems.Add(Property(Safe(member != null ? member.Name : "Unknown"), role));
+                    AddFamilyMemberEditorItems(
+                        startingItems,
+                        member,
+                        i,
+                        ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix,
+                        true);
                 }
             }
 
-            if (startingItems.Count == 0)
+            if (startingItems.Count == 1)
                 startingItems.Add(Text("No starting survivors have been captured into this draft."));
 
             List<ScenarioAuthoringInspectorItem> futureItems = new List<ScenarioAuthoringInspectorItem>();
@@ -2245,10 +2250,64 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             string name = survivor.Survivor != null ? survivor.Survivor.Name : survivor.Id;
-            items.Add(Property(Safe(name), (survivor.AskToJoin ? "Ask to join (runtime unsupported)" : "Auto join") + " - " + FormatSchedule(survivor.Arrival)));
+            items.Add(Property(Safe(name), (survivor.AskToJoin ? "Ask to join" : "Auto join") + " - " + FormatSchedule(survivor.Arrival)));
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionFutureSurvivorDayPrefix, ScenarioAuthoringActionIds.ActionFutureSurvivorHourPrefix, index);
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + index.ToString(), "Toggle Join Mode", "Auto join is the only runtime-supported arrival mode in this pass.", true, survivor.AskToJoin, "AJ")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + index.ToString(), "Toggle Join Mode", "Switch between recruit intercom flow and immediate auto-join.", true, survivor.AskToJoin, "AJ")));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + index.ToString(), "Remove Future Survivor", "Remove this future survivor arrival.", true, false, "RM")));
+            if (survivor.Survivor != null)
+            {
+                AddFamilyMemberEditorItems(
+                    items,
+                    survivor.Survivor,
+                    index,
+                    ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix,
+                    false);
+            }
+        }
+
+        private static void AddFamilyMemberEditorItems(
+            List<ScenarioAuthoringInspectorItem> items,
+            FamilyMemberConfig member,
+            int index,
+            string actionPrefix,
+            bool includeOrdering)
+        {
+            if (items == null)
+                return;
+
+            if (member == null)
+                member = new FamilyMemberConfig();
+
+            string indexedPrefix = actionPrefix + index.ToString(CultureInfo.InvariantCulture) + ".";
+            items.Add(Property(
+                (index + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(member.Name),
+                BuildFamilyMemberSummary(member)));
+            items.Add(ActionItem(Action(indexedPrefix + "name", "Name", "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name))));
+            items.Add(ActionItem(Action(indexedPrefix + "gender", "Gender", "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString())));
+            items.Add(ActionItem(Action(indexedPrefix + "age.1", "Age +", "Increase this survivor's exact age.", true, false, "A+", FormatAge(member))));
+            items.Add(ActionItem(Action(indexedPrefix + "age.-1", "Age -", "Decrease this survivor's exact age.", true, false, "A-", FormatAge(member))));
+
+            string[] statIds = ScenarioFamilyMemberFactory.StatIds;
+            for (int i = 0; i < statIds.Length; i++)
+            {
+                string statId = statIds[i];
+                int value = FindStatValue(member, statId, 5);
+                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".1", statId + " +", "Increase " + statId + ".", true, false, "+", value.ToString(CultureInfo.InvariantCulture))));
+                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".-1", statId + " -", "Decrease " + statId + ".", true, false, "-", value.ToString(CultureInfo.InvariantCulture))));
+            }
+
+            items.Add(ActionItem(Action(indexedPrefix + "strength_trait", "Strength Trait", "Cycle this survivor's strength characteristic.", true, false, "ST", FindTrait(member, "Strength:"))));
+            items.Add(ActionItem(Action(indexedPrefix + "weakness_trait", "Weakness Trait", "Cycle this survivor's weakness characteristic.", true, false, "WT", FindTrait(member, "Weakness:"))));
+            items.Add(ActionItem(Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", true, false, "ID")));
+            items.Add(ActionItem(Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", true, false, "LK", FormatAppearance(member))));
+            items.Add(ActionItem(Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored head, torso, and leg texture overrides.", true, false, "CL", FormatAppearance(member))));
+
+            if (includeOrdering)
+            {
+                items.Add(ActionItem(Action(actionPrefix + "move." + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Move Up", "Move this starting survivor earlier in the crew order.", true, false, "UP")));
+                items.Add(ActionItem(Action(actionPrefix + "move." + index.ToString(CultureInfo.InvariantCulture) + ".1", "Move Down", "Move this starting survivor later in the crew order.", true, false, "DN")));
+                items.Add(ActionItem(Action(actionPrefix + "remove." + index.ToString(CultureInfo.InvariantCulture), "Remove", "Remove this starting survivor from the start crew.", true, false, "RM")));
+            }
         }
 
         private static void AddInventoryChangeItems(List<ScenarioAuthoringInspectorItem> items, TimedInventoryChangeDefinition change, int index)
@@ -2289,6 +2348,82 @@ namespace ShelteredAPI.Scenarios
             items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".-1", "Day -", "Move this scheduled entry one day earlier.", true, false, "D-")));
             items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".1", "Hour +", "Move this scheduled entry one hour later.", true, false, "H+")));
             items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".-1", "Hour -", "Move this scheduled entry one hour earlier.", true, false, "H-")));
+        }
+
+        private static string BuildFamilyMemberSummary(FamilyMemberConfig member)
+        {
+            if (member == null)
+                return "Empty survivor";
+
+            return member.Gender
+                + " / age " + FormatAge(member)
+                + " / " + FormatStatLine(member)
+                + " / " + FindTrait(member, "Strength:")
+                + " / " + FindTrait(member, "Weakness:")
+                + " / look " + FormatAppearance(member);
+        }
+
+        private static string FormatStatLine(FamilyMemberConfig member)
+        {
+            string[] statIds = ScenarioFamilyMemberFactory.StatIds;
+            List<string> parts = new List<string>();
+            for (int i = 0; i < statIds.Length; i++)
+                parts.Add(statIds[i].Substring(0, 3) + " " + FindStatValue(member, statIds[i], 5).ToString(CultureInfo.InvariantCulture));
+            return string.Join(", ", parts.ToArray());
+        }
+
+        private static int FindStatValue(FamilyMemberConfig member, string statId, int fallback)
+        {
+            for (int i = 0; member != null && member.Stats != null && i < member.Stats.Count; i++)
+            {
+                StatOverride stat = member.Stats[i];
+                if (stat != null && string.Equals(stat.StatId, statId, StringComparison.OrdinalIgnoreCase))
+                    return stat.Value;
+            }
+
+            return fallback;
+        }
+
+        private static string FindTrait(FamilyMemberConfig member, string prefix)
+        {
+            for (int i = 0; member != null && member.Traits != null && i < member.Traits.Count; i++)
+            {
+                string trait = member.Traits[i];
+                if (!string.IsNullOrEmpty(trait) && trait.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return trait.Substring(prefix.Length);
+            }
+
+            return "<none>";
+        }
+
+        private static string FormatAge(FamilyMemberConfig member)
+        {
+            if (member == null)
+                return "<none>";
+            if (member.ExactAge.HasValue)
+                return member.ExactAge.Value.ToString(CultureInfo.InvariantCulture);
+            if (member.MinAge.HasValue || member.MaxAge.HasValue)
+                return (member.MinAge.HasValue ? member.MinAge.Value.ToString(CultureInfo.InvariantCulture) : "?")
+                    + "-"
+                    + (member.MaxAge.HasValue ? member.MaxAge.Value.ToString(CultureInfo.InvariantCulture) : "?");
+            return "<none>";
+        }
+
+        private static string FormatAppearance(FamilyMemberConfig member)
+        {
+            FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+            if (appearance == null)
+                return "default";
+
+            int count = 0;
+            if (!string.IsNullOrEmpty(appearance.HeadTextureId) || !string.IsNullOrEmpty(appearance.HeadTexturePath))
+                count++;
+            if (!string.IsNullOrEmpty(appearance.TorsoTextureId) || !string.IsNullOrEmpty(appearance.TorsoTexturePath))
+                count++;
+            if (!string.IsNullOrEmpty(appearance.LegTextureId) || !string.IsNullOrEmpty(appearance.LegTexturePath))
+                count++;
+
+            return count == 0 ? "default" : count.ToString(CultureInfo.InvariantCulture) + "/3 parts";
         }
 
         private static string GetCurrentWeatherSummary()

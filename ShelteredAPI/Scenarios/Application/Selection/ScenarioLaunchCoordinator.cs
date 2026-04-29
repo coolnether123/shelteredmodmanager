@@ -274,15 +274,14 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
             bool started;
             try
             {
-                started = saveManager.LoadFromCurrentSlot();
+                started = saveManager.SetSlotToLoad(GetSlotNumber(virtualSaveType));
             }
             catch (Exception ex)
             {
-                error = "LoadFromCurrentSlot threw: " + ex.Message;
+                error = "SetSlotToLoad threw: " + ex.Message;
                 _saveLibrary.ClearQueuedLoad(virtualSaveType);
                 return false;
             }

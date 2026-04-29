@@ -64,7 +64,21 @@ namespace ShelteredAPI.Scenarios
 
             if (definition.FamilySetup.OverrideVanillaFamily && definition.FamilySetup.Members.Count > members.Count)
             {
-                result.AddMessage("OverrideVanillaFamily requested more members than currently spawned. Creating/removing family members is deferred until a safe spawn adapter is added.");
+                for (int i = members.Count; i < definition.FamilySetup.Members.Count; i++)
+                {
+                    FamilyMemberConfig config = definition.FamilySetup.Members[i];
+                    FamilyMember spawned;
+                    string spawnMessage;
+                    if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
+                    {
+                        result.FamilyChanges++;
+                        ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
+                    }
+                    else if (!string.IsNullOrEmpty(spawnMessage))
+                    {
+                        result.AddMessage(spawnMessage);
+                    }
+                }
             }
         }
 

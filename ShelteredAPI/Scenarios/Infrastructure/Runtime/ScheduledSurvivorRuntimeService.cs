@@ -15,12 +15,6 @@ namespace ShelteredAPI.Scenarios
         {
             message = null;
             bool askToJoin = ReadBool(effect, "askToJoin", false);
-            if (askToJoin)
-            {
-                message = "Ask-to-join future survivor arrivals are not enabled yet; use auto-join for runtime spawning.";
-                return false;
-            }
-
             FutureSurvivorDefinition survivor = FindFutureSurvivor(definition, effect.SurvivorId ?? effect.TargetId);
             if (survivor == null)
             {
@@ -28,8 +22,11 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            SpawnFamilyMember(survivor.Survivor);
-            return true;
+            if (askToJoin || survivor.AskToJoin)
+                return ScenarioFamilyMemberFactory.ScheduleRecruit(survivor.Survivor, 0f, out message);
+
+            FamilyMember spawned;
+            return ScenarioFamilyMemberFactory.Spawn(survivor.Survivor, out spawned, out message);
         }
 
         public bool CanEvaluate(ScenarioConditionKind kind)
@@ -83,33 +80,5 @@ namespace ShelteredAPI.Scenarios
             return fallback;
         }
 
-        private static void SpawnFamilyMember(FamilyMemberConfig config)
-        {
-            if (config == null || FamilySpawner.instance == null)
-                return;
-
-            FamilySpawner.CharacterAttributes attributes = new FamilySpawner.CharacterAttributes();
-            attributes.m_firstName = string.IsNullOrEmpty(config.Name) ? "Survivor" : config.Name;
-            attributes.m_meshId = config.Gender == ScenarioGender.Female ? "woman" : "man";
-            for (int i = 0; config.Stats != null && i < config.Stats.Count; i++)
-            {
-                StatOverride stat = config.Stats[i];
-                if (stat == null || string.IsNullOrEmpty(stat.StatId))
-                    continue;
-                if (string.Compare(stat.StatId, "Strength", StringComparison.OrdinalIgnoreCase) == 0)
-                    attributes.m_strengthLevel = stat.Value;
-                else if (string.Compare(stat.StatId, "Dexterity", StringComparison.OrdinalIgnoreCase) == 0)
-                    attributes.m_dexterityLevel = stat.Value;
-                else if (string.Compare(stat.StatId, "Charisma", StringComparison.OrdinalIgnoreCase) == 0)
-                    attributes.m_charismaLevel = stat.Value;
-                else if (string.Compare(stat.StatId, "Perception", StringComparison.OrdinalIgnoreCase) == 0)
-                    attributes.m_perceptionLevel = stat.Value;
-                else if (string.Compare(stat.StatId, "Intelligence", StringComparison.OrdinalIgnoreCase) == 0)
-                    attributes.m_intelligenceLevel = stat.Value;
-            }
-
-            FamilySpawner.SetPendingFamilySpawn(attributes);
-            FamilySpawner.ForceSpawnPending();
-        }
     }
 }

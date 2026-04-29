@@ -615,6 +615,33 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
+    internal sealed class CharacterEditorCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioCharacterEditorAuthoringService _service;
+        private readonly IScenarioEditorService _editorService;
+
+        public CharacterEditorCommandHandler(
+            ScenarioCharacterEditorAuthoringService service,
+            IScenarioEditorService editorService)
+        {
+            _service = service;
+            _editorService = editorService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = actionId != null
+                && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix, StringComparison.Ordinal));
+            message = null;
+            if (!handled || _service == null)
+                return false;
+
+            return _service.TryHandleAction(_editorService.CurrentSession, state, actionId, out message);
+        }
+    }
+
     internal sealed class EditorLifecycleCommandHandler : IScenarioCommandHandler
     {
         private readonly IScenarioEditorService _editorService;

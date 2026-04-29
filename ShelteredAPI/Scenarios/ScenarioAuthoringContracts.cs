@@ -77,7 +77,10 @@ namespace ShelteredAPI.Scenarios
         public const string ActionCaptureShelterObjects = "capture.shelter.objects";
         public const string ActionCaptureSelectedObject = "capture.shelter.selected_object";
         public const string ActionRemoveSelectedObjectPlacement = "capture.shelter.remove_selected_object";
+        public const string ActionStartingSurvivorAdd = "scenario.start_survivor.add";
+        public const string ActionStartingSurvivorPrefix = "scenario.start_survivor.";
         public const string ActionFutureSurvivorAdd = "scenario.future_survivor.add";
+        public const string ActionFutureSurvivorEditPrefix = "scenario.future_survivor.edit.";
         public const string ActionFutureSurvivorRemovePrefix = "scenario.future_survivor.remove.";
         public const string ActionFutureSurvivorToggleAskPrefix = "scenario.future_survivor.ask.";
         public const string ActionFutureSurvivorDayPrefix = "scenario.future_survivor.day.";
