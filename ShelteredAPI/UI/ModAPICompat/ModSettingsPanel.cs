@@ -6,6 +6,7 @@ using System.Globalization; // Added for CultureInfo
 using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Internal.UI;
+using ModAPI.Internal.SpineUI;
 using ModAPI.Spine;
 using ModAPI.Spine.UI;
 
@@ -47,6 +48,7 @@ namespace ModAPI.UI
         private Font _activeTtfFont;
         private readonly ModSettingsSearchController _searchController = new ModSettingsSearchController();
         private readonly ModSettingsPresetController _presetController = new ModSettingsPresetController();
+        private readonly ModSettingsKeybindStatusController _keybindStatusController = new ModSettingsKeybindStatusController();
 
         // State
         private List<List<GameObject>> _pages = new List<List<GameObject>>();
@@ -73,7 +75,6 @@ namespace ModAPI.UI
         private const int WINDOW_HEIGHT = 900;
         private const int ROW_HEIGHT = 70;
         private const float WideKeybindRowX = -420f;
-        private const float SectionHeaderLocalX = 76f;
         
         /// <summary>
         /// Opens the shared settings window for the supplied mod entry and rebuilds the full UI from its provider.
@@ -206,12 +207,17 @@ namespace ModAPI.UI
             _nextBtn = CreateButton(root, "BtnNext", ">", new Vector3(60, bottomY, 0), 20, Color.white, uiFont, ttfFont, 50, 40, () => ChangePage(1));
             _pagingLabel = CreateLabel(root, "Paging", "1/1", new Vector3(0, bottomY, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 100);
             _pagingLabel.alignment = NGUIText.Alignment.Center;
+
+            _keybindStatusController.Build(root, new Vector3(0, bottomY + 48, 0), uiFont, ttfFont, CreateLabel);
+            ModSettingsKeybindStatusReporter.Attach(_keybindStatusController.Report);
             
             // RESET button (Bottom Left)
-            CreateButton(root, "BtnReset", "DEFAULTS", new Vector3(leftX + 60, bottomY, 0), 16, Color.white, uiFont, ttfFont, 140, 40, () => OnResetClicked());
+            var defaultsButton = CreateButton(root, "BtnReset", "DEFAULTS", new Vector3(leftX + 60, bottomY, 0), 16, Color.white, uiFont, ttfFont, 140, 40, () => OnResetClicked());
+            SpineWidgetRuntime.SetTooltip(defaultsButton, "Restore every setting on this page to its default value.");
 
             // 4. Save & Close (Bottom Right)
-            CreateButton(root, "BtnSaveAndClose", "SAVE & CLOSE", new Vector3(rightX - 100, bottomY, 0), 18, Color.white, uiFont, ttfFont, 200, 40, () => OnClose());
+            var saveButton = CreateButton(root, "BtnSaveAndClose", "SAVE & CLOSE", new Vector3(rightX - 100, bottomY, 0), 18, Color.white, uiFont, ttfFont, 200, 40, () => OnClose());
+            SpineWidgetRuntime.SetTooltip(saveButton, "Save changes and return to the previous settings screen.");
 
             MMLog.WriteDebug("UI Initial Construction Complete. Building Menu Content...");
             BuildMenu(uiFont, ttfFont);
@@ -220,6 +226,8 @@ namespace ModAPI.UI
 
         private void Update()
         {
+            _keybindStatusController.Update();
+
             if (!_inputLockedExternally)
                 _searchController.HandleInput(MaxSearchLength, COLOR_SUBTEXT, delegate
                 {
@@ -249,6 +257,7 @@ namespace ModAPI.UI
             // Auto-save after reset
             if (_currentMod.SettingsProvider is ISettingsProvider2 sp3) sp3.Save();
 
+            _keybindStatusController.Report("All controls restored to defaults.", false);
             BuildMenu(_modNameLabel.bitmapFont, _modNameLabel.trueTypeFont);
         }
 
@@ -260,6 +269,7 @@ namespace ModAPI.UI
             _lastClosedViewMode = _currentViewMode;
             FlushPendingSettingInputs();
             SaveCurrentSettings();
+            ModSettingsKeybindStatusReporter.Detach(_keybindStatusController.Report);
 
             Destroy(_instance);
             _instance = null;
@@ -275,6 +285,7 @@ namespace ModAPI.UI
             // persist pending edits so settings are not lost.
             FlushPendingSettingInputs();
             SaveCurrentSettings();
+            ModSettingsKeybindStatusReporter.Detach(_keybindStatusController.Report);
 
             if (_instance == gameObject) _instance = null;
             if (_activeInstance == this) _activeInstance = null;
@@ -580,12 +591,21 @@ namespace ModAPI.UI
             var displayEntries = BuildDisplayEntries(visibleItems, allDefs, useWideKeybindLayout);
 
             var pagedEntries = BuildPaginatedDisplayEntrySegments(displayEntries, itemsPerPage);
+            ModSettingsKeybindWidgetBuilder keybindBuilder = useWideKeybindLayout ? CreateKeybindWidgetBuilder(data) : null;
 
             for (int i = 0; i < pagedEntries.Count; i++)
             {
                 var pageItems = new List<GameObject>();
                 var segment = pagedEntries[i];
                 int renderedRows = 0;
+
+                if (useWideKeybindLayout && columns == 1 && segment.Count > 0)
+                {
+                    GameObject header = keybindBuilder.CreateColumnHeaderWidget();
+                    header.transform.localPosition = new Vector3(WideKeybindRowX, startY + 34f, 0);
+                    pageItems.Add(header);
+                    foreach (var w in header.GetComponentsInChildren<UIWidget>(true)) w.depth += 100;
+                }
 
                 for (int j = 0; j < segment.Count; j++)
                 {
@@ -620,11 +640,11 @@ namespace ModAPI.UI
 
                     if (useWideKeybindLayout && isSectionHeader)
                     {
-                        widget = CreateSectionHeaderWidget(entry.Primary);
+                        widget = keybindBuilder.CreateSectionHeaderWidget(entry.Primary);
                     }
                     else if (entry.Secondary != null)
                     {
-                        widget = CreateDualKeybindWidget(entry.Primary, entry.Secondary, data);
+                        widget = keybindBuilder.CreateDualKeybindWidget(entry.Primary, entry.Secondary);
                     }
                     else
                     {
@@ -635,7 +655,7 @@ namespace ModAPI.UI
                     {
                         widget.transform.localPosition = new Vector3(x, y, 0);
                         if (useWideKeybindLayout)
-                            NormalizeWideKeybindWidgetAlignment(widget, entry);
+                            ModSettingsKeybindWidgetBuilder.NormalizeWideKeybindWidgetAlignment(widget, entry);
                         pageItems.Add(widget);
                         foreach (var w in widget.GetComponentsInChildren<UIWidget>(true)) w.depth += 100;
 
@@ -652,6 +672,23 @@ namespace ModAPI.UI
                 // Handle no search results.
                 if (_pages.Count == 0) _pages.Add(new List<GameObject>());
             }
+        }
+
+        private ModSettingsKeybindWidgetBuilder CreateKeybindWidgetBuilder(object settingsObject)
+        {
+            return new ModSettingsKeybindWidgetBuilder(
+                _contentRoot,
+                _currentMod != null ? _currentMod.SettingsProvider : null,
+                settingsObject,
+                _whiteTexture,
+                _activeBitmapFont,
+                _activeTtfFont,
+                COLOR_TEXT,
+                COLOR_SUBTEXT,
+                CreateLabel,
+                CreateButton,
+                ApplySettingValue,
+                OnSettingChanged);
         }
 
         private List<ModSettingsKeybindDisplayEntry> BuildDisplayEntries(List<SettingDefinition> visibleItems, List<SettingDefinition> allDefs, bool pairKeybinds)
@@ -824,272 +861,14 @@ namespace ModAPI.UI
             }
         }
 
-        private GameObject CreateDualKeybindWidget(SettingDefinition primaryDef, SettingDefinition secondaryDef, object data)
-        {
-            var container = NGUITools.AddChild(_contentRoot);
-            container.name = "DualKeybind_" + (primaryDef != null ? primaryDef.Id : "Unknown");
-            NGUITools.SetLayer(container, _contentRoot.layer);
-            const int keySlotWidth = 158;
-            const int keySlotHeight = 38;
-            const int clearWidth = 96;
-            const int clearHeight = 38;
-
-            string actionLabel = GetActionLabel(primaryDef, secondaryDef);
-            var label = CreateLabel(container.transform, "ActionLabel", actionLabel, new Vector3(0, 0, 0), 16, COLOR_TEXT, _activeBitmapFont, _activeTtfFont, 102);
-            label.pivot = UIWidget.Pivot.Left;
-            label.alignment = NGUIText.Alignment.Left;
-            label.transform.localPosition = Vector3.zero;
-            label.width = 250;
-            label.overflowMethod = UILabel.Overflow.ClampContent;
-            label.multiLine = false;
-            SetTooltip(label.gameObject, primaryDef != null ? primaryDef.Tooltip : (secondaryDef != null ? secondaryDef.Tooltip : null));
-
-            KeybindCaptureListener primaryCapture = null;
-            KeybindCaptureListener secondaryCapture = null;
-
-            Func<string> primaryDisplay = () => FormatKeyCode(ReadKeyCode(primaryDef, data));
-            Func<string> secondaryDisplay = () => FormatKeyCode(ReadKeyCode(secondaryDef, data));
-
-            Action refreshCapture = () =>
-            {
-                if (primaryCapture != null && primaryCapture.DisplayTextProvider != null && primaryCapture.ValueLabel != null)
-                    primaryCapture.ValueLabel.text = primaryCapture.DisplayTextProvider();
-                if (secondaryCapture != null && secondaryCapture.DisplayTextProvider != null && secondaryCapture.ValueLabel != null)
-                    secondaryCapture.ValueLabel.text = secondaryCapture.DisplayTextProvider();
-            };
-
-            primaryCapture = CreateClickableKeySlot(
-                container.transform,
-                "Primary",
-                new Vector3(290, 0, 0),
-                primaryDisplay,
-                null,
-                key =>
-                {
-                    if (ApplySettingValue(primaryDef, data, key))
-                    {
-                        OnSettingChanged();
-                        refreshCapture();
-                    }
-                },
-                keySlotWidth,
-                keySlotHeight);
-
-            secondaryCapture = CreateClickableKeySlot(
-                container.transform,
-                "Secondary",
-                new Vector3(465, 0, 0),
-                secondaryDisplay,
-                null,
-                key =>
-                {
-                    if (ApplySettingValue(secondaryDef, data, key))
-                    {
-                        OnSettingChanged();
-                        refreshCapture();
-                    }
-                },
-                keySlotWidth,
-                keySlotHeight);
-
-            CreateButton(
-                container.transform,
-                "Clear",
-                "CLEAR",
-                new Vector3(630, 0, 0),
-                13,
-                Color.white,
-                _activeBitmapFont,
-                _activeTtfFont,
-                clearWidth,
-                clearHeight,
-                () =>
-                {
-                    bool changed = false;
-                    if (ApplySettingValue(primaryDef, data, KeyCode.None)) changed = true;
-                    if (ApplySettingValue(secondaryDef, data, KeyCode.None)) changed = true;
-
-                    if (changed)
-                    {
-                        OnSettingChanged();
-                        refreshCapture();
-                    }
-                });
-
-            return container;
-        }
-
-        private GameObject CreateSectionHeaderWidget(SettingDefinition def)
-        {
-            var container = NGUITools.AddChild(_contentRoot);
-            container.name = "SectionHeader_" + (def != null ? def.Id : "Unknown");
-            NGUITools.SetLayer(container, _contentRoot.layer);
-
-            string title = def != null && !string.IsNullOrEmpty(def.Label)
-                ? def.Label.ToUpperInvariant()
-                : "SECTION";
-
-            var label = CreateLabel(
-                container.transform,
-                "SectionLabel",
-                title,
-                new Vector3(0, 0, 0),
-                20,
-                def != null && def.HeaderColor.HasValue ? def.HeaderColor.Value : new Color(0.35f, 0.70f, 0.90f, 1f),
-                _activeBitmapFont,
-                _activeTtfFont,
-                102);
-            label.pivot = UIWidget.Pivot.Left;
-            label.alignment = NGUIText.Alignment.Left;
-            label.transform.localPosition = new Vector3(SectionHeaderLocalX, 0, 0);
-            label.width = 300;
-            label.overflowMethod = UILabel.Overflow.ClampContent;
-            label.multiLine = false;
-
-            return container;
-        }
-
         private static bool IsSectionHeaderEntry(ModSettingsKeybindDisplayEntry entry)
         {
             return ModSettingsKeybindLayout.IsSectionHeaderEntry(entry);
         }
 
-        private void NormalizeWideKeybindWidgetAlignment(GameObject widget, ModSettingsKeybindDisplayEntry entry)
-        {
-            if (widget == null || entry == null) return;
-
-            var labels = widget.GetComponentsInChildren<UILabel>(true);
-            if (labels == null || labels.Length == 0) return;
-
-            bool isHeader = IsSectionHeaderEntry(entry);
-            string target = isHeader
-                ? ((entry.Primary != null && !string.IsNullOrEmpty(entry.Primary.Label))
-                    ? entry.Primary.Label.ToUpperInvariant()
-                    : "SECTION")
-                : GetActionLabel(entry.Primary, entry.Secondary);
-
-            UILabel best = null;
-            for (int i = 0; i < labels.Length; i++)
-            {
-                UILabel candidate = labels[i];
-                if (candidate == null) continue;
-
-                string text = candidate.text ?? string.Empty;
-                if (string.Equals(text.Trim(), target.Trim(), StringComparison.OrdinalIgnoreCase))
-                {
-                    best = candidate;
-                    break;
-                }
-            }
-
-            if (best == null)
-                best = labels[0];
-            if (best == null) return;
-
-            best.pivot = UIWidget.Pivot.Left;
-            best.alignment = NGUIText.Alignment.Left;
-            best.multiLine = false;
-            best.overflowMethod = UILabel.Overflow.ClampContent;
-            best.width = isHeader ? 320 : 250;
-
-            var pos = best.transform.localPosition;
-            best.transform.localPosition = new Vector3(isHeader ? SectionHeaderLocalX : 0f, pos.y, pos.z);
-        }
-
-        private KeybindCaptureListener CreateClickableKeySlot(
-            Transform parent,
-            string name,
-            Vector3 localPosition,
-            Func<string> displayTextProvider,
-            Action onSelected,
-            Action<KeyCode> onCaptured,
-            int slotWidth,
-            int slotHeight)
-        {
-            var slot = new GameObject(name);
-            slot.transform.SetParent(parent, false);
-            slot.transform.localPosition = localPosition;
-            slot.layer = parent.gameObject.layer;
-
-            var bg = slot.AddComponent<UITexture>();
-            bg.mainTexture = _whiteTexture;
-            bg.width = slotWidth;
-            bg.height = slotHeight;
-            bg.depth = 100;
-            bg.color = new Color(0.19f, 0.15f, 0.12f, 0.95f);
-
-            var valueLabel = CreateLabel(
-                slot.transform,
-                "Value",
-                displayTextProvider != null ? displayTextProvider() : string.Empty,
-                Vector3.zero,
-                14,
-                Color.white,
-                _activeBitmapFont,
-                _activeTtfFont,
-                101);
-            valueLabel.alignment = NGUIText.Alignment.Center;
-            valueLabel.width = Mathf.Max(40, slotWidth - 8);
-            valueLabel.height = Mathf.Max(20, slotHeight - 4);
-            valueLabel.overflowMethod = UILabel.Overflow.ClampContent;
-            valueLabel.multiLine = false;
-
-            var col = slot.AddComponent<BoxCollider>();
-            col.size = new Vector3(slotWidth, slotHeight, 1);
-            col.center = Vector3.zero;
-
-            var capture = slot.AddComponent<KeybindCaptureListener>();
-            capture.ValueLabel = valueLabel;
-            capture.DisplayTextProvider = displayTextProvider;
-            capture.OnCanceled = () =>
-            {
-                if (displayTextProvider != null)
-                    valueLabel.text = displayTextProvider();
-            };
-            capture.OnCaptured = key =>
-            {
-                if (onCaptured != null) onCaptured(key);
-                if (displayTextProvider != null)
-                    valueLabel.text = displayTextProvider();
-            };
-
-            UIEventListener.Get(slot).onClick = _ =>
-            {
-                if (onSelected != null) onSelected();
-                capture.StartCapture();
-            };
-
-            return capture;
-        }
-
         private static bool ApplySettingValue(SettingDefinition def, object settingsObject, object newValue)
         {
             return ModSettingsKeybindRuntime.ApplySettingValue(def, settingsObject, newValue);
-        }
-
-        private static KeyCode ReadKeyCode(SettingDefinition def, object settingsObject)
-        {
-            return ModSettingsKeybindRuntime.ReadKeyCode(def, settingsObject);
-        }
-
-        private static string GetKeybindActionBaseId(string settingId)
-        {
-            return ModSettingsKeybindLayout.GetKeybindActionBaseId(settingId);
-        }
-
-        private static string GetActionLabel(SettingDefinition primaryDef, SettingDefinition secondaryDef)
-        {
-            return ModSettingsKeybindLayout.GetActionLabel(primaryDef, secondaryDef);
-        }
-
-        private static string FormatKeyCode(KeyCode key)
-        {
-            return ModSettingsKeybindLayout.FormatKeyCode(key);
-        }
-
-        private static string HumanizeKeyName(string value)
-        {
-            return ModSettingsKeybindLayout.HumanizeKeyName(value);
         }
 
         public void RefreshDependents(string changedId)
@@ -1182,36 +961,6 @@ namespace ModAPI.UI
             var label = go.AddComponent<UILabel>(); label.text = text; label.fontSize = fontSize; label.color = color; label.depth = depth;
             label.overflowMethod = UILabel.Overflow.ResizeFreely; label.bitmapFont = uiFont; label.trueTypeFont = ttfFont;
             return label;
-        }
-
-        private static void SetTooltip(GameObject go, string text)
-        {
-            if (go == null || string.IsNullOrEmpty(text)) return;
-            
-            // NGUI hover events require a collider.
-            var box = go.GetComponent<BoxCollider>();
-            if (box == null)
-            {
-                NGUITools.AddWidgetCollider(go);
-                box = go.GetComponent<BoxCollider>();
-            }
-
-            if (box != null)
-            {
-                var widget = go.GetComponent<UIWidget>();
-                if (widget != null && (box.size.x < 1f || box.size.y < 1f))
-                {
-                    box.size = new Vector3(Mathf.Max(widget.width, 200), Mathf.Max(widget.height, 24), 1);
-                    box.center = new Vector3(box.size.x / 2, 0, 0);
-                }
-            }
-
-            var panel = NGUITools.FindInParents<UIPanel>(go);
-            var root = panel != null ? panel.transform : (go.transform != null ? go.transform.root : null);
-            if (root == null) return;
-
-            var label = go.GetComponent<UILabel>();
-            UIHelper.AddTooltip(go, root, text, label != null ? label.bitmapFont : null, label != null ? label.trueTypeFont : null);
         }
 
         private GameObject CreateButton(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int w, int h, Action onClick)

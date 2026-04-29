@@ -161,6 +161,7 @@
     <Compile Include="Scenarios\Domain\Conditions\ScenarioGateDefinition.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectDefinition.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectKind.cs" />
+    <Compile Include="Scenarios\Domain\Map\ScenarioMapDefinitions.cs" />
     <Compile Include="Scenarios\Domain\Objects\ScenarioObjectIdentity.cs" />
     <Compile Include="Scenarios\Domain\Objects\ScenarioObjectStartState.cs" />
     <Compile Include="Scenarios\Domain\Runtime\ScenarioExecutedActionRecord.cs" />
@@ -440,8 +441,11 @@
     <Compile Include="UI\ModAPICompat\ModManager\ModManagerDescriptionScroller.cs" />
     <Compile Include="UI\ModAPICompat\Settings\ModSettingsSearchController.cs" />
     <Compile Include="UI\ModAPICompat\Settings\ModSettingsPresetController.cs" />
+    <Compile Include="UI\ModAPICompat\Settings\ModSettingsKeybindActionReset.cs" />
     <Compile Include="UI\ModAPICompat\Settings\ModSettingsKeybindLayout.cs" />
     <Compile Include="UI\ModAPICompat\Settings\ModSettingsKeybindRuntime.cs" />
+    <Compile Include="UI\ModAPICompat\Settings\ModSettingsKeybindStatus.cs" />
+    <Compile Include="UI\ModAPICompat\Settings\ModSettingsKeybindWidgetBuilder.cs" />
     <Compile Include="UI\ModAPICompat\DebugInternal\UIDebugSourceModels.cs" />
     <Compile Include="UI\ModAPICompat\DebugInternal\UIDebugSourceMethodLocator.cs" />
     <Compile Include="UI\ModAPICompat\DebugInternal\UIDebugSourceDiffService.cs" />

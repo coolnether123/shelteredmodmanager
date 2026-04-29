@@ -331,31 +331,6 @@ namespace ShelteredAPI.Scenarios
         public int DurationHours { get; set; }
     }
 
-    public class MapAuthoringDefinition
-    {
-        public MapAuthoringDefinition()
-        {
-            Locations = new List<MapLocationDefinition>();
-        }
-
-        public string StartLocationId { get; set; }
-        public List<MapLocationDefinition> Locations { get; private set; }
-    }
-
-    public class MapLocationDefinition
-    {
-        public MapLocationDefinition()
-        {
-            Properties = new List<ScenarioProperty>();
-        }
-
-        public string Id { get; set; }
-        public string DisplayName { get; set; }
-        public float X { get; set; }
-        public float Y { get; set; }
-        public List<ScenarioProperty> Properties { get; private set; }
-    }
-
     public class ConditionDef
     {
         public ConditionDef()

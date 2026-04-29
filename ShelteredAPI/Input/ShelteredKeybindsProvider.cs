@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using ModAPI.Core;
+using ModAPI.Internal.UI;
 using ModAPI.InputActions;
 using ModAPI.Spine;
 using ModAPI.UI;
@@ -16,7 +17,7 @@ namespace ShelteredAPI.Input
     /// Settings provider bridging Sheltered and mod-defined input actions into the shared Spine settings window.
     /// Applies a full validation/conflict/persist pipeline for every bind change.
     /// </summary>
-    internal sealed class ShelteredKeybindsProvider : ISettingsProvider2
+    internal sealed class ShelteredKeybindsProvider : ISettingsProvider2, IKeybindActionResetProvider
     {
         private const string PrefKeyPrefix = "ShelteredAPI.Keybind.";
         private const string ZoomSpeedPrefKey = PrefKeyPrefix + "ZoomSpeed";
@@ -112,6 +113,23 @@ namespace ShelteredAPI.Input
             ModPrefs.Save();
         }
 
+        public bool ResetKeybindActionToDefault(string actionId)
+        {
+            EnsureLoaded();
+            if (string.IsNullOrEmpty(actionId)) return false;
+
+            ModInputAction action;
+            if (!InputActionRegistry.TryGetAction(actionId, out action) || action == null)
+                return false;
+
+            InputActionRegistry.SetBinding(action.Id, action.DefaultBinding);
+            PersistActionBinding(action.Id, action.DefaultBinding);
+            ModPrefs.Save();
+            MMLog.WriteInfo("[ShelteredKeybindsProvider] Reset action=" + action.Id + " to default primary="
+                + action.DefaultBinding.Primary + " secondary=" + action.DefaultBinding.Secondary + ".");
+            return true;
+        }
+
         /// <summary>
         /// Persists all displayed bindings and Sheltered input tuning values to ModPrefs.
         /// </summary>
@@ -204,12 +222,14 @@ namespace ShelteredAPI.Input
                 if (!KeyValidationPolicy.IsKeyBindable(keyCode))
                 {
                     MMLog.WriteInfo("[Keybinds] Rejected unbindable key " + keyCode + " for " + actionId + ".");
+                    ReportStatus("Cannot bind " + FormatKeyForMessage(keyCode) + ". That key is reserved by the controls screen or the operating system.", true);
                     return false;
                 }
 
                 if (!KeyValidationPolicy.IsValidForContext(keyCode, context))
                 {
                     MMLog.WriteInfo("[Keybinds] Rejected key " + keyCode + " for context " + context + " on " + actionId + ".");
+                    ReportStatus("Cannot bind " + FormatKeyForMessage(keyCode) + " to " + GetActionLabel(actionId) + " in the " + context + " context.", true);
                     return false;
                 }
             }
@@ -222,6 +242,7 @@ namespace ShelteredAPI.Input
             else proposed.Secondary = keyCode;
 
             NormalizeSelfOverlap(ref proposed, primary);
+            int clearedConflictCount = 0;
 
             if (keyCode != KeyCode.None)
             {
@@ -232,6 +253,7 @@ namespace ShelteredAPI.Input
                     {
                         // Deferred apply via MessageBox callback.
                         MMLog.WriteInfo("[Keybinds] Conflict prompt shown for action=" + actionId + " key=" + keyCode + ".");
+                        ReportStatus("Choose whether to override the existing " + FormatKeyForMessage(keyCode) + " binding.", true);
                         return false;
                     }
 
@@ -247,17 +269,22 @@ namespace ShelteredAPI.Input
                     if (!fallbackResolution.Applied)
                     {
                         MMLog.WriteInfo("[Keybinds] Binding cancelled for " + actionId + ". " + fallbackResolution.Message);
+                        ReportStatus("Binding unchanged for " + GetActionLabel(actionId) + ".", true);
                         return false;
                     }
 
                     PersistAffectedActions(fallbackResolution.AffectedActionIds);
+                    clearedConflictCount = fallbackResolution.AffectedActionIds != null
+                        ? fallbackResolution.AffectedActionIds.Count
+                        : 0;
                     MMLog.WriteInfo("[Keybinds] Fallback conflict resolution applied for action=" + actionId + ". Affected="
-                        + fallbackResolution.AffectedActionIds.Count + ".");
+                        + clearedConflictCount + ".");
                 }
             }
 
             ApplyAndPersist(actionId, proposed);
             MMLog.WriteInfo("[Keybinds] Apply complete action=" + actionId + " => primary=" + proposed.Primary + ", secondary=" + proposed.Secondary + ".");
+            ReportStatus(BuildAppliedMessage(actionId, primary, keyCode, clearedConflictCount), false);
             return true;
         }
 
@@ -488,11 +515,14 @@ namespace ShelteredAPI.Input
                             if (!resolution.Applied)
                             {
                                 MMLog.WriteInfo("[Keybinds] Conflict prompt cancelled for " + actionId + ".");
+                                ReportStatus("Binding unchanged for " + GetActionLabel(actionId) + ".", true);
                                 return;
                             }
 
                             PersistAffectedActions(resolution.AffectedActionIds);
                             ApplyAndPersist(actionId, proposedBinding);
+                            ReportStatus("Bound " + GetActionLabel(actionId) + " to " + FormatKeyForMessage(proposedKey)
+                                + " and cleared conflicting binding(s).", false);
                         }
                         finally
                         {
@@ -513,7 +543,10 @@ namespace ShelteredAPI.Input
                                 KeyConflictUserChoice.Cancel);
 
                             if (!resolution.Applied)
+                            {
                                 MMLog.WriteInfo("[Keybinds] Conflict prompt cancelled for " + actionId + ".");
+                                ReportStatus("Binding unchanged for " + GetActionLabel(actionId) + ".", true);
+                            }
                         }
                         finally
                         {
@@ -537,6 +570,39 @@ namespace ShelteredAPI.Input
             PersistActionBinding(actionId, binding);
             ModPrefs.Save();
             MMLog.WriteInfo("[ShelteredKeybindsProvider] Persisted action=" + actionId + " primary=" + binding.Primary + " secondary=" + binding.Secondary + ".");
+        }
+
+        private static void ReportStatus(string message, bool warning)
+        {
+            ModSettingsKeybindStatusReporter.Report(message, warning);
+        }
+
+        private static string BuildAppliedMessage(string actionId, bool primary, KeyCode keyCode, int clearedConflictCount)
+        {
+            string actionLabel = GetActionLabel(actionId);
+            string slot = primary ? "primary" : "alternate";
+            if (keyCode == KeyCode.None)
+                return "Cleared the " + slot + " binding for " + actionLabel + ".";
+
+            if (clearedConflictCount > 0)
+                return "Bound " + actionLabel + " " + slot + " to " + FormatKeyForMessage(keyCode)
+                    + " and cleared " + clearedConflictCount + " conflicting binding(s).";
+
+            return "Bound " + actionLabel + " " + slot + " to " + FormatKeyForMessage(keyCode) + ".";
+        }
+
+        private static string GetActionLabel(string actionId)
+        {
+            ModInputAction action;
+            if (InputActionRegistry.TryGetAction(actionId, out action) && action != null && !string.IsNullOrEmpty(action.Label))
+                return action.Label;
+
+            return string.IsNullOrEmpty(actionId) ? "this action" : actionId;
+        }
+
+        private static string FormatKeyForMessage(KeyCode keyCode)
+        {
+            return ModSettingsKeybindLayout.FormatKeyCode(keyCode);
         }
 
         private static void PersistAffectedActions(List<string> affectedActionIds)

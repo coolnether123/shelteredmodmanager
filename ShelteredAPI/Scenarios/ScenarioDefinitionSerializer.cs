@@ -488,23 +488,257 @@ namespace ShelteredAPI.Scenarios
                 return result;
 
             result.StartLocationId = AttributeOrChild(element, "startLocationId", "StartLocationId");
-            XmlNodeList locationNodes = element.GetElementsByTagName("Location");
+            result.Width = ReadFloatAttribute(element, "width", 0f);
+            result.Height = ReadFloatAttribute(element, "height", 0f);
+            result.DefaultTerrainId = AttributeOrChild(element, "defaultTerrainId", "DefaultTerrainId");
+
+            XmlElement locationsElement = Child(element, "Locations") ?? element;
+            XmlNodeList locationNodes = locationsElement.GetElementsByTagName("Location");
             for (int i = 0; i < locationNodes.Count; i++)
             {
                 XmlElement locationElement = locationNodes[i] as XmlElement;
-                if (locationElement == null)
+                if (locationElement == null || locationElement.ParentNode != locationsElement)
                     continue;
 
                 MapLocationDefinition location = new MapLocationDefinition();
                 location.Id = AttributeOrChild(locationElement, "id", "Id");
                 location.DisplayName = AttributeOrChild(locationElement, "displayName", "DisplayName");
+                location.Kind = AttributeOrChild(locationElement, "kind", "Kind");
                 location.X = ReadFloatAttribute(locationElement, "x", 0f);
                 location.Y = ReadFloatAttribute(locationElement, "y", 0f);
+                location.Radius = ReadFloatAttribute(locationElement, "radius", 0f);
+                location.Searchable = ReadBoolAttribute(locationElement, "searchable", true);
+                location.DiscoveredAtStart = ReadBoolAttribute(locationElement, "discoveredAtStart", true);
+                location.MarkerId = AttributeOrChild(locationElement, "markerId", "MarkerId");
+                location.BoundaryId = AttributeOrChild(locationElement, "boundaryId", "BoundaryId");
+                location.TerrainId = AttributeOrChild(locationElement, "terrainId", "TerrainId");
+                location.LootTableId = AttributeOrChild(locationElement, "lootTableId", "LootTableId");
+                location.EncounterTableId = AttributeOrChild(locationElement, "encounterTableId", "EncounterTableId");
+                location.RequiredGateId = AttributeOrChild(locationElement, "requiredGateId", "RequiredGateId");
+                location.Danger = ReadIntAttribute(locationElement, "danger", 0);
                 ReadProperties(Child(locationElement, "Properties"), location.Properties);
                 result.Locations.Add(location);
             }
 
+            ReadMapMarkers(Child(element, "Markers"), result.Markers);
+            ReadMapBoundaries(Child(element, "Boundaries"), result.Boundaries);
+            ReadMapTerrainPatches(Child(element, "TerrainPatches"), result.TerrainPatches);
+            ReadMapLootTables(Child(element, "LootTables"), result.LootTables);
+            ReadMapEncounterTables(Child(element, "EncounterTables"), result.EncounterTables);
+            ReadExpeditionRoutes(Child(element, "Routes"), result.Routes);
             return result;
+        }
+
+        private static void ReadMapMarkers(XmlElement element, System.Collections.Generic.List<MapMarkerDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Marker");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                MapMarkerDefinition marker = new MapMarkerDefinition();
+                marker.Id = AttributeOrChild(node, "id", "Id");
+                marker.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
+                marker.Kind = ReadEnumAttribute(node, "kind", MapMarkerKind.PointOfInterest);
+                marker.X = ReadFloatAttribute(node, "x", 0f);
+                marker.Y = ReadFloatAttribute(node, "y", 0f);
+                marker.IconId = AttributeOrChild(node, "iconId", "IconId");
+                marker.LocationId = AttributeOrChild(node, "locationId", "LocationId");
+                marker.BoundaryId = AttributeOrChild(node, "boundaryId", "BoundaryId");
+                marker.VisibleAtStart = ReadBoolAttribute(node, "visibleAtStart", true);
+                ReadStringList(Child(node, "Tags"), "Tag", marker.Tags);
+                ReadProperties(Child(node, "Properties"), marker.Properties);
+                target.Add(marker);
+            }
+        }
+
+        private static void ReadMapBoundaries(XmlElement element, System.Collections.Generic.List<MapBoundaryDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Boundary");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                MapBoundaryDefinition boundary = new MapBoundaryDefinition();
+                boundary.Id = AttributeOrChild(node, "id", "Id");
+                boundary.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
+                boundary.Kind = ReadEnumAttribute(node, "kind", MapBoundaryKind.Region);
+                boundary.MinX = ReadNullableFloatAttribute(node, "minX");
+                boundary.MinY = ReadNullableFloatAttribute(node, "minY");
+                boundary.MaxX = ReadNullableFloatAttribute(node, "maxX");
+                boundary.MaxY = ReadNullableFloatAttribute(node, "maxY");
+                boundary.TerrainId = AttributeOrChild(node, "terrainId", "TerrainId");
+                boundary.LootTableId = AttributeOrChild(node, "lootTableId", "LootTableId");
+                boundary.EncounterTableId = AttributeOrChild(node, "encounterTableId", "EncounterTableId");
+                boundary.RequiredGateId = AttributeOrChild(node, "requiredGateId", "RequiredGateId");
+                ReadMapPoints(Child(node, "Points"), "Point", boundary.Points);
+                ReadProperties(Child(node, "Properties"), boundary.Properties);
+                target.Add(boundary);
+            }
+        }
+
+        private static void ReadMapTerrainPatches(XmlElement element, System.Collections.Generic.List<MapTerrainPatchDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Patch");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                MapTerrainPatchDefinition patch = new MapTerrainPatchDefinition();
+                patch.Id = AttributeOrChild(node, "id", "Id");
+                patch.TerrainId = AttributeOrChild(node, "terrainId", "TerrainId");
+                patch.Shape = ReadEnumAttribute(node, "shape", MapTerrainBrushShape.Rectangle);
+                patch.X = ReadFloatAttribute(node, "x", 0f);
+                patch.Y = ReadFloatAttribute(node, "y", 0f);
+                patch.Width = ReadFloatAttribute(node, "width", 0f);
+                patch.Height = ReadFloatAttribute(node, "height", 0f);
+                patch.Radius = ReadFloatAttribute(node, "radius", 0f);
+                patch.Priority = ReadIntAttribute(node, "priority", 0);
+                patch.BoundaryId = AttributeOrChild(node, "boundaryId", "BoundaryId");
+                ReadMapPoints(Child(node, "Points"), "Point", patch.Points);
+                ReadProperties(Child(node, "Properties"), patch.Properties);
+                target.Add(patch);
+            }
+        }
+
+        private static void ReadMapLootTables(XmlElement element, System.Collections.Generic.List<MapLootTableDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("LootTable");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                MapLootTableDefinition table = new MapLootTableDefinition();
+                table.Id = AttributeOrChild(node, "id", "Id");
+                table.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
+                XmlElement entries = Child(node, "Entries");
+                XmlNodeList entryNodes = entries != null ? entries.GetElementsByTagName("Entry") : node.GetElementsByTagName("Entry");
+                for (int entryIndex = 0; entryIndex < entryNodes.Count; entryIndex++)
+                {
+                    XmlElement entryNode = entryNodes[entryIndex] as XmlElement;
+                    if (entryNode == null || (entries != null && entryNode.ParentNode != entries))
+                        continue;
+
+                    table.Entries.Add(new MapLootEntryDefinition
+                    {
+                        ItemId = AttributeOrChild(entryNode, "itemId", "ItemId"),
+                        MinQuantity = ReadIntAttribute(entryNode, "min", 1),
+                        MaxQuantity = ReadIntAttribute(entryNode, "max", 1),
+                        Weight = ReadIntAttribute(entryNode, "weight", 1),
+                        Chance = ReadFloatAttribute(entryNode, "chance", 1f)
+                    });
+                }
+                ReadProperties(Child(node, "Properties"), table.Properties);
+                target.Add(table);
+            }
+        }
+
+        private static void ReadMapEncounterTables(XmlElement element, System.Collections.Generic.List<MapEncounterTableDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("EncounterTable");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                MapEncounterTableDefinition table = new MapEncounterTableDefinition();
+                table.Id = AttributeOrChild(node, "id", "Id");
+                table.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
+                XmlElement entries = Child(node, "Entries");
+                XmlNodeList entryNodes = entries != null ? entries.GetElementsByTagName("Entry") : node.GetElementsByTagName("Entry");
+                for (int entryIndex = 0; entryIndex < entryNodes.Count; entryIndex++)
+                {
+                    XmlElement entryNode = entryNodes[entryIndex] as XmlElement;
+                    if (entryNode == null || (entries != null && entryNode.ParentNode != entries))
+                        continue;
+
+                    MapEncounterEntryDefinition entry = new MapEncounterEntryDefinition();
+                    entry.Id = AttributeOrChild(entryNode, "id", "Id");
+                    entry.EncounterType = AttributeOrChild(entryNode, "type", "EncounterType");
+                    entry.FactionId = AttributeOrChild(entryNode, "factionId", "FactionId");
+                    entry.PersonalityId = AttributeOrChild(entryNode, "personalityId", "PersonalityId");
+                    entry.MinCount = ReadIntAttribute(entryNode, "min", 1);
+                    entry.MaxCount = ReadIntAttribute(entryNode, "max", 1);
+                    entry.Weight = ReadIntAttribute(entryNode, "weight", 1);
+                    entry.Chance = ReadFloatAttribute(entryNode, "chance", 1f);
+                    entry.LootTableId = AttributeOrChild(entryNode, "lootTableId", "LootTableId");
+                    entry.QuestId = AttributeOrChild(entryNode, "questId", "QuestId");
+                    ReadProperties(Child(entryNode, "Properties"), entry.Properties);
+                    table.Entries.Add(entry);
+                }
+                ReadProperties(Child(node, "Properties"), table.Properties);
+                target.Add(table);
+            }
+        }
+
+        private static void ReadExpeditionRoutes(XmlElement element, System.Collections.Generic.List<ExpeditionRouteDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Route");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                ExpeditionRouteDefinition route = new ExpeditionRouteDefinition();
+                route.Id = AttributeOrChild(node, "id", "Id");
+                route.FromLocationId = AttributeOrChild(node, "from", "FromLocationId");
+                route.ToLocationId = AttributeOrChild(node, "to", "ToLocationId");
+                route.OneWay = ReadBoolAttribute(node, "oneWay", false);
+                route.Distance = ReadFloatAttribute(node, "distance", 0f);
+                route.Risk = ReadIntAttribute(node, "risk", 0);
+                route.RequiredGateId = AttributeOrChild(node, "requiredGateId", "RequiredGateId");
+                ReadMapPoints(Child(node, "Waypoints"), "Point", route.Waypoints);
+                ReadProperties(Child(node, "Properties"), route.Properties);
+                target.Add(route);
+            }
+        }
+
+        private static void ReadMapPoints(XmlElement element, string pointName, System.Collections.Generic.List<MapPointDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName(pointName);
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null || node.ParentNode != element)
+                    continue;
+
+                target.Add(new MapPointDefinition
+                {
+                    X = ReadFloatAttribute(node, "x", 0f),
+                    Y = ReadFloatAttribute(node, "y", 0f)
+                });
+            }
         }
 
         internal static AssetReferencesDefinition ReadAssetReferences(XmlElement element)
@@ -959,7 +1193,14 @@ namespace ShelteredAPI.Scenarios
 
             writer.WriteStartElement("Map");
             WriteAttribute(writer, "startLocationId", value.StartLocationId);
-            for (int i = 0; i < value.Locations.Count; i++)
+            if (value.Width > 0f)
+                writer.WriteAttributeString("width", value.Width.ToString(CultureInfo.InvariantCulture));
+            if (value.Height > 0f)
+                writer.WriteAttributeString("height", value.Height.ToString(CultureInfo.InvariantCulture));
+            WriteAttribute(writer, "defaultTerrainId", value.DefaultTerrainId);
+
+            writer.WriteStartElement("Locations");
+            for (int i = 0; value.Locations != null && i < value.Locations.Count; i++)
             {
                 MapLocationDefinition location = value.Locations[i];
                 if (location == null)
@@ -968,9 +1209,232 @@ namespace ShelteredAPI.Scenarios
                 writer.WriteStartElement("Location");
                 WriteAttribute(writer, "id", location.Id);
                 WriteAttribute(writer, "displayName", location.DisplayName);
+                WriteAttribute(writer, "kind", location.Kind);
                 writer.WriteAttributeString("x", location.X.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("y", location.Y.ToString(CultureInfo.InvariantCulture));
+                if (location.Radius > 0f)
+                    writer.WriteAttributeString("radius", location.Radius.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("searchable", location.Searchable ? "true" : "false");
+                writer.WriteAttributeString("discoveredAtStart", location.DiscoveredAtStart ? "true" : "false");
+                WriteAttribute(writer, "markerId", location.MarkerId);
+                WriteAttribute(writer, "boundaryId", location.BoundaryId);
+                WriteAttribute(writer, "terrainId", location.TerrainId);
+                WriteAttribute(writer, "lootTableId", location.LootTableId);
+                WriteAttribute(writer, "encounterTableId", location.EncounterTableId);
+                WriteAttribute(writer, "requiredGateId", location.RequiredGateId);
+                if (location.Danger != 0)
+                    writer.WriteAttributeString("danger", location.Danger.ToString(CultureInfo.InvariantCulture));
                 WriteProperties(writer, "Properties", location.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+
+            WriteMapMarkers(writer, value.Markers);
+            WriteMapBoundaries(writer, value.Boundaries);
+            WriteMapTerrainPatches(writer, value.TerrainPatches);
+            WriteMapLootTables(writer, value.LootTables);
+            WriteMapEncounterTables(writer, value.EncounterTables);
+            WriteExpeditionRoutes(writer, value.Routes);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMapMarkers(XmlWriter writer, System.Collections.Generic.List<MapMarkerDefinition> markers)
+        {
+            writer.WriteStartElement("Markers");
+            for (int i = 0; markers != null && i < markers.Count; i++)
+            {
+                MapMarkerDefinition marker = markers[i];
+                if (marker == null)
+                    continue;
+
+                writer.WriteStartElement("Marker");
+                WriteAttribute(writer, "id", marker.Id);
+                WriteAttribute(writer, "displayName", marker.DisplayName);
+                writer.WriteAttributeString("kind", marker.Kind.ToString());
+                writer.WriteAttributeString("x", marker.X.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("y", marker.Y.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "iconId", marker.IconId);
+                WriteAttribute(writer, "locationId", marker.LocationId);
+                WriteAttribute(writer, "boundaryId", marker.BoundaryId);
+                writer.WriteAttributeString("visibleAtStart", marker.VisibleAtStart ? "true" : "false");
+                WriteStringList(writer, "Tags", "Tag", marker.Tags);
+                WriteProperties(writer, "Properties", marker.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMapBoundaries(XmlWriter writer, System.Collections.Generic.List<MapBoundaryDefinition> boundaries)
+        {
+            writer.WriteStartElement("Boundaries");
+            for (int i = 0; boundaries != null && i < boundaries.Count; i++)
+            {
+                MapBoundaryDefinition boundary = boundaries[i];
+                if (boundary == null)
+                    continue;
+
+                writer.WriteStartElement("Boundary");
+                WriteAttribute(writer, "id", boundary.Id);
+                WriteAttribute(writer, "displayName", boundary.DisplayName);
+                writer.WriteAttributeString("kind", boundary.Kind.ToString());
+                WriteNullableFloatAttribute(writer, "minX", boundary.MinX);
+                WriteNullableFloatAttribute(writer, "minY", boundary.MinY);
+                WriteNullableFloatAttribute(writer, "maxX", boundary.MaxX);
+                WriteNullableFloatAttribute(writer, "maxY", boundary.MaxY);
+                WriteAttribute(writer, "terrainId", boundary.TerrainId);
+                WriteAttribute(writer, "lootTableId", boundary.LootTableId);
+                WriteAttribute(writer, "encounterTableId", boundary.EncounterTableId);
+                WriteAttribute(writer, "requiredGateId", boundary.RequiredGateId);
+                WriteMapPoints(writer, "Points", "Point", boundary.Points);
+                WriteProperties(writer, "Properties", boundary.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMapTerrainPatches(XmlWriter writer, System.Collections.Generic.List<MapTerrainPatchDefinition> patches)
+        {
+            writer.WriteStartElement("TerrainPatches");
+            for (int i = 0; patches != null && i < patches.Count; i++)
+            {
+                MapTerrainPatchDefinition patch = patches[i];
+                if (patch == null)
+                    continue;
+
+                writer.WriteStartElement("Patch");
+                WriteAttribute(writer, "id", patch.Id);
+                WriteAttribute(writer, "terrainId", patch.TerrainId);
+                writer.WriteAttributeString("shape", patch.Shape.ToString());
+                writer.WriteAttributeString("x", patch.X.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("y", patch.Y.ToString(CultureInfo.InvariantCulture));
+                if (patch.Width > 0f)
+                    writer.WriteAttributeString("width", patch.Width.ToString(CultureInfo.InvariantCulture));
+                if (patch.Height > 0f)
+                    writer.WriteAttributeString("height", patch.Height.ToString(CultureInfo.InvariantCulture));
+                if (patch.Radius > 0f)
+                    writer.WriteAttributeString("radius", patch.Radius.ToString(CultureInfo.InvariantCulture));
+                if (patch.Priority != 0)
+                    writer.WriteAttributeString("priority", patch.Priority.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "boundaryId", patch.BoundaryId);
+                WriteMapPoints(writer, "Points", "Point", patch.Points);
+                WriteProperties(writer, "Properties", patch.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMapLootTables(XmlWriter writer, System.Collections.Generic.List<MapLootTableDefinition> tables)
+        {
+            writer.WriteStartElement("LootTables");
+            for (int i = 0; tables != null && i < tables.Count; i++)
+            {
+                MapLootTableDefinition table = tables[i];
+                if (table == null)
+                    continue;
+
+                writer.WriteStartElement("LootTable");
+                WriteAttribute(writer, "id", table.Id);
+                WriteAttribute(writer, "displayName", table.DisplayName);
+                writer.WriteStartElement("Entries");
+                for (int entryIndex = 0; table.Entries != null && entryIndex < table.Entries.Count; entryIndex++)
+                {
+                    MapLootEntryDefinition entry = table.Entries[entryIndex];
+                    if (entry == null)
+                        continue;
+
+                    writer.WriteStartElement("Entry");
+                    WriteAttribute(writer, "itemId", entry.ItemId);
+                    writer.WriteAttributeString("min", entry.MinQuantity.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteAttributeString("max", entry.MaxQuantity.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteAttributeString("weight", entry.Weight.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteAttributeString("chance", entry.Chance.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteEndElement();
+                }
+                writer.WriteEndElement();
+                WriteProperties(writer, "Properties", table.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMapEncounterTables(XmlWriter writer, System.Collections.Generic.List<MapEncounterTableDefinition> tables)
+        {
+            writer.WriteStartElement("EncounterTables");
+            for (int i = 0; tables != null && i < tables.Count; i++)
+            {
+                MapEncounterTableDefinition table = tables[i];
+                if (table == null)
+                    continue;
+
+                writer.WriteStartElement("EncounterTable");
+                WriteAttribute(writer, "id", table.Id);
+                WriteAttribute(writer, "displayName", table.DisplayName);
+                writer.WriteStartElement("Entries");
+                for (int entryIndex = 0; table.Entries != null && entryIndex < table.Entries.Count; entryIndex++)
+                {
+                    MapEncounterEntryDefinition entry = table.Entries[entryIndex];
+                    if (entry == null)
+                        continue;
+
+                    writer.WriteStartElement("Entry");
+                    WriteAttribute(writer, "id", entry.Id);
+                    WriteAttribute(writer, "type", entry.EncounterType);
+                    WriteAttribute(writer, "factionId", entry.FactionId);
+                    WriteAttribute(writer, "personalityId", entry.PersonalityId);
+                    writer.WriteAttributeString("min", entry.MinCount.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteAttributeString("max", entry.MaxCount.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteAttributeString("weight", entry.Weight.ToString(CultureInfo.InvariantCulture));
+                    writer.WriteAttributeString("chance", entry.Chance.ToString(CultureInfo.InvariantCulture));
+                    WriteAttribute(writer, "lootTableId", entry.LootTableId);
+                    WriteAttribute(writer, "questId", entry.QuestId);
+                    WriteProperties(writer, "Properties", entry.Properties);
+                    writer.WriteEndElement();
+                }
+                writer.WriteEndElement();
+                WriteProperties(writer, "Properties", table.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteExpeditionRoutes(XmlWriter writer, System.Collections.Generic.List<ExpeditionRouteDefinition> routes)
+        {
+            writer.WriteStartElement("Routes");
+            for (int i = 0; routes != null && i < routes.Count; i++)
+            {
+                ExpeditionRouteDefinition route = routes[i];
+                if (route == null)
+                    continue;
+
+                writer.WriteStartElement("Route");
+                WriteAttribute(writer, "id", route.Id);
+                WriteAttribute(writer, "from", route.FromLocationId);
+                WriteAttribute(writer, "to", route.ToLocationId);
+                writer.WriteAttributeString("oneWay", route.OneWay ? "true" : "false");
+                if (route.Distance > 0f)
+                    writer.WriteAttributeString("distance", route.Distance.ToString(CultureInfo.InvariantCulture));
+                if (route.Risk != 0)
+                    writer.WriteAttributeString("risk", route.Risk.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "requiredGateId", route.RequiredGateId);
+                WriteMapPoints(writer, "Waypoints", "Point", route.Waypoints);
+                WriteProperties(writer, "Properties", route.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMapPoints(XmlWriter writer, string parentName, string pointName, System.Collections.Generic.List<MapPointDefinition> points)
+        {
+            writer.WriteStartElement(parentName);
+            for (int i = 0; points != null && i < points.Count; i++)
+            {
+                MapPointDefinition point = points[i];
+                if (point == null)
+                    continue;
+
+                writer.WriteStartElement(pointName);
+                writer.WriteAttributeString("x", point.X.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("y", point.Y.ToString(CultureInfo.InvariantCulture));
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
@@ -1797,13 +2261,19 @@ namespace ShelteredAPI.Scenarios
 
         private static float ReadFloatAttribute(XmlElement element, string attributeName, float fallback)
         {
+            float? parsed = ReadNullableFloatAttribute(element, attributeName);
+            return parsed.HasValue ? parsed.Value : fallback;
+        }
+
+        private static float? ReadNullableFloatAttribute(XmlElement element, string attributeName)
+        {
             if (element == null || !element.HasAttribute(attributeName))
-                return fallback;
+                return null;
 
             float parsed;
             return float.TryParse(element.GetAttribute(attributeName), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)
-                ? parsed
-                : fallback;
+                ? (float?)parsed
+                : null;
         }
 
         private static int? ParseNullableInt(string raw)
@@ -1842,6 +2312,11 @@ namespace ShelteredAPI.Scenarios
             if (!string.IsNullOrEmpty(value))
                 writer.WriteAttributeString(name, value);
         }
+
+        private static void WriteNullableFloatAttribute(XmlWriter writer, string name, float? value)
+        {
+            if (value.HasValue)
+                writer.WriteAttributeString(name, value.Value.ToString(CultureInfo.InvariantCulture));
+        }
     }
 }
-
