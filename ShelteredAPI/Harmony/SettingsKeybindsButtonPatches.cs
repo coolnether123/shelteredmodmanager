@@ -92,6 +92,7 @@ namespace ShelteredAPI.Harmony
             if (_restoreHooked) return;
             _restoreHooked = true;
             ModSettingsPanel.Closed += RestoreTemporarilyHiddenObjects;
+            ShelteredKeybindsUIV2.Closed += RestoreTemporarilyHiddenObjects;
         }
 
         private static void HidePanelsForKeybindOpen(BasePanel sourcePanel, string source)

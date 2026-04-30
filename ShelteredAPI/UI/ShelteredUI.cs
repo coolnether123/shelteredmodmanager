@@ -45,7 +45,7 @@ namespace ShelteredAPI.UI
 
         public static void ShowShelteredKeybinds()
         {
-            ShelteredKeybindsUI.Show();
+            ShelteredKeybindsUIV2.Show();
         }
     }
 }

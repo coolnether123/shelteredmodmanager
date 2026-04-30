@@ -23,28 +23,42 @@ namespace ShelteredAPI.Scenarios
         [HarmonyPostfix]
         private static void CursorBaseFollowPostfix(ref Vector3 __result)
         {
-            SuppressCameraFollowOverAuthoringUi(ref __result);
+            TrySuppressCameraFollowOverAuthoringUi(ref __result);
         }
 
         [HarmonyPatch(typeof(CursorPlacement), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorPlacementFollowPostfix(ref Vector3 __result)
         {
-            SuppressCameraFollowOverAuthoringUi(ref __result);
+            TrySuppressCameraFollowOverAuthoringUi(ref __result);
         }
 
         [HarmonyPatch(typeof(CursorPlacementRoom), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorPlacementRoomFollowPostfix(ref Vector3 __result)
         {
-            SuppressCameraFollowOverAuthoringUi(ref __result);
+            TrySuppressCameraFollowOverAuthoringUi(ref __result);
         }
 
         [HarmonyPatch(typeof(CursorUpgrade), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorUpgradeFollowPostfix(ref Vector3 __result)
         {
-            SuppressCameraFollowOverAuthoringUi(ref __result);
+            TrySuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        private static void TrySuppressCameraFollowOverAuthoringUi(ref Vector3 followPosition)
+        {
+            try
+            {
+                SuppressCameraFollowOverAuthoringUi(ref followPosition);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce(
+                    "ScenarioAuthoringBootstrap.SuppressCameraFollowOverAuthoringUi",
+                    "[ScenarioAuthoringBootstrap] Camera-follow suppression failed: " + ex.Message);
+            }
         }
 
         private static void SuppressCameraFollowOverAuthoringUi(ref Vector3 followPosition)

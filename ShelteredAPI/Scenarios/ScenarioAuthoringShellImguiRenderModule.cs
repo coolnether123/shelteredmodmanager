@@ -1938,7 +1938,7 @@ namespace ShelteredAPI.Scenarios
             for (int i = 0; i < windows.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
-                if (window != null && window.WorkspaceTabVisible && window.Visible)
+                if (IsWorkspaceTabWindow(window) && window.Visible)
                     return window.Id;
             }
             return null;
@@ -1975,11 +1975,18 @@ namespace ShelteredAPI.Scenarios
             for (int i = 0; windows != null && i < windows.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
-                if (window != null && window.WorkspaceTabVisible)
+                if (IsWorkspaceTabWindow(window))
                     tabWindows.Add(window);
             }
 
             return tabWindows.ToArray();
+        }
+
+        private static bool IsWorkspaceTabWindow(ScenarioAuthoringShellWindowViewModel window)
+        {
+            return window != null
+                && window.WorkspaceTabVisible
+                && window.WorkspaceStage != ScenarioStageKind.None;
         }
 
         private static void AppendWorkspaceRects(Dictionary<string, Rect> rects, ScenarioAuthoringShellWindowViewModel[] windows, Rect rect)
