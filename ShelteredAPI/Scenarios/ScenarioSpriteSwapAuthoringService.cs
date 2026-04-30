@@ -118,7 +118,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioSpriteCatalogService _catalogService;
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
         private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
-        private readonly SpritePatchBuilder _spritePatchBuilder;
+        private readonly ScenarioSpritePatchAuthoringService _spritePatchAuthoringService;
         private readonly ScenarioAuthoringHistoryService _historyService;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
@@ -139,7 +139,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioSpriteCatalogService catalogService,
             ScenarioCharacterAppearanceService characterAppearanceService,
             ScenarioSpriteRuntimeResolver runtimeResolver,
-            SpritePatchBuilder spritePatchBuilder,
+            ScenarioSpritePatchAuthoringService spritePatchAuthoringService,
             ScenarioAuthoringHistoryService historyService,
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
@@ -148,7 +148,7 @@ namespace ShelteredAPI.Scenarios
             _catalogService = catalogService;
             _characterAppearanceService = characterAppearanceService;
             _runtimeResolver = runtimeResolver;
-            _spritePatchBuilder = spritePatchBuilder;
+            _spritePatchAuthoringService = spritePatchAuthoringService;
             _historyService = historyService;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
@@ -731,6 +731,30 @@ namespace ShelteredAPI.Scenarios
             string customSpriteId = BuildCustomSpriteId(model.Target.TargetPath);
             Color initialColor = FindInitialBrushColor(editableTexture);
             Texture2D baselineTexture = CreateEditableTexture(sourceSprite);
+            string baseSpriteId = sourceCandidate != null ? sourceCandidate.SpriteId : null;
+            string baseRelativePath = sourceCandidate != null ? sourceCandidate.RelativePath : null;
+            string baseRuntimeSpriteKey = sourceCandidate != null ? sourceCandidate.RuntimeSpriteKey : null;
+            if (sourceCandidate == null)
+            {
+                SpriteSwapRule activeRule = ScenarioSpriteSwapRuleEditor.FindActiveRule(
+                    session != null ? session.WorkingDefinition : null,
+                    model.Target.TargetPath,
+                    GetCurrentDay());
+                if (activeRule != null)
+                {
+                    baseSpriteId = activeRule.SpriteId;
+                    baseRelativePath = activeRule.RelativePath;
+                    baseRuntimeSpriteKey = activeRule.RuntimeSpriteKey;
+                }
+            }
+
+            if (string.IsNullOrEmpty(baseSpriteId)
+                && string.IsNullOrEmpty(baseRelativePath)
+                && string.IsNullOrEmpty(baseRuntimeSpriteKey))
+            {
+                baseRuntimeSpriteKey = ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(sourceSprite);
+            }
+
             _customEditorSession = new CustomEditorSession
             {
                 TargetPath = model.Target.TargetPath,
@@ -743,9 +767,9 @@ namespace ShelteredAPI.Scenarios
                 ActiveTool = CustomEditorTool.Paint,
                 Dirty = false,
                 CustomSpriteId = customSpriteId,
-                BaseSpriteId = sourceCandidate != null ? sourceCandidate.SpriteId : null,
-                BaseRelativePath = sourceCandidate != null ? sourceCandidate.RelativePath : null,
-                BaseRuntimeSpriteKey = sourceCandidate != null ? sourceCandidate.RuntimeSpriteKey : null,
+                BaseSpriteId = baseSpriteId,
+                BaseRelativePath = baseRelativePath,
+                BaseRuntimeSpriteKey = baseRuntimeSpriteKey,
                 LastInteractionX = 0,
                 LastInteractionY = 0
             };
@@ -796,7 +820,7 @@ namespace ShelteredAPI.Scenarios
                 ActiveTool = CustomEditorTool.Paint,
                 Dirty = false,
                 CustomSpriteId = customTextureId,
-                BaseSpriteId = sourceId,
+                BaseRuntimeSpriteKey = ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(editableTexture, sourceId),
                 LastInteractionX = 0,
                 LastInteractionY = 0,
                 IsCharacterEditor = true,
@@ -884,10 +908,11 @@ namespace ShelteredAPI.Scenarios
                     "Apply character " + ScenarioCharacterAppearanceService.BuildPartLabel(_customEditorSession.CharacterPart).ToLowerInvariant()
                     + " texture to " + SafeLabel(target.DisplayName));
 
-                string patchId = UpsertPatchSpriteAsset(definition, packRoot, customTextureId, _customEditorSession.SourceLabel);
+                string patchMessage;
+                string patchId = UpsertPatchSpriteAsset(definition, customTextureId, _customEditorSession.SourceLabel, out patchMessage);
                 if (string.IsNullOrEmpty(patchId))
                 {
-                    message = "Character texture patch could not be generated.";
+                    message = !string.IsNullOrEmpty(patchMessage) ? patchMessage : "Character texture patch could not be generated.";
                     return false;
                 }
                 FamilyMemberConfig memberConfig = EnsureFamilyMemberConfig(definition, target);
@@ -1386,10 +1411,11 @@ namespace ShelteredAPI.Scenarios
                     definition,
                     "Apply custom sprite to " + SafeLabel(state.SpriteSwapPicker.Target.DisplayName));
 
-                string patchId = UpsertPatchSpriteAsset(definition, packRoot, customSpriteId, _customEditorSession.SourceLabel);
+                string patchMessage;
+                string patchId = UpsertPatchSpriteAsset(definition, customSpriteId, _customEditorSession.SourceLabel, out patchMessage);
                 if (string.IsNullOrEmpty(patchId))
                 {
-                    message = "Custom sprite patch could not be generated.";
+                    message = !string.IsNullOrEmpty(patchMessage) ? patchMessage : "Custom sprite patch could not be generated.";
                     return false;
                 }
                 ApplyCustomSpriteRule(definition, model.Target, customSpriteId, null);
@@ -2181,91 +2207,25 @@ namespace ShelteredAPI.Scenarios
             return "character_" + safe.ToLowerInvariant() + "_" + part.ToString().ToLowerInvariant() + "_" + DateTime.UtcNow.Ticks;
         }
 
-        private static string BuildPatchBaseRelativePath(string spriteId)
+        private string UpsertPatchSpriteAsset(ScenarioDefinition definition, string spriteId, string displayName, out string message)
         {
-            return Path.Combine(Path.Combine(Path.Combine("Sprites", "Authoring"), "bases"), spriteId + ".png").Replace('\\', '/');
-        }
-
-        private string UpsertPatchSpriteAsset(ScenarioDefinition definition, string packRoot, string spriteId, string displayName)
-        {
-            if (definition == null || definition.AssetReferences == null || _customEditorSession == null || string.IsNullOrEmpty(spriteId))
-                return null;
-
-            string patchId = spriteId + ".patch";
-            string baseSpriteId = _customEditorSession.BaseSpriteId;
-            string baseRelativePath = _customEditorSession.BaseRelativePath;
-            string baseRuntimeSpriteKey = _customEditorSession.BaseRuntimeSpriteKey;
-
-            if (string.IsNullOrEmpty(baseSpriteId)
-                && string.IsNullOrEmpty(baseRelativePath)
-                && string.IsNullOrEmpty(baseRuntimeSpriteKey)
-                && !string.IsNullOrEmpty(packRoot)
-                && _customEditorSession.BaselineTexture != null)
+            message = null;
+            if (definition == null || _customEditorSession == null || string.IsNullOrEmpty(spriteId))
             {
-                baseRelativePath = BuildPatchBaseRelativePath(spriteId);
-                string fullPath = Path.Combine(packRoot, baseRelativePath);
-                string directory = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(directory))
-                    Directory.CreateDirectory(directory);
-
-                File.WriteAllBytes(fullPath, _customEditorSession.BaselineTexture.EncodeToPNG());
+                message = "No active custom sprite edit was available to save.";
+                return null;
             }
 
-            SpritePatchDefinition patch = _spritePatchBuilder.Build(
-                patchId,
-                string.IsNullOrEmpty(displayName) ? spriteId : displayName,
-                baseSpriteId,
-                baseRelativePath,
-                baseRuntimeSpriteKey,
+            return _spritePatchAuthoringService.UpsertPatchSpriteAsset(
+                definition,
+                spriteId,
+                displayName,
+                _customEditorSession.BaseSpriteId,
+                _customEditorSession.BaseRelativePath,
+                _customEditorSession.BaseRuntimeSpriteKey,
                 _customEditorSession.BaselineTexture,
-                _customEditorSession.Texture);
-            if (patch == null)
-                return null;
-
-            UpsertPatchDefinition(definition, patch);
-            UpsertCustomSpriteReference(definition, spriteId, patchId);
-            return patchId;
-        }
-
-        private static void UpsertCustomSpriteReference(ScenarioDefinition definition, string spriteId, string patchId)
-        {
-            if (definition == null || definition.AssetReferences == null || string.IsNullOrEmpty(spriteId))
-                return;
-
-            for (int i = 0; i < definition.AssetReferences.CustomSprites.Count; i++)
-            {
-                SpriteRef sprite = definition.AssetReferences.CustomSprites[i];
-                if (sprite != null && string.Equals(sprite.Id, spriteId, StringComparison.OrdinalIgnoreCase))
-                {
-                    sprite.RelativePath = null;
-                    sprite.PatchId = patchId;
-                    return;
-                }
-            }
-
-            definition.AssetReferences.CustomSprites.Add(new SpriteRef
-            {
-                Id = spriteId,
-                PatchId = patchId
-            });
-        }
-
-        private static void UpsertPatchDefinition(ScenarioDefinition definition, SpritePatchDefinition patch)
-        {
-            if (definition == null || definition.AssetReferences == null || patch == null)
-                return;
-
-            for (int i = 0; i < definition.AssetReferences.SpritePatches.Count; i++)
-            {
-                SpritePatchDefinition existing = definition.AssetReferences.SpritePatches[i];
-                if (existing != null && string.Equals(existing.Id, patch.Id, StringComparison.OrdinalIgnoreCase))
-                {
-                    definition.AssetReferences.SpritePatches[i] = patch;
-                    return;
-                }
-            }
-
-            definition.AssetReferences.SpritePatches.Add(patch);
+                _customEditorSession.Texture,
+                out message);
         }
 
         private static void ApplyCustomSpriteRule(

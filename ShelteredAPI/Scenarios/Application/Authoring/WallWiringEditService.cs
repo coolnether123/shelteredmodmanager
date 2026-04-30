@@ -17,20 +17,28 @@ namespace ShelteredAPI.Scenarios
             return _draftMutationService.CanMutateActiveDraft(out message);
         }
 
-        public bool ApplyWall(int gridX, int gridY, int wallSpriteIndex)
+        public bool ApplyWall(int gridX, int gridY, int wallSpriteIndex, string runtimeSpriteKey)
         {
             return _draftMutationService.TryUpsertRoomEdit(
                 gridX,
                 gridY,
-                delegate(RoomEdit room) { room.WallSpriteIndex = wallSpriteIndex; });
+                delegate(RoomEdit room)
+                {
+                    room.WallSpriteIndex = wallSpriteIndex >= 0 ? (int?)wallSpriteIndex : null;
+                    room.WallRuntimeSpriteKey = runtimeSpriteKey;
+                });
         }
 
-        public bool ApplyWire(int gridX, int gridY, int wireSpriteIndex)
+        public bool ApplyWire(int gridX, int gridY, int wireSpriteIndex, string runtimeSpriteKey)
         {
             return _draftMutationService.TryUpsertRoomEdit(
                 gridX,
                 gridY,
-                delegate(RoomEdit room) { room.WireSpriteIndex = wireSpriteIndex; });
+                delegate(RoomEdit room)
+                {
+                    room.WireSpriteIndex = wireSpriteIndex >= 0 ? (int?)wireSpriteIndex : null;
+                    room.WireRuntimeSpriteKey = runtimeSpriteKey;
+                });
         }
     }
 }

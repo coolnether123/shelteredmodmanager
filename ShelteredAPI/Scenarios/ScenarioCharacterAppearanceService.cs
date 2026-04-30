@@ -492,6 +492,7 @@ namespace ShelteredAPI.Scenarios
                 return null;
 
             Texture2D copy = new Texture2D(source.width, source.height, TextureFormat.ARGB32, false);
+            copy.name = source.name;
             copy.filterMode = FilterMode.Point;
             copy.wrapMode = TextureWrapMode.Clamp;
             try

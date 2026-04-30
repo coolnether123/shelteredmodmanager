@@ -30,7 +30,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioSpriteCatalogService>(),
                     resolver.Get<ScenarioCharacterAppearanceService>(),
                     resolver.Get<ScenarioSpriteRuntimeResolver>(),
-                    resolver.Get<SpritePatchBuilder>(),
+                    resolver.Get<ScenarioSpritePatchAuthoringService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),
@@ -43,6 +43,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ObjectPlacementService>(),
                     resolver.Get<WallWiringEditService>(),
                     resolver.Get<PlacementPaletteService>(),
+                    resolver.Get<RoomVisualPaletteService>(),
                     resolver.Get<PlacementGhostSessionService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapDraftService(); });

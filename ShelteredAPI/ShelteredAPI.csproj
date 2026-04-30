@@ -210,6 +210,8 @@
     <Compile Include="Scenarios\Application\Authoring\ObjectPlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\PlacementGhostSessionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\PlacementPaletteService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\RoomVisualPaletteService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioDraftMutationService.cs" />
@@ -271,6 +273,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\BunkerApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\FamilyApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\InventoryApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\RoomVisualRuntimeApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioApplyCoordinator.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFlagRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStartStateApplyService.cs" />

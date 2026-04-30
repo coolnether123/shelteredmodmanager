@@ -197,6 +197,8 @@ namespace ShelteredAPI.Scenarios
         public int GridY { get; set; }
         public int? WallSpriteIndex { get; set; }
         public int? WireSpriteIndex { get; set; }
+        public string WallRuntimeSpriteKey { get; set; }
+        public string WireRuntimeSpriteKey { get; set; }
     }
 
     public class ObjectPlacement

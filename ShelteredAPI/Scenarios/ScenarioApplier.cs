@@ -7,7 +7,6 @@ using System.Reflection;
 using ModAPI.Core;
 using ShelteredAPI.Content;
 using ModAPI.Scenarios;
-using ShelteredAPI.Content;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -266,26 +265,17 @@ namespace ShelteredAPI.Scenarios
                 if (room == null)
                     continue;
 
-                if (room.WallSpriteIndex.HasValue)
-                {
-                    if (grid.SetWall(room.GridX, room.GridY, room.WallSpriteIndex.Value))
-                        result.BunkerChanges++;
-                    else
-                        result.AddMessage("Failed to set wall sprite at " + room.GridX + "," + room.GridY + ".");
-                }
+                string wallMessage;
+                if (RoomVisualRuntimeApplyService.ApplyWallEdit(grid, room, out wallMessage))
+                    result.BunkerChanges++;
+                else if (!string.IsNullOrEmpty(wallMessage))
+                    result.AddMessage(wallMessage);
 
-                if (room.WireSpriteIndex.HasValue)
-                {
-                    if (wires != null && room.WireSpriteIndex.Value >= 0 && room.WireSpriteIndex.Value < wires.Count
-                        && grid.SetWiring(room.GridX, room.GridY, wires[room.WireSpriteIndex.Value]))
-                    {
-                        result.BunkerChanges++;
-                    }
-                    else
-                    {
-                        result.AddMessage("Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ".");
-                    }
-                }
+                string wireMessage;
+                if (RoomVisualRuntimeApplyService.ApplyWireEdit(grid, wires, room, out wireMessage))
+                    result.BunkerChanges++;
+                else if (!string.IsNullOrEmpty(wireMessage))
+                    result.AddMessage(wireMessage);
             }
         }
 

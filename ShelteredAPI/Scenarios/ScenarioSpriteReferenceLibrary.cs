@@ -25,11 +25,32 @@ namespace ShelteredAPI.Scenarios
 
             Texture2D texture = sprite.texture;
             Rect rect = sprite.rect;
-            string textureName = texture != null ? texture.name ?? string.Empty : string.Empty;
-            string spriteName = sprite.name ?? string.Empty;
-            return textureName + "|" + spriteName + "|"
-                + Mathf.RoundToInt(rect.x) + "," + Mathf.RoundToInt(rect.y) + ","
-                + Mathf.RoundToInt(rect.width) + "," + Mathf.RoundToInt(rect.height);
+            return CreateRuntimeSpriteKey(
+                texture,
+                sprite.name,
+                Mathf.RoundToInt(rect.x),
+                Mathf.RoundToInt(rect.y),
+                Mathf.RoundToInt(rect.width),
+                Mathf.RoundToInt(rect.height));
+        }
+
+        public static string CreateRuntimeSpriteKey(Texture2D texture, string spriteName)
+        {
+            if (texture == null)
+                return null;
+
+            return CreateRuntimeSpriteKey(texture, spriteName, 0, 0, texture.width, texture.height);
+        }
+
+        private static string CreateRuntimeSpriteKey(Texture2D texture, string spriteName, int x, int y, int width, int height)
+        {
+            if (texture == null)
+                return null;
+
+            string textureName = texture.name ?? string.Empty;
+            return textureName + "|" + (spriteName ?? string.Empty) + "|"
+                + x + "," + y + ","
+                + width + "," + height;
         }
 
         public static void RegisterGeneratedSprite(string runtimeSpriteKey, Sprite sprite)
@@ -94,26 +115,99 @@ namespace ShelteredAPI.Scenarios
             Sprite[] loadedSprites = Resources.FindObjectsOfTypeAll<Sprite>();
             for (int i = 0; loadedSprites != null && i < loadedSprites.Length; i++)
             {
-                Sprite sprite = loadedSprites[i];
-                if (sprite == null || sprite.texture == null)
-                    continue;
-
-                string runtimeSpriteKey = CreateRuntimeSpriteKey(sprite);
-                if (string.IsNullOrEmpty(runtimeSpriteKey) || byKey.ContainsKey(runtimeSpriteKey))
-                    continue;
-
-                byKey[runtimeSpriteKey] = new LoadedSpriteReference
-                {
-                    RuntimeSpriteKey = runtimeSpriteKey,
-                    SpriteName = string.IsNullOrEmpty(sprite.name) ? "<unnamed>" : sprite.name,
-                    TextureName = sprite.texture != null && !string.IsNullOrEmpty(sprite.texture.name) ? sprite.texture.name : "<texture>",
-                    Sprite = sprite
-                };
+                AddLoadedSprite(byKey, loadedSprites[i]);
             }
+
+            Sprite[] resourceSprites = null;
+            try
+            {
+                resourceSprites = Resources.LoadAll<Sprite>(string.Empty);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ScenarioSpriteReferenceLibrary.ResourcesLoadAll", "Could not enumerate Resources sprites for the scenario editor: " + ex.Message);
+            }
+
+            for (int i = 0; resourceSprites != null && i < resourceSprites.Length; i++)
+            {
+                AddLoadedSprite(byKey, resourceSprites[i]);
+            }
+
+            AddCharacterTextureSprites(byKey);
 
             List<LoadedSpriteReference> result = new List<LoadedSpriteReference>(byKey.Values);
             result.Sort(CompareLoadedSpriteReference);
             return result;
+        }
+
+        private static void AddLoadedSprite(Dictionary<string, LoadedSpriteReference> byKey, Sprite sprite)
+        {
+            if (byKey == null || sprite == null || sprite.texture == null)
+                return;
+
+            string runtimeSpriteKey = CreateRuntimeSpriteKey(sprite);
+            if (string.IsNullOrEmpty(runtimeSpriteKey) || byKey.ContainsKey(runtimeSpriteKey))
+                return;
+
+            byKey[runtimeSpriteKey] = new LoadedSpriteReference
+            {
+                RuntimeSpriteKey = runtimeSpriteKey,
+                SpriteName = string.IsNullOrEmpty(sprite.name) ? "<unnamed>" : sprite.name,
+                TextureName = sprite.texture != null && !string.IsNullOrEmpty(sprite.texture.name) ? sprite.texture.name : "<texture>",
+                Sprite = sprite
+            };
+        }
+
+        private static void AddCharacterTextureSprites(Dictionary<string, LoadedSpriteReference> byKey)
+        {
+            CharacterMeshOptions options = CharacterMeshOptions.instance;
+            if (byKey == null || (UnityEngine.Object)options == (UnityEngine.Object)null)
+                return;
+
+            List<string> meshIds = options.GetCharacterMeshIds();
+            for (int i = 0; meshIds != null && i < meshIds.Count; i++)
+            {
+                CharacterMeshOptions.CharacterMeshType meshType = options.FindCharacterMesh(meshIds[i]);
+                if (meshType == null)
+                    continue;
+
+                AddCharacterTextureList(byKey, meshType.m_headTextures);
+                AddCharacterTextureList(byKey, meshType.m_torsoTextures);
+                AddCharacterTextureList(byKey, meshType.m_legTextures);
+            }
+        }
+
+        private static void AddCharacterTextureList(
+            Dictionary<string, LoadedSpriteReference> byKey,
+            List<CharacterMeshOptions.CharacterTexture> textures)
+        {
+            for (int i = 0; textures != null && i < textures.Count; i++)
+            {
+                CharacterMeshOptions.CharacterTexture entry = textures[i];
+                if (entry == null || entry.m_texture == null || string.IsNullOrEmpty(entry.m_id))
+                    continue;
+
+                string runtimeSpriteKey = CreateRuntimeSpriteKey(entry.m_texture, entry.m_id);
+                if (string.IsNullOrEmpty(runtimeSpriteKey) || byKey.ContainsKey(runtimeSpriteKey))
+                    continue;
+
+                Sprite sprite = Sprite.Create(
+                    entry.m_texture,
+                    new Rect(0f, 0f, entry.m_texture.width, entry.m_texture.height),
+                    new Vector2(0.5f, 0.5f),
+                    100f);
+                if (sprite == null)
+                    continue;
+
+                sprite.name = entry.m_id;
+                byKey[runtimeSpriteKey] = new LoadedSpriteReference
+                {
+                    RuntimeSpriteKey = runtimeSpriteKey,
+                    SpriteName = entry.m_id,
+                    TextureName = !string.IsNullOrEmpty(entry.m_texture.name) ? entry.m_texture.name : "<character texture>",
+                    Sprite = sprite
+                };
+            }
         }
 
         private static int CompareLoadedSpriteReference(LoadedSpriteReference left, LoadedSpriteReference right)

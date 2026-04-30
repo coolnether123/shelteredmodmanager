@@ -50,6 +50,7 @@ namespace ShelteredAPI.Scenarios
         }
 
         private readonly ScenarioSpriteRuntimeResolver _resolver;
+        private readonly IScenarioSpriteAssetResolver _assetResolver;
         private readonly ScenarioSpriteFamilyMatcher _familyMatcher = new ScenarioSpriteFamilyMatcher();
         private string _cachedTargetPath;
         private string _cachedCurrentSpriteKey;
@@ -62,9 +63,10 @@ namespace ShelteredAPI.Scenarios
         private int _cachedPlacementFrame = -1;
         private PlacementCatalog _cachedPlacementCatalog;
 
-        internal ScenarioSpriteCatalogService(ScenarioSpriteRuntimeResolver resolver)
+        internal ScenarioSpriteCatalogService(ScenarioSpriteRuntimeResolver resolver, IScenarioSpriteAssetResolver assetResolver)
         {
             _resolver = resolver;
+            _assetResolver = assetResolver;
         }
 
         public SpriteCatalog GetCatalog(ScenarioEditorSession session, ScenarioAuthoringTarget target, string scenarioFilePath)
@@ -89,7 +91,7 @@ namespace ShelteredAPI.Scenarios
                 return CloneCatalog(_cachedCatalog);
             }
 
-            SpriteCatalog catalog = BuildCatalog(session.WorkingDefinition, target, resolvedTarget, scenarioFilePath, _familyMatcher);
+            SpriteCatalog catalog = BuildCatalog(session.WorkingDefinition, target, resolvedTarget, scenarioFilePath, _familyMatcher, _assetResolver);
             _cachedTargetPath = targetPath;
             _cachedCurrentSpriteKey = currentSpriteKey;
             _cachedScenarioFilePath = scenarioFilePath;
@@ -127,7 +129,7 @@ namespace ShelteredAPI.Scenarios
                 return ClonePlacementCatalog(_cachedPlacementCatalog);
             }
 
-            PlacementCatalog catalog = BuildPlacementCatalog(session.WorkingDefinition, scenarioFilePath);
+            PlacementCatalog catalog = BuildPlacementCatalog(session.WorkingDefinition, scenarioFilePath, _assetResolver);
             _cachedPlacementScenarioFilePath = scenarioFilePath;
             _cachedPlacementCustomSpriteSignature = customSpriteSignature;
             _cachedPlacementFrame = Time.frameCount;
@@ -140,7 +142,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringTarget authoringTarget,
             ScenarioSpriteRuntimeResolver.ResolvedTarget target,
             string scenarioFilePath,
-            ScenarioSpriteFamilyMatcher familyMatcher)
+            ScenarioSpriteFamilyMatcher familyMatcher,
+            IScenarioSpriteAssetResolver assetResolver)
         {
             SpriteCatalog catalog = new SpriteCatalog
             {
@@ -156,23 +159,50 @@ namespace ShelteredAPI.Scenarios
             ScenarioSpriteFamilyMatcher.FamilyProfile targetFamily = familyMatcher != null
                 ? familyMatcher.DescribeTarget(authoringTarget, target)
                 : null;
+            bool allowEnvironmentPalette = IsEnvironmentArtTarget(authoringTarget);
             if (familyMatcher == null || !familyMatcher.HasVerifiedFamily(targetFamily))
             {
-                catalog.GuidanceMessage = "No verified in-game sprite family could be resolved for this target. The editor will not guess based on sprite size.";
-                return catalog;
+                if (!allowEnvironmentPalette)
+                {
+                    AddCustomSpriteCandidates(
+                        definition,
+                        scenarioFilePath,
+                        assetResolver,
+                        catalog.ModdedCandidates,
+                        target.CurrentSprite,
+                        true);
+                    catalog.GuidanceMessage = catalog.ModdedCandidates.Count > 0
+                        ? "No verified in-game sprite family could be resolved for this target. Showing compatible scenario custom sprite patches only."
+                        : "No verified in-game sprite family could be resolved for this target. The editor will not guess based on sprite size.";
+                    return catalog;
+                }
+
+                catalog.FamilyFiltered = false;
+                catalog.FilterSummary = "Scenario environment art";
+                catalog.GuidanceMessage = "Showing same-size loaded environment sprites so scenario wall and background art can be reused across built-in scenarios.";
             }
 
             List<ScenarioSpriteReferenceLibrary.LoadedSpriteReference> loadedSprites = ScenarioSpriteReferenceLibrary.GetLoadedSprites();
             for (int i = 0; i < loadedSprites.Count; i++)
             {
                 ScenarioSpriteReferenceLibrary.LoadedSpriteReference loaded = loadedSprites[i];
-                if (loaded == null || loaded.Sprite == null || !IsCompatible(target.CurrentSprite, loaded.Sprite))
+                if (loaded == null
+                    || loaded.Sprite == null
+                    || IsGeneratedPatchRuntimeKey(loaded.RuntimeSpriteKey)
+                    || !IsCompatible(target.CurrentSprite, loaded.Sprite))
+                {
                     continue;
+                }
 
                 ScenarioSpriteFamilyMatcher.FamilyProfile candidateFamily = familyMatcher != null
                     ? familyMatcher.DescribeRuntimeCandidate(loaded.RuntimeSpriteKey, loaded.Sprite)
                     : null;
-                if (candidateFamily == null || !familyMatcher.IsExactVerifiedMatch(targetFamily, candidateFamily))
+                bool exactMatch = candidateFamily != null
+                    && familyMatcher != null
+                    && familyMatcher.IsExactVerifiedMatch(targetFamily, candidateFamily);
+                if (!exactMatch && !allowEnvironmentPalette)
+                    continue;
+                if (!exactMatch && allowEnvironmentPalette && !IsEnvironmentCandidate(loaded, candidateFamily))
                     continue;
 
                 catalog.VanillaCandidates.Add(new SpriteCandidate
@@ -190,24 +220,35 @@ namespace ShelteredAPI.Scenarios
                 });
             }
             catalog.ModdedCandidates.Clear();
+            AddCustomSpriteCandidates(
+                definition,
+                scenarioFilePath,
+                assetResolver,
+                catalog.ModdedCandidates,
+                target.CurrentSprite,
+                true);
             if (catalog.VanillaCandidates.Count == 0)
             {
-                catalog.GuidanceMessage = "No verified runtime replacements were found for the selected family '"
-                    + familyMatcher.DescribeVerifiedFamily(targetFamily)
-                    + "'. The editor will not widen the list to same-size sprites.";
+                catalog.GuidanceMessage = allowEnvironmentPalette && !catalog.FamilyFiltered
+                    ? "No same-size loaded environment sprites were found for this scenario art target."
+                    : "No verified runtime replacements were found for the selected family '"
+                        + (familyMatcher != null ? familyMatcher.DescribeVerifiedFamily(targetFamily) : "<unknown>")
+                        + "'. The editor will not widen the list to same-size sprites.";
             }
             else
             {
-                catalog.GuidanceMessage = "Showing verified runtime replacements for the in-game family '"
-                    + familyMatcher.DescribeVerifiedFamily(targetFamily)
-                    + "'. Custom sprite overrides are hidden in strict mode.";
+                catalog.GuidanceMessage = allowEnvironmentPalette && !catalog.FamilyFiltered
+                    ? "Showing same-size loaded environment sprites, including built-in scenario room/background sheets when Unity has them loaded."
+                    : "Showing verified runtime replacements for the in-game family '"
+                        + familyMatcher.DescribeVerifiedFamily(targetFamily)
+                        + "'. Scenario custom sprite patches are listed separately.";
             }
             catalog.VanillaCandidates.Sort(CompareCandidate);
             catalog.ModdedCandidates.Sort(CompareCandidate);
             return catalog;
         }
 
-        private static PlacementCatalog BuildPlacementCatalog(ScenarioDefinition definition, string scenarioFilePath)
+        private static PlacementCatalog BuildPlacementCatalog(ScenarioDefinition definition, string scenarioFilePath, IScenarioSpriteAssetResolver assetResolver)
         {
             PlacementCatalog catalog = new PlacementCatalog
             {
@@ -222,7 +263,7 @@ namespace ShelteredAPI.Scenarios
             for (int i = 0; i < loadedSprites.Count; i++)
             {
                 ScenarioSpriteReferenceLibrary.LoadedSpriteReference loaded = loadedSprites[i];
-                if (loaded == null || loaded.Sprite == null)
+                if (loaded == null || loaded.Sprite == null || IsGeneratedPatchRuntimeKey(loaded.RuntimeSpriteKey))
                     continue;
 
                 catalog.VanillaCandidates.Add(new SpriteCandidate
@@ -238,9 +279,71 @@ namespace ShelteredAPI.Scenarios
                 });
             }
 
+            AddCustomSpriteCandidates(
+                definition,
+                scenarioFilePath,
+                assetResolver,
+                catalog.ModdedCandidates,
+                null,
+                false);
             catalog.VanillaCandidates.Sort(CompareCandidate);
             catalog.ModdedCandidates.Sort(CompareCandidate);
             return catalog;
+        }
+
+        private static void AddCustomSpriteCandidates(
+            ScenarioDefinition definition,
+            string scenarioFilePath,
+            IScenarioSpriteAssetResolver assetResolver,
+            List<SpriteCandidate> candidates,
+            Sprite compatibilityTarget,
+            bool requireCompatible)
+        {
+            if (definition == null
+                || definition.AssetReferences == null
+                || definition.AssetReferences.CustomSprites == null
+                || assetResolver == null
+                || candidates == null)
+            {
+                return;
+            }
+
+            string packRoot = !string.IsNullOrEmpty(scenarioFilePath) ? System.IO.Path.GetDirectoryName(scenarioFilePath) : null;
+            for (int i = 0; i < definition.AssetReferences.CustomSprites.Count; i++)
+            {
+                SpriteRef spriteRef = definition.AssetReferences.CustomSprites[i];
+                if (spriteRef == null || string.IsNullOrEmpty(spriteRef.Id))
+                    continue;
+
+                Sprite sprite = assetResolver.ResolveSprite(
+                    definition,
+                    packRoot,
+                    spriteRef.Id,
+                    spriteRef.RelativePath,
+                    null,
+                    "scenario custom sprite '" + spriteRef.Id + "'");
+                if (sprite == null)
+                    continue;
+
+                if (requireCompatible && !IsCompatible(compatibilityTarget, sprite))
+                    continue;
+
+                SpritePatchDefinition patch = FindPatch(definition.AssetReferences, spriteRef.PatchId);
+                candidates.Add(new SpriteCandidate
+                {
+                    Token = "custom:" + spriteRef.Id,
+                    Label = !string.IsNullOrEmpty(patch != null ? patch.DisplayName : null)
+                        ? patch.DisplayName
+                        : spriteRef.Id,
+                    Hint = BuildCustomSpriteHint(spriteRef, patch, sprite),
+                    SpriteName = spriteRef.Id,
+                    SourceName = "Scenario Custom",
+                    SourceKind = SpriteCandidateSourceKind.ScenarioCustom,
+                    SpriteId = spriteRef.Id,
+                    RelativePath = spriteRef.RelativePath,
+                    Sprite = sprite
+                });
+            }
         }
 
         private static SpriteCatalog CloneCatalog(SpriteCatalog catalog)
@@ -318,6 +421,34 @@ namespace ShelteredAPI.Scenarios
 
                 hash = (hash * 397) ^ SafeHash(sprite.Id);
                 hash = (hash * 397) ^ SafeHash(sprite.RelativePath);
+                hash = (hash * 397) ^ SafeHash(sprite.PatchId);
+            }
+
+            if (definition.AssetReferences.SpritePatches != null)
+            {
+                hash = (hash * 397) ^ definition.AssetReferences.SpritePatches.Count;
+                for (int i = 0; i < definition.AssetReferences.SpritePatches.Count; i++)
+                {
+                    SpritePatchDefinition patch = definition.AssetReferences.SpritePatches[i];
+                    if (patch == null)
+                        continue;
+
+                    hash = (hash * 397) ^ SafeHash(patch.Id);
+                    hash = (hash * 397) ^ patch.Width;
+                    hash = (hash * 397) ^ patch.Height;
+                    hash = (hash * 397) ^ (patch.Operations != null ? patch.Operations.Count : 0);
+                    for (int operationIndex = 0; patch.Operations != null && operationIndex < patch.Operations.Count; operationIndex++)
+                    {
+                        SpritePatchOperation operation = patch.Operations[operationIndex];
+                        if (operation == null)
+                            continue;
+
+                        hash = (hash * 397) ^ SafeHash(operation.Id);
+                        hash = (hash * 397) ^ operation.Order;
+                        hash = (hash * 397) ^ (int)operation.Kind;
+                        hash = (hash * 397) ^ (operation.Runs != null ? operation.Runs.Count : 0);
+                    }
+                }
             }
 
             return hash;
@@ -339,6 +470,64 @@ namespace ShelteredAPI.Scenarios
                 && Mathf.RoundToInt(currentRect.height) == Mathf.RoundToInt(candidateRect.height);
         }
 
+        private static bool IsEnvironmentArtTarget(ScenarioAuthoringTarget target)
+        {
+            if (target == null)
+                return false;
+
+            switch (target.Kind)
+            {
+                case ScenarioAuthoringTargetKind.Background:
+                case ScenarioAuthoringTargetKind.Wall:
+                case ScenarioAuthoringTargetKind.Room:
+                case ScenarioAuthoringTargetKind.Tile:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsGeneratedPatchRuntimeKey(string runtimeSpriteKey)
+        {
+            return !string.IsNullOrEmpty(runtimeSpriteKey)
+                && runtimeSpriteKey.StartsWith("patch:", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsEnvironmentCandidate(
+            ScenarioSpriteReferenceLibrary.LoadedSpriteReference loaded,
+            ScenarioSpriteFamilyMatcher.FamilyProfile candidateFamily)
+        {
+            if (candidateFamily != null && !string.IsNullOrEmpty(candidateFamily.KindKey))
+            {
+                if (candidateFamily.KindKey.IndexOf("Background", StringComparison.OrdinalIgnoreCase) >= 0
+                    || candidateFamily.KindKey.IndexOf("Wall", StringComparison.OrdinalIgnoreCase) >= 0
+                    || candidateFamily.KindKey.IndexOf("Room", StringComparison.OrdinalIgnoreCase) >= 0
+                    || candidateFamily.KindKey.IndexOf("Tile", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            string combined = ((loaded != null ? loaded.SpriteName : null) ?? string.Empty)
+                + " "
+                + ((loaded != null ? loaded.TextureName : null) ?? string.Empty);
+            return ContainsAny(combined, "wall", "background", "backdrop", "room", "bunker", "shelter", "surrounded", "stasis", "scenario");
+        }
+
+        private static bool ContainsAny(string value, params string[] parts)
+        {
+            if (string.IsNullOrEmpty(value) || parts == null)
+                return false;
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(parts[i]) && value.IndexOf(parts[i], StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static string BuildLabel(string spriteName, string sourceName)
         {
             string primary = !string.IsNullOrEmpty(spriteName) ? spriteName : "<sprite>";
@@ -352,6 +541,34 @@ namespace ShelteredAPI.Scenarios
             return "Map: " + (!string.IsNullOrEmpty(sourceName) ? sourceName : "<source>")
                 + " | Sprite: " + (!string.IsNullOrEmpty(spriteName) ? spriteName : "<sprite>")
                 + " | Size: " + Mathf.RoundToInt(rect.width) + "x" + Mathf.RoundToInt(rect.height);
+        }
+
+        private static string BuildCustomSpriteHint(SpriteRef spriteRef, SpritePatchDefinition patch, Sprite sprite)
+        {
+            Rect rect = sprite != null ? sprite.rect : new Rect();
+            string source = patch != null && !string.IsNullOrEmpty(patch.BaseRuntimeSpriteKey)
+                ? "runtime"
+                : (patch != null && !string.IsNullOrEmpty(patch.BaseSpriteId)
+                    ? patch.BaseSpriteId
+                    : (spriteRef != null && !string.IsNullOrEmpty(spriteRef.RelativePath) ? spriteRef.RelativePath : "scenario patch"));
+            return "Scenario custom sprite"
+                + " | Source: " + source
+                + " | Size: " + Mathf.RoundToInt(rect.width) + "x" + Mathf.RoundToInt(rect.height);
+        }
+
+        private static SpritePatchDefinition FindPatch(AssetReferencesDefinition assets, string patchId)
+        {
+            if (assets == null || assets.SpritePatches == null || string.IsNullOrEmpty(patchId))
+                return null;
+
+            for (int i = 0; i < assets.SpritePatches.Count; i++)
+            {
+                SpritePatchDefinition patch = assets.SpritePatches[i];
+                if (patch != null && string.Equals(patch.Id, patchId, StringComparison.OrdinalIgnoreCase))
+                    return patch;
+            }
+
+            return null;
         }
 
         private static int CompareCandidate(SpriteCandidate left, SpriteCandidate right)

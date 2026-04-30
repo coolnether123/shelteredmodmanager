@@ -17,7 +17,12 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioGameplayScheduleAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioEventAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteRuntimeResolver(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteCatalogService(resolver.Get<ScenarioSpriteRuntimeResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioSpriteCatalogService(
+                    resolver.Get<ScenarioSpriteRuntimeResolver>(),
+                    resolver.Get<IScenarioSpriteAssetResolver>());
+            });
 
             services.AddScenarioInfrastructure();
             services.AddScenarioApplication();

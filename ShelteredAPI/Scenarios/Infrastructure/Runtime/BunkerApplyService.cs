@@ -38,41 +38,30 @@ namespace ShelteredAPI.Scenarios
                 if (room == null)
                     continue;
 
-                if (room.WallSpriteIndex.HasValue)
+                string wallMessage;
+                try
                 {
-                    try
-                    {
-                        if (grid.SetWall(room.GridX, room.GridY, room.WallSpriteIndex.Value))
-                            result.BunkerChanges++;
-                        else
-                            AddBunkerMessage(result, "Failed to set wall sprite at " + room.GridX + "," + room.GridY + ".");
-                    }
-                    catch (Exception ex)
-                    {
-                        AddBunkerMessage(result, "Failed to set wall sprite at " + room.GridX + "," + room.GridY + ": " + ex.Message);
-                    }
+                    if (RoomVisualRuntimeApplyService.ApplyWallEdit(grid, room, out wallMessage))
+                        result.BunkerChanges++;
+                    else
+                        AddBunkerMessage(result, wallMessage);
+                }
+                catch (Exception ex)
+                {
+                    AddBunkerMessage(result, "Failed to set wall sprite at " + room.GridX + "," + room.GridY + ": " + ex.Message);
                 }
 
-                if (room.WireSpriteIndex.HasValue)
+                string wireMessage;
+                try
                 {
-                    try
-                    {
-                        if (wires != null
-                            && room.WireSpriteIndex.Value >= 0
-                            && room.WireSpriteIndex.Value < wires.Count
-                            && grid.SetWiring(room.GridX, room.GridY, wires[room.WireSpriteIndex.Value]))
-                        {
-                            result.BunkerChanges++;
-                        }
-                        else
-                        {
-                            AddBunkerMessage(result, "Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ".");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        AddBunkerMessage(result, "Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ": " + ex.Message);
-                    }
+                    if (RoomVisualRuntimeApplyService.ApplyWireEdit(grid, wires, room, out wireMessage))
+                        result.BunkerChanges++;
+                    else
+                        AddBunkerMessage(result, wireMessage);
+                }
+                catch (Exception ex)
+                {
+                    AddBunkerMessage(result, "Failed to set wiring sprite at " + room.GridX + "," + room.GridY + ": " + ex.Message);
                 }
             }
         }

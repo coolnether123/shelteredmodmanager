@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Text;
 using ModAPI.Core;
 using ModAPI.Scenarios;
@@ -59,7 +58,6 @@ namespace ShelteredAPI.Scenarios
             public float ColliderWidth;
         }
 
-        private static readonly FieldInfo WiresSpritesField = typeof(ShelterRoomGrid).GetField("wiresSprites", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly string[] ObjectSectionOrder = new[]
         {
             "Workbenches & Stations",
@@ -72,6 +70,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ObjectPlacementService _objectPlacementService;
         private readonly WallWiringEditService _wallWiringEditService;
         private readonly PlacementPaletteService _placementPaletteService;
+        private readonly RoomVisualPaletteService _roomVisualPaletteService;
         private readonly PlacementGhostSessionService _placementGhostSessionService;
         private ActivePlacementSession _activePlacement;
 
@@ -90,12 +89,14 @@ namespace ShelteredAPI.Scenarios
             ObjectPlacementService objectPlacementService,
             WallWiringEditService wallWiringEditService,
             PlacementPaletteService placementPaletteService,
+            RoomVisualPaletteService roomVisualPaletteService,
             PlacementGhostSessionService placementGhostSessionService)
         {
             _structurePlacementService = structurePlacementService;
             _objectPlacementService = objectPlacementService;
             _wallWiringEditService = wallWiringEditService;
             _placementPaletteService = placementPaletteService;
+            _roomVisualPaletteService = roomVisualPaletteService;
             _placementGhostSessionService = placementGhostSessionService;
         }
 
@@ -207,27 +208,37 @@ namespace ShelteredAPI.Scenarios
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix, StringComparison.Ordinal))
             {
                 handled = true;
+                string token = actionId.Substring(ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix.Length);
                 int wallIndex;
-                if (!int.TryParse(actionId.Substring(ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix.Length), out wallIndex))
+                if (int.TryParse(token, out wallIndex))
+                    return ApplyWall(state != null ? state.SelectedTarget : null, wallIndex, null, out message);
+
+                string runtimeSpriteKey = DecodeActionToken(token);
+                if (string.IsNullOrEmpty(runtimeSpriteKey))
                 {
                     message = "The selected wall sprite could not be decoded.";
                     return false;
                 }
 
-                return ApplyWall(state != null ? state.SelectedTarget : null, wallIndex, out message);
+                return ApplyWall(state != null ? state.SelectedTarget : null, -1, runtimeSpriteKey, out message);
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix, StringComparison.Ordinal))
             {
                 handled = true;
+                string token = actionId.Substring(ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix.Length);
                 int wireIndex;
-                if (!int.TryParse(actionId.Substring(ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix.Length), out wireIndex))
+                if (int.TryParse(token, out wireIndex))
+                    return ApplyWire(state != null ? state.SelectedTarget : null, wireIndex, null, out message);
+
+                string runtimeSpriteKey = DecodeActionToken(token);
+                if (string.IsNullOrEmpty(runtimeSpriteKey))
                 {
                     message = "The selected wiring sprite could not be decoded.";
                     return false;
                 }
 
-                return ApplyWire(state != null ? state.SelectedTarget : null, wireIndex, out message);
+                return ApplyWire(state != null ? state.SelectedTarget : null, -1, runtimeSpriteKey, out message);
             }
 
             return false;
@@ -779,7 +790,7 @@ namespace ShelteredAPI.Scenarios
             return true;
         }
 
-        private bool ApplyWall(ScenarioAuthoringTarget target, int wallIndex, out string message)
+        private bool ApplyWall(ScenarioAuthoringTarget target, int wallIndex, string runtimeSpriteKey, out string message)
         {
             message = null;
             ShelterRoom room;
@@ -792,34 +803,37 @@ namespace ShelteredAPI.Scenarios
             }
 
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
-            if (room.wallSprites == null || wallIndex < 0 || wallIndex >= room.wallSprites.Count)
+            RoomVisualPaletteService.Entry entry = _roomVisualPaletteService.ResolveWallEntry(room, wallIndex, runtimeSpriteKey);
+            if (entry == null || entry.Sprite == null)
             {
-                message = "The selected wall sprite index is not valid for this room.";
+                message = "The selected wall sprite is not available for this room.";
                 return false;
             }
 
             if (!_wallWiringEditService.CanRecordEdit(out message))
                 return false;
 
-            if (grid == null || !grid.SetWall(gridX, gridY, wallIndex))
+            int appliedIndex = _roomVisualPaletteService.EnsureSprite(room.wallSprites, entry.Sprite);
+            if (grid == null || appliedIndex < 0 || !grid.SetWall(gridX, gridY, appliedIndex))
             {
                 message = "The selected wall sprite could not be applied to " + gridX + "," + gridY + ".";
                 return false;
             }
 
-            if (!_wallWiringEditService.ApplyWall(gridX, gridY, wallIndex))
+            int serializedIndex = entry.NativeIndex >= 0 ? appliedIndex : -1;
+            if (!_wallWiringEditService.ApplyWall(gridX, gridY, serializedIndex, entry.RuntimeSpriteKey))
             {
-                message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                message = "Applied wall sprite " + appliedIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
                 MMLog.WriteWarning("[ScenarioBuildPlacement] Wall edit could not record to draft at " + gridX + "," + gridY + ".");
                 return true;
             }
 
-            message = "Applied wall sprite " + wallIndex + " to room " + gridX + "," + gridY + ".";
-            LogPlacementInfo("Wall edit recorded to draft at " + gridX + "," + gridY + " sprite=" + wallIndex + ".");
+            message = "Applied wall sprite " + appliedIndex + " to room " + gridX + "," + gridY + ".";
+            LogPlacementInfo("Wall edit recorded to draft at " + gridX + "," + gridY + " sprite=" + appliedIndex + ".");
             return true;
         }
 
-        private bool ApplyWire(ScenarioAuthoringTarget target, int wireIndex, out string message)
+        private bool ApplyWire(ScenarioAuthoringTarget target, int wireIndex, string runtimeSpriteKey, out string message)
         {
             message = null;
             ShelterRoom room;
@@ -832,31 +846,34 @@ namespace ShelteredAPI.Scenarios
             }
 
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
-            List<Sprite> wireSprites = grid != null && WiresSpritesField != null ? WiresSpritesField.GetValue(grid) as List<Sprite> : null;
-            if (wireSprites == null || wireIndex < 0 || wireIndex >= wireSprites.Count)
+            List<Sprite> wireSprites = _roomVisualPaletteService.GetWireSprites(grid);
+            RoomVisualPaletteService.Entry entry = _roomVisualPaletteService.ResolveWireEntry(wireSprites, wireIndex, runtimeSpriteKey);
+            if (wireSprites == null || entry == null || entry.Sprite == null)
             {
-                message = "The selected wiring sprite index is not valid for this shelter.";
+                message = "The selected wiring sprite is not available for this shelter.";
                 return false;
             }
 
             if (!_wallWiringEditService.CanRecordEdit(out message))
                 return false;
 
-            if (grid == null || !grid.SetWiring(gridX, gridY, wireSprites[wireIndex]))
+            int appliedIndex = _roomVisualPaletteService.EnsureSprite(wireSprites, entry.Sprite);
+            if (grid == null || appliedIndex < 0 || !grid.SetWiring(gridX, gridY, wireSprites[appliedIndex]))
             {
                 message = "The selected wiring sprite could not be applied to " + gridX + "," + gridY + ".";
                 return false;
             }
 
-            if (!_wallWiringEditService.ApplyWire(gridX, gridY, wireIndex))
+            int serializedIndex = entry.NativeIndex >= 0 ? appliedIndex : -1;
+            if (!_wallWiringEditService.ApplyWire(gridX, gridY, serializedIndex, entry.RuntimeSpriteKey))
             {
-                message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
+                message = "Applied wiring sprite " + appliedIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
                 MMLog.WriteWarning("[ScenarioBuildPlacement] Wiring edit could not record to draft at " + gridX + "," + gridY + ".");
                 return true;
             }
 
-            message = "Applied wiring sprite " + wireIndex + " to room " + gridX + "," + gridY + ".";
-            LogPlacementInfo("Wiring edit recorded to draft at " + gridX + "," + gridY + " sprite=" + wireIndex + ".");
+            message = "Applied wiring sprite " + appliedIndex + " to room " + gridX + "," + gridY + ".";
+            LogPlacementInfo("Wiring edit recorded to draft at " + gridX + "," + gridY + " sprite=" + appliedIndex + ".");
             return true;
         }
 
@@ -1182,19 +1199,25 @@ namespace ShelteredAPI.Scenarios
             }
 
             int activeWallIndex = room.GetWallSprite();
+            Sprite activeWall = activeWallIndex >= 0 && room.wallSprites != null && activeWallIndex < room.wallSprites.Count ? room.wallSprites[activeWallIndex] : null;
+            string activeWallKey = ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(activeWall);
+            List<RoomVisualPaletteService.Entry> wallPalette = _roomVisualPaletteService.BuildWallPalette(room);
             List<PaletteEntryModel> wallEntries = new List<PaletteEntryModel>();
-            for (int i = 0; room.wallSprites != null && i < room.wallSprites.Count; i++)
+            for (int i = 0; wallPalette != null && i < wallPalette.Count; i++)
             {
+                RoomVisualPaletteService.Entry entry = wallPalette[i];
+                bool active = entry != null && string.Equals(activeWallKey, entry.RuntimeSpriteKey, StringComparison.OrdinalIgnoreCase);
+                int displayIndex = entry != null && entry.NativeIndex >= 0 ? entry.NativeIndex : i;
                 wallEntries.Add(new PaletteEntryModel
                 {
-                    ActionId = ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix + i,
-                    Label = "Wall " + (i + 1),
-                    Hint = "Apply wall sprite " + i + " to room " + gridX + "," + gridY + ".",
-                    Source = "Room " + gridX + "," + gridY,
-                    Badge = activeWallIndex == i ? "LIVE" : "WALL",
-                    Preview = room.wallSprites[i],
+                    ActionId = ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix + EncodeActionToken(entry != null ? entry.RuntimeSpriteKey : null),
+                    Label = "Wall " + (displayIndex + 1),
+                    Hint = "Apply wall sprite " + displayIndex + " to room " + gridX + "," + gridY + ".",
+                    Source = entry != null && !string.IsNullOrEmpty(entry.SourceLabel) ? entry.SourceLabel : ("Room " + gridX + "," + gridY),
+                    Badge = active ? "LIVE" : "WALL",
+                    Preview = entry != null ? entry.Sprite : null,
                     Enabled = true,
-                    Active = activeWallIndex == i
+                    Active = active
                 });
             }
 
@@ -1209,20 +1232,25 @@ namespace ShelteredAPI.Scenarios
 
             List<PaletteEntryModel> wireEntries = new List<PaletteEntryModel>();
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
-            List<Sprite> wireSprites = grid != null && WiresSpritesField != null ? WiresSpritesField.GetValue(grid) as List<Sprite> : null;
+            List<Sprite> wireSprites = _roomVisualPaletteService.GetWireSprites(grid);
             Sprite activeWire = room.GetWires();
-            for (int i = 0; wireSprites != null && i < wireSprites.Count; i++)
+            string activeWireKey = ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(activeWire);
+            List<RoomVisualPaletteService.Entry> wirePalette = _roomVisualPaletteService.BuildWirePalette(wireSprites);
+            for (int i = 0; wirePalette != null && i < wirePalette.Count; i++)
             {
+                RoomVisualPaletteService.Entry entry = wirePalette[i];
+                bool active = entry != null && string.Equals(activeWireKey, entry.RuntimeSpriteKey, StringComparison.OrdinalIgnoreCase);
+                int displayIndex = entry != null && entry.NativeIndex >= 0 ? entry.NativeIndex : i;
                 wireEntries.Add(new PaletteEntryModel
                 {
-                    ActionId = ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix + i,
-                    Label = "Wire " + (i + 1),
-                    Hint = "Apply wiring sprite " + i + " to room " + gridX + "," + gridY + ".",
-                    Source = "Room " + gridX + "," + gridY,
-                    Badge = activeWire == wireSprites[i] ? "LIVE" : "WIRE",
-                    Preview = wireSprites[i],
+                    ActionId = ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix + EncodeActionToken(entry != null ? entry.RuntimeSpriteKey : null),
+                    Label = "Wire " + (displayIndex + 1),
+                    Hint = "Apply wiring sprite " + displayIndex + " to room " + gridX + "," + gridY + ".",
+                    Source = entry != null && !string.IsNullOrEmpty(entry.SourceLabel) ? entry.SourceLabel : ("Room " + gridX + "," + gridY),
+                    Badge = active ? "LIVE" : "WIRE",
+                    Preview = entry != null ? entry.Sprite : null,
                     Enabled = true,
-                    Active = activeWire == wireSprites[i]
+                    Active = active
                 });
             }
 

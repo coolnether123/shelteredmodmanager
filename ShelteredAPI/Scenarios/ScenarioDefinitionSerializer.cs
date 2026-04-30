@@ -342,7 +342,9 @@ namespace ShelteredAPI.Scenarios
                             GridX = ReadIntAttribute(roomElement, "gridX", 0),
                             GridY = ReadIntAttribute(roomElement, "gridY", 0),
                             WallSpriteIndex = ReadNullableIntAttribute(roomElement, "wallSpriteIndex"),
-                            WireSpriteIndex = ReadNullableIntAttribute(roomElement, "wireSpriteIndex")
+                            WireSpriteIndex = ReadNullableIntAttribute(roomElement, "wireSpriteIndex"),
+                            WallRuntimeSpriteKey = AttributeOrChild(roomElement, "wallRuntimeSpriteKey", "WallRuntimeSpriteKey"),
+                            WireRuntimeSpriteKey = AttributeOrChild(roomElement, "wireRuntimeSpriteKey", "WireRuntimeSpriteKey")
                         });
                     }
                 }
@@ -818,6 +820,8 @@ namespace ShelteredAPI.Scenarios
                     writer.WriteAttributeString("wallSpriteIndex", room.WallSpriteIndex.Value.ToString(CultureInfo.InvariantCulture));
                 if (room.WireSpriteIndex.HasValue)
                     writer.WriteAttributeString("wireSpriteIndex", room.WireSpriteIndex.Value.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "wallRuntimeSpriteKey", room.WallRuntimeSpriteKey);
+                WriteAttribute(writer, "wireRuntimeSpriteKey", room.WireRuntimeSpriteKey);
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
