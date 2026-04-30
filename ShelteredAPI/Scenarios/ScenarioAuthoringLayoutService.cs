@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Security;
 using System.Text;
@@ -35,8 +36,9 @@ namespace ShelteredAPI.Scenarios
             state.Settings = state.Settings != null ? state.Settings.Copy() : _settingsService.Load();
             _settingsService.ApplyDefinitionDefaults(state.Settings);
             EnsureWindowStates(state);
-            LoadLayout(state);
-            HideStartupUtilityWindows(state);
+            bool layoutLoaded = LoadLayout(state);
+            if (!layoutLoaded)
+                HideStartupUtilityWindows(state);
             ApplyStageWorkspace(state);
         }
 
@@ -81,12 +83,19 @@ namespace ShelteredAPI.Scenarios
 
             window.Visible = !window.Visible;
             if (window.Visible)
+            {
                 window.Collapsed = false;
+                BringWindowToFront(state, window.Id);
+            }
             else
+            {
                 window.Collapsed = false;
+            }
 
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Calendar, StringComparison.OrdinalIgnoreCase))
+                ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
         }
@@ -114,10 +123,14 @@ namespace ShelteredAPI.Scenarios
             bool changed = window.Visible != open || (open && window.Collapsed);
             window.Visible = open;
             if (open)
+            {
                 window.Collapsed = false;
+                BringWindowToFront(state, window.Id);
+            }
 
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
+            ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return changed;
         }
@@ -145,6 +158,7 @@ namespace ShelteredAPI.Scenarios
             window.Visible = true;
             window.Collapsed = false;
             state.MinimalMode = false;
+            BringWindowToFront(state, window.Id);
             PersistIfEnabled(state);
             return changed;
         }
@@ -299,6 +313,56 @@ namespace ShelteredAPI.Scenarios
             SaveLayout(state);
         }
 
+        public bool SetWindowFrame(
+            ScenarioAuthoringState state,
+            string windowId,
+            float x,
+            float y,
+            float width,
+            float height,
+            bool persist)
+        {
+            ScenarioAuthoringWindowState window = FindWindow(state, windowId);
+            if (window == null)
+                return false;
+
+            ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
+            if (definition == null || definition.Dock != ScenarioAuthoringShellDock.Floating)
+                return false;
+
+            float clampedWidth = Math.Max(definition.MinWidth, width);
+            float clampedHeight = Math.Max(definition.MinHeight, height);
+            bool changed = !window.HasCustomBounds
+                || Math.Abs(window.X - x) > 0.01f
+                || Math.Abs(window.Y - y) > 0.01f
+                || Math.Abs(window.Width - clampedWidth) > 0.01f
+                || Math.Abs(window.Height - clampedHeight) > 0.01f;
+
+            window.HasCustomBounds = true;
+            window.X = x;
+            window.Y = y;
+            window.Width = clampedWidth;
+            window.Height = clampedHeight;
+            changed |= BringWindowToFrontInternal(state, window);
+
+            if (persist)
+                PersistIfEnabled(state);
+
+            return changed;
+        }
+
+        public bool BringWindowToFront(ScenarioAuthoringState state, string windowId)
+        {
+            ScenarioAuthoringWindowState window = FindWindow(state, windowId);
+            if (window == null)
+                return false;
+
+            bool changed = BringWindowToFrontInternal(state, window);
+            if (changed)
+                PersistIfEnabled(state);
+            return changed;
+        }
+
         public ScenarioAuthoringWindowState FindWindow(ScenarioAuthoringState state, string windowId)
         {
             if (state == null || string.IsNullOrEmpty(windowId))
@@ -314,11 +378,11 @@ namespace ShelteredAPI.Scenarios
             return null;
         }
 
-        private void LoadLayout(ScenarioAuthoringState state)
+        private bool LoadLayout(ScenarioAuthoringState state)
         {
             string path = ScenarioAuthoringStoragePaths.GetLayoutFilePath();
             if (!File.Exists(path))
-                return;
+                return false;
 
             try
             {
@@ -326,7 +390,7 @@ namespace ShelteredAPI.Scenarios
                 document.Load(path);
                 XmlElement root = document.DocumentElement;
                 if (root == null)
-                    return;
+                    return false;
 
                 state.ActiveLayoutPreset = ReadAttribute(root, "preset", "default");
                 state.MinimalMode = ReadBool(root, "minimalMode", false);
@@ -346,14 +410,22 @@ namespace ShelteredAPI.Scenarios
                     window.Visible = ReadBool(element, "visible", window.Visible);
                     window.Collapsed = ReadBool(element, "collapsed", window.Collapsed);
                     window.Pinned = ReadBool(element, "pinned", window.Pinned);
+                    window.HasCustomBounds = ReadBool(element, "customFrame", window.HasCustomBounds);
+                    window.X = ReadFloat(element, "x", window.X);
+                    window.Y = ReadFloat(element, "y", window.Y);
+                    window.Width = ReadFloat(element, "width", window.Width);
+                    window.Height = ReadFloat(element, "height", window.Height);
+                    window.ZIndex = ReadInt(element, "z", window.ZIndex);
                     NormalizeWindowState(window);
                 }
 
                 ApplyStageWorkspace(state);
+                return true;
             }
             catch (Exception ex)
             {
                 ModAPI.Core.MMLog.WriteWarning("[ScenarioAuthoringLayout] Failed to load layout: " + ex.Message);
+                return false;
             }
         }
 
@@ -408,6 +480,18 @@ namespace ShelteredAPI.Scenarios
                         .Append(window.Collapsed ? "true" : "false")
                         .Append("\" pinned=\"")
                         .Append(window.Pinned ? "true" : "false")
+                        .Append("\" customFrame=\"")
+                        .Append(window.HasCustomBounds ? "true" : "false")
+                        .Append("\" x=\"")
+                        .Append(FormatFloat(window.X))
+                        .Append("\" y=\"")
+                        .Append(FormatFloat(window.Y))
+                        .Append("\" width=\"")
+                        .Append(FormatFloat(window.Width))
+                        .Append("\" height=\"")
+                        .Append(FormatFloat(window.Height))
+                        .Append("\" z=\"")
+                        .Append(window.ZIndex.ToString(CultureInfo.InvariantCulture))
                         .AppendLine("\" />");
                 }
 
@@ -429,8 +513,12 @@ namespace ShelteredAPI.Scenarios
                 Collapsed = definition.DefaultCollapsed,
                 Pinned = definition.DefaultPinned,
                 Order = definition.Order,
+                HasCustomBounds = false,
+                X = 0f,
+                Y = 0f,
                 Width = definition.DefaultWidth,
-                Height = definition.DefaultHeight
+                Height = definition.DefaultHeight,
+                ZIndex = definition.Order
             };
 
             NormalizeWindowState(state);
@@ -444,12 +532,76 @@ namespace ShelteredAPI.Scenarios
 
             if (state.Collapsed)
                 state.Visible = false;
+
+            if (state.Width < 1f)
+                state.Width = 1f;
+            if (state.Height < 1f)
+                state.Height = 1f;
+        }
+
+        private static bool IsWindowOpen(ScenarioAuthoringState state, string windowId)
+        {
+            if (state == null || state.WindowStates == null || string.IsNullOrEmpty(windowId))
+                return false;
+
+            for (int i = 0; i < state.WindowStates.Count; i++)
+            {
+                ScenarioAuthoringWindowState window = state.WindowStates[i];
+                if (window != null && string.Equals(window.Id, windowId, StringComparison.OrdinalIgnoreCase))
+                    return window.Visible && !window.Collapsed;
+            }
+
+            return false;
+        }
+
+        private static bool BringWindowToFrontInternal(ScenarioAuthoringState state, ScenarioAuthoringWindowState window)
+        {
+            if (state == null || state.WindowStates == null || window == null)
+                return false;
+
+            int top = 0;
+            for (int i = 0; i < state.WindowStates.Count; i++)
+            {
+                ScenarioAuthoringWindowState candidate = state.WindowStates[i];
+                if (candidate != null && candidate.ZIndex > top)
+                    top = candidate.ZIndex;
+            }
+
+            if (window.ZIndex >= top)
+                return false;
+
+            window.ZIndex = top + 1;
+            return true;
         }
 
         private static bool ReadBool(XmlElement element, string name, bool fallback)
         {
             bool parsed;
             return bool.TryParse(ReadAttribute(element, name, fallback ? "true" : "false"), out parsed) ? parsed : fallback;
+        }
+
+        private static int ReadInt(XmlElement element, string name, int fallback)
+        {
+            int parsed;
+            return int.TryParse(
+                ReadAttribute(element, name, fallback.ToString(CultureInfo.InvariantCulture)),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private static float ReadFloat(XmlElement element, string name, float fallback)
+        {
+            float parsed;
+            return float.TryParse(
+                ReadAttribute(element, name, fallback.ToString(CultureInfo.InvariantCulture)),
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out parsed)
+                ? parsed
+                : fallback;
         }
 
         private static string ReadAttribute(XmlElement element, string name, string fallback)
@@ -466,6 +618,11 @@ namespace ShelteredAPI.Scenarios
             return string.IsNullOrEmpty(value)
                 ? string.Empty
                 : SecurityElement.Escape(value);
+        }
+
+        private static string FormatFloat(float value)
+        {
+            return value.ToString("0.###", CultureInfo.InvariantCulture);
         }
     }
 }

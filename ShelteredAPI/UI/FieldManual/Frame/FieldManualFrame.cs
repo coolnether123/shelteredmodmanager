@@ -69,25 +69,23 @@ namespace ShelteredAPI.UI.FieldManual.Frame
                 stripW, stripH, Color.white, stripDepth);
 
             int titleDepth = _ui.NextDepth();
-            UILabel titleLabel = _ui.CreateLabel(header, "Title", title ?? string.Empty,
+            const int fileNumberWidth = 240;
+            const int headerTextGap = 40;
+            int titleWidth = stripW - 48 - fileNumberWidth - headerTextGap;
+            _ui.CreateLabel(header, "Title", title ?? string.Empty,
                 new Vector3(-stripW * 0.5f + 24, 8, 0), 26, _palette.Paper,
-                stripW - 280, 32,
+                titleWidth, 32,
                 NGUIText.Alignment.Left, UIWidget.Pivot.Left, titleDepth);
-            // Bitmap fonts don't always re-render on size changes if the label was created
-            // with no text earlier; nudge:
-            titleLabel.MakePixelPerfect();
 
-            UILabel subtitleLabel = _ui.CreateLabel(header, "Subtitle", subtitle ?? string.Empty,
+            _ui.CreateLabel(header, "Subtitle", subtitle ?? string.Empty,
                 new Vector3(-stripW * 0.5f + 24, -16, 0), 14, new Color(_palette.Paper.r, _palette.Paper.g, _palette.Paper.b, 0.78f),
-                stripW - 280, 20,
+                titleWidth, 20,
                 NGUIText.Alignment.Left, UIWidget.Pivot.Left, titleDepth);
-            subtitleLabel.MakePixelPerfect();
 
-            UILabel fileNumber = _ui.CreateLabel(header, "FileNumber", "FILE № SHL-INPUT",
+            _ui.CreateLabel(header, "FileNumber", "FILE № SHL-INPUT",
                 new Vector3(stripW * 0.5f - 24, 0, 0), 14, new Color(_palette.Brass.r, _palette.Brass.g, _palette.Brass.b, 0.95f),
-                240, 24,
+                fileNumberWidth, 24,
                 NGUIText.Alignment.Right, UIWidget.Pivot.Right, titleDepth);
-            fileNumber.MakePixelPerfect();
 
             // ---------- 4. Paper sheet ----------
             int paperX = inset + 8;

@@ -386,6 +386,7 @@ namespace ShelteredAPI.Scenarios
         public string Id { get; set; }
         public string RelativePath { get; set; }
         public string PatchId { get; set; }
+        public bool UserOwned { get; set; }
     }
 
     public class SceneSpritePlacement

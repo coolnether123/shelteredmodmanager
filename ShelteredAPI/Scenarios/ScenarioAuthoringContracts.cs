@@ -133,6 +133,7 @@ namespace ShelteredAPI.Scenarios
         public const string ActionSpriteSwapPickerSave = "sprite_swap.picker.save";
         public const string ActionSpriteSwapPickerCancel = "sprite_swap.picker.cancel";
         public const string ActionSpriteSwapPreviewPrefix = "sprite_swap.preview.";
+        public const string ActionSpriteSwapImportPng = "sprite_swap.import_png";
         public const string ActionSpriteSwapCustomEditStart = "sprite_swap.custom.start";
         public const string ActionSpriteSwapCustomEditDiscard = "sprite_swap.custom.discard";
         public const string ActionSpriteSwapCustomBrushPrefix = "sprite_swap.custom.brush.";
@@ -489,8 +490,12 @@ namespace ShelteredAPI.Scenarios
         public bool Collapsed { get; set; }
         public bool Pinned { get; set; }
         public int Order { get; set; }
+        public bool HasCustomBounds { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
         public float Width { get; set; }
         public float Height { get; set; }
+        public int ZIndex { get; set; }
 
         public ScenarioAuthoringWindowState Copy()
         {
@@ -501,8 +506,12 @@ namespace ShelteredAPI.Scenarios
                 Collapsed = Collapsed,
                 Pinned = Pinned,
                 Order = Order,
+                HasCustomBounds = HasCustomBounds,
+                X = X,
+                Y = Y,
                 Width = Width,
-                Height = Height
+                Height = Height,
+                ZIndex = ZIndex
             };
         }
     }
@@ -649,8 +658,14 @@ namespace ShelteredAPI.Scenarios
         public bool WorkspaceTabVisible { get; set; }
         public bool Visible { get; set; }
         public bool Collapsed { get; set; }
+        public bool HasCustomBounds { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
         public float Width { get; set; }
         public float Height { get; set; }
+        public float MinWidth { get; set; }
+        public float MinHeight { get; set; }
+        public int ZIndex { get; set; }
         public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
         public ScenarioAuthoringInspectorSection[] Sections { get; set; }
     }

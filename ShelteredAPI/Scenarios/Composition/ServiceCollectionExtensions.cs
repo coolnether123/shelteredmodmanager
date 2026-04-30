@@ -59,6 +59,7 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver) { return new RoomVisualPaletteService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementGhostSessionService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpritePatchAuthoringService(resolver.Get<SpritePatchBuilder>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioPngImportService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioApplyCoordinator(

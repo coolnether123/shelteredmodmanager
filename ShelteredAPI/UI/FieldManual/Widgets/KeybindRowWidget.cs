@@ -61,11 +61,12 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
             // Action label
             int textDepth = _ui.NextDepth();
-            _ui.CreateLabel(row, "Action", actionLabel,
+            UILabel actionText = _ui.CreateLabel(row, "Action", actionLabel,
                 new Vector3(-rowWidth * 0.5f + 8, 0, 0),
                 17, _palette.Ink,
                 _metrics.ActionLabelWidth, _metrics.RowHeight - 8,
                 NGUIText.Alignment.Left, UIWidget.Pivot.Left, textDepth);
+            actionText.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             // Keycaps positioned to the right of the label
             int kw = _metrics.KeycapWidth;

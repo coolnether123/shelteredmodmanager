@@ -31,6 +31,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioCharacterAppearanceService>(),
                     resolver.Get<ScenarioSpriteRuntimeResolver>(),
                     resolver.Get<ScenarioSpritePatchAuthoringService>(),
+                    resolver.Get<ScenarioPngImportService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),

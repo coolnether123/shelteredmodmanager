@@ -26,11 +26,25 @@ namespace ShelteredAPI.Scenarios
             TrySuppressCameraFollowOverAuthoringUi(ref __result);
         }
 
+        [HarmonyPatch(typeof(CursorBase), "GetCameraFollowPosition")]
+        [HarmonyFinalizer]
+        private static Exception CursorBaseFollowFinalizer(Exception __exception, ref Vector3 __result)
+        {
+            return FinalizeCameraFollow("CursorBase.GetCameraFollowPosition", __exception, ref __result);
+        }
+
         [HarmonyPatch(typeof(CursorPlacement), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorPlacementFollowPostfix(ref Vector3 __result)
         {
             TrySuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorPlacement), "GetCameraFollowPosition")]
+        [HarmonyFinalizer]
+        private static Exception CursorPlacementFollowFinalizer(Exception __exception, ref Vector3 __result)
+        {
+            return FinalizeCameraFollow("CursorPlacement.GetCameraFollowPosition", __exception, ref __result);
         }
 
         [HarmonyPatch(typeof(CursorPlacementRoom), "GetCameraFollowPosition")]
@@ -40,11 +54,52 @@ namespace ShelteredAPI.Scenarios
             TrySuppressCameraFollowOverAuthoringUi(ref __result);
         }
 
+        [HarmonyPatch(typeof(CursorPlacementRoom), "GetCameraFollowPosition")]
+        [HarmonyFinalizer]
+        private static Exception CursorPlacementRoomFollowFinalizer(Exception __exception, ref Vector3 __result)
+        {
+            return FinalizeCameraFollow("CursorPlacementRoom.GetCameraFollowPosition", __exception, ref __result);
+        }
+
         [HarmonyPatch(typeof(CursorUpgrade), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorUpgradeFollowPostfix(ref Vector3 __result)
         {
             TrySuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorUpgrade), "GetCameraFollowPosition")]
+        [HarmonyFinalizer]
+        private static Exception CursorUpgradeFollowFinalizer(Exception __exception, ref Vector3 __result)
+        {
+            return FinalizeCameraFollow("CursorUpgrade.GetCameraFollowPosition", __exception, ref __result);
+        }
+
+        private static Exception FinalizeCameraFollow(string source, Exception exception, ref Vector3 followPosition)
+        {
+            if (exception == null)
+                return null;
+
+            try
+            {
+                if (!ScenarioAuthoringRuntimeGuards.IsAuthoringActive())
+                    return exception;
+
+                if (TryResolveCameraPosition(out Vector3 cameraPosition))
+                    followPosition = cameraPosition;
+
+                MMLog.WarnOnce(
+                    "ScenarioAuthoringBootstrap.CameraFollowFinalizer." + source,
+                    "[ScenarioAuthoringBootstrap] Suppressed " + source + " failure while scenario authoring is active: " + exception.Message);
+                return null;
+            }
+            catch (Exception finalizerException)
+            {
+                MMLog.WarnOnce(
+                    "ScenarioAuthoringBootstrap.CameraFollowFinalizer",
+                    "[ScenarioAuthoringBootstrap] Camera-follow finalizer failed: " + finalizerException.Message);
+                return exception;
+            }
         }
 
         private static void TrySuppressCameraFollowOverAuthoringUi(ref Vector3 followPosition)
@@ -75,6 +130,35 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             followPosition = camera.transform.position;
+        }
+
+        private static bool TryResolveCameraPosition(out Vector3 position)
+        {
+            Camera camera = Camera.main;
+            if (camera == null)
+            {
+                Camera[] cameras = Camera.allCameras;
+                if (cameras != null)
+                {
+                    for (int i = 0; i < cameras.Length; i++)
+                    {
+                        if (cameras[i] != null && cameras[i].enabled)
+                        {
+                            camera = cameras[i];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (camera == null)
+            {
+                position = Vector3.zero;
+                return false;
+            }
+
+            position = camera.transform.position;
+            return true;
         }
     }
 }

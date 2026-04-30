@@ -244,6 +244,36 @@ namespace ShelteredAPI.Scenarios
             return changed;
         }
 
+        internal bool UpdateWindowFrame(string windowId, float x, float y, float width, float height, bool persist)
+        {
+            bool changed;
+            lock (_sync)
+            {
+                changed = _state != null
+                    && _state.IsActive
+                    && _layoutService.SetWindowFrame(_state, windowId, x, y, width, height, persist);
+            }
+
+            if (changed)
+                RaiseStateChanged();
+            return changed;
+        }
+
+        internal bool BringWindowToFront(string windowId)
+        {
+            bool changed;
+            lock (_sync)
+            {
+                changed = _state != null
+                    && _state.IsActive
+                    && _layoutService.BringWindowToFront(_state, windowId);
+            }
+
+            if (changed)
+                RaiseStateChanged();
+            return changed;
+        }
+
         internal void OpenContextMenu(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
             _presentationBuilder.OpenContextMenu(state, target, _contextMenuService);

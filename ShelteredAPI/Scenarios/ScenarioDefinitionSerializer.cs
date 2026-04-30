@@ -507,7 +507,8 @@ namespace ShelteredAPI.Scenarios
                         {
                             Id = AttributeOrChild(spriteElement, "id", "Id"),
                             RelativePath = AttributeOrChild(spriteElement, "path", "Path"),
-                            PatchId = AttributeOrChild(spriteElement, "patchId", "PatchId")
+                            PatchId = AttributeOrChild(spriteElement, "patchId", "PatchId"),
+                            UserOwned = ReadBoolAttribute(spriteElement, "userOwned", false)
                         });
                     }
                 }
@@ -953,6 +954,8 @@ namespace ShelteredAPI.Scenarios
                 WriteAttribute(writer, "id", value.CustomSprites[i].Id);
                 WriteAttribute(writer, "path", value.CustomSprites[i].RelativePath);
                 WriteAttribute(writer, "patchId", value.CustomSprites[i].PatchId);
+                if (value.CustomSprites[i].UserOwned)
+                    writer.WriteAttributeString("userOwned", "true");
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();

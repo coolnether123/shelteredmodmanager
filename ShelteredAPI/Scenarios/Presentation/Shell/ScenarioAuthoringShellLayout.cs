@@ -26,6 +26,9 @@ namespace ShelteredAPI.Scenarios
         // Extra breathing room between the HUD reserve and the inspector header.
         public const float InspectorHudClearance = 16f;
         public const float InspectorTopOffset = 30f;
+        public const float WorkspaceTabReserveHeight = 42f;
+        public const float FloatingWindowStartY = 46f;
+        public const float FloatingWindowCascade = 28f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
         // on the right for the HUD so labels never collide with the game UI.
@@ -88,13 +91,124 @@ namespace ShelteredAPI.Scenarios
             return new Rect(viewportLeft, trayY, trayWidth, BottomTrayHeight);
         }
 
-        public static Rect BuildWorkspaceRect(Rect contentRect)
+        public static Rect BuildWorkspaceRect(Rect contentRect, bool reserveBottomTray)
         {
-            float width = Mathf.Clamp(contentRect.width * 0.58f, 640f, 980f);
-            float height = Mathf.Clamp(contentRect.height * 0.72f, 400f, 620f);
-            float x = contentRect.x + ((contentRect.width - width) * 0.5f);
-            float y = contentRect.y + ((contentRect.height - height) * 0.5f);
+            Rect workspaceBounds = reserveBottomTray
+                ? new Rect(contentRect.x, contentRect.y, contentRect.width, Math.Max(240f, contentRect.height - BottomTrayHeight - Gutter))
+                : contentRect;
+            float maxWidth = Math.Max(320f, workspaceBounds.width - ((ToolRailWidth + Gutter + InspectorWidth + Gutter) * 0.5f));
+            float maxHeight = Math.Max(220f, workspaceBounds.height - WorkspaceTabReserveHeight - Gutter);
+            float width = Mathf.Clamp(workspaceBounds.width * 0.58f, Math.Min(640f, maxWidth), Math.Min(980f, maxWidth));
+            float height = Mathf.Clamp(workspaceBounds.height * 0.72f, Math.Min(400f, maxHeight), Math.Min(620f, maxHeight));
+            float x = workspaceBounds.x + ((workspaceBounds.width - width) * 0.5f);
+            float y = workspaceBounds.y + ((workspaceBounds.height - height) * 0.5f) + (WorkspaceTabReserveHeight * 0.5f);
+            y = Math.Max(workspaceBounds.y + WorkspaceTabReserveHeight, y);
             return new Rect(x, y, width, height);
+        }
+
+        public static Rect BuildFloatingWindowRect(
+            ScenarioAuthoringShellWindowViewModel window,
+            Rect contentRect,
+            int visibleFloatingIndex)
+        {
+            float minWidth = window != null && window.MinWidth > 0f ? window.MinWidth : 260f;
+            float minHeight = window != null && window.MinHeight > 0f ? window.MinHeight : 140f;
+            float width = window != null && window.Width > 0f ? window.Width : minWidth;
+            float height = window != null && window.Height > 0f ? window.Height : minHeight;
+
+            Rect rect;
+            if (window != null && window.HasCustomBounds)
+            {
+                rect = new Rect(window.X, window.Y, width, height);
+            }
+            else
+            {
+                rect = BuildDefaultFloatingWindowRect(window, contentRect, visibleFloatingIndex, width, height);
+            }
+
+            return ClampWindowRect(rect, contentRect, minWidth, minHeight);
+        }
+
+        private static Rect BuildDefaultFloatingWindowRect(
+            ScenarioAuthoringShellWindowViewModel window,
+            Rect contentRect,
+            int visibleFloatingIndex,
+            float width,
+            float height)
+        {
+            Rect defaultBounds = BuildDefaultWindowBounds(contentRect);
+            float x = defaultBounds.x + ((defaultBounds.width - width) * 0.5f);
+            float y = defaultBounds.y + ((defaultBounds.height - height) * 0.5f);
+            Vector2 offset = ResolveDefaultWindowOffset(window, contentRect, visibleFloatingIndex);
+            return new Rect(x + offset.x, y + offset.y, width, height);
+        }
+
+        private static Rect BuildDefaultWindowBounds(Rect contentRect)
+        {
+            float x = contentRect.x + ToolRailWidth + Gutter;
+            float y = contentRect.y + WorkspaceTabReserveHeight;
+            float width = Math.Max(320f, contentRect.xMax - x - Gutter);
+            float height = Math.Max(240f, contentRect.yMax - y - CommandDockHeight - Gutter);
+            return new Rect(x, y, width, height);
+        }
+
+        private static Vector2 ResolveDefaultWindowOffset(
+            ScenarioAuthoringShellWindowViewModel window,
+            Rect contentRect,
+            int visibleFloatingIndex)
+        {
+            if (window == null || string.IsNullOrEmpty(window.Id))
+                return CascadeOffset(visibleFloatingIndex);
+
+            float horizontal = Math.Min(280f, contentRect.width * 0.18f);
+            float vertical = Math.Min(170f, contentRect.height * 0.18f);
+
+            if (window.WorkspaceStage != ScenarioStageKind.None)
+                return Vector2.zero;
+
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(horizontal, -18f);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(0f, vertical);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Calendar, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(0f, -vertical * 0.35f);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Hierarchy, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(-horizontal, -vertical * 0.45f);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.SelectionStack, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(-horizontal, vertical * 0.55f);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(-horizontal * 0.5f, -vertical * 0.5f);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
+                return new Vector2(0f, 0f);
+
+            return CascadeOffset(visibleFloatingIndex);
+        }
+
+        private static Vector2 CascadeOffset(int visibleFloatingIndex)
+        {
+            int slot = Math.Max(0, visibleFloatingIndex % 5);
+            float offset = (slot - 2) * FloatingWindowCascade;
+            return new Vector2(offset, offset * 0.75f);
+        }
+
+        public static Rect ClampWindowRect(Rect rect, Rect bounds, float minWidth, float minHeight)
+        {
+            float safeMinWidth = Math.Max(120f, minWidth);
+            float safeMinHeight = Math.Max(80f, minHeight);
+            float maxWidth = Math.Max(safeMinWidth, bounds.width - (Margin * 2f));
+            float maxHeight = Math.Max(safeMinHeight, bounds.height - (Margin * 2f));
+            float width = Mathf.Clamp(rect.width, safeMinWidth, maxWidth);
+            float height = Mathf.Clamp(rect.height, safeMinHeight, maxHeight);
+            float minX = bounds.x + Margin;
+            float minY = bounds.y + Margin;
+            float maxX = Math.Max(minX, bounds.xMax - width - Margin);
+            float maxY = Math.Max(minY, bounds.yMax - height - Margin);
+
+            return new Rect(
+                Mathf.Clamp(rect.x, minX, maxX),
+                Mathf.Clamp(rect.y, minY, maxY),
+                width,
+                height);
         }
 
         /// <summary>

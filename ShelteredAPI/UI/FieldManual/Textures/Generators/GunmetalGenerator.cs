@@ -4,7 +4,7 @@ using ShelteredAPI.UI.FieldManual.Theme;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>
-    /// Renders a brushed-metal panel: vertical brush noise on a gunmetal base
+    /// Renders a dark Sheltered-style frame: vertical worn-board noise on a brown base
     /// with a 1px highlight on the top edge and a 1px shadow on the bottom edge.
     /// </summary>
     internal static class GunmetalGenerator
@@ -17,7 +17,7 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             var canvas = new TextureCanvas(width, height);
             canvas.Fill(palette.Gunmetal);
 
-            // Vertical brush streaks: alternating subtle dark/light columns.
+            // Vertical wear streaks: alternating subtle dark/light columns.
             var rng = new System.Random(0xBADA55);
             for (int x = 0; x < width; x += BrushStreakSpacing)
             {

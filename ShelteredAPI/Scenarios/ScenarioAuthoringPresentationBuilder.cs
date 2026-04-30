@@ -477,6 +477,7 @@ namespace ShelteredAPI.Scenarios
                     Property("Custom Editor", customEditor != null ? "Active" : "Inactive"),
                     Property("Compatibility", Safe(picker.CompatibilitySummary)),
                     Property("Stored As", Safe(picker.XmlPathHint)),
+                    Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state.ActiveScenarioFilePath))),
                     Property("Compatible Vanilla", CountCandidates(picker.VanillaCandidates).ToString()),
                     Property("Compatible Modded", CountCandidates(picker.ModdedCandidates).ToString()),
                     Text("Selecting a sprite previews it immediately on the live target. The custom editor now supports paint, eyedropper, rectangular selection, and pixel copy/paste before saving.")
@@ -507,6 +508,14 @@ namespace ShelteredAPI.Scenarios
                         false,
                         "CL",
                         "Restore the previous sprite.")),
+                    ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
+                        "Import PNG Replacement",
+                        "Import the newest same-size PNG from the scenario import folder as a user-owned full replacement.",
+                        true,
+                        false,
+                        "IM",
+                        "Copy a user-owned PNG into the scenario pack.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart,
                         customEditor != null ? "Custom Editor Active" : "Edit Custom Copy",
@@ -576,6 +585,7 @@ namespace ShelteredAPI.Scenarios
                     Property("Canvas", (customEditor != null ? customEditor.Width : 0) + "x" + (customEditor != null ? customEditor.Height : 0)),
                     Property("Zoom", (customEditor != null ? customEditor.Zoom : 8) + "x"),
                     Property("Stored As", "FamilySetup > Members > Appearance"),
+                    Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null))),
                     Text("Family member visuals use dedicated head, torso, and legs textures instead of the regular sprite-swap catalog. The live character preview updates as you paint.")
                 }
             });
@@ -603,7 +613,15 @@ namespace ShelteredAPI.Scenarios
                         true,
                         false,
                         "CL",
-                        "Restore the previous character appearance."))
+                        "Restore the previous character appearance.")),
+                    ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
+                        "Import PNG Replacement",
+                        "Import the newest same-size PNG from the scenario import folder as a user-owned full character texture replacement.",
+                        true,
+                        false,
+                        "IM",
+                        "Copy a user-owned PNG into the scenario pack."))
                 }
             });
 
@@ -883,9 +901,15 @@ namespace ShelteredAPI.Scenarios
                     WorkspaceTabVisible = definitionEntry.WorkspaceTabVisible,
                     Visible = windowState.Visible,
                     Collapsed = windowState.Collapsed,
+                    HasCustomBounds = windowState.HasCustomBounds,
+                    X = windowState.X,
+                    Y = windowState.Y,
                     Width = windowState.Width,
                     Height = windowState.Height,
-                    HeaderActions = BuildWindowHeaderActions(definitionEntry.Id, windowState, state)
+                    MinWidth = definitionEntry.MinWidth,
+                    MinHeight = definitionEntry.MinHeight,
+                    ZIndex = windowState.ZIndex,
+                    HeaderActions = BuildWindowHeaderActions(definitionEntry, windowState, state)
                 };
                 window.Sections = BuildWindowSections(definitionEntry, state, editorSession, session, definition);
                 windows.Add(window);
@@ -2659,16 +2683,16 @@ namespace ShelteredAPI.Scenarios
         }
 
         private ScenarioAuthoringInspectorAction[] BuildWindowHeaderActions(
-            string windowId,
+            ScenarioAuthoringWindowDefinition windowDefinition,
             ScenarioAuthoringWindowState windowState,
             ScenarioAuthoringState state)
         {
-            if (windowState == null)
+            if (windowDefinition == null || windowState == null)
                 return new ScenarioAuthoringInspectorAction[0];
 
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix + windowId, "_", "Collapse this panel into the Windows list.", true, false, "CL"));
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + windowId, "x", "Hide this panel.", true, false, "HD"));
+            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix + windowDefinition.Id, "_", "Collapse this panel into the Windows list.", true, false, "CL"));
+            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + windowDefinition.Id, "x", "Hide this panel.", true, false, "HD"));
             return actions.ToArray();
         }
 
@@ -3086,6 +3110,9 @@ namespace ShelteredAPI.Scenarios
         {
             if (candidate == null)
                 return null;
+
+            if (candidate.UserOwned)
+                return "USER";
 
             if (candidate.SourceKind == ScenarioSpriteCatalogService.SpriteCandidateSourceKind.ScenarioCustom)
                 return "MOD";

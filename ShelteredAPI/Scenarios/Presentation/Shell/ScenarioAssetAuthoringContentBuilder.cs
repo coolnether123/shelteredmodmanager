@@ -109,6 +109,7 @@ namespace ShelteredAPI.Scenarios
             summaryItems.Add(ScenarioAuthoringPresentationBuilder.Property("Active Swap", ScenarioAuthoringPresentationBuilder.Safe(picker.ActiveRuleSummary)));
             summaryItems.Add(ScenarioAuthoringPresentationBuilder.Property("Compatibility", ScenarioAuthoringPresentationBuilder.Safe(picker.CompatibilitySummary)));
             summaryItems.Add(ScenarioAuthoringPresentationBuilder.Property("Stored As", ScenarioAuthoringPresentationBuilder.Safe(picker.XmlPathHint)));
+            summaryItems.Add(ScenarioAuthoringPresentationBuilder.Property("PNG Import Folder", ScenarioAuthoringPresentationBuilder.Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null))));
             summaryItems.Add(ScenarioAuthoringPresentationBuilder.Property("Compatible Vanilla", CountCandidates(picker.VanillaCandidates).ToString()));
             summaryItems.Add(ScenarioAuthoringPresentationBuilder.Property("Compatible Modded", CountCandidates(picker.ModdedCandidates).ToString()));
             bool pickerOpen = state != null

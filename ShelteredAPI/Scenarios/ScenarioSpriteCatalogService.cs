@@ -24,6 +24,7 @@ namespace ShelteredAPI.Scenarios
             public string RuntimeSpriteKey;
             public string SpriteId;
             public string RelativePath;
+            public bool UserOwned;
             public Sprite Sprite;
             public string FamilyKey;
             public string FamilyLabel;
@@ -341,6 +342,7 @@ namespace ShelteredAPI.Scenarios
                     SourceKind = SpriteCandidateSourceKind.ScenarioCustom,
                     SpriteId = spriteRef.Id,
                     RelativePath = spriteRef.RelativePath,
+                    UserOwned = spriteRef.UserOwned,
                     Sprite = sprite
                 });
             }
@@ -398,6 +400,7 @@ namespace ShelteredAPI.Scenarios
                     RuntimeSpriteKey = item.RuntimeSpriteKey,
                     SpriteId = item.SpriteId,
                     RelativePath = item.RelativePath,
+                    UserOwned = item.UserOwned,
                     Sprite = item.Sprite,
                     FamilyKey = item.FamilyKey,
                     FamilyLabel = item.FamilyLabel
@@ -422,6 +425,7 @@ namespace ShelteredAPI.Scenarios
                 hash = (hash * 397) ^ SafeHash(sprite.Id);
                 hash = (hash * 397) ^ SafeHash(sprite.RelativePath);
                 hash = (hash * 397) ^ SafeHash(sprite.PatchId);
+                hash = (hash * 397) ^ (sprite.UserOwned ? 1 : 0);
             }
 
             if (definition.AssetReferences.SpritePatches != null)
@@ -552,6 +556,7 @@ namespace ShelteredAPI.Scenarios
                     ? patch.BaseSpriteId
                     : (spriteRef != null && !string.IsNullOrEmpty(spriteRef.RelativePath) ? spriteRef.RelativePath : "scenario patch"));
             return "Scenario custom sprite"
+                + (spriteRef != null && spriteRef.UserOwned ? " | User-owned asset" : string.Empty)
                 + " | Source: " + source
                 + " | Size: " + Mathf.RoundToInt(rect.width) + "x" + Mathf.RoundToInt(rect.height);
         }

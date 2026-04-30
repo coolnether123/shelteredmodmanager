@@ -4,7 +4,7 @@ using ShelteredAPI.UI.FieldManual.Theme;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>
-    /// Renders the title strip: a faded olive band with a subtle horizontal weave noise
+    /// Renders the title strip/button surface: a worn brown band with subtle horizontal weave noise
     /// and 1px dark borders top/bottom.
     /// </summary>
     internal static class OliveBandGenerator

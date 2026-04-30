@@ -63,6 +63,7 @@ namespace ShelteredAPI.UI.FieldManual.Primitives
             label.depth = depth;
             label.overflowMethod = UILabel.Overflow.ClampContent;
             label.multiLine = false;
+            go.transform.localPosition = localPosition;
             return label;
         }
 
@@ -71,13 +72,34 @@ namespace ShelteredAPI.UI.FieldManual.Primitives
             BoxCollider col = target.GetComponent<BoxCollider>();
             if (col == null) col = target.AddComponent<BoxCollider>();
             col.size = new Vector3(width, height, 1f);
-            col.center = Vector3.zero;
+            col.center = ResolveColliderCenter(target, width, height);
             if (onClick != null)
             {
                 UIEventListener listener = UIEventListener.Get(target);
                 listener.onClick = delegate(GameObject go) { onClick(); };
             }
             return col;
+        }
+
+        private static Vector3 ResolveColliderCenter(GameObject target, int width, int height)
+        {
+            UIWidget widget = target != null ? target.GetComponent<UIWidget>() : null;
+            if (widget == null) return Vector3.zero;
+
+            switch (widget.pivot)
+            {
+                case UIWidget.Pivot.TopLeft: return new Vector3(width * 0.5f, -height * 0.5f, 0f);
+                case UIWidget.Pivot.Top: return new Vector3(0f, -height * 0.5f, 0f);
+                case UIWidget.Pivot.TopRight: return new Vector3(-width * 0.5f, -height * 0.5f, 0f);
+                case UIWidget.Pivot.Left: return new Vector3(width * 0.5f, 0f, 0f);
+                case UIWidget.Pivot.Right: return new Vector3(-width * 0.5f, 0f, 0f);
+                case UIWidget.Pivot.BottomLeft: return new Vector3(width * 0.5f, height * 0.5f, 0f);
+                case UIWidget.Pivot.Bottom: return new Vector3(0f, height * 0.5f, 0f);
+                case UIWidget.Pivot.BottomRight: return new Vector3(-width * 0.5f, height * 0.5f, 0f);
+                case UIWidget.Pivot.Center:
+                default:
+                    return Vector3.zero;
+            }
         }
     }
 }

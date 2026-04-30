@@ -119,6 +119,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
         private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
         private readonly ScenarioSpritePatchAuthoringService _spritePatchAuthoringService;
+        private readonly ScenarioPngImportService _pngImportService;
         private readonly ScenarioAuthoringHistoryService _historyService;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
@@ -140,6 +141,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioCharacterAppearanceService characterAppearanceService,
             ScenarioSpriteRuntimeResolver runtimeResolver,
             ScenarioSpritePatchAuthoringService spritePatchAuthoringService,
+            ScenarioPngImportService pngImportService,
             ScenarioAuthoringHistoryService historyService,
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
@@ -149,6 +151,7 @@ namespace ShelteredAPI.Scenarios
             _characterAppearanceService = characterAppearanceService;
             _runtimeResolver = runtimeResolver;
             _spritePatchAuthoringService = spritePatchAuthoringService;
+            _pngImportService = pngImportService;
             _historyService = historyService;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
@@ -334,6 +337,12 @@ namespace ShelteredAPI.Scenarios
             {
                 handled = true;
                 return BeginCustomEdit(state, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapImportPng, StringComparison.Ordinal))
+            {
+                handled = true;
+                return ImportPngReplacement(state, out message);
             }
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, StringComparison.Ordinal))
@@ -942,6 +951,130 @@ namespace ShelteredAPI.Scenarios
                 message = "Character texture save failed: " + ex.Message;
                 return false;
             }
+        }
+
+        private bool ImportPngReplacement(ScenarioAuthoringState state, out string message)
+        {
+            if (HasCharacterEditor(state))
+                return ImportCharacterPngReplacement(state, out message);
+
+            return ImportSpritePngReplacement(state, out message);
+        }
+
+        private bool ImportSpritePngReplacement(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            ScenarioEditorSession session;
+            SpritePickerModel model;
+            if (!TryGetOpenPickerModel(state, out session, out model, out message))
+                return false;
+
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null || model.Target == null || model.Target.CurrentSprite == null)
+            {
+                message = "No active sprite target is available for PNG import.";
+                return false;
+            }
+
+            string targetDisplay = state.SpriteSwapPicker != null && state.SpriteSwapPicker.Target != null
+                ? state.SpriteSwapPicker.Target.DisplayName
+                : model.Target.TargetPath;
+            ScenarioPngImportService.ImportedSpriteAsset imported;
+            string importMessage;
+            if (!_pngImportService.TryImportLatestSpriteReplacement(
+                definition,
+                state.ActiveScenarioFilePath,
+                targetDisplay,
+                model.Target.CurrentSprite,
+                out imported,
+                out importMessage))
+            {
+                message = importMessage;
+                return false;
+            }
+
+            _historyService.RecordVisualChange(definition, "Import PNG sprite replacement for " + SafeLabel(targetDisplay));
+            ApplyCustomSpriteRule(definition, model.Target, imported.SpriteId, imported.RelativePath);
+
+            MarkAssetsDirty(session);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
+            ClosePickerState(state, false);
+            Invalidate();
+
+            message = (string.IsNullOrEmpty(importMessage) ? "Imported PNG replacement." : importMessage)
+                + " Saved as a user-owned full replacement for '" + SafeLabel(targetDisplay) + "'.";
+            MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
+            return true;
+        }
+
+        private bool ImportCharacterPngReplacement(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCharacterEditor(state) || _customEditorSession == null || _customEditorSession.Texture == null)
+            {
+                message = "Character editor is not active.";
+                return false;
+            }
+
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active authoring session is available.";
+                return false;
+            }
+
+            ScenarioCharacterTexturePart part = _customEditorSession.CharacterPart;
+            string partLabel = ScenarioCharacterAppearanceService.BuildPartLabel(part);
+            ScenarioCharacterAppearanceService.ResolvedCharacterTarget target;
+            if (!TryResolveCharacterEditorTarget(state, out target, out message))
+                return false;
+
+            string targetDisplay = target != null ? target.DisplayName : "Character";
+            ScenarioPngImportService.ImportedSpriteAsset imported;
+            string importMessage;
+            if (!_pngImportService.TryImportLatestCharacterTexture(
+                definition,
+                state.ActiveScenarioFilePath,
+                targetDisplay,
+                part,
+                _customEditorSession.Texture,
+                out imported,
+                out importMessage))
+            {
+                message = importMessage;
+                return false;
+            }
+
+            _historyService.RecordVisualChange(
+                definition,
+                "Import PNG character " + partLabel.ToLowerInvariant()
+                + " texture for " + SafeLabel(targetDisplay));
+
+            FamilyMemberConfig memberConfig = EnsureFamilyMemberConfig(definition, target);
+            ScenarioCharacterAppearanceService.UpsertAppearance(
+                memberConfig,
+                part,
+                imported.SpriteId,
+                imported.RelativePath);
+
+            string applyMessage;
+            _characterAppearanceService.ApplyConfiguredAppearance(
+                definition,
+                state.ActiveScenarioFilePath,
+                memberConfig,
+                target.FamilyMember,
+                out applyMessage);
+
+            MarkFamilyDirty(session);
+            ClosePickerState(state, false);
+            Invalidate();
+
+            message = (string.IsNullOrEmpty(importMessage) ? "Imported PNG replacement." : importMessage)
+                + " Saved as a user-owned full " + partLabel.ToLowerInvariant()
+                + " replacement for '" + SafeLabel(targetDisplay) + "'.";
+            MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
+            return true;
         }
 
         private bool AdjustEditorZoom(ScenarioAuthoringState state, int delta, out string message)
@@ -1951,6 +2084,7 @@ namespace ShelteredAPI.Scenarios
                     RuntimeSpriteKey = item.RuntimeSpriteKey,
                     SpriteId = item.SpriteId,
                     RelativePath = item.RelativePath,
+                    UserOwned = item.UserOwned,
                     Sprite = item.Sprite
                 });
             }

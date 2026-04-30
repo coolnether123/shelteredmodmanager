@@ -106,7 +106,6 @@
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
-    <Compile Include="Harmony\SettingsInputModePromptPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />
     <Compile Include="Interactions\ObjectButtonInjector.cs" />
     <Compile Include="Persistence\ModPersistence.cs" />
@@ -211,6 +210,7 @@
     <Compile Include="Scenarios\Application\Authoring\PlacementGhostSessionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\PlacementPaletteService.cs" />
     <Compile Include="Scenarios\Application\Authoring\RoomVisualPaletteService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPngImportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
@@ -415,7 +415,6 @@
     <Compile Include="UI\UITakeover.cs" />
     <Compile Include="UI\UIPanelTakeover.cs" />
     <Compile Include="UI\ShelteredUI.cs" />
-    <Compile Include="UI\ShelteredControllerModePromptDialog.cs" />
     <Compile Include="UI\ShelteredKeybindConflictDialog.cs" />
     <Compile Include="Input\ShelteredKeybindsProvider.cs" />
     <Compile Include="UI\ShelteredKeybindsUI.cs" />
@@ -436,6 +435,7 @@
     <Compile Include="UI\FieldManual\Textures\Generators\VignetteGenerator.cs" />
     <Compile Include="UI\FieldManual\Primitives\UIPrimitiveFactory.cs" />
     <Compile Include="UI\FieldManual\Primitives\HoverReveal.cs" />
+    <Compile Include="UI\FieldManual\Diagnostics\FieldManualLayoutDiagnostics.cs" />
     <Compile Include="UI\FieldManual\Frame\IPanelFrame.cs" />
     <Compile Include="UI\FieldManual\Frame\PanelFrameRegions.cs" />
     <Compile Include="UI\FieldManual\Frame\FieldManualFrame.cs" />

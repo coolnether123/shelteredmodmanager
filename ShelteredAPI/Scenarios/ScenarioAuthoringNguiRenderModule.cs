@@ -358,7 +358,7 @@ namespace ShelteredAPI.Scenarios
                 }
                 else
                 {
-                    Rect workspace = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect);
+                    Rect workspace = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, false);
                     float width = Mathf.Min(window.Width > 0f ? window.Width : 720f, Math.Max(520f, viewportRight - viewportLeft));
                     float height = Mathf.Min(window.Height > 0f ? window.Height : 420f, Math.Max(260f, contentRect.height - 120f));
                     float x = workspace.x + ((workspace.width - width) * 0.5f) + ((i % 3) * 18f);

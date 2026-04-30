@@ -34,6 +34,7 @@ namespace ShelteredAPI.Scenarios
 
     internal sealed class ScenarioValidator
     {
+        private const double DerivativePatchWarningThreshold = 0.80d;
         private readonly IScenarioDependencyResolver _dependencyResolver;
         private readonly ScenarioValidationPipeline _pipeline;
 
@@ -483,7 +484,81 @@ namespace ShelteredAPI.Scenarios
                             result.AddError("Sprite patch '" + (patch.Id ?? ("#" + i)) + "' has an invalid delta run #" + runIndex + ".");
                     }
                 }
+
+                AddDerivativePatchWarning(patch, result);
             }
+        }
+
+        private static void AddDerivativePatchWarning(SpritePatchDefinition patch, ScenarioValidationResult result)
+        {
+            if (patch == null || result == null || patch.Width <= 0 || patch.Height <= 0)
+                return;
+
+            int totalPixels;
+            try
+            {
+                totalPixels = checked(patch.Width * patch.Height);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (totalPixels <= 0)
+                return;
+
+            int changedPixels = CountChangedPatchPixels(patch, totalPixels);
+            if (changedPixels <= 0)
+                return;
+
+            double ratio = (double)changedPixels / (double)totalPixels;
+            if (ratio < DerivativePatchWarningThreshold)
+                return;
+
+            int percent = (int)Math.Round(ratio * 100d);
+            result.AddWarning("This patch changes " + percent.ToString(CultureInfo.InvariantCulture)
+                + "% of the base sprite and may function as a derivative asset. Patch: '"
+                + (patch.Id ?? "<unknown>") + "'.");
+        }
+
+        private static int CountChangedPatchPixels(SpritePatchDefinition patch, int totalPixels)
+        {
+            bool[] changed = new bool[totalPixels];
+            int count = 0;
+            for (int operationIndex = 0; patch.Operations != null && operationIndex < patch.Operations.Count; operationIndex++)
+            {
+                SpritePatchOperation operation = patch.Operations[operationIndex];
+                if (operation == null)
+                    continue;
+
+                if (operation.Kind == SpritePatchOperationKind.Clear)
+                    return totalPixels;
+
+                if (operation.Kind != SpritePatchOperationKind.Pixels)
+                    continue;
+
+                for (int runIndex = 0; operation.Runs != null && runIndex < operation.Runs.Count; runIndex++)
+                {
+                    SpritePatchDeltaRun run = operation.Runs[runIndex];
+                    if (run == null || !run.IsValid() || run.Y < 0 || run.Y >= patch.Height)
+                        continue;
+
+                    int start = Math.Max(0, run.X);
+                    long rawEnd = (long)run.X + (long)run.Length;
+                    int end = rawEnd > patch.Width ? patch.Width : (int)rawEnd;
+                    for (int x = start; x < end; x++)
+                    {
+                        int index = x + (run.Y * patch.Width);
+                        if (index < 0 || index >= changed.Length || changed[index])
+                            continue;
+
+                        changed[index] = true;
+                        count++;
+                    }
+                }
+            }
+
+            return count;
         }
 
         private static void ValidateSceneSpritePlacements(AssetReferencesDefinition assets, string packRoot, ScenarioValidationResult result)

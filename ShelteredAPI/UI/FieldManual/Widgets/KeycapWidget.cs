@@ -49,6 +49,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
                 Vector3.zero, 14, palette.KeycapInk,
                 Mathf.Max(40, width - 12), Mathf.Max(20, height - 6),
                 NGUIText.Alignment.Center, UIWidget.Pivot.Center, labelDepth);
+            label.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             ui.AddClickCollider(host, width, height, onClick);
 
