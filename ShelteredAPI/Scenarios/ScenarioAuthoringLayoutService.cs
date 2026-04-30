@@ -69,12 +69,20 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
             {
-                ScenarioStageKind workspaceStage = definition.WorkspaceStage;
-                if (workspaceStage == ScenarioStageKind.None)
-                    return false;
+                if (!window.Visible || window.Collapsed)
+                {
+                    _stageCoordinator.SelectStage(state, definition.WorkspaceStage);
+                    ApplyStageWorkspace(state);
+                    window.Visible = true;
+                    window.Collapsed = false;
+                    BringWindowToFront(state, window.Id);
+                }
+                else
+                {
+                    window.Visible = false;
+                    window.Collapsed = false;
+                }
 
-                _stageCoordinator.SelectStage(state, workspaceStage);
-                ApplyStageWorkspace(state);
                 state.MinimalMode = false;
                 state.FocusSelectionMode = false;
                 PersistIfEnabled(state);
@@ -109,15 +117,25 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
             {
-                if (!open)
-                    return false;
+                bool changed = window.Visible != open || (open && window.Collapsed);
+                if (open)
+                {
+                    _stageCoordinator.SelectStage(state, definition.WorkspaceStage);
+                    ApplyStageWorkspace(state);
+                    window.Visible = true;
+                    window.Collapsed = false;
+                    BringWindowToFront(state, window.Id);
+                }
+                else
+                {
+                    window.Visible = false;
+                    window.Collapsed = false;
+                }
 
-                _stageCoordinator.SelectStage(state, definition.WorkspaceStage);
-                ApplyStageWorkspace(state);
                 state.MinimalMode = false;
                 state.FocusSelectionMode = false;
                 PersistIfEnabled(state);
-                return true;
+                return changed;
             }
 
             bool changed = window.Visible != open || (open && window.Collapsed);
