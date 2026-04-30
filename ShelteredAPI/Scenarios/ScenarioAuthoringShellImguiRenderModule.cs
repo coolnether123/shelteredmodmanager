@@ -439,6 +439,8 @@ namespace ShelteredAPI.Scenarios
         {
             int chromeCount = CountChromeActions(window != null ? window.HeaderActions : null);
             float reservedRight = 18f + (chromeCount * 24f);
+            if (window != null && string.Equals(window.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
+                reservedRight += 176f;
             float width = Math.Max(40f, rect.width - reservedRight - 16f);
             return new Rect(rect.x + 8f, rect.y + 4f, width, 30f);
         }
@@ -1787,15 +1789,24 @@ namespace ShelteredAPI.Scenarios
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 30f);
             GUI.Box(headerRect, GUIContent.none, _headerStyle);
-            GUI.Label(new Rect(headerRect.x + 8f, headerRect.y + 4f, headerRect.width - 120f, 22f), settings.Title ?? "Editor Settings", _sectionTitleStyle);
 
-            float actionX = headerRect.xMax - 90f;
-            for (int i = 0; settings.HeaderActions != null && i < settings.HeaderActions.Length; i++)
+            ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window != null ? window.HeaderActions : null, true);
+            float actionX = headerRect.xMax - 28f;
+            for (int i = chromeActions.Length - 1; i >= 0; i--)
             {
-                Rect actionRect = new Rect(actionX, headerRect.y + 3f, 82f, 22f);
+                Rect actionRect = new Rect(actionX, headerRect.y + 3f, 22f, 22f);
+                DrawButton(actionRect, chromeActions[i], false);
+                actionX -= 24f;
+            }
+
+            for (int i = settings.HeaderActions != null ? settings.HeaderActions.Length - 1 : -1; i >= 0; i--)
+            {
+                Rect actionRect = new Rect(actionX - 82f, headerRect.y + 3f, 82f, 22f);
                 DrawButton(actionRect, settings.HeaderActions[i], false);
                 actionX -= 86f;
             }
+
+            GUI.Label(new Rect(headerRect.x + 8f, headerRect.y + 4f, Math.Max(80f, actionX - headerRect.x - 10f), 22f), settings.Title ?? "Editor Settings", _sectionTitleStyle);
 
             Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 16f);
             GUILayout.BeginArea(bodyRect);
