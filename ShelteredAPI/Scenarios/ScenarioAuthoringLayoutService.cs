@@ -269,8 +269,7 @@ namespace ShelteredAPI.Scenarios
                 || activeStage == ScenarioStageKind.BunkerSurface
                 || activeStage == ScenarioStageKind.BunkerInside;
             bool showBuild = bunkerStage
-                && (state.ActiveTool == ScenarioAuthoringTool.Assets
-                    || (state.SpriteSwapPicker != null && state.SpriteSwapPicker.IsOpen));
+                && state.ActiveTool == ScenarioAuthoringTool.Assets;
 
             for (int i = 0; i < state.WindowStates.Count; i++)
             {

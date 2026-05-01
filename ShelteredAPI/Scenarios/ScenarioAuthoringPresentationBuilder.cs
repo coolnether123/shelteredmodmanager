@@ -27,6 +27,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioTargetClassifier _targetClassifier;
         private readonly ScenarioAssetAuthoringContentBuilder _assetAuthoringContentBuilder;
         private readonly ScenarioMapAuthoringContentBuilder _mapAuthoringContentBuilder;
+        private readonly ScenarioQuestAuthoringContentBuilder _questAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
 
         public ScenarioAuthoringPresentationBuilder(
@@ -47,7 +48,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioTargetClassifier targetClassifier,
             ScenarioAssetAuthoringContentBuilder assetAuthoringContentBuilder,
-            ScenarioMapAuthoringContentBuilder mapAuthoringContentBuilder)
+            ScenarioMapAuthoringContentBuilder mapAuthoringContentBuilder,
+            ScenarioQuestAuthoringContentBuilder questAuthoringContentBuilder)
         {
             _captureService = captureService;
             _sectionHub = sectionHub;
@@ -67,6 +69,7 @@ namespace ShelteredAPI.Scenarios
             _targetClassifier = targetClassifier;
             _assetAuthoringContentBuilder = assetAuthoringContentBuilder;
             _mapAuthoringContentBuilder = mapAuthoringContentBuilder;
+            _questAuthoringContentBuilder = questAuthoringContentBuilder;
             _windowSectionBuilders = CreateWindowSectionBuilders();
         }
 
@@ -97,7 +100,6 @@ namespace ShelteredAPI.Scenarios
             _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);
             return viewModel;
         }
-
 
         public ScenarioAuthoringInspectorDocument BuildShellDocument(ScenarioAuthoringContext context)
         {
@@ -203,6 +205,12 @@ namespace ShelteredAPI.Scenarios
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(BuildObjectSummarySection(target, classification, objectPlacement, hasCapturedPlacement));
             sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
+            if (replacementAllowed)
+            {
+                List<ScenarioAuthoringInspectorSection> assetEditorSections = _assetAuthoringContentBuilder.BuildSelectedAssetEditorSections(state, editorSession, target);
+                for (int i = 0; i < assetEditorSections.Count; i++)
+                    sections.Add(assetEditorSections[i]);
+            }
             sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
             sections.Add(BuildWarningsSection(scopeAllowed, target, objectPlacement, definition, captureReason));
 
@@ -296,18 +304,18 @@ namespace ShelteredAPI.Scenarios
                 "RM")));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionToolAssets,
-                "Open Asset Picker",
-                "Open the focused visual replacement and placement tray.",
-                replacementAllowed,
+                "Place Asset",
+                "Open the asset placement browser for snapped scene sprites.",
+                scopeAllowed,
                 false,
-                "AS")));
+                "PL")));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
-                "Replace Visual",
-                "Open the sprite picker for this visual target.",
+                "Edit Asset",
+                "Open the asset editor for this visual target.",
                 replacementAllowed,
                 false,
-                "RV")));
+                "ED")));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionSelectionClear,
                 "Clear Selection",
@@ -394,7 +402,7 @@ namespace ShelteredAPI.Scenarios
                 sections.Add(new ScenarioAuthoringInspectorSection
                 {
                     Id = "sprite_picker_empty",
-                    Title = "Sprite Picker",
+                    Title = "Asset Editor",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                     Items = new[]
@@ -403,7 +411,7 @@ namespace ShelteredAPI.Scenarios
                         ActionItem(Action(
                             ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
                             "Cancel",
-                            "Close the sprite picker and restore the current sprite.",
+                            "Close the asset editor and restore the current sprite.",
                             true,
                             false))
                     }
@@ -411,7 +419,7 @@ namespace ShelteredAPI.Scenarios
 
                 return new ScenarioAuthoringInspectorDocument
                 {
-                    Title = "Sprite Picker",
+                    Title = "Asset Editor",
                     Subtitle = FormatTarget(state.SpriteSwapPicker.Target),
                     HeaderActions = new ScenarioAuthoringInspectorAction[0],
                     Sections = sections.ToArray()
@@ -429,7 +437,7 @@ namespace ShelteredAPI.Scenarios
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "sprite_picker_summary",
-                Title = "Target",
+                Title = "Selected Asset",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = new[]
@@ -451,7 +459,7 @@ namespace ShelteredAPI.Scenarios
                     Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state.ActiveScenarioFilePath))),
                     Property("Compatible Vanilla", CountCandidates(picker.VanillaCandidates).ToString()),
                     Property("Compatible Modded", CountCandidates(picker.ModdedCandidates).ToString()),
-                    Text("Selecting a sprite previews it immediately on the live target. The custom editor now supports paint, eyedropper, rectangular selection, and pixel copy/paste before saving.")
+                    Text("Selecting an asset previews it immediately on the live target. The custom editor supports paint, eyedropper, rectangular selection, and pixel copy/paste before saving.")
                 }
             });
 
@@ -466,7 +474,7 @@ namespace ShelteredAPI.Scenarios
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave,
                         "Save & Close",
-                        "Persist the previewed sprite swap and close the picker.",
+                        "Persist the previewed sprite swap and close the asset editor.",
                         true,
                         false,
                         "SV",
@@ -490,7 +498,7 @@ namespace ShelteredAPI.Scenarios
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart,
                         customEditor != null ? "Custom Editor Active" : "Edit Custom Copy",
-                        "Duplicate the current preview into the in-picker pixel editor so you can recolor, sample, select, copy, and paste pixels before saving a scenario custom sprite.",
+                        "Duplicate the current preview into the asset editor's pixel tools so you can recolor, sample, select, copy, and paste pixels before saving a scenario custom sprite.",
                         true,
                         customEditor != null,
                         "PX",
@@ -508,14 +516,14 @@ namespace ShelteredAPI.Scenarios
 
             sections.Add(BuildSpriteCandidateSection(
                 "sprite_picker_vanilla",
-                "Vanilla Sprites",
+                "Vanilla Replacement Assets",
                 _selectionScopeService.FilterCandidatesForScope(picker.VanillaCandidates, state),
                 "No verified vanilla/runtime sprites are currently available for this target family.",
                 savedToken,
                 previewToken));
             sections.Add(BuildSpriteCandidateSection(
                 "sprite_picker_modded",
-                "Modded Sprites",
+                "Scenario Replacement Assets",
                 _selectionScopeService.FilterCandidatesForScope(picker.ModdedCandidates, state),
                 "Custom sprite overrides are hidden in strict replacement mode.",
                 savedToken,
@@ -523,7 +531,7 @@ namespace ShelteredAPI.Scenarios
 
             return new ScenarioAuthoringInspectorDocument
             {
-                Title = "Sprite Picker",
+                Title = "Asset Editor",
                 Subtitle = FormatTarget(state.SpriteSwapPicker.Target),
                 HeaderActions = new ScenarioAuthoringInspectorAction[0],
                 Sections = sections.ToArray()
@@ -919,7 +927,7 @@ namespace ShelteredAPI.Scenarios
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Triggers, delegate(ScenarioAuthoringWindowContentContext context) { return BuildTriggerWindowSections(context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Quests, delegate(ScenarioAuthoringWindowContentContext context) { return BuildQuestWindowSections(context.Definition); });
+            builders[ScenarioAuthoringWindowContentKind.Quests] = _questAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Map] = _mapAuthoringContentBuilder;
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Publish, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPublishWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Calendar, delegate(ScenarioAuthoringWindowContentContext context) { return BuildCalendarWindowSections(context.State, context.Definition); });
@@ -1665,7 +1673,7 @@ namespace ShelteredAPI.Scenarios
                     null));
 
                 ScenarioAuthoringTarget target = state.SelectedTarget ?? state.HoveredTarget;
-                List<ScenarioAuthoringInspectorSection> assetSections = _assetAuthoringContentBuilder.BuildAssetSections(state, editorSession, target);
+                List<ScenarioAuthoringInspectorSection> assetSections = _assetAuthoringContentBuilder.BuildAssetPlacementSections(state, editorSession, target);
                 for (int i = 0; i < assetSections.Count; i++)
                     sections.Add(assetSections[i]);
 
@@ -2073,25 +2081,34 @@ namespace ShelteredAPI.Scenarios
             liveItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureInventory, "Capture Current Stockpile", "Snapshot every current shelter item stack into the starting stockpile.", true, true, "IV")));
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            if (definition != null && definition.StartingInventory != null)
+            StartingInventoryDefinition inventory = definition != null ? definition.StartingInventory : null;
+            bool overrideRandomStart = inventory != null && inventory.OverrideRandomStart;
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingAdd, "Add Starting Item", "Add an editable item stack to the starting stockpile.", true, true, "A+")));
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionInventoryStartingOverrideToggle,
+                "Override Random Start",
+                "Toggle whether this scenario replaces the game's random starting item roll.",
+                true,
+                overrideRandomStart,
+                "OR",
+                overrideRandomStart ? "Random starting items disabled" : "Random starting items still allowed")));
+
+            if (inventory != null)
             {
-                for (int i = 0; i < definition.StartingInventory.Items.Count; i++)
-                {
-                    ItemEntry entry = definition.StartingInventory.Items[i];
-                    items.Add(Property(Safe(entry != null ? entry.ItemId : "Item"), entry != null ? entry.Quantity.ToString() : "0"));
-                }
+                for (int i = 0; i < inventory.Items.Count; i++)
+                    AddStartingInventoryItems(items, inventory.Items[i], i);
             }
 
-            if (items.Count == 0)
-                items.Add(Text("No starting stockpile has been captured into this draft."));
+            if (items.Count == 2)
+                items.Add(Text("No starting stockpile has been captured or authored into this draft."));
 
             List<ScenarioAuthoringInspectorItem> scheduledItems = new List<ScenarioAuthoringInspectorItem>();
             scheduledItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, "Schedule Add", "Add an item stack at a specific day and hour.", true, true, "A+")));
             scheduledItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, "Schedule Remove", "Remove an item stack at a specific day and hour.", true, false, "R-")));
-            if (definition != null && definition.StartingInventory != null)
+            if (inventory != null)
             {
-                for (int i = 0; i < definition.StartingInventory.ScheduledChanges.Count; i++)
-                    AddInventoryChangeItems(scheduledItems, definition.StartingInventory.ScheduledChanges[i], i);
+                for (int i = 0; i < inventory.ScheduledChanges.Count; i++)
+                    AddInventoryChangeItems(scheduledItems, inventory.ScheduledChanges[i], i);
             }
             if (scheduledItems.Count == 2)
                 scheduledItems.Add(Text("No timed stockpile changes have been authored yet."));
@@ -2125,40 +2142,6 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static ScenarioAuthoringInspectorSection[] BuildQuestWindowSections(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> liveItems = BuildLiveQuestItems();
-            List<ScenarioAuthoringInspectorItem> authoredItems = new List<ScenarioAuthoringInspectorItem>();
-            authoredItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionQuestCaptureActive, "Capture Active Quests", "Persist every current active QuestManager quest into this draft.", true, true, "QC")));
-            authoredItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionQuestScheduleAdd, "Add Scheduled Quest", "Create a quest entry that starts on a specific day and hour.", true, true, "QS")));
-            if (definition != null && definition.Quests != null)
-            {
-                for (int i = 0; i < definition.Quests.Quests.Count; i++)
-                    AddQuestItems(authoredItems, definition.Quests.Quests[i], i);
-            }
-            if (authoredItems.Count == 2)
-                authoredItems.Add(Text("No authored quest entries are in this draft yet."));
-
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "live_quests",
-                    Title = "Current Active Quests",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = liveItems.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "authored_quests",
-                    Title = "Authored Quest Schedule",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = authoredItems.ToArray()
-                }
-            };
-        }
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveSurvivorItems()
         {
@@ -2192,35 +2175,20 @@ namespace ShelteredAPI.Scenarios
                 if (stack == null || stack.m_type == ItemManager.ItemType.Undefined || stack.m_count <= 0)
                     continue;
 
-                items.Add(Property(stack.m_type.ToString(), stack.m_count.ToString()));
+                ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(stack.m_type);
+                items.Add(Property(
+                    "Current shelter item",
+                    catalogEntry.DisplayName,
+                    catalogEntry.Detail,
+                    "x" + stack.m_count.ToString(CultureInfo.InvariantCulture),
+                    null,
+                    catalogEntry.PreviewSprite));
                 total += stack.m_count;
             }
 
-            items.Insert(0, Property("Total Items", total.ToString()));
+            items.Insert(0, Property("Total Items", total.ToString(CultureInfo.InvariantCulture)));
             if (items.Count == 1)
                 items.Add(Text("No current shelter inventory items are available from InventoryManager."));
-            return items;
-        }
-
-        private static List<ScenarioAuthoringInspectorItem> BuildLiveQuestItems()
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            QuestManager manager = QuestManager.instance;
-            List<QuestInstance> quests = manager != null ? manager.GetCurrentQuests(true, true, true) : null;
-            for (int i = 0; quests != null && i < quests.Count; i++)
-            {
-                QuestInstance quest = quests[i];
-                if (quest == null || quest.definition == null)
-                    continue;
-
-                string state = quest.state.ToString();
-                if (quest.definition.IsScenario() && quest.stage != null)
-                    state += " / " + quest.stage.id;
-                items.Add(Property(Safe(quest.definition.id), state));
-            }
-
-            if (items.Count == 0)
-                items.Add(Text("No current quest or scenario instances are active in QuestManager."));
             return items;
         }
 
@@ -2295,9 +2263,47 @@ namespace ShelteredAPI.Scenarios
             if (items == null || change == null)
                 return;
 
-            items.Add(Property(change.Kind.ToString() + " " + Safe(change.ItemId), "x" + change.Quantity + " - " + FormatSchedule(change.When)));
+            ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(change.ItemId);
+            items.Add(Property(
+                change.Kind.ToString() + " timed change",
+                catalogEntry.DisplayName,
+                catalogEntry.Detail + " | " + FormatSchedule(change.When),
+                change.Kind + " x" + change.Quantity.ToString(CultureInfo.InvariantCulture),
+                null,
+                catalogEntry.PreviewSprite,
+                change.Kind == ScenarioInventoryChangeKind.Add));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this timed change to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this timed change to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleKindPrefix + index.ToString(CultureInfo.InvariantCulture), "Toggle Add/Remove", "Switch this timed change between adding and removing items.", true, change.Kind == ScenarioInventoryChangeKind.Add, "AR", change.Kind.ToString())));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this timed change quantity by one.", true, false, "+", change.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this timed change quantity by one.", true, false, "-", change.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".10", "Quantity +10", "Increase this timed change quantity by ten.", true, false, "+10", change.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-10", "Quantity -10", "Decrease this timed change quantity by ten.", true, false, "-10", change.Quantity.ToString(CultureInfo.InvariantCulture))));
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, index);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix + index.ToString(), "Remove Timed Item Change", "Remove this timed stockpile change.", true, false, "RM")));
+        }
+
+        private static void AddStartingInventoryItems(List<ScenarioAuthoringInspectorItem> items, ItemEntry entry, int index)
+        {
+            if (items == null || entry == null)
+                return;
+
+            ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(entry.ItemId);
+            items.Add(Property(
+                "Starting item",
+                catalogEntry.DisplayName,
+                catalogEntry.Detail,
+                "x" + entry.Quantity.ToString(CultureInfo.InvariantCulture),
+                null,
+                catalogEntry.PreviewSprite,
+                true));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this starting stack to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this starting stack to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this starting stack by one.", true, false, "+", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this starting stack by one.", true, false, "-", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".10", "Quantity +10", "Increase this starting stack by ten.", true, false, "+10", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-10", "Quantity -10", "Decrease this starting stack by ten.", true, false, "-10", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix + index.ToString(CultureInfo.InvariantCulture), "Remove Starting Item", "Remove this stack from the starting stockpile.", true, false, "RM")));
         }
 
         private static void AddWeatherEventItems(List<ScenarioAuthoringInspectorItem> items, WeatherEventDefinition weather, int index)
@@ -2344,24 +2350,29 @@ namespace ShelteredAPI.Scenarios
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectDeletePrefix + prefix, "Remove Effect", "Remove this scheduled action effect.", true, false, "RM")));
         }
 
-        private static void AddQuestItems(List<ScenarioAuthoringInspectorItem> items, QuestDefinition quest, int index)
-        {
-            if (items == null || quest == null)
-                return;
-
-            string title = !string.IsNullOrEmpty(quest.Title) ? quest.Title : quest.Id;
-            string trigger = !string.IsNullOrEmpty(quest.StartTriggerId) ? "trigger " + quest.StartTriggerId : FormatSchedule(quest.ScheduledStart);
-            items.Add(Property(Safe(title), trigger));
-            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix, ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix, index);
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix + index.ToString(), "Remove Quest", "Remove this authored quest entry.", true, false, "RM")));
-        }
-
         private static void AddScheduleActions(List<ScenarioAuthoringInspectorItem> items, string dayPrefix, string hourPrefix, int index)
         {
             items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".1", "Day +", "Move this scheduled entry one day later.", true, false, "D+")));
             items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".-1", "Day -", "Move this scheduled entry one day earlier.", true, false, "D-")));
             items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".1", "Hour +", "Move this scheduled entry one hour later.", true, false, "H+")));
             items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".-1", "Hour -", "Move this scheduled entry one hour earlier.", true, false, "H-")));
+        }
+
+        private static int CompareSchedule(ScenarioScheduleTime left, ScenarioScheduleTime right)
+        {
+            if (left == null && right == null)
+                return 0;
+            if (left == null)
+                return 1;
+            if (right == null)
+                return -1;
+            int byDay = left.Day.CompareTo(right.Day);
+            if (byDay != 0)
+                return byDay;
+            int byHour = left.Hour.CompareTo(right.Hour);
+            if (byHour != 0)
+                return byHour;
+            return left.Minute.CompareTo(right.Minute);
         }
 
         private static string BuildFamilyMemberSummary(FamilyMemberConfig member)
@@ -3467,10 +3478,9 @@ namespace ShelteredAPI.Scenarios
                     items.Add(Property("Custom Sprite XML", "AssetReferences > CustomSprites > Sprite"));
                     items.Add(Property("Swap XML", "AssetReferences > SpriteSwaps > Swap"));
                     items.Add(Property("Placement XML", "AssetReferences > SceneSpritePlacements > Placement"));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionAssetModeReplace, "Replace Existing", "Open the sprite picker for the selected visual target and save the change explicitly.", true, state.AssetMode == ScenarioAssetAuthoringMode.ReplaceExisting, "RE", "Strict family-based replacement.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionAssetModePlace, "Place New Snapped", "Selecting a sprite creates or updates a snapped authored scene sprite.", true, state.AssetMode == ScenarioAssetAuthoringMode.PlaceNew, "PL", "Snapped decorative placement.")));
+                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen, "Edit Selected Asset", "Open the selected target in the dedicated asset editor.", selectedTarget != null && selectedTarget.SupportsReplace, false, "ED", "Change the selected asset in its own editor window.")));
                     items.Add(Text("Asset authoring now fails closed: verified in-game runtime art only, no silent size-based fallback."));
-                    items.Add(Text("Use Replace Existing to launch the sprite picker, preview compatible swaps, and explicitly save or cancel them. Use Place New Snapped for visual-only scene dressing that stores Placement entries in the scenario XML."));
+                    items.Add(Text("Use the Inspector to edit an existing selected asset. Use this browser only for snapped visual-only scene dressing that stores Placement entries in the scenario XML."));
                     items.Add(Text("These labels mirror the serializer and Custom Scenarios guide so authored changes match how other scenario packs are structured."));
                     break;
 

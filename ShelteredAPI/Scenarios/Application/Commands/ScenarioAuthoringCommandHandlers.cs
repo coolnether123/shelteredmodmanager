@@ -997,36 +997,6 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    internal sealed class AssetModeCommandHandler : IScenarioCommandHandler
-    {
-        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
-        {
-            handled = actionId != null && actionId.StartsWith("asset.mode.", StringComparison.Ordinal);
-            message = null;
-            if (!handled)
-                return false;
-
-            switch (actionId)
-            {
-                case ScenarioAuthoringActionIds.ActionAssetModeReplace:
-                    if (state.AssetMode == ScenarioAssetAuthoringMode.ReplaceExisting)
-                        return false;
-                    state.AssetMode = ScenarioAssetAuthoringMode.ReplaceExisting;
-                    message = "Asset workflow set to replace existing visuals.";
-                    return true;
-                case ScenarioAuthoringActionIds.ActionAssetModePlace:
-                    if (state.AssetMode == ScenarioAssetAuthoringMode.PlaceNew)
-                        return false;
-                    state.AssetMode = ScenarioAssetAuthoringMode.PlaceNew;
-                    message = "Asset workflow set to place new snapped sprites.";
-                    return true;
-                default:
-                    handled = false;
-                    return false;
-            }
-        }
-    }
-
     internal sealed class ToolCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioAuthoringLayoutService _layoutService;
@@ -1054,7 +1024,12 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringActionIds.ActionToolShelter:
                     return SetTool(state, ScenarioAuthoringTool.Shelter, out message, "Structure placement tool active.");
                 case ScenarioAuthoringActionIds.ActionToolAssets:
-                    return SetTool(state, ScenarioAuthoringTool.Assets, out message, "Asset workflow active.");
+                    bool modeChanged = state.AssetMode != ScenarioAssetAuthoringMode.PlaceNew;
+                    state.AssetMode = ScenarioAssetAuthoringMode.PlaceNew;
+                    bool toolChanged = SetTool(state, ScenarioAuthoringTool.Assets, out message, "Asset placement browser active.");
+                    if (!toolChanged && modeChanged)
+                        message = "Asset placement browser active.";
+                    return toolChanged || modeChanged;
                 case ScenarioAuthoringActionIds.ActionToolObjects:
                     return SetTool(state, ScenarioAuthoringTool.Objects, out message, "Shelter object placement tool active.");
                 case ScenarioAuthoringActionIds.ActionToolWiring:

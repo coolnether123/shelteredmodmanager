@@ -69,7 +69,6 @@ namespace ShelteredAPI.Scenarios
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new SelectionCommandHandler(),
-                new AssetModeCommandHandler(),
                 new ToolCommandHandler(layoutService)
             };
         }

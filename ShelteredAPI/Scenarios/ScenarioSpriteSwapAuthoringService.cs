@@ -254,18 +254,10 @@ namespace ShelteredAPI.Scenarios
             if (!IsPickerOpen(state))
                 return false;
 
-            if (state.ActiveTool != ScenarioAuthoringTool.Assets
-                || state.AssetMode != ScenarioAssetAuthoringMode.ReplaceExisting)
-            {
-                ClosePickerState(state, true);
-                message = "Sprite picker closed because the asset workflow changed.";
-                return true;
-            }
-
             if (state.SelectedTarget == null || !AreSameTarget(state.SelectedTarget, state.SpriteSwapPicker.Target))
             {
                 ClosePickerState(state, true);
-                message = "Sprite picker closed because the selected target changed.";
+                message = "Asset editor closed because the selected target changed.";
                 return true;
             }
 
@@ -630,7 +622,7 @@ namespace ShelteredAPI.Scenarios
 
             if (state.SelectedTarget == null)
             {
-                message = "Select a visual target before opening the sprite picker.";
+                message = "Select a visual target before opening the asset editor.";
                 return false;
             }
 
@@ -638,6 +630,7 @@ namespace ShelteredAPI.Scenarios
             if (_characterAppearanceService.TryResolve(state.SelectedTarget, out characterTarget, out message))
             {
                 ClosePickerState(state, true);
+                state.AssetMode = ScenarioAssetAuthoringMode.ReplaceExisting;
                 state.SpriteSwapPicker = new ScenarioSpriteSwapPickerState
                 {
                     IsOpen = true,
@@ -656,6 +649,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             ClosePickerState(state, true);
+            state.AssetMode = ScenarioAssetAuthoringMode.ReplaceExisting;
             state.SpriteSwapPicker = new ScenarioSpriteSwapPickerState
             {
                 IsOpen = true,
@@ -667,7 +661,7 @@ namespace ShelteredAPI.Scenarios
                 PreviewCandidateLabel = model.ActiveCandidateLabel
             };
 
-            message = "Sprite picker opened for '" + SafeLabel(state.SelectedTarget.DisplayName) + "'.";
+            message = "Asset editor opened for '" + SafeLabel(state.SelectedTarget.DisplayName) + "'.";
             return true;
         }
 
@@ -1475,7 +1469,7 @@ namespace ShelteredAPI.Scenarios
             if (string.IsNullOrEmpty(previewToken) || string.Equals(previewToken, savedToken, StringComparison.Ordinal))
             {
                 ClosePickerState(state, false);
-                message = "Closed the sprite picker for '" + SafeLabel(targetDisplay) + "' without changes.";
+                message = "Closed the asset editor for '" + SafeLabel(targetDisplay) + "' without changes.";
                 return true;
             }
 
@@ -1574,7 +1568,7 @@ namespace ShelteredAPI.Scenarios
             message = null;
             if (!IsPickerOpen(state))
             {
-                message = "Sprite picker is not open.";
+                message = "Asset editor is not open.";
                 return false;
             }
 
@@ -1817,7 +1811,7 @@ namespace ShelteredAPI.Scenarios
 
             if (!IsPickerOpen(state))
             {
-                message = "Sprite picker is not open.";
+                message = "Asset editor is not open.";
                 return false;
             }
 

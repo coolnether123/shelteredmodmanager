@@ -8,6 +8,10 @@ namespace ShelteredAPI.Scenarios
     internal sealed class ScenarioAuthoringShellImguiRenderModule : IScenarioAuthoringRenderModule
     {
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioAuthoring.ShellImgui";
+        private const string CandidateFilterAll = "all";
+        private const string CandidateFilterActive = "active";
+        private const string CandidateFilterVanilla = "vanilla";
+        private const string CandidateFilterScenario = "scenario";
 
         // Layout constants live in ScenarioAuthoringShellLayout. These aliases keep
         // the render code readable without re-declaring the values.
@@ -53,6 +57,12 @@ namespace ShelteredAPI.Scenarios
         private Vector2 _dragStartMouse = Vector2.zero;
         private Rect _dragStartRect = Rect.zero;
         private Rect _dragLastRect = Rect.zero;
+        private string _assetBrowserSearchText = string.Empty;
+        private string _assetBrowserCandidateFilter = CandidateFilterAll;
+        private bool _assetBrowserSearchFocused;
+        private string _spritePickerSearchText = string.Empty;
+        private string _spritePickerCandidateFilter = CandidateFilterAll;
+        private bool _spritePickerSearchFocused;
 
         public string ModuleId
         {
@@ -242,6 +252,8 @@ namespace ShelteredAPI.Scenarios
 
             inputCapture.SetKeyboardCaptured(
                 shell.SpritePickerDocument != null
+                || _assetBrowserSearchFocused
+                || _spritePickerSearchFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
 
             DrawTooltipOverlay(scaledWidth, scaledHeight, hudReserveRect);
@@ -971,7 +983,7 @@ namespace ShelteredAPI.Scenarios
                 DrawButton(actionRect, action, false);
                 actionX -= 24f;
             }
-            GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 7f, Math.Max(80f, actionX - headerRect.x - 10f), 20f), (window.Title ?? "Asset Browser").ToUpperInvariant(), _sectionTitleStyle);
+            GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 7f, Math.Max(80f, actionX - headerRect.x - 10f), 20f), (window.Title ?? "Asset Placement").ToUpperInvariant(), _sectionTitleStyle);
 
             Rect bodyRect = new Rect(rect.x + 14f, headerRect.yMax + 8f, rect.width - 28f, rect.height - 54f);
             bool showDetailsPane = bodyRect.width >= 720f;
@@ -983,9 +995,15 @@ namespace ShelteredAPI.Scenarios
                 ? new Rect(pickerRect.xMax + 16f, bodyRect.y, bodyRect.xMax - pickerRect.xMax - 16f, bodyRect.height)
                 : Rect.zero;
 
-            GUI.Box(new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 28f), "  Search assets...", _fieldStyle);
+            Rect filterRect = new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 64f);
+            DrawCandidateFilterControls(
+                filterRect,
+                "asset_browser_search",
+                ref _assetBrowserSearchText,
+                ref _assetBrowserCandidateFilter,
+                ref _assetBrowserSearchFocused);
 
-            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 38f, pickerRect.width, pickerRect.height - 38f));
+            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 74f, pickerRect.width, pickerRect.height - 74f));
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             bool drewCandidateGrid = false;
@@ -997,12 +1015,12 @@ namespace ShelteredAPI.Scenarios
                     || section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
                     continue;
 
-                DrawSection(section, !showDetailsPane);
+                DrawSection(section, !showDetailsPane, _assetBrowserSearchText, _assetBrowserCandidateFilter);
                 GUILayout.Space(6f);
                 drewCandidateGrid = true;
             }
             if (!drewCandidateGrid)
-                GUILayout.Label("Switch to Place New Snapped to browse sprite assets here, or select a replaceable target and open the sprite picker.", _mutedTextStyle);
+                GUILayout.Label("Use this window for snapped scene sprite placement. Select an existing asset and use Inspector > Edit Asset to change it.", _mutedTextStyle);
             if (!showDetailsPane)
             {
                 for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
@@ -1062,9 +1080,23 @@ namespace ShelteredAPI.Scenarios
             GUILayout.BeginArea(bodyRect);
             Vector2 scrollPosition = GetWindowScrollPosition(scrollId);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            if (string.Equals(scrollId, "sprite_picker", StringComparison.Ordinal))
+            {
+                DrawCandidateFilterControls(
+                    GUILayoutUtility.GetRect(120f, 64f, GUILayout.ExpandWidth(true), GUILayout.Height(64f)),
+                    "sprite_picker_search",
+                    ref _spritePickerSearchText,
+                    ref _spritePickerCandidateFilter,
+                    ref _spritePickerSearchFocused);
+                GUILayout.Space(6f);
+            }
+
             for (int i = 0; document != null && document.Sections != null && i < document.Sections.Length; i++)
             {
-                DrawSection(document.Sections[i]);
+                if (string.Equals(scrollId, "sprite_picker", StringComparison.Ordinal))
+                    DrawSection(document.Sections[i], false, _spritePickerSearchText, _spritePickerCandidateFilter);
+                else
+                    DrawSection(document.Sections[i]);
                 if (i < document.Sections.Length - 1)
                     GUILayout.Space(6f);
             }
@@ -1503,12 +1535,62 @@ namespace ShelteredAPI.Scenarios
             GUI.color = previous;
         }
 
+        private void DrawCandidateFilterControls(
+            Rect rect,
+            string controlName,
+            ref string searchText,
+            ref string candidateFilter,
+            ref bool searchFocused)
+        {
+            GUILayout.BeginArea(rect);
+            GUILayout.BeginVertical();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
+            GUI.SetNextControlName(controlName);
+            string nextSearchText = GUILayout.TextField(searchText ?? string.Empty, _fieldStyle, GUILayout.Height(26f));
+            if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
+                searchText = nextSearchText;
+
+            if (GUILayout.Button("Clear", _buttonStyle, GUILayout.Width(64f), GUILayout.Height(26f)))
+                searchText = string.Empty;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            DrawCandidateFilterButton("All", CandidateFilterAll, ref candidateFilter);
+            DrawCandidateFilterButton("Active", CandidateFilterActive, ref candidateFilter);
+            DrawCandidateFilterButton("Vanilla", CandidateFilterVanilla, ref candidateFilter);
+            DrawCandidateFilterButton("Scenario", CandidateFilterScenario, ref candidateFilter);
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
+            GUILayout.EndArea();
+            searchFocused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+        }
+
+        private void DrawCandidateFilterButton(string label, string value, ref string candidateFilter)
+        {
+            bool active = string.Equals(candidateFilter, value, StringComparison.OrdinalIgnoreCase);
+            if (GUILayout.Button(label, active ? _activeButtonStyle : _buttonStyle, GUILayout.Width(78f), GUILayout.Height(26f)))
+                candidateFilter = value;
+        }
+
         private void DrawSection(ScenarioAuthoringInspectorSection section)
         {
             DrawSection(section, false);
         }
 
         private void DrawSection(ScenarioAuthoringInspectorSection section, bool compactInspector)
+        {
+            DrawSection(section, compactInspector, null, CandidateFilterAll);
+        }
+
+        private void DrawSection(
+            ScenarioAuthoringInspectorSection section,
+            bool compactInspector,
+            string candidateSearchText,
+            string candidateFilter)
         {
             if (section == null)
                 return;
@@ -1548,10 +1630,17 @@ namespace ShelteredAPI.Scenarios
             }
             else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
             {
+                int totalCandidates = CountCandidateActions(section);
+                int visibleCandidates = CountFilteredCandidateActions(section, candidateSearchText, candidateFilter);
+                GUILayout.Label("Results " + visibleCandidates + " / " + totalCandidates, _mutedTextStyle);
+
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)
                 {
                     ScenarioAuthoringInspectorItem item = section.Items[i];
                     if (item == null || item.Action != null)
+                        continue;
+                    if (item.Kind == ScenarioAuthoringInspectorItemKind.Property
+                        && string.Equals(item.Label, "Count", StringComparison.OrdinalIgnoreCase))
                         continue;
 
                     DrawItem(item, compactInspector);
@@ -1560,11 +1649,16 @@ namespace ShelteredAPI.Scenarios
                 int columns = compactInspector ? 2 : 3;
                 float cardWidth = compactInspector ? 160f : 176f;
                 int count = 0;
+                if (visibleCandidates == 0)
+                    GUILayout.Label("No assets match the current search and filters.", _mutedTextStyle);
+
                 GUILayout.BeginHorizontal();
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)
                 {
                     ScenarioAuthoringInspectorItem item = section.Items[i];
                     if (item == null || item.Action == null)
+                        continue;
+                    if (!CandidateActionMatches(section, item.Action, candidateSearchText, candidateFilter))
                         continue;
 
                     Rect rect = GUILayoutUtility.GetRect(cardWidth, 84f, GUILayout.Width(cardWidth), GUILayout.Height(84f));
@@ -1695,6 +1789,113 @@ namespace ShelteredAPI.Scenarios
                 Rect badgeRect = new Rect(textRect.x, rect.yMax - 22f, Mathf.Max(52f, badgeSize.x + 16f), 18f);
                 GUI.Box(badgeRect, action.Badge, _fieldStyle);
             }
+        }
+
+        private static int CountCandidateActions(ScenarioAuthoringInspectorSection section)
+        {
+            int count = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                if (section.Items[i] != null && section.Items[i].Action != null)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static int CountFilteredCandidateActions(
+            ScenarioAuthoringInspectorSection section,
+            string searchText,
+            string candidateFilter)
+        {
+            int count = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item != null && item.Action != null && CandidateActionMatches(section, item.Action, searchText, candidateFilter))
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static bool CandidateActionMatches(
+            ScenarioAuthoringInspectorSection section,
+            ScenarioAuthoringInspectorAction action,
+            string searchText,
+            string candidateFilter)
+        {
+            if (action == null)
+                return false;
+
+            if (!CandidateMatchesFilter(section, action, candidateFilter))
+                return false;
+
+            return CandidateMatchesSearch(action, searchText);
+        }
+
+        private static bool CandidateMatchesFilter(
+            ScenarioAuthoringInspectorSection section,
+            ScenarioAuthoringInspectorAction action,
+            string candidateFilter)
+        {
+            string filter = string.IsNullOrEmpty(candidateFilter) ? CandidateFilterAll : candidateFilter;
+            if (string.Equals(filter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string sectionId = section != null ? section.Id ?? string.Empty : string.Empty;
+            string badge = action != null ? action.Badge ?? string.Empty : string.Empty;
+            if (string.Equals(filter, CandidateFilterActive, StringComparison.OrdinalIgnoreCase))
+            {
+                return action.Emphasized
+                    || StringContains(badge, "active")
+                    || StringContains(badge, "saved")
+                    || StringContains(badge, "preview");
+            }
+
+            if (string.Equals(filter, CandidateFilterVanilla, StringComparison.OrdinalIgnoreCase))
+            {
+                return StringContains(sectionId, "vanilla")
+                    || StringContains(badge, "live");
+            }
+
+            if (string.Equals(filter, CandidateFilterScenario, StringComparison.OrdinalIgnoreCase))
+            {
+                return StringContains(sectionId, "modded")
+                    || StringContains(sectionId, "scenario")
+                    || StringContains(badge, "mod")
+                    || StringContains(badge, "user");
+            }
+
+            return true;
+        }
+
+        private static bool CandidateMatchesSearch(ScenarioAuthoringInspectorAction action, string searchText)
+        {
+            string normalized = (searchText ?? string.Empty).Trim();
+            if (normalized.Length == 0)
+                return true;
+
+            string haystack = ((action.Label ?? string.Empty) + " "
+                + (action.Detail ?? string.Empty) + " "
+                + (action.Hint ?? string.Empty) + " "
+                + (action.Badge ?? string.Empty) + " "
+                + (action.IconText ?? string.Empty)).ToLowerInvariant();
+            string[] tokens = normalized.ToLowerInvariant().Split(new[] { ' ', '\t', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                if (haystack.IndexOf(tokens[i], StringComparison.Ordinal) < 0)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool StringContains(string value, string token)
+        {
+            return !string.IsNullOrEmpty(value)
+                && !string.IsNullOrEmpty(token)
+                && value.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void DrawSpritePreview(Rect rect, Sprite sprite, bool emphasized)
