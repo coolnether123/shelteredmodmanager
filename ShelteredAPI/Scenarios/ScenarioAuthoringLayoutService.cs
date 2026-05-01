@@ -117,7 +117,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
             {
-                bool changed = window.Visible != open || (open && window.Collapsed);
+                bool workspaceChanged = window.Visible != open || (open && window.Collapsed);
                 if (open)
                 {
                     _stageCoordinator.SelectStage(state, definition.WorkspaceStage);
@@ -135,7 +135,7 @@ namespace ShelteredAPI.Scenarios
                 state.MinimalMode = false;
                 state.FocusSelectionMode = false;
                 PersistIfEnabled(state);
-                return changed;
+                return workspaceChanged;
             }
 
             bool changed = window.Visible != open || (open && window.Collapsed);
