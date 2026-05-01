@@ -304,6 +304,7 @@
     <Compile Include="Scenarios\Application\Selection\ScenarioTargetClassifier.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioTargetScopeTextMatcher.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioTargetScope.cs" />
+    <Compile Include="Scenarios\Presentation\Inspector\ScenarioEventGraphInspectorBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Compatibility\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAssetAuthoringContentBuilder.cs" />
@@ -381,6 +382,7 @@
     <Compile Include="Scenarios\ScenarioSpriteReferenceLibrary.cs" />
     <Compile Include="Scenarios\ScenarioSpriteRuntimeMutationService.cs" />
     <Compile Include="Scenarios\ScenarioSpriteRuntimeResolver.cs" />
+    <Compile Include="Scenarios\ScenarioSpriteSwapAuthoringService.Actions.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapRuleEditor.cs" />
     <Compile Include="Scenarios\ScenarioSpriteSwapClipboard.cs" />
