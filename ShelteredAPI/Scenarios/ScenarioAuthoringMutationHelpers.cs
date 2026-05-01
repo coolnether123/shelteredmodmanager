@@ -70,6 +70,24 @@ namespace ShelteredAPI.Scenarios
             }
             return fallback;
         }
+
+        public static string GetString(List<ScenarioProperty> properties, string key, string fallback)
+        {
+            for (int i = 0; properties != null && i < properties.Count; i++)
+            {
+                ScenarioProperty property = properties[i];
+                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
+                    return property.Value ?? fallback;
+            }
+            return fallback;
+        }
+
+        public static bool GetBool(List<ScenarioProperty> properties, string key, bool fallback)
+        {
+            string value = GetString(properties, key, fallback ? "true" : "false");
+            bool parsed;
+            return bool.TryParse(value, out parsed) ? parsed : fallback;
+        }
     }
 
     internal static class ScenarioAuthoringSchedule

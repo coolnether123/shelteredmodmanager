@@ -8,6 +8,7 @@ namespace ShelteredAPI.Scenarios
         {
             services.AddScenarioPresentation();
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapAuthoringContentBuilder(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestAuthoringContentBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringShellImguiRenderModule(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringImguiRenderModule(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringNguiRenderModule(); });
@@ -31,7 +32,8 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<ScenarioSelectionScopeService>(),
                     resolver.Get<ScenarioTargetClassifier>(),
                     resolver.Get<ScenarioAssetAuthoringContentBuilder>(),
-                    resolver.Get<ScenarioMapAuthoringContentBuilder>());
+                    resolver.Get<ScenarioMapAuthoringContentBuilder>(),
+                    resolver.Get<ScenarioQuestAuthoringContentBuilder>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

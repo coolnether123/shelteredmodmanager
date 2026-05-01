@@ -19,7 +19,6 @@ namespace ShelteredAPI.Scenarios
             viewModel.TimeLabel = null;
         }
 
-
         private static string Safe(string value)
         {
             return string.IsNullOrEmpty(value) ? "<unnamed>" : value;

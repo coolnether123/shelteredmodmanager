@@ -520,6 +520,35 @@ namespace ShelteredAPI.Content
             return false;
         }
 
+        internal static bool TryGetResolvedItemId(ItemManager.ItemType type, out string id)
+        {
+            ResolvedItem resolved;
+            if (ResolvedByType.TryGetValue(type, out resolved)
+                && resolved != null
+                && resolved.Definition != null
+                && !string.IsNullOrEmpty(resolved.Definition.Id))
+            {
+                id = resolved.Definition.Id;
+                return true;
+            }
+
+            id = null;
+            return false;
+        }
+
+        internal static bool TryGetResolvedItemIcon(ItemManager.ItemType type, out Sprite icon)
+        {
+            ResolvedItem resolved;
+            if (ResolvedByType.TryGetValue(type, out resolved) && resolved != null && resolved.Icon != null)
+            {
+                icon = resolved.Icon;
+                return true;
+            }
+
+            icon = null;
+            return false;
+        }
+
         private static bool IsValidCraftLocation(CraftingManager.CraftLocation loc)
         {
             return loc == CraftingManager.CraftLocation.Workbench ||

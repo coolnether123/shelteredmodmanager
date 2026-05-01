@@ -16,6 +16,8 @@ namespace ShelteredAPI.Scenarios
             public SceneSpritePlacement ActivePlacement;
             public bool PlacementActive;
             public bool CanPlace;
+            public string ActiveCandidateToken;
+            public string ActiveCandidateLabel;
             public string PlacementSummary;
             public string CompatibilitySummary;
             public string GuidanceMessage;
@@ -103,11 +105,20 @@ namespace ShelteredAPI.Scenarios
             SceneSpritePlacement activePlacement = FindPlacement(session != null ? session.WorkingDefinition : null, target);
             model.ActivePlacement = activePlacement;
             if (HasActivePlacement)
+            {
+                model.ActiveCandidateToken = _activePlacement.Candidate != null ? _activePlacement.Candidate.Token : null;
+                model.ActiveCandidateLabel = _activePlacement.Candidate != null ? _activePlacement.Candidate.Label : null;
                 model.PlacementSummary = "Placing '" + SafeLabel(_activePlacement.Candidate != null ? _activePlacement.Candidate.Label : null) + "'. Move over the bunker to snap; hold Shift to place freely.";
+            }
             else
+            {
+                ScenarioSpriteCatalogService.SpriteCandidate activeCandidate = FindCandidate(model, BuildPlacementReferenceToken(activePlacement));
+                model.ActiveCandidateToken = activeCandidate != null ? activeCandidate.Token : BuildPlacementReferenceToken(activePlacement);
+                model.ActiveCandidateLabel = activeCandidate != null ? activeCandidate.Label : BuildPlacementReferenceLabel(activePlacement);
                 model.PlacementSummary = activePlacement != null
                     ? "Placement '" + (activePlacement.Id ?? "<placement>") + "' is selected."
                     : "Selecting a sprite starts a snapped scene sprite placement preview.";
+            }
             return model;
         }
 
@@ -166,6 +177,12 @@ namespace ShelteredAPI.Scenarios
             {
                 handled = true;
                 return RemovePlacement(state, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSceneSpritePlacementCancel, StringComparison.Ordinal))
+            {
+                handled = true;
+                return CancelActivePlacement("Scene sprite placement cancelled.", out message);
             }
 
             if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionSceneSpritePlacementApplyPrefix, StringComparison.Ordinal))
@@ -386,6 +403,30 @@ namespace ShelteredAPI.Scenarios
             }
 
             return null;
+        }
+
+        private static string BuildPlacementReferenceToken(SceneSpritePlacement placement)
+        {
+            if (placement == null)
+                return null;
+
+            if (!string.IsNullOrEmpty(placement.RuntimeSpriteKey))
+                return "runtime:" + placement.RuntimeSpriteKey;
+            if (!string.IsNullOrEmpty(placement.SpriteId))
+                return "custom:" + placement.SpriteId;
+            return !string.IsNullOrEmpty(placement.RelativePath) ? placement.RelativePath : null;
+        }
+
+        private static string BuildPlacementReferenceLabel(SceneSpritePlacement placement)
+        {
+            if (placement == null)
+                return null;
+
+            if (!string.IsNullOrEmpty(placement.SpriteId))
+                return placement.SpriteId;
+            if (!string.IsNullOrEmpty(placement.RuntimeSpriteKey))
+                return placement.RuntimeSpriteKey;
+            return placement.RelativePath;
         }
 
         private static SceneSpritePlacement FindPlacement(ScenarioDefinition definition, string placementId)

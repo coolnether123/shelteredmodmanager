@@ -308,6 +308,7 @@
     <Compile Include="Scenarios\Presentation\Compatibility\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAssetAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioMapAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Shell\ScenarioQuestAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAuthoringWindowContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ScenarioAuthoringShellLayout.cs" />
     <Compile Include="Scenarios\Presentation\Shell\ShellChromeViewModelBuilder.cs" />
@@ -351,6 +352,7 @@
     <Compile Include="Scenarios\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\ScenarioGameplayScheduleAuthoringService.cs" />
+    <Compile Include="Scenarios\ScenarioInventoryItemCatalog.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringMutationHelpers.cs" />
     <Compile Include="Scenarios\ScenarioEventAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioCharacterEditorAuthoringService.cs" />
