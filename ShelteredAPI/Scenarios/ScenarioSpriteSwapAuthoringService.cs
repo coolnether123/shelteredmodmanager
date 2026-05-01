@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
@@ -266,20 +265,12 @@ namespace ShelteredAPI.Scenarios
 
         public static string BuildApplyActionId(string token)
         {
-            if (string.IsNullOrEmpty(token))
-                return ScenarioAuthoringActionIds.ActionSpriteSwapApplyPrefix;
-
-            byte[] bytes = Encoding.UTF8.GetBytes(token);
-            return ScenarioAuthoringActionIds.ActionSpriteSwapApplyPrefix + Convert.ToBase64String(bytes);
+            return ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionSpriteSwapApplyPrefix, token);
         }
 
         public static string BuildPreviewActionId(string token)
         {
-            if (string.IsNullOrEmpty(token))
-                return ScenarioAuthoringActionIds.ActionSpriteSwapPreviewPrefix;
-
-            byte[] bytes = Encoding.UTF8.GetBytes(token);
-            return ScenarioAuthoringActionIds.ActionSpriteSwapPreviewPrefix + Convert.ToBase64String(bytes);
+            return ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionSpriteSwapPreviewPrefix, token);
         }
 
         public static string BuildCustomBrushActionId(int brushIndex)
@@ -2137,18 +2128,7 @@ namespace ShelteredAPI.Scenarios
 
         private static string DecodeActionToken(string encoded)
         {
-            if (string.IsNullOrEmpty(encoded))
-                return null;
-
-            try
-            {
-                byte[] bytes = Convert.FromBase64String(encoded);
-                return Encoding.UTF8.GetString(bytes);
-            }
-            catch
-            {
-                return null;
-            }
+            return ScenarioAuthoringActionCodec.DecodeToken(encoded);
         }
 
         private static int GetCurrentDay()

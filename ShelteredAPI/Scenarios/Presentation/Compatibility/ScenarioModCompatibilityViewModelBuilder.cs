@@ -8,15 +8,15 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioAuthoringInspectorItem> BuildItems(ScenarioModCompatibilityReport report)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Property("Required Mods", Count(report != null ? report.RequiredMods : null)));
-            items.Add(Property("Optional Mods", Count(report != null ? report.OptionalMods : null)));
-            items.Add(Property("Missing Required", Count(report != null ? report.MissingRequiredMods : null)));
-            items.Add(Property("Version Mismatches", Count(report != null ? report.VersionMismatches : null)));
+            items.Add(ScenarioInspectorItemFactory.Property("Required Mods", Count(report != null ? report.RequiredMods : null)));
+            items.Add(ScenarioInspectorItemFactory.Property("Optional Mods", Count(report != null ? report.OptionalMods : null)));
+            items.Add(ScenarioInspectorItemFactory.Property("Missing Required", Count(report != null ? report.MissingRequiredMods : null)));
+            items.Add(ScenarioInspectorItemFactory.Property("Version Mismatches", Count(report != null ? report.VersionMismatches : null)));
 
             AddDependencies(items, "Missing", report != null ? report.MissingRequiredMods : null);
             AddDependencies(items, "Required", report != null ? report.RequiredMods : null);
             for (int i = 0; report != null && report.UnknownReferences != null && i < report.UnknownReferences.Count && i < 6; i++)
-                items.Add(Property("Unknown Reference", report.UnknownReferences[i]));
+                items.Add(ScenarioInspectorItemFactory.Property("Unknown Reference", report.UnknownReferences[i]));
             return items;
         }
 
@@ -26,7 +26,7 @@ namespace ShelteredAPI.Scenarios
             {
                 ScenarioModDependencyDefinition dependency = dependencies[i];
                 if (dependency != null)
-                    items.Add(Property(label + " " + dependency.ModId, FormatReasons(dependency)));
+                    items.Add(ScenarioInspectorItemFactory.Property(label + " " + dependency.ModId, FormatReasons(dependency)));
             }
         }
 
@@ -43,14 +43,5 @@ namespace ShelteredAPI.Scenarios
             return values != null ? values.Count.ToString() : "0";
         }
 
-        private static ScenarioAuthoringInspectorItem Property(string label, string value)
-        {
-            return new ScenarioAuthoringInspectorItem
-            {
-                Kind = ScenarioAuthoringInspectorItemKind.Property,
-                Label = label,
-                Value = value
-            };
-        }
     }
 }

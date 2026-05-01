@@ -154,9 +154,9 @@ namespace ShelteredAPI.Scenarios
                     continue;
                 }
 
-                int level = GetIntProperty(placement.CustomProperties, "level", 1);
-                bool lockDeconstruct = GetBoolProperty(placement.CustomProperties, "lockDeconstruct", false);
-                bool movable = GetBoolProperty(placement.CustomProperties, "movable", true);
+                int level = ScenarioPropertyBag.GetInt(placement.CustomProperties, "level", 1);
+                bool lockDeconstruct = ScenarioPropertyBag.GetBool(placement.CustomProperties, "lockDeconstruct", false);
+                bool movable = ScenarioPropertyBag.GetBool(placement.CustomProperties, "movable", true);
                 Vector2 position = new Vector2(
                     placement.Position != null ? placement.Position.X : 0f,
                     placement.Position != null ? placement.Position.Y : 0f);
@@ -276,8 +276,8 @@ namespace ShelteredAPI.Scenarios
 
         private static bool TryResolveGridCoordinates(ShelterRoomGrid grid, ObjectPlacement placement, out int gridX, out int gridY)
         {
-            gridX = GetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridX, int.MinValue);
-            gridY = GetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridY, int.MinValue);
+            gridX = ScenarioPropertyBag.GetInt(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridX, int.MinValue);
+            gridY = ScenarioPropertyBag.GetInt(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridY, int.MinValue);
             if (gridX != int.MinValue && gridY != int.MinValue)
                 return true;
 
@@ -299,7 +299,7 @@ namespace ShelteredAPI.Scenarios
 
         private static float ResolveHorizontalPosition(ShelterRoomGrid grid, ObjectPlacement placement, int gridX)
         {
-            string storedValue = GetProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyHorizontalPos);
+            string storedValue = ScenarioPropertyBag.GetString(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyHorizontalPos);
             float parsedValue;
             if (!string.IsNullOrEmpty(storedValue)
                 && float.TryParse(storedValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsedValue))
@@ -333,28 +333,5 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private static string GetProperty(List<ScenarioProperty> properties, string key)
-        {
-            for (int i = 0; properties != null && i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
-            }
-
-            return null;
-        }
-
-        private static int GetIntProperty(List<ScenarioProperty> properties, string key, int fallback)
-        {
-            int value;
-            return int.TryParse(GetProperty(properties, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? value : fallback;
-        }
-
-        private static bool GetBoolProperty(List<ScenarioProperty> properties, string key, bool fallback)
-        {
-            bool value;
-            return bool.TryParse(GetProperty(properties, key), out value) ? value : fallback;
-        }
     }
 }

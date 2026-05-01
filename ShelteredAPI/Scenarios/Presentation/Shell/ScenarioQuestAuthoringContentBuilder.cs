@@ -42,42 +42,42 @@ namespace ShelteredAPI.Scenarios
 
             if (authored == 0)
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text(
+                items.Add(ScenarioInspectorItemFactory.Text(
                     "You have no authored quests. Click Add Quest below, or pick from the Quest Library further down."));
             }
             else if (snapshot.HasNextScheduled)
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text("Next popup: " + snapshot.NextScheduledLabel));
+                items.Add(ScenarioInspectorItemFactory.Text("Next popup: " + snapshot.NextScheduledLabel));
             }
             else
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text(
-                    "All your quests are trigger-started — none are on a schedule yet."));
+                items.Add(ScenarioInspectorItemFactory.Text(
+                    "All your quests are trigger-started - none are on a schedule yet."));
             }
 
-            items.Add(ScenarioAuthoringPresentationBuilder.Text(
+            items.Add(ScenarioInspectorItemFactory.Text(
                 "Scheduled quests fire on a day/time. Trigger quests wait for an event."));
 
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Authored quests", authored.ToString(CultureInfo.InvariantCulture)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("On a schedule", scheduled.ToString(CultureInfo.InvariantCulture)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Wait for trigger", triggered.ToString(CultureInfo.InvariantCulture)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Running right now", live.ToString(CultureInfo.InvariantCulture)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Library size", snapshot.CatalogCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ScenarioInspectorItemFactory.Property("Authored quests", authored.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ScenarioInspectorItemFactory.Property("On a schedule", scheduled.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ScenarioInspectorItemFactory.Property("Wait for trigger", triggered.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ScenarioInspectorItemFactory.Property("Running right now", live.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ScenarioInspectorItemFactory.Property("Library size", snapshot.CatalogCount.ToString(CultureInfo.InvariantCulture)));
 
             if (snapshot.Warnings.Count == 0)
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
+                items.Add(ScenarioInspectorItemFactory.Property(
                     "Validation",
                     authored == 0 ? "Nothing to validate" : "OK"));
             }
             else
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
+                items.Add(ScenarioInspectorItemFactory.Property(
                     "Validation",
                     snapshot.Warnings.Count.ToString(CultureInfo.InvariantCulture) + " warning(s)"));
                 int max = Math.Min(snapshot.Warnings.Count, OverviewWarningLimit);
                 for (int i = 0; i < max; i++)
-                    items.Add(ScenarioAuthoringPresentationBuilder.Text("! " + snapshot.Warnings[i]));
+                    items.Add(ScenarioInspectorItemFactory.Text("! " + snapshot.Warnings[i]));
             }
 
             return new ScenarioAuthoringInspectorSection
@@ -95,14 +95,14 @@ namespace ShelteredAPI.Scenarios
         private static ScenarioAuthoringInspectorSection BuildToolsSection(QuestAuthoringSnapshot snapshot)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionQuestScheduleAdd,
                 "Add Quest",
                 "Add a fresh authored quest entry, populated from the next library quest you have not used yet.",
                 true,
                 snapshot.AuthoredCount == 0,
                 "Q+")));
-            items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionQuestCaptureActive,
                 "Capture Active",
                 "Replace the authored list with every quest currently active in QuestManager.",
@@ -136,7 +136,7 @@ namespace ShelteredAPI.Scenarios
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
                     {
-                        ScenarioAuthoringPresentationBuilder.Text(
+                        ScenarioInspectorItemFactory.Text(
                             "No authored quests yet. Click Add Quest above or pick one from the Quest Library below.")
                     }
                 });
@@ -156,13 +156,13 @@ namespace ShelteredAPI.Scenarios
 
             if (snapshot.Catalog.Count == 0)
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text(snapshot.CatalogReady
+                items.Add(ScenarioInspectorItemFactory.Text(snapshot.CatalogReady
                     ? "QuestLibrary returned no quests."
                     : "QuestLibrary is not ready in this scene. Open a save or playtest first."));
             }
             else
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text(
+                items.Add(ScenarioInspectorItemFactory.Text(
                     "Click any library quest below to add it to your scenario as a scheduled popup."));
 
                 int max = Math.Min(snapshot.Catalog.Count, CatalogPreviewLimit);
@@ -174,7 +174,7 @@ namespace ShelteredAPI.Scenarios
 
                     bool available = QuestAuthoringSnapshot.IsQuestAvailable(quest);
                     string suffix = available ? string.Empty : "  (locked)";
-                    items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionQuestCatalogAddPrefix + i.ToString(CultureInfo.InvariantCulture),
                         "+ " + quest.id + "   " + quest.questType.ToString() + suffix,
                         "Add this QuestLibrary quest to the scenario draft.",
@@ -185,7 +185,7 @@ namespace ShelteredAPI.Scenarios
 
                 if (snapshot.Catalog.Count > max)
                 {
-                    items.Add(ScenarioAuthoringPresentationBuilder.Text(
+                    items.Add(ScenarioInspectorItemFactory.Text(
                         "Showing " + max.ToString(CultureInfo.InvariantCulture)
                         + " of " + snapshot.Catalog.Count.ToString(CultureInfo.InvariantCulture)
                         + " library quests. Use Cycle Quest Id on an authored quest to reach the rest."));
@@ -218,14 +218,14 @@ namespace ShelteredAPI.Scenarios
                 string state = quest.state.ToString();
                 if (quest.definition.IsScenario() && quest.stage != null)
                     state += " / " + quest.stage.id;
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
-                    ScenarioAuthoringPresentationBuilder.Safe(quest.definition.id),
+                items.Add(ScenarioInspectorItemFactory.Property(
+                    ScenarioInspectorItemFactory.Safe(quest.definition.id),
                     state));
             }
 
             if (items.Count == 0)
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text(
+                items.Add(ScenarioInspectorItemFactory.Text(
                     "No quests are currently running in QuestManager."));
             }
 
@@ -281,23 +281,23 @@ namespace ShelteredAPI.Scenarios
             {
                 string title = !string.IsNullOrEmpty(quest.Title) ? quest.Title : quest.Id;
                 string when = triggerStarted
-                    ? "On trigger '" + ScenarioAuthoringPresentationBuilder.Safe(quest.StartTriggerId) + "'"
+                    ? "On trigger '" + ScenarioInspectorItemFactory.Safe(quest.StartTriggerId) + "'"
                     : QuestAuthoringHelpers.FormatSchedule(quest.ScheduledStart);
                 string sectionTitle = "Quest #" + (index + 1).ToString(CultureInfo.InvariantCulture)
-                    + "  ·  " + ScenarioAuthoringPresentationBuilder.Safe(title)
-                    + "  ·  " + when;
+                    + " / " + ScenarioInspectorItemFactory.Safe(title)
+                    + " / " + when;
                 string validation = QuestAuthoringHelpers.FormatQuestValidation(quest, _snapshot.Definition);
 
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
+                items.Add(ScenarioInspectorItemFactory.Property(
                     "Quest id",
-                    ScenarioAuthoringPresentationBuilder.Safe(quest.Id)));
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
+                    ScenarioInspectorItemFactory.Safe(quest.Id)));
+                items.Add(ScenarioInspectorItemFactory.Property(
                     "Library",
                     libraryQuest != null
                         ? QuestAuthoringHelpers.BuildQuestLibrarySummary(libraryQuest)
                         : "not found"));
-                items.Add(ScenarioAuthoringPresentationBuilder.Property("Validation", validation));
+                items.Add(ScenarioInspectorItemFactory.Property("Validation", validation));
 
                 return new ScenarioAuthoringInspectorSection
                 {
@@ -314,14 +314,14 @@ namespace ShelteredAPI.Scenarios
                 bool triggerStarted)
             {
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestStartModePrefix + idPart,
                     "Scheduled",
                     "Start at a specific day and time.",
                     triggerStarted,
                     !triggerStarted,
                     "SC")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestStartModePrefix + idPart,
                     "Trigger",
                     "Wait until a Trigger fires.",
@@ -348,53 +348,53 @@ namespace ShelteredAPI.Scenarios
                 int hour = time != null ? time.Hour : 8;
                 int minute = time != null ? time.Minute : 0;
                 string current = "Day " + day.ToString(CultureInfo.InvariantCulture)
-                    + " · " + hour.ToString("D2", CultureInfo.InvariantCulture)
+                    + " / " + hour.ToString("D2", CultureInfo.InvariantCulture)
                     + ":" + minute.ToString("D2", CultureInfo.InvariantCulture);
 
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix + idPart + ".-1",
                     "Day -",
                     "Move this quest one day earlier.",
                     true,
                     false,
                     "D-")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleDayPrefix + idPart + ".1",
                     "Day +",
                     "Move this quest one day later.",
                     true,
                     false,
                     "D+")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix + idPart + ".-1",
                     "Hr -",
                     "Move this quest one hour earlier.",
                     true,
                     false,
                     "H-")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleHourPrefix + idPart + ".1",
                     "Hr +",
                     "Move this quest one hour later.",
                     true,
                     false,
                     "H+")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleMinutePrefix + idPart + ".-15",
                     "Min -15",
                     "Move this quest fifteen minutes earlier.",
                     true,
                     false,
                     "M-")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleMinutePrefix + idPart + ".15",
                     "Min +15",
                     "Move this quest fifteen minutes later.",
                     true,
                     false,
                     "M+")));
-                items.Add(ScenarioAuthoringPresentationBuilder.Property("When", current));
+                items.Add(ScenarioInspectorItemFactory.Property("When", current));
 
                 return new ScenarioAuthoringInspectorSection
                 {
@@ -411,26 +411,26 @@ namespace ShelteredAPI.Scenarios
                 string idPart)
             {
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestTriggerCyclePrefix + idPart + ".-1",
                     "< Prev",
                     "Attach this quest to the previous authored trigger.",
                     _snapshot.HasAnyTriggers,
                     false,
                     "TG-")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestTriggerCyclePrefix + idPart + ".1",
                     "Next >",
                     "Attach this quest to the next authored trigger.",
                     _snapshot.HasAnyTriggers,
                     false,
                     "TG+")));
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
+                items.Add(ScenarioInspectorItemFactory.Property(
                     "Trigger",
                     !string.IsNullOrEmpty(quest.StartTriggerId) ? quest.StartTriggerId : "<none>"));
                 if (!_snapshot.HasAnyTriggers)
                 {
-                    items.Add(ScenarioAuthoringPresentationBuilder.Text(
+                    items.Add(ScenarioInspectorItemFactory.Text(
                         "No triggers exist yet. Author one in the Triggers window first."));
                 }
 
@@ -450,43 +450,43 @@ namespace ShelteredAPI.Scenarios
                 QuestDef libraryQuest)
             {
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix + idPart + ".-1",
                     "< Prev id",
                     "Switch this quest to the previous QuestLibrary id.",
                     true,
                     false,
                     "ID-")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestIdCyclePrefix + idPart + ".1",
                     "Next id >",
                     "Switch this quest to the next QuestLibrary id.",
                     true,
                     false,
                     "ID+")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestTitleSyncPrefix + idPart,
                     "Sync Title",
                     "Copy the QuestLibrary name key into this authored quest title.",
                     libraryQuest != null,
                     false,
                     "NM")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestDescriptionSyncPrefix + idPart,
                     "Sync Desc",
                     "Copy the QuestLibrary description key into this authored quest description.",
                     libraryQuest != null,
                     false,
                     "DS")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestCompletionCyclePrefix + idPart + ".1",
                     "Cycle Completion",
                     "Cycle the optional completion condition reference.",
                     true,
                     !string.IsNullOrEmpty(quest.CompletionConditionId),
                     "CC")));
-                items.Add(ScenarioAuthoringPresentationBuilder.Property("Title", ScenarioAuthoringPresentationBuilder.Safe(quest.Title)));
-                items.Add(ScenarioAuthoringPresentationBuilder.Property(
+                items.Add(ScenarioInspectorItemFactory.Property("Title", ScenarioInspectorItemFactory.Safe(quest.Title)));
+                items.Add(ScenarioInspectorItemFactory.Property(
                     "Completion",
                     !string.IsNullOrEmpty(quest.CompletionConditionId) ? quest.CompletionConditionId : "<none>"));
 
@@ -506,35 +506,35 @@ namespace ShelteredAPI.Scenarios
                 QuestDef libraryQuest)
             {
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestSpawnNowPrefix + idPart,
                     "Spawn Now",
                     "Immediately ask QuestManager to spawn this quest so you can preview the popup.",
                     libraryQuest != null,
                     false,
                     "SP")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestMovePrefix + idPart + ".-1",
                     "Move Up",
                     "Move this quest earlier in the authored list.",
                     index > 0,
                     false,
                     "UP")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestMovePrefix + idPart + ".1",
                     "Move Down",
                     "Move this quest later in the authored list.",
                     true,
                     false,
                     "DN")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestDuplicatePrefix + idPart,
                     "Duplicate",
                     "Copy this authored quest entry.",
                     true,
                     false,
                     "CP")));
-                items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix + idPart,
                     "Remove",
                     "Remove this authored quest entry.",
@@ -594,7 +594,7 @@ namespace ShelteredAPI.Scenarios
                     HasNextScheduled = true;
                     string label = QuestAuthoringHelpers.FormatSchedule(next.ScheduledStart);
                     string title = !string.IsNullOrEmpty(next.Title) ? next.Title : next.Id;
-                    NextScheduledLabel = label + " — " + ScenarioAuthoringPresentationBuilder.Safe(title);
+                    NextScheduledLabel = label + " - " + ScenarioInspectorItemFactory.Safe(title);
                 }
             }
 
@@ -679,11 +679,7 @@ namespace ShelteredAPI.Scenarios
 
             public static string FormatSchedule(ScenarioScheduleTime time)
             {
-                if (time == null)
-                    return "unscheduled";
-                return "day " + time.Day.ToString(CultureInfo.InvariantCulture)
-                    + " " + time.Hour.ToString("D2", CultureInfo.InvariantCulture)
-                    + ":" + time.Minute.ToString("D2", CultureInfo.InvariantCulture);
+                return ScenarioScheduleFormatter.Format(time);
             }
 
             public static string FormatQuestValidation(QuestDefinition quest, ScenarioDefinition definition)
@@ -696,7 +692,7 @@ namespace ShelteredAPI.Scenarios
                     return "missing QuestLibrary definition";
                 if (definition != null
                     && !string.IsNullOrEmpty(quest.StartTriggerId)
-                    && !HasTrigger(definition, quest.StartTriggerId))
+                    && !ScenarioDefinitionLookup.HasTrigger(definition, quest.StartTriggerId))
                     return "missing trigger";
                 if (definition != null
                     && !string.IsNullOrEmpty(quest.CompletionConditionId)
@@ -737,7 +733,7 @@ namespace ShelteredAPI.Scenarios
 
                     if (!string.IsNullOrEmpty(quest.Id) && QuestAuthoringSnapshot.FindQuestDef(quest.Id) == null)
                         warnings.Add("Quest '" + quest.Id + "' is not present in QuestLibrary.");
-                    if (!string.IsNullOrEmpty(quest.StartTriggerId) && !HasTrigger(definition, quest.StartTriggerId))
+                    if (!string.IsNullOrEmpty(quest.StartTriggerId) && !ScenarioDefinitionLookup.HasTrigger(definition, quest.StartTriggerId))
                         warnings.Add("Quest '" + label + "' references missing trigger '" + quest.StartTriggerId + "'.");
                     if (string.IsNullOrEmpty(quest.StartTriggerId) && quest.ScheduledStart == null)
                         warnings.Add("Quest '" + label + "' has neither schedule nor trigger.");
@@ -778,7 +774,7 @@ namespace ShelteredAPI.Scenarios
                 string spawn = quest.spawnOptions != null
                     ? quest.spawnOptions.minDistance.ToString(CultureInfo.InvariantCulture) + "-" + quest.spawnOptions.maxDistance.ToString(CultureInfo.InvariantCulture) + " tiles"
                     : "default spawn";
-                return type + " · " + spawn;
+                return type + " / " + spawn;
             }
 
             public static bool HasAnyTrigger(ScenarioDefinition definition)
@@ -789,39 +785,9 @@ namespace ShelteredAPI.Scenarios
                     && definition.TriggersAndEvents.Triggers.Count > 0;
             }
 
-            private static bool HasTrigger(ScenarioDefinition definition, string triggerId)
-            {
-                if (string.IsNullOrEmpty(triggerId)
-                    || definition == null
-                    || definition.TriggersAndEvents == null
-                    || definition.TriggersAndEvents.Triggers == null)
-                    return false;
-                for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
-                {
-                    TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
-                    if (trigger != null && string.Equals(trigger.Id, triggerId, StringComparison.OrdinalIgnoreCase))
-                        return true;
-                }
-                return false;
-            }
-
             private static bool HasCompletionCondition(ScenarioDefinition definition, string conditionId)
             {
-                if (definition == null || definition.WinLossConditions == null)
-                    return false;
-                return ContainsConditionId(definition.WinLossConditions.WinConditions, conditionId)
-                    || ContainsConditionId(definition.WinLossConditions.LossConditions, conditionId);
-            }
-
-            private static bool ContainsConditionId(List<ConditionDef> conditions, string conditionId)
-            {
-                for (int i = 0; conditions != null && i < conditions.Count; i++)
-                {
-                    ConditionDef condition = conditions[i];
-                    if (condition != null && string.Equals(condition.Id, conditionId, StringComparison.OrdinalIgnoreCase))
-                        return true;
-                }
-                return false;
+                return ScenarioDefinitionLookup.HasCondition(definition, conditionId);
             }
         }
     }

@@ -69,7 +69,7 @@ namespace ShelteredAPI.Scenarios
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                     Items = new[]
                     {
-                        ScenarioAuthoringPresentationBuilder.Text("This target does not expose a compatible editable sprite asset.")
+                        ScenarioInspectorItemFactory.Text("This target does not expose a compatible editable sprite asset.")
                     }
                 });
             }
@@ -104,32 +104,32 @@ namespace ShelteredAPI.Scenarios
                 : null;
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioAuthoringPresentationBuilder.Text(
-                ScenarioAuthoringPresentationBuilder.Safe(model.Target.SpriteName),
-                ScenarioAuthoringPresentationBuilder.Safe(model.Target.TextureName),
+            items.Add(ScenarioInspectorItemFactory.Text(
+                ScenarioInspectorItemFactory.Safe(model.Target.SpriteName),
+                ScenarioInspectorItemFactory.Safe(model.Target.TextureName),
                 model.Target.Kind.ToString(),
                 "SP",
                 model.Target.CurrentSprite,
                 true));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Component", model.Target.Kind.ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Current Sprite", ScenarioAuthoringPresentationBuilder.Safe(model.Target.SpriteName)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Current Map", ScenarioAuthoringPresentationBuilder.Safe(model.Target.TextureName)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Active Swap", ScenarioAuthoringPresentationBuilder.Safe(model.ActiveRuleSummary)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Compatibility", ScenarioAuthoringPresentationBuilder.Safe(model.CompatibilitySummary)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Stored As", ScenarioAuthoringPresentationBuilder.Safe(model.XmlPathHint)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("PNG Import Folder", ScenarioAuthoringPresentationBuilder.Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null))));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Compatible Vanilla", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Compatible Modded", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Editor", editorOpen ? "Open" : "Closed"));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Preview", !string.IsNullOrEmpty(previewLabel) ? previewLabel : "<none>"));
-            items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+            items.Add(ScenarioInspectorItemFactory.Property("Component", model.Target.Kind.ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Current Sprite", ScenarioInspectorItemFactory.Safe(model.Target.SpriteName)));
+            items.Add(ScenarioInspectorItemFactory.Property("Current Map", ScenarioInspectorItemFactory.Safe(model.Target.TextureName)));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Swap", ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary)));
+            items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
+            items.Add(ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)));
+            items.Add(ScenarioInspectorItemFactory.Property("PNG Import Folder", ScenarioInspectorItemFactory.Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null))));
+            items.Add(ScenarioInspectorItemFactory.Property("Compatible Vanilla", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Compatible Modded", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Editor", editorOpen ? "Open" : "Closed"));
+            items.Add(ScenarioInspectorItemFactory.Property("Preview", !string.IsNullOrEmpty(previewLabel) ? previewLabel : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
                 editorOpen ? "Asset Editor Open" : "Edit Asset",
                 "Open the dedicated asset editor, preview compatible replacements in real time, then save or cancel.",
                 true,
                 editorOpen)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Text(ScenarioAuthoringPresentationBuilder.Safe(model.GuidanceMessage)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Text("This follows the same serializer shape other scenario packs use: AssetReferences > SpriteSwaps > Swap."));
+            items.Add(ScenarioInspectorItemFactory.Text(ScenarioInspectorItemFactory.Safe(model.GuidanceMessage)));
+            items.Add(ScenarioInspectorItemFactory.Text("This follows the same serializer shape other scenario packs use: AssetReferences > SpriteSwaps > Swap."));
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -175,7 +175,7 @@ namespace ShelteredAPI.Scenarios
                     Title = "Scope",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
-                    Items = new[] { ScenarioAuthoringPresentationBuilder.Text(scopeReason) }
+                    Items = new[] { ScenarioInspectorItemFactory.Text(scopeReason) }
                 });
                 return sections;
             }
@@ -198,7 +198,7 @@ namespace ShelteredAPI.Scenarios
                 Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                 Items = new[]
                 {
-                    ScenarioAuthoringPresentationBuilder.Text("This browser is only for placing snapped scene sprites. Select an existing asset and use the Inspector's Edit Asset action to change that asset.")
+                    ScenarioInspectorItemFactory.Text("This browser is only for placing snapped scene sprites. Select an existing asset and use the Inspector's Edit Asset action to change that asset.")
                 }
             };
         }
@@ -217,36 +217,36 @@ namespace ShelteredAPI.Scenarios
                 return sections;
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioAuthoringPresentationBuilder.Text(
+            items.Add(ScenarioInspectorItemFactory.Text(
                 ScenarioAuthoringPresentationBuilder.FormatTarget(target),
                 target != null ? target.Kind.ToString() : "<none>",
                 null,
                 "AN",
                 ResolvePreviewSprite(target),
                 true));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Anchor", ScenarioAuthoringPresentationBuilder.FormatTarget(target)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Grid", target != null && target.GridX.HasValue && target.GridY.HasValue ? (target.GridX.Value + "," + target.GridY.Value) : "<none>"));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Active Placement", model.ActivePlacement != null ? ScenarioAuthoringPresentationBuilder.Safe(model.ActivePlacement.Id) : "<none>"));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioAuthoringPresentationBuilder.Safe(model.ActiveCandidateLabel) : "<none>"));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Placement Preview", model.PlacementActive ? "Active" : "Inactive"));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Compatibility", ScenarioAuthoringPresentationBuilder.Safe(model.CompatibilitySummary)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Stored As", ScenarioAuthoringPresentationBuilder.Safe(model.XmlPathHint)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Vanilla Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Modded Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Filtered People", model.BlockedPeople.ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Filtered Objects", model.BlockedInteractiveObjects.ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Filtered Pathing", model.BlockedPathfindingActors.ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Filtered Gameplay", model.BlockedGameplayAssets.ToString()));
-            items.Add(ScenarioAuthoringPresentationBuilder.Text(ScenarioAuthoringPresentationBuilder.Safe(model.PlacementSummary)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Text(ScenarioAuthoringPresentationBuilder.Safe(model.GuidanceMessage)));
-            items.Add(ScenarioAuthoringPresentationBuilder.Text("This follows the same serializer shape other scenario packs use: AssetReferences > SceneSpritePlacements > Placement."));
-            items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+            items.Add(ScenarioInspectorItemFactory.Property("Anchor", ScenarioAuthoringPresentationBuilder.FormatTarget(target)));
+            items.Add(ScenarioInspectorItemFactory.Property("Grid", target != null && target.GridX.HasValue && target.GridY.HasValue ? (target.GridX.Value + "," + target.GridY.Value) : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Placement", model.ActivePlacement != null ? ScenarioInspectorItemFactory.Safe(model.ActivePlacement.Id) : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioInspectorItemFactory.Safe(model.ActiveCandidateLabel) : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.Property("Placement Preview", model.PlacementActive ? "Active" : "Inactive"));
+            items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
+            items.Add(ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)));
+            items.Add(ScenarioInspectorItemFactory.Property("Vanilla Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Modded Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Filtered People", model.BlockedPeople.ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Filtered Objects", model.BlockedInteractiveObjects.ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Filtered Pathing", model.BlockedPathfindingActors.ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Filtered Gameplay", model.BlockedGameplayAssets.ToString()));
+            items.Add(ScenarioInspectorItemFactory.Text(ScenarioInspectorItemFactory.Safe(model.PlacementSummary)));
+            items.Add(ScenarioInspectorItemFactory.Text(ScenarioInspectorItemFactory.Safe(model.GuidanceMessage)));
+            items.Add(ScenarioInspectorItemFactory.Text("This follows the same serializer shape other scenario packs use: AssetReferences > SceneSpritePlacements > Placement."));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove,
                 "Remove Placement",
                 "Remove the selected authored scene sprite placement from the draft.",
                 model.ActivePlacement != null,
                 false)));
-            items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSceneSpritePlacementCancel,
                 "Cancel Active Placement",
                 "Stop the current scene sprite placement preview without changing the draft.",
@@ -274,10 +274,10 @@ namespace ShelteredAPI.Scenarios
             string activeToken)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioAuthoringPresentationBuilder.Property("Count", ScenarioAssetAuthoringContentMetrics.CountCandidates(candidates).ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Count", ScenarioAssetAuthoringContentMetrics.CountCandidates(candidates).ToString()));
             if (candidates == null || candidates.Count == 0)
             {
-                items.Add(ScenarioAuthoringPresentationBuilder.Text(emptyMessage));
+                items.Add(ScenarioInspectorItemFactory.Text(emptyMessage));
             }
             else
             {
@@ -288,7 +288,7 @@ namespace ShelteredAPI.Scenarios
                         continue;
 
                     bool active = string.Equals(candidate.Token, activeToken, StringComparison.Ordinal);
-                    items.Add(ScenarioAuthoringPresentationBuilder.ActionItem(ScenarioAuthoringPresentationBuilder.Action(
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioSceneSpritePlacementAuthoringService.BuildApplyActionId(candidate.Token),
                         ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(candidate.Label),
                         candidate.Hint,

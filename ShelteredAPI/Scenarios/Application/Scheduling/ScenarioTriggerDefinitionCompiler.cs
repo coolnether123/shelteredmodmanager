@@ -78,9 +78,9 @@ namespace ShelteredAPI.Scenarios
             if (type == "scenarioflagset" || type == "flagset")
             {
                 condition.Kind = ScenarioConditionKind.ScenarioFlagSet;
-                condition.FlagId = FirstProperty(trigger.Properties, "flagId", "targetId");
+                condition.FlagId = ScenarioPropertyBag.FirstString(trigger.Properties, "flagId", "targetId");
                 condition.TargetId = condition.FlagId;
-                condition.FlagValue = FirstProperty(trigger.Properties, "flagValue", "value");
+                condition.FlagValue = ScenarioPropertyBag.FirstString(trigger.Properties, "flagValue", "value");
                 return Require(condition.FlagId, "Trigger '" + trigger.Id + "' requires flagId for type '" + trigger.Type + "'.", out reason);
             }
 
@@ -89,22 +89,22 @@ namespace ShelteredAPI.Scenarios
                 condition.Kind = type == "questactive"
                     ? ScenarioConditionKind.QuestActive
                     : (type == "questcompleted" ? ScenarioConditionKind.QuestCompleted : ScenarioConditionKind.QuestFailed);
-                condition.TargetId = FirstProperty(trigger.Properties, "questId", "targetId");
+                condition.TargetId = ScenarioPropertyBag.FirstString(trigger.Properties, "questId", "targetId");
                 return Require(condition.TargetId, "Trigger '" + trigger.Id + "' requires questId for type '" + trigger.Type + "'.", out reason);
             }
 
             if (type == "survivorpresent")
             {
                 condition.Kind = ScenarioConditionKind.SurvivorPresent;
-                condition.TargetId = FirstProperty(trigger.Properties, "survivorId", "name", "targetId");
+                condition.TargetId = ScenarioPropertyBag.FirstString(trigger.Properties, "survivorId", "name", "targetId");
                 return Require(condition.TargetId, "Trigger '" + trigger.Id + "' requires survivorId/name.", out reason);
             }
 
             if (type == "itemquantityavailable" || type == "itemquantity" || type == "hasitem")
             {
                 condition.Kind = ScenarioConditionKind.ItemQuantityAvailable;
-                condition.TargetId = FirstProperty(trigger.Properties, "itemId", "targetId");
-                condition.Quantity = GetInt(trigger.Properties, "quantity", 1);
+                condition.TargetId = ScenarioPropertyBag.FirstString(trigger.Properties, "itemId", "targetId");
+                condition.Quantity = ScenarioPropertyBag.GetInt(trigger.Properties, "quantity", 1);
                 if (!Require(condition.TargetId, "Trigger '" + trigger.Id + "' requires itemId.", out reason))
                     return false;
                 if (condition.Quantity <= 0)
@@ -120,7 +120,7 @@ namespace ShelteredAPI.Scenarios
                 condition.Kind = type == "technologyunlocked"
                     ? ScenarioConditionKind.TechnologyUnlocked
                     : ScenarioConditionKind.BunkerExpansionUnlocked;
-                condition.TargetId = FirstProperty(trigger.Properties, "bunkerExpansionId", "technologyId", "targetId");
+                condition.TargetId = ScenarioPropertyBag.FirstString(trigger.Properties, "bunkerExpansionId", "technologyId", "targetId");
                 return Require(condition.TargetId, "Trigger '" + trigger.Id + "' requires target id for type '" + trigger.Type + "'.", out reason);
             }
 
@@ -131,9 +131,9 @@ namespace ShelteredAPI.Scenarios
         private static ScenarioScheduleTime ReadSchedule(List<ScenarioProperty> properties)
         {
             ScenarioScheduleTime time = new ScenarioScheduleTime();
-            time.Day = Math.Max(1, GetInt(properties, "day", GetInt(properties, "days", time.Day)));
-            time.Hour = Clamp(GetInt(properties, "hour", time.Hour), 0, 23);
-            time.Minute = Clamp(GetInt(properties, "minute", time.Minute), 0, 59);
+            time.Day = Math.Max(1, ScenarioPropertyBag.GetInt(properties, "day", ScenarioPropertyBag.GetInt(properties, "days", time.Day)));
+            time.Hour = Clamp(ScenarioPropertyBag.GetInt(properties, "hour", time.Hour), 0, 23);
+            time.Minute = Clamp(ScenarioPropertyBag.GetInt(properties, "minute", time.Minute), 0, 59);
             return time;
         }
 
@@ -145,40 +145,6 @@ namespace ShelteredAPI.Scenarios
 
             reason = message;
             return false;
-        }
-
-        private static string FirstProperty(List<ScenarioProperty> properties, params string[] keys)
-        {
-            for (int i = 0; keys != null && i < keys.Length; i++)
-            {
-                string value = GetProperty(properties, keys[i]);
-                if (!string.IsNullOrEmpty(value))
-                    return value;
-            }
-
-            return null;
-        }
-
-        private static int GetInt(List<ScenarioProperty> properties, string key, int fallback)
-        {
-            string value = GetProperty(properties, key);
-            int parsed;
-            return !string.IsNullOrEmpty(value) && int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
-        }
-
-        private static string GetProperty(List<ScenarioProperty> properties, string key)
-        {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return null;
-
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
-            }
-
-            return null;
         }
 
         private static int Clamp(int value, int min, int max)

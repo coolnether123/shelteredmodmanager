@@ -2257,11 +2257,9 @@ namespace ShelteredAPI.Scenarios
             return manager.currentState + " / day " + manager.currentDay;
         }
 
-        internal static string FormatSchedule(ScenarioScheduleTime time)
+        private static string FormatSchedule(ScenarioScheduleTime time)
         {
-            if (time == null)
-                return "unscheduled";
-            return "day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2");
+            return ScenarioScheduleFormatter.Format(time);
         }
 
         private static string FormatTriggerSchedule(TriggerDef trigger)
@@ -2269,12 +2267,12 @@ namespace ShelteredAPI.Scenarios
             if (trigger == null || trigger.Properties == null)
                 return "manual";
 
-            int day = ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "day", 0);
+            int day = ScenarioPropertyBag.GetInt(trigger.Properties, "day", 0);
             if (day <= 0)
                 return "manual";
 
-            int hour = ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "hour", 8);
-            int minute = ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "minute", 0);
+            int hour = ScenarioPropertyBag.GetInt(trigger.Properties, "hour", 8);
+            int minute = ScenarioPropertyBag.GetInt(trigger.Properties, "minute", 0);
             return "day " + day.ToString(CultureInfo.InvariantCulture) + " " + hour.ToString("D2") + ":" + minute.ToString("D2");
         }
 
@@ -2640,7 +2638,7 @@ namespace ShelteredAPI.Scenarios
             return actions.ToArray();
         }
 
-        internal static ScenarioAuthoringInspectorAction Action(
+        private static ScenarioAuthoringInspectorAction Action(
             string id,
             string label,
             string hint,
@@ -2665,7 +2663,7 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        internal static ScenarioAuthoringInspectorItem Text(
+        private static ScenarioAuthoringInspectorItem Text(
             string value,
             string detail = null,
             string badge = null,
@@ -2685,7 +2683,7 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        internal static ScenarioAuthoringInspectorItem Property(
+        private static ScenarioAuthoringInspectorItem Property(
             string label,
             string value,
             string detail = null,
@@ -2707,7 +2705,7 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        internal static ScenarioAuthoringInspectorItem ActionItem(ScenarioAuthoringInspectorAction action)
+        private static ScenarioAuthoringInspectorItem ActionItem(ScenarioAuthoringInspectorAction action)
         {
             return new ScenarioAuthoringInspectorItem
             {
@@ -2752,7 +2750,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        internal static string Safe(string value)
+        private static string Safe(string value)
         {
             return string.IsNullOrEmpty(value) ? "<none>" : value;
         }

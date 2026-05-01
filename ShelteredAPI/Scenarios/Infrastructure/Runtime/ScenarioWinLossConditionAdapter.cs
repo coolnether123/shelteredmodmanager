@@ -30,7 +30,7 @@ namespace ShelteredAPI.Scenarios
 
             if (type == "survivedays")
             {
-                int days = GetInt(condition.Properties, "days", 0);
+                int days = ScenarioPropertyBag.GetInt(condition.Properties, "days", 0);
                 if (days <= 0)
                 {
                     reason = "surviveDays condition requires a positive 'days' property.";
@@ -47,7 +47,7 @@ namespace ShelteredAPI.Scenarios
 
             if (type == "timereached" || type == "dayreached")
             {
-                int day = GetInt(condition.Properties, "day", GetInt(condition.Properties, "days", 0));
+                int day = ScenarioPropertyBag.GetInt(condition.Properties, "day", ScenarioPropertyBag.GetInt(condition.Properties, "days", 0));
                 if (day <= 0)
                 {
                     reason = "timeReached/dayReached condition requires a positive 'day' property.";
@@ -57,16 +57,16 @@ namespace ShelteredAPI.Scenarios
                 conditionRef.Kind = ScenarioConditionKind.TimeReached;
                 conditionRef.Time = new ScenarioScheduleTime();
                 conditionRef.Time.Day = day;
-                conditionRef.Time.Hour = GetInt(condition.Properties, "hour", 0);
-                conditionRef.Time.Minute = GetInt(condition.Properties, "minute", 0);
+                conditionRef.Time.Hour = ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0);
+                conditionRef.Time.Minute = ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0);
                 return true;
             }
 
             if (type == "itemquantityavailable" || type == "itemquantity" || type == "hasitem")
             {
                 conditionRef.Kind = ScenarioConditionKind.ItemQuantityAvailable;
-                conditionRef.TargetId = FirstProperty(condition.Properties, "itemId", "targetId");
-                conditionRef.Quantity = GetInt(condition.Properties, "quantity", 1);
+                conditionRef.TargetId = ScenarioPropertyBag.FirstString(condition.Properties, "itemId", "targetId");
+                conditionRef.Quantity = ScenarioPropertyBag.GetInt(condition.Properties, "quantity", 1);
                 return Require(conditionRef.TargetId, "Item quantity condition requires an itemId property.", out reason);
             }
 
@@ -75,14 +75,14 @@ namespace ShelteredAPI.Scenarios
                 conditionRef.Kind = type == "questactive"
                     ? ScenarioConditionKind.QuestActive
                     : (type == "questcompleted" ? ScenarioConditionKind.QuestCompleted : ScenarioConditionKind.QuestFailed);
-                conditionRef.TargetId = FirstProperty(condition.Properties, "questId", "targetId");
+                conditionRef.TargetId = ScenarioPropertyBag.FirstString(condition.Properties, "questId", "targetId");
                 return Require(conditionRef.TargetId, "Quest condition requires a questId property.", out reason);
             }
 
             if (type == "survivorpresent")
             {
                 conditionRef.Kind = ScenarioConditionKind.SurvivorPresent;
-                conditionRef.TargetId = FirstProperty(condition.Properties, "survivorId", "name", "targetId");
+                conditionRef.TargetId = ScenarioPropertyBag.FirstString(condition.Properties, "survivorId", "name", "targetId");
                 return Require(conditionRef.TargetId, "Survivor condition requires a survivorId/name property.", out reason);
             }
 
@@ -91,23 +91,23 @@ namespace ShelteredAPI.Scenarios
                 conditionRef.Kind = type == "technologyunlocked"
                     ? ScenarioConditionKind.TechnologyUnlocked
                     : ScenarioConditionKind.BunkerExpansionUnlocked;
-                conditionRef.TargetId = FirstProperty(condition.Properties, "bunkerExpansionId", "technologyId", "targetId");
+                conditionRef.TargetId = ScenarioPropertyBag.FirstString(condition.Properties, "bunkerExpansionId", "technologyId", "targetId");
                 return Require(conditionRef.TargetId, "Bunker/technology condition requires a target id property.", out reason);
             }
 
             if (type == "scenarioflagset" || type == "flagset")
             {
                 conditionRef.Kind = ScenarioConditionKind.ScenarioFlagSet;
-                conditionRef.FlagId = FirstProperty(condition.Properties, "flagId", "targetId");
+                conditionRef.FlagId = ScenarioPropertyBag.FirstString(condition.Properties, "flagId", "targetId");
                 conditionRef.TargetId = conditionRef.FlagId;
-                conditionRef.FlagValue = FirstProperty(condition.Properties, "flagValue", "value");
+                conditionRef.FlagValue = ScenarioPropertyBag.FirstString(condition.Properties, "flagValue", "value");
                 return Require(conditionRef.FlagId, "Scenario flag condition requires a flagId property.", out reason);
             }
 
             if (type == "customtrigger" || type == "trigger")
             {
                 conditionRef.Kind = ScenarioConditionKind.CustomTrigger;
-                conditionRef.TargetId = FirstProperty(condition.Properties, "triggerId", "targetId");
+                conditionRef.TargetId = ScenarioPropertyBag.FirstString(condition.Properties, "triggerId", "targetId");
                 return Require(conditionRef.TargetId, "Custom trigger condition requires a triggerId property.", out reason);
             }
 
@@ -124,40 +124,6 @@ namespace ShelteredAPI.Scenarios
 
             reason = message;
             return false;
-        }
-
-        private static string FirstProperty(List<ScenarioProperty> properties, params string[] keys)
-        {
-            for (int i = 0; keys != null && i < keys.Length; i++)
-            {
-                string value = GetProperty(properties, keys[i]);
-                if (!string.IsNullOrEmpty(value))
-                    return value;
-            }
-
-            return null;
-        }
-
-        private static int GetInt(List<ScenarioProperty> properties, string key, int fallback)
-        {
-            string value = GetProperty(properties, key);
-            int parsed;
-            return !string.IsNullOrEmpty(value) && int.TryParse(value, out parsed) ? parsed : fallback;
-        }
-
-        private static string GetProperty(List<ScenarioProperty> properties, string key)
-        {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return null;
-
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
-            }
-
-            return null;
         }
 
         private static string Normalize(string value)

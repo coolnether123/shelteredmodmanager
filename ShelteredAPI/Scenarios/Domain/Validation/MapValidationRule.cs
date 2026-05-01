@@ -397,20 +397,8 @@ namespace ShelteredAPI.Scenarios
         private static void ValidateOptionalGateReference(ScenarioDefinition definition, string label, string gateId, ScenarioValidationResult result)
         {
             string id = TrimToNull(gateId);
-            if (id != null && !HasGate(definition, id))
+            if (id != null && !ScenarioDefinitionLookup.HasGate(definition, id))
                 result.AddError(label + " references unknown requiredGateId '" + id + "'.");
-        }
-
-        private static bool HasGate(ScenarioDefinition definition, string gateId)
-        {
-            for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
-            {
-                ScenarioGateDefinition gate = definition.Gates[i];
-                if (gate != null && string.Equals(gate.Id, gateId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            return false;
         }
 
         private static void AddUnique(Dictionary<string, bool> ids, string id, string duplicateMessage, ScenarioValidationResult result)

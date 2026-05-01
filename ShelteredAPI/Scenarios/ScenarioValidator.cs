@@ -323,45 +323,14 @@ namespace ShelteredAPI.Scenarios
                         questIds[id] = true;
 
                     string startTriggerId = TrimToNull(quest.StartTriggerId);
-                    if (startTriggerId != null && !HasTrigger(definition.TriggersAndEvents, startTriggerId))
+                    if (startTriggerId != null && !ScenarioDefinitionLookup.HasTrigger(definition.TriggersAndEvents, startTriggerId))
                         result.AddError("Quest '" + id + "' references unknown startTriggerId '" + startTriggerId + "'.");
 
                     string completionConditionId = TrimToNull(quest.CompletionConditionId);
-                    if (completionConditionId != null && !HasCondition(definition.WinLossConditions, completionConditionId))
+                    if (completionConditionId != null && !ScenarioDefinitionLookup.HasCondition(definition.WinLossConditions, completionConditionId))
                         result.AddError("Quest '" + id + "' references unknown completionConditionId '" + completionConditionId + "'.");
                 }
             }
-        }
-
-        private static bool HasTrigger(TriggersAndEventsDefinition triggersAndEvents, string triggerId)
-        {
-            for (int i = 0; triggersAndEvents != null && triggersAndEvents.Triggers != null && i < triggersAndEvents.Triggers.Count; i++)
-            {
-                TriggerDef trigger = triggersAndEvents.Triggers[i];
-                if (trigger != null && string.Equals(trigger.Id, triggerId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static bool HasCondition(WinLossConditionsDefinition conditions, string conditionId)
-        {
-            for (int i = 0; conditions != null && conditions.WinConditions != null && i < conditions.WinConditions.Count; i++)
-            {
-                ConditionDef condition = conditions.WinConditions[i];
-                if (condition != null && string.Equals(condition.Id, conditionId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            for (int i = 0; conditions != null && conditions.LossConditions != null && i < conditions.LossConditions.Count; i++)
-            {
-                ConditionDef condition = conditions.LossConditions[i];
-                if (condition != null && string.Equals(condition.Id, conditionId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            return false;
         }
 
         private static void ValidateSpecialPlacement(
@@ -388,7 +357,7 @@ namespace ShelteredAPI.Scenarios
                         result.AddError("Ladder placement #" + index + " must include grid coordinates or a position.");
 
                     float horizontalPos;
-                    if (TryGetFloatProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyHorizontalPos, out horizontalPos)
+                    if (ScenarioPropertyBag.TryGetFloat(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyHorizontalPos, out horizontalPos)
                         && (horizontalPos < 0f || horizontalPos > 1f))
                     {
                         result.AddError("Ladder placement #" + index + " has horizontalPos outside the 0..1 range.");
@@ -658,8 +627,8 @@ namespace ShelteredAPI.Scenarios
             gridY = -1;
             int parsedGridX;
             int parsedGridY;
-            if (!TryGetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridX, out parsedGridX)
-                || !TryGetIntProperty(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridY, out parsedGridY))
+            if (!ScenarioPropertyBag.TryGetInt(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridX, out parsedGridX)
+                || !ScenarioPropertyBag.TryGetInt(placement != null ? placement.CustomProperties : null, ScenarioPlacementDefinitions.PropertyGridY, out parsedGridY))
             {
                 return false;
             }
@@ -667,36 +636,6 @@ namespace ShelteredAPI.Scenarios
             gridX = parsedGridX;
             gridY = parsedGridY;
             return true;
-        }
-
-        private static bool TryGetIntProperty(List<ScenarioProperty> properties, string key, out int value)
-        {
-            value = 0;
-            string propertyValue = GetProperty(properties, key);
-            return !string.IsNullOrEmpty(propertyValue) && int.TryParse(propertyValue, out value);
-        }
-
-        private static bool TryGetFloatProperty(List<ScenarioProperty> properties, string key, out float value)
-        {
-            value = 0f;
-            string propertyValue = GetProperty(properties, key);
-            return !string.IsNullOrEmpty(propertyValue)
-                && float.TryParse(propertyValue, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
-        }
-
-        private static string GetProperty(List<ScenarioProperty> properties, string key)
-        {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return null;
-
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
-            }
-
-            return null;
         }
 
         private static string EnsureTrailingDirectorySeparator(string path)

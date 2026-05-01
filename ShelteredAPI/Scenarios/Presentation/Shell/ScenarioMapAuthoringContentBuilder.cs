@@ -247,17 +247,17 @@ namespace ShelteredAPI.Scenarios
 
         private static ScenarioAuthoringInspectorItem Text(string value)
         {
-            return ScenarioAuthoringPresentationBuilder.Text(value);
+            return ScenarioInspectorItemFactory.Text(value);
         }
 
         private static ScenarioAuthoringInspectorItem Property(string label, string value)
         {
-            return ScenarioAuthoringPresentationBuilder.Property(label, value);
+            return ScenarioInspectorItemFactory.Property(label, value);
         }
 
         private static string Safe(string value)
         {
-            return string.IsNullOrEmpty(value) ? "<none>" : value;
+            return ScenarioInspectorItemFactory.Safe(value);
         }
 
         private static string Count<T>(List<T> values)

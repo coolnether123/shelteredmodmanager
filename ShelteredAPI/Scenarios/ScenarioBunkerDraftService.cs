@@ -152,7 +152,7 @@ namespace ShelteredAPI.Scenarios
                 if (placement == null)
                     continue;
 
-                string sourceObjectId = GetProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
+                string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
                 if (!string.IsNullOrEmpty(objectId)
                     && !string.IsNullOrEmpty(sourceObjectId)
                     && string.Equals(sourceObjectId, objectId, StringComparison.OrdinalIgnoreCase))
@@ -179,8 +179,8 @@ namespace ShelteredAPI.Scenarios
             if (placements == null || placement == null)
                 return -1;
 
-            string identity = GetProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity);
-            string sourceObjectId = GetProperty(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
+            string identity = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity);
+            string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
             Vector3 position = new Vector3(
                 placement.Position != null ? placement.Position.X : 0f,
                 placement.Position != null ? placement.Position.Y : 0f,
@@ -192,7 +192,7 @@ namespace ShelteredAPI.Scenarios
                 if (existing == null)
                     continue;
 
-                string existingIdentity = GetProperty(existing.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity);
+                string existingIdentity = ScenarioPropertyBag.GetString(existing.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity);
                 if (!string.IsNullOrEmpty(identity)
                     && !string.IsNullOrEmpty(existingIdentity)
                     && string.Equals(existingIdentity, identity, StringComparison.OrdinalIgnoreCase))
@@ -200,7 +200,7 @@ namespace ShelteredAPI.Scenarios
                     return i;
                 }
 
-                string existingSourceObjectId = GetProperty(existing.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
+                string existingSourceObjectId = ScenarioPropertyBag.GetString(existing.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
                 if (!string.IsNullOrEmpty(sourceObjectId)
                     && !string.IsNullOrEmpty(existingSourceObjectId)
                     && string.Equals(existingSourceObjectId, sourceObjectId, StringComparison.OrdinalIgnoreCase))
@@ -238,39 +238,12 @@ namespace ShelteredAPI.Scenarios
 
         public static string GetProperty(List<ScenarioProperty> properties, string key)
         {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return null;
-
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value;
-            }
-
-            return null;
+            return ScenarioPropertyBag.GetString(properties, key);
         }
 
         public static void SetProperty(List<ScenarioProperty> properties, string key, string value)
         {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return;
-
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property == null || !string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                property.Value = value;
-                return;
-            }
-
-            properties.Add(new ScenarioProperty
-            {
-                Key = key,
-                Value = value
-            });
+            ScenarioPropertyBag.Set(properties, key, value);
         }
 
         public static string SafeObjectName(Obj_Base obj)

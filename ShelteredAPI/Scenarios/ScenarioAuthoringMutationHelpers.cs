@@ -41,55 +41,6 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
-    internal static class ScenarioAuthoringPropertyBag
-    {
-        public static void Set(List<ScenarioProperty> properties, string key, string value)
-        {
-            if (properties == null || string.IsNullOrEmpty(key))
-                return;
-            for (int i = 0; i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                {
-                    property.Value = value;
-                    return;
-                }
-            }
-            properties.Add(new ScenarioProperty { Key = key, Value = value });
-        }
-
-        public static int GetInt(List<ScenarioProperty> properties, string key, int fallback)
-        {
-            for (int i = 0; properties != null && i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                int parsed;
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase) && int.TryParse(property.Value, out parsed))
-                    return parsed;
-            }
-            return fallback;
-        }
-
-        public static string GetString(List<ScenarioProperty> properties, string key, string fallback)
-        {
-            for (int i = 0; properties != null && i < properties.Count; i++)
-            {
-                ScenarioProperty property = properties[i];
-                if (property != null && string.Equals(property.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return property.Value ?? fallback;
-            }
-            return fallback;
-        }
-
-        public static bool GetBool(List<ScenarioProperty> properties, string key, bool fallback)
-        {
-            string value = GetString(properties, key, fallback ? "true" : "false");
-            bool parsed;
-            return bool.TryParse(value, out parsed) ? parsed : fallback;
-        }
-    }
-
     internal static class ScenarioAuthoringSchedule
     {
         public static ScenarioScheduleTime NextTime()

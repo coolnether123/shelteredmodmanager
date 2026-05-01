@@ -1481,24 +1481,12 @@ namespace ShelteredAPI.Scenarios
 
         private static string EncodeActionToken(string token)
         {
-            byte[] bytes = Encoding.UTF8.GetBytes(token ?? string.Empty);
-            return Convert.ToBase64String(bytes);
+            return ScenarioAuthoringActionCodec.EncodeToken(token);
         }
 
         private static string DecodeActionToken(string encoded)
         {
-            if (string.IsNullOrEmpty(encoded))
-                return null;
-
-            try
-            {
-                byte[] bytes = Convert.FromBase64String(encoded);
-                return Encoding.UTF8.GetString(bytes);
-            }
-            catch
-            {
-                return null;
-            }
+            return ScenarioAuthoringActionCodec.DecodeToken(encoded);
         }
 
         private static int ComparePaletteEntries(PaletteEntryModel left, PaletteEntryModel right)

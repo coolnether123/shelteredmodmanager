@@ -12,40 +12,40 @@ namespace ShelteredAPI.Scenarios
             if (definition == null || summary == null)
                 return;
 
-            HashSet<string> gates = CollectGateIds(definition);
+            ScenarioDefinitionIndex index = new ScenarioDefinitionIndex(definition);
             for (int i = 0; definition.Gates != null && i < definition.Gates.Count; i++)
             {
                 ScenarioGateDefinition gate = definition.Gates[i];
                 string id = TrimToNull(gate != null ? gate.Id : null);
                 if (id == null)
                     summary.AddError("events.gate.id_required", "[Events] Gate #" + i + " is missing id.");
-                ValidateGroup(definition, summary, gate != null ? gate.Conditions : null, "[Events] Gate '" + (id ?? ("#" + i)) + "'");
+                ValidateGroup(index, summary, gate != null ? gate.Conditions : null, "[Events] Gate '" + (id ?? ("#" + i)) + "'");
             }
 
             for (int i = 0; definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 string gateId = TrimToNull(action != null ? action.GateId : null);
-                if (gateId != null && !gates.Contains(gateId))
+                if (gateId != null && !index.HasGate(gateId))
                     summary.AddError("events.action.unknown_gate", "[Events] Scheduled action '" + (action.Id ?? ("#" + i)) + "' references unknown gate '" + gateId + "'.");
             }
 
             ValidateCircularGateRefs(definition, summary);
         }
 
-        private static void ValidateGroup(ScenarioDefinition definition, ValidationSummary summary, ScenarioConditionGroup group, string scope)
+        private static void ValidateGroup(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionGroup group, string scope)
         {
             if (group == null)
                 return;
 
             for (int i = 0; group.Conditions != null && i < group.Conditions.Count; i++)
-                ValidateCondition(definition, summary, group.Conditions[i], scope);
+                ValidateCondition(index, summary, group.Conditions[i], scope);
 
             for (int i = 0; group.Groups != null && i < group.Groups.Count; i++)
-                ValidateGroup(definition, summary, group.Groups[i], scope);
+                ValidateGroup(index, summary, group.Groups[i], scope);
         }
 
-        private static void ValidateCondition(ScenarioDefinition definition, ValidationSummary summary, ScenarioConditionRef condition, string scope)
+        private static void ValidateCondition(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionRef condition, string scope)
         {
             if (condition == null)
             {
@@ -59,11 +59,11 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioConditionKind.QuestActive:
                 case ScenarioConditionKind.QuestCompleted:
                 case ScenarioConditionKind.QuestFailed:
-                    if (target == null || !HasQuest(definition, target))
+                    if (target == null || !index.HasQuest(target))
                         summary.AddError("quests.condition.unknown", scope + " references unknown quest '" + (target ?? string.Empty) + "'.");
                     break;
                 case ScenarioConditionKind.BunkerExpansionUnlocked:
-                    if (target == null || !HasExpansion(definition, target))
+                    if (target == null || !index.HasExpansion(target))
                         summary.AddError("bunker.condition.unknown_expansion", scope + " references unknown bunker expansion '" + (target ?? string.Empty) + "'.");
                     break;
                 case ScenarioConditionKind.ScenarioFlagSet:
@@ -93,7 +93,7 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioConditionKind.CustomTrigger:
                     if (target == null)
                         summary.AddError("events.condition.target_required", scope + " condition is missing target id.");
-                    else if (!HasTrigger(definition, target))
+                    else if (!index.HasTrigger(target))
                         summary.AddError("events.condition.unknown_trigger", scope + " references unknown trigger '" + target + "'.");
                     break;
             }
@@ -138,42 +138,6 @@ namespace ShelteredAPI.Scenarios
                     return condition.TargetId;
             }
             return null;
-        }
-
-        private static HashSet<string> CollectGateIds(ScenarioDefinition definition)
-        {
-            HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; definition.Gates != null && i < definition.Gates.Count; i++)
-            {
-                string id = TrimToNull(definition.Gates[i] != null ? definition.Gates[i].Id : null);
-                if (id != null)
-                    ids.Add(id);
-            }
-            return ids;
-        }
-
-        private static bool HasQuest(ScenarioDefinition definition, string id)
-        {
-            for (int i = 0; definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
-                if (definition.Quests.Quests[i] != null && string.Equals(definition.Quests.Quests[i].Id, id, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
-        }
-
-        private static bool HasExpansion(ScenarioDefinition definition, string id)
-        {
-            for (int i = 0; definition.BunkerGrid != null && definition.BunkerGrid.Expansions != null && i < definition.BunkerGrid.Expansions.Count; i++)
-                if (definition.BunkerGrid.Expansions[i] != null && string.Equals(definition.BunkerGrid.Expansions[i].Id, id, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
-        }
-
-        private static bool HasTrigger(ScenarioDefinition definition, string id)
-        {
-            for (int i = 0; definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
-                if (definition.TriggersAndEvents.Triggers[i] != null && string.Equals(definition.TriggersAndEvents.Triggers[i].Id, id, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
         }
 
         private static string TrimToNull(string value)

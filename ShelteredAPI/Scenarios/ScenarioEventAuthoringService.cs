@@ -79,8 +79,8 @@ namespace ShelteredAPI.Scenarios
             if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, events.Triggers.Count, out index, out delta))
             {
                 TriggerDef trigger = events.Triggers[index];
-                int day = Math.Max(1, ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "day", 1) + delta);
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "day", day.ToString());
+                int day = Math.Max(1, ScenarioPropertyBag.GetInt(trigger.Properties, "day", 1) + delta);
+                ScenarioPropertyBag.Set(trigger.Properties, "day", day.ToString());
                 ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
                 message = "Updated trigger day to " + day + ".";
                 return true;
@@ -88,8 +88,8 @@ namespace ShelteredAPI.Scenarios
             if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, events.Triggers.Count, out index, out delta))
             {
                 TriggerDef trigger = events.Triggers[index];
-                int hour = ScenarioAuthoringSchedule.Clamp(ScenarioAuthoringPropertyBag.GetInt(trigger.Properties, "hour", 8) + delta, 0, 23);
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "hour", hour.ToString());
+                int hour = ScenarioAuthoringSchedule.Clamp(ScenarioPropertyBag.GetInt(trigger.Properties, "hour", 8) + delta, 0, 23);
+                ScenarioPropertyBag.Set(trigger.Properties, "hour", hour.ToString());
                 ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
                 message = "Updated trigger hour to " + hour + ".";
                 return true;
@@ -128,23 +128,23 @@ namespace ShelteredAPI.Scenarios
                 || string.Equals(type, "TimeReached", StringComparison.OrdinalIgnoreCase))
             {
                 ScenarioScheduleTime time = ScenarioAuthoringSchedule.NextTime();
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "day", time.Day.ToString());
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "hour", time.Hour.ToString());
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "minute", time.Minute.ToString());
+                ScenarioPropertyBag.Set(trigger.Properties, "day", time.Day.ToString());
+                ScenarioPropertyBag.Set(trigger.Properties, "hour", time.Hour.ToString());
+                ScenarioPropertyBag.Set(trigger.Properties, "minute", time.Minute.ToString());
             }
             else if (string.Equals(type, "ScenarioFlagSet", StringComparison.OrdinalIgnoreCase))
             {
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "flagId", "flag_1");
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "flagValue", "true");
+                ScenarioPropertyBag.Set(trigger.Properties, "flagId", "flag_1");
+                ScenarioPropertyBag.Set(trigger.Properties, "flagValue", "true");
             }
             else if (string.Equals(type, "QuestCompleted", StringComparison.OrdinalIgnoreCase))
             {
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "questId", "quest_1");
+                ScenarioPropertyBag.Set(trigger.Properties, "questId", "quest_1");
             }
             else if (string.Equals(type, "ItemQuantityAvailable", StringComparison.OrdinalIgnoreCase))
             {
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "itemId", "Food");
-                ScenarioAuthoringPropertyBag.Set(trigger.Properties, "quantity", "1");
+                ScenarioPropertyBag.Set(trigger.Properties, "itemId", "Food");
+                ScenarioPropertyBag.Set(trigger.Properties, "quantity", "1");
             }
         }
 
@@ -576,7 +576,7 @@ namespace ShelteredAPI.Scenarios
                 id = "trigger_" + index.ToString();
                 index++;
             }
-            while (HasTrigger(events, id));
+            while (ScenarioDefinitionLookup.HasTrigger(events, id));
             return id;
         }
 
@@ -589,7 +589,7 @@ namespace ShelteredAPI.Scenarios
                 id = "gate_" + index.ToString();
                 index++;
             }
-            while (HasGate(definition, id));
+            while (ScenarioDefinitionLookup.HasGate(definition, id));
             return id;
         }
 
@@ -604,22 +604,6 @@ namespace ShelteredAPI.Scenarios
             }
             while (HasScheduledAction(definition, id));
             return id;
-        }
-
-        private static bool HasTrigger(TriggersAndEventsDefinition events, string id)
-        {
-            for (int i = 0; events != null && events.Triggers != null && i < events.Triggers.Count; i++)
-                if (events.Triggers[i] != null && string.Equals(events.Triggers[i].Id, id, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
-        }
-
-        private static bool HasGate(ScenarioDefinition definition, string id)
-        {
-            for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
-                if (definition.Gates[i] != null && string.Equals(definition.Gates[i].Id, id, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
         }
 
         private static bool HasScheduledAction(ScenarioDefinition definition, string id)
