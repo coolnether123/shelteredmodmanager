@@ -67,53 +67,67 @@ namespace ShelteredAPI.Core
         {
             var gameHelper = new GameHelperImpl();
             RegisterApi(GameRuntimeApiIds.GameHelper, gameHelper);
-            RegisterApi("ShelteredAPI.GameHelper", gameHelper);
+            RegisterApi(ShelteredApiAliasIds.GameHelper, gameHelper);
 
             IContentResolutionService contentResolution = new ShelteredContentResolutionService();
             RegisterApi(GameRuntimeApiIds.ContentResolution, contentResolution);
-            RegisterApi("ShelteredAPI.ContentResolution", contentResolution);
+            RegisterApi(ShelteredApiAliasIds.ContentResolution, contentResolution);
+
+            IShelteredContentService content = ShelteredContent.Service;
+            RegisterApi(GameRuntimeApiIds.ShelteredContent, content);
+            RegisterApi(ShelteredApiAliasIds.ShelteredContent, content);
+            RegisterApi(GameRuntimeApiIds.ShelteredContentRegistration, content.Registration);
+            RegisterApi(ShelteredApiAliasIds.ShelteredContentRegistration, content.Registration);
+            RegisterApi(GameRuntimeApiIds.ShelteredInventory, content.Inventory);
+            RegisterApi(ShelteredApiAliasIds.ShelteredInventory, content.Inventory);
+            RegisterApi(GameRuntimeApiIds.ShelteredAssetLoading, content.Assets);
+            RegisterApi(ShelteredApiAliasIds.ShelteredAssetLoading, content.Assets);
+            RegisterApi(GameRuntimeApiIds.ShelteredLocalization, content.Localization);
+            RegisterApi(ShelteredApiAliasIds.ShelteredLocalization, content.Localization);
+            RegisterApi(GameRuntimeApiIds.ShelteredRecipeLootMutation, content.RecipeLootMutation);
+            RegisterApi(ShelteredApiAliasIds.ShelteredRecipeLootMutation, content.RecipeLootMutation);
 
             IGameLifecycleSource lifecycleSource = new ShelteredGameLifecycleSource();
             RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);
-            RegisterApi("ShelteredAPI.GameLifecycle", lifecycleSource);
+            RegisterApi(ShelteredApiAliasIds.GameLifecycle, lifecycleSource);
 
             ISaveRuntimeAdapter saveRuntime = new ShelteredSaveRuntimeAdapter();
             RegisterApi(GameRuntimeApiIds.SaveRuntime, saveRuntime);
-            RegisterApi("ShelteredAPI.SaveRuntime", saveRuntime);
+            RegisterApi(ShelteredApiAliasIds.SaveRuntime, saveRuntime);
             saveRuntime.EnsureRuntimeReady();
 
             IUiLifecycleEventSink uiLifecycleEvents = new ShelteredUiLifecycleEventSink();
             RegisterApi(GameRuntimeApiIds.UiLifecycleEvents, uiLifecycleEvents);
-            RegisterApi("ShelteredAPI.UiLifecycleEvents", uiLifecycleEvents);
+            RegisterApi(ShelteredApiAliasIds.UiLifecycleEvents, uiLifecycleEvents);
 
             IActorSystem actors = ShelteredActors.Instance;
             RegisterApi(GameRuntimeApiIds.Actors, actors);
-            RegisterApi("ShelteredAPI.Actors", actors);
+            RegisterApi(ShelteredApiAliasIds.Actors, actors);
             RegisterApi(GameRuntimeApiIds.ActorRegistry, (IActorRegistry)actors);
-            RegisterApi("ShelteredAPI.ActorRegistry", (IActorRegistry)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorRegistry, (IActorRegistry)actors);
             RegisterApi(GameRuntimeApiIds.ActorComponents, (IActorComponentStore)actors);
-            RegisterApi("ShelteredAPI.ActorComponents", (IActorComponentStore)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorComponents, (IActorComponentStore)actors);
             RegisterApi(GameRuntimeApiIds.ActorBindings, (IActorBindingStore)actors);
-            RegisterApi("ShelteredAPI.ActorBindings", (IActorBindingStore)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorBindings, (IActorBindingStore)actors);
             RegisterApi(GameRuntimeApiIds.ActorAdapters, (IActorAdapterRegistry)actors);
-            RegisterApi("ShelteredAPI.ActorAdapters", (IActorAdapterRegistry)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorAdapters, (IActorAdapterRegistry)actors);
             RegisterApi(GameRuntimeApiIds.ActorDiagnostics, (IActorDiagnostics)actors);
-            RegisterApi("ShelteredAPI.ActorDiagnostics", (IActorDiagnostics)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorDiagnostics, (IActorDiagnostics)actors);
             RegisterApi(GameRuntimeApiIds.ActorSimulation, (IActorSimulationScheduler)actors);
-            RegisterApi("ShelteredAPI.ActorSimulation", (IActorSimulationScheduler)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorSimulation, (IActorSimulationScheduler)actors);
             RegisterApi(GameRuntimeApiIds.ActorEvents, (IActorEvents)actors);
-            RegisterApi("ShelteredAPI.ActorEvents", (IActorEvents)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorEvents, (IActorEvents)actors);
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
-            RegisterApi("ShelteredAPI.ActorSerialization", (IActorSerializationService)actors);
+            RegisterApi(ShelteredApiAliasIds.ActorSerialization, (IActorSerializationService)actors);
 
             ICustomScenarioService customScenarios = ScenarioCompositionRoot.Resolve<ICustomScenarioService>();
             IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
             ScenarioCompositionRoot.Resolve<IScenarioRuntimeBindingService>().EnsureHooked();
             ScenarioCompositionRoot.Resolve<IShelteredCustomScenarioService>().RefreshDefinitionCatalog();
             RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
-            RegisterApi("ShelteredAPI.CustomScenarios", customScenarios);
+            RegisterApi(ShelteredApiAliasIds.CustomScenarios, customScenarios);
             RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);
-            RegisterApi("ShelteredAPI.ScenarioAuthoring", scenarioAuthoring);
+            RegisterApi(ShelteredApiAliasIds.ScenarioAuthoring, scenarioAuthoring);
         }
 
         private static void EnsureSaveProtectionPatches()

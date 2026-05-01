@@ -61,6 +61,7 @@
     <Compile Include="Actors\Models\ActorComponents.cs" />
     <Compile Include="Actors\Models\ActorRuntimeModels.cs" />
     <Compile Include="Core\IGameHelper.cs" />
+    <Compile Include="Core\GameRuntimeApis.cs" />
     <Compile Include="Core\IContentResolutionService.cs" />
     <Compile Include="Core\IGameLifecycleSource.cs" />
     <Compile Include="Core\ISaveRuntimeAdapter.cs" />

@@ -64,6 +64,7 @@
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
     <Compile Include="Content\ShelteredContent.cs" />
+    <Compile Include="Content\ShelteredContentServices.cs" />
     <Compile Include="Content\ShelteredContentResolutionService.cs" />
     <Compile Include="Core\ShelteredGameLifecycleSource.cs" />
     <Compile Include="Events\FactionEvents.cs" />
@@ -98,6 +99,7 @@
     <Compile Include="Core\GameHelperImpl.cs" />
     <Compile Include="Core\ShelteredSaveRuntimeAdapter.cs" />
     <Compile Include="Core\ServiceContainer.cs" />
+    <Compile Include="Core\ShelteredApiIds.cs" />
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />
     <Compile Include="Core\SaveRuntimeState.cs" />

@@ -43,6 +43,12 @@ namespace ModAPI.Core
         public const string GameLifecycle = "GameRuntime.GameLifecycle";
         public const string UiLifecycleEvents = "GameRuntime.UiLifecycleEvents";
         public const string SaveRuntime = "GameRuntime.SaveRuntime";
+        public const string ShelteredContent = "GameRuntime.ShelteredContent";
+        public const string ShelteredContentRegistration = "GameRuntime.ShelteredContentRegistration";
+        public const string ShelteredInventory = "GameRuntime.ShelteredInventory";
+        public const string ShelteredAssetLoading = "GameRuntime.ShelteredAssetLoading";
+        public const string ShelteredLocalization = "GameRuntime.ShelteredLocalization";
+        public const string ShelteredRecipeLootMutation = "GameRuntime.ShelteredRecipeLootMutation";
         public const string CustomScenarios = "GameRuntime.CustomScenarios";
         public const string ScenarioAuthoring = "GameRuntime.ScenarioAuthoring";
     }

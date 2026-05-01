@@ -1,20 +1,172 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using ModAPI.Core;
 using UnityEngine;
 
 namespace ShelteredAPI.Content
 {
     /// <summary>Result of a content registration attempt.</summary>
-    public class RegistrationResult
+    public sealed class RegistrationResult
     {
-        public bool Success;
-        public int AssignedTypeId;
-        public string ErrorMessage;
-        public string[] Warnings = new string[0];
+        public bool Success { get; private set; }
+        public int AssignedTypeId { get; private set; }
+        public string ErrorMessage { get; private set; }
+        public string[] Warnings { get; private set; }
 
-        public static RegistrationResult Failed(string error) => new RegistrationResult { Success = false, ErrorMessage = error };
-        public static RegistrationResult Ok(int id, string[] warnings = null) => new RegistrationResult { Success = true, AssignedTypeId = id, Warnings = warnings ?? new string[0] };
+        public static RegistrationResult Failed(string error)
+        {
+            return new RegistrationResult { Success = false, ErrorMessage = error, Warnings = new string[0] };
+        }
+
+        public static RegistrationResult Ok(int id, string[] warnings = null)
+        {
+            return new RegistrationResult { Success = true, AssignedTypeId = id, Warnings = warnings ?? new string[0] };
+        }
+    }
+
+    /// <summary>Result of a content mutation that does not assign a runtime item ID.</summary>
+    public sealed class ContentOperationResult
+    {
+        public bool Success { get; private set; }
+        public string ErrorMessage { get; private set; }
+        public string[] Warnings { get; private set; }
+
+        public static ContentOperationResult Ok(string[] warnings = null)
+        {
+            return new ContentOperationResult { Success = true, Warnings = warnings ?? new string[0] };
+        }
+
+        public static ContentOperationResult Failed(string error)
+        {
+            return new ContentOperationResult { Success = false, ErrorMessage = error, Warnings = new string[0] };
+        }
+    }
+
+    /// <summary>Result of an inventory mutation requested by mod-facing item ID.</summary>
+    public sealed class InventoryMutationResult
+    {
+        public bool Success { get; private set; }
+        public string ItemId { get; private set; }
+        public int Quantity { get; private set; }
+        public string ErrorMessage { get; private set; }
+
+        public static InventoryMutationResult Ok(string itemId, int quantity)
+        {
+            return new InventoryMutationResult { Success = true, ItemId = itemId, Quantity = quantity };
+        }
+
+        public static InventoryMutationResult Failed(string itemId, int quantity, string error)
+        {
+            return new InventoryMutationResult { Success = false, ItemId = itemId, Quantity = quantity, ErrorMessage = error };
+        }
+    }
+
+    /// <summary>Read-only runtime/catalog snapshot for a registered item definition.</summary>
+    public sealed class ItemDefinitionSnapshot
+    {
+        internal ItemDefinitionSnapshot(ItemDefinition definition)
+        {
+            Id = definition.Id;
+            DisplayName = definition.DisplayName;
+            Description = definition.Description;
+            DisplayNameKey = definition.DisplayNameKey;
+            DescriptionKey = definition.DescriptionKey;
+            IconPath = definition.IconPath;
+            PrefabPath = definition.PrefabPath;
+            Category = definition.Category;
+            StackSize = definition.StackSize;
+            TradeValue = definition.TradeValue;
+            BurnValue = definition.BurnValue;
+            ScrapValue = definition.ScrapValue;
+            FabricationCost = definition.FabricationCost;
+            BaseFabricationTime = definition.BaseFabricationTime;
+            BaseCraftTime = definition.BaseCraftTime;
+            CraftStackSize = definition.CraftStackSize;
+            RationValue = definition.RationValue;
+            Contamination = definition.Contamination;
+            LoadCarrySlots = definition.LoadCarrySlots;
+            IsRawFood = definition.IsRawFood;
+            CookedHungerMultiplier = definition.CookedHungerMultiplier;
+            ObjectLevel = definition.ObjectLevel;
+            CustomTypeId = definition.CustomTypeId;
+        }
+
+        public string Id { get; private set; }
+        public string DisplayName { get; private set; }
+        public string Description { get; private set; }
+        public string DisplayNameKey { get; private set; }
+        public string DescriptionKey { get; private set; }
+        public string IconPath { get; private set; }
+        public string PrefabPath { get; private set; }
+        public ItemCategory Category { get; private set; }
+        public int StackSize { get; private set; }
+        public int TradeValue { get; private set; }
+        public float BurnValue { get; private set; }
+        public float ScrapValue { get; private set; }
+        public float FabricationCost { get; private set; }
+        public float BaseFabricationTime { get; private set; }
+        public float BaseCraftTime { get; private set; }
+        public int CraftStackSize { get; private set; }
+        public int RationValue { get; private set; }
+        public float Contamination { get; private set; }
+        public int LoadCarrySlots { get; private set; }
+        public bool IsRawFood { get; private set; }
+        public float CookedHungerMultiplier { get; private set; }
+        public int ObjectLevel { get; private set; }
+        public int? CustomTypeId { get; private set; }
+    }
+
+    /// <summary>Read-only runtime/catalog snapshot for a registered recipe definition.</summary>
+    public sealed class RecipeDefinitionSnapshot
+    {
+        internal RecipeDefinitionSnapshot(RecipeDefinition definition)
+        {
+            Id = definition.Id;
+            ResultItemId = definition.ResultItemId;
+            Station = definition.Station;
+            Level = definition.Level;
+            CraftTimeSeconds = definition.CraftTimeSeconds;
+            ResultCount = definition.ResultCount;
+            Unique = definition.Unique;
+            Locked = definition.Locked;
+            UnlockFlag = definition.UnlockFlag;
+
+            var ingredients = new List<RecipeIngredientSnapshot>();
+            if (definition.Ingredients != null)
+            {
+                for (int i = 0; i < definition.Ingredients.Count; i++)
+                {
+                    RecipeIngredient ingredient = definition.Ingredients[i];
+                    if (ingredient != null)
+                        ingredients.Add(new RecipeIngredientSnapshot(ingredient.ItemId, ingredient.Count));
+                }
+            }
+            Ingredients = new ReadOnlyCollection<RecipeIngredientSnapshot>(ingredients);
+        }
+
+        public string Id { get; private set; }
+        public string ResultItemId { get; private set; }
+        public ReadOnlyCollection<RecipeIngredientSnapshot> Ingredients { get; private set; }
+        public CraftStation Station { get; private set; }
+        public int Level { get; private set; }
+        public float CraftTimeSeconds { get; private set; }
+        public int ResultCount { get; private set; }
+        public bool Unique { get; private set; }
+        public bool Locked { get; private set; }
+        public string UnlockFlag { get; private set; }
+    }
+
+    public sealed class RecipeIngredientSnapshot
+    {
+        internal RecipeIngredientSnapshot(string itemId, int count)
+        {
+            ItemId = itemId;
+            Count = count;
+        }
+
+        public string ItemId { get; private set; }
+        public int Count { get; private set; }
     }
 
     /// <summary>
@@ -129,10 +281,12 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>Patch an existing item's properties.</summary>
-        public static void PatchItem(ItemPatch patch)
+        public static ContentOperationResult PatchItem(ItemPatch patch)
         {
-            if (patch == null) throw new ArgumentNullException(nameof(patch));
+            if (patch == null) return ContentOperationResult.Failed("Item patch cannot be null");
+            if (string.IsNullOrEmpty(patch.TargetItemId)) return ContentOperationResult.Failed("TargetItemId is required");
             ItemPatches.Add(patch);
+            return ContentOperationResult.Ok();
         }
 
         /// <summary>
@@ -151,50 +305,82 @@ namespace ShelteredAPI.Content
         ///     .WithIngredient(VanillaItems.Water, 1));
         /// </code>
         /// </summary>
-        public static void RegisterRecipe(RecipeDefinition def)
+        public static ContentOperationResult RegisterRecipe(RecipeDefinition def)
         {
-            if (def == null) throw new ArgumentNullException(nameof(def));
+            if (def == null) return ContentOperationResult.Failed("RecipeDefinition cannot be null");
             def.NormalizeLegacyFields();
             
             if (string.IsNullOrEmpty(def.Id))
-                throw new ArgumentException("Recipe ID is required", nameof(def));
+                return ContentOperationResult.Failed("Recipe ID is required");
             if (string.IsNullOrEmpty(def.ResultItemId))
-                throw new ArgumentException("ResultItemId is required", nameof(def));
+                return ContentOperationResult.Failed("ResultItemId is required");
             if (def.Ingredients.Count == 0)
-                throw new ArgumentException("Recipe must have at least one ingredient", nameof(def));
+                return ContentOperationResult.Failed("Recipe must have at least one ingredient");
             
             // Clamp level between 1 and 5
             def.Level = UnityEngine.Mathf.Clamp(def.Level, 1, 5);
                 
             Recipes.Add(def);
+            return ContentOperationResult.Ok();
         }
 
         /// <summary>
         /// Register a cooking recipe for the stove.
         /// </summary>
-        public static void RegisterCookingRecipe(CookingRecipe recipe)
+        public static ContentOperationResult RegisterCookingRecipe(CookingRecipe recipe)
         {
-            if (recipe == null) throw new ArgumentNullException(nameof(recipe));
+            if (recipe == null) return ContentOperationResult.Failed("CookingRecipe cannot be null");
             if (string.IsNullOrEmpty(recipe.RawItemId)) 
-                throw new ArgumentException("RawItemId is required", nameof(recipe));
+                return ContentOperationResult.Failed("RawItemId is required");
             if (recipe.CookTimeSeconds <= 0)
-                throw new ArgumentException("CookTimeSeconds must be > 0", nameof(recipe));
+                return ContentOperationResult.Failed("CookTimeSeconds must be > 0");
             
             CookingRecipes.Add(recipe);
+            return ContentOperationResult.Ok();
         }
 
         /// <summary>Patch an existing recipe by ID.</summary>
-        public static void PatchRecipe(RecipePatch patch)
+        public static ContentOperationResult PatchRecipe(RecipePatch patch)
         {
-            if (patch == null) throw new ArgumentNullException(nameof(patch));
+            if (patch == null) return ContentOperationResult.Failed("Recipe patch cannot be null");
+            if (string.IsNullOrEmpty(patch.TargetRecipeId)) return ContentOperationResult.Failed("TargetRecipeId is required");
             RecipePatches.Add(patch);
+            return ContentOperationResult.Ok();
         }
 
         /// <summary>Add an item to a loot pool.</summary>
-        public static void AddLoot(LootEntry entry)
+        public static ContentOperationResult AddLoot(LootEntry entry)
         {
-            if (entry == null) throw new ArgumentNullException(nameof(entry));
+            if (entry == null) return ContentOperationResult.Failed("LootEntry cannot be null");
+            if (string.IsNullOrEmpty(entry.ItemId)) return ContentOperationResult.Failed("ItemId is required");
+            if (entry.MinQuantity < 1) return ContentOperationResult.Failed("MinQuantity must be at least one");
+            if (entry.MaxQuantity < entry.MinQuantity) return ContentOperationResult.Failed("MaxQuantity must be greater than or equal to MinQuantity");
             LootEntries.Add(entry);
+            return ContentOperationResult.Ok();
+        }
+
+        internal static ReadOnlyCollection<ItemDefinitionSnapshot> GetItemSnapshots()
+        {
+            var snapshots = new List<ItemDefinitionSnapshot>();
+            for (int i = 0; i < Items.Count; i++)
+            {
+                ItemDefinition definition = Items[i];
+                if (definition != null)
+                    snapshots.Add(definition.ToSnapshot());
+            }
+            return new ReadOnlyCollection<ItemDefinitionSnapshot>(snapshots);
+        }
+
+        internal static ReadOnlyCollection<RecipeDefinitionSnapshot> GetRecipeSnapshots()
+        {
+            var snapshots = new List<RecipeDefinitionSnapshot>();
+            for (int i = 0; i < Recipes.Count; i++)
+            {
+                RecipeDefinition definition = Recipes[i];
+                if (definition != null)
+                    snapshots.Add(definition.ToSnapshot());
+            }
+            return new ReadOnlyCollection<RecipeDefinitionSnapshot>(snapshots);
         }
 
         internal static int EnsureCustomTypeId(ItemDefinition def)
@@ -262,13 +448,13 @@ namespace ShelteredAPI.Content
         private static int ClaimCustomItemId(string modId, string itemId)
         {
             var seed = (modId ?? "mod") + "|" + (itemId ?? "item");
-            var hash = seed.GetHashCode();
-            var positive = hash == int.MinValue ? int.MaxValue : Math.Abs(hash);
+            var positive = StableContentIdHash(seed);
             var id = CustomItemTypeStart + (positive % CustomItemTypeRange);
 
             if (!_claimedIds.Add(id))
             {
                 var baseId = id;
+                var claimed = false;
                 for (int attempt = 1; attempt < 100; attempt++)
                 {
                     var candidate = baseId + attempt;
@@ -277,14 +463,31 @@ namespace ShelteredAPI.Content
                     if (_claimedIds.Add(candidate))
                     {
                         id = candidate;
+                        claimed = true;
                         break;
                     }
                 }
-                if (!_claimedIds.Contains(id))
+                if (!claimed)
                     throw new InvalidOperationException($"No available custom item ID for {modId}.{itemId}");
             }
 
             return id;
+        }
+
+        internal static int StableContentIdHash(string value)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                string text = value ?? string.Empty;
+                for (int i = 0; i < text.Length; i++)
+                {
+                    hash ^= text[i];
+                    hash *= 16777619;
+                }
+
+                return (int)(hash & 0x7fffffff);
+            }
         }
 
         private static string ResolveModId(System.Reflection.Assembly asm)
@@ -549,6 +752,12 @@ namespace ShelteredAPI.Content
         }
         public ItemDefinition WithOwner(System.Reflection.Assembly asm) { OwnerAssembly = asm; return this; }
 
+        public ItemDefinitionSnapshot ToSnapshot()
+        {
+            NormalizeLegacyFields();
+            return new ItemDefinitionSnapshot(this);
+        }
+
         internal bool HasDisplayNameValue()
         {
             return !string.IsNullOrEmpty(DisplayNameKey) ||
@@ -665,6 +874,12 @@ namespace ShelteredAPI.Content
         {
             if (!string.IsNullOrEmpty(key)) Metadata[key] = value;
             return this;
+        }
+
+        public RecipeDefinitionSnapshot ToSnapshot()
+        {
+            NormalizeLegacyFields();
+            return new RecipeDefinitionSnapshot(this);
         }
 
         internal void NormalizeLegacyFields()
