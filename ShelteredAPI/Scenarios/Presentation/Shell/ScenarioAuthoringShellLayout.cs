@@ -36,12 +36,6 @@ namespace ShelteredAPI.Scenarios
         public const float TopBarPreferredWidth = 1180f;
         public const float TopBarMinWidth = 560f;
 
-        // Mode chip needs to comfortably fit a draft name on a single muted line.
-        public const float ModeChipWidth = 290f;
-        public const float ModeChipHeight = 44f;
-
-        public const int DraftLabelMaxChars = 22;
-
         public static Rect BuildHudReserveRect(float scaledWidth)
         {
             float reserveWidth = Mathf.Clamp(HudReserveWidth, 280f, Math.Max(280f, scaledWidth * 0.36f));
@@ -237,15 +231,5 @@ namespace ShelteredAPI.Scenarios
             return clamped;
         }
 
-        public static string TruncateDraftLabel(string draft)
-        {
-            if (string.IsNullOrEmpty(draft))
-                return "Untitled";
-
-            if (draft.Length <= DraftLabelMaxChars)
-                return draft;
-
-            return draft.Substring(0, DraftLabelMaxChars - 1) + "...";
-        }
     }
 }

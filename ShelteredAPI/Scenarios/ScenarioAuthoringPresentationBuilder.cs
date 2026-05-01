@@ -98,35 +98,6 @@ namespace ShelteredAPI.Scenarios
             return viewModel;
         }
 
-        private static string FormatDraftDisplay(string draftId)
-        {
-            if (string.IsNullOrEmpty(draftId))
-                return "Untitled";
-
-            const string prefix = "smm.authoring.";
-            if (draftId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && draftId.Length > prefix.Length)
-            {
-                string tail = draftId.Substring(prefix.Length);
-                int dot = tail.IndexOf('.');
-                return dot > 0 ? "Draft " + tail.Substring(0, dot) : "Draft " + tail;
-            }
-
-            return draftId.Length > 32 ? draftId.Substring(0, 29) + "..." : draftId;
-        }
-
-        private static string BuildEditorModeLabel(ScenarioEditorSession editorSession, ScenarioAuthoringState state)
-        {
-            if (editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting)
-                return "Playtesting";
-
-            if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
-                return "Playtesting";
-
-            if (state != null && state.MinimalMode)
-                return "Minimal Editing";
-
-            return "Editing Draft";
-        }
 
         public ScenarioAuthoringInspectorDocument BuildShellDocument(ScenarioAuthoringContext context)
         {

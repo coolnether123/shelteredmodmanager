@@ -176,9 +176,13 @@ namespace ShelteredAPI.Scenarios
             DrawLabel("TopTitle", rect, new Rect(18f, 9f, 215f, 28f), "SHELTERED", 24, _titleColor, NGUIText.Alignment.Left, BaseDepth + 4);
             DrawLabel("TopSubtitle", rect, new Rect(18f, 36f, 230f, 20f), "SCENARIO EDITOR", 15, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
 
+            float actionRight = rect.xMax - 14f;
+            float toolbarX = Math.Max(rect.x + 250f, actionRight - MeasureTopBarActionsWidth(shell.ToolbarActions));
+            Rect windowButton = DrawWindowMenuButton(shell.LayoutActions, actionRight, rect.y + 52f);
+
             float tabX = rect.x + 250f;
             float tabY = rect.y + 10f;
-            float tabRight = rect.xMax - 460f;
+            float tabRight = Math.Max(tabX, toolbarX - 10f);
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
                 ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
@@ -195,6 +199,7 @@ namespace ShelteredAPI.Scenarios
 
             float childX = rect.x + 250f;
             float childY = rect.y + 54f;
+            float childRight = windowButton.width > 0f ? windowButton.x - 10f : rect.xMax - 14f;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
                 ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
@@ -203,41 +208,58 @@ namespace ShelteredAPI.Scenarios
 
                 ScenarioAuthoringInspectorAction child = CloneAction(tab, CleanChildStageLabel(tab.Label));
                 float width = ClampTextWidth(child.Label, 92f, 126f);
-                if (childX + width > tabRight)
+                if (childX + width > childRight)
                     break;
 
                 DrawButton(new Rect(childX, childY, width, 28f), child, true, "ChildTab" + i);
                 childX += width + 4f;
             }
 
-            Rect chip = new Rect(rect.xMax - 420f, rect.y + 10f, 210f, 72f);
-            DrawPanel("ModeChip", chip, _panelAltColor, true, BaseDepth + 1);
-            DrawLabel("Mode", chip, new Rect(10f, 8f, chip.width - 20f, 20f), shell.ModeLabel ?? "Editing Draft", 15, _titleColor, NGUIText.Alignment.Left, BaseDepth + 5);
-            DrawLabel("Draft", chip, new Rect(10f, 32f, chip.width - 20f, 18f), ScenarioAuthoringShellLayout.TruncateDraftLabel(shell.DraftLabel), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 5);
-
-            float actionX = chip.xMax + 10f;
-            Rect windowButton = Rect.zero;
+            float actionX = toolbarX;
             for (int i = 0; shell.ToolbarActions != null && i < shell.ToolbarActions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = shell.ToolbarActions[i];
                 float width = ClampTextWidth(action != null ? action.Label : null, 86f, 118f);
+                if (actionX + width > actionRight)
+                    break;
+
                 DrawButton(new Rect(actionX, rect.y + 14f, width, 30f), action, false, "TopAction" + i);
                 actionX += width + 5f;
             }
 
-            for (int i = 0; shell.LayoutActions != null && i < shell.LayoutActions.Length; i++)
+            RegisterRect(rect);
+            return windowButton;
+        }
+
+        private float MeasureTopBarActionsWidth(ScenarioAuthoringInspectorAction[] actions)
+        {
+            float width = 0f;
+            for (int i = 0; actions != null && i < actions.Length; i++)
             {
-                ScenarioAuthoringInspectorAction action = shell.LayoutActions[i];
+                ScenarioAuthoringInspectorAction action = actions[i];
+                width += ClampTextWidth(action != null ? action.Label : null, 86f, 118f);
+                if (i + 1 < actions.Length)
+                    width += 5f;
+            }
+
+            return width;
+        }
+
+        private Rect DrawWindowMenuButton(ScenarioAuthoringInspectorAction[] actions, float right, float y)
+        {
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
                 if (!IsWindowMenuAction(action))
                     continue;
 
-                windowButton = new Rect(actionX, rect.y + 52f, 104f, 28f);
-                DrawButton(windowButton, _windowMenuOpen ? CloneEmphasized(action) : action, false, "WindowMenuButton");
-                break;
+                float width = ClampTextWidth(action.Label, 92f, 116f);
+                Rect rect = new Rect(right - width, y, width, 28f);
+                DrawButton(rect, _windowMenuOpen ? CloneEmphasized(action) : action, false, "WindowMenuButton");
+                return rect;
             }
 
-            RegisterRect(rect);
-            return windowButton;
+            return Rect.zero;
         }
 
         private void DrawToolRail(Rect contentRect, ScenarioAuthoringState state)

@@ -753,8 +753,6 @@ namespace ShelteredAPI.Scenarios
     {
         public string Title { get; set; }
         public string Subtitle { get; set; }
-        public string DraftLabel { get; set; }
-        public string ModeLabel { get; set; }
         public string TimeLabel { get; set; }
         public ScenarioAuthoringInspectorAction[] Tabs { get; set; }
         public ScenarioAuthoringInspectorAction[] ToolbarActions { get; set; }

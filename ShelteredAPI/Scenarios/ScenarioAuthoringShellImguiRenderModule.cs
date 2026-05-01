@@ -499,28 +499,24 @@ namespace ShelteredAPI.Scenarios
         private Rect DrawTopBar(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
-            Rect windowMenuButtonRect = Rect.zero;
             const float primaryRowY = 10f;
             const float primaryRowHeight = 36f;
             const float secondaryRowY = 54f;
             const float secondaryRowHeight = 30f;
-            const float quickActionsWidth = 410f;
-            const float chipGutter = 14f;
 
             Rect brandRect = new Rect(rect.x + 18f, rect.y + 10f, 190f, rect.height - 18f);
             GUI.Label(new Rect(brandRect.x, brandRect.y - 1f, brandRect.width, 30f), "SHELTERED", _titleStyle);
             GUI.Label(new Rect(brandRect.x, brandRect.y + 27f, brandRect.width, 22f), "SCENARIO EDITOR", _smallTitleStyle);
 
-            // Reserve chip + quick-action area on the right of the primary row so primary
-            // tabs cannot grow into it. Chip is right-aligned against the quick-action band.
-            float chipWidth = ScenarioAuthoringShellLayout.ModeChipWidth;
-            float chipHeight = ScenarioAuthoringShellLayout.ModeChipHeight;
-            float chipX = rect.xMax - quickActionsWidth - chipWidth - chipGutter;
             float primaryRowLeft = brandRect.xMax + 20f;
-            chipX = Math.Max(primaryRowLeft + 8f, chipX);
-            Rect modeChipRect = new Rect(chipX, rect.y + ((primaryRowHeight + 14f - chipHeight) * 0.5f) + 4f, chipWidth, chipHeight);
+            float actionRight = rect.xMax - 10f;
+            float toolbarWidth = MeasureTopBarActionsWidth(shell.ToolbarActions);
+            float toolbarX = Math.Max(primaryRowLeft, actionRight - toolbarWidth);
+            Rect windowMenuButtonRect = DrawTopBarWindowAction(
+                new Rect(primaryRowLeft, rect.y + secondaryRowY, actionRight - primaryRowLeft, secondaryRowHeight),
+                shell);
 
-            float primaryTabsRight = modeChipRect.x - chipGutter;
+            float primaryTabsRight = Math.Max(primaryRowLeft, toolbarX - 10f);
             float tabX = primaryRowLeft;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
@@ -536,12 +532,15 @@ namespace ShelteredAPI.Scenarios
                 tabX = tabRect.xMax + 2f;
             }
 
-            DrawModeChip(modeChipRect, shell);
+            DrawTopBarToolbarActions(
+                new Rect(toolbarX, rect.y + primaryRowY + 3f, actionRight - toolbarX, secondaryRowHeight),
+                shell);
 
+            float childTabsRight = windowMenuButtonRect.width > 0f ? windowMenuButtonRect.x - 10f : actionRight;
             Rect childTabsRect = new Rect(
                 primaryRowLeft,
                 rect.y + secondaryRowY,
-                Math.Max(80f, modeChipRect.x - primaryRowLeft - chipGutter),
+                Math.Max(80f, childTabsRight - primaryRowLeft),
                 secondaryRowHeight);
             float childX = childTabsRect.x;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
@@ -559,19 +558,11 @@ namespace ShelteredAPI.Scenarios
                 childX = tabRect.xMax + 2f;
             }
 
-            // Quick-actions band sits right of the chip on the secondary row.
-            float quickActionsX = modeChipRect.xMax + chipGutter;
-            float quickActionsBandWidth = Math.Max(160f, rect.xMax - quickActionsX - 8f);
-            windowMenuButtonRect = DrawTopBarQuickActions(
-                new Rect(quickActionsX, rect.y + secondaryRowY, quickActionsBandWidth, secondaryRowHeight),
-                shell);
-
             return windowMenuButtonRect;
         }
 
-        private Rect DrawTopBarQuickActions(Rect rect, ScenarioAuthoringShellViewModel shell)
+        private void DrawTopBarToolbarActions(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
-            Rect menuButtonRect = Rect.zero;
             float x = rect.x;
             for (int i = 0; shell.ToolbarActions != null && i < shell.ToolbarActions.Length; i++)
             {
@@ -586,7 +577,10 @@ namespace ShelteredAPI.Scenarios
                 DrawButton(actionRect, action, false);
                 x = actionRect.xMax + 4f;
             }
+        }
 
+        private Rect DrawTopBarWindowAction(Rect rect, ScenarioAuthoringShellViewModel shell)
+        {
             for (int i = 0; shell.LayoutActions != null && i < shell.LayoutActions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = shell.LayoutActions[i];
@@ -594,25 +588,29 @@ namespace ShelteredAPI.Scenarios
                     continue;
 
                 ScenarioAuthoringInspectorAction displayAction = _windowMenuOpen ? CloneEmphasized(action) : action;
-                Rect actionRect = new Rect(Mathf.Min(x, rect.xMax - 106f), rect.y, 106f, rect.height);
+                Rect actionRect = new Rect(rect.xMax - 106f, rect.y, 106f, rect.height);
                 DrawButton(actionRect, displayAction, false);
-                menuButtonRect = actionRect;
-                break;
+                return actionRect;
             }
 
-            return menuButtonRect;
+            return Rect.zero;
         }
 
-        private void DrawModeChip(Rect rect, ScenarioAuthoringShellViewModel shell)
+        private float MeasureTopBarActionsWidth(ScenarioAuthoringInspectorAction[] actions)
         {
-            GUI.Box(rect, GUIContent.none, _sectionStyle);
-            string mode = string.IsNullOrEmpty(shell.ModeLabel) ? "Editing Draft" : shell.ModeLabel;
-            string draft = ScenarioAuthoringShellLayout.TruncateDraftLabel(shell.DraftLabel);
+            float width = 0f;
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
 
-            float innerWidth = rect.width - 24f;
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 5f, innerWidth, 19f), mode, _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 24f, innerWidth, 17f),
-                new GUIContent(draft, shell.DraftLabel ?? string.Empty), _mutedTextStyle);
+                width += Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 96f, 126f);
+                if (i + 1 < actions.Length)
+                    width += 4f;
+            }
+
+            return width;
         }
 
         private Rect DrawToolRail(Rect contentRect, ScenarioAuthoringState state)
