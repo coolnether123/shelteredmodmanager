@@ -18,8 +18,13 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton<IScenarioSpriteSwapEngine>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioSpriteSwapService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
-                return new ScenarioSceneSpritePlacementService(resolver.Get<IScenarioSpriteAssetResolver>());
+                return new ScenarioSceneSpritePlacementService(
+                    resolver.Get<IScenarioSpriteAssetResolver>(),
+                    resolver.Get<ScenarioSceneSpritePlacementRoot>(),
+                    resolver.Get<ScenarioSceneSpritePlacementRuntimeFactory>());
             });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpritePlacementRoot(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpritePlacementRuntimeFactory(); });
             services.AddSingleton<IScenarioSceneSpritePlacementEngine>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioSceneSpritePlacementService>(); });
             services.AddSingleton<IScenarioApplier>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioApplyCoordinator>(); });
             services.AddSingleton<IScenarioPlaytestOrchestrator>(delegate(IServiceResolver resolver)

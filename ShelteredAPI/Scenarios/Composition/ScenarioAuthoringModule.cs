@@ -18,7 +18,7 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioSceneSpritePlacementAuthoringService(
-                    resolver.Get<ScenarioSpriteCatalogService>(),
+                    resolver.Get<ScenarioSceneSpritePlacementCatalogService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),
                     resolver.Get<IScenarioEditorService>(),

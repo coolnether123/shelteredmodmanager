@@ -1,5 +1,3 @@
-using ModAPI.Scenarios;
-
 namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioSceneSpriteStartStateApplyService
@@ -19,8 +17,9 @@ namespace ShelteredAPI.Scenarios
                 SceneSpritePlacement placement = definition.AssetReferences.SceneSpritePlacements[i];
                 if (placement == null)
                     continue;
-                string id = !string.IsNullOrEmpty(placement.ScenarioObjectId) ? placement.ScenarioObjectId : placement.Id;
-                ScenarioObjectStartStateApplyService.Record(state, id, placement.RuntimeBindingKey, placement.StartState);
+                string id = ScenarioSceneSpritePlacementIdentity.ResolveScenarioObjectId(placement, i);
+                string bindingKey = ScenarioSceneSpritePlacementIdentity.ResolveRuntimeBindingKey(placement, id);
+                ScenarioObjectStartStateApplyService.Record(state, id, bindingKey, placement.StartState);
             }
         }
     }

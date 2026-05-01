@@ -357,6 +357,7 @@
     <Compile Include="Scenarios\ScenarioFamilyMemberFactory.cs" />
     <Compile Include="Scenarios\ScenarioApplyResult.cs" />
     <Compile Include="Scenarios\ScenarioPlaytestOrchestrator.cs" />
+    <Compile Include="Scenarios\ScenarioPlaceableAssetClassification.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeContracts.cs" />
     <Compile Include="Scenarios\ScenarioRuntimeOrchestrator.cs" />
     <Compile Include="Scenarios\ShelteredScenarioAuthoring.cs" />
@@ -364,11 +365,16 @@
     <Compile Include="Scenarios\ShelteredScenarioRuntime.cs" />
     <Compile Include="Scenarios\ScenarioTriggerRuntime.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementAuthoringService.cs" />
+    <Compile Include="Scenarios\ScenarioSceneSpritePlacementCatalogService.cs" />
+    <Compile Include="Scenarios\ScenarioSceneSpritePlacementIdentity.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementMarker.cs" />
+    <Compile Include="Scenarios\ScenarioSceneSpritePlacementRoot.cs" />
+    <Compile Include="Scenarios\ScenarioSceneSpritePlacementRuntimeFactory.cs" />
     <Compile Include="Scenarios\ScenarioSceneSpritePlacementService.cs" />
     <Compile Include="Scenarios\ScenarioServiceAdapters.cs" />
     <Compile Include="Scenarios\ScenarioStateManager.cs" />
     <Compile Include="Scenarios\ScenarioSpriteCatalogService.cs" />
+    <Compile Include="Scenarios\ScenarioSpritePlacementPolicy.cs" />
     <Compile Include="Scenarios\ScenarioSpriteAssetResolver.cs" />
     <Compile Include="Scenarios\ScenarioSpriteReferenceLibrary.cs" />
     <Compile Include="Scenarios\ScenarioSpriteRuntimeMutationService.cs" />

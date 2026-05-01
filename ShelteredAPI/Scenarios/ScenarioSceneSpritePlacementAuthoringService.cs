@@ -20,6 +20,10 @@ namespace ShelteredAPI.Scenarios
             public string CompatibilitySummary;
             public string GuidanceMessage;
             public string XmlPathHint;
+            public int BlockedPeople;
+            public int BlockedInteractiveObjects;
+            public int BlockedPathfindingActors;
+            public int BlockedGameplayAssets;
         }
 
         private sealed class ActivePlacementSession
@@ -46,7 +50,7 @@ namespace ShelteredAPI.Scenarios
         private const string DefaultPlacementSortingLayerName = "Objects";
         private const int DefaultPlacementSortingOrder = 20;
 
-        private readonly ScenarioSpriteCatalogService _catalogService;
+        private readonly ScenarioSceneSpritePlacementCatalogService _catalogService;
         private readonly ScenarioAuthoringHistoryService _historyService;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly IScenarioEditorService _editorService;
@@ -59,7 +63,7 @@ namespace ShelteredAPI.Scenarios
         }
 
         internal ScenarioSceneSpritePlacementAuthoringService(
-            ScenarioSpriteCatalogService catalogService,
+            ScenarioSceneSpritePlacementCatalogService catalogService,
             ScenarioAuthoringHistoryService historyService,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
             IScenarioEditorService editorService,
@@ -82,7 +86,7 @@ namespace ShelteredAPI.Scenarios
                 CanPlace = true
             };
 
-            ScenarioSpriteCatalogService.PlacementCatalog catalog = _catalogService.GetPlacementCatalog(session, scenarioFilePath);
+            ScenarioSceneSpritePlacementCatalogService.PlacementCatalog catalog = _catalogService.GetCatalog(session, scenarioFilePath);
             if (catalog != null)
             {
                 model.VanillaCandidates.AddRange(catalog.VanillaCandidates);
@@ -90,6 +94,10 @@ namespace ShelteredAPI.Scenarios
                 model.CompatibilitySummary = catalog.FilterSummary;
                 model.GuidanceMessage = catalog.GuidanceMessage;
                 model.XmlPathHint = catalog.XmlPathHint;
+                model.BlockedPeople = catalog.BlockedPeople;
+                model.BlockedInteractiveObjects = catalog.BlockedInteractiveObjects;
+                model.BlockedPathfindingActors = catalog.BlockedPathfindingActors;
+                model.BlockedGameplayAssets = catalog.BlockedGameplayAssets;
             }
 
             SceneSpritePlacement activePlacement = FindPlacement(session != null ? session.WorkingDefinition : null, target);
@@ -201,6 +209,14 @@ namespace ShelteredAPI.Scenarios
                 message = model != null && !string.IsNullOrEmpty(model.GuidanceMessage)
                     ? model.GuidanceMessage
                     : "The requested sprite placement candidate was not available.";
+                return false;
+            }
+
+            if (!candidate.CanPlaceAsSceneSprite)
+            {
+                message = !string.IsNullOrEmpty(candidate.PlacementGuidance)
+                    ? candidate.PlacementGuidance
+                    : "That asset cannot be placed as a visual-only scene sprite.";
                 return false;
             }
 

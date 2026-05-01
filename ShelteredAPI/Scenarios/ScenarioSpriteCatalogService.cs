@@ -28,6 +28,9 @@ namespace ShelteredAPI.Scenarios
             public Sprite Sprite;
             public string FamilyKey;
             public string FamilyLabel;
+            public ScenarioPlaceableAssetKind PlacementKind;
+            public bool CanPlaceAsSceneSprite;
+            public string PlacementGuidance;
         }
 
         internal sealed class SpriteCatalog
@@ -36,15 +39,6 @@ namespace ShelteredAPI.Scenarios
             public List<SpriteCandidate> VanillaCandidates;
             public List<SpriteCandidate> ModdedCandidates;
             public bool FamilyFiltered;
-            public string FilterSummary;
-            public string GuidanceMessage;
-            public string XmlPathHint;
-        }
-
-        internal sealed class PlacementCatalog
-        {
-            public List<SpriteCandidate> VanillaCandidates;
-            public List<SpriteCandidate> ModdedCandidates;
             public string FilterSummary;
             public string GuidanceMessage;
             public string XmlPathHint;
@@ -59,11 +53,6 @@ namespace ShelteredAPI.Scenarios
         private string _cachedScenarioFilePath;
         private int _cachedFrame = -1;
         private SpriteCatalog _cachedCatalog;
-        private int _cachedPlacementCustomSpriteSignature;
-        private string _cachedPlacementScenarioFilePath;
-        private int _cachedPlacementFrame = -1;
-        private PlacementCatalog _cachedPlacementCatalog;
-
         internal ScenarioSpriteCatalogService(ScenarioSpriteRuntimeResolver resolver, IScenarioSpriteAssetResolver assetResolver)
         {
             _resolver = resolver;
@@ -110,32 +99,6 @@ namespace ShelteredAPI.Scenarios
             _cachedCustomSpriteSignature = 0;
             _cachedFrame = -1;
             _cachedCatalog = null;
-            _cachedPlacementCustomSpriteSignature = 0;
-            _cachedPlacementScenarioFilePath = null;
-            _cachedPlacementFrame = -1;
-            _cachedPlacementCatalog = null;
-        }
-
-        public PlacementCatalog GetPlacementCatalog(ScenarioEditorSession session, string scenarioFilePath)
-        {
-            if (session == null || session.WorkingDefinition == null)
-                return null;
-
-            int customSpriteSignature = ComputeCustomSpriteSignature(session.WorkingDefinition);
-            if (_cachedPlacementCatalog != null
-                && string.Equals(_cachedPlacementScenarioFilePath, scenarioFilePath, StringComparison.OrdinalIgnoreCase)
-                && _cachedPlacementCustomSpriteSignature == customSpriteSignature
-                && (_cachedPlacementFrame < 0 || Time.frameCount - _cachedPlacementFrame < 30))
-            {
-                return ClonePlacementCatalog(_cachedPlacementCatalog);
-            }
-
-            PlacementCatalog catalog = BuildPlacementCatalog(session.WorkingDefinition, scenarioFilePath, _assetResolver);
-            _cachedPlacementScenarioFilePath = scenarioFilePath;
-            _cachedPlacementCustomSpriteSignature = customSpriteSignature;
-            _cachedPlacementFrame = Time.frameCount;
-            _cachedPlacementCatalog = ClonePlacementCatalog(catalog);
-            return catalog;
         }
 
         private static SpriteCatalog BuildCatalog(
@@ -249,50 +212,7 @@ namespace ShelteredAPI.Scenarios
             return catalog;
         }
 
-        private static PlacementCatalog BuildPlacementCatalog(ScenarioDefinition definition, string scenarioFilePath, IScenarioSpriteAssetResolver assetResolver)
-        {
-            PlacementCatalog catalog = new PlacementCatalog
-            {
-                VanillaCandidates = new List<SpriteCandidate>(),
-                ModdedCandidates = new List<SpriteCandidate>(),
-                FilterSummary = "Existing game art only",
-                GuidanceMessage = "Scene sprite placement only exposes loaded runtime sprites so placed visuals stay consistent with built-in game art.",
-                XmlPathHint = "AssetReferences > SceneSpritePlacements > Placement"
-            };
-
-            List<ScenarioSpriteReferenceLibrary.LoadedSpriteReference> loadedSprites = ScenarioSpriteReferenceLibrary.GetLoadedSprites();
-            for (int i = 0; i < loadedSprites.Count; i++)
-            {
-                ScenarioSpriteReferenceLibrary.LoadedSpriteReference loaded = loadedSprites[i];
-                if (loaded == null || loaded.Sprite == null || IsGeneratedPatchRuntimeKey(loaded.RuntimeSpriteKey))
-                    continue;
-
-                catalog.VanillaCandidates.Add(new SpriteCandidate
-                {
-                    Token = "runtime:" + (loaded.RuntimeSpriteKey ?? string.Empty),
-                    Label = BuildLabel(loaded.SpriteName, loaded.TextureName),
-                    Hint = BuildHint(loaded.TextureName, loaded.SpriteName, loaded.Sprite),
-                    SpriteName = loaded.SpriteName,
-                    SourceName = loaded.TextureName,
-                    SourceKind = SpriteCandidateSourceKind.VanillaRuntime,
-                    RuntimeSpriteKey = loaded.RuntimeSpriteKey,
-                    Sprite = loaded.Sprite
-                });
-            }
-
-            AddCustomSpriteCandidates(
-                definition,
-                scenarioFilePath,
-                assetResolver,
-                catalog.ModdedCandidates,
-                null,
-                false);
-            catalog.VanillaCandidates.Sort(CompareCandidate);
-            catalog.ModdedCandidates.Sort(CompareCandidate);
-            return catalog;
-        }
-
-        private static void AddCustomSpriteCandidates(
+        internal static void AddCustomSpriteCandidates(
             ScenarioDefinition definition,
             string scenarioFilePath,
             IScenarioSpriteAssetResolver assetResolver,
@@ -365,22 +285,7 @@ namespace ShelteredAPI.Scenarios
             };
         }
 
-        private static PlacementCatalog ClonePlacementCatalog(PlacementCatalog catalog)
-        {
-            if (catalog == null)
-                return null;
-
-            return new PlacementCatalog
-            {
-                VanillaCandidates = CloneCandidates(catalog.VanillaCandidates),
-                ModdedCandidates = CloneCandidates(catalog.ModdedCandidates),
-                FilterSummary = catalog.FilterSummary,
-                GuidanceMessage = catalog.GuidanceMessage,
-                XmlPathHint = catalog.XmlPathHint
-            };
-        }
-
-        private static List<SpriteCandidate> CloneCandidates(List<SpriteCandidate> source)
+        internal static List<SpriteCandidate> CloneCandidates(List<SpriteCandidate> source)
         {
             List<SpriteCandidate> clone = new List<SpriteCandidate>();
             for (int i = 0; source != null && i < source.Count; i++)
@@ -403,14 +308,17 @@ namespace ShelteredAPI.Scenarios
                     UserOwned = item.UserOwned,
                     Sprite = item.Sprite,
                     FamilyKey = item.FamilyKey,
-                    FamilyLabel = item.FamilyLabel
+                    FamilyLabel = item.FamilyLabel,
+                    PlacementKind = item.PlacementKind,
+                    CanPlaceAsSceneSprite = item.CanPlaceAsSceneSprite,
+                    PlacementGuidance = item.PlacementGuidance
                 });
             }
 
             return clone;
         }
 
-        private static int ComputeCustomSpriteSignature(ScenarioDefinition definition)
+        internal static int ComputeCustomSpriteSignature(ScenarioDefinition definition)
         {
             if (definition == null || definition.AssetReferences == null || definition.AssetReferences.CustomSprites == null)
                 return 0;
@@ -491,7 +399,7 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private static bool IsGeneratedPatchRuntimeKey(string runtimeSpriteKey)
+        internal static bool IsGeneratedPatchRuntimeKey(string runtimeSpriteKey)
         {
             return !string.IsNullOrEmpty(runtimeSpriteKey)
                 && runtimeSpriteKey.StartsWith("patch:", StringComparison.OrdinalIgnoreCase);
@@ -532,14 +440,14 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
-        private static string BuildLabel(string spriteName, string sourceName)
+        internal static string BuildLabel(string spriteName, string sourceName)
         {
             string primary = !string.IsNullOrEmpty(spriteName) ? spriteName : "<sprite>";
             string source = !string.IsNullOrEmpty(sourceName) ? sourceName : "<source>";
             return primary == source ? primary : (primary + " [" + source + "]");
         }
 
-        private static string BuildHint(string sourceName, string spriteName, Sprite sprite)
+        internal static string BuildHint(string sourceName, string spriteName, Sprite sprite)
         {
             Rect rect = sprite != null ? sprite.rect : new Rect();
             return "Map: " + (!string.IsNullOrEmpty(sourceName) ? sourceName : "<source>")
@@ -576,7 +484,7 @@ namespace ShelteredAPI.Scenarios
             return null;
         }
 
-        private static int CompareCandidate(SpriteCandidate left, SpriteCandidate right)
+        internal static int CompareCandidate(SpriteCandidate left, SpriteCandidate right)
         {
             if (ReferenceEquals(left, right)) return 0;
             if (left == null) return 1;
