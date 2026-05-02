@@ -4,7 +4,7 @@ using System;
 using ModAPI.Core;
 using ModAPI.Harmony;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     [PatchPolicy(PatchDomain.SaveFlow, "SaveGlobalDataCustomSession",
         TargetBehavior = "Global-data save propagation into the active custom session",

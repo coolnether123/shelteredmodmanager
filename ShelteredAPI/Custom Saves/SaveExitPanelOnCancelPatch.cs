@@ -2,7 +2,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     [PatchPolicy(PatchDomain.SaveFlow, "SaveExitCancelTrace",
         TargetBehavior = "Save-exit cancel path logging",

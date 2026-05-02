@@ -1,6 +1,6 @@
 using System;
 using ModAPI.Core;
-using ModAPI.Hooks;
+using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 

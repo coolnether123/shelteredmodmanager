@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     /// <summary>
     /// Centralized delete routing for save slots.

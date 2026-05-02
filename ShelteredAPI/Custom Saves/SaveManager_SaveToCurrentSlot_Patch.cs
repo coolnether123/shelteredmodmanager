@@ -5,7 +5,7 @@ using System.Linq;
 using ModAPI.Core;
 using ModAPI.Harmony;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     [PatchPolicy(PatchDomain.SaveFlow, "SaveToCurrentSlotRedirect",
         TargetBehavior = "Pending custom-slot save redirect before vanilla SaveToCurrentSlot execution",

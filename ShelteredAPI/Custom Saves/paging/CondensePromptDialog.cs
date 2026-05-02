@@ -2,9 +2,9 @@ using System;
 using UnityEngine;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 
-namespace ModAPI.Hooks.Paging
+namespace ShelteredAPI.Saves.Paging
 {
     /// <summary>
     /// Dialog shown at startup when save slot gaps are detected.

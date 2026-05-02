@@ -1,9 +1,9 @@
 using System;
 using UnityEngine;
 using ModAPI.Core;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 
-namespace ModAPI.Hooks.Paging
+namespace ShelteredAPI.Saves.Paging
 {
     /// <summary>
     /// Readable first-time onboarding dialog for custom save paging.

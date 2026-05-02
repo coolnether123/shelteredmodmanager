@@ -3,11 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
-using ModAPI.Hooks;
-using ModAPI.Hooks.Paging;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios

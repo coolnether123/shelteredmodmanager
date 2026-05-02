@@ -3,7 +3,7 @@ using System.Linq;
 using ShelteredAPI.Saves;
 using ModAPI.Core;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     // This is a temporary diagnostic class. 
     // It will be removed once the correct save method is identified.

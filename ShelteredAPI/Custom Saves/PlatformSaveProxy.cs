@@ -7,7 +7,7 @@ using System.Text;
 using UnityEngine;
 using ModAPI.Core;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     internal class PlatformSaveProxy : PlatformSave_Base
     {

@@ -1,12 +1,12 @@
 using System.Collections.Generic;
-using ModAPI.Hooks;
+using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 
-namespace ModAPI.Core
+namespace ShelteredAPI.Core
 {
     /// <summary>
     /// Internal coordinator for custom-save session state.
-    /// Keeps ModAPI internals from reaching directly into proxy fields while
+    /// Keeps save internals from reaching directly into proxy fields while
     /// preserving the existing PlatformSaveProxy surface for compatibility.
     /// </summary>
     internal static class SaveRuntimeState

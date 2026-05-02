@@ -5,7 +5,7 @@ using UnityEngine;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 
-namespace ModAPI.Hooks.Paging
+namespace ShelteredAPI.Saves.Paging
 {
     /// <summary>
     /// Manages the state and visual components of the save slot paging UI.

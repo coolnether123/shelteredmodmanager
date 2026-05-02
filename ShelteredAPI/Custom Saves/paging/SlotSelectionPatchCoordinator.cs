@@ -2,11 +2,11 @@ using System;
 using System.IO;
 using HarmonyLib;
 using ModAPI.Core;
-using ModAPI.Hooks.Paging;
+using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using UnityEngine;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     internal static class SlotSelectionPatchCoordinator
     {

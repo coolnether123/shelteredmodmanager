@@ -6,9 +6,9 @@ using UnityEngine;
 using ModAPI.Core;
 using ModAPI.InputServices;
 using ShelteredAPI.Saves;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 
-namespace ModAPI.Hooks.Paging
+namespace ShelteredAPI.Saves.Paging
 {
     /// <summary>
     /// Modal window showing save verification details.

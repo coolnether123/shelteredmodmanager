@@ -5,11 +5,12 @@ using System.Reflection;
 using System.Text;
 using HarmonyLib;
 using UnityEngine;
-using ShelteredAPI.Saves;
-using ModAPI.Hooks.Paging;
+using ModAPI.Core;
 using ModAPI.Harmony;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Paging;
 
-namespace ModAPI.Core
+namespace ShelteredAPI.Core
 {
     /// <summary>
     /// Serialized mod manifest payload embedded into save data for load verification.
@@ -304,8 +305,8 @@ namespace ModAPI.Core
                         };
 
                         // Open UI
-                        ModAPI.Hooks.Paging.SaveDetailsWindow.Show(entry, manifestForUI, currentState, true, 
-                        () => 
+                        SaveDetailsWindow.Show(entry, manifestForUI, currentState, true,
+                        () =>
                         {
                             MMLog.WriteDebug("[LoadGamePatch] User accepted load. Allowing Update_LoadData to proceed.");
                             _isWaitingForUser = false;
@@ -352,7 +353,7 @@ namespace ModAPI.Core
                     }
                 };
 
-                ModAPI.Hooks.Paging.SaveDetailsWindow.Show(entry, manifestForUI, state, true, () =>
+                SaveDetailsWindow.Show(entry, manifestForUI, state, true, () =>
                 {
                     MMLog.WriteDebug("[LoadGamePatch] User opted to recover manifest and continue load.");
                     _isWaitingForUser = false;
@@ -382,7 +383,7 @@ namespace ModAPI.Core
                     context.AbsoluteSlot = SaveRuntimeState.ActiveCustomSave.absoluteSlot;
                 }
 
-                ModAPI.Hooks.PlatformSaveProxy.Target pending;
+                PlatformSaveProxy.Target pending;
                 if (!SaveRuntimeState.TryGetPendingLoad(type, out pending) || pending == null)
                     return context;
 

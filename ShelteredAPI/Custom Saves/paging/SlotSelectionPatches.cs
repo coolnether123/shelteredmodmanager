@@ -1,7 +1,7 @@
 using HarmonyLib;
 using ModAPI.Harmony;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     /// <summary>
     /// This static class holds state that must persist across scene loads,

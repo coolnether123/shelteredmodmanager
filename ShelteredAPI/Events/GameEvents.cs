@@ -4,7 +4,7 @@ using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Harmony;
-using ModAPI.Hooks;
+using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 
 namespace ShelteredAPI.Events

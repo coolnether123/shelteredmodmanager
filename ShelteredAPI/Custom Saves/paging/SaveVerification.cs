@@ -5,11 +5,11 @@ using System.IO;
 using UnityEngine;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
-using ModAPI.UI;
-using ModAPI.Hooks;
+using ShelteredAPI.UI.Compatibility;
+using ShelteredAPI.Hooks;
 using HarmonyLib;
 
-namespace ModAPI.Hooks.Paging
+namespace ShelteredAPI.Saves.Paging
 {
     internal static class SaveVerification
     {
@@ -307,7 +307,7 @@ namespace ModAPI.Hooks.Paging
                         if (capSlot <= 3)
                         {
                             // For vanilla saves, ensure we bypass the anti-mod-mismatch loading block
-                            ModAPI.Core.SaveProtectionPatches.LoadGamePatch._forceLoad = true;
+                            SaveProtectionPatches.LoadGamePatch._forceLoad = true;
                         }
                         else
                         {

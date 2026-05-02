@@ -1,6 +1,6 @@
 using System;
 using System.Reflection;
-using ModAPI.Hooks.Paging;
+using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 

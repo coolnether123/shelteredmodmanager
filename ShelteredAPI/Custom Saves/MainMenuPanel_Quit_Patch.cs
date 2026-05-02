@@ -3,7 +3,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using UnityEngine;
 
-namespace ModAPI.Hooks
+namespace ShelteredAPI.Hooks
 {
     // =========================================================================================
     // MANAGED SHUTDOWN SYSTEM
