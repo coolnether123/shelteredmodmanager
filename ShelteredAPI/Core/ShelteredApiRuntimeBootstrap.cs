@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Core;
+using ShelteredAPI.UI.Compatibility;
 using ModAPI.Harmony;
 using ModAPI.Actors;
 using ModAPI.InputServices;
@@ -59,8 +60,8 @@ namespace ShelteredAPI.Core
             if (runtimeRoot.GetComponent<ShelteredKeybindPersistenceGuard>() == null)
                 runtimeRoot.AddComponent<ShelteredKeybindPersistenceGuard>();
 
-            if (runtimeRoot.GetComponent<ModAPI.UI.UIDebugInspector>() == null)
-                runtimeRoot.AddComponent<ModAPI.UI.UIDebugInspector>();
+            if (runtimeRoot.GetComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>() == null)
+                runtimeRoot.AddComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>();
         }
 
         private static void EnsureApiRegistrations()

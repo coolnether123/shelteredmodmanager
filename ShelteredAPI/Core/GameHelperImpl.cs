@@ -1,7 +1,8 @@
 using System;
+using ModAPI.Core;
 using ShelteredAPI.Content;
 
-namespace ModAPI.Core
+namespace ShelteredAPI.Core
 {
     internal class GameHelperImpl : IGameHelper
     {

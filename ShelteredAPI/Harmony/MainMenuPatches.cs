@@ -3,13 +3,14 @@ using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using ModAPI.Core;
-using ModAPI.UI;
+using ModAPI.Harmony;
+using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.Saves;
-using ModAPI.Hooks;
-using ModAPI.Hooks.Paging;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves.Paging;
 using UnityEngine;
 
-namespace ModAPI.Harmony
+namespace ShelteredAPI.Harmony
 {
     internal static class AutoLoadFlow
     {

@@ -10,7 +10,7 @@ using ModAPI.Harmony;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace ModAPI.Debugging
+namespace ShelteredAPI.Debugging
 {
     [HarmonyUtil.DebugPatch("SaveExitDiagnostics")]
     [PatchPolicy(PatchDomain.Diagnostics, "CrashCorridorMapDiagnostics",

@@ -5,7 +5,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using UnityEngine;
 
-namespace ModAPI.Util
+namespace ShelteredAPI.Persistence
 {
     /// <summary>
     /// Sheltered save-backed compatibility helper for JSON blobs keyed by mod id.
