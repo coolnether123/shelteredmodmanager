@@ -33,7 +33,8 @@ namespace ShelteredAPI.Scenarios
             {
                 return new ScenarioSelectionCatalogService(
                     resolver.Get<IShelteredCustomScenarioService>(),
-                    resolver.Get<IScenarioSaveLibrary>());
+                    resolver.Get<IScenarioSaveLibrary>(),
+                    resolver.Get<IScenarioDefinitionSerializer>());
             });
             services.AddSingleton<IScenarioSelectionCatalogService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioSelectionCatalogService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

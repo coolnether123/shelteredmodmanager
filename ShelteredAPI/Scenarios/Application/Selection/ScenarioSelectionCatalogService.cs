@@ -9,13 +9,16 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly IShelteredCustomScenarioService _customScenarios;
         private readonly IScenarioSaveLibrary _saveLibrary;
+        private readonly IScenarioDefinitionSerializer _definitionSerializer;
 
         public ScenarioSelectionCatalogService(
             IShelteredCustomScenarioService customScenarios,
-            IScenarioSaveLibrary saveLibrary)
+            IScenarioSaveLibrary saveLibrary,
+            IScenarioDefinitionSerializer definitionSerializer)
         {
             _customScenarios = customScenarios;
             _saveLibrary = saveLibrary;
+            _definitionSerializer = definitionSerializer;
         }
 
         public void Refresh()
@@ -253,14 +256,14 @@ namespace ShelteredAPI.Scenarios
             return ScenarioBaseGameMode.Survival;
         }
 
-        private static ScenarioBaseGameMode ResolveDraftBaseGameMode(ScenarioInfo draft)
+        private ScenarioBaseGameMode ResolveDraftBaseGameMode(ScenarioInfo draft)
         {
             if (draft == null || string.IsNullOrEmpty(draft.FilePath))
                 return ScenarioBaseGameMode.Survival;
 
             try
             {
-                ScenarioDefinition definition = new ScenarioDefinitionSerializer().Load(draft.FilePath);
+                ScenarioDefinition definition = _definitionSerializer.Load(draft.FilePath);
                 if (definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
                     return definition.BaseGameMode;
             }
