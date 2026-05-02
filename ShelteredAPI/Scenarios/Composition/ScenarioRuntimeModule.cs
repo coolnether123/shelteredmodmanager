@@ -38,12 +38,17 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton<IScenarioRuntimeOrchestrator>(delegate(IServiceResolver resolver)
             {
                 return new ScenarioRuntimeOrchestrator(
-                    resolver.Get<IShelteredCustomScenarioService>(),
+                    resolver.Get<ICustomScenarioLifecycleService>(),
+                    resolver.Get<ICustomScenarioRegistry>(),
+                    resolver.Get<IScenarioDependencyVerifier>(),
+                    resolver.Get<IScenarioDefinitionFactory>(),
+                    resolver.Get<IScenarioDefinitionCatalogService>(),
                     resolver.Get<IScenarioRuntimeBindingService>(),
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<IScenarioApplier>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
-                    resolver.Get<IScenarioSceneSpritePlacementEngine>());
+                    resolver.Get<IScenarioSceneSpritePlacementEngine>(),
+                    resolver.Get<IVanillaScenarioRuntime>());
             });
         }
     }

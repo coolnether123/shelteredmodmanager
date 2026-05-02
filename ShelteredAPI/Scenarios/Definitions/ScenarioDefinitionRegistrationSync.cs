@@ -4,38 +4,32 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    internal sealed class ScenarioDefinitionRegistrationSync
+    internal sealed class ScenarioDefinitionRegistrationSync : IScenarioDefinitionCatalogService
     {
-        private readonly IScenarioDefinitionSerializer _definitionSerializer;
         private readonly IScenarioDefinitionCatalog _definitionCatalog;
-        private readonly IScenarioDefinitionValidator _definitionValidator;
-        private readonly ScenarioAuthoringDraftRepository _draftRepository;
+        private readonly IScenarioDefinitionReader _definitionReader;
         private readonly IScenarioRegistrationStore _store;
         private readonly ScenarioRecordFactory _recordFactory;
         private readonly ScenarioSaveDescriptorMirror _saveDescriptorMirror;
-        private readonly ScenarioDependencyService _dependencyService;
-        private readonly ScenarioDefinitionService _definitionService;
+        private readonly IScenarioDefinitionDependencyReader _dependencyReader;
+        private readonly IScenarioDefinitionFactory _definitionFactory;
 
         public ScenarioDefinitionRegistrationSync(
-            IScenarioDefinitionSerializer definitionSerializer,
             IScenarioDefinitionCatalog definitionCatalog,
-            IScenarioDefinitionValidator definitionValidator,
-            ScenarioAuthoringDraftRepository draftRepository,
+            IScenarioDefinitionReader definitionReader,
             IScenarioRegistrationStore store,
             ScenarioRecordFactory recordFactory,
             ScenarioSaveDescriptorMirror saveDescriptorMirror,
-            ScenarioDependencyService dependencyService,
-            ScenarioDefinitionService definitionService)
+            IScenarioDefinitionDependencyReader dependencyReader,
+            IScenarioDefinitionFactory definitionFactory)
         {
-            _definitionSerializer = definitionSerializer;
             _definitionCatalog = definitionCatalog;
-            _definitionValidator = definitionValidator;
-            _draftRepository = draftRepository;
+            _definitionReader = definitionReader;
             _store = store;
             _recordFactory = recordFactory;
             _saveDescriptorMirror = saveDescriptorMirror;
-            _dependencyService = dependencyService;
-            _definitionService = definitionService;
+            _dependencyReader = dependencyReader;
+            _definitionFactory = definitionFactory;
         }
 
         public void RefreshDefinitionCatalog()
@@ -46,62 +40,22 @@ namespace ShelteredAPI.Scenarios
 
         public ScenarioInfo[] ListDefinitions()
         {
-            return GetAllDefinitionInfos();
+            return _definitionReader.ListAll();
         }
 
         public ScenarioValidationResult ValidateDefinition(string scenarioId)
         {
-            ScenarioInfo info;
-            if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
-            {
-                ScenarioValidationResult missing = new ScenarioValidationResult();
-                missing.AddError("Scenario is not indexed: " + scenarioId);
-                return missing;
-            }
-
-            try
-            {
-                ScenarioDefinition definition = _definitionSerializer.Load(info.FilePath);
-                return _definitionValidator.Validate(definition, info.FilePath);
-            }
-            catch (Exception ex)
-            {
-                ScenarioValidationResult failed = new ScenarioValidationResult();
-                failed.AddError("Scenario XML could not be loaded: " + ex.Message);
-                return failed;
-            }
+            return _definitionReader.Validate(scenarioId);
         }
 
         public bool TryLoadDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)
         {
-            definition = null;
-            scenarioFilePath = null;
-            validation = new ScenarioValidationResult();
-
-            ScenarioInfo info;
-            if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
-            {
-                validation.AddError("Scenario is not indexed: " + scenarioId);
-                return false;
-            }
-
-            scenarioFilePath = info.FilePath;
-            try
-            {
-                definition = _definitionSerializer.Load(info.FilePath);
-                validation = _definitionValidator.Validate(definition, info.FilePath);
-                return validation.IsValid;
-            }
-            catch (Exception ex)
-            {
-                validation.AddError("Scenario XML could not be loaded: " + ex.Message);
-                return false;
-            }
+            return _definitionReader.TryLoad(scenarioId, out definition, out scenarioFilePath, out validation);
         }
 
         private void SyncDefinitionRegistrations()
         {
-            ScenarioInfo[] definitions = GetAllDefinitionInfos();
+            ScenarioInfo[] definitions = _definitionReader.ListAll();
             Dictionary<string, ScenarioInfo> current = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < definitions.Length; i++)
             {
@@ -146,67 +100,14 @@ namespace ShelteredAPI.Scenarios
                 Description = "XML scenario pack from " + (TrimToNull(definition.OwnerModId) ?? "loaded mod") + ".",
                 Version = TrimToNull(definition.Version) ?? "1.0",
                 OwnerModId = TrimToNull(definition.OwnerModId),
-                RequiredMods = ScenarioDependencyManifest.CloneRequiredMods(_dependencyService.LoadDefinitionDependencies(definition.Id)),
+                RequiredMods = ScenarioDependencyManifest.CloneRequiredMods(_dependencyReader.LoadDefinitionDependencies(definition.Id)),
                 DefinitionFactory = new CustomScenarioDefinitionFactory(
-                    delegate(CustomScenarioBuildContext context) { return _definitionService.BuildScenarioDefFromDefinition(definition.Id); })
+                    delegate(CustomScenarioBuildContext context) { return _definitionFactory.BuildScenarioDefFromDefinition(definition.Id); })
             };
 
             ScenarioRecord record = _recordFactory.CreateRecord(registration);
             record.IsDefinitionBacked = true;
             return record;
-        }
-
-        private bool TryGetDefinitionInfo(string scenarioId, out ScenarioInfo info)
-        {
-            info = null;
-            if (string.IsNullOrEmpty(scenarioId))
-                return false;
-
-            if (_definitionCatalog.TryGet(scenarioId, out info) && info != null)
-                return true;
-
-            return _draftRepository.TryGet(scenarioId, out info) && info != null;
-        }
-
-        private ScenarioInfo[] GetAllDefinitionInfos()
-        {
-            List<ScenarioInfo> combined = new List<ScenarioInfo>();
-            Dictionary<string, ScenarioInfo> byId = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
-            AddDefinitionInfos(byId, _definitionCatalog.ListAll());
-            AddDefinitionInfos(byId, _draftRepository.ListAll());
-
-            foreach (KeyValuePair<string, ScenarioInfo> pair in byId)
-                combined.Add(pair.Value);
-
-            combined.Sort(CompareScenarioDefinitionInfo);
-            return combined.ToArray();
-        }
-
-        private static void AddDefinitionInfos(Dictionary<string, ScenarioInfo> target, ScenarioInfo[] source)
-        {
-            if (target == null || source == null)
-                return;
-
-            for (int i = 0; i < source.Length; i++)
-            {
-                ScenarioInfo info = source[i];
-                if (info == null || string.IsNullOrEmpty(info.Id) || target.ContainsKey(info.Id))
-                    continue;
-
-                target[info.Id] = info;
-            }
-        }
-
-        private static int CompareScenarioDefinitionInfo(ScenarioInfo left, ScenarioInfo right)
-        {
-            if (object.ReferenceEquals(left, right)) return 0;
-            if (left == null) return 1;
-            if (right == null) return -1;
-
-            int name = string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
-            if (name != 0) return name;
-
-            return string.Compare(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string TrimToNull(string value)

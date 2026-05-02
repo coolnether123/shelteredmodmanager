@@ -17,14 +17,20 @@ namespace ShelteredAPI.Scenarios
     {
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioSelectionCatalogService _catalog;
+        private readonly ICustomScenarioLifecycleService _scenarioLifecycle;
 
-        public ScenarioLaunchCoordinator(IScenarioSaveLibrary saveLibrary, IScenarioSelectionCatalogService catalog)
+        public ScenarioLaunchCoordinator(
+            IScenarioSaveLibrary saveLibrary,
+            IScenarioSelectionCatalogService catalog,
+            ICustomScenarioLifecycleService scenarioLifecycle)
         {
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
             if (catalog == null) throw new ArgumentNullException("catalog");
+            if (scenarioLifecycle == null) throw new ArgumentNullException("scenarioLifecycle");
 
             _saveLibrary = saveLibrary;
             _catalog = catalog;
+            _scenarioLifecycle = scenarioLifecycle;
         }
 
         public SaveManager.SaveType GetVirtualSaveType(ScenarioCatalogEntry entry)
@@ -90,7 +96,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            if (!ShelteredCustomScenarioService.Instance.MarkSelected(scenario.Id))
+            if (!_scenarioLifecycle.MarkSelected(scenario.Id))
             {
                 error = "MarkSelected failed for scenario " + scenario.Id + ".";
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
@@ -109,7 +115,7 @@ namespace ShelteredAPI.Scenarios
             {
                 error = "Failed to allocate startup save: " + ex.Message;
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
-                ShelteredCustomScenarioService.Instance.ClearState();
+                _scenarioLifecycle.ClearState();
                 return false;
             }
 
@@ -117,7 +123,7 @@ namespace ShelteredAPI.Scenarios
             {
                 error = "Save library returned a null startup save.";
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error + " scenarioId=" + scenario.Id + ".");
-                ShelteredCustomScenarioService.Instance.ClearState();
+                _scenarioLifecycle.ClearState();
                 return false;
             }
 
@@ -201,7 +207,7 @@ namespace ShelteredAPI.Scenarios
                 }
             }
 
-            ShelteredCustomScenarioService.Instance.ClearState();
+            _scenarioLifecycle.ClearState();
         }
 
         public bool QueueAuthoringDraftLaunch(

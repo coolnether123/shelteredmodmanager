@@ -9,6 +9,7 @@ namespace ShelteredAPI.Scenarios
         private readonly IScenarioQuestInstanceResolver _questInstanceResolver;
         private readonly IScenarioWinLossConditionAdapter _conditionAdapter;
         private readonly ScenarioConditionEvaluatorRegistry _conditionEvaluator;
+        private readonly IVanillaScenarioRuntime _vanillaRuntime;
         private ScenarioDefinition _definition;
         private ScenarioRuntimeBinding _binding;
         private string _lastBlockedReason;
@@ -16,11 +17,13 @@ namespace ShelteredAPI.Scenarios
         public ScenarioWinLossOutcomeService(
             IScenarioQuestInstanceResolver questInstanceResolver,
             IScenarioWinLossConditionAdapter conditionAdapter,
-            ScenarioConditionEvaluatorRegistry conditionEvaluator)
+            ScenarioConditionEvaluatorRegistry conditionEvaluator,
+            IVanillaScenarioRuntime vanillaRuntime)
         {
             _questInstanceResolver = questInstanceResolver;
             _conditionAdapter = conditionAdapter;
             _conditionEvaluator = conditionEvaluator;
+            _vanillaRuntime = vanillaRuntime;
         }
 
         public void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding)
@@ -90,16 +93,21 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
-        private static void Resolve(QuestInstance instance, ScenarioRuntimeState state, bool success, ConditionDef condition)
+        private void Resolve(QuestInstance instance, ScenarioRuntimeState state, bool success, ConditionDef condition)
         {
-            if (instance == null || QuestManager.instance == null)
+            if (instance == null || state == null)
                 return;
 
-            int instanceId = instance.id;
-            QuestManager.instance.FinishQuest(instanceId, success);
+            string reason;
+            if (!_vanillaRuntime.TryFinishQuest(instance, success, out reason))
+            {
+                LogBlocked(reason);
+                return;
+            }
+
             state.ScenarioOutcome = success ? "Win" : "Loss";
             state.ScenarioOutcomeConditionId = condition != null ? condition.Id : null;
-            MMLog.WriteInfo("[ScenarioWinLoss] Resolved scenario QuestInstance " + instanceId.ToString()
+            MMLog.WriteInfo("[ScenarioWinLoss] Resolved scenario QuestInstance " + instance.id.ToString()
                 + " as " + state.ScenarioOutcome
                 + " via condition '" + (state.ScenarioOutcomeConditionId ?? string.Empty) + "'.");
         }

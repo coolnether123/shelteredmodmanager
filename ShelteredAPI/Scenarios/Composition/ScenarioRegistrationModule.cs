@@ -27,13 +27,13 @@ namespace ShelteredAPI.Scenarios
                 return new ShelteredCustomScenarioService(
                     resolver.Get<IScenarioRegistrationStore>(),
                     resolver.Get<ScenarioRegistrationService>(),
-                    resolver.Get<ScenarioDefinitionService>(),
-                    resolver.Get<ScenarioDefinitionRegistrationSync>(),
-                    resolver.Get<ScenarioDependencyService>(),
-                    resolver.Get<ScenarioLifecycleService>(),
-                    resolver.Get<ScenarioEventHub>(),
-                    resolver.Get<IScenarioStateManager>());
+                    resolver.Get<IScenarioDefinitionFactory>(),
+                    resolver.Get<IScenarioDefinitionCatalogService>(),
+                    resolver.Get<IScenarioDependencyVerifier>(),
+                    resolver.Get<ICustomScenarioLifecycleService>(),
+                    resolver.Get<ScenarioEventHub>());
             });
+            services.AddSingleton<ICustomScenarioRegistry>(delegate(IServiceResolver resolver) { return resolver.Get<ShelteredCustomScenarioService>(); });
             services.AddSingleton<IShelteredCustomScenarioService>(delegate(IServiceResolver resolver) { return resolver.Get<ShelteredCustomScenarioService>(); });
             services.AddSingleton<ICustomScenarioService>(delegate(IServiceResolver resolver) { return resolver.Get<IShelteredCustomScenarioService>(); });
         }

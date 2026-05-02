@@ -5,29 +5,20 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    internal sealed class ScenarioDefinitionService
+    internal sealed class ScenarioDefinitionService : IScenarioDefinitionFactory
     {
         private readonly IScenarioRegistrationStore _store;
         private readonly IScenarioStateManager _stateManager;
-        private readonly IScenarioDefinitionSerializer _definitionSerializer;
-        private readonly IScenarioDefinitionCatalog _definitionCatalog;
-        private readonly IScenarioDefinitionValidator _definitionValidator;
-        private readonly ScenarioAuthoringDraftRepository _draftRepository;
+        private readonly IScenarioDefinitionReader _definitionReader;
 
         public ScenarioDefinitionService(
             IScenarioRegistrationStore store,
             IScenarioStateManager stateManager,
-            IScenarioDefinitionSerializer definitionSerializer,
-            IScenarioDefinitionCatalog definitionCatalog,
-            IScenarioDefinitionValidator definitionValidator,
-            ScenarioAuthoringDraftRepository draftRepository)
+            IScenarioDefinitionReader definitionReader)
         {
             _store = store;
             _stateManager = stateManager;
-            _definitionSerializer = definitionSerializer;
-            _definitionCatalog = definitionCatalog;
-            _definitionValidator = definitionValidator;
-            _draftRepository = draftRepository;
+            _definitionReader = definitionReader;
         }
 
         public bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage)
@@ -101,7 +92,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioDefinition definition;
             string scenarioFilePath;
             ScenarioValidationResult validation;
-            if (!TryLoadDefinition(scenarioId, out definition, out scenarioFilePath, out validation))
+            if (!_definitionReader.TryLoad(scenarioId, out definition, out scenarioFilePath, out validation))
                 throw new InvalidOperationException("Scenario XML failed validation: " + FormatValidationIssues(validation));
 
             ShelteredScenarioDefBuilder builder = new ShelteredScenarioDefBuilder()
@@ -130,45 +121,6 @@ namespace ShelteredAPI.Scenarios
                 builder.AddSimpleStage(stageId);
             }
             return builder.Build();
-        }
-
-        private bool TryLoadDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)
-        {
-            definition = null;
-            scenarioFilePath = null;
-            validation = new ScenarioValidationResult();
-
-            ScenarioInfo info;
-            if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
-            {
-                validation.AddError("Scenario is not indexed: " + scenarioId);
-                return false;
-            }
-
-            scenarioFilePath = info.FilePath;
-            try
-            {
-                definition = _definitionSerializer.Load(info.FilePath);
-                validation = _definitionValidator.Validate(definition, info.FilePath);
-                return validation.IsValid;
-            }
-            catch (Exception ex)
-            {
-                validation.AddError("Scenario XML could not be loaded: " + ex.Message);
-                return false;
-            }
-        }
-
-        private bool TryGetDefinitionInfo(string scenarioId, out ScenarioInfo info)
-        {
-            info = null;
-            if (string.IsNullOrEmpty(scenarioId))
-                return false;
-
-            if (_definitionCatalog.TryGet(scenarioId, out info) && info != null)
-                return true;
-
-            return _draftRepository.TryGet(scenarioId, out info) && info != null;
         }
 
         private CustomScenarioBuildContext PrepareBuildContext(ScenarioRecord record, CustomScenarioBuildContext context)

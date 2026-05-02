@@ -4,26 +4,31 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    internal sealed class ScenarioLifecycleService
+    internal sealed class ScenarioLifecycleService : ICustomScenarioLifecycleService
     {
         private readonly IScenarioRegistrationStore _store;
-        private readonly ScenarioDependencyService _dependencyService;
+        private readonly IScenarioDependencyVerifier _dependencyVerifier;
         private readonly IScenarioStateManager _stateManager;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
         private readonly ScenarioEventHub _events;
 
         public ScenarioLifecycleService(
             IScenarioRegistrationStore store,
-            ScenarioDependencyService dependencyService,
+            IScenarioDependencyVerifier dependencyVerifier,
             IScenarioStateManager stateManager,
             IScenarioRuntimeBindingService runtimeBindingService,
             ScenarioEventHub events)
         {
             _store = store;
-            _dependencyService = dependencyService;
+            _dependencyVerifier = dependencyVerifier;
             _stateManager = stateManager;
             _runtimeBindingService = runtimeBindingService;
             _events = events;
+        }
+
+        public CustomScenarioState CurrentState
+        {
+            get { return _stateManager.GetCustomScenarioState(); }
         }
 
         public bool MarkSelected(string scenarioId)
@@ -32,7 +37,7 @@ namespace ShelteredAPI.Scenarios
             if (!_store.TryGet(scenarioId, out record))
                 return false;
 
-            if (_dependencyService.VerifyDependencies(record.Info) != ScenarioDependencyVerificationState.Match)
+            if (_dependencyVerifier.VerifyDependencies(record.Info) != ScenarioDependencyVerificationState.Match)
             {
                 MMLog.WriteWarning("[ScenarioLifecycleService] Custom scenario dependencies are not satisfied: " + scenarioId);
                 return false;

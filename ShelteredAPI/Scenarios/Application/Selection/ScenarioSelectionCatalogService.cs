@@ -7,16 +7,22 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioSelectionCatalogService : IScenarioSelectionCatalogService
     {
-        private readonly IShelteredCustomScenarioService _customScenarios;
+        private readonly ICustomScenarioRegistry _customScenarios;
+        private readonly IScenarioDefinitionCatalogService _definitions;
+        private readonly IScenarioDependencyVerifier _dependencies;
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioDefinitionSerializer _definitionSerializer;
 
         public ScenarioSelectionCatalogService(
-            IShelteredCustomScenarioService customScenarios,
+            ICustomScenarioRegistry customScenarios,
+            IScenarioDefinitionCatalogService definitions,
+            IScenarioDependencyVerifier dependencies,
             IScenarioSaveLibrary saveLibrary,
             IScenarioDefinitionSerializer definitionSerializer)
         {
             _customScenarios = customScenarios;
+            _definitions = definitions;
+            _dependencies = dependencies;
             _saveLibrary = saveLibrary;
             _definitionSerializer = definitionSerializer;
         }
@@ -24,7 +30,7 @@ namespace ShelteredAPI.Scenarios
         public void Refresh()
         {
             ScenarioSelectionIds.RegisterVanillaDescriptors();
-            _customScenarios.RefreshDefinitionCatalog();
+            _definitions.RefreshDefinitionCatalog();
         }
 
         public ScenarioCatalogEntry[] ListAll()
@@ -158,8 +164,8 @@ namespace ShelteredAPI.Scenarios
                 if (scenario == null || string.IsNullOrEmpty(scenario.Id))
                     continue;
 
-                SlotManifest manifest = _customScenarios.CreateDependencyManifest(scenario);
-                ScenarioDependencyVerificationState dependencyState = _customScenarios.VerifyDependencies(scenario);
+                SlotManifest manifest = _dependencies.CreateDependencyManifest(scenario);
+                ScenarioDependencyVerificationState dependencyState = _dependencies.VerifyDependencies(scenario);
                 ScenarioBaseGameMode baseGameMode = ResolveBaseGameMode(scenario);
                 entries.Add(new ScenarioCatalogEntry
                 {
@@ -242,7 +248,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioValidationResult validation;
             try
             {
-                if (_customScenarios.TryLoadDefinition(scenario.Id, out definition, out scenarioFilePath, out validation)
+                if (_definitions.TryLoadDefinition(scenario.Id, out definition, out scenarioFilePath, out validation)
                     && definition != null
                     && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
                 {

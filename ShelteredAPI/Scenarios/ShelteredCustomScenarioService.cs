@@ -9,16 +9,21 @@ namespace ShelteredAPI.Scenarios
     /// <summary>
     /// Sheltered runtime implementation of the neutral custom scenario service contract.
     /// </summary>
-    internal sealed class ShelteredCustomScenarioService : ICustomScenarioService, IShelteredCustomScenarioService
+    internal sealed class ShelteredCustomScenarioService : ICustomScenarioService,
+        IShelteredCustomScenarioService,
+        ICustomScenarioRegistry,
+        IScenarioDefinitionCatalogService,
+        IScenarioDefinitionFactory,
+        ICustomScenarioLifecycleService,
+        IScenarioDependencyVerifier
     {
         private readonly IScenarioRegistrationStore _registrations;
         private readonly ScenarioRegistrationService _registrationService;
-        private readonly ScenarioDefinitionService _definitionService;
-        private readonly ScenarioDefinitionRegistrationSync _definitionRegistrationSync;
-        private readonly ScenarioDependencyService _dependencyService;
-        private readonly ScenarioLifecycleService _lifecycleService;
+        private readonly IScenarioDefinitionFactory _definitionFactory;
+        private readonly IScenarioDefinitionCatalogService _definitionCatalog;
+        private readonly IScenarioDependencyVerifier _dependencyVerifier;
+        private readonly ICustomScenarioLifecycleService _lifecycleService;
         private readonly ScenarioEventHub _events;
-        private readonly IScenarioStateManager _stateManager;
 
         public static ShelteredCustomScenarioService Instance
         {
@@ -57,47 +62,45 @@ namespace ShelteredAPI.Scenarios
 
         public CustomScenarioState CurrentState
         {
-            get { return _stateManager.GetCustomScenarioState(); }
+            get { return _lifecycleService.CurrentState; }
         }
 
         internal ShelteredCustomScenarioService(
             IScenarioRegistrationStore registrations,
             ScenarioRegistrationService registrationService,
-            ScenarioDefinitionService definitionService,
-            ScenarioDefinitionRegistrationSync definitionRegistrationSync,
-            ScenarioDependencyService dependencyService,
-            ScenarioLifecycleService lifecycleService,
-            ScenarioEventHub events,
-            IScenarioStateManager stateManager)
+            IScenarioDefinitionFactory definitionFactory,
+            IScenarioDefinitionCatalogService definitionCatalog,
+            IScenarioDependencyVerifier dependencyVerifier,
+            ICustomScenarioLifecycleService lifecycleService,
+            ScenarioEventHub events)
         {
             _registrations = registrations;
             _registrationService = registrationService;
-            _definitionService = definitionService;
-            _definitionRegistrationSync = definitionRegistrationSync;
-            _dependencyService = dependencyService;
+            _definitionFactory = definitionFactory;
+            _definitionCatalog = definitionCatalog;
+            _dependencyVerifier = dependencyVerifier;
             _lifecycleService = lifecycleService;
             _events = events;
-            _stateManager = stateManager;
         }
 
         public void RefreshDefinitionCatalog()
         {
-            _definitionRegistrationSync.RefreshDefinitionCatalog();
+            _definitionCatalog.RefreshDefinitionCatalog();
         }
 
         public ScenarioInfo[] ListDefinitions()
         {
-            return _definitionRegistrationSync.ListDefinitions();
+            return _definitionCatalog.ListDefinitions();
         }
 
         public ScenarioValidationResult ValidateDefinition(string scenarioId)
         {
-            return _definitionRegistrationSync.ValidateDefinition(scenarioId);
+            return _definitionCatalog.ValidateDefinition(scenarioId);
         }
 
         public bool TryLoadDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)
         {
-            return _definitionRegistrationSync.TryLoadDefinition(scenarioId, out definition, out scenarioFilePath, out validation);
+            return _definitionCatalog.TryLoadDefinition(scenarioId, out definition, out scenarioFilePath, out validation);
         }
 
         public CustomScenarioRegistrationResult Register(CustomScenarioRegistration registration)
@@ -130,12 +133,17 @@ namespace ShelteredAPI.Scenarios
 
         public bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage)
         {
-            return _definitionService.TryCreateDefinition(scenarioId, context, out definition, out errorMessage);
+            return _definitionFactory.TryCreateDefinition(scenarioId, context, out definition, out errorMessage);
         }
 
         public bool TryCreateScenarioDef(string scenarioId, CustomScenarioBuildContext context, out ScenarioDef definition, out string errorMessage)
         {
-            return _definitionService.TryCreateScenarioDef(scenarioId, context, out definition, out errorMessage);
+            return _definitionFactory.TryCreateScenarioDef(scenarioId, context, out definition, out errorMessage);
+        }
+
+        public ScenarioDef BuildScenarioDefFromDefinition(string scenarioId)
+        {
+            return _definitionFactory.BuildScenarioDefFromDefinition(scenarioId);
         }
 
         public bool MarkSelected(string scenarioId)
@@ -155,12 +163,12 @@ namespace ShelteredAPI.Scenarios
 
         public SlotManifest CreateDependencyManifest(CustomScenarioInfo info)
         {
-            return _dependencyService.CreateDependencyManifest(info);
+            return _dependencyVerifier.CreateDependencyManifest(info);
         }
 
         public ScenarioDependencyVerificationState VerifyDependencies(CustomScenarioInfo info)
         {
-            return _dependencyService.VerifyDependencies(info);
+            return _dependencyVerifier.VerifyDependencies(info);
         }
     }
 }

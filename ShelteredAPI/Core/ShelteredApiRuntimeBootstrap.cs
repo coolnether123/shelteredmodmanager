@@ -124,7 +124,7 @@ namespace ShelteredAPI.Core
             ICustomScenarioService customScenarios = ScenarioCompositionRoot.Resolve<ICustomScenarioService>();
             IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
             ScenarioCompositionRoot.Resolve<IScenarioRuntimeBindingService>().EnsureHooked();
-            ScenarioCompositionRoot.Resolve<IShelteredCustomScenarioService>().RefreshDefinitionCatalog();
+            ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>().RefreshDefinitionCatalog();
             RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
             RegisterApi(ShelteredApiAliasIds.CustomScenarios, customScenarios);
             RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);

@@ -8,34 +8,40 @@ namespace ShelteredAPI.Scenarios
         {
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
-                return new ScenarioDependencyService(
+                return new ScenarioDefinitionReader(
                     resolver.Get<IScenarioDefinitionSerializer>(),
                     resolver.Get<IScenarioDefinitionCatalog>(),
+                    resolver.Get<IScenarioDefinitionValidator>(),
                     resolver.Get<ScenarioAuthoringDraftRepository>());
             });
+            services.AddSingleton<IScenarioDefinitionReader>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDefinitionReader>(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioDependencyService(
+                    resolver.Get<IScenarioDefinitionReader>());
+            });
+            services.AddSingleton<IScenarioDependencyVerifier>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDependencyService>(); });
+            services.AddSingleton<IScenarioDefinitionDependencyReader>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDependencyService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioDefinitionService(
                     resolver.Get<IScenarioRegistrationStore>(),
                     resolver.Get<IScenarioStateManager>(),
-                    resolver.Get<IScenarioDefinitionSerializer>(),
-                    resolver.Get<IScenarioDefinitionCatalog>(),
-                    resolver.Get<IScenarioDefinitionValidator>(),
-                    resolver.Get<ScenarioAuthoringDraftRepository>());
+                    resolver.Get<IScenarioDefinitionReader>());
             });
+            services.AddSingleton<IScenarioDefinitionFactory>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDefinitionService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioDefinitionRegistrationSync(
-                    resolver.Get<IScenarioDefinitionSerializer>(),
                     resolver.Get<IScenarioDefinitionCatalog>(),
-                    resolver.Get<IScenarioDefinitionValidator>(),
-                    resolver.Get<ScenarioAuthoringDraftRepository>(),
+                    resolver.Get<IScenarioDefinitionReader>(),
                     resolver.Get<IScenarioRegistrationStore>(),
                     resolver.Get<ScenarioRecordFactory>(),
                     resolver.Get<ScenarioSaveDescriptorMirror>(),
-                    resolver.Get<ScenarioDependencyService>(),
-                    resolver.Get<ScenarioDefinitionService>());
+                    resolver.Get<IScenarioDefinitionDependencyReader>(),
+                    resolver.Get<IScenarioDefinitionFactory>());
             });
+            services.AddSingleton<IScenarioDefinitionCatalogService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDefinitionRegistrationSync>(); });
         }
     }
 }

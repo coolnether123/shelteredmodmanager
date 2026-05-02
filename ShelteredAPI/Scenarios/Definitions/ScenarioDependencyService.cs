@@ -6,20 +6,13 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
-    internal sealed class ScenarioDependencyService
+    internal sealed class ScenarioDependencyService : IScenarioDependencyVerifier, IScenarioDefinitionDependencyReader
     {
-        private readonly IScenarioDefinitionSerializer _definitionSerializer;
-        private readonly IScenarioDefinitionCatalog _definitionCatalog;
-        private readonly ScenarioAuthoringDraftRepository _draftRepository;
+        private readonly IScenarioDefinitionReader _definitionReader;
 
-        public ScenarioDependencyService(
-            IScenarioDefinitionSerializer definitionSerializer,
-            IScenarioDefinitionCatalog definitionCatalog,
-            ScenarioAuthoringDraftRepository draftRepository)
+        public ScenarioDependencyService(IScenarioDefinitionReader definitionReader)
         {
-            _definitionSerializer = definitionSerializer;
-            _definitionCatalog = definitionCatalog;
-            _draftRepository = draftRepository;
+            _definitionReader = definitionReader;
         }
 
         public SlotManifest CreateDependencyManifest(CustomScenarioInfo info)
@@ -46,11 +39,16 @@ namespace ShelteredAPI.Scenarios
 
             try
             {
-                ScenarioInfo info;
-                if (!TryGetDefinitionInfo(scenarioId, out info) || info == null)
+                ScenarioDefinition definition;
+                string scenarioFilePath;
+                string errorMessage;
+                if (!_definitionReader.TryLoadUnchecked(scenarioId, out definition, out scenarioFilePath, out errorMessage) || definition == null)
+                {
+                    if (!string.IsNullOrEmpty(errorMessage) && !errorMessage.StartsWith("Scenario is not indexed"))
+                        MMLog.WriteWarning("[ScenarioDependencyService] Failed to load dependency manifest for '" + scenarioId + "': " + errorMessage);
                     return new ScenarioModDependency[0];
+                }
 
-                ScenarioDefinition definition = _definitionSerializer.Load(info.FilePath);
                 return ScenarioDependencyManifest.FromDependencyStrings(definition.Dependencies);
             }
             catch (Exception ex)
@@ -92,19 +90,6 @@ namespace ShelteredAPI.Scenarios
 
             return result;
         }
-
-        private bool TryGetDefinitionInfo(string scenarioId, out ScenarioInfo info)
-        {
-            info = null;
-            if (string.IsNullOrEmpty(scenarioId))
-                return false;
-
-            if (_definitionCatalog.TryGet(scenarioId, out info) && info != null)
-                return true;
-
-            return _draftRepository.TryGet(scenarioId, out info) && info != null;
-        }
-
         private static ScenarioDependencyVerificationState MapVerificationState(SaveVerification.VerificationState state)
         {
             switch (state)

@@ -261,6 +261,7 @@
     <Compile Include="Scenarios\Composition\ScenarioPresentationModule.cs" />
     <Compile Include="Scenarios\Composition\ScenarioRegistrationModule.cs" />
     <Compile Include="Scenarios\Composition\ScenarioRuntimeModule.cs" />
+    <Compile Include="Scenarios\Definitions\ScenarioDefinitionReader.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinitionRegistrationSync.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinitionService.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDependencyService.cs" />
@@ -271,6 +272,7 @@
     <Compile Include="Scenarios\Infrastructure\Persistence\IScenarioDraftRepository.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\IScenarioLayoutRepository.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\IScenarioSettingsRepository.cs" />
+    <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioRuntimeBindingPersistence.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioRuntimeExecutionJournalRepository.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\AssetApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\BunkerApplyService.cs" />
@@ -293,6 +295,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledSurvivorRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWeatherRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\TriggerRuntimeAdapter.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\VanillaScenarioRuntimeGateway.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionScopeService.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserPanelAdapter.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioBrowserState.cs" />

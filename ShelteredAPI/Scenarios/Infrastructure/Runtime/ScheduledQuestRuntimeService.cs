@@ -6,6 +6,13 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScheduledQuestRuntimeService : IScenarioEffectHandler, IScenarioConditionEvaluator
     {
+        private readonly IVanillaScenarioRuntime _vanillaRuntime;
+
+        public ScheduledQuestRuntimeService(IVanillaScenarioRuntime vanillaRuntime)
+        {
+            _vanillaRuntime = vanillaRuntime;
+        }
+
         public bool CanHandle(ScenarioEffectKind kind)
         {
             return kind == ScenarioEffectKind.StartQuest;
@@ -15,14 +22,7 @@ namespace ShelteredAPI.Scenarios
         {
             message = null;
             string questId = effect != null ? (effect.QuestId ?? effect.TargetId) : null;
-            if (QuestManager.instance == null || string.IsNullOrEmpty(questId))
-            {
-                message = "QuestManager is not ready or quest id is missing.";
-                return false;
-            }
-
-            QuestManager.instance.SpawnQuestWithId(questId);
-            return true;
+            return _vanillaRuntime.TryStartQuest(questId, out message);
         }
 
         public bool CanEvaluate(ScenarioConditionKind kind)
@@ -35,13 +35,13 @@ namespace ShelteredAPI.Scenarios
         public bool IsSatisfied(ScenarioDefinition definition, ScenarioConditionRef condition, ScenarioRuntimeState state, out string reason)
         {
             reason = null;
-            if (condition == null || QuestManager.instance == null)
+            if (condition == null)
             {
-                reason = "QuestManager is not ready.";
+                reason = "Quest condition is missing.";
                 return false;
             }
 
-            List<QuestInstance> quests = QuestManager.instance.GetCurrentQuests(true, true, true);
+            List<QuestInstance> quests = _vanillaRuntime.GetCurrentQuests();
             for (int i = 0; quests != null && i < quests.Count; i++)
             {
                 QuestInstance quest = quests[i];

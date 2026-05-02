@@ -4,6 +4,13 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioQuestInstanceResolver : IScenarioQuestInstanceResolver
     {
+        private readonly IVanillaScenarioRuntime _vanillaRuntime;
+
+        public ScenarioQuestInstanceResolver(IVanillaScenarioRuntime vanillaRuntime)
+        {
+            _vanillaRuntime = vanillaRuntime;
+        }
+
         public bool TryResolve(ScenarioRuntimeBinding binding, out QuestInstance instance, out string reason)
         {
             instance = null;
@@ -12,12 +19,6 @@ namespace ShelteredAPI.Scenarios
             if (binding == null || !binding.IsActive || binding.IsConvertedToNormalSave)
             {
                 reason = "No active scenario binding is available.";
-                return false;
-            }
-
-            if (QuestManager.instance == null)
-            {
-                reason = "QuestManager is not ready.";
                 return false;
             }
 
@@ -33,12 +34,8 @@ namespace ShelteredAPI.Scenarios
                 return true;
             }
 
-            instance = QuestManager.instance.GetQuestInstance(binding.ScenarioQuestInstanceId.Value);
-            if (instance == null)
-            {
-                reason = "Bound scenario QuestInstance was not found: " + binding.ScenarioQuestInstanceId.Value.ToString();
+            if (!_vanillaRuntime.TryGetQuestInstance(binding.ScenarioQuestInstanceId.Value, out instance, out reason))
                 return false;
-            }
 
             if (instance.definition == null || !instance.definition.IsScenario())
             {
@@ -59,12 +56,12 @@ namespace ShelteredAPI.Scenarios
             return true;
         }
 
-        private static QuestInstance FindScenarioInstance(string scenarioId)
+        private QuestInstance FindScenarioInstance(string scenarioId)
         {
-            if (QuestManager.instance == null || string.IsNullOrEmpty(scenarioId))
+            if (string.IsNullOrEmpty(scenarioId))
                 return null;
 
-            System.Collections.Generic.List<QuestInstance> quests = QuestManager.instance.GetCurrentQuests(true, true, true);
+            System.Collections.Generic.List<QuestInstance> quests = _vanillaRuntime.GetCurrentQuests();
             for (int i = 0; quests != null && i < quests.Count; i++)
             {
                 QuestInstance quest = quests[i];

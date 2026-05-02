@@ -7,69 +7,85 @@ namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioRuntimeOrchestrator : IScenarioRuntimeOrchestrator
     {
-        private readonly IShelteredCustomScenarioService _customScenarioService;
+        private readonly ICustomScenarioLifecycleService _customScenarioLifecycle;
+        private readonly ICustomScenarioRegistry _customScenarioRegistry;
+        private readonly IScenarioDependencyVerifier _dependencyVerifier;
+        private readonly IScenarioDefinitionFactory _definitionFactory;
+        private readonly IScenarioDefinitionCatalogService _definitionCatalog;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
         private readonly IScenarioEditorService _editorService;
         private readonly IScenarioApplier _applier;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
+        private readonly IVanillaScenarioRuntime _vanillaRuntime;
         private string _lastAppliedKey;
 
         public ScenarioRuntimeOrchestrator(
-            IShelteredCustomScenarioService customScenarioService,
+            ICustomScenarioLifecycleService customScenarioLifecycle,
+            ICustomScenarioRegistry customScenarioRegistry,
+            IScenarioDependencyVerifier dependencyVerifier,
+            IScenarioDefinitionFactory definitionFactory,
+            IScenarioDefinitionCatalogService definitionCatalog,
             IScenarioRuntimeBindingService runtimeBindingService,
             IScenarioEditorService editorService,
             IScenarioApplier applier,
             IScenarioSpriteSwapEngine spriteSwapEngine,
-            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine)
+            IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
+            IVanillaScenarioRuntime vanillaRuntime)
         {
-            _customScenarioService = customScenarioService;
+            _customScenarioLifecycle = customScenarioLifecycle;
+            _customScenarioRegistry = customScenarioRegistry;
+            _dependencyVerifier = dependencyVerifier;
+            _definitionFactory = definitionFactory;
+            _definitionCatalog = definitionCatalog;
             _runtimeBindingService = runtimeBindingService;
             _editorService = editorService;
             _applier = applier;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
+            _vanillaRuntime = vanillaRuntime;
         }
 
         public void UpdatePendingScenarioSpawn()
         {
-            CustomScenarioState state = _customScenarioService.CurrentState;
+            CustomScenarioState state = _customScenarioLifecycle.CurrentState;
             if (state == null || state.LifecycleState != CustomScenarioLifecycleState.Pending || string.IsNullOrEmpty(state.ScenarioId))
                 return;
 
-            if (!ScenarioWorldReady.IsReady())
+            string reason;
+            if (!_vanillaRuntime.IsWorldReady(out reason))
                 return;
 
             CustomScenarioInfo scenarioInfo;
-            if (!_customScenarioService.TryGet(state.ScenarioId, out scenarioInfo)
-                || _customScenarioService.VerifyDependencies(scenarioInfo) != ScenarioDependencyVerificationState.Match)
+            if (!_customScenarioRegistry.TryGet(state.ScenarioId, out scenarioInfo)
+                || _dependencyVerifier.VerifyDependencies(scenarioInfo) != ScenarioDependencyVerificationState.Match)
             {
                 MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] Dependencies are not satisfied; custom scenario will not spawn: " + state.ScenarioId);
-                _customScenarioService.ClearState();
+                _customScenarioLifecycle.ClearState();
                 return;
             }
 
             ScenarioDef definition;
             string error;
-            if (!_customScenarioService.TryCreateScenarioDef(state.ScenarioId, null, out definition, out error))
+            if (!_definitionFactory.TryCreateScenarioDef(state.ScenarioId, null, out definition, out error))
             {
                 MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] " + error);
-                _customScenarioService.ClearState();
+                _customScenarioLifecycle.ClearState();
                 return;
             }
 
-            QuestInstance instance = QuestManager.instance.SpawnQuestOrScenario(definition);
-            if (instance == null)
+            QuestInstance instance;
+            if (!_vanillaRuntime.TrySpawnScenario(definition, out instance, out reason))
             {
-                MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] QuestManager failed to spawn custom scenario: " + state.ScenarioId);
-                _customScenarioService.ClearState();
+                MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] " + reason);
+                _customScenarioLifecycle.ClearState();
                 return;
             }
 
-            if (!_customScenarioService.MarkSpawned(state.ScenarioId))
+            if (!_customScenarioLifecycle.MarkSpawned(state.ScenarioId))
             {
                 MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] Failed to mark custom scenario as spawned: " + state.ScenarioId);
-                _customScenarioService.ClearState();
+                _customScenarioLifecycle.ClearState();
                 return;
             }
 
@@ -93,7 +109,8 @@ namespace ShelteredAPI.Scenarios
             if (string.Equals(_lastAppliedKey, applyKey, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            if (!ScenarioWorldReady.IsReady())
+            string reason;
+            if (!_vanillaRuntime.IsWorldReady(out reason))
                 return;
 
             ScenarioDefinition definition;
@@ -126,7 +143,7 @@ namespace ShelteredAPI.Scenarios
                 return true;
             }
 
-            return _customScenarioService.TryLoadDefinition(binding.ScenarioId, out definition, out scenarioFilePath, out validation);
+            return _definitionCatalog.TryLoadDefinition(binding.ScenarioId, out definition, out scenarioFilePath, out validation);
         }
 
         private static void LogValidationFailure(string scenarioId, ScenarioValidationResult validation)

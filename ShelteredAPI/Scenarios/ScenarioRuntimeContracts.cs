@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
@@ -36,6 +37,15 @@ namespace ShelteredAPI.Scenarios
         ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath);
     }
 
+    internal interface IScenarioDefinitionReader
+    {
+        ScenarioInfo[] ListAll();
+        bool TryGetInfo(string scenarioId, out ScenarioInfo info);
+        ScenarioValidationResult Validate(string scenarioId);
+        bool TryLoad(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation);
+        bool TryLoadUnchecked(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out string errorMessage);
+    }
+
     internal interface IScenarioStateManager
     {
         event Action<ScenarioStateSnapshot> StateChanged;
@@ -57,18 +67,48 @@ namespace ShelteredAPI.Scenarios
         public string Reason { get; set; }
     }
 
-    internal interface IShelteredCustomScenarioService : ICustomScenarioService
+    internal interface ICustomScenarioRegistry
+    {
+        bool TryGet(string scenarioId, out CustomScenarioInfo scenario);
+        CustomScenarioInfo[] List();
+    }
+
+    internal interface IScenarioDefinitionCatalogService
     {
         void RefreshDefinitionCatalog();
         ScenarioInfo[] ListDefinitions();
         ScenarioValidationResult ValidateDefinition(string scenarioId);
         bool TryLoadDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation);
+    }
+
+    internal interface IScenarioDefinitionFactory
+    {
+        bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage);
         bool TryCreateScenarioDef(string scenarioId, CustomScenarioBuildContext context, out ScenarioDef definition, out string errorMessage);
+        ScenarioDef BuildScenarioDefFromDefinition(string scenarioId);
+    }
+
+    internal interface ICustomScenarioLifecycleService
+    {
+        CustomScenarioState CurrentState { get; }
         bool MarkSelected(string scenarioId);
         bool MarkSpawned(string scenarioId);
         void ClearState();
+    }
+
+    internal interface IScenarioDependencyVerifier
+    {
         SlotManifest CreateDependencyManifest(CustomScenarioInfo info);
         ScenarioDependencyVerificationState VerifyDependencies(CustomScenarioInfo info);
+    }
+
+    internal interface IScenarioDefinitionDependencyReader
+    {
+        ScenarioModDependency[] LoadDefinitionDependencies(string scenarioId);
+    }
+
+    internal interface IShelteredCustomScenarioService : ICustomScenarioService
+    {
     }
 
     internal interface IScenarioRuntimeBindingService
@@ -79,6 +119,22 @@ namespace ShelteredAPI.Scenarios
         void SetBinding(ScenarioRuntimeBinding binding);
         void ConvertToNormalSave();
         ScenarioRuntimeBinding GetActiveBindingForStartup();
+    }
+
+    internal interface IScenarioRuntimeBindingPersistence
+    {
+        ScenarioRuntimeBinding Load(SaveData data);
+        void Save(SaveData data, ScenarioRuntimeBinding binding);
+    }
+
+    internal interface IVanillaScenarioRuntime
+    {
+        bool IsWorldReady(out string blockingReason);
+        bool TrySpawnScenario(ScenarioDef definition, out QuestInstance instance, out string reason);
+        bool TryStartQuest(string questId, out string reason);
+        bool TryGetQuestInstance(int instanceId, out QuestInstance instance, out string reason);
+        List<QuestInstance> GetCurrentQuests();
+        bool TryFinishQuest(QuestInstance instance, bool success, out string reason);
     }
 
     internal interface IScenarioQuestInstanceResolver
