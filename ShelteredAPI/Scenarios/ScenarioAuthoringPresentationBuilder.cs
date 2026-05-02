@@ -2032,6 +2032,7 @@ namespace ShelteredAPI.Scenarios
                 BuildFamilyMemberSummary(member)));
             items.Add(ActionItem(Action(indexedPrefix + "name", "Name", "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name))));
             items.Add(ActionItem(Action(indexedPrefix + "gender", "Gender", "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString())));
+            items.Add(ActionItem(Action(indexedPrefix + "adult", "Adult/Child", "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member))));
             items.Add(ActionItem(Action(indexedPrefix + "age.1", "Age +", "Increase this survivor's exact age.", true, false, "A+", FormatAge(member))));
             items.Add(ActionItem(Action(indexedPrefix + "age.-1", "Age -", "Decrease this survivor's exact age.", true, false, "A-", FormatAge(member))));
 
@@ -2046,9 +2047,12 @@ namespace ShelteredAPI.Scenarios
 
             items.Add(ActionItem(Action(indexedPrefix + "strength_trait", "Strength Trait", "Cycle this survivor's strength characteristic.", true, false, "ST", FindTrait(member, "Strength:"))));
             items.Add(ActionItem(Action(indexedPrefix + "weakness_trait", "Weakness Trait", "Cycle this survivor's weakness characteristic.", true, false, "WT", FindTrait(member, "Weakness:"))));
+            items.Add(ActionItem(Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND")));
+            items.Add(ActionItem(Action(indexedPrefix + "randomize_look", "Randomize Look", "Randomize head, top, bottom, and color choices.", true, false, "RLK", FormatAppearance(member))));
+            AddAppearanceCycleActions(items, indexedPrefix, member);
             items.Add(ActionItem(Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", true, false, "ID")));
             items.Add(ActionItem(Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", true, false, "LK", FormatAppearance(member))));
-            items.Add(ActionItem(Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored head, torso, and leg texture overrides.", true, false, "CL", FormatAppearance(member))));
+            items.Add(ActionItem(Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored mesh, texture, and color overrides.", true, false, "CL", FormatAppearance(member))));
 
             if (includeOrdering)
             {
@@ -2056,6 +2060,26 @@ namespace ShelteredAPI.Scenarios
                 items.Add(ActionItem(Action(actionPrefix + "move." + index.ToString(CultureInfo.InvariantCulture) + ".1", "Move Down", "Move this starting survivor later in the crew order.", true, false, "DN")));
                 items.Add(ActionItem(Action(actionPrefix + "remove." + index.ToString(CultureInfo.InvariantCulture), "Remove", "Remove this starting survivor from the start crew.", true, false, "RM")));
             }
+        }
+
+        private static void AddAppearanceCycleActions(List<ScenarioAuthoringInspectorItem> items, string indexedPrefix, FamilyMemberConfig member)
+        {
+            FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+            items.Add(ActionItem(Action(indexedPrefix + "texture.head.-1", "Previous Head", "Switch to the previous vanilla head sprite.", true, false, "<H", FormatTexture(appearance, ScenarioCharacterTexturePart.Head))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.head.1", "Next Head", "Switch to the next vanilla head sprite.", true, false, "H>", FormatTexture(appearance, ScenarioCharacterTexturePart.Head))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.-1", "Previous Top", "Switch to the previous vanilla torso/top sprite.", true, false, "<T", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.1", "Next Top", "Switch to the next vanilla torso/top sprite.", true, false, "T>", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.-1", "Previous Bottom", "Switch to the previous vanilla leg/bottom sprite.", true, false, "<B", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.1", "Next Bottom", "Switch to the next vanilla leg/bottom sprite.", true, false, "B>", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs))));
+
+            items.Add(ActionItem(Action(indexedPrefix + "color.hair.-1", "Previous Hair Color", "Switch to the previous vanilla hair color.", true, false, "<HC", FormatColor(appearance, ScenarioCharacterColorPart.Hair))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.hair.1", "Next Hair Color", "Switch to the next vanilla hair color.", true, false, "HC>", FormatColor(appearance, ScenarioCharacterColorPart.Hair))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.skin.-1", "Previous Skin Color", "Switch to the previous vanilla skin color.", true, false, "<SC", FormatColor(appearance, ScenarioCharacterColorPart.Skin))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.skin.1", "Next Skin Color", "Switch to the next vanilla skin color.", true, false, "SC>", FormatColor(appearance, ScenarioCharacterColorPart.Skin))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.shirt.-1", "Previous Shirt Color", "Switch to the previous vanilla shirt/top color.", true, false, "<TC", FormatColor(appearance, ScenarioCharacterColorPart.Shirt))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.shirt.1", "Next Shirt Color", "Switch to the next vanilla shirt/top color.", true, false, "TC>", FormatColor(appearance, ScenarioCharacterColorPart.Shirt))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.pants.-1", "Previous Pants Color", "Switch to the previous vanilla pants/bottom color.", true, false, "<BC", FormatColor(appearance, ScenarioCharacterColorPart.Pants))));
+            items.Add(ActionItem(Action(indexedPrefix + "color.pants.1", "Next Pants Color", "Switch to the next vanilla pants/bottom color.", true, false, "BC>", FormatColor(appearance, ScenarioCharacterColorPart.Pants))));
         }
 
         private static void AddInventoryChangeItems(List<ScenarioAuthoringInspectorItem> items, TimedInventoryChangeDefinition change, int index)
@@ -2181,6 +2205,7 @@ namespace ShelteredAPI.Scenarios
                 return "Empty survivor";
 
             return member.Gender
+                + " / " + FormatBody(member)
                 + " / age " + FormatAge(member)
                 + " / " + FormatStatLine(member)
                 + " / " + FindTrait(member, "Strength:")
@@ -2234,6 +2259,14 @@ namespace ShelteredAPI.Scenarios
             return "<none>";
         }
 
+        private static string FormatBody(FamilyMemberConfig member)
+        {
+            FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+            bool adult = appearance == null || !appearance.IsAdult.HasValue || appearance.IsAdult.Value;
+            string mesh = appearance != null && !string.IsNullOrEmpty(appearance.MeshId) ? appearance.MeshId : "<auto>";
+            return (adult ? "adult" : "child") + " mesh " + mesh;
+        }
+
         private static string FormatAppearance(FamilyMemberConfig member)
         {
             FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
@@ -2241,14 +2274,77 @@ namespace ShelteredAPI.Scenarios
                 return "default";
 
             int count = 0;
+            if (!string.IsNullOrEmpty(appearance.MeshId) || appearance.IsAdult.HasValue)
+                count++;
             if (!string.IsNullOrEmpty(appearance.HeadTextureId) || !string.IsNullOrEmpty(appearance.HeadTexturePath))
                 count++;
             if (!string.IsNullOrEmpty(appearance.TorsoTextureId) || !string.IsNullOrEmpty(appearance.TorsoTexturePath))
                 count++;
             if (!string.IsNullOrEmpty(appearance.LegTextureId) || !string.IsNullOrEmpty(appearance.LegTexturePath))
                 count++;
+            if (!string.IsNullOrEmpty(appearance.HairColorHex))
+                count++;
+            if (!string.IsNullOrEmpty(appearance.SkinColorHex))
+                count++;
+            if (!string.IsNullOrEmpty(appearance.ShirtColorHex))
+                count++;
+            if (!string.IsNullOrEmpty(appearance.PantsColorHex))
+                count++;
 
-            return count == 0 ? "default" : count.ToString(CultureInfo.InvariantCulture) + "/3 parts";
+            return count == 0 ? "default" : count.ToString(CultureInfo.InvariantCulture) + " custom choices";
+        }
+
+        private static string FormatTexture(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part)
+        {
+            if (appearance == null)
+                return "default";
+
+            string id = null;
+            string path = null;
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head:
+                    id = appearance.HeadTextureId;
+                    path = appearance.HeadTexturePath;
+                    break;
+                case ScenarioCharacterTexturePart.Torso:
+                    id = appearance.TorsoTextureId;
+                    path = appearance.TorsoTexturePath;
+                    break;
+                case ScenarioCharacterTexturePart.Legs:
+                    id = appearance.LegTextureId;
+                    path = appearance.LegTexturePath;
+                    break;
+            }
+
+            if (!string.IsNullOrEmpty(id))
+                return id;
+            return !string.IsNullOrEmpty(path) ? path : "default";
+        }
+
+        private static string FormatColor(FamilyMemberAppearanceConfig appearance, ScenarioCharacterColorPart part)
+        {
+            if (appearance == null)
+                return "default";
+
+            string color = null;
+            switch (part)
+            {
+                case ScenarioCharacterColorPart.Hair:
+                    color = appearance.HairColorHex;
+                    break;
+                case ScenarioCharacterColorPart.Skin:
+                    color = appearance.SkinColorHex;
+                    break;
+                case ScenarioCharacterColorPart.Shirt:
+                    color = appearance.ShirtColorHex;
+                    break;
+                case ScenarioCharacterColorPart.Pants:
+                    color = appearance.PantsColorHex;
+                    break;
+            }
+
+            return !string.IsNullOrEmpty(color) ? color : "default";
         }
 
         private static string GetCurrentWeatherSummary()
