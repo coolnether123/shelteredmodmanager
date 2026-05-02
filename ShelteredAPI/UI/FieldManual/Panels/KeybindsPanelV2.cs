@@ -6,6 +6,7 @@ using ShelteredAPI.UI.Spine;
 using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI.Internal;
 using UnityEngine;
+using ShelteredAPI.UI.FieldManual.Animations;
 using ShelteredAPI.UI.FieldManual.Frame;
 using ShelteredAPI.UI.FieldManual.Layout;
 using ShelteredAPI.UI.FieldManual.Primitives;
@@ -38,6 +39,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private UIPrimitiveFactory _ui;
         private PaperPagedList _pagedList;
         private BookPageNavigatorWidget _pageNavigator;
+        private IFieldManualTransition _pageTransition;
         private readonly PanelPageState _pageState = new PanelPageState();
         private List<List<ModSettingsKeybindDisplayEntry>> _pages = new List<List<ModSettingsKeybindDisplayEntry>>();
         private int _pageItemHeightBudget;
@@ -76,6 +78,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             _palette = new FieldManualPalette();
             _metrics = new FieldManualMetrics();
             _textures = new ProceduralTextureLibrary(_palette);
+            _pageTransition = new FieldManualFadeTransition(FieldManualTransitionProfile.VanillaPageInfoFade);
 
             UIFontCache.FontResult fonts = UIFontCache.GetFonts();
             _ui = new UIPrimitiveFactory(fonts.Bitmap, fonts.TTF, OverlayDepth);
@@ -144,7 +147,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
             _pages = BuildPages(entries);
             _pageState.SetPageCount(_pages.Count);
-            RenderCurrentPage();
+            RenderCurrentPage(false);
         }
 
         private List<List<ModSettingsKeybindDisplayEntry>> BuildPages(List<ModSettingsKeybindDisplayEntry> entries)
@@ -175,7 +178,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
                 : _metrics.RowHeight;
         }
 
-        private void RenderCurrentPage()
+        private void RenderCurrentPage(bool animate)
         {
             if (_pagedList == null)
                 return;
@@ -189,6 +192,9 @@ namespace ShelteredAPI.UI.FieldManual.Panels
                 BuildCurrentPageRows(_pages[_pageState.CurrentPageIndex]);
 
             _pagedList.Layout(_metrics.RowSpacing);
+            if (animate && _pageTransition != null)
+                _pageTransition.Play(_pagedList.ContentRoot);
+
             if (_pageNavigator != null)
                 _pageNavigator.UpdateState(_pageState.CurrentPageIndex, _pageState.PageCount);
         }
@@ -315,7 +321,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             if (!_pageState.MoveBy(delta))
                 return;
 
-            RenderCurrentPage();
+            RenderCurrentPage(true);
         }
 
         private void Close()

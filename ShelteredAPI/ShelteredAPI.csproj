@@ -458,6 +458,10 @@
     <Compile Include="UI\FieldManual\Theme\IThemeMetrics.cs" />
     <Compile Include="UI\FieldManual\Theme\FieldManualPalette.cs" />
     <Compile Include="UI\FieldManual\Theme\FieldManualMetrics.cs" />
+    <Compile Include="UI\FieldManual\Animations\IFieldManualTransition.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualFadeTransition.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualTransitionProfile.cs" />
+    <Compile Include="UI\FieldManual\Animations\UIWidgetAlphaGroup.cs" />
     <Compile Include="UI\FieldManual\Textures\ITextureLibrary.cs" />
     <Compile Include="UI\FieldManual\Textures\ProceduralTextureLibrary.cs" />
     <Compile Include="UI\FieldManual\Textures\Generators\TextureCanvas.cs" />
