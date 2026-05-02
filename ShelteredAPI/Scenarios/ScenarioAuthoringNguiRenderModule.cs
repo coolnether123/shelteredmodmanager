@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios

@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
+using ShelteredAPI.Scenarios.UiKit;
+using ShelteredAPI.Scenarios.UiKit.Frame;
+using ShelteredAPI.Scenarios.UiKit.Theme;
+using ShelteredAPI.Scenarios.UiKit.Widgets;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -26,6 +30,7 @@ namespace ShelteredAPI.Scenarios
 
         private ScenarioAuthoringShellRuntime _runtime;
         private ScenarioAuthoringPresentationSnapshot _snapshot;
+        private ScenarioUiContext _uiContext;
         private bool _visible;
         private GUIStyle _rootPanelStyle;
         private GUIStyle _headerStyle;
@@ -37,17 +42,8 @@ namespace ShelteredAPI.Scenarios
         private GUIStyle _activeButtonStyle;
         private GUIStyle _tabStyle;
         private GUIStyle _activeTabStyle;
-        private GUIStyle _sectionStyle;
         private GUIStyle _sectionTitleStyle;
         private GUIStyle _statusStyle;
-        private GUIStyle _fieldStyle;
-        private GUIStyle _menuStyle;
-        private Texture2D _panelTexture;
-        private Texture2D _panelAltTexture;
-        private Texture2D _lineTexture;
-        private Texture2D _activeTexture;
-        private Texture2D _dangerTexture;
-        private Texture2D _viewportTexture;
         private float _styleOpacity = -1f;
         private bool _windowMenuOpen;
         private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
@@ -94,7 +90,10 @@ namespace ShelteredAPI.Scenarios
                 _runtime.enabled = _visible;
 
             if (!_visible)
+            {
+                DisposeUiContext();
                 ClearInputCapture();
+            }
         }
 
         public void Hide()
@@ -105,6 +104,7 @@ namespace ShelteredAPI.Scenarios
             ClearFloatingDrag();
             if (_runtime != null)
                 _runtime.enabled = false;
+            DisposeUiContext();
             ClearInputCapture();
         }
 
@@ -150,10 +150,7 @@ namespace ShelteredAPI.Scenarios
                 : 1f;
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
             inputCapture.BeginFrame(uiScale);
-            float panelOpacity = _snapshot.State != null && _snapshot.State.Settings != null
-                ? Mathf.Clamp(_snapshot.State.Settings.GetFloat("shell.panel_opacity", 0.82f), 0.55f, 1f)
-                : 0.82f;
-            EnsureStyles(panelOpacity);
+            EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
 
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(uiScale, uiScale, 1f));
@@ -797,7 +794,7 @@ namespace ShelteredAPI.Scenarios
             }, false);
 
             GUI.Label(new Rect(rightControlsX + 156f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
-            GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 112f, 4f), GUIContent.none, _fieldStyle);
+            GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 112f, 4f), GUIContent.none, _uiContext.Styles.Field);
             GUI.Label(new Rect(rightControlsX + 310f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
         }
 
@@ -871,12 +868,17 @@ namespace ShelteredAPI.Scenarios
 
         private Rect DrawStandardWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioAuthoringInspectorAction[] secondaryActions = GetHeaderActions(window.HeaderActions, false);
             bool hasSecondaryActions = secondaryActions.Length > 0;
-            Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, hasSecondaryActions ? 58f : 30f);
-            GUI.Box(headerRect, GUIContent.none, _headerStyle);
+            ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
+                rect,
+                (window.Title ?? string.Empty).ToUpperInvariant(),
+                null,
+                false,
+                hasSecondaryActions ? 58f : 30f,
+                12f + (chromeActions.Length * 24f));
+            Rect headerRect = regions.Header;
             Rect titleRowRect = new Rect(headerRect.x, headerRect.y, headerRect.width, 30f);
 
             float actionX = titleRowRect.xMax - 28f;
@@ -887,9 +889,6 @@ namespace ShelteredAPI.Scenarios
                 DrawButton(actionRect, action, false);
                 actionX -= 24f;
             }
-
-            float titleWidth = Math.Max(80f, actionX - (titleRowRect.x + 8f));
-            GUI.Label(new Rect(titleRowRect.x + 8f, titleRowRect.y + 5f, titleWidth, 20f), (window.Title ?? string.Empty).ToUpperInvariant(), _sectionTitleStyle);
 
             if (hasSecondaryActions)
             {
@@ -910,7 +909,7 @@ namespace ShelteredAPI.Scenarios
             if (window.Collapsed)
                 return Rect.zero;
 
-            Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 18f);
+            Rect bodyRect = regions.Body;
             GUILayout.BeginArea(bodyRect);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
@@ -938,11 +937,15 @@ namespace ShelteredAPI.Scenarios
 
         private Rect DrawInspectorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
-            Rect headerRect = new Rect(rect.x + 12f, rect.y + 12f, rect.width - 24f, 34f);
-            GUI.Label(new Rect(headerRect.x, headerRect.y + 4f, headerRect.width - 26f, 22f), "INSPECTOR", _sectionTitleStyle);
-
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
+            ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
+                rect,
+                "INSPECTOR",
+                null,
+                false,
+                34f,
+                12f + (chromeActions.Length * 24f));
+            Rect headerRect = regions.Header;
             float actionX = headerRect.xMax - 24f;
             for (int i = chromeActions.Length - 1; i >= 0; i--)
             {
@@ -950,7 +953,7 @@ namespace ShelteredAPI.Scenarios
                 actionX -= 24f;
             }
 
-            Rect bodyRect = new Rect(rect.x + 14f, headerRect.yMax + 10f, rect.width - 28f, rect.height - 62f);
+            Rect bodyRect = regions.Body;
             GUILayout.BeginArea(bodyRect);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             scrollPosition.x = 0f;
@@ -973,10 +976,15 @@ namespace ShelteredAPI.Scenarios
 
         private Rect DrawBottomTrayWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
-            Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 34f);
-            GUI.Box(headerRect, GUIContent.none, _headerStyle);
+            ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
+                rect,
+                (window.Title ?? "Asset Placement").ToUpperInvariant(),
+                null,
+                false,
+                34f,
+                12f + (chromeActions.Length * 24f));
+            Rect headerRect = regions.Header;
             float actionX = headerRect.xMax - 28f;
             for (int i = chromeActions.Length - 1; i >= 0; i--)
             {
@@ -985,9 +993,7 @@ namespace ShelteredAPI.Scenarios
                 DrawButton(actionRect, action, false);
                 actionX -= 24f;
             }
-            GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 7f, Math.Max(80f, actionX - headerRect.x - 10f), 20f), (window.Title ?? "Asset Placement").ToUpperInvariant(), _sectionTitleStyle);
-
-            Rect bodyRect = new Rect(rect.x + 14f, headerRect.yMax + 8f, rect.width - 28f, rect.height - 54f);
+            Rect bodyRect = regions.Body;
             bool showDetailsPane = bodyRect.width >= 720f;
             float pickerWidth = showDetailsPane
                 ? Mathf.Clamp(bodyRect.width * 0.62f, 420f, bodyRect.width - 256f)
@@ -1067,18 +1073,17 @@ namespace ShelteredAPI.Scenarios
 
         private Rect DrawDocumentModal(Rect rect, ScenarioAuthoringInspectorDocument document, string scrollId)
         {
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
-            Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 46f);
-            GUI.Box(headerRect, GUIContent.none, _headerStyle);
-
             string title = document != null && !string.IsNullOrEmpty(document.Title)
                 ? document.Title.ToUpperInvariant()
                 : "DOCUMENT";
-            GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 5f, headerRect.width - 20f, 18f), title, _sectionTitleStyle);
-            if (document != null && !string.IsNullOrEmpty(document.Subtitle))
-                GUI.Label(new Rect(headerRect.x + 10f, headerRect.y + 23f, headerRect.width - 20f, 16f), document.Subtitle, _mutedTextStyle);
-
-            Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 18f);
+            ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
+                rect,
+                title,
+                document != null ? document.Subtitle : null,
+                false,
+                46f,
+                0f);
+            Rect bodyRect = regions.Body;
             GUILayout.BeginArea(bodyRect);
             Vector2 scrollPosition = GetWindowScrollPosition(scrollId);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
@@ -1122,7 +1127,7 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             GUILayout.Space(6f);
-            GUILayout.BeginVertical(_sectionStyle);
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
             GUILayout.Label(editor.IsCharacterEditor ? "Character Pixel Editor" : "Pixel Editor", _sectionTitleStyle);
             GUILayout.Label(
                 "Source: " + (editor.SourceLabel ?? "<sprite>") + (editor.Dirty ? " | Modified" : " | Unchanged"),
@@ -1295,7 +1300,7 @@ namespace ShelteredAPI.Scenarios
         {
             Color previous = GUI.color;
             GUI.color = color.a <= 0.001f ? new Color(0f, 0f, 0f, 0.2f) : color;
-            GUI.Box(rect, GUIContent.none, active ? _activeButtonStyle : _fieldStyle);
+            GUI.Box(rect, GUIContent.none, active ? _activeButtonStyle : _uiContext.Styles.Field);
             GUI.color = previous;
 
             if (color.a <= 0.001f)
@@ -1352,7 +1357,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawColorPreview(Rect rect, Color color)
         {
-            GUI.Box(rect, GUIContent.none, _fieldStyle);
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
             Rect fillRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 8f);
             DrawCheckerboard(fillRect, 6);
             Color previous = GUI.color;
@@ -1363,7 +1368,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawPixelCanvas(Rect rect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
         {
-            GUI.Box(rect, GUIContent.none, _fieldStyle);
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
             if (editor.PreviewSprite == null || editor.PreviewSprite.texture == null)
             {
                 GUI.Label(rect, "No Sprite", _mutedTextStyle);
@@ -1550,7 +1555,7 @@ namespace ShelteredAPI.Scenarios
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
             GUI.SetNextControlName(controlName);
-            string nextSearchText = GUILayout.TextField(searchText ?? string.Empty, _fieldStyle, GUILayout.Height(26f));
+            string nextSearchText = GUILayout.TextField(searchText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Height(26f));
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
                 searchText = nextSearchText;
 
@@ -1597,7 +1602,7 @@ namespace ShelteredAPI.Scenarios
             if (section == null)
                 return;
 
-            GUILayout.BeginVertical(_sectionStyle);
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
             if (!string.IsNullOrEmpty(section.Title))
                 GUILayout.Label(section.Title, _sectionTitleStyle);
 
@@ -1708,19 +1713,12 @@ namespace ShelteredAPI.Scenarios
                     if (compactInspector)
                     {
                         Rect rowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
-                        float labelWidth = Mathf.Clamp(rowRect.width * 0.48f, 106f, 144f);
-                        GUI.Label(new Rect(rowRect.x, rowRect.y, labelWidth, rowRect.height), item.Label ?? string.Empty, _mutedTextStyle);
-                        GUI.Label(
-                            new Rect(rowRect.x + labelWidth + 8f, rowRect.y, rowRect.width - labelWidth - 8f, rowRect.height),
-                            Shorten(item.Value, 34),
-                            _textStyle);
+                        ScenarioUiWidgets.DrawKeyValueRow(rowRect, item.Label, Shorten(item.Value, 34), _uiContext.Styles);
                     }
                     else
                     {
-                        GUILayout.BeginHorizontal();
-                        GUILayout.Label(item.Label ?? string.Empty, _mutedTextStyle, GUILayout.Width(116f));
-                        GUILayout.Label(item.Value ?? string.Empty, _textStyle);
-                        GUILayout.EndHorizontal();
+                        Rect rowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
+                        ScenarioUiWidgets.DrawKeyValueRow(rowRect, item.Label, item.Value, _uiContext.Styles);
                     }
                     break;
                 case ScenarioAuthoringInspectorItemKind.Action:
@@ -1738,7 +1736,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawRichItem(ScenarioAuthoringInspectorItem item)
         {
-            GUILayout.BeginVertical(_sectionStyle);
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
             Rect rowRect = GUILayoutUtility.GetRect(120f, 92f, GUILayout.ExpandWidth(true));
             Rect previewRect = new Rect(rowRect.x + 6f, rowRect.y + 6f, 84f, rowRect.height - 12f);
             DrawSpritePreview(previewRect, item.PreviewSprite, item.Emphasized);
@@ -1756,7 +1754,7 @@ namespace ShelteredAPI.Scenarios
             {
                 Vector2 badgeSize = _mutedTextStyle.CalcSize(new GUIContent(item.Badge));
                 Rect badgeRect = new Rect(textRect.x, rowRect.yMax - 26f, Mathf.Max(56f, badgeSize.x + 18f), 20f);
-                GUI.Box(badgeRect, item.Badge, _fieldStyle);
+                ScenarioUiWidgets.DrawPill(badgeRect, item.Badge, _uiContext.Styles, item.Emphasized ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
             }
             GUILayout.EndVertical();
         }
@@ -1789,7 +1787,7 @@ namespace ShelteredAPI.Scenarios
             {
                 Vector2 badgeSize = _mutedTextStyle.CalcSize(new GUIContent(action.Badge));
                 Rect badgeRect = new Rect(textRect.x, rect.yMax - 22f, Mathf.Max(52f, badgeSize.x + 16f), 18f);
-                GUI.Box(badgeRect, action.Badge, _fieldStyle);
+                ScenarioUiWidgets.DrawPill(badgeRect, action.Badge, _uiContext.Styles, action.Emphasized ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
             }
         }
 
@@ -1902,23 +1900,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawSpritePreview(Rect rect, Sprite sprite, bool emphasized)
         {
-            GUI.Box(rect, GUIContent.none, emphasized ? _activeButtonStyle : _fieldStyle);
-            if (sprite == null || sprite.texture == null)
-            {
-                GUI.Label(rect, "No Sprite", _mutedTextStyle);
-                return;
-            }
-
-            Rect textureRect = sprite.textureRect;
-            Texture2D texture = sprite.texture;
-            Rect uv = new Rect(
-                textureRect.x / texture.width,
-                textureRect.y / texture.height,
-                textureRect.width / texture.width,
-                textureRect.height / texture.height);
-
-            Rect fitted = FitRect(rect, textureRect.width, textureRect.height, 4f);
-            GUI.DrawTextureWithTexCoords(fitted, texture, uv, true);
+            ScenarioUiWidgets.DrawSpritePreviewFrame(rect, sprite, _uiContext.Styles, emphasized);
         }
 
         private static string CombineDetail(string primary, string secondary)
@@ -1966,32 +1948,21 @@ namespace ShelteredAPI.Scenarios
             return value.Substring(0, low) + ellipsis;
         }
 
-        private static Rect FitRect(Rect rect, float sourceWidth, float sourceHeight, float padding)
-        {
-            Rect inner = new Rect(rect.x + padding, rect.y + padding, rect.width - (padding * 2f), rect.height - (padding * 2f));
-            if (sourceWidth <= 0f || sourceHeight <= 0f || inner.width <= 0f || inner.height <= 0f)
-                return inner;
-
-            float scale = Math.Min(inner.width / sourceWidth, inner.height / sourceHeight);
-            float width = sourceWidth * scale;
-            float height = sourceHeight * scale;
-            return new Rect(
-                inner.x + ((inner.width - width) * 0.5f),
-                inner.y + ((inner.height - height) * 0.5f),
-                width,
-                height);
-        }
-
         private Rect DrawSettingsWindow(
             Rect rect,
             ScenarioAuthoringSettingsViewModel settings,
             ScenarioAuthoringShellWindowViewModel window)
         {
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
-            Rect headerRect = new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 30f);
-            GUI.Box(headerRect, GUIContent.none, _headerStyle);
-
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window != null ? window.HeaderActions : null, true);
+            int settingsActionCount = settings.HeaderActions != null ? settings.HeaderActions.Length : 0;
+            ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
+                rect,
+                settings.Title ?? "Editor Settings",
+                null,
+                false,
+                30f,
+                12f + (chromeActions.Length * 24f) + (settingsActionCount * 86f));
+            Rect headerRect = regions.Header;
             float actionX = headerRect.xMax - 28f;
             for (int i = chromeActions.Length - 1; i >= 0; i--)
             {
@@ -2007,9 +1978,7 @@ namespace ShelteredAPI.Scenarios
                 actionX -= 86f;
             }
 
-            GUI.Label(new Rect(headerRect.x + 8f, headerRect.y + 4f, Math.Max(80f, actionX - headerRect.x - 10f), 22f), settings.Title ?? "Editor Settings", _sectionTitleStyle);
-
-            Rect bodyRect = new Rect(rect.x + 10f, headerRect.yMax + 8f, rect.width - 20f, rect.height - headerRect.height - 16f);
+            Rect bodyRect = regions.Body;
             GUILayout.BeginArea(bodyRect);
             _settingsScrollPosition = GUILayout.BeginScrollView(_settingsScrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label(settings.Subtitle ?? string.Empty, _mutedTextStyle);
@@ -2020,7 +1989,7 @@ namespace ShelteredAPI.Scenarios
                 if (section == null)
                     continue;
 
-                GUILayout.BeginVertical(_sectionStyle);
+                GUILayout.BeginVertical(_uiContext.Styles.Section);
                 GUILayout.Label(section.Title ?? string.Empty, _sectionTitleStyle);
                 for (int j = 0; section.Items != null && j < section.Items.Length; j++)
                 {
@@ -2088,7 +2057,7 @@ namespace ShelteredAPI.Scenarios
                         Enabled = item.Enabled && item.CanDecrease
                     },
                     false);
-                GUILayout.Label(item.ValueText ?? string.Empty, _fieldStyle, GUILayout.Width(84f), GUILayout.Height(24f));
+                GUILayout.Label(item.ValueText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Width(84f), GUILayout.Height(24f));
                 DrawButton(GUILayoutUtility.GetRect(26f, 24f, GUILayout.Width(26f), GUILayout.Height(24f)),
                     new ScenarioAuthoringInspectorAction
                     {
@@ -2100,7 +2069,7 @@ namespace ShelteredAPI.Scenarios
             }
             else
             {
-                GUILayout.Label(item.ValueText ?? string.Empty, _fieldStyle, GUILayout.Width(160f), GUILayout.Height(24f));
+                GUILayout.Label(item.ValueText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Width(160f), GUILayout.Height(24f));
             }
 
             GUILayout.EndHorizontal();
@@ -2108,7 +2077,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawContextMenu(Rect rect, ScenarioAuthoringContextMenuModel menu)
         {
-            GUI.Box(rect, GUIContent.none, _menuStyle);
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
             GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f));
             GUILayout.Label(menu.Title ?? "Context", _sectionTitleStyle);
             if (!string.IsNullOrEmpty(menu.Detail))
@@ -2156,7 +2125,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawWindowMenu(Rect rect, ScenarioAuthoringInspectorAction[] actions)
         {
-            GUI.Box(rect, GUIContent.none, _menuStyle);
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
             GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f));
             for (int i = 0; actions != null && i < actions.Length; i++)
             {
@@ -2226,7 +2195,7 @@ namespace ShelteredAPI.Scenarios
             if (x < 6f) x = 6f;
             if (y < 6f) y = 6f;
             Rect tipRect = ClampAwayFromHud(new Rect(x, y, width, height), scaledWidth, scaledHeight, hudReserveRect);
-            GUI.Box(tipRect, GUIContent.none, _menuStyle);
+            GUI.Box(tipRect, GUIContent.none, _uiContext.Styles.Menu);
             GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
         }
 
@@ -2235,86 +2204,49 @@ namespace ShelteredAPI.Scenarios
             return ScenarioAuthoringShellLayout.ClampAwayFromHud(rect, width, height, hudReserveRect);
         }
 
-        private void EnsureStyles(float panelOpacity)
+        private void EnsureStyles(ScenarioAuthoringSettingsSnapshot settings)
         {
-            if (_rootPanelStyle != null && Mathf.Abs(_styleOpacity - panelOpacity) <= 0.001f)
+            float panelOpacity = ScenarioUiTheme.ResolvePanelOpacity(settings);
+            if (_uiContext != null && Mathf.Abs(_styleOpacity - panelOpacity) <= 0.001f)
                 return;
 
+            DisposeUiContext();
+            _uiContext = ScenarioUiKit.Build(settings);
             _styleOpacity = panelOpacity;
-            _panelTexture = MakeTexture(new Color(0.07f, 0.07f, 0.06f, panelOpacity));
-            _panelAltTexture = MakeTexture(new Color(0.13f, 0.13f, 0.11f, Mathf.Min(1f, panelOpacity + 0.06f)));
-            _lineTexture = MakeTexture(new Color(0.62f, 0.47f, 0.14f, 0.88f));
-            _activeTexture = MakeTexture(new Color(0.34f, 0.29f, 0.14f, Mathf.Min(1f, panelOpacity + 0.10f)));
-            _dangerTexture = MakeTexture(new Color(0.48f, 0.12f, 0.08f, 1f));
-            _viewportTexture = MakeTexture(new Color(0.04f, 0.05f, 0.05f, 0.16f));
-
-            _rootPanelStyle = BuildBoxStyle(_panelTexture, 10, new RectOffset(2, 2, 2, 2));
-            _headerStyle = BuildBoxStyle(_panelAltTexture, 6, new RectOffset(1, 1, 1, 1));
-            _sectionStyle = BuildBoxStyle(_panelAltTexture, 8, new RectOffset(1, 1, 1, 1));
-            _statusStyle = BuildBoxStyle(_panelTexture, 6, new RectOffset(1, 1, 1, 1));
-            _menuStyle = BuildBoxStyle(_panelAltTexture, 8, new RectOffset(1, 1, 1, 1));
-
-            _titleStyle = BuildTextStyle(27, FontStyle.Bold, new Color(0.94f, 0.80f, 0.52f, 1f));
-            _smallTitleStyle = BuildTextStyle(17, FontStyle.Bold, new Color(0.88f, 0.74f, 0.49f, 1f));
-            _sectionTitleStyle = BuildTextStyle(15, FontStyle.Bold, new Color(0.94f, 0.80f, 0.52f, 1f));
-            _textStyle = BuildTextStyle(15, FontStyle.Normal, new Color(0.92f, 0.89f, 0.82f, 1f));
-            _mutedTextStyle = BuildTextStyle(13, FontStyle.Normal, new Color(0.77f, 0.72f, 0.63f, 1f));
-            _fieldStyle = BuildBoxStyle(_panelTexture, 4, new RectOffset(1, 1, 1, 1));
-            _fieldStyle.normal.textColor = new Color(0.90f, 0.87f, 0.79f, 1f);
-            _fieldStyle.alignment = TextAnchor.MiddleCenter;
-            _fieldStyle.fontSize = 13;
-
-            _buttonStyle = BuildButtonStyle(_panelAltTexture, _lineTexture, new Color(0.90f, 0.87f, 0.79f, 1f));
-            _activeButtonStyle = BuildButtonStyle(_activeTexture, _lineTexture, new Color(0.98f, 0.92f, 0.74f, 1f));
-            _tabStyle = BuildButtonStyle(_panelTexture, _lineTexture, new Color(0.87f, 0.79f, 0.66f, 1f));
-            _activeTabStyle = BuildButtonStyle(_activeTexture, _lineTexture, new Color(0.98f, 0.92f, 0.74f, 1f));
+            ScenarioUiStyleSheet styles = _uiContext.Styles;
+            _rootPanelStyle = styles.PanelBase;
+            _headerStyle = styles.Header;
+            _statusStyle = styles.Status;
+            _titleStyle = styles.BrandTitleText;
+            _smallTitleStyle = styles.TitleText;
+            _sectionTitleStyle = styles.SectionTitleText;
+            _textStyle = styles.BodyText;
+            _mutedTextStyle = styles.MutedText;
+            _buttonStyle = styles.Button;
+            _activeButtonStyle = styles.ButtonActive;
+            _tabStyle = styles.Tab;
+            _activeTabStyle = styles.TabActive;
         }
 
-        private static Texture2D MakeTexture(Color color)
+        private void DisposeUiContext()
         {
-            Texture2D texture = new Texture2D(1, 1, TextureFormat.ARGB32, false);
-            texture.hideFlags = HideFlags.HideAndDontSave;
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
+            if (_uiContext != null)
+                _uiContext.Dispose();
 
-        private static GUIStyle BuildBoxStyle(Texture2D texture, int padding, RectOffset border)
-        {
-            GUIStyle style = new GUIStyle(GUI.skin.box);
-            style.normal.background = texture;
-            style.border = border;
-            style.padding = new RectOffset(padding, padding, padding, padding);
-            style.margin = new RectOffset(0, 0, 0, 0);
-            return style;
-        }
-
-        private static GUIStyle BuildTextStyle(int size, FontStyle fontStyle, Color color)
-        {
-            GUIStyle style = new GUIStyle(GUI.skin.label);
-            style.fontSize = size;
-            style.fontStyle = fontStyle;
-            style.normal.textColor = color;
-            style.wordWrap = true;
-            return style;
-        }
-
-        private static GUIStyle BuildButtonStyle(Texture2D background, Texture2D hover, Color textColor)
-        {
-            GUIStyle style = new GUIStyle(GUI.skin.button);
-            style.normal.background = background;
-            style.hover.background = hover;
-            style.active.background = hover;
-            style.normal.textColor = textColor;
-            style.hover.textColor = textColor;
-            style.active.textColor = textColor;
-            style.alignment = TextAnchor.MiddleCenter;
-            style.fontSize = 14;
-            style.border = new RectOffset(1, 1, 1, 1);
-            style.padding = new RectOffset(8, 8, 4, 4);
-            style.margin = new RectOffset(0, 0, 0, 0);
-            style.wordWrap = false;
-            return style;
+            _uiContext = null;
+            _rootPanelStyle = null;
+            _headerStyle = null;
+            _titleStyle = null;
+            _smallTitleStyle = null;
+            _textStyle = null;
+            _mutedTextStyle = null;
+            _buttonStyle = null;
+            _activeButtonStyle = null;
+            _tabStyle = null;
+            _activeTabStyle = null;
+            _sectionTitleStyle = null;
+            _statusStyle = null;
+            _styleOpacity = -1f;
         }
 
         private static bool HasVisibleWindow(ScenarioAuthoringShellWindowViewModel[] windows, ScenarioAuthoringShellDock dock)

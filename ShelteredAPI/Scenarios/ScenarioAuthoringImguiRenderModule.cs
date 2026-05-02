@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using ModAPI.Core;
+using ShelteredAPI.Scenarios.UiKit;
+using ShelteredAPI.Scenarios.UiKit.Textures;
+using ShelteredAPI.Scenarios.UiKit.Theme;
+using ShelteredAPI.Scenarios.UiKit.Widgets;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -803,23 +807,7 @@ namespace ShelteredAPI.Scenarios
 
         private void DrawSpritePreview(Rect rect, Sprite sprite, bool emphasized)
         {
-            GUI.Box(rect, GUIContent.none, emphasized ? _runtime.ActivePreviewStyle : _runtime.PreviewStyle);
-            if (sprite == null || sprite.texture == null)
-            {
-                GUI.Label(rect, "No Sprite", _runtime.EmptyPreviewStyle);
-                return;
-            }
-
-            Rect textureRect = sprite.textureRect;
-            Texture2D texture = sprite.texture;
-            Rect uv = new Rect(
-                textureRect.x / texture.width,
-                textureRect.y / texture.height,
-                textureRect.width / texture.width,
-                textureRect.height / texture.height);
-
-            Rect fitted = FitRect(rect, textureRect.width, textureRect.height, 6f);
-            GUI.DrawTextureWithTexCoords(fitted, texture, uv, true);
+            ScenarioUiWidgets.DrawSpritePreviewFrame(rect, sprite, _runtime.Styles, emphasized);
         }
 
         private void DrawActionButtons(ScenarioAuthoringInspectorAction[] actions, float width, float height, bool compact, bool headerMode)
@@ -1112,22 +1100,6 @@ namespace ShelteredAPI.Scenarios
             return value.Substring(0, Math.Max(0, maxLength - 3)) + "...";
         }
 
-        private static Rect FitRect(Rect rect, float sourceWidth, float sourceHeight, float padding)
-        {
-            Rect inner = new Rect(rect.x + padding, rect.y + padding, rect.width - (padding * 2f), rect.height - (padding * 2f));
-            if (sourceWidth <= 0f || sourceHeight <= 0f || inner.width <= 0f || inner.height <= 0f)
-                return inner;
-
-            float scale = Math.Min(inner.width / sourceWidth, inner.height / sourceHeight);
-            float width = sourceWidth * scale;
-            float height = sourceHeight * scale;
-            return new Rect(
-                inner.x + ((inner.width - width) * 0.5f),
-                inner.y + ((inner.height - height) * 0.5f),
-                width,
-                height);
-        }
-
         private Rect ToBrowserScreenRect(Rect localRect)
         {
             return new Rect(
@@ -1248,7 +1220,7 @@ namespace ShelteredAPI.Scenarios
         {
             EnsureRuntime();
             if (_runtime != null)
-                _runtime.EnsureStyles();
+                _runtime.EnsureStyles(_snapshot != null && _snapshot.State != null ? _snapshot.State.Settings : null);
         }
 
         private static void SetInteractiveRects(Rect[] rects)
@@ -1268,23 +1240,8 @@ namespace ShelteredAPI.Scenarios
         private sealed class ScenarioAuthoringImguiRuntime : MonoBehaviour
         {
             private ScenarioAuthoringImguiRenderModule _owner;
-            private Texture2D _headerTexture;
-            private Texture2D _sidebarTexture;
-            private Texture2D _inspectorTexture;
-            private Texture2D _browserTexture;
-            private Texture2D _hoverTexture;
-            private Texture2D _sectionTexture;
-            private Texture2D _buttonTexture;
-            private Texture2D _buttonActiveTexture;
-            private Texture2D _buttonPrimaryTexture;
-            private Texture2D _tabTexture;
-            private Texture2D _tabActiveTexture;
-            private Texture2D _metricTexture;
-            private Texture2D _cardTexture;
-            private Texture2D _cardActiveTexture;
-            private Texture2D _previewTexture;
-            private Texture2D _previewActiveTexture;
-            private Texture2D _badgeTexture;
+            private ScenarioUiContext _uiContext;
+            private ScenarioUiTextureCache _textures;
             private GUIStyle _headerSurfaceStyle;
             private GUIStyle _sidebarSurfaceStyle;
             private GUIStyle _inspectorSurfaceStyle;
@@ -1313,9 +1270,6 @@ namespace ShelteredAPI.Scenarios
             private GUIStyle _propertyKeyStyle;
             private GUIStyle _propertyValueStyle;
             private GUIStyle _previewContainerStyle;
-            private GUIStyle _previewStyle;
-            private GUIStyle _activePreviewStyle;
-            private GUIStyle _emptyPreviewStyle;
             private GUIStyle _cardButtonStyle;
             private GUIStyle _activeCardButtonStyle;
             private GUIStyle _cardTitleStyle;
@@ -1324,7 +1278,9 @@ namespace ShelteredAPI.Scenarios
             private GUIStyle _badgeBoxStyle;
             private GUIStyle _miniButtonStyle;
             private bool _stylesReady;
+            private float _styleOpacity = -1f;
 
+            public ScenarioUiStyleSheet Styles { get { return _uiContext != null ? _uiContext.Styles : null; } }
             public GUIStyle HeaderSurfaceStyle { get { return _headerSurfaceStyle; } }
             public GUIStyle SidebarSurfaceStyle { get { return _sidebarSurfaceStyle; } }
             public GUIStyle InspectorSurfaceStyle { get { return _inspectorSurfaceStyle; } }
@@ -1353,9 +1309,6 @@ namespace ShelteredAPI.Scenarios
             public GUIStyle PropertyKeyStyle { get { return _propertyKeyStyle; } }
             public GUIStyle PropertyValueStyle { get { return _propertyValueStyle; } }
             public GUIStyle PreviewContainerStyle { get { return _previewContainerStyle; } }
-            public GUIStyle PreviewStyle { get { return _previewStyle; } }
-            public GUIStyle ActivePreviewStyle { get { return _activePreviewStyle; } }
-            public GUIStyle EmptyPreviewStyle { get { return _emptyPreviewStyle; } }
             public GUIStyle CardButtonStyle { get { return _cardButtonStyle; } }
             public GUIStyle ActiveCardButtonStyle { get { return _activeCardButtonStyle; } }
             public GUIStyle CardTitleStyle { get { return _cardTitleStyle; } }
@@ -1371,35 +1324,23 @@ namespace ShelteredAPI.Scenarios
                 DontDestroyOnLoad(gameObject);
             }
 
-            public void EnsureStyles()
+            public void EnsureStyles(ScenarioAuthoringSettingsSnapshot settings)
             {
-                if (_stylesReady)
+                float panelOpacity = ScenarioUiTheme.ResolvePanelOpacity(settings);
+                if (_stylesReady && Mathf.Abs(_styleOpacity - panelOpacity) <= 0.001f)
                     return;
 
-                _headerTexture = MakeTexture(new Color(0.10f, 0.08f, 0.06f, 0.98f));
-                _sidebarTexture = MakeTexture(new Color(0.07f, 0.07f, 0.07f, 0.96f));
-                _inspectorTexture = MakeTexture(new Color(0.06f, 0.06f, 0.06f, 0.97f));
-                _browserTexture = MakeTexture(new Color(0.09f, 0.08f, 0.07f, 0.98f));
-                _hoverTexture = MakeTexture(new Color(0.06f, 0.06f, 0.07f, 0.98f));
-                _sectionTexture = MakeTexture(new Color(0.13f, 0.11f, 0.09f, 0.98f));
-                _buttonTexture = MakeTexture(new Color(0.20f, 0.17f, 0.13f, 1f));
-                _buttonActiveTexture = MakeTexture(new Color(0.26f, 0.23f, 0.18f, 1f));
-                _buttonPrimaryTexture = MakeTexture(new Color(0.17f, 0.32f, 0.49f, 1f));
-                _tabTexture = MakeTexture(new Color(0.15f, 0.13f, 0.10f, 1f));
-                _tabActiveTexture = MakeTexture(new Color(0.19f, 0.31f, 0.47f, 1f));
-                _metricTexture = MakeTexture(new Color(0.15f, 0.12f, 0.09f, 1f));
-                _cardTexture = MakeTexture(new Color(0.18f, 0.15f, 0.12f, 1f));
-                _cardActiveTexture = MakeTexture(new Color(0.24f, 0.29f, 0.20f, 1f));
-                _previewTexture = MakeTexture(new Color(0.08f, 0.08f, 0.09f, 1f));
-                _previewActiveTexture = MakeTexture(new Color(0.16f, 0.21f, 0.14f, 1f));
-                _badgeTexture = MakeTexture(new Color(0.42f, 0.33f, 0.20f, 1f));
+                DisposeStyles();
+                _uiContext = ScenarioUiKit.Build(settings);
+                _textures = _uiContext.Textures;
+                ScenarioUiStyleSheet styles = _uiContext.Styles;
 
-                _headerSurfaceStyle = BuildSurface(_headerTexture, 18);
-                _sidebarSurfaceStyle = BuildSurface(_sidebarTexture, 14);
-                _inspectorSurfaceStyle = BuildSurface(_inspectorTexture, 14);
-                _browserSurfaceStyle = BuildSurface(_browserTexture, 14);
-                _hoverSurfaceStyle = BuildSurface(_hoverTexture, 12);
-                _sectionSurfaceStyle = BuildSurface(_sectionTexture, 10);
+                _headerSurfaceStyle = BuildSurface(_textures.Get(new Color(0.10f, 0.08f, 0.06f, 0.98f)), 18);
+                _sidebarSurfaceStyle = BuildSurface(_textures.Get(new Color(0.07f, 0.07f, 0.07f, 0.96f)), 14);
+                _inspectorSurfaceStyle = BuildSurface(_textures.Get(new Color(0.06f, 0.06f, 0.06f, 0.97f)), 14);
+                _browserSurfaceStyle = BuildSurface(_textures.Get(new Color(0.09f, 0.08f, 0.07f, 0.98f)), 14);
+                _hoverSurfaceStyle = BuildSurface(_textures.Get(new Color(0.06f, 0.06f, 0.07f, 0.98f)), 12);
+                _sectionSurfaceStyle = styles.Section;
 
                 _brandStyle = new GUIStyle(GUI.skin.label);
                 _brandStyle.normal.textColor = new Color(0.95f, 0.78f, 0.42f, 1f);
@@ -1416,7 +1357,7 @@ namespace ShelteredAPI.Scenarios
                 _subtitleStyle.fontSize = 13;
 
                 _statusStyle = new GUIStyle(GUI.skin.box);
-                _statusStyle.normal.background = MakeTexture(new Color(0.16f, 0.14f, 0.11f, 1f));
+                _statusStyle.normal.background = _textures.Get(new Color(0.16f, 0.14f, 0.11f, 1f));
                 _statusStyle.normal.textColor = new Color(0.95f, 0.87f, 0.72f, 1f);
                 _statusStyle.padding = new RectOffset(10, 10, 6, 6);
                 _statusStyle.alignment = TextAnchor.MiddleLeft;
@@ -1437,74 +1378,52 @@ namespace ShelteredAPI.Scenarios
                 _captionStyle.normal.textColor = new Color(0.74f, 0.72f, 0.68f, 1f);
                 _captionStyle.fontSize = 11;
 
-                _buttonStyle = BuildButton(_buttonTexture, new Color(0.97f, 0.93f, 0.86f, 1f), 12);
-                _primaryButtonStyle = BuildButton(_buttonPrimaryTexture, Color.white, 12);
-                _compactButtonStyle = BuildButton(_buttonTexture, new Color(0.96f, 0.92f, 0.86f, 1f), 11);
-                _primaryCompactButtonStyle = BuildButton(_buttonPrimaryTexture, Color.white, 11);
-                _headerButtonStyle = BuildButton(_buttonTexture, new Color(0.96f, 0.93f, 0.86f, 1f), 12);
-                _headerPrimaryButtonStyle = BuildButton(_buttonPrimaryTexture, Color.white, 12);
-                _tabButtonStyle = BuildButton(_tabTexture, new Color(0.95f, 0.91f, 0.84f, 1f), 12);
-                _activeTabButtonStyle = BuildButton(_tabActiveTexture, Color.white, 12);
+                _buttonStyle = styles.Button;
+                _primaryButtonStyle = styles.ButtonActive;
+                _compactButtonStyle = WithFontSize(styles.Button, 11);
+                _primaryCompactButtonStyle = WithFontSize(styles.ButtonActive, 11);
+                _headerButtonStyle = styles.Button;
+                _headerPrimaryButtonStyle = styles.ButtonActive;
+                _tabButtonStyle = styles.Tab;
+                _activeTabButtonStyle = styles.TabActive;
 
-                _metricTileStyle = BuildSurface(_metricTexture, 10);
-                _metricLabelStyle = new GUIStyle(GUI.skin.label);
-                _metricLabelStyle.normal.textColor = new Color(0.80f, 0.74f, 0.66f, 1f);
+                _metricTileStyle = styles.Card;
+                _metricLabelStyle = new GUIStyle(styles.MutedText);
                 _metricLabelStyle.fontSize = 11;
                 _metricLabelStyle.alignment = TextAnchor.UpperLeft;
 
-                _metricValueStyle = new GUIStyle(GUI.skin.label);
-                _metricValueStyle.normal.textColor = new Color(0.98f, 0.96f, 0.92f, 1f);
+                _metricValueStyle = new GUIStyle(styles.SectionTitleText);
                 _metricValueStyle.fontSize = 16;
                 _metricValueStyle.fontStyle = FontStyle.Bold;
                 _metricValueStyle.alignment = TextAnchor.MiddleLeft;
 
-                _propertyRowStyle = BuildSurface(MakeTexture(new Color(0.11f, 0.10f, 0.08f, 1f)), 8);
-                _propertyKeyStyle = new GUIStyle(GUI.skin.label);
-                _propertyKeyStyle.normal.textColor = new Color(0.79f, 0.73f, 0.66f, 1f);
+                _propertyRowStyle = styles.PanelInset;
+                _propertyKeyStyle = new GUIStyle(styles.MutedText);
                 _propertyKeyStyle.fontSize = 11;
 
-                _propertyValueStyle = new GUIStyle(GUI.skin.label);
-                _propertyValueStyle.normal.textColor = new Color(0.96f, 0.94f, 0.90f, 1f);
+                _propertyValueStyle = new GUIStyle(styles.BodyText);
                 _propertyValueStyle.fontSize = 12;
                 _propertyValueStyle.wordWrap = true;
 
-                _previewContainerStyle = BuildSurface(MakeTexture(new Color(0.12f, 0.10f, 0.08f, 1f)), 8);
-                _previewStyle = BuildSurface(_previewTexture, 4);
-                _activePreviewStyle = BuildSurface(_previewActiveTexture, 4);
-                _emptyPreviewStyle = new GUIStyle(GUI.skin.label);
-                _emptyPreviewStyle.normal.textColor = new Color(0.72f, 0.71f, 0.68f, 1f);
-                _emptyPreviewStyle.alignment = TextAnchor.MiddleCenter;
-                _emptyPreviewStyle.wordWrap = true;
-                _emptyPreviewStyle.fontSize = 11;
-
-                _cardButtonStyle = BuildButton(_cardTexture, new Color(0.98f, 0.95f, 0.90f, 1f), 12);
-                _activeCardButtonStyle = BuildButton(_cardActiveTexture, Color.white, 12);
-                _cardTitleStyle = new GUIStyle(GUI.skin.label);
-                _cardTitleStyle.normal.textColor = new Color(0.98f, 0.95f, 0.88f, 1f);
+                _previewContainerStyle = styles.Card;
+                _cardButtonStyle = styles.Button;
+                _activeCardButtonStyle = styles.ButtonActive;
+                _cardTitleStyle = new GUIStyle(styles.BodyText);
                 _cardTitleStyle.fontSize = 13;
                 _cardTitleStyle.fontStyle = FontStyle.Bold;
                 _cardTitleStyle.wordWrap = false;
 
-                _cardDetailStyle = new GUIStyle(GUI.skin.label);
-                _cardDetailStyle.normal.textColor = new Color(0.82f, 0.80f, 0.76f, 1f);
+                _cardDetailStyle = new GUIStyle(styles.MutedText);
                 _cardDetailStyle.fontSize = 11;
                 _cardDetailStyle.wordWrap = true;
 
-                _badgeStyle = new GUIStyle(GUI.skin.label);
-                _badgeStyle.normal.textColor = new Color(1f, 0.96f, 0.88f, 1f);
-                _badgeStyle.fontSize = 10;
-                _badgeStyle.alignment = TextAnchor.MiddleCenter;
+                _badgeStyle = WithFontSize(styles.PillText, 10);
+                _badgeBoxStyle = WithFontSize(styles.Pill, 10);
 
-                _badgeBoxStyle = new GUIStyle(GUI.skin.box);
-                _badgeBoxStyle.normal.background = _badgeTexture;
-                _badgeBoxStyle.normal.textColor = new Color(1f, 0.96f, 0.88f, 1f);
-                _badgeBoxStyle.fontSize = 10;
-                _badgeBoxStyle.alignment = TextAnchor.MiddleCenter;
-                _badgeBoxStyle.padding = new RectOffset(8, 8, 3, 3);
-
-                _miniButtonStyle = BuildButton(_buttonTexture, new Color(0.97f, 0.93f, 0.86f, 1f), 11);
+                _miniButtonStyle = WithFontSize(styles.Button, 11);
 
                 _stylesReady = true;
+                _styleOpacity = panelOpacity;
                 MMLog.WriteInfo("[ScenarioAuthoringIMGUI] Initialized fixed-layout scenario editor styles.");
             }
 
@@ -1512,6 +1431,57 @@ namespace ShelteredAPI.Scenarios
             {
                 if (_owner != null)
                     _owner.Draw();
+            }
+
+            private void OnDestroy()
+            {
+                DisposeStyles();
+            }
+
+            private void DisposeStyles()
+            {
+                if (_uiContext != null)
+                    _uiContext.Dispose();
+
+                _uiContext = null;
+                _textures = null;
+                _headerSurfaceStyle = null;
+                _sidebarSurfaceStyle = null;
+                _inspectorSurfaceStyle = null;
+                _browserSurfaceStyle = null;
+                _hoverSurfaceStyle = null;
+                _sectionSurfaceStyle = null;
+                _brandStyle = null;
+                _titleStyle = null;
+                _subtitleStyle = null;
+                _statusStyle = null;
+                _sectionTitleStyle = null;
+                _noteStyle = null;
+                _captionStyle = null;
+                _buttonStyle = null;
+                _primaryButtonStyle = null;
+                _compactButtonStyle = null;
+                _primaryCompactButtonStyle = null;
+                _headerButtonStyle = null;
+                _headerPrimaryButtonStyle = null;
+                _tabButtonStyle = null;
+                _activeTabButtonStyle = null;
+                _metricTileStyle = null;
+                _metricLabelStyle = null;
+                _metricValueStyle = null;
+                _propertyRowStyle = null;
+                _propertyKeyStyle = null;
+                _propertyValueStyle = null;
+                _previewContainerStyle = null;
+                _cardButtonStyle = null;
+                _activeCardButtonStyle = null;
+                _cardTitleStyle = null;
+                _cardDetailStyle = null;
+                _badgeStyle = null;
+                _badgeBoxStyle = null;
+                _miniButtonStyle = null;
+                _stylesReady = false;
+                _styleOpacity = -1f;
             }
 
             private static GUIStyle BuildSurface(Texture2D texture, int padding)
@@ -1523,36 +1493,13 @@ namespace ShelteredAPI.Scenarios
                 return style;
             }
 
-            private static GUIStyle BuildButton(Texture2D texture, Color textColor, int fontSize)
+            private static GUIStyle WithFontSize(GUIStyle source, int fontSize)
             {
-                GUIStyle style = new GUIStyle(GUI.skin.button);
-                style.normal.background = texture;
-                style.hover.background = texture;
-                style.active.background = texture;
-                style.focused.background = texture;
-                style.normal.textColor = textColor;
-                style.hover.textColor = textColor;
-                style.active.textColor = textColor;
-                style.focused.textColor = textColor;
+                GUIStyle style = new GUIStyle(source);
                 style.fontSize = fontSize;
-                style.alignment = TextAnchor.MiddleCenter;
-                style.padding = new RectOffset(10, 10, 6, 6);
-                style.wordWrap = true;
                 return style;
             }
 
-            private static Texture2D MakeTexture(Color color)
-            {
-                Texture2D texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-                for (int x = 0; x < 2; x++)
-                {
-                    for (int y = 0; y < 2; y++)
-                        texture.SetPixel(x, y, color);
-                }
-
-                texture.Apply();
-                return texture;
-            }
         }
     }
 }
