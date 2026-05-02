@@ -4,12 +4,12 @@ using ShelteredAPI.UI.FieldManual.Theme;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>
-    /// Renders a typewriter-style keycap: rounded rectangle with light bevel on top
-    /// and shadow on bottom. State controls the face and rim colors.
+    /// Renders a Sheltered-style book button slot: mostly square, worn brown fill,
+    /// dark rim, and light top edge. State controls the face and rim colors.
     /// </summary>
     internal static class KeycapGenerator
     {
-        private const int CornerRadius = 8;
+        private const int CornerRadius = 2;
         private const int BevelLightThickness = 2;
         private const int BevelDarkThickness = 2;
 
@@ -40,6 +40,7 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             }
 
             FillRoundedRect(canvas, 0, 0, width, height, CornerRadius, face);
+            AddWornNoise(canvas, width, height, palette);
 
             // Top highlight bevel
             for (int t = 0; t < BevelLightThickness; t++)
@@ -57,6 +58,24 @@ namespace ShelteredAPI.UI.FieldManual.Textures.Generators
             StrokeRoundedRect(canvas, 0, 0, width, height, CornerRadius, new Color(rim.r, rim.g, rim.b, 0.9f));
 
             return canvas.ToTexture(FilterMode.Bilinear);
+        }
+
+        private static void AddWornNoise(TextureCanvas canvas, int width, int height, IThemePalette palette)
+        {
+            var rng = new System.Random(unchecked(width * 397 ^ height * 541));
+            Color light = new Color(palette.KeycapBevelLight.r, palette.KeycapBevelLight.g, palette.KeycapBevelLight.b, 0.06f);
+            Color dark = new Color(palette.KeycapBevelDark.r, palette.KeycapBevelDark.g, palette.KeycapBevelDark.b, 0.08f);
+            for (int y = 2; y < height - 2; y++)
+            {
+                for (int x = 2; x < width - 2; x++)
+                {
+                    double roll = rng.NextDouble();
+                    if (roll < 0.035)
+                        canvas.BlendPixel(x, y, light);
+                    else if (roll > 0.965)
+                        canvas.BlendPixel(x, y, dark);
+                }
+            }
         }
 
         private static Color Lighten(Color c, float amount)

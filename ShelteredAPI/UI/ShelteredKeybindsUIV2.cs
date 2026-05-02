@@ -18,7 +18,7 @@ namespace ShelteredAPI.UI
         {
             var provider = ShelteredKeybindsProvider.Instance;
             provider.EnsureLoaded();
-            MMLog.WriteInfo("[ShelteredKeybindsUIV2] Opening Field Manual keybind panel.");
+            MMLog.WriteInfo("[ShelteredKeybindsUIV2] Opening Sheltered book keybind panel.");
 
             var entry = new ModEntry
             {

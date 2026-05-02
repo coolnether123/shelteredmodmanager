@@ -9,7 +9,12 @@ namespace ShelteredAPI.UI.Internal
     {
         internal static bool TryCloneBookVisuals(ModManagerPanel panel)
         {
-            if (panel == null)
+            return panel != null && TryCloneScenarioBookVisuals(panel.gameObject, 10005);
+        }
+
+        internal static bool TryCloneScenarioBookVisuals(GameObject parent, int visualDepth)
+        {
+            if (parent == null)
                 return false;
 
             try
@@ -18,7 +23,7 @@ namespace ShelteredAPI.UI.Internal
                 if (scenarioPanel == null)
                     return false;
 
-                MMLog.WriteDebug("Loading Mod Manager UI...");
+                MMLog.WriteDebug("Loading scenario book visuals...");
 
                 foreach (Transform child in scenarioPanel.transform)
                 {
@@ -38,12 +43,13 @@ namespace ShelteredAPI.UI.Internal
                         continue;
 
                     GameObject clone = (GameObject)Object.Instantiate(child.gameObject);
-                    clone.transform.parent = panel.transform;
+                    clone.transform.parent = parent.transform;
                     clone.name = "Cloned_" + child.name;
                     clone.transform.localPosition = child.localPosition;
                     clone.transform.localScale = child.localScale;
                     clone.transform.localRotation = child.localRotation;
-                    clone.layer = panel.gameObject.layer;
+                    clone.layer = parent.layer;
+                    NGUITools.SetLayer(clone, parent.layer);
 
                     UIButton[] buttons = clone.GetComponentsInChildren<UIButton>(true);
                     for (int i = 0; i < buttons.Length; i++)
@@ -61,8 +67,8 @@ namespace ShelteredAPI.UI.Internal
                     for (int i = 0; i < widgets.Length; i++)
                     {
                         UIWidget widget = widgets[i];
-                        widget.gameObject.layer = panel.gameObject.layer;
-                        widget.depth = 10005;
+                        widget.gameObject.layer = parent.layer;
+                        widget.depth = visualDepth;
                     }
 
                     clone.SetActive(true);

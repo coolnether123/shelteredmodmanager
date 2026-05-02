@@ -12,12 +12,8 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.UI.FieldManual.Widgets
 {
     /// <summary>
-    /// One row of the keybind list:
-    ///     [ Action label ]   [ primary keycap ]   [ alt keycap ]   (× ↺ on hover)
-    /// Owns two <see cref="KeycapWidget"/>s and two <see cref="KeybindCaptureListener"/>s,
-    /// and reuses the existing ModSettingsKeybindRuntime to read/write the underlying
-    /// SettingDefinition values. Everything visual is themed; everything functional is
-    /// delegated to existing services.
+    /// One row of the keybind list. Action text stays on the left page, binding slots
+    /// stay on the right page, and the middle band is left clear for the book crease.
     /// </summary>
     internal sealed class KeybindRowWidget
     {
@@ -56,26 +52,16 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         public GameObject Build(GameObject parent, ModSettingsKeybindDisplayEntry entry)
         {
             string actionLabel = ModSettingsKeybindLayout.GetActionLabel(entry.Primary, entry.Secondary);
-            int rowWidth = (int)(_metrics.PanelWidth * 0.78f);
+            KeybindRowLayout layout = KeybindRowLayout.Create(_metrics);
 
             GameObject row = _ui.CreateChild(parent, "Row_" + (entry.Primary != null ? entry.Primary.Id : "row"), Vector3.zero);
 
-            // Action label
-            int textDepth = _ui.NextDepth();
             UILabel actionText = _ui.CreateLabel(row, "Action", actionLabel,
-                new Vector3(-rowWidth * 0.5f + 8, 0, 0),
+                new Vector3(layout.ActionLabelX, 0, 0),
                 17, _palette.Ink,
                 _metrics.ActionLabelWidth, _metrics.RowHeight - 8,
-                NGUIText.Alignment.Left, UIWidget.Pivot.Left, textDepth);
+                NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             actionText.overflowMethod = UILabel.Overflow.ShrinkContent;
-
-            // Keycaps positioned to the right of the label
-            int kw = _metrics.KeycapWidth;
-            int kh = _metrics.KeycapHeight;
-            int spacing = _metrics.KeycapSpacing;
-            float capsRightEdge = rowWidth * 0.5f - 70; // leave room for hover icons
-            float altCenterX = capsRightEdge - kw * 0.5f;
-            float primaryCenterX = altCenterX - kw - spacing;
 
             KeycapWidget primaryCap = null;
             KeycapWidget secondaryCap = null;
@@ -85,18 +71,18 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             Func<string> primaryDisplay = delegate
             {
                 return entry.Primary == null
-                    ? "—"
+                    ? "--"
                     : ModSettingsKeybindLayout.FormatKeyCode(ModSettingsKeybindRuntime.ReadKeyCode(entry.Primary, _settingsObject));
             };
             Func<string> secondaryDisplay = delegate
             {
                 return entry.Secondary == null
-                    ? "—"
+                    ? "--"
                     : ModSettingsKeybindLayout.FormatKeyCode(ModSettingsKeybindRuntime.ReadKeyCode(entry.Secondary, _settingsObject));
             };
 
-            primaryCap = KeycapWidget.Create(row, "Primary", new Vector3(primaryCenterX, 0, 0),
-                kw, kh, primaryDisplay(), _textures, _palette, _ui,
+            primaryCap = KeycapWidget.Create(row, "Primary", new Vector3(layout.PrimaryCenterX, 0, 0),
+                layout.KeySlotWidth, layout.KeySlotHeight, primaryDisplay(), _textures, _palette, _ui,
                 delegate
                 {
                     if (primaryCap == null || primaryCapture == null) return;
@@ -104,8 +90,8 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
                     primaryCapture.StartCapture();
                 });
 
-            secondaryCap = KeycapWidget.Create(row, "Alt", new Vector3(altCenterX, 0, 0),
-                kw, kh, secondaryDisplay(), _textures, _palette, _ui,
+            secondaryCap = KeycapWidget.Create(row, "Alt", new Vector3(layout.SecondaryCenterX, 0, 0),
+                layout.KeySlotWidth, layout.KeySlotHeight, secondaryDisplay(), _textures, _palette, _ui,
                 delegate
                 {
                     if (secondaryCap == null || secondaryCapture == null) return;
@@ -116,48 +102,50 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             primaryCapture = AttachCapture(primaryCap, entry.Primary, primaryDisplay);
             secondaryCapture = AttachCapture(secondaryCap, entry.Secondary, secondaryDisplay);
 
-            // Action-edit icons (always visible at low opacity, no longer reveal-on-hover —
-            // tooltip strip in the panel footer explains them).
-            int iconsDepth = _ui.NextDepth();
-            Color iconColor = new Color(_palette.InkFaded.r, _palette.InkFaded.g, _palette.InkFaded.b, 0.55f);
-            UILabel clearIcon = _ui.CreateLabel(row, "ClearIcon", "x",
-                new Vector3(altCenterX + kw * 0.5f + 22, 0, 0),
-                18, iconColor,
-                28, 28, NGUIText.Alignment.Center, UIWidget.Pivot.Center, iconsDepth);
-            UILabel resetIcon = _ui.CreateLabel(row, "ResetIcon", "↺",
-                new Vector3(altCenterX + kw * 0.5f + 52, 0, 0),
-                18, iconColor,
-                28, 28, NGUIText.Alignment.Center, UIWidget.Pivot.Center, iconsDepth);
-
-            _ui.AddClickCollider(clearIcon.gameObject, 28, 28, delegate
-            {
-                bool changed = false;
-                if (entry.Primary != null) changed |= ApplyValue(entry.Primary, KeyCode.None);
-                if (entry.Secondary != null) changed |= ApplyValue(entry.Secondary, KeyCode.None);
-                if (changed)
+            GameObject clearButton = CreateSmallRowButton(row, "Clear", "CLR", new Vector3(layout.ClearCenterX, 0, 0),
+                layout.SmallButtonWidth, layout.SmallButtonHeight,
+                delegate
                 {
-                    primaryCap.SetText(primaryDisplay());
-                    secondaryCap.SetText(secondaryDisplay());
-                    if (_notifyChanged != null) _notifyChanged();
-                }
-            });
-            _ui.AddClickCollider(resetIcon.gameObject, 28, 28, delegate
-            {
-                if (ModSettingsKeybindActionReset.Reset(_settingsProvider, entry.Primary, entry.Secondary, _settingsObject, _applyValue))
+                    bool changed = false;
+                    if (entry.Primary != null) changed |= ApplyValue(entry.Primary, KeyCode.None);
+                    if (entry.Secondary != null) changed |= ApplyValue(entry.Secondary, KeyCode.None);
+                    if (changed)
+                    {
+                        primaryCap.SetText(primaryDisplay());
+                        secondaryCap.SetText(secondaryDisplay());
+                        if (_notifyChanged != null) _notifyChanged();
+                    }
+                });
+
+            GameObject resetButton = CreateSmallRowButton(row, "Reset", "RST", new Vector3(layout.ResetCenterX, 0, 0),
+                layout.SmallButtonWidth, layout.SmallButtonHeight,
+                delegate
                 {
-                    primaryCap.SetText(primaryDisplay());
-                    secondaryCap.SetText(secondaryDisplay());
-                    if (_notifyChanged != null) _notifyChanged();
-                }
-            });
+                    if (ModSettingsKeybindActionReset.Reset(_settingsProvider, entry.Primary, entry.Secondary, _settingsObject, _applyValue))
+                    {
+                        primaryCap.SetText(primaryDisplay());
+                        secondaryCap.SetText(secondaryDisplay());
+                        if (_notifyChanged != null) _notifyChanged();
+                    }
+                });
 
-            // Row-wide collider for both scroll-drag forwarding and a fallback tooltip surface.
-            _ui.AddClickCollider(row, rowWidth, _metrics.RowHeight, null);
-
-            // Tooltip wiring — every interactive surface pushes its own message onto the bus.
-            AttachTooltips(row, entry, actionLabel, primaryCap, secondaryCap, clearIcon.gameObject, resetIcon.gameObject);
+            _ui.AddClickCollider(row, layout.RowWidth, _metrics.RowHeight, null);
+            AttachTooltips(row, entry, actionLabel, primaryCap, secondaryCap, clearButton, resetButton);
 
             return row;
+        }
+
+        private GameObject CreateSmallRowButton(GameObject parent, string name, string text, Vector3 position, int width, int height, Action onClick)
+        {
+            UITexture bg = _ui.CreateQuad(parent, name + "Bg", _textures.Keycap(width, height, KeycapState.Rest),
+                position, width, height, Color.white, _ui.NextDepth());
+            UILabel label = _ui.CreateLabel(parent, name + "Label", text,
+                position, 12, _palette.KeycapInk,
+                Mathf.Max(20, width - 6), Mathf.Max(18, height - 4),
+                NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            label.overflowMethod = UILabel.Overflow.ShrinkContent;
+            _ui.AddClickCollider(bg.gameObject, width, height, onClick);
+            return bg.gameObject;
         }
 
         private void AttachTooltips(
@@ -166,37 +154,37 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             string actionLabel,
             KeycapWidget primaryCap,
             KeycapWidget secondaryCap,
-            GameObject clearIcon,
-            GameObject resetIcon)
+            GameObject clearButton,
+            GameObject resetButton)
         {
             if (_tooltipBus == null) return;
 
             string actionBody = entry.Primary != null && !string.IsNullOrEmpty(entry.Primary.Tooltip)
                 ? entry.Primary.Tooltip
-                : (entry.Secondary != null && !string.IsNullOrEmpty(entry.Secondary.Tooltip) ? entry.Secondary.Tooltip : "Click a key to rebind. Click x or ↺ to clear or reset.");
+                : (entry.Secondary != null && !string.IsNullOrEmpty(entry.Secondary.Tooltip) ? entry.Secondary.Tooltip : "Click a binding to change it. Use CLR or RST to clear or restore it.");
 
             HoverTooltipTrigger.Attach(row, _tooltipBus,
                 TooltipMessage.Info(actionLabel, actionBody));
 
             if (primaryCap != null)
                 HoverTooltipTrigger.Attach(primaryCap.gameObject, _tooltipBus,
-                    TooltipMessage.Info(actionLabel + " — Primary",
+                    TooltipMessage.Info(actionLabel + " - Primary",
                         "Click to rebind the primary key. Press Escape to cancel."));
 
-            if (secondaryCap != null)
+            if (secondaryCap != null && entry.Secondary != null)
                 HoverTooltipTrigger.Attach(secondaryCap.gameObject, _tooltipBus,
-                    TooltipMessage.Info(actionLabel + " — Alternate",
+                    TooltipMessage.Info(actionLabel + " - Alternate",
                         "Click to rebind the alternate key. Press Escape to cancel."));
 
-            if (clearIcon != null)
-                HoverTooltipTrigger.Attach(clearIcon, _tooltipBus,
+            if (clearButton != null)
+                HoverTooltipTrigger.Attach(clearButton, _tooltipBus,
                     TooltipMessage.Info("Clear bindings",
                         "Removes both primary and alternate bindings for " + actionLabel + "."));
 
-            if (resetIcon != null)
-                HoverTooltipTrigger.Attach(resetIcon, _tooltipBus,
+            if (resetButton != null)
+                HoverTooltipTrigger.Attach(resetButton, _tooltipBus,
                     TooltipMessage.Info("Restore defaults",
-                        "Resets " + actionLabel + " to its reserved default keys."));
+                        "Resets " + actionLabel + " to its default keys."));
         }
 
         private bool ApplyValue(SettingDefinition def, object value)
@@ -206,7 +194,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
         private KeybindCaptureListener AttachCapture(KeycapWidget cap, SettingDefinition def, Func<string> displayProvider)
         {
-            if (cap == null) return null;
+            if (cap == null || def == null) return null;
             KeybindCaptureListener capture = cap.gameObject.AddComponent<KeybindCaptureListener>();
             capture.ValueLabel = cap.ValueLabel;
             capture.DisplayTextProvider = displayProvider;
@@ -218,7 +206,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             capture.OnCaptured = delegate(KeyCode key)
             {
                 cap.StopPulse();
-                if (def != null && ApplyValue(def, key))
+                if (ApplyValue(def, key))
                 {
                     cap.SetText(displayProvider());
                     if (_notifyChanged != null) _notifyChanged();

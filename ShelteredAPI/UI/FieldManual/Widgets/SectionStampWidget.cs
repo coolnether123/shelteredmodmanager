@@ -5,7 +5,7 @@ using ShelteredAPI.UI.FieldManual.Theme;
 namespace ShelteredAPI.UI.FieldManual.Widgets
 {
     /// <summary>
-    /// A section header rendered as a slightly rotated red rubber stamp.
+    /// A section header aligned to the left page of the Sheltered book.
     /// </summary>
     internal sealed class SectionStampWidget
     {
@@ -22,20 +22,20 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
         public GameObject Build(GameObject parent, string text)
         {
-            string stamped = "— " + (text ?? string.Empty).ToUpperInvariant() + " —";
-            int rowWidth = (int)(_metrics.PanelWidth * 0.78f);
+            string stamped = (text ?? string.Empty).ToUpperInvariant();
+            KeybindRowLayout layout = KeybindRowLayout.Create(_metrics);
 
             GameObject host = _ui.CreateChild(parent, "SectionStamp", Vector3.zero);
             host.transform.localRotation = Quaternion.Euler(0, 0, _metrics.SectionStampRotationDegrees);
 
             int depth = _ui.NextDepth();
             UILabel label = _ui.CreateLabel(host, "Stamp", stamped,
-                new Vector3(-rowWidth * 0.5f + 12, 0, 0),
-                22,
-                new Color(_palette.StampRed.r, _palette.StampRed.g, _palette.StampRed.b, 0.85f),
-                rowWidth - 24, _metrics.SectionStampHeight,
+                new Vector3(layout.ActionLabelX, 0, 0),
+                20,
+                _palette.InkFaded,
+                _metrics.ActionLabelWidth, _metrics.SectionStampHeight,
                 NGUIText.Alignment.Left, UIWidget.Pivot.Left, depth);
-            label.spacingX = 2;
+            label.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             return host;
         }

@@ -7,7 +7,7 @@ using ShelteredAPI.UI.FieldManual.Theme;
 namespace ShelteredAPI.UI.FieldManual.Widgets
 {
     /// <summary>
-    /// A typewriter keycap widget. Owns its background texture and label, swaps
+    /// A Sheltered-style binding slot. Owns its background texture and label, swaps
     /// textures based on hover/capture state, and pulses while capturing.
     /// </summary>
     internal sealed class KeycapWidget : MonoBehaviour
@@ -67,9 +67,8 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         public void SetText(string text)
         {
             if (ValueLabel == null) return;
-            string t = string.IsNullOrEmpty(text) ? "—" : text;
-            ValueLabel.text = t;
             bool empty = string.IsNullOrEmpty(text) || string.Equals(text, "UNBOUND", StringComparison.OrdinalIgnoreCase);
+            ValueLabel.text = empty ? "--" : text;
             ApplyVisualState(empty ? KeycapState.Empty : (_pulsing ? KeycapState.Pulse : (_hovered ? KeycapState.Hover : KeycapState.Rest)));
         }
 
@@ -91,7 +90,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         {
             _hovered = isOver;
             if (_pulsing) return;
-            ApplyVisualState(string.IsNullOrEmpty(ValueLabel.text) || ValueLabel.text == "—"
+            ApplyVisualState(string.IsNullOrEmpty(ValueLabel.text) || ValueLabel.text == "--"
                 ? KeycapState.Empty
                 : (isOver ? KeycapState.Hover : KeycapState.Rest));
         }
