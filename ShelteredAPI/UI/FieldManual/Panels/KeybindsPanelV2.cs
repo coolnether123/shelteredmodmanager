@@ -4,6 +4,7 @@ using ModAPI.Core;
 using ModAPI.Spine;
 using ShelteredAPI.UI.Spine;
 using ShelteredAPI.UI.Compatibility;
+using ShelteredAPI.UI.Internal;
 using UnityEngine;
 using ShelteredAPI.UI.FieldManual.Frame;
 using ShelteredAPI.UI.FieldManual.Layout;

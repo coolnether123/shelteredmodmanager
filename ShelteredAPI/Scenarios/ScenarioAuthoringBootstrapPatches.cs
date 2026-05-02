@@ -20,10 +20,24 @@ namespace ShelteredAPI.Scenarios
         }
 
         [HarmonyPatch(typeof(CursorBase), "GetCameraFollowPosition")]
+        [HarmonyPrefix]
+        private static bool CursorBaseFollowPrefix(CursorBase __instance, ref Vector3 __result)
+        {
+            return TryAllowVanillaCameraFollow(__instance, ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorBase), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorBaseFollowPostfix(ref Vector3 __result)
         {
             TrySuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorPlacement), "GetCameraFollowPosition")]
+        [HarmonyPrefix]
+        private static bool CursorPlacementFollowPrefix(CursorPlacement __instance, ref Vector3 __result)
+        {
+            return TryAllowVanillaCameraFollow(__instance, ref __result);
         }
 
         [HarmonyPatch(typeof(CursorPlacement), "GetCameraFollowPosition")]
@@ -34,6 +48,13 @@ namespace ShelteredAPI.Scenarios
         }
 
         [HarmonyPatch(typeof(CursorPlacementRoom), "GetCameraFollowPosition")]
+        [HarmonyPrefix]
+        private static bool CursorPlacementRoomFollowPrefix(CursorPlacementRoom __instance, ref Vector3 __result)
+        {
+            return TryAllowVanillaCameraFollow(__instance, ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorPlacementRoom), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorPlacementRoomFollowPostfix(ref Vector3 __result)
         {
@@ -41,10 +62,48 @@ namespace ShelteredAPI.Scenarios
         }
 
         [HarmonyPatch(typeof(CursorUpgrade), "GetCameraFollowPosition")]
+        [HarmonyPrefix]
+        private static bool CursorUpgradeFollowPrefix(CursorUpgrade __instance, ref Vector3 __result)
+        {
+            return TryAllowVanillaCameraFollow(__instance, ref __result);
+        }
+
+        [HarmonyPatch(typeof(CursorUpgrade), "GetCameraFollowPosition")]
         [HarmonyPostfix]
         private static void CursorUpgradeFollowPostfix(ref Vector3 __result)
         {
             TrySuppressCameraFollowOverAuthoringUi(ref __result);
+        }
+
+        private static bool TryAllowVanillaCameraFollow(CursorBase cursor, ref Vector3 followPosition)
+        {
+            try
+            {
+                if (!TryGetCursorPosition(cursor, out followPosition))
+                {
+                    followPosition = GetCameraFallbackPosition(Vector3.zero);
+                    MMLog.WarnOnce(
+                        "ScenarioAuthoringBootstrap.CursorCameraFollowMissingCursor",
+                        "[ScenarioAuthoringBootstrap] Camera-follow fallback used because the active cursor was unavailable.");
+                    return false;
+                }
+
+                if (ShouldSuppressCameraFollowOverAuthoringUi())
+                {
+                    followPosition = GetCameraFallbackPosition(followPosition);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                followPosition = GetCameraFallbackPosition(followPosition);
+                MMLog.WarnOnce(
+                    "ScenarioAuthoringBootstrap.CursorCameraFollowPrefix",
+                    "[ScenarioAuthoringBootstrap] Camera-follow prefix fallback used: " + ex.Message);
+                return false;
+            }
+
+            return true;
         }
 
         private static void TrySuppressCameraFollowOverAuthoringUi(ref Vector3 followPosition)
@@ -63,18 +122,43 @@ namespace ShelteredAPI.Scenarios
 
         private static void SuppressCameraFollowOverAuthoringUi(ref Vector3 followPosition)
         {
-            if (!ScenarioAuthoringRuntimeGuards.IsAuthoringActive())
+            if (!ShouldSuppressCameraFollowOverAuthoringUi())
                 return;
+
+            followPosition = GetCameraFallbackPosition(followPosition);
+        }
+
+        private static bool ShouldSuppressCameraFollowOverAuthoringUi()
+        {
+            if (!ScenarioAuthoringRuntimeGuards.IsAuthoringActive())
+                return false;
 
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
-            if (inputCapture == null || !inputCapture.ShouldBlockGameCameraInput())
-                return;
+            return inputCapture != null && inputCapture.ShouldBlockGameCameraInput();
+        }
 
+        private static bool TryGetCursorPosition(CursorBase cursor, out Vector3 position)
+        {
+            position = Vector3.zero;
+            if ((UnityEngine.Object)cursor == (UnityEngine.Object)null)
+                return false;
+
+            Transform transform = cursor.transform;
+            if ((UnityEngine.Object)transform == (UnityEngine.Object)null)
+                return false;
+
+            position = transform.position;
+            return true;
+        }
+
+        private static Vector3 GetCameraFallbackPosition(Vector3 fallback)
+        {
             Camera camera = Camera.main;
-            if (camera == null)
-                return;
+            if ((UnityEngine.Object)camera == (UnityEngine.Object)null)
+                return fallback;
 
-            followPosition = camera.transform.position;
+            Transform transform = camera.transform;
+            return (UnityEngine.Object)transform != (UnityEngine.Object)null ? transform.position : fallback;
         }
     }
 }
