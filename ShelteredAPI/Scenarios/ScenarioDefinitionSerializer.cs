@@ -626,6 +626,21 @@ namespace ShelteredAPI.Scenarios
             if (element == null)
                 return appearance;
 
+            appearance.MeshId = AttributeOrChild(element, "meshId", "MeshId");
+            if (element.HasAttribute("adult"))
+                appearance.IsAdult = ReadBoolAttribute(element, "adult", true);
+            else
+            {
+                string adultText = ReadText(element, "IsAdult");
+                bool adult;
+                if (!string.IsNullOrEmpty(adultText) && bool.TryParse(adultText, out adult))
+                    appearance.IsAdult = adult;
+            }
+            appearance.HairColorHex = AttributeOrChild(element, "hairColor", "HairColor");
+            appearance.SkinColorHex = AttributeOrChild(element, "skinColor", "SkinColor");
+            appearance.ShirtColorHex = AttributeOrChild(element, "shirtColor", "ShirtColor");
+            appearance.PantsColorHex = AttributeOrChild(element, "pantsColor", "PantsColor");
+
             string textureId;
             string texturePath;
 
@@ -1417,6 +1432,13 @@ namespace ShelteredAPI.Scenarios
                 appearance = new FamilyMemberAppearanceConfig();
 
             writer.WriteStartElement("Appearance");
+            WriteAttribute(writer, "meshId", appearance.MeshId);
+            if (appearance.IsAdult.HasValue)
+                writer.WriteAttributeString("adult", appearance.IsAdult.Value.ToString());
+            WriteAttribute(writer, "hairColor", appearance.HairColorHex);
+            WriteAttribute(writer, "skinColor", appearance.SkinColorHex);
+            WriteAttribute(writer, "shirtColor", appearance.ShirtColorHex);
+            WriteAttribute(writer, "pantsColor", appearance.PantsColorHex);
             WriteFamilyAppearancePart(writer, "Head", appearance.HeadTextureId, appearance.HeadTexturePath);
             WriteFamilyAppearancePart(writer, "Torso", appearance.TorsoTextureId, appearance.TorsoTexturePath);
             WriteFamilyAppearancePart(writer, "Legs", appearance.LegTextureId, appearance.LegTexturePath);

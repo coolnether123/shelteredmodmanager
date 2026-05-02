@@ -76,7 +76,7 @@ namespace ShelteredAPI.Scenarios
 
             attributes.m_firstName = string.IsNullOrEmpty(config.Name) ? "Survivor" : config.Name;
             attributes.m_lastName = string.Empty;
-            attributes.m_meshId = ResolveMeshId(config.Gender);
+            attributes.m_meshId = ResolveMeshId(config);
 
             if (config.Appearance != null)
             {
@@ -86,6 +86,10 @@ namespace ShelteredAPI.Scenarios
                     attributes.m_torsoTexture = config.Appearance.TorsoTextureId;
                 if (!string.IsNullOrEmpty(config.Appearance.LegTextureId))
                     attributes.m_legTexture = config.Appearance.LegTextureId;
+                ApplyColor(config.Appearance.HairColorHex, delegate(Color color) { attributes.m_hairColor = color; });
+                ApplyColor(config.Appearance.SkinColorHex, delegate(Color color) { attributes.m_skinColor = color; });
+                ApplyColor(config.Appearance.ShirtColorHex, delegate(Color color) { attributes.m_shirtColor = color; });
+                ApplyColor(config.Appearance.PantsColorHex, delegate(Color color) { attributes.m_pantsColor = color; });
             }
 
             for (int i = 0; config.Stats != null && i < config.Stats.Count; i++)
@@ -187,9 +191,31 @@ namespace ShelteredAPI.Scenarios
             return value > 20 ? 20 : value;
         }
 
-        private static string ResolveMeshId(ScenarioGender gender)
+        private static string ResolveMeshId(FamilyMemberConfig config)
         {
-            return gender == ScenarioGender.Female ? "woman" : "man";
+            if (config != null && config.Appearance != null && !string.IsNullOrEmpty(config.Appearance.MeshId))
+                return config.Appearance.MeshId;
+
+            ScenarioGender gender = config != null ? config.Gender : ScenarioGender.Any;
+            bool adult = true;
+            if (config != null && config.Appearance != null && config.Appearance.IsAdult.HasValue)
+                adult = config.Appearance.IsAdult.Value;
+            else if (config != null && config.ExactAge.HasValue)
+                adult = config.ExactAge.Value >= 18;
+
+            if (gender == ScenarioGender.Female)
+                return adult ? "woman" : "girl";
+            return adult ? "man" : "boy";
+        }
+
+        private static void ApplyColor(string colorHex, Action<Color> apply)
+        {
+            if (apply == null)
+                return;
+
+            Color color;
+            if (ScenarioCharacterAppearanceService.TryParseColorHex(colorHex, out color))
+                apply(color);
         }
 
         private static void ApplyStat(FamilySpawner.CharacterAttributes attributes, StatOverride stat)

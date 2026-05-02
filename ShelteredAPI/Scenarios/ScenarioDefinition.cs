@@ -354,12 +354,18 @@ namespace ShelteredAPI.Scenarios
 
     public class FamilyMemberAppearanceConfig
     {
+        public string MeshId { get; set; }
+        public bool? IsAdult { get; set; }
         public string HeadTextureId { get; set; }
         public string HeadTexturePath { get; set; }
         public string TorsoTextureId { get; set; }
         public string TorsoTexturePath { get; set; }
         public string LegTextureId { get; set; }
         public string LegTexturePath { get; set; }
+        public string HairColorHex { get; set; }
+        public string SkinColorHex { get; set; }
+        public string ShirtColorHex { get; set; }
+        public string PantsColorHex { get; set; }
     }
 
     public class StatOverride
