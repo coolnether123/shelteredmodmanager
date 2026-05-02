@@ -177,7 +177,7 @@ Prompt 6 moved concrete Sheltered UI, item/content, and diagnostic runtime hooks
 
 - Inventory runtime helpers are hosted by `ShelteredAPI.dll` and exposed publicly through `ShelteredAPI.Content.ShelteredContent`.
 - `ShelteredAPI.Content.ShelteredItemContentBridge` owns the temporary typed conversion from neutral content runtime keys to Sheltered `ItemManager.ItemType` values.
-- NGUI panel helpers, mod-manager and settings panels, `ModUIHooks`, `ContextMenuHelper`, `UIHooks`, `UIPatches`, item-panel augmentation, panel lifecycle patch forwarding, `UIDebug`, and the Spine settings UI renderers are hosted by `ShelteredAPI.dll` under `ShelteredAPI/UI/ModAPICompat`.
+- NGUI panel helpers, mod-manager and settings panels, `ModUIHooks`, `ContextMenuHelper`, `UIHooks`, `UIPatches`, item-panel augmentation, panel lifecycle patch forwarding, `UIDebug`, and the Spine settings UI renderers are hosted by `ShelteredAPI.dll` under `ShelteredAPI/UI/Compatibility`.
 - `CrashCorridorMapDiagnostics` is hosted by `ShelteredAPI.dll` because it patches Sheltered loading, save, and UI managers.
 - `ModAPI` keeps only neutral UI/input framework pieces: `UIFlowGuard`, `ScrollInputBridge`, `TouchInputBridge`, input binding/action contracts, and Unity scene helpers that do not name Sheltered managers or NGUI widgets.
 

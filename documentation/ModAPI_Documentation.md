@@ -190,10 +190,10 @@ Representative files:
 - `ModAPI/UI/UIFlowGuard.cs`
 - `ModAPI/UI/ScrollInputBridge.cs`
 - `ModAPI/UI/TouchInputBridge.cs`
-- `ShelteredAPI/UI/ModAPICompat/UIUtil.cs`
-- `ShelteredAPI/UI/ModAPICompat/UIHelper.cs`
-- `ShelteredAPI/UI/ModAPICompat/UIPatches.cs`
-- `ShelteredAPI/UI/ModAPICompat/Runtime/*`
+- `ShelteredAPI/UI/Compatibility/UIUtil.cs`
+- `ShelteredAPI/UI/Compatibility/UIHelper.cs`
+- `ShelteredAPI/UI/Compatibility/UIPatches.cs`
+- `ShelteredAPI/UI/Compatibility/Runtime/*`
 
 ## 9. Save Expansion
 

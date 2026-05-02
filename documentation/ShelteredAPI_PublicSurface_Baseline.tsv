@@ -1,6 +1,6 @@
-﻿# Kind	Namespace	Name	Path	Justification
-class	ModAPI.Hooks.Paging	ModCompareEntry	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
-class	ModAPI.Hooks.Paging	VerificationWindowOptions	ShelteredAPI/Custom Saves/paging/SaveDetailsWindow.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+# Kind	Namespace	Name	Path	Justification
+class	ShelteredAPI.Saves.Paging	ModCompareEntry	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Saves.Paging	VerificationWindowOptions	ShelteredAPI/Custom Saves/paging/SaveDetailsWindow.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Actors	ShelteredActors	ShelteredAPI/Actors/ActorSystem.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Adapters	GameHelperExtensions	ShelteredAPI/Adapters/GameHelperExtensions.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters	AttributeModifier	ShelteredAPI/Characters/Models/AttributeModifier.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -148,8 +148,8 @@ class	ShelteredAPI.Scenarios	WeatherEventDefinition	ShelteredAPI/Scenarios/Scena
 class	ShelteredAPI.Scenarios	WinLossConditionsDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI	ShelteredUI	ShelteredAPI/UI/ShelteredUI.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI	UITakeoverSession	ShelteredAPI/UI/UITakeover.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
-enum	ModAPI.Hooks.Paging	ModCompareStatus	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
-enum	ModAPI.Hooks.Paging	VerificationState	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+enum	ShelteredAPI.Saves.Paging	ModCompareStatus	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+enum	ShelteredAPI.Saves.Paging	VerificationState	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Characters	CharacterLocation	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Characters	CharacterSource	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Characters	CharacterState	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
