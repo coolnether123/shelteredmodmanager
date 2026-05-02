@@ -87,6 +87,10 @@ namespace ShelteredAPI.Scenarios
                 return missingPath;
             }
 
+            ScenarioObjectIdentityAssignmentSummary identityMigration = _identityAssignmentService.AssignMissingIds(session);
+            if (identityMigration.AssignedCount > 0)
+                MMLog.WriteInfo("[ScenarioEditorController] Assigned " + identityMigration.AssignedCount + " missing scenario object id(s) before validation.");
+
             ScenarioValidationResult validation = _validator.Validate(session.WorkingDefinition, path);
             if (validation == null)
             {
@@ -116,6 +120,10 @@ namespace ShelteredAPI.Scenarios
             ScenarioValidationResult validation;
             try
             {
+                ScenarioObjectIdentityAssignmentSummary identityMigration = _identityAssignmentService.AssignMissingIds(session);
+                if (identityMigration.AssignedCount > 0)
+                    MMLog.WriteInfo("[ScenarioEditorController] Assigned " + identityMigration.AssignedCount + " missing scenario object id(s) before playtest validation.");
+
                 validation = _validator.Validate(session.WorkingDefinition, _sessionStore.CurrentFilePath);
             }
             catch (Exception ex)

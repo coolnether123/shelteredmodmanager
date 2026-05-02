@@ -102,13 +102,13 @@ namespace ShelteredAPI.Scenarios
                     switch (kind)
                     {
                         case ScenarioPlacementDefinitionKind.Room:
-                            ApplyRoomPlacement(grid, placement, i, result);
+                            ApplyRoomPlacement(grid, placement, i, result, false);
                             break;
                         case ScenarioPlacementDefinitionKind.Ladder:
-                            ApplyLadderPlacement(grid, placement, i, result);
+                            ApplyLadderPlacement(grid, placement, i, result, false);
                             break;
                         case ScenarioPlacementDefinitionKind.RoomLight:
-                            ApplyRoomLightPlacement(grid, placement, i, result);
+                            ApplyRoomLightPlacement(grid, placement, i, result, false);
                             break;
                     }
                 }
@@ -134,71 +134,153 @@ namespace ShelteredAPI.Scenarios
                 if (placement == null || ScenarioPlacementDefinitions.IsSpecialDefinition(placement.DefinitionReference))
                     continue;
 
-                if (!string.IsNullOrEmpty(placement.PrefabReference))
-                {
-                    AddBunkerMessage(result, "Object placement #" + i + " uses PrefabReference '" + placement.PrefabReference
-                        + "' and is deferred because direct prefab-path instantiation is not safe for live saves.");
-                    continue;
-                }
-
-                ObjectManager.ObjectType objectType;
-                if (!TryParseObjectType(placement.DefinitionReference, out objectType))
-                {
-                    AddBunkerMessage(result, "Object placement #" + i + " has unknown DefinitionReference: " + (placement.DefinitionReference ?? string.Empty));
-                    continue;
-                }
-
-                if (!manager.HasPrefab(objectType))
-                {
-                    AddBunkerMessage(result, "Object placement #" + i + " skipped because ObjectManager has no prefab for " + objectType + ".");
-                    continue;
-                }
-
-                int level = ScenarioPropertyBag.GetInt(placement.CustomProperties, "level", 1);
-                bool lockDeconstruct = ScenarioPropertyBag.GetBool(placement.CustomProperties, "lockDeconstruct", false);
-                bool movable = ScenarioPropertyBag.GetBool(placement.CustomProperties, "movable", true);
-                Vector2 position = new Vector2(
-                    placement.Position != null ? placement.Position.X : 0f,
-                    placement.Position != null ? placement.Position.Y : 0f);
-
-                Obj_Base spawned;
-                try
-                {
-                    spawned = manager.SpawnObject(objectType, level, position, lockDeconstruct, movable);
-                }
-                catch (Exception ex)
-                {
-                    AddBunkerMessage(result, "Object placement #" + i + " failed to spawn " + objectType + ": " + ex.Message);
-                    continue;
-                }
-
-                if (spawned == null)
-                {
-                    AddBunkerMessage(result, "Object placement #" + i + " failed to spawn " + objectType + " at " + position.x + "," + position.y + ".");
-                    continue;
-                }
-
-                if (placement.Rotation != null)
-                    spawned.transform.eulerAngles = new Vector3(placement.Rotation.X, placement.Rotation.Y, placement.Rotation.Z);
-
-                result.BunkerChanges++;
+                ApplyStandardObjectPlacement(placement, i, result, false);
             }
         }
 
-        private static void ApplyRoomPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result)
+        internal static bool TryMaterializePlacement(ScenarioDefinition definition, string objectId, ScenarioApplyResult result)
         {
+            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.ObjectPlacements == null || string.IsNullOrEmpty(objectId))
+                return false;
+
+            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
+                if (placement == null
+                    || (!string.Equals(placement.ScenarioObjectId, objectId, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(placement.RuntimeBindingKey, objectId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                return TryMaterializePlacement(placement, i, result, true);
+            }
+
+            return false;
+        }
+
+        internal static bool TryMaterializePlacement(ObjectPlacement placement, int index, ScenarioApplyResult result, bool forceMaterialize)
+        {
+            if (placement == null)
+                return false;
+
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            ScenarioPlacementDefinitionKind kind;
+            if (ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind))
+            {
+                if (grid == null || !grid.isInitialized)
+                    return false;
+
+                switch (kind)
+                {
+                    case ScenarioPlacementDefinitionKind.Room:
+                        return ApplyRoomPlacement(grid, placement, index, result, forceMaterialize);
+                    case ScenarioPlacementDefinitionKind.Ladder:
+                        return ApplyLadderPlacement(grid, placement, index, result, forceMaterialize);
+                    case ScenarioPlacementDefinitionKind.RoomLight:
+                        return ApplyRoomLightPlacement(grid, placement, index, result, forceMaterialize);
+                }
+            }
+
+            return ApplyStandardObjectPlacement(placement, index, result, forceMaterialize) != null;
+        }
+
+        private static Obj_Base ApplyStandardObjectPlacement(ObjectPlacement placement, int index, ScenarioApplyResult result, bool forceMaterialize)
+        {
+            if (placement == null)
+                return null;
+
+            if (!forceMaterialize && !ScenarioObjectStartStateApplyService.ShouldMaterializeAtStart(placement))
+                return null;
+
+            ObjectManager manager = ObjectManager.Instance;
+            if (manager == null)
+            {
+                AddBunkerMessage(result, "ObjectManager is not ready; object placement #" + index + " skipped.");
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(placement.PrefabReference))
+            {
+                AddBunkerMessage(result, "Object placement #" + index + " uses PrefabReference '" + placement.PrefabReference
+                    + "' and is deferred because direct prefab-path instantiation is not safe for live saves.");
+                return null;
+            }
+
+            ObjectManager.ObjectType objectType;
+            if (!TryParseObjectType(placement.DefinitionReference, out objectType))
+            {
+                AddBunkerMessage(result, "Object placement #" + index + " has unknown DefinitionReference: " + (placement.DefinitionReference ?? string.Empty));
+                return null;
+            }
+
+            if (!manager.HasPrefab(objectType))
+            {
+                AddBunkerMessage(result, "Object placement #" + index + " skipped because ObjectManager has no prefab for " + objectType + ".");
+                return null;
+            }
+
+            int level = ScenarioPropertyBag.GetInt(placement.CustomProperties, "level", 1);
+            bool lockDeconstruct = ScenarioPropertyBag.GetBool(placement.CustomProperties, "lockDeconstruct", false);
+            bool movable = ScenarioPropertyBag.GetBool(placement.CustomProperties, "movable", true);
+            Vector2 position = new Vector2(
+                placement.Position != null ? placement.Position.X : 0f,
+                placement.Position != null ? placement.Position.Y : 0f);
+
+            Obj_Base spawned;
+            try
+            {
+                spawned = manager.SpawnObject(objectType, level, position, lockDeconstruct, movable);
+            }
+            catch (Exception ex)
+            {
+                AddBunkerMessage(result, "Object placement #" + index + " failed to spawn " + objectType + ": " + ex.Message);
+                return null;
+            }
+
+            if (spawned == null)
+            {
+                AddBunkerMessage(result, "Object placement #" + index + " failed to spawn " + objectType + " at " + position.x + "," + position.y + ".");
+                return null;
+            }
+
+            if (placement.Rotation != null)
+                spawned.transform.eulerAngles = new Vector3(placement.Rotation.X, placement.Rotation.Y, placement.Rotation.Z);
+
+            ScenarioObjectPlacementRuntimeBinding.Attach(spawned.gameObject, placement, spawned, index);
+            ScenarioObjectStatePropertyService.Apply(spawned, placement);
+            if (forceMaterialize)
+            {
+                spawned.EnableObject();
+                spawned.selectable = true;
+                spawned.gameObject.SetActive(true);
+            }
+            else
+            {
+                ScenarioObjectStartStateApplyService.ApplyToObject(spawned, placement, result);
+            }
+            if (result != null)
+                result.BunkerChanges++;
+            return spawned;
+        }
+
+        private static bool ApplyRoomPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result, bool forceMaterialize)
+        {
+            if (!forceMaterialize && !ScenarioObjectStartStateApplyService.ShouldMaterializeStructureAtStart(placement))
+                return false;
+
             int gridX;
             int gridY;
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
                 AddBunkerMessage(result, "Room placement #" + index + " could not resolve a shelter cell.");
-                return;
+                return false;
             }
 
             if (!IsValidCell(grid, gridX, gridY))
             {
                 AddBunkerMessage(result, "Room placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
-                return;
+                return false;
             }
 
             ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
@@ -206,64 +288,111 @@ namespace ShelteredAPI.Scenarios
                 ? ShelterRoomGrid.CellType.RoomTop
                 : ShelterRoomGrid.CellType.Room;
             if (cell != null && cell.type == cellType)
-                return;
+                return true;
 
             if (grid.SetCellType(gridX, gridY, cellType))
-                result.BunkerChanges++;
+            {
+                if (result != null)
+                    result.BunkerChanges++;
+                cell = grid.GetCell(gridX, gridY);
+                if (cell != null && cell.prefab != null)
+                {
+                    ScenarioObjectPlacementRuntimeBinding.Attach(cell.prefab, placement, null, index);
+                    if (!forceMaterialize)
+                        ScenarioObjectStartStateApplyService.ApplyToStructure(cell.prefab, placement);
+                }
+                return true;
+            }
             else
                 AddBunkerMessage(result, "Room placement #" + index + " failed at " + gridX + "," + gridY + ".");
+            return false;
         }
 
-        private static void ApplyLadderPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result)
+        private static bool ApplyLadderPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result, bool forceMaterialize)
         {
+            if (!forceMaterialize && !ScenarioObjectStartStateApplyService.ShouldMaterializeStructureAtStart(placement))
+                return false;
+
             int gridX;
             int gridY;
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
                 AddBunkerMessage(result, "Ladder placement #" + index + " could not resolve a shelter cell.");
-                return;
+                return false;
             }
 
             if (!IsValidCell(grid, gridX, gridY))
             {
                 AddBunkerMessage(result, "Ladder placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
-                return;
+                return false;
             }
 
             if (grid.HasLadder(gridX, gridY))
-                return;
+                return true;
 
             float horizontalPos = ResolveHorizontalPosition(grid, placement, gridX);
-            if (grid.AddLadder(gridX, gridY, horizontalPos) != null)
-                result.BunkerChanges++;
+            ShelterLadder ladder = grid.AddLadder(gridX, gridY, horizontalPos);
+            if (ladder != null)
+            {
+                if (result != null)
+                    result.BunkerChanges++;
+                ScenarioObjectPlacementRuntimeBinding.Attach(ladder.gameObject, placement, null, index);
+                if (!forceMaterialize)
+                    ScenarioObjectStartStateApplyService.ApplyToStructure(ladder.gameObject, placement);
+                return true;
+            }
             else
                 AddBunkerMessage(result, "Ladder placement #" + index + " failed at " + gridX + "," + gridY + ".");
+            return false;
         }
 
-        private static void ApplyRoomLightPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result)
+        private static bool ApplyRoomLightPlacement(ShelterRoomGrid grid, ObjectPlacement placement, int index, ScenarioApplyResult result, bool forceMaterialize)
         {
+            if (!forceMaterialize && !ScenarioObjectStartStateApplyService.ShouldMaterializeStructureAtStart(placement))
+                return false;
+
             int gridX;
             int gridY;
             if (!TryResolveGridCoordinates(grid, placement, out gridX, out gridY))
             {
                 AddBunkerMessage(result, "Room light placement #" + index + " could not resolve a shelter cell.");
-                return;
+                return false;
             }
 
             if (!IsValidCell(grid, gridX, gridY))
             {
                 AddBunkerMessage(result, "Room light placement #" + index + " is outside the shelter grid at " + gridX + "," + gridY + ".");
-                return;
+                return false;
             }
 
             ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
             if (cell != null && (UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
-                return;
+                return true;
 
             if (grid.AddLight(gridX, gridY))
-                result.BunkerChanges++;
+            {
+                if (result != null)
+                    result.BunkerChanges++;
+                cell = grid.GetCell(gridX, gridY);
+                if (cell != null && (UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
+                {
+                    ScenarioObjectPlacementRuntimeBinding.Attach(cell.lightObject.gameObject, placement, cell.lightObject, index);
+                    if (forceMaterialize)
+                    {
+                        cell.lightObject.EnableObject();
+                        cell.lightObject.selectable = true;
+                        cell.lightObject.gameObject.SetActive(true);
+                    }
+                    else
+                    {
+                        ScenarioObjectStartStateApplyService.ApplyToObject(cell.lightObject, placement, result);
+                    }
+                }
+                return true;
+            }
             else
                 AddBunkerMessage(result, "Room light placement #" + index + " failed at " + gridX + "," + gridY + ".");
+            return false;
         }
 
         private static void AddBunkerMessage(ScenarioApplyResult result, string message)

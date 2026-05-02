@@ -33,11 +33,15 @@ namespace ShelteredAPI.Scenarios
                 record.Hidden = false;
                 record.Locked = false;
                 record.State = ScenarioObjectStartState.StartsEnabled;
+                if (ScenarioObjectPlacementRuntimeBinding.Find(objectId) == null)
+                    BunkerApplyService.TryMaterializePlacement(definition, objectId, new ScenarioApplyResult());
+                ScenarioObjectPlacementRuntimeBinding.ApplyActiveState(objectId, true);
             }
             else
             {
                 record.Active = false;
                 record.State = ScenarioObjectStartState.StartsDisabled;
+                ScenarioObjectPlacementRuntimeBinding.ApplyActiveState(objectId, false);
             }
 
             message = "Object runtime state recorded for " + objectId + ".";

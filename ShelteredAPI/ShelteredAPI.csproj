@@ -344,6 +344,8 @@
     <Compile Include="Scenarios\ScenarioBuildPlacementAuthoringService.cs" />
     <Compile Include="Scenarios\ScenarioBunkerDraftService.cs" />
     <Compile Include="Scenarios\ScenarioCharacterAppearanceService.cs" />
+    <Compile Include="Scenarios\ScenarioObjectPlacementRuntimeBinding.cs" />
+    <Compile Include="Scenarios\ScenarioObjectStatePropertyService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringCaptureService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringContracts.cs" />

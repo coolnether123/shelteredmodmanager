@@ -41,20 +41,20 @@ namespace ShelteredAPI.Scenarios
                 return result;
             }
 
-            if (_familyApplyService != null)
-                ApplyStep("family", result, delegate { _familyApplyService.Apply(definition, scenarioFilePath, result); });
-            if (_inventoryApplyService != null)
-                ApplyStep("inventory", result, delegate { _inventoryApplyService.Apply(definition, result); });
             if (_bunkerApplyService != null)
                 ApplyStep("bunker", result, delegate { _bunkerApplyService.Apply(definition, result); });
-            if (_triggerRuntimeAdapter != null)
-                ApplyStep("scheduled runtime", result, delegate { _triggerRuntimeAdapter.Apply(definition, result); });
             if (_objectStartStateApplyService != null)
                 ApplyStep("object start state", result, delegate { _objectStartStateApplyService.Apply(definition, result); });
+            if (_inventoryApplyService != null)
+                ApplyStep("inventory", result, delegate { _inventoryApplyService.Apply(definition, result); });
+            if (_familyApplyService != null)
+                ApplyStep("family", result, delegate { _familyApplyService.Apply(definition, scenarioFilePath, result); });
             if (_assetApplyService != null)
                 ApplyStep("assets", result, delegate { _assetApplyService.Apply(definition, scenarioFilePath, result); });
             if (_sceneSpriteStartStateApplyService != null)
                 ApplyStep("scene sprite start state", result, delegate { _sceneSpriteStartStateApplyService.Apply(definition, result); });
+            if (_triggerRuntimeAdapter != null)
+                ApplyStep("scheduled runtime", result, delegate { _triggerRuntimeAdapter.Apply(definition, result); });
             return result;
         }
 

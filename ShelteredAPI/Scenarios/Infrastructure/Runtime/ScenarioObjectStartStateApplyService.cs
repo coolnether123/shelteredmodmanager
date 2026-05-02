@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Scenarios;
+using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
 {
@@ -45,6 +46,96 @@ namespace ShelteredAPI.Scenarios
             record.Active = startState == ScenarioObjectStartState.StartsEnabled || startState == ScenarioObjectStartState.StartsLocked;
             record.Locked = startState == ScenarioObjectStartState.StartsLocked;
             record.Hidden = startState == ScenarioObjectStartState.StartsHidden || startState == ScenarioObjectStartState.AppearsLater || startState == ScenarioObjectStartState.RemovedAtStart;
+        }
+
+        internal static bool ShouldMaterializeAtStart(ObjectPlacement placement)
+        {
+            if (placement == null)
+                return false;
+
+            return placement.StartState != ScenarioObjectStartState.RemovedAtStart;
+        }
+
+        internal static bool ShouldMaterializeStructureAtStart(ObjectPlacement placement)
+        {
+            if (placement == null)
+                return false;
+
+            return placement.StartState == ScenarioObjectStartState.StartsEnabled
+                || placement.StartState == ScenarioObjectStartState.StartsDisabled
+                || placement.StartState == ScenarioObjectStartState.StartsLocked;
+        }
+
+        internal static void ApplyToObject(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
+        {
+            if (obj == null || placement == null)
+                return;
+
+            string id = !string.IsNullOrEmpty(placement.ScenarioObjectId) ? placement.ScenarioObjectId : placement.DefinitionReference;
+            switch (placement.StartState)
+            {
+                case ScenarioObjectStartState.StartsEnabled:
+                    obj.EnableObject();
+                    obj.selectable = true;
+                    SetGameObjectActive(obj.gameObject, true);
+                    break;
+
+                case ScenarioObjectStartState.StartsDisabled:
+                    obj.DisableObject();
+                    SetGameObjectActive(obj.gameObject, true);
+                    break;
+
+                case ScenarioObjectStartState.StartsHidden:
+                case ScenarioObjectStartState.AppearsLater:
+                    SetGameObjectActive(obj.gameObject, false);
+                    break;
+
+                case ScenarioObjectStartState.StartsLocked:
+                    obj.EnableObject();
+                    obj.selectable = false;
+                    obj.lockDeconstructOption = true;
+                    SetGameObjectActive(obj.gameObject, true);
+                    break;
+
+                case ScenarioObjectStartState.RemovedAtStart:
+                    RemoveObject(obj);
+                    break;
+
+                default:
+                    if (result != null)
+                        result.AddMessage("Object '" + (id ?? string.Empty) + "' has an unknown start state; leaving it enabled.");
+                    break;
+            }
+        }
+
+        internal static void ApplyToStructure(GameObject target, ObjectPlacement placement)
+        {
+            if (target == null || placement == null)
+                return;
+
+            if (placement.StartState == ScenarioObjectStartState.StartsHidden
+                || placement.StartState == ScenarioObjectStartState.AppearsLater
+                || placement.StartState == ScenarioObjectStartState.RemovedAtStart)
+            {
+                target.SetActive(false);
+            }
+        }
+
+        private static void SetGameObjectActive(GameObject target, bool active)
+        {
+            if (target != null)
+                target.SetActive(active);
+        }
+
+        private static void RemoveObject(Obj_Base obj)
+        {
+            if (obj == null)
+                return;
+
+            if (ObjectManager.Instance != null)
+                ObjectManager.Instance.RemoveObject(obj);
+            else if (obj.gameObject != null)
+                UnityEngine.Object.Destroy(obj.gameObject);
         }
 
         private static ScenarioObjectRuntimeStateRecord Find(ScenarioRuntimeState state, string id)

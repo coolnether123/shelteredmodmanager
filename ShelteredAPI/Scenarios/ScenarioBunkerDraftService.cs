@@ -91,6 +91,7 @@ namespace ShelteredAPI.Scenarios
                 Key = ScenarioPlacementDefinitions.PropertyCapturedName,
                 Value = SafeObjectName(obj)
             });
+            ScenarioObjectStatePropertyService.Capture(obj, placement);
             return placement;
         }
 
