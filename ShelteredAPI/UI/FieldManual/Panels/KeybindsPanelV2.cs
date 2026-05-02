@@ -18,26 +18,34 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 {
     /// <summary>
     /// Orchestrator for the Sheltered keybinds panel. Composes a scenario-book frame,
-    /// a scrollable list, and keybind row widgets while reusing the existing settings
+    /// paged list, and keybind row widgets while reusing the existing settings
     /// layout/runtime services.
     /// </summary>
     internal sealed class KeybindsPanelV2 : MonoBehaviour
     {
         private const int OverlayDepth = 50100;
         private const string OverlayName = "ShelteredAPI_KeybindBookPanel";
+        private const int HeaderRowHeight = 32;
 
         private static GameObject _instance;
 
         private ModEntry _mod;
+        private ISettingsProvider _settingsProvider;
+        private object _settingsObject;
         private IThemePalette _palette;
         private IThemeMetrics _metrics;
         private ProceduralTextureLibrary _textures;
         private UIPrimitiveFactory _ui;
-        private PaperScrollList _scrollList;
+        private PaperPagedList _pagedList;
+        private BookPageNavigatorWidget _pageNavigator;
+        private readonly PanelPageState _pageState = new PanelPageState();
+        private List<List<ModSettingsKeybindDisplayEntry>> _pages = new List<List<ModSettingsKeybindDisplayEntry>>();
+        private int _pageItemHeightBudget;
         private TooltipBus _tooltipBus;
         private TooltipDisplayWidget _tooltipDisplay;
         private bool _isClosing;
         private bool _closedRaised;
+        private bool _controllerAxisButtonDown;
 
         public static void Show(ModEntry mod)
         {
@@ -81,7 +89,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             IPanelFrame frame = new ShelteredBookFrame(_palette, _metrics, _textures, _ui);
             PanelFrameRegions regions = frame.Build(root, title, subtitle);
 
-            BuildScrollList(regions);
+            BuildPagedList(regions);
             BuildTooltipStrip(regions);
             BuildFooter(regions);
             BuildContent();
@@ -94,7 +102,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             _tooltipDisplay.Build(regions.Root, new Vector3(300f, y, 0), 480, _tooltipBus);
         }
 
-        private void BuildScrollList(PanelFrameRegions regions)
+        private void BuildPagedList(PanelFrameRegions regions)
         {
             Rect viewport = new Rect(
                 -regions.ContentRectLocal.width * 0.5f,
@@ -102,8 +110,9 @@ namespace ShelteredAPI.UI.FieldManual.Panels
                 regions.ContentRectLocal.width,
                 regions.ContentRectLocal.height);
 
-            _scrollList = new PaperScrollList(viewport, _ui.NextDepth());
-            _scrollList.Build(regions.ContentRoot);
+            _pagedList = new PaperPagedList(viewport, _ui.NextDepth());
+            _pagedList.Build(regions.ContentRoot);
+            _pageItemHeightBudget = (int)Mathf.Max(1f, viewport.height - HeaderRowHeight - _metrics.RowSpacing);
         }
 
         private void BuildFooter(PanelFrameRegions regions)
@@ -115,26 +124,84 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
             buttonFactory.Build(regions.FooterRoot, "DefaultsButton", "Defaults",
                 new Vector3(320f, -400f, 0f), 240, 58, 22, ResetAllDefaults);
+
+            _pageNavigator = new BookPageNavigatorWidget(_palette, _textures, _ui);
+            _pageNavigator.Build(regions.FooterRoot, new Vector3(0f, -400f, 0f),
+                delegate { ChangePage(-1); },
+                delegate { ChangePage(1); });
         }
 
         private void BuildContent()
         {
-            ISettingsProvider provider = _mod.SettingsProvider;
-            object settings = provider.GetSettingsObject();
-            List<SettingDefinition> allDefs = provider.GetSettings().ToList();
+            _settingsProvider = _mod.SettingsProvider;
+            _settingsObject = _settingsProvider.GetSettingsObject();
+            List<SettingDefinition> allDefs = _settingsProvider.GetSettings().ToList();
             List<SettingDefinition> displayDefs = allDefs.Where(IsKeybindPanelItem).ToList();
             List<SettingDefinition> visible = displayDefs.Where(IsVisible).ToList();
 
             bool pairKeybinds = ModSettingsKeybindLayout.ShouldUseWideKeybindLayout(visible, displayDefs);
             List<ModSettingsKeybindDisplayEntry> entries = ModSettingsKeybindLayout.BuildDisplayEntries(visible, displayDefs, pairKeybinds);
 
-            if (entries.Count > 0)
+            _pages = BuildPages(entries);
+            _pageState.SetPageCount(_pages.Count);
+            RenderCurrentPage();
+        }
+
+        private List<List<ModSettingsKeybindDisplayEntry>> BuildPages(List<ModSettingsKeybindDisplayEntry> entries)
+        {
+            var pages = new List<List<ModSettingsKeybindDisplayEntry>>();
+            if (entries == null || entries.Count == 0)
+                return pages;
+
+            var rows = new List<PaperPageRow<ModSettingsKeybindDisplayEntry>>();
+            for (int i = 0; i < entries.Count; i++)
             {
-                var headerFactory = new KeybindColumnHeaderWidget(_palette, _metrics, _textures, _ui);
-                _scrollList.AddRow(headerFactory.Build(_scrollList.ContentRoot), 32);
+                ModSettingsKeybindDisplayEntry entry = entries[i];
+                rows.Add(new PaperPageRow<ModSettingsKeybindDisplayEntry>(
+                    entry,
+                    GetEntryHeight(entry),
+                    ModSettingsKeybindLayout.IsSectionHeaderEntry(entry)));
             }
 
-            var rowFactory = new KeybindRowWidget(_palette, _metrics, _textures, _ui, _tooltipBus, provider, settings, ApplyValue, OnValueChanged);
+            var paginator = new PaperPagePaginator<ModSettingsKeybindDisplayEntry>(_pageItemHeightBudget, _metrics.RowSpacing);
+            pages = paginator.BuildPages(rows);
+            return pages;
+        }
+
+        private int GetEntryHeight(ModSettingsKeybindDisplayEntry entry)
+        {
+            return ModSettingsKeybindLayout.IsSectionHeaderEntry(entry)
+                ? _metrics.SectionStampHeight
+                : _metrics.RowHeight;
+        }
+
+        private void RenderCurrentPage()
+        {
+            if (_pagedList == null)
+                return;
+
+            _pagedList.Clear();
+            if (_tooltipBus != null)
+                _tooltipBus.Clear();
+
+            bool hasRows = _pages != null && _pages.Count > 0;
+            if (hasRows)
+                BuildCurrentPageRows(_pages[_pageState.CurrentPageIndex]);
+
+            _pagedList.Layout(_metrics.RowSpacing);
+            if (_pageNavigator != null)
+                _pageNavigator.UpdateState(_pageState.CurrentPageIndex, _pageState.PageCount);
+        }
+
+        private void BuildCurrentPageRows(List<ModSettingsKeybindDisplayEntry> entries)
+        {
+            if (entries == null || entries.Count == 0)
+                return;
+
+            var headerFactory = new KeybindColumnHeaderWidget(_palette, _metrics, _textures, _ui);
+            _pagedList.AddRow(headerFactory.Build(_pagedList.ContentRoot), HeaderRowHeight);
+
+            var rowFactory = new KeybindRowWidget(_palette, _metrics, _textures, _ui, _tooltipBus, _settingsProvider, _settingsObject, ApplyValue, OnValueChanged);
             var stampFactory = new SectionStampWidget(_palette, _metrics, _ui);
 
             for (int i = 0; i < entries.Count; i++)
@@ -144,17 +211,15 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
                 if (ModSettingsKeybindLayout.IsSectionHeaderEntry(entry))
                 {
-                    GameObject stamp = stampFactory.Build(_scrollList.ContentRoot, entry.Primary.Label);
-                    _scrollList.AddRow(stamp, _metrics.SectionStampHeight);
+                    GameObject stamp = stampFactory.Build(_pagedList.ContentRoot, entry.Primary.Label);
+                    _pagedList.AddRow(stamp, _metrics.SectionStampHeight);
                 }
                 else
                 {
-                    GameObject row = rowFactory.Build(_scrollList.ContentRoot, entry);
-                    _scrollList.AddRow(row, _metrics.RowHeight);
+                    GameObject row = rowFactory.Build(_pagedList.ContentRoot, entry);
+                    _pagedList.AddRow(row, _metrics.RowHeight);
                 }
             }
-
-            _scrollList.Layout(_metrics.RowSpacing);
         }
 
         private static bool IsVisible(SettingDefinition def)
@@ -189,17 +254,68 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
         private void Rebuild()
         {
-            _scrollList.Clear();
+            if (_pagedList != null)
+                _pagedList.Clear();
             BuildContent();
         }
 
         private void Update()
         {
+            HandlePageInput();
+
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
                 if (KeybindCaptureListener.ShouldBlockEscapeClose()) return;
                 Close();
             }
+        }
+
+        private void HandlePageInput()
+        {
+            if (_pageState.PageCount <= 1 || KeybindCaptureListener.HasActiveCapture())
+                return;
+
+            if (UnityEngine.Input.GetKeyDown(KeyCode.LeftArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
+            {
+                ChangePage(-1);
+                return;
+            }
+
+            if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageDown))
+            {
+                ChangePage(1);
+                return;
+            }
+
+            float horizontal = PlatformInput.GetAxis(PlatformInput.MenuInputAxis.UIhorizontal);
+            if (!_controllerAxisButtonDown)
+            {
+                if (horizontal > 0.5f)
+                {
+                    ChangePage(1);
+                    _controllerAxisButtonDown = true;
+                }
+                else if (horizontal < -0.5f)
+                {
+                    ChangePage(-1);
+                    _controllerAxisButtonDown = true;
+                }
+            }
+            else if (horizontal < 0.5f && horizontal > -0.5f)
+            {
+                _controllerAxisButtonDown = false;
+            }
+        }
+
+        private void ChangePage(int delta)
+        {
+            if (KeybindCaptureListener.HasActiveCapture())
+                return;
+
+            if (!_pageState.MoveBy(delta))
+                return;
+
+            RenderCurrentPage();
         }
 
         private void Close()

@@ -481,6 +481,11 @@
     <Compile Include="UI\FieldManual\Widgets\KeycapWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\KeybindRowWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\SectionStampWidget.cs" />
+    <Compile Include="UI\FieldManual\Widgets\BookPageNavigatorWidget.cs" />
+    <Compile Include="UI\FieldManual\Layout\PanelPageState.cs" />
+    <Compile Include="UI\FieldManual\Layout\PaperPagedList.cs" />
+    <Compile Include="UI\FieldManual\Layout\PaperPagePaginator.cs" />
+    <Compile Include="UI\FieldManual\Layout\PaperPageRow.cs" />
     <Compile Include="UI\FieldManual\Layout\PaperScrollList.cs" />
     <Compile Include="UI\FieldManual\Tooltips\TooltipMessage.cs" />
     <Compile Include="UI\FieldManual\Tooltips\ITooltipBus.cs" />
