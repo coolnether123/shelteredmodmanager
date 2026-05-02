@@ -1,4 +1,5 @@
 using UnityEngine;
+using ModAPI;
 using ModAPI.Reflection;
 
 namespace ShelteredAPI.Hooks

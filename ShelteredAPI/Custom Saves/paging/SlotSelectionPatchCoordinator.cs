@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using HarmonyLib;
 using ModAPI.Core;
+using ShelteredAPI.Core;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using UnityEngine;
@@ -240,11 +241,11 @@ namespace ShelteredAPI.Hooks
 
         internal static void UpdatePostfix(SlotSelectionPanel panel)
         {
-            if (Input.GetKeyDown(KeyCode.RightArrow))
+            if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow))
             {
                 PagingManager.ChangePage(panel, 1);
             }
-            else if (Input.GetKeyDown(KeyCode.LeftArrow))
+            else if (UnityEngine.Input.GetKeyDown(KeyCode.LeftArrow))
             {
                 PagingManager.ChangePage(panel, -1);
             }

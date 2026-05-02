@@ -105,7 +105,7 @@ namespace ShelteredAPI.UI.Compatibility
         private void UpdatePosition()
         {
             // Follow mouse
-            Vector3 mousePos = Input.mousePosition;
+            Vector3 mousePos = UnityEngine.Input.mousePosition;
             
             // NGUI Coordinate conversion
             // Standard NGUI tooltips usually attach to UICamera logic, but we are doing a manual overlay.

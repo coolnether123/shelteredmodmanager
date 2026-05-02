@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
+using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
 
 namespace ShelteredAPI.Hooks

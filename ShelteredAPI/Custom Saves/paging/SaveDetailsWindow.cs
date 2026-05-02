@@ -505,12 +505,12 @@ namespace ShelteredAPI.Saves.Paging
         private void Update()
         {
             // Handle Escape to close this window WITHOUT propagating to underlying panels
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
                 _onCancel?.Invoke();
                 Close();
                 // Consume input to prevent underlying panels from receiving Escape
-                Input.ResetInputAxes();
+                UnityEngine.Input.ResetInputAxes();
             }
         }
         
@@ -804,9 +804,9 @@ namespace ShelteredAPI.Saves.Paging
             float scroll;
             if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_minX, _maxX), out scroll))
             {
-                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
+                if (UnityEngine.Input.GetKeyDown(KeyCode.UpArrow) || UnityEngine.Input.GetKeyDown(KeyCode.W) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
-                else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.PageDown))
+                else if (UnityEngine.Input.GetKeyDown(KeyCode.DownArrow) || UnityEngine.Input.GetKeyDown(KeyCode.S) || UnityEngine.Input.GetKeyDown(KeyCode.PageDown))
                     scroll = -1f;
             }
             if (scroll == 0f) return;
@@ -856,9 +856,9 @@ namespace ShelteredAPI.Saves.Paging
             float scroll;
             if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(-400f, 400f), out scroll))
             {
-                if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.PageUp))
+                if (UnityEngine.Input.GetKeyDown(KeyCode.UpArrow) || UnityEngine.Input.GetKeyDown(KeyCode.W) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
-                else if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.PageDown))
+                else if (UnityEngine.Input.GetKeyDown(KeyCode.DownArrow) || UnityEngine.Input.GetKeyDown(KeyCode.S) || UnityEngine.Input.GetKeyDown(KeyCode.PageDown))
                     scroll = -1f;
             }
             if (scroll == 0f) return;

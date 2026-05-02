@@ -396,8 +396,8 @@ namespace ShelteredAPI.UI.Compatibility
             if (uiRoot == null) return;
             
             float ratio = (float)uiRoot.activeHeight / Screen.height;
-            float x = (Input.mousePosition.x - Screen.width * 0.5f) * ratio;
-            float y = (Input.mousePosition.y - Screen.height * 0.5f) * ratio;
+            float x = (UnityEngine.Input.mousePosition.x - Screen.width * 0.5f) * ratio;
+            float y = (UnityEngine.Input.mousePosition.y - Screen.height * 0.5f) * ratio;
             
             // Offset tooltip from cursor to be above it
             // x is already center-aligned due to Pivot.Bottom

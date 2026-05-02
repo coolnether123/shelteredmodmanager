@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Core;
+using ModAPI.Spine;
 using ShelteredAPI.UI.Internal.Spine;
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;

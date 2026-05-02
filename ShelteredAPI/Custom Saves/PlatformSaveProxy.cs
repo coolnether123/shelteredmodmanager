@@ -6,6 +6,7 @@ using System.IO;
 using System.Text;
 using UnityEngine;
 using ModAPI.Core;
+using ShelteredAPI.Core;
 
 namespace ShelteredAPI.Hooks
 {

@@ -21,14 +21,14 @@ namespace ShelteredAPI.UI.Compatibility
         
         public void Update()
         {
-            if (Input.GetKeyDown(KeyCode.F11))
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F11))
             {
                 _showTranspilerLogs = !_showTranspilerLogs;
                 _active = _showTranspilerLogs;
                 MMLog.WriteInfo($"[UIDebug] Transpiler Inspector {(_showTranspilerLogs ? "Enabled" : "Disabled")}");
             }
 
-            if (_active && !_showTranspilerLogs && Input.GetMouseButtonDown(0))
+            if (_active && !_showTranspilerLogs && UnityEngine.Input.GetMouseButtonDown(0))
             {
                 if (_lastHover != null)
                 {
@@ -69,7 +69,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (cam == null) return;
 
             // Simple Raycast using NGUI logic would be best, but let's use UICamera.raycastGlobal
-            var ray = cam.ScreenPointToRay(Input.mousePosition);
+            var ray = cam.ScreenPointToRay(UnityEngine.Input.mousePosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 1000f, 1 << LayerMask.NameToLayer("UI")))
             {
                 _lastHover = hit.collider.gameObject;

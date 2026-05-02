@@ -119,7 +119,7 @@ namespace ShelteredAPI.UI.Compatibility
             }
             
             sb.AppendLine($"Current Hovered: {(UICamera.hoveredObject != null ? UICamera.hoveredObject.name : "(none)")}");
-            sb.AppendLine($"Mouse Position: {Input.mousePosition}");
+            sb.AppendLine($"Mouse Position: {UnityEngine.Input.mousePosition}");
             
             if (Enabled) MMLog.WriteDebug(sb.ToString());
         }
@@ -313,7 +313,7 @@ namespace ShelteredAPI.UI.Compatibility
         {
             if (Enabled) MMLog.WriteDebug("[UIDebug] Click tracing enabled - next click will be logged");
             // This would need a MonoBehaviour to implement properly
-            // For now, call TraceClickAt(Input.mousePosition) manually in your onClick handler
+            // For now, call TraceClickAt(UnityEngine.Input.mousePosition) manually in your onClick handler
         }
 
         // ==================== DELEGATE VERIFICATION (Feature 8) ====================
@@ -507,7 +507,7 @@ namespace ShelteredAPI.UI.Compatibility
         public static void LogRaycastInfo()
         {
             LogCameraInfo();
-            TraceClickAt(Input.mousePosition);
+            TraceClickAt(UnityEngine.Input.mousePosition);
         }
 
         public static void InspectSprite(UISprite sprite, string label = "")
@@ -580,7 +580,7 @@ namespace ShelteredAPI.UI.Compatibility
         {
             if (go == null) return;
             var listener = UIEventListener.Get(go);
-            listener.onClick += (obj) => { LogTimed($"onClick: {label} ({obj.name})"); TraceClickAt(Input.mousePosition); };
+            listener.onClick += (obj) => { LogTimed($"onClick: {label} ({obj.name})"); TraceClickAt(UnityEngine.Input.mousePosition); };
             listener.onPress += (obj, pressed) => LogTimed($"onPress: {label} ({obj.name}) pressed={pressed}");
             listener.onHover += (obj, hover) => LogTimed($"onHover: {label} ({obj.name}) hover={hover}");
             LogTimed($"Attached debug listeners to '{go.name}' ({label})");

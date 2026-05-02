@@ -106,7 +106,7 @@ namespace ShelteredAPI.Saves.Paging
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return))
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape) || UnityEngine.Input.GetKeyDown(KeyCode.Return))
                 Close();
         }
 

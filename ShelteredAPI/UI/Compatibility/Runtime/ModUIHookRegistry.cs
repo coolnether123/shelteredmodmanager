@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
+using ShelteredAPI.UI.Compatibility;
 
 namespace ShelteredAPI.UI.Internal
 {

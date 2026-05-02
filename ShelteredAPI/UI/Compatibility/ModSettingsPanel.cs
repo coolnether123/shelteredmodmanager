@@ -235,7 +235,7 @@ namespace ShelteredAPI.UI.Compatibility
                     HandleSearchFilterChanged();
                 });
 
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
                 if (_inputLockedExternally)
                     return;

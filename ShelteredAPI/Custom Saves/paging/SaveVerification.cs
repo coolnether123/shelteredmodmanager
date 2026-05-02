@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using ModAPI.Core;
+using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
 using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.Hooks;

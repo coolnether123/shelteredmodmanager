@@ -3,6 +3,7 @@ using ShelteredAPI.Saves;
 using System;
 using ModAPI.Core;
 using ModAPI.Harmony;
+using ShelteredAPI.Core;
 
 namespace ShelteredAPI.Hooks
 {

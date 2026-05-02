@@ -109,7 +109,7 @@ namespace ShelteredAPI.UI.Internal
             if (!_manualSearchEnabled || _inputRoot == null || _displayLabel == null)
                 return;
 
-            if (Input.GetMouseButtonDown(0))
+            if (UnityEngine.Input.GetMouseButtonDown(0))
             {
                 _hasFocus = IsHoveredWithin(_inputRoot);
                 RefreshDisplay(subtextColor);
@@ -118,7 +118,7 @@ namespace ShelteredAPI.UI.Internal
             if (!_hasFocus)
                 return;
 
-            string typed = Input.inputString;
+            string typed = UnityEngine.Input.inputString;
             if (string.IsNullOrEmpty(typed))
                 return;
 
