@@ -18,7 +18,11 @@ namespace ShelteredAPI.Scenarios
             items.Add(ScenarioInspectorItemFactory.Property("Tool", state != null ? state.ActiveTool.ToString() : "Unknown"));
             items.Add(ScenarioInspectorItemFactory.Property("Playtest", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"));
             items.Add(ScenarioInspectorItemFactory.Property("Dirty Sections", editorSession != null ? editorSession.DirtyFlags.Count.ToString() : "0"));
-            items.Add(ScenarioInspectorItemFactory.Property("Base Mode", authoringSession != null ? authoringSession.BaseMode.ToString() : "Unknown"));
+            items.Add(ScenarioInspectorItemFactory.Property(
+                "Base Mode",
+                editorSession != null && editorSession.WorkingDefinition != null
+                    ? editorSession.WorkingDefinition.BaseGameMode.ToString()
+                    : authoringSession != null ? authoringSession.BaseMode.ToString() : "Unknown"));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "session",

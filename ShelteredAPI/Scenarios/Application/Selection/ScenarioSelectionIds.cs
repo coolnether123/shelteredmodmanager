@@ -50,6 +50,17 @@ namespace ShelteredAPI.Scenarios
             return SaveManager.SaveType.Slot1;
         }
 
+        public static SaveManager.SaveType GetDefaultSaveType(ScenarioBaseGameMode baseGameMode)
+        {
+            if (baseGameMode == ScenarioBaseGameMode.Surrounded)
+                return SaveManager.SaveType.SlotSurrounded;
+
+            if (baseGameMode == ScenarioBaseGameMode.Stasis)
+                return SaveManager.SaveType.SlotStasis;
+
+            return SaveManager.SaveType.Slot1;
+        }
+
         public static ScenarioBaseGameMode GetBaseGameMode(string scenarioId)
         {
             if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase))

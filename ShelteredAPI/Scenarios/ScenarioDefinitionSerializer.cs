@@ -120,6 +120,12 @@ namespace ShelteredAPI.Scenarios
 
             definition.BaseGameMode = ReadEnum(root, "BaseMode", ScenarioBaseGameMode.Survival);
             definition.SeedOverride = ReadNullableLong(root, "SeedOverride");
+            XmlElement selectionRules = Child(root, "SelectionRules");
+            definition.SelectionRules = selectionRules != null
+                ? ReadSelectionRules(selectionRules)
+                : ScenarioSelectionRulesDefinition.ForBaseMode(definition.BaseGameMode);
+            ReadScenarioCharacters(Child(root, "ScenarioCharacters"), definition.ScenarioCharacters);
+            definition.ScenarioFlow = ReadScenarioFlow(Child(root, "ScenarioFlow"));
             definition.FamilySetup = familySerializer.Read(Child(root, "FamilySetup"));
             definition.StartingInventory = inventorySerializer.Read(Child(root, "StartingInventory"));
             definition.BunkerEdits = bunkerEditsSerializer.Read(Child(root, "BunkerEdits"));
@@ -132,6 +138,332 @@ namespace ShelteredAPI.Scenarios
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
             scheduledSerializer.Read(Child(root, "ScheduledActions"), definition.ScheduledActions);
             return definition;
+        }
+
+        private static ScenarioSelectionRulesDefinition ReadSelectionRules(XmlElement element)
+        {
+            ScenarioSelectionRulesDefinition rules = new ScenarioSelectionRulesDefinition();
+            if (element == null)
+                return rules;
+
+            rules.Weight = ReadFloatAttribute(element, "weight", rules.Weight);
+            rules.StartDay = ReadIntAttribute(element, "startDay", rules.StartDay);
+            rules.TimeoutDays = ReadIntAttribute(element, "timeoutDays", rules.TimeoutDays);
+            rules.MaxSimultaneousInstances = ReadIntAttribute(element, "maxSimultaneousInstances", rules.MaxSimultaneousInstances);
+            rules.OnceOnly = ReadBoolAttribute(element, "onceOnly", rules.OnceOnly);
+            rules.DiscoverByRadio = ReadBoolAttribute(element, "discoverByRadio", rules.DiscoverByRadio);
+
+            XmlElement availability = Child(element, "Availability");
+            if (availability != null)
+            {
+                rules.Availability.Survival = ReadBoolAttribute(availability, "survival", rules.Availability.Survival);
+                rules.Availability.Surrounded = ReadBoolAttribute(availability, "surrounded", rules.Availability.Surrounded);
+                rules.Availability.Stasis = ReadBoolAttribute(availability, "stasis", rules.Availability.Stasis);
+            }
+
+            ReadStringList(Child(element, "PrerequisiteMilestones"), "Milestone", rules.PrerequisiteMilestones);
+            return rules;
+        }
+
+        private static void ReadScenarioCharacters(XmlElement element, System.Collections.Generic.List<ScenarioNpcDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Character");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                ScenarioNpcDefinition character = new ScenarioNpcDefinition();
+                character.CharacterId = AttributeOrChild(node, "id", "Id");
+                character.PresetId = AttributeOrChild(node, "presetId", "PresetId");
+                character.WeaponItemId = AttributeOrChild(node, "weapon", "Weapon");
+                character.EquippedItem1Id = AttributeOrChild(node, "equippedItem1", "EquippedItem1");
+                character.EquippedItem2Id = AttributeOrChild(node, "equippedItem2", "EquippedItem2");
+                character.Personality = AttributeOrChild(node, "personality", "Personality");
+                character.NumRandomItems = ReadIntAttribute(node, "numRandomItems", 0);
+                character.StatSetting = AttributeOrChild(node, "statSetting", "StatSetting");
+                character.BackgroundNpc = ReadBoolAttribute(node, "backgroundNpc", false);
+                character.FlipMesh = ReadBoolAttribute(node, "flipMesh", false);
+                character.Species = AttributeOrChild(node, "species", "Species");
+                character.AvatarOverrideSpriteId = AttributeOrChild(node, "avatarOverrideSpriteId", "AvatarOverrideSpriteId");
+                character.Stats = ReadScenarioNpcStats(Child(node, "Stats"));
+                ReadItemEntries(Child(node, "CarriedItems"), "Item", character.CarriedItems);
+                target.Add(character);
+            }
+        }
+
+        private static ScenarioNpcStatsDefinition ReadScenarioNpcStats(XmlElement element)
+        {
+            ScenarioNpcStatsDefinition stats = new ScenarioNpcStatsDefinition();
+            if (element == null)
+                return stats;
+
+            stats.Strength = ReadIntAttribute(element, "strength", 0);
+            stats.Dexterity = ReadIntAttribute(element, "dexterity", 0);
+            stats.Charisma = ReadIntAttribute(element, "charisma", 0);
+            stats.Perception = ReadIntAttribute(element, "perception", 0);
+            stats.Intelligence = ReadIntAttribute(element, "intelligence", 0);
+            return stats;
+        }
+
+        private static ScenarioFlowDefinition ReadScenarioFlow(XmlElement element)
+        {
+            ScenarioFlowDefinition flow = new ScenarioFlowDefinition();
+            if (element == null)
+                return flow;
+
+            XmlElement stages = Child(element, "Stages") ?? element;
+            XmlNodeList nodes = stages.GetElementsByTagName("Stage");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement stageNode = nodes[i] as XmlElement;
+                if (stageNode == null)
+                    continue;
+
+                ScenarioFlowStageDefinition stage = new ScenarioFlowStageDefinition();
+                stage.Id = AttributeOrChild(stageNode, "id", "Id");
+                stage.UnansweredNextStage = AttributeOrChild(stageNode, "unansweredNextStage", "UnansweredNextStage");
+                stage.UnansweredNextDays = ReadIntAttribute(stageNode, "unansweredNextDays", 1);
+                stage.PunishOnUnanswered = ReadBoolAttribute(stageNode, "punishOnUnanswered", false);
+                ReadStringList(Child(stageNode, "CharacterIds"), "CharacterId", stage.CharacterIds);
+                ReadIntercomStages(Child(stageNode, "IntercomStages"), stage.IntercomStages);
+                flow.Stages.Add(stage);
+            }
+
+            return flow;
+        }
+
+        private static void ReadIntercomStages(XmlElement element, System.Collections.Generic.List<ScenarioIntercomStageDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("IntercomStage");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                ScenarioIntercomStageDefinition stage = new ScenarioIntercomStageDefinition();
+                stage.Id = AttributeOrChild(node, "id", "Id");
+                stage.Type = AttributeOrChild(node, "type", "Type");
+                stage.NextId = AttributeOrChild(node, "nextId", "NextId");
+                stage.AlternateNextId = AttributeOrChild(node, "alternateNextId", "AlternateNextId");
+                ReadDialogueLines(Child(node, "Dialogue"), stage.Dialogue);
+                ReadDialogueOptions(Child(node, "Options"), stage.Options);
+                ReadStringList(Child(node, "RandomizedNextIds"), "NextId", stage.RandomizedNextIds);
+                ReadItemEntries(Child(node, "Items"), "Item", stage.Items);
+                ReadItemEntries(Child(node, "ItemsToRemove"), "Item", stage.ItemsToRemove);
+                stage.EndOptions = ReadEndOptions(Child(node, "EndOptions"));
+                ReadStringList(Child(node, "SubquestsToActivate"), "SubquestId", stage.SubquestsToActivate);
+                stage.SubquestCheck = ReadSubquestCheck(Child(node, "SubquestCheck"));
+                ReadMilestones(Child(node, "SetMilestones"), stage.SetMilestones);
+                ReadMilestoneChecks(Child(node, "CheckMilestones"), stage.CheckMilestones);
+                stage.StageChange = ReadStageChange(Child(node, "StageChange"));
+                XmlElement description = Child(node, "StageDescription");
+                stage.StageDescriptionKey = description != null ? AttributeOrChild(description, "key", "Key") : null;
+                ReadStringList(Child(node, "CharacterIdsToRecruit"), "CharacterId", stage.CharacterIdsToRecruit);
+                stage.RecruitAsFamily = ReadBoolAttribute(node, "recruitAsFamily", false);
+                target.Add(stage);
+            }
+        }
+
+        private static void ReadDialogueLines(XmlElement element, System.Collections.Generic.List<ScenarioDialogueLineDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Line");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ScenarioDialogueLineDefinition
+                {
+                    Character = AttributeOrChild(node, "character", "Character"),
+                    TextKey = AttributeOrChild(node, "textKey", "TextKey")
+                });
+            }
+        }
+
+        private static void ReadDialogueOptions(XmlElement element, System.Collections.Generic.List<ScenarioDialogueOptionDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Option");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ScenarioDialogueOptionDefinition
+                {
+                    TextKey = AttributeOrChild(node, "textKey", "TextKey"),
+                    NextId = AttributeOrChild(node, "nextId", "NextId")
+                });
+            }
+        }
+
+        private static ScenarioEncounterEndOptionsDefinition ReadEndOptions(XmlElement element)
+        {
+            ScenarioEncounterEndOptionsDefinition options = new ScenarioEncounterEndOptionsDefinition();
+            if (element == null)
+                return options;
+
+            options.Type = AttributeOrChild(element, "type", "Type");
+            options.CombatResult = AttributeOrChild(element, "combatResult", "CombatResult");
+            options.CombatWinMilestone = AttributeOrChild(element, "combatWinMilestone", "CombatWinMilestone");
+            options.CombatLossMilestone = AttributeOrChild(element, "combatLossMilestone", "CombatLossMilestone");
+            options.AddVehicle = ReadBoolAttribute(element, "addVehicle", false);
+            options.MoralOutcome = AttributeOrChild(element, "moralOutcome", "MoralOutcome");
+            options.MoralOutcomeCombatWon = AttributeOrChild(element, "moralOutcomeCombatWon", "MoralOutcomeCombatWon");
+            options.MoralOutcomeCombatLost = AttributeOrChild(element, "moralOutcomeCombatLost", "MoralOutcomeCombatLost");
+            options.AddSurroundedCharacterOutcome = AttributeOrChild(element, "addSurroundedCharacterOutcome", "AddSurroundedCharacterOutcome");
+            options.RevealSurroundedMapRegionOption = AttributeOrChild(element, "revealSurroundedMapRegionOption", "RevealSurroundedMapRegionOption");
+            options.OverrideTradeItems = ReadBoolAttribute(element, "overrideTradeItems", false);
+            options.MinRandomTradeItems = ReadIntAttribute(element, "minRandomTradeItems", 0);
+            options.MaxRandomTradeItems = ReadIntAttribute(element, "maxRandomTradeItems", 0);
+            options.CompleteQuest = ReadBoolAttribute(element, "completeQuest", false);
+            options.CompleteParentScenario = ReadBoolAttribute(element, "completeParentScenario", false);
+            ReadItemEntries(Child(element, "RewardItems"), "Item", options.RewardItems);
+            ReadItemEntries(Child(element, "TradeItems"), "Item", options.TradeItems);
+            ReadFloatingQuestTriggers(Child(element, "TriggerFloatingQuests"), options.TriggerFloatingQuests);
+            ReadSpawnTriggers(Child(element, "SpawnScenarios"), options.SpawnScenarios);
+            return options;
+        }
+
+        private static ScenarioSubquestCheckDefinition ReadSubquestCheck(XmlElement element)
+        {
+            ScenarioSubquestCheckDefinition check = new ScenarioSubquestCheckDefinition();
+            if (element == null)
+                return check;
+
+            check.Check = AttributeOrChild(element, "check", "Check");
+            ReadStringList(Child(element, "Subquests"), "SubquestId", check.Subquests);
+            return check;
+        }
+
+        private static ScenarioStageChangeDefinition ReadStageChange(XmlElement element)
+        {
+            ScenarioStageChangeDefinition change = new ScenarioStageChangeDefinition();
+            if (element == null)
+                return change;
+
+            change.Id = AttributeOrChild(element, "id", "Id");
+            change.DelayDays = ReadIntAttribute(element, "delayDays", ReadIntAttribute(element, "delay", 0));
+            return change;
+        }
+
+        private static void ReadMilestones(XmlElement element, System.Collections.Generic.List<ScenarioMilestoneDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Milestone");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ScenarioMilestoneDefinition
+                {
+                    Name = AttributeOrChild(node, "name", "Name"),
+                    Scope = AttributeOrChild(node, "scope", "Scope"),
+                    Action = AttributeOrChild(node, "action", "Action")
+                });
+            }
+        }
+
+        private static void ReadMilestoneChecks(XmlElement element, System.Collections.Generic.List<ScenarioMilestoneCheckDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Milestone");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ScenarioMilestoneCheckDefinition
+                {
+                    Name = AttributeOrChild(node, "name", "Name"),
+                    Scope = AttributeOrChild(node, "scope", "Scope")
+                });
+            }
+        }
+
+        private static void ReadFloatingQuestTriggers(XmlElement element, System.Collections.Generic.List<ScenarioFloatingQuestTriggerDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("FloatingQuest");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ScenarioFloatingQuestTriggerDefinition
+                {
+                    Id = AttributeOrChild(node, "id", "Id"),
+                    ActivationDelayDays = ReadFloatAttribute(node, "activationDelayDays", 2f),
+                    DurationDays = ReadFloatAttribute(node, "durationDays", 5f)
+                });
+            }
+        }
+
+        private static void ReadSpawnTriggers(XmlElement element, System.Collections.Generic.List<ScenarioSpawnTriggerDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Scenario");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ScenarioSpawnTriggerDefinition
+                {
+                    Id = AttributeOrChild(node, "id", "Id"),
+                    SpawnChance = ReadFloatAttribute(node, "spawnChance", 100f),
+                    DelayDays = ReadIntAttribute(node, "delayDays", 1)
+                });
+            }
+        }
+
+        private static void ReadItemEntries(XmlElement element, string childName, System.Collections.Generic.List<ItemEntry> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName(childName);
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement node = nodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                target.Add(new ItemEntry
+                {
+                    ItemId = AttributeOrChild(node, "id", "Id"),
+                    Quantity = ReadIntAttribute(node, "quantity", 0)
+                });
+            }
         }
 
         internal static FamilySetupDefinition ReadFamilySetup(XmlElement element)
@@ -658,6 +990,9 @@ namespace ShelteredAPI.Scenarios
             WriteElement(writer, "BaseMode", definition.BaseGameMode.ToString());
             if (definition.SeedOverride.HasValue)
                 WriteElement(writer, "SeedOverride", definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture));
+            WriteSelectionRules(writer, definition.SelectionRules, definition.BaseGameMode);
+            WriteScenarioCharacters(writer, definition.ScenarioCharacters);
+            WriteScenarioFlow(writer, definition.ScenarioFlow);
 
             familySerializer.Write(writer, definition.FamilySetup);
             inventorySerializer.Write(writer, definition.StartingInventory);
@@ -673,6 +1008,298 @@ namespace ShelteredAPI.Scenarios
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
+        }
+
+        private static void WriteSelectionRules(XmlWriter writer, ScenarioSelectionRulesDefinition rules, ScenarioBaseGameMode baseMode)
+        {
+            if (rules == null)
+                rules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
+            if (rules.Availability == null)
+                rules.Availability = new ScenarioModeAvailabilityDefinition();
+
+            writer.WriteStartElement("SelectionRules");
+            writer.WriteAttributeString("weight", rules.Weight.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("startDay", rules.StartDay.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("timeoutDays", rules.TimeoutDays.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("maxSimultaneousInstances", rules.MaxSimultaneousInstances.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("onceOnly", rules.OnceOnly.ToString());
+            writer.WriteAttributeString("discoverByRadio", rules.DiscoverByRadio.ToString());
+            writer.WriteStartElement("Availability");
+            writer.WriteAttributeString("survival", rules.Availability.Survival.ToString());
+            writer.WriteAttributeString("surrounded", rules.Availability.Surrounded.ToString());
+            writer.WriteAttributeString("stasis", rules.Availability.Stasis.ToString());
+            writer.WriteEndElement();
+            WriteStringList(writer, "PrerequisiteMilestones", "Milestone", rules.PrerequisiteMilestones);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteScenarioCharacters(XmlWriter writer, System.Collections.Generic.List<ScenarioNpcDefinition> characters)
+        {
+            writer.WriteStartElement("ScenarioCharacters");
+            for (int i = 0; characters != null && i < characters.Count; i++)
+            {
+                ScenarioNpcDefinition character = characters[i];
+                if (character == null)
+                    continue;
+
+                writer.WriteStartElement("Character");
+                WriteAttribute(writer, "id", character.CharacterId);
+                WriteAttribute(writer, "presetId", character.PresetId);
+                WriteAttribute(writer, "weapon", character.WeaponItemId);
+                WriteAttribute(writer, "equippedItem1", character.EquippedItem1Id);
+                WriteAttribute(writer, "equippedItem2", character.EquippedItem2Id);
+                WriteAttribute(writer, "personality", character.Personality);
+                writer.WriteAttributeString("numRandomItems", character.NumRandomItems.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "statSetting", character.StatSetting);
+                writer.WriteAttributeString("backgroundNpc", character.BackgroundNpc.ToString());
+                writer.WriteAttributeString("flipMesh", character.FlipMesh.ToString());
+                WriteAttribute(writer, "species", character.Species);
+                WriteAttribute(writer, "avatarOverrideSpriteId", character.AvatarOverrideSpriteId);
+                WriteScenarioNpcStats(writer, character.Stats);
+                WriteItemEntries(writer, "CarriedItems", "Item", character.CarriedItems);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteScenarioNpcStats(XmlWriter writer, ScenarioNpcStatsDefinition stats)
+        {
+            if (stats == null)
+                stats = new ScenarioNpcStatsDefinition();
+
+            writer.WriteStartElement("Stats");
+            writer.WriteAttributeString("strength", stats.Strength.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("dexterity", stats.Dexterity.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("charisma", stats.Charisma.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("perception", stats.Perception.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("intelligence", stats.Intelligence.ToString(CultureInfo.InvariantCulture));
+            writer.WriteEndElement();
+        }
+
+        private static void WriteScenarioFlow(XmlWriter writer, ScenarioFlowDefinition flow)
+        {
+            if (flow == null)
+                flow = new ScenarioFlowDefinition();
+
+            writer.WriteStartElement("ScenarioFlow");
+            writer.WriteStartElement("Stages");
+            for (int i = 0; flow.Stages != null && i < flow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition stage = flow.Stages[i];
+                if (stage == null)
+                    continue;
+
+                writer.WriteStartElement("Stage");
+                WriteAttribute(writer, "id", stage.Id);
+                WriteAttribute(writer, "unansweredNextStage", stage.UnansweredNextStage);
+                writer.WriteAttributeString("unansweredNextDays", stage.UnansweredNextDays.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("punishOnUnanswered", stage.PunishOnUnanswered.ToString());
+                WriteStringList(writer, "CharacterIds", "CharacterId", stage.CharacterIds);
+                WriteIntercomStages(writer, stage.IntercomStages);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+        }
+
+        private static void WriteIntercomStages(XmlWriter writer, System.Collections.Generic.List<ScenarioIntercomStageDefinition> stages)
+        {
+            writer.WriteStartElement("IntercomStages");
+            for (int i = 0; stages != null && i < stages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition stage = stages[i];
+                if (stage == null)
+                    continue;
+
+                writer.WriteStartElement("IntercomStage");
+                WriteAttribute(writer, "id", stage.Id);
+                WriteAttribute(writer, "type", stage.Type);
+                WriteAttribute(writer, "nextId", stage.NextId);
+                WriteAttribute(writer, "alternateNextId", stage.AlternateNextId);
+                writer.WriteAttributeString("recruitAsFamily", stage.RecruitAsFamily.ToString());
+                WriteDialogueLines(writer, stage.Dialogue);
+                WriteDialogueOptions(writer, stage.Options);
+                WriteStringList(writer, "RandomizedNextIds", "NextId", stage.RandomizedNextIds);
+                WriteItemEntries(writer, "Items", "Item", stage.Items);
+                WriteItemEntries(writer, "ItemsToRemove", "Item", stage.ItemsToRemove);
+                WriteEndOptions(writer, stage.EndOptions);
+                WriteStringList(writer, "SubquestsToActivate", "SubquestId", stage.SubquestsToActivate);
+                WriteSubquestCheck(writer, stage.SubquestCheck);
+                WriteMilestones(writer, "SetMilestones", stage.SetMilestones);
+                WriteMilestoneChecks(writer, "CheckMilestones", stage.CheckMilestones);
+                WriteStageChange(writer, stage.StageChange);
+                writer.WriteStartElement("StageDescription");
+                WriteAttribute(writer, "key", stage.StageDescriptionKey);
+                writer.WriteEndElement();
+                WriteStringList(writer, "CharacterIdsToRecruit", "CharacterId", stage.CharacterIdsToRecruit);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteDialogueLines(XmlWriter writer, System.Collections.Generic.List<ScenarioDialogueLineDefinition> lines)
+        {
+            writer.WriteStartElement("Dialogue");
+            for (int i = 0; lines != null && i < lines.Count; i++)
+            {
+                ScenarioDialogueLineDefinition line = lines[i];
+                if (line == null)
+                    continue;
+                writer.WriteStartElement("Line");
+                WriteAttribute(writer, "character", line.Character);
+                WriteAttribute(writer, "textKey", line.TextKey);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteDialogueOptions(XmlWriter writer, System.Collections.Generic.List<ScenarioDialogueOptionDefinition> options)
+        {
+            writer.WriteStartElement("Options");
+            for (int i = 0; options != null && i < options.Count; i++)
+            {
+                ScenarioDialogueOptionDefinition option = options[i];
+                if (option == null)
+                    continue;
+                writer.WriteStartElement("Option");
+                WriteAttribute(writer, "textKey", option.TextKey);
+                WriteAttribute(writer, "nextId", option.NextId);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteEndOptions(XmlWriter writer, ScenarioEncounterEndOptionsDefinition options)
+        {
+            if (options == null)
+                options = new ScenarioEncounterEndOptionsDefinition();
+
+            writer.WriteStartElement("EndOptions");
+            WriteAttribute(writer, "type", options.Type);
+            WriteAttribute(writer, "combatResult", options.CombatResult);
+            WriteAttribute(writer, "combatWinMilestone", options.CombatWinMilestone);
+            WriteAttribute(writer, "combatLossMilestone", options.CombatLossMilestone);
+            writer.WriteAttributeString("addVehicle", options.AddVehicle.ToString());
+            WriteAttribute(writer, "moralOutcome", options.MoralOutcome);
+            WriteAttribute(writer, "moralOutcomeCombatWon", options.MoralOutcomeCombatWon);
+            WriteAttribute(writer, "moralOutcomeCombatLost", options.MoralOutcomeCombatLost);
+            WriteAttribute(writer, "addSurroundedCharacterOutcome", options.AddSurroundedCharacterOutcome);
+            WriteAttribute(writer, "revealSurroundedMapRegionOption", options.RevealSurroundedMapRegionOption);
+            writer.WriteAttributeString("overrideTradeItems", options.OverrideTradeItems.ToString());
+            writer.WriteAttributeString("minRandomTradeItems", options.MinRandomTradeItems.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("maxRandomTradeItems", options.MaxRandomTradeItems.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("completeQuest", options.CompleteQuest.ToString());
+            writer.WriteAttributeString("completeParentScenario", options.CompleteParentScenario.ToString());
+            WriteItemEntries(writer, "RewardItems", "Item", options.RewardItems);
+            WriteItemEntries(writer, "TradeItems", "Item", options.TradeItems);
+            WriteFloatingQuestTriggers(writer, options.TriggerFloatingQuests);
+            WriteSpawnTriggers(writer, options.SpawnScenarios);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteSubquestCheck(XmlWriter writer, ScenarioSubquestCheckDefinition check)
+        {
+            if (check == null)
+                check = new ScenarioSubquestCheckDefinition();
+
+            writer.WriteStartElement("SubquestCheck");
+            WriteAttribute(writer, "check", check.Check);
+            WriteStringList(writer, "Subquests", "SubquestId", check.Subquests);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteStageChange(XmlWriter writer, ScenarioStageChangeDefinition change)
+        {
+            if (change == null)
+                change = new ScenarioStageChangeDefinition();
+
+            writer.WriteStartElement("StageChange");
+            WriteAttribute(writer, "id", change.Id);
+            writer.WriteAttributeString("delayDays", change.DelayDays.ToString(CultureInfo.InvariantCulture));
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMilestones(XmlWriter writer, string parentName, System.Collections.Generic.List<ScenarioMilestoneDefinition> milestones)
+        {
+            writer.WriteStartElement(parentName);
+            for (int i = 0; milestones != null && i < milestones.Count; i++)
+            {
+                ScenarioMilestoneDefinition milestone = milestones[i];
+                if (milestone == null)
+                    continue;
+                writer.WriteStartElement("Milestone");
+                WriteAttribute(writer, "name", milestone.Name);
+                WriteAttribute(writer, "scope", milestone.Scope);
+                WriteAttribute(writer, "action", milestone.Action);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteMilestoneChecks(XmlWriter writer, string parentName, System.Collections.Generic.List<ScenarioMilestoneCheckDefinition> milestones)
+        {
+            writer.WriteStartElement(parentName);
+            for (int i = 0; milestones != null && i < milestones.Count; i++)
+            {
+                ScenarioMilestoneCheckDefinition milestone = milestones[i];
+                if (milestone == null)
+                    continue;
+                writer.WriteStartElement("Milestone");
+                WriteAttribute(writer, "name", milestone.Name);
+                WriteAttribute(writer, "scope", milestone.Scope);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteFloatingQuestTriggers(XmlWriter writer, System.Collections.Generic.List<ScenarioFloatingQuestTriggerDefinition> triggers)
+        {
+            writer.WriteStartElement("TriggerFloatingQuests");
+            for (int i = 0; triggers != null && i < triggers.Count; i++)
+            {
+                ScenarioFloatingQuestTriggerDefinition trigger = triggers[i];
+                if (trigger == null)
+                    continue;
+                writer.WriteStartElement("FloatingQuest");
+                WriteAttribute(writer, "id", trigger.Id);
+                writer.WriteAttributeString("activationDelayDays", trigger.ActivationDelayDays.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("durationDays", trigger.DurationDays.ToString(CultureInfo.InvariantCulture));
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteSpawnTriggers(XmlWriter writer, System.Collections.Generic.List<ScenarioSpawnTriggerDefinition> triggers)
+        {
+            writer.WriteStartElement("SpawnScenarios");
+            for (int i = 0; triggers != null && i < triggers.Count; i++)
+            {
+                ScenarioSpawnTriggerDefinition trigger = triggers[i];
+                if (trigger == null)
+                    continue;
+                writer.WriteStartElement("Scenario");
+                WriteAttribute(writer, "id", trigger.Id);
+                writer.WriteAttributeString("spawnChance", trigger.SpawnChance.ToString(CultureInfo.InvariantCulture));
+                writer.WriteAttributeString("delayDays", trigger.DelayDays.ToString(CultureInfo.InvariantCulture));
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteItemEntries(XmlWriter writer, string parentName, string itemName, System.Collections.Generic.List<ItemEntry> items)
+        {
+            writer.WriteStartElement(parentName);
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                ItemEntry item = items[i];
+                if (item == null)
+                    continue;
+                writer.WriteStartElement(itemName);
+                WriteAttribute(writer, "id", item.ItemId);
+                writer.WriteAttributeString("quantity", item.Quantity.ToString(CultureInfo.InvariantCulture));
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
         }
 
         internal static void WriteFamilySetup(XmlWriter writer, FamilySetupDefinition setup)

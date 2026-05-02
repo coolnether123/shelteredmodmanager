@@ -973,7 +973,7 @@ namespace ShelteredAPI.Scenarios
                     Items = new[]
                     {
                         Property("Draft", Safe(state.ActiveDraftId)),
-                        Property("Base Mode", session != null ? session.BaseMode.ToString() : "Unknown"),
+                        Property("Base Mode", editorSession != null && editorSession.WorkingDefinition != null ? editorSession.WorkingDefinition.BaseGameMode.ToString() : "Unknown"),
                         Property("Simulation", ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Running (playtest)" : "Frozen (authoring pause)"),
                         Property("Playtest", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"),
                         Property("Applied To World", editorSession != null && editorSession.HasAppliedToCurrentWorld ? "Yes" : "No"),
@@ -988,6 +988,8 @@ namespace ShelteredAPI.Scenarios
                     Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                     Items = new[]
                     {
+                        ActionItem(Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "Mode -", "Switch to the previous scenario base mode.", true, false, "M-")),
+                        ActionItem(Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, "Mode +", "Switch to the next scenario base mode.", true, false, "M+")),
                         ActionItem(Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "Persist the current scenario draft XML.", true, false, "SV")),
                         ActionItem(Action(ScenarioAuthoringActionIds.ActionPlaytest, editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Test" : "Start Test Scenario", "Toggle scenario playtest mode.", true, false, "TS"))
                     }
@@ -3224,6 +3226,7 @@ namespace ShelteredAPI.Scenarios
                     ActionItem(Action(ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "Place workbenches, shelter systems, and furniture or capture live spawned objects.", true, activeTool == ScenarioAuthoringTool.Objects, "OB", "Interactive shelter objects.")),
                     ActionItem(Action(ScenarioAuthoringActionIds.ActionToolWiring, "Walls & Wiring", "Apply room wall and wiring sprites to the selected shelter tile.", true, activeTool == ScenarioAuthoringTool.Wiring, "WW", "Room finish editing.")),
                     ActionItem(Action(ScenarioAuthoringActionIds.ActionToolAssets, "Assets", "Swap existing visuals or place new snapped scene sprites.", true, activeTool == ScenarioAuthoringTool.Assets, "AS", "Sprite replacements and scene art.")),
+                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolWinLoss, "Win/Loss", "Author scenario outcome conditions.", true, activeTool == ScenarioAuthoringTool.WinLoss, "WL", "Scenario outcome rules.")),
                     ActionItem(Action(ScenarioAuthoringActionIds.ActionToolSelect, "Select", "Stay in world selection mode while using the current workflow.", true, activeTool == ScenarioAuthoringTool.Select, "SL", "Selection-only mode."))
                 }
             };
@@ -3339,6 +3342,13 @@ namespace ShelteredAPI.Scenarios
                     if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Detail))
                         items.Add(Text(buildStatus.Detail));
                     items.Add(Text("Pick the room tile first, then choose wall or wiring variants from the palette window."));
+                    break;
+
+                case ScenarioAuthoringTool.WinLoss:
+                    title = "Win/Loss";
+                    items.Add(Property("Win Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.WinConditions.Count.ToString() : "0"));
+                    items.Add(Property("Loss Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.LossConditions.Count.ToString() : "0"));
+                    items.Add(Text("Win and loss conditions are evaluated against the active scenario QuestInstance during playtest and runtime."));
                     break;
 
                 case ScenarioAuthoringTool.Select:

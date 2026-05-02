@@ -108,20 +108,27 @@ namespace ShelteredAPI.Scenarios
                 .SetId(definition.Id)
                 .SetNameKey(!string.IsNullOrEmpty(definition.DisplayName) ? definition.DisplayName : definition.Id)
                 .SetDescriptionKey(definition.Description ?? string.Empty)
-                .UseInModes(
-                    definition.BaseGameMode == ScenarioBaseGameMode.Survival,
-                    definition.BaseGameMode == ScenarioBaseGameMode.Surrounded,
-                    definition.BaseGameMode == ScenarioBaseGameMode.Stasis)
-                .OnceOnly(false);
+                .ApplySelectionRules(definition.SelectionRules, definition.BaseGameMode);
 
-            string stageId = definition.Id + ".main";
-            if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers.Count > 0
-                && !string.IsNullOrEmpty(definition.TriggersAndEvents.Triggers[0].Id))
+            for (int i = 0; definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
+                builder.AddScenarioCharacter(definition.ScenarioCharacters[i]);
+
+            if (definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null && definition.ScenarioFlow.Stages.Count > 0)
             {
-                stageId = definition.TriggersAndEvents.Triggers[0].Id;
+                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
+                    builder.AddFlowStage(definition.ScenarioFlow.Stages[i]);
             }
+            else
+            {
+                string stageId = definition.Id + ".main";
+                if (definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers.Count > 0
+                    && !string.IsNullOrEmpty(definition.TriggersAndEvents.Triggers[0].Id))
+                {
+                    stageId = definition.TriggersAndEvents.Triggers[0].Id;
+                }
 
-            builder.AddSimpleStage(stageId);
+                builder.AddSimpleStage(stageId);
+            }
             return builder.Build();
         }
 

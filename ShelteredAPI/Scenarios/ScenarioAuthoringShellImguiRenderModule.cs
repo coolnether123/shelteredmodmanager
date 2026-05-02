@@ -640,6 +640,8 @@ namespace ShelteredAPI.Scenarios
             DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 82f), state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "/\\", "Walls &\nWiring");
             y += 88f;
             DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "P", "Assets");
+            y += 78f;
+            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "WL", "Win/Loss");
             return rect;
         }
 

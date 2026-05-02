@@ -245,6 +245,7 @@ namespace ShelteredAPI.Scenarios
             definition.Author = "unknown";
             definition.Version = "0.1.0";
             definition.BaseGameMode = baseMode;
+            definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
             return definition;
         }
 

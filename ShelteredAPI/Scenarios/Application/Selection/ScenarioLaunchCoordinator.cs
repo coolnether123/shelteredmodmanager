@@ -29,7 +29,7 @@ namespace ShelteredAPI.Scenarios
 
         public SaveManager.SaveType GetVirtualSaveType(ScenarioCatalogEntry entry)
         {
-            if (entry != null && entry.IsVanilla)
+            if (entry != null)
                 return entry.DefaultSaveType;
 
             return SaveManager.SaveType.Slot1;

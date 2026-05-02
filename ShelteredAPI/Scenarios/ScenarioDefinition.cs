@@ -30,6 +30,9 @@ namespace ShelteredAPI.Scenarios
             Dependencies = new List<string>();
             ModDependencies = new List<ScenarioModDependencyDefinition>();
             BaseGameMode = ScenarioBaseGameMode.Survival;
+            SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(BaseGameMode);
+            ScenarioCharacters = new List<ScenarioNpcDefinition>();
+            ScenarioFlow = new ScenarioFlowDefinition();
             FamilySetup = new FamilySetupDefinition();
             StartingInventory = new StartingInventoryDefinition();
             BunkerEdits = new BunkerEditsDefinition();
@@ -52,6 +55,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioModDependencyDefinition> ModDependencies { get; private set; }
         public ScenarioBaseGameMode BaseGameMode { get; set; }
         public long? SeedOverride { get; set; }
+        public ScenarioSelectionRulesDefinition SelectionRules { get; set; }
+        public List<ScenarioNpcDefinition> ScenarioCharacters { get; private set; }
+        public ScenarioFlowDefinition ScenarioFlow { get; set; }
         public FamilySetupDefinition FamilySetup { get; set; }
         public StartingInventoryDefinition StartingInventory { get; set; }
         public BunkerEditsDefinition BunkerEdits { get; set; }
@@ -63,6 +69,252 @@ namespace ShelteredAPI.Scenarios
         public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
         public List<ScenarioGateDefinition> Gates { get; private set; }
         public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
+    }
+
+    public class ScenarioModeAvailabilityDefinition
+    {
+        public bool Survival { get; set; }
+        public bool Surrounded { get; set; }
+        public bool Stasis { get; set; }
+
+        public void UseOnly(ScenarioBaseGameMode baseMode)
+        {
+            Survival = baseMode == ScenarioBaseGameMode.Survival;
+            Surrounded = baseMode == ScenarioBaseGameMode.Surrounded;
+            Stasis = baseMode == ScenarioBaseGameMode.Stasis;
+        }
+    }
+
+    public class ScenarioSelectionRulesDefinition
+    {
+        public ScenarioSelectionRulesDefinition()
+        {
+            Weight = 1f;
+            MaxSimultaneousInstances = 1;
+            Availability = new ScenarioModeAvailabilityDefinition();
+            PrerequisiteMilestones = new List<string>();
+        }
+
+        public float Weight { get; set; }
+        public int StartDay { get; set; }
+        public int TimeoutDays { get; set; }
+        public int MaxSimultaneousInstances { get; set; }
+        public bool OnceOnly { get; set; }
+        public bool DiscoverByRadio { get; set; }
+        public ScenarioModeAvailabilityDefinition Availability { get; set; }
+        public List<string> PrerequisiteMilestones { get; private set; }
+
+        public static ScenarioSelectionRulesDefinition ForBaseMode(ScenarioBaseGameMode baseMode)
+        {
+            ScenarioSelectionRulesDefinition rules = new ScenarioSelectionRulesDefinition();
+            rules.Availability.UseOnly(baseMode);
+            return rules;
+        }
+    }
+
+    public class ScenarioNpcDefinition
+    {
+        public ScenarioNpcDefinition()
+        {
+            WeaponItemId = "Weapon_Fists";
+            EquippedItem1Id = "Undefined";
+            EquippedItem2Id = "Undefined";
+            StatSetting = "Random_Low";
+            Stats = new ScenarioNpcStatsDefinition();
+            CarriedItems = new List<ItemEntry>();
+        }
+
+        public string CharacterId { get; set; }
+        public string PresetId { get; set; }
+        public string WeaponItemId { get; set; }
+        public string EquippedItem1Id { get; set; }
+        public string EquippedItem2Id { get; set; }
+        public string Personality { get; set; }
+        public int NumRandomItems { get; set; }
+        public List<ItemEntry> CarriedItems { get; private set; }
+        public string StatSetting { get; set; }
+        public ScenarioNpcStatsDefinition Stats { get; set; }
+        public bool BackgroundNpc { get; set; }
+        public bool FlipMesh { get; set; }
+        public string Species { get; set; }
+        public string AvatarOverrideSpriteId { get; set; }
+    }
+
+    public class ScenarioNpcStatsDefinition
+    {
+        public int Strength { get; set; }
+        public int Dexterity { get; set; }
+        public int Charisma { get; set; }
+        public int Perception { get; set; }
+        public int Intelligence { get; set; }
+    }
+
+    public class ScenarioFlowDefinition
+    {
+        public ScenarioFlowDefinition()
+        {
+            Stages = new List<ScenarioFlowStageDefinition>();
+        }
+
+        public List<ScenarioFlowStageDefinition> Stages { get; private set; }
+    }
+
+    public class ScenarioFlowStageDefinition
+    {
+        public ScenarioFlowStageDefinition()
+        {
+            CharacterIds = new List<string>();
+            IntercomStages = new List<ScenarioIntercomStageDefinition>();
+            UnansweredNextDays = 1;
+        }
+
+        public string Id { get; set; }
+        public List<string> CharacterIds { get; private set; }
+        public List<ScenarioIntercomStageDefinition> IntercomStages { get; private set; }
+        public string UnansweredNextStage { get; set; }
+        public int UnansweredNextDays { get; set; }
+        public bool PunishOnUnanswered { get; set; }
+    }
+
+    public class ScenarioIntercomStageDefinition
+    {
+        public ScenarioIntercomStageDefinition()
+        {
+            Type = "Standard";
+            Dialogue = new List<ScenarioDialogueLineDefinition>();
+            Options = new List<ScenarioDialogueOptionDefinition>();
+            RandomizedNextIds = new List<string>();
+            Items = new List<ItemEntry>();
+            ItemsToRemove = new List<ItemEntry>();
+            SubquestsToActivate = new List<string>();
+            SetMilestones = new List<ScenarioMilestoneDefinition>();
+            CheckMilestones = new List<ScenarioMilestoneCheckDefinition>();
+            SubquestCheck = new ScenarioSubquestCheckDefinition();
+            StageChange = new ScenarioStageChangeDefinition();
+            EndOptions = new ScenarioEncounterEndOptionsDefinition();
+            CharacterIdsToRecruit = new List<string>();
+        }
+
+        public string Id { get; set; }
+        public string Type { get; set; }
+        public string NextId { get; set; }
+        public string AlternateNextId { get; set; }
+        public List<ScenarioDialogueLineDefinition> Dialogue { get; private set; }
+        public List<ScenarioDialogueOptionDefinition> Options { get; private set; }
+        public List<string> RandomizedNextIds { get; private set; }
+        public List<ItemEntry> Items { get; private set; }
+        public List<ItemEntry> ItemsToRemove { get; private set; }
+        public ScenarioEncounterEndOptionsDefinition EndOptions { get; set; }
+        public List<string> SubquestsToActivate { get; private set; }
+        public ScenarioSubquestCheckDefinition SubquestCheck { get; set; }
+        public List<ScenarioMilestoneDefinition> SetMilestones { get; private set; }
+        public List<ScenarioMilestoneCheckDefinition> CheckMilestones { get; private set; }
+        public ScenarioStageChangeDefinition StageChange { get; set; }
+        public string StageDescriptionKey { get; set; }
+        public List<string> CharacterIdsToRecruit { get; private set; }
+        public bool RecruitAsFamily { get; set; }
+    }
+
+    public class ScenarioDialogueLineDefinition
+    {
+        public string Character { get; set; }
+        public string TextKey { get; set; }
+    }
+
+    public class ScenarioDialogueOptionDefinition
+    {
+        public string TextKey { get; set; }
+        public string NextId { get; set; }
+    }
+
+    public class ScenarioStageChangeDefinition
+    {
+        public string Id { get; set; }
+        public int DelayDays { get; set; }
+    }
+
+    public class ScenarioEncounterEndOptionsDefinition
+    {
+        public ScenarioEncounterEndOptionsDefinition()
+        {
+            Type = "NothingHappens";
+            CombatResult = "Nothing";
+            RewardItems = new List<ItemEntry>();
+            TradeItems = new List<ItemEntry>();
+            TriggerFloatingQuests = new List<ScenarioFloatingQuestTriggerDefinition>();
+            SpawnScenarios = new List<ScenarioSpawnTriggerDefinition>();
+        }
+
+        public string Type { get; set; }
+        public string CombatResult { get; set; }
+        public string CombatWinMilestone { get; set; }
+        public string CombatLossMilestone { get; set; }
+        public bool AddVehicle { get; set; }
+        public List<ItemEntry> RewardItems { get; private set; }
+        public string MoralOutcome { get; set; }
+        public string MoralOutcomeCombatWon { get; set; }
+        public string MoralOutcomeCombatLost { get; set; }
+        public string AddSurroundedCharacterOutcome { get; set; }
+        public string RevealSurroundedMapRegionOption { get; set; }
+        public bool OverrideTradeItems { get; set; }
+        public List<ItemEntry> TradeItems { get; private set; }
+        public int MinRandomTradeItems { get; set; }
+        public int MaxRandomTradeItems { get; set; }
+        public List<ScenarioFloatingQuestTriggerDefinition> TriggerFloatingQuests { get; private set; }
+        public List<ScenarioSpawnTriggerDefinition> SpawnScenarios { get; private set; }
+        public bool CompleteQuest { get; set; }
+        public bool CompleteParentScenario { get; set; }
+    }
+
+    public class ScenarioFloatingQuestTriggerDefinition
+    {
+        public ScenarioFloatingQuestTriggerDefinition()
+        {
+            ActivationDelayDays = 2f;
+            DurationDays = 5f;
+        }
+
+        public string Id { get; set; }
+        public float ActivationDelayDays { get; set; }
+        public float DurationDays { get; set; }
+    }
+
+    public class ScenarioSpawnTriggerDefinition
+    {
+        public ScenarioSpawnTriggerDefinition()
+        {
+            SpawnChance = 100f;
+            DelayDays = 1;
+        }
+
+        public string Id { get; set; }
+        public float SpawnChance { get; set; }
+        public int DelayDays { get; set; }
+    }
+
+    public class ScenarioMilestoneDefinition
+    {
+        public string Name { get; set; }
+        public string Scope { get; set; }
+        public string Action { get; set; }
+    }
+
+    public class ScenarioMilestoneCheckDefinition
+    {
+        public string Name { get; set; }
+        public string Scope { get; set; }
+    }
+
+    public class ScenarioSubquestCheckDefinition
+    {
+        public ScenarioSubquestCheckDefinition()
+        {
+            Check = "AllAreSuccessful";
+            Subquests = new List<string>();
+        }
+
+        public string Check { get; set; }
+        public List<string> Subquests { get; private set; }
     }
 
     public class FamilySetupDefinition

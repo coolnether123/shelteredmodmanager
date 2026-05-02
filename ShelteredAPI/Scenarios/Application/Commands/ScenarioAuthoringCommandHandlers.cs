@@ -684,7 +684,9 @@ namespace ShelteredAPI.Scenarios
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
         {
-            handled = actionId != null && actionId.StartsWith("editor.", StringComparison.Ordinal);
+            handled = actionId != null
+                && (actionId.StartsWith("editor.", StringComparison.Ordinal)
+                    || actionId.StartsWith("scenario.mode.", StringComparison.Ordinal));
             message = null;
             if (!handled)
                 return false;
@@ -699,10 +701,57 @@ namespace ShelteredAPI.Scenarios
                     _editorService.ConvertToNormalSave();
                     message = "Scenario binding converted to a normal save.";
                     return true;
+                case ScenarioAuthoringActionIds.ActionScenarioModePrevious:
+                    return CycleBaseMode(-1, out message);
+                case ScenarioAuthoringActionIds.ActionScenarioModeNext:
+                    return CycleBaseMode(1, out message);
                 default:
                     handled = false;
                     return false;
             }
+        }
+
+        private bool CycleBaseMode(int direction, out string message)
+        {
+            message = null;
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario definition is available.";
+                return true;
+            }
+
+            int count = Enum.GetValues(typeof(ScenarioBaseGameMode)).Length;
+            int next = ((int)definition.BaseGameMode + direction) % count;
+            if (next < 0)
+                next += count;
+
+            definition.BaseGameMode = (ScenarioBaseGameMode)next;
+            EnsureSelectionRulesForBaseMode(definition);
+            MarkDirty(session, ScenarioDirtySection.Meta);
+            message = "Base mode set to " + definition.BaseGameMode + ".";
+            return true;
+        }
+
+        private static void EnsureSelectionRulesForBaseMode(ScenarioDefinition definition)
+        {
+            if (definition == null)
+                return;
+            if (definition.SelectionRules == null)
+                definition.SelectionRules = new ScenarioSelectionRulesDefinition();
+            if (definition.SelectionRules.Availability == null)
+                definition.SelectionRules.Availability = new ScenarioModeAvailabilityDefinition();
+
+            definition.SelectionRules.Availability.UseOnly(definition.BaseGameMode);
+        }
+
+        private static void MarkDirty(ScenarioEditorSession session, ScenarioDirtySection section)
+        {
+            if (session == null || session.DirtyFlags == null || session.DirtyFlags.Contains(section))
+                return;
+
+            session.DirtyFlags.Add(section);
         }
 
         private bool SaveDraft(ScenarioAuthoringState state, out string message)
@@ -1039,7 +1088,7 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringActionIds.ActionToolVehicle:
                     return SetTool(state, ScenarioAuthoringTool.Shelter, out message, "Shelter object capture tool active.");
                 case ScenarioAuthoringActionIds.ActionToolWinLoss:
-                    return SetTool(state, ScenarioAuthoringTool.Inventory, out message, "Inventory capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.WinLoss, out message, "Win/Loss authoring active.");
                 default:
                     handled = false;
                     return false;
@@ -1065,6 +1114,11 @@ namespace ShelteredAPI.Scenarios
                 _layoutService.SelectStage(state, ScenarioStageKind.People);
             else if (tool == ScenarioAuthoringTool.Inventory)
                 _layoutService.SelectStage(state, ScenarioStageKind.InventoryStorage);
+            else if (tool == ScenarioAuthoringTool.WinLoss)
+            {
+                _layoutService.SelectStage(state, ScenarioStageKind.Events);
+                state.ActiveTool = ScenarioAuthoringTool.WinLoss;
+            }
 
             message = statusMessage;
             return true;

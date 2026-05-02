@@ -77,6 +77,7 @@ namespace ShelteredAPI.Scenarios
                 definition.Author = "SMM Authoring";
                 definition.Version = "0.1.0";
                 definition.BaseGameMode = baseMode;
+                definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
 
                 string scenarioFilePath = Path.Combine(draftRoot, ScenarioDefinitionSerializer.DefaultFileName);
                 _serializer.Save(definition, scenarioFilePath);

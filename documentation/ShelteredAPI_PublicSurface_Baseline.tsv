@@ -18,6 +18,22 @@ class	ShelteredAPI.Content	ItemDefinition	ShelteredAPI/Content/ContentRegistry.c
 class	ShelteredAPI.Content	ItemDefinitionSnapshot	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Content	ItemPatch	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Content	ItemTemplates	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Scenarios	ScenarioDialogueLineDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioDialogueOptionDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioEncounterEndOptionsDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioFloatingQuestTriggerDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioFlowDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef stage flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioFlowStageDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef stage flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioIntercomStageDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef intercom authoring.
+class	ShelteredAPI.Scenarios	ScenarioMilestoneCheckDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioMilestoneDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioModeAvailabilityDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla QuestSelection availability flags.
+class	ShelteredAPI.Scenarios	ScenarioNpcDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla QuestCharacter setup authoring.
+class	ShelteredAPI.Scenarios	ScenarioNpcStatsDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla QuestCharacter stat authoring.
+class	ShelteredAPI.Scenarios	ScenarioSelectionRulesDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla QuestSelection spawn tuning.
+class	ShelteredAPI.Scenarios	ScenarioSpawnTriggerDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
+class	ShelteredAPI.Scenarios	ScenarioStageChangeDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef delayed stage changes.
+class	ShelteredAPI.Scenarios	ScenarioSubquestCheckDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public scenario XML DTO for vanilla ScenarioDef conversation flow authoring.
 class	ShelteredAPI.Content	LootEntry	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Content	RecipeDefinition	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Content	RecipeDefinitionSnapshot	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.

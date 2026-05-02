@@ -566,8 +566,10 @@ namespace ShelteredAPI.Scenarios
             if (definition == null || definition.WinLossConditions == null)
                 return;
 
-            ApplyConditionList(definition.WinLossConditions.WinConditions, "win", result);
-            ApplyConditionList(definition.WinLossConditions.LossConditions, "loss", result);
+            int winCount = definition.WinLossConditions.WinConditions != null ? definition.WinLossConditions.WinConditions.Count : 0;
+            int lossCount = definition.WinLossConditions.LossConditions != null ? definition.WinLossConditions.LossConditions.Count : 0;
+            if (winCount > 0 || lossCount > 0)
+                result.AddMessage("Registered " + winCount + " win and " + lossCount + " loss condition(s) for runtime scenario outcome evaluation.");
         }
 
         private static void ApplyStats(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
@@ -665,22 +667,6 @@ namespace ShelteredAPI.Scenarios
                 result.FamilyChanges++;
             else if (!string.IsNullOrEmpty(message))
                 result.AddMessage(message);
-        }
-
-        private static void ApplyConditionList(List<ConditionDef> conditions, string outcome, ScenarioApplyResult result)
-        {
-            if (conditions == null || conditions.Count == 0)
-                return;
-
-            for (int i = 0; i < conditions.Count; i++)
-            {
-                ConditionDef condition = conditions[i];
-                if (condition == null)
-                    continue;
-
-                result.AddMessage(outcome + " condition '" + (condition.Id ?? ("#" + i)) + "' of type '" + (condition.Type ?? string.Empty)
-                    + "' is deferred because active scenario bindings do not yet persist the spawned QuestInstance id needed to complete/fail the scenario safely.");
-            }
         }
 
         private static bool TryParseStatType(string value, out BaseStats.StatType statType)

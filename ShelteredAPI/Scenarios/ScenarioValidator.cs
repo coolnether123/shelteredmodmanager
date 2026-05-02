@@ -669,6 +669,61 @@ namespace ShelteredAPI.Scenarios
                     summary.AddError("core.meta.display_name_required", "Scenario DisplayName is required.");
                 if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
                     summary.AddError("core.meta.invalid_base_mode", "Scenario BaseMode is invalid: " + definition.BaseGameMode);
+                ValidateSelectionRules(definition, summary);
+                ValidateScenarioFlow(definition, summary);
+            }
+
+            private static void ValidateSelectionRules(ScenarioDefinition definition, ValidationSummary summary)
+            {
+                ScenarioSelectionRulesDefinition rules = definition != null ? definition.SelectionRules : null;
+                if (rules == null)
+                    return;
+
+                if (rules.Weight < 0f)
+                    summary.AddError("core.selection.invalid_weight", "Scenario selection weight cannot be negative.");
+                if (rules.StartDay < 0)
+                    summary.AddError("core.selection.invalid_start_day", "Scenario selection start day cannot be negative.");
+                if (rules.TimeoutDays < 0)
+                    summary.AddError("core.selection.invalid_timeout", "Scenario selection timeout cannot be negative.");
+                if (rules.MaxSimultaneousInstances < 0)
+                    summary.AddError("core.selection.invalid_max_instances", "Scenario max simultaneous instances cannot be negative.");
+                if (rules.Availability == null
+                    || (!rules.Availability.Survival && !rules.Availability.Surrounded && !rules.Availability.Stasis))
+                {
+                    summary.AddError("core.selection.no_modes", "Scenario selection must be available in at least one game mode.");
+                }
+            }
+
+            private static void ValidateScenarioFlow(ScenarioDefinition definition, ValidationSummary summary)
+            {
+                if (definition == null || definition.ScenarioFlow == null || definition.ScenarioFlow.Stages == null)
+                    return;
+
+                HashSet<string> stageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
+                {
+                    ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
+                    if (stage == null)
+                        continue;
+
+                    if (TrimToNull(stage.Id) == null)
+                        summary.AddError("core.flow.stage_id_required", "Scenario flow stage #" + i.ToString() + " requires an id.");
+                    else if (!stageIds.Add(stage.Id))
+                        summary.AddError("core.flow.duplicate_stage", "Scenario flow stage id is duplicated: " + stage.Id);
+
+                    if (stage.UnansweredNextDays < 0)
+                        summary.AddError("core.flow.invalid_unanswered_delay", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' has a negative unanswered delay.");
+                }
+
+                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
+                {
+                    ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
+                    if (stage == null || TrimToNull(stage.UnansweredNextStage) == null)
+                        continue;
+
+                    if (!stageIds.Contains(stage.UnansweredNextStage))
+                        summary.AddError("core.flow.missing_unanswered_stage", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' routes unanswered intercoms to missing stage '" + stage.UnansweredNextStage + "'.");
+                }
             }
         }
 

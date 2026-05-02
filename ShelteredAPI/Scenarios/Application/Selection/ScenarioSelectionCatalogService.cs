@@ -157,14 +157,15 @@ namespace ShelteredAPI.Scenarios
 
                 SlotManifest manifest = _customScenarios.CreateDependencyManifest(scenario);
                 ScenarioDependencyVerificationState dependencyState = _customScenarios.VerifyDependencies(scenario);
+                ScenarioBaseGameMode baseGameMode = ResolveBaseGameMode(scenario);
                 entries.Add(new ScenarioCatalogEntry
                 {
                     ScenarioId = scenario.Id,
                     StorageScenarioId = _saveLibrary.ToStorageScenarioId(scenario.Id),
                     Source = ScenarioCatalogSource.Modded,
                     LaunchMode = ScenarioLaunchMode.CustomDefinition,
-                    BaseGameMode = ScenarioBaseGameMode.Survival,
-                    DefaultSaveType = SaveManager.SaveType.Slot1,
+                    BaseGameMode = baseGameMode,
+                    DefaultSaveType = ScenarioSelectionIds.GetDefaultSaveType(baseGameMode),
                     DisplayName = scenario.DisplayName,
                     Description = scenario.Description,
                     Version = scenario.Version,
@@ -207,14 +208,15 @@ namespace ShelteredAPI.Scenarios
                 if (draft == null || string.IsNullOrEmpty(draft.Id))
                     continue;
 
+                ScenarioBaseGameMode baseGameMode = ResolveDraftBaseGameMode(draft);
                 entries.Add(new ScenarioCatalogEntry
                 {
                     ScenarioId = draft.Id,
                     StorageScenarioId = ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                     Source = ScenarioCatalogSource.Draft,
                     LaunchMode = ScenarioLaunchMode.AuthoringDraft,
-                    BaseGameMode = ScenarioBaseGameMode.Survival,
-                    DefaultSaveType = SaveManager.SaveType.Slot1,
+                    BaseGameMode = baseGameMode,
+                    DefaultSaveType = ScenarioSelectionIds.GetDefaultSaveType(baseGameMode),
                     DisplayName = string.IsNullOrEmpty(draft.DisplayName) ? draft.Id : draft.DisplayName,
                     Description = "Authoring draft. Open the editor to continue working on this scenario.",
                     Version = draft.Version,
@@ -225,6 +227,48 @@ namespace ShelteredAPI.Scenarios
                     DependencyState = ScenarioDependencyVerificationState.Match
                 });
             }
+        }
+
+        private ScenarioBaseGameMode ResolveBaseGameMode(CustomScenarioInfo scenario)
+        {
+            if (scenario == null || string.IsNullOrEmpty(scenario.Id))
+                return ScenarioBaseGameMode.Survival;
+
+            ScenarioDefinition definition;
+            string scenarioFilePath;
+            ScenarioValidationResult validation;
+            try
+            {
+                if (_customScenarios.TryLoadDefinition(scenario.Id, out definition, out scenarioFilePath, out validation)
+                    && definition != null
+                    && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
+                {
+                    return definition.BaseGameMode;
+                }
+            }
+            catch
+            {
+            }
+
+            return ScenarioBaseGameMode.Survival;
+        }
+
+        private static ScenarioBaseGameMode ResolveDraftBaseGameMode(ScenarioInfo draft)
+        {
+            if (draft == null || string.IsNullOrEmpty(draft.FilePath))
+                return ScenarioBaseGameMode.Survival;
+
+            try
+            {
+                ScenarioDefinition definition = new ScenarioDefinitionSerializer().Load(draft.FilePath);
+                if (definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
+                    return definition.BaseGameMode;
+            }
+            catch
+            {
+            }
+
+            return ScenarioBaseGameMode.Survival;
         }
 
         private static int CompareEntries(ScenarioCatalogEntry left, ScenarioCatalogEntry right)

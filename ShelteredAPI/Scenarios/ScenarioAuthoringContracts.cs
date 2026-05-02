@@ -197,6 +197,8 @@ namespace ShelteredAPI.Scenarios
         public const string ActionToolPeople = "tool.people";
         public const string ActionToolVehicle = "tool.vehicle";
         public const string ActionToolWinLoss = "tool.win_loss";
+        public const string ActionScenarioModePrevious = "scenario.mode.previous";
+        public const string ActionScenarioModeNext = "scenario.mode.next";
     }
 
     internal enum ScenarioAuthoringTool

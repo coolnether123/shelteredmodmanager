@@ -278,6 +278,8 @@ namespace ShelteredAPI.Scenarios
             y += 84f;
             DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "AST", "Assets", "ToolAssets");
             y += 72f;
+            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "WIN", "Win/Loss", "ToolWinLoss");
+            y += 72f;
             DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Family, ScenarioAuthoringActionIds.ActionToolPeople, "PPL", "People", "ToolPeople");
             RegisterRect(rect);
         }

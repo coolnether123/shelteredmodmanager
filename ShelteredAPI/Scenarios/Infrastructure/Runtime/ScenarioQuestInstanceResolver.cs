@@ -15,16 +15,22 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            if (!binding.ScenarioQuestInstanceId.HasValue)
-            {
-                reason = "Active scenario binding has no spawned QuestInstance id.";
-                return false;
-            }
-
             if (QuestManager.instance == null)
             {
                 reason = "QuestManager is not ready.";
                 return false;
+            }
+
+            if (!binding.ScenarioQuestInstanceId.HasValue)
+            {
+                instance = FindScenarioInstance(binding.ScenarioId);
+                if (instance == null)
+                {
+                    reason = "Active scenario binding has no spawned QuestInstance id.";
+                    return false;
+                }
+
+                return true;
             }
 
             instance = QuestManager.instance.GetQuestInstance(binding.ScenarioQuestInstanceId.Value);
@@ -51,6 +57,27 @@ namespace ShelteredAPI.Scenarios
             }
 
             return true;
+        }
+
+        private static QuestInstance FindScenarioInstance(string scenarioId)
+        {
+            if (QuestManager.instance == null || string.IsNullOrEmpty(scenarioId))
+                return null;
+
+            System.Collections.Generic.List<QuestInstance> quests = QuestManager.instance.GetCurrentQuests(true, true, true);
+            for (int i = 0; quests != null && i < quests.Count; i++)
+            {
+                QuestInstance quest = quests[i];
+                if (quest != null
+                    && quest.definition != null
+                    && quest.definition.IsScenario()
+                    && string.Equals(quest.definition.id, scenarioId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return quest;
+                }
+            }
+
+            return null;
         }
     }
 }
