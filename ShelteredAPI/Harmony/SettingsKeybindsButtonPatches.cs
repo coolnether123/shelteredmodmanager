@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI;
 using UnityEngine;
 

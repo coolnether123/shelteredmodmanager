@@ -1,7 +1,8 @@
+using ShelteredAPI.UI.Compatibility;
 using System;
-using ModAPI.Internal.UI;
+using ShelteredAPI.UI.Internal;
 using ModAPI.Spine;
-using ModAPI.Spine.UI;
+using ShelteredAPI.UI.Spine;
 using UnityEngine;
 using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Textures;

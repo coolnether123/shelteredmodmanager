@@ -2,7 +2,7 @@ using System;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
 namespace ShelteredAPI.Harmony

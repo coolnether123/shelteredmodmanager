@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using ModAPI.Core;
-using ModAPI.Internal.UI;
+using ShelteredAPI.UI.Internal;
 using ModAPI.Spine;
-using ModAPI.Spine.UI;
-using ModAPI.UI;
+using ShelteredAPI.UI.Spine;
+using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 using ShelteredAPI.UI.FieldManual.Frame;
 using ShelteredAPI.UI.FieldManual.Layout;

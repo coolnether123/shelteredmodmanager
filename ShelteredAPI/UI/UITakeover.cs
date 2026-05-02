@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
 namespace ShelteredAPI.UI

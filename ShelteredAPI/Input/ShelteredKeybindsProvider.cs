@@ -4,10 +4,10 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using ModAPI.Core;
-using ModAPI.Internal.UI;
+using ShelteredAPI.UI.Internal;
 using ModAPI.InputActions;
 using ModAPI.Spine;
-using ModAPI.UI;
+using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI;
 using UnityEngine;
 
