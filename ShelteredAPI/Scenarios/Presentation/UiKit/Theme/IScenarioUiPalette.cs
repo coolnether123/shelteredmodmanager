@@ -14,7 +14,6 @@ namespace ShelteredAPI.Scenarios.UiKit.Theme
         Color PanelBase { get; }
         Color PanelRaised { get; }
         Color PanelInset { get; }
-        Color PanelOverlay { get; }
         Color Viewport { get; }
 
         // Borders / dividers
@@ -22,7 +21,6 @@ namespace ShelteredAPI.Scenarios.UiKit.Theme
         Color BorderStrong { get; }
 
         // Accents
-        Color AccentPrimary { get; }
         Color AccentActive { get; }
         Color AccentDanger { get; }
         Color AccentMuted { get; }
@@ -33,6 +31,5 @@ namespace ShelteredAPI.Scenarios.UiKit.Theme
         Color TextBody { get; }
         Color TextMuted { get; }
         Color TextOnAccent { get; }
-        Color TextDisabled { get; }
     }
 }
