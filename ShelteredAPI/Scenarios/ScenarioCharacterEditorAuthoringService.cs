@@ -183,8 +183,21 @@ namespace ShelteredAPI.Scenarios
             if (string.Equals(command, "gender", StringComparison.Ordinal))
             {
                 config.Gender = NextGender(config.Gender);
+                UpdateVanillaMesh(config, true);
                 MarkDirty(session);
                 message = "Changed " + label + " gender to " + config.Gender + ".";
+                return true;
+            }
+
+            if (string.Equals(command, "adult", StringComparison.Ordinal))
+            {
+                EnsureAppearance(config);
+                bool current = !config.Appearance.IsAdult.HasValue || config.Appearance.IsAdult.Value;
+                config.Appearance.IsAdult = !current;
+                config.ExactAge = config.Appearance.IsAdult.Value ? 25 : 12;
+                UpdateVanillaMesh(config, true);
+                MarkDirty(session);
+                message = "Changed " + label + " body type to " + (config.Appearance.IsAdult.Value ? "adult" : "child") + ".";
                 return true;
             }
 
@@ -195,6 +208,9 @@ namespace ShelteredAPI.Scenarios
                 {
                     int current = config.ExactAge.HasValue ? config.ExactAge.Value : 25;
                     config.ExactAge = Clamp(current + delta, 1, 99);
+                    EnsureAppearance(config);
+                    config.Appearance.IsAdult = config.ExactAge.Value >= 18;
+                    UpdateVanillaMesh(config, false);
                     MarkDirty(session);
                     message = "Changed " + label + " age to " + config.ExactAge.Value.ToString() + ".";
                     return true;
@@ -232,6 +248,56 @@ namespace ShelteredAPI.Scenarios
                 MarkDirty(session);
                 message = "Changed " + label + " weakness trait.";
                 return true;
+            }
+
+            if (string.Equals(command, "randomize_person", StringComparison.Ordinal))
+            {
+                RandomizePerson(config);
+                MarkDirty(session);
+                message = "Randomized " + label + " like vanilla character creation.";
+                return true;
+            }
+
+            if (string.Equals(command, "randomize_look", StringComparison.Ordinal))
+            {
+                RandomizeLook(config);
+                MarkDirty(session);
+                message = "Randomized " + label + " appearance.";
+                return true;
+            }
+
+            if (command.StartsWith("texture.", StringComparison.Ordinal))
+            {
+                string[] parts = command.Substring("texture.".Length).Split('.');
+                int delta;
+                if (parts.Length == 2 && int.TryParse(parts[1], out delta))
+                {
+                    ScenarioCharacterTexturePart part;
+                    if (TryParseTexturePart(parts[0], out part))
+                    {
+                        CycleTexture(config, part, delta);
+                        MarkDirty(session);
+                        message = "Changed " + label + " " + ScenarioCharacterAppearanceService.BuildPartLabel(part).ToLowerInvariant() + " sprite.";
+                        return true;
+                    }
+                }
+            }
+
+            if (command.StartsWith("color.", StringComparison.Ordinal))
+            {
+                string[] parts = command.Substring("color.".Length).Split('.');
+                int delta;
+                if (parts.Length == 2 && int.TryParse(parts[1], out delta))
+                {
+                    ScenarioCharacterColorPart part;
+                    if (TryParseColorPart(parts[0], out part))
+                    {
+                        CycleColor(config, part, delta);
+                        MarkDirty(session);
+                        message = "Changed " + label + " " + ScenarioCharacterAppearanceService.BuildColorLabel(part).ToLowerInvariant() + " color.";
+                        return true;
+                    }
+                }
             }
 
             if (string.Equals(command, "copy_look", StringComparison.Ordinal))
@@ -332,6 +398,197 @@ namespace ShelteredAPI.Scenarios
             }
 
             ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
+        }
+
+        private void CycleTexture(FamilyMemberConfig config, ScenarioCharacterTexturePart part, int delta)
+        {
+            EnsureAppearance(config);
+            UpdateVanillaMesh(config, false);
+            string current = GetTextureId(config.Appearance, part);
+            string next = _appearanceService != null
+                ? _appearanceService.CycleTextureId(config.Appearance.MeshId, part, current, delta)
+                : current;
+            ScenarioCharacterAppearanceService.UpsertAppearance(config, part, next, null);
+        }
+
+        private void CycleColor(FamilyMemberConfig config, ScenarioCharacterColorPart part, int delta)
+        {
+            EnsureAppearance(config);
+            string current = GetColorHex(config.Appearance, part);
+            string next = _appearanceService != null
+                ? _appearanceService.CycleColorHex(part, current, delta)
+                : current;
+            ScenarioCharacterAppearanceService.UpsertColor(config, part, next);
+        }
+
+        private void RandomizePerson(FamilyMemberConfig config)
+        {
+            if (config == null)
+                return;
+
+            config.Gender = UnityEngine.Random.Range(0, 2) == 0 ? ScenarioGender.Male : ScenarioGender.Female;
+            EnsureAppearance(config);
+            config.Appearance.IsAdult = UnityEngine.Random.Range(0, 2) == 0;
+            config.ExactAge = config.Appearance.IsAdult.Value ? UnityEngine.Random.Range(18, 61) : UnityEngine.Random.Range(6, 18);
+            config.Name = NameGenerator.GetFirstName(config.Gender == ScenarioGender.Female ? NameGenerator.Gender.Female : NameGenerator.Gender.Male);
+
+            ScenarioFamilyMemberFactory.EnsureCoreStats(config);
+            for (int i = 0; config.Stats != null && i < config.Stats.Count; i++)
+            {
+                if (config.Stats[i] != null)
+                    config.Stats[i].Value = UnityEngine.Random.Range(10, 21);
+            }
+
+            config.Traits.Clear();
+            AddRandomTrait(config, true);
+            AddRandomTrait(config, false);
+            RandomizeLook(config);
+        }
+
+        private void RandomizeLook(FamilyMemberConfig config)
+        {
+            if (config == null)
+                return;
+
+            EnsureAppearance(config);
+            UpdateVanillaMesh(config, false);
+
+            if (_appearanceService != null)
+            {
+                config.Appearance.HeadTextureId = _appearanceService.RandomTextureId(config.Appearance.MeshId, ScenarioCharacterTexturePart.Head);
+                config.Appearance.TorsoTextureId = _appearanceService.RandomTextureId(config.Appearance.MeshId, ScenarioCharacterTexturePart.Torso);
+                config.Appearance.LegTextureId = _appearanceService.RandomTextureId(config.Appearance.MeshId, ScenarioCharacterTexturePart.Legs);
+                config.Appearance.HairColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Hair);
+                config.Appearance.SkinColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Skin);
+                config.Appearance.ShirtColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Shirt);
+                config.Appearance.PantsColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Pants);
+            }
+
+            config.Appearance.HeadTexturePath = null;
+            config.Appearance.TorsoTexturePath = null;
+            config.Appearance.LegTexturePath = null;
+        }
+
+        private static void UpdateVanillaMesh(FamilyMemberConfig config, bool resetTextures)
+        {
+            if (config == null)
+                return;
+
+            EnsureAppearance(config);
+            if (!config.Appearance.IsAdult.HasValue)
+                config.Appearance.IsAdult = !config.ExactAge.HasValue || config.ExactAge.Value >= 18;
+
+            bool adult = config.Appearance.IsAdult.Value;
+            config.Appearance.MeshId = ResolveVanillaMeshId(config.Gender, adult);
+            if (!resetTextures)
+                return;
+
+            config.Appearance.HeadTextureId = "default";
+            config.Appearance.HeadTexturePath = null;
+            config.Appearance.TorsoTextureId = "default";
+            config.Appearance.TorsoTexturePath = null;
+            config.Appearance.LegTextureId = "default";
+            config.Appearance.LegTexturePath = null;
+        }
+
+        private static string ResolveVanillaMeshId(ScenarioGender gender, bool adult)
+        {
+            if (gender == ScenarioGender.Female)
+                return adult ? "woman" : "girl";
+            return adult ? "man" : "boy";
+        }
+
+        private static void EnsureAppearance(FamilyMemberConfig config)
+        {
+            if (config != null && config.Appearance == null)
+                config.Appearance = new FamilyMemberAppearanceConfig();
+        }
+
+        private static string GetTextureId(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part)
+        {
+            if (appearance == null)
+                return "default";
+
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head: return appearance.HeadTextureId;
+                case ScenarioCharacterTexturePart.Torso: return appearance.TorsoTextureId;
+                case ScenarioCharacterTexturePart.Legs: return appearance.LegTextureId;
+                default: return "default";
+            }
+        }
+
+        private static string GetColorHex(FamilyMemberAppearanceConfig appearance, ScenarioCharacterColorPart part)
+        {
+            if (appearance == null)
+                return null;
+
+            switch (part)
+            {
+                case ScenarioCharacterColorPart.Hair: return appearance.HairColorHex;
+                case ScenarioCharacterColorPart.Skin: return appearance.SkinColorHex;
+                case ScenarioCharacterColorPart.Shirt: return appearance.ShirtColorHex;
+                case ScenarioCharacterColorPart.Pants: return appearance.PantsColorHex;
+                default: return null;
+            }
+        }
+
+        private static bool TryParseTexturePart(string value, out ScenarioCharacterTexturePart part)
+        {
+            part = ScenarioCharacterTexturePart.Head;
+            if (string.Equals(value, "head", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(value, "torso", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "top", StringComparison.OrdinalIgnoreCase))
+            {
+                part = ScenarioCharacterTexturePart.Torso;
+                return true;
+            }
+            if (string.Equals(value, "legs", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "bottom", StringComparison.OrdinalIgnoreCase))
+            {
+                part = ScenarioCharacterTexturePart.Legs;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TryParseColorPart(string value, out ScenarioCharacterColorPart part)
+        {
+            part = ScenarioCharacterColorPart.Hair;
+            if (string.Equals(value, "hair", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(value, "skin", StringComparison.OrdinalIgnoreCase))
+            {
+                part = ScenarioCharacterColorPart.Skin;
+                return true;
+            }
+            if (string.Equals(value, "shirt", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "top", StringComparison.OrdinalIgnoreCase))
+            {
+                part = ScenarioCharacterColorPart.Shirt;
+                return true;
+            }
+            if (string.Equals(value, "pants", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "bottom", StringComparison.OrdinalIgnoreCase))
+            {
+                part = ScenarioCharacterColorPart.Pants;
+                return true;
+            }
+            return false;
+        }
+
+        private static void AddRandomTrait(FamilyMemberConfig config, bool strength)
+        {
+            Array values = Enum.GetValues(strength ? typeof(Traits.Strength) : typeof(Traits.Weakness));
+            if (values == null || values.Length == 0)
+                return;
+
+            for (int attempts = 0; attempts < values.Length * 2; attempts++)
+            {
+                object value = values.GetValue(UnityEngine.Random.Range(0, values.Length));
+                if (value == null || string.Equals(value.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                config.Traits.Add((strength ? "Strength:" : "Weakness:") + value.ToString());
+                return;
+            }
         }
 
         private static FamilySetupDefinition EnsureFamily(ScenarioDefinition definition)
