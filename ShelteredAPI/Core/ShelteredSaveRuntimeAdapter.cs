@@ -25,21 +25,29 @@ namespace ShelteredAPI.Core
 
         public IModSaveContext GetCurrentSaveContext()
         {
-            SaveEntry active = SaveRuntimeState.ActiveCustomSave;
-            if (active != null)
-                return CreateContext(active);
-
             SaveManager.SaveType currentType = ResolveCurrentSaveType();
-            if (currentType == SaveManager.SaveType.Invalid || currentType == SaveManager.SaveType.GlobalData)
-                return null;
-
             PlatformSaveProxy.Target pending;
-            if (SaveRuntimeState.TryGetPendingSave(currentType, out pending) && pending != null)
+            if (currentType != SaveManager.SaveType.Invalid
+                && currentType != SaveManager.SaveType.GlobalData
+                && SaveRuntimeState.TryGetPendingSave(currentType, out pending)
+                && pending != null)
             {
                 SaveEntry pendingEntry = ResolveEntry(pending);
                 if (pendingEntry != null)
                     return CreateContext(pendingEntry);
             }
+
+            SaveEntry active = SaveRuntimeState.ActiveCustomSave;
+            if (active != null
+                && (currentType == SaveManager.SaveType.Invalid
+                    || currentType == SaveManager.SaveType.GlobalData
+                    || SaveRuntimeState.HasActiveCustomSessionFor(currentType)))
+            {
+                return CreateContext(active);
+            }
+
+            if (currentType == SaveManager.SaveType.Invalid || currentType == SaveManager.SaveType.GlobalData)
+                return null;
 
             int vanillaSlot = SaveTypeToSlotIndex(currentType);
             if (vanillaSlot <= 0)

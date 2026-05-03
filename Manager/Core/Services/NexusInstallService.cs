@@ -146,6 +146,7 @@ namespace Manager.Core.Services
             catch (Exception ex)
             {
                 errorMessage = "Install failed: " + ex.Message;
+                RestoreBackupAfterFailedInstall(targetPath, backupPath, ref errorMessage);
                 return null;
             }
             finally
@@ -159,6 +160,25 @@ namespace Manager.Core.Services
             result.BackupPath = backupPath;
             result.DownloadedArchivePath = string.Empty;
             return result;
+        }
+
+        private static void RestoreBackupAfterFailedInstall(string targetPath, string backupPath, ref string errorMessage)
+        {
+            if (string.IsNullOrEmpty(targetPath) || string.IsNullOrEmpty(backupPath) || !Directory.Exists(backupPath))
+                return;
+
+            try
+            {
+                TryDeleteDirectory(targetPath);
+                Directory.Move(backupPath, targetPath);
+            }
+            catch (Exception restoreEx)
+            {
+                string restoreMessage = " Backup restore failed: " + restoreEx.Message;
+                errorMessage = string.IsNullOrEmpty(errorMessage)
+                    ? restoreMessage.Trim()
+                    : errorMessage + restoreMessage;
+            }
         }
 
         private static string GetManagerBinPath()

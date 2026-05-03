@@ -14,7 +14,7 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 ## User-Facing Scope
 
 - Split API surface: neutral `ModAPI.dll` plus Sheltered-specific `ShelteredAPI.dll`.
-- Custom scenario browser, XML packs, authoring tools, dependency lockout, trigger runtime, scheduled effects, and win/loss support.
+- Custom scenario browser, XML packs, authoring tools, dependency lockout, trigger runtime, scheduled effects, and win/loss support. This surface is experimental for Beta.3 testing.
 - Rebindable vanilla and mod-defined keybindings with conflict handling and persistence.
 - Desktop and in-game mod manager improvements, including mod metadata, load order, Nexus discovery, and compatibility status.
 - Save expansion and save verification for missing mods and version mismatches.
@@ -36,3 +36,4 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 - Smoke test Epic package against `ShelteredWindows64_EOS.exe`.
 - Verify `SMM\Manager.exe` About tab shows `Version 1.3.0-beta.3`.
 - Verify installed API versions show `1.3.0.3` in the manager.
+- Verify the Family Expansion mod package has been rebuilt against ModAPI/ShelteredAPI 1.3 Beta.3 before listing it as compatible.

@@ -1,6 +1,6 @@
-# Custom Scenarios Guide (v1.3 Beta.3)
+# Custom Scenarios Guide (v1.3 Beta.3, Experimental)
 
-The 1.3 Beta.3 line is a breaking clean API line.
+The 1.3 Beta.3 line is a breaking clean API line. Custom scenarios are experimental in Beta.3 and should be tested with disposable saves before being used in long-running playthroughs.
 
 ## Assembly Rule
 
