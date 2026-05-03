@@ -18,6 +18,7 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioAuthoringPresentationService _presentation;
         private readonly IScenarioEditorService _editorService;
         private readonly IScenarioSaveLibrary _saveLibrary;
+        private readonly IScenarioRuntimeBindingService _runtimeBindingService;
         private ScenarioAuthoringSession _pendingSession;
         private ScenarioAuthoringSession _activeSession;
         private string _lastPendingDraftId;
@@ -36,7 +37,8 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringMenuService menuService,
             ScenarioAuthoringPresentationService presentation,
             IScenarioEditorService editorService,
-            IScenarioSaveLibrary saveLibrary)
+            IScenarioSaveLibrary saveLibrary,
+            IScenarioRuntimeBindingService runtimeBindingService)
         {
             _backend = backend;
             _draftRepository = draftRepository;
@@ -44,6 +46,7 @@ namespace ShelteredAPI.Scenarios
             _presentation = presentation;
             _editorService = editorService;
             _saveLibrary = saveLibrary;
+            _runtimeBindingService = runtimeBindingService;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }
         }
@@ -183,14 +186,43 @@ namespace ShelteredAPI.Scenarios
             CloseActiveSession(reason ?? "Closed from authoring shell.", resumeGame);
         }
 
+        public bool HasPendingDraftLaunch()
+        {
+            lock (_sync)
+            {
+                return IsDraftAuthoringSession(_pendingSession);
+            }
+        }
+
+        public bool IsEditingDraftActive()
+        {
+            ScenarioAuthoringSession active = GetActiveSession();
+            return IsEditingDraftSession(active);
+        }
+
         public void Update()
         {
+            if (!HasPendingOrActiveDraftSession())
+            {
+                EnsureInactiveAuthoringState("No draft scenario authoring session is pending or active.");
+                return;
+            }
+
             HandleActiveSessionBoundaries();
             TryBootstrapPendingDraft();
+
+            ScenarioAuthoringSession active = GetActiveSession();
+            if (!IsEditingDraftSession(active))
+            {
+                _presentation.Update();
+                _menuService.Update(null);
+                return;
+            }
+
             _editorService.MaintainAuthoringPause();
             _backend.Update();
             _presentation.Update();
-            _menuService.Update(GetActiveSession());
+            _menuService.Update(active);
         }
 
         private void TryBootstrapPendingDraft()
@@ -331,6 +363,8 @@ namespace ShelteredAPI.Scenarios
         private void HandleAfterLoad(SaveData data)
         {
             CancelPendingDraft("An existing save loaded before the authoring bootstrap completed.");
+            if (GetActiveSession() != null)
+                CloseActiveSession("A save loaded while scenario authoring was active.", true);
         }
 
         private void HandleActiveSessionBoundaries()
@@ -338,6 +372,24 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringSession active = GetActiveSession();
             if (active == null)
                 return;
+
+            if (!IsDraftAuthoringSession(active))
+            {
+                CloseActiveSession("Active authoring session was not a draft scenario session.", true);
+                return;
+            }
+
+            if (!IsEditorSessionForDraft(active))
+            {
+                CloseActiveSession("Scenario editor session no longer matches the active draft.", true);
+                return;
+            }
+
+            if (IsNormalSavePlaying(active))
+            {
+                CloseActiveSession("Draft scenario binding is no longer active; normal save play resumed.", true);
+                return;
+            }
 
             if (!ScenarioWorldReady.IsShelterSceneActive())
             {
@@ -401,6 +453,77 @@ namespace ShelteredAPI.Scenarios
             {
                 return _activeSession;
             }
+        }
+
+        private bool HasPendingOrActiveDraftSession()
+        {
+            lock (_sync)
+            {
+                return IsDraftAuthoringSession(_pendingSession) || IsDraftAuthoringSession(_activeSession);
+            }
+        }
+
+        private bool IsEditingDraftSession(ScenarioAuthoringSession session)
+        {
+            if (!IsDraftAuthoringSession(session) || !IsEditorSessionForDraft(session) || IsNormalSavePlaying(session))
+                return false;
+
+            ScenarioAuthoringState state = _backend.CurrentState;
+            return state != null
+                && state.IsActive
+                && string.Equals(state.ActiveDraftId, session.DraftId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsDraftAuthoringSession(ScenarioAuthoringSession session)
+        {
+            return session != null
+                && !string.IsNullOrEmpty(session.DraftId)
+                && string.Equals(
+                    session.StorageScenarioId,
+                    ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                    StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrEmpty(session.ScenarioFilePath);
+        }
+
+        private bool IsEditorSessionForDraft(ScenarioAuthoringSession session)
+        {
+            ScenarioEditorSession editorSession = _editorService.CurrentSession;
+            if (session == null || editorSession == null || editorSession.WorkingDefinition == null)
+                return false;
+
+            return string.Equals(editorSession.WorkingDefinition.Id, session.DraftId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsNormalSavePlaying(ScenarioAuthoringSession session)
+        {
+            ScenarioRuntimeBinding binding = _runtimeBindingService != null ? _runtimeBindingService.CurrentBinding : null;
+            if (session == null || binding == null || binding.IsConvertedToNormalSave || !binding.IsActive)
+                return true;
+
+            return !string.Equals(binding.ScenarioId, session.DraftId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void EnsureInactiveAuthoringState(string reason)
+        {
+            ScenarioAuthoringState state = _backend.CurrentState;
+            bool hasEditorSession = _editorService.CurrentSession != null;
+            bool hasBackendState = state != null && state.IsActive;
+            if (!hasEditorSession && !hasBackendState)
+            {
+                _presentation.Update();
+                return;
+            }
+
+            if (hasEditorSession)
+            {
+                try { _editorService.CloseEditor(false); }
+                catch (Exception ex) { MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Inactive editor cleanup failed: " + ex.Message); }
+            }
+
+            if (hasBackendState)
+                _backend.ClearActiveSession(reason);
+
+            _presentation.Update();
         }
 
         private void ClearLaunchRedirects(ScenarioAuthoringSession session, string reason)

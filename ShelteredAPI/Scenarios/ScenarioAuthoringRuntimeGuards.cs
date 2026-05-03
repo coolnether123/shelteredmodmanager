@@ -9,18 +9,23 @@ namespace ShelteredAPI.Scenarios
 
         public static bool IsAuthoringActive()
         {
-            ScenarioAuthoringState state = GetState();
-            return state != null && state.IsActive;
+            return ScenarioAuthoringBootstrapService.Instance.IsEditingDraftActive();
         }
 
         public static bool IsPlaytesting()
         {
+            if (!IsAuthoringActive())
+                return false;
+
             ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
             return session != null && session.PlaytestState == ScenarioPlaytestState.Playtesting;
         }
 
         public static bool ShouldCaptureGameplayInput()
         {
+            if (!IsAuthoringActive())
+                return false;
+
             ScenarioAuthoringState state = GetState();
             return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
                 .ShouldCaptureGameplayInput(state, IsPlaytesting());
@@ -43,6 +48,9 @@ namespace ShelteredAPI.Scenarios
 
         public static bool ShouldBlockGameplayAxis(PlatformInput.InputAxis axis)
         {
+            if (!IsAuthoringActive())
+                return false;
+
             switch (axis)
             {
                 case PlatformInput.InputAxis.CameraHorizontal:
@@ -57,6 +65,9 @@ namespace ShelteredAPI.Scenarios
 
         public static bool ShouldBlockMenuAxis(PlatformInput.MenuInputAxis axis)
         {
+            if (!IsAuthoringActive())
+                return false;
+
             ScenarioAuthoringState state = GetState();
             return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
                 .ShouldConsumeScroll(state, IsPlaytesting())
@@ -65,6 +76,9 @@ namespace ShelteredAPI.Scenarios
 
         public static bool ShouldSuppressCtrlCameraBehavior()
         {
+            if (!IsAuthoringActive())
+                return false;
+
             ScenarioAuthoringState state = GetState();
             return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
                 .ShouldSuppressCtrlCameraBehavior(state, IsPlaytesting());
