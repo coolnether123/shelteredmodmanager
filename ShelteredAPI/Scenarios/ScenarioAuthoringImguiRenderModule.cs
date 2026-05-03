@@ -538,7 +538,7 @@ namespace ShelteredAPI.Scenarios
             DrawPageHeader(headerRight, page, pageCount, candidateSection != null ? candidateSection.Id : "browser");
 
             Rect gridRect = new Rect(inner.x, inner.y + 34f, inner.width, inner.height - 34f);
-            _lastGridFirstCardRect = Rect.zero;
+            _lastGridFirstCardRect = RuntimeCompat.ZeroRect();
 
             if (actions.Count == 0)
             {

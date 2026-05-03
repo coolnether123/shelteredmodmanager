@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.UiKit;
 using ShelteredAPI.Scenarios.UiKit.Frame;
@@ -51,8 +52,8 @@ namespace ShelteredAPI.Scenarios
         private string _dragWindowId;
         private FloatingWindowDragMode _dragMode = FloatingWindowDragMode.None;
         private Vector2 _dragStartMouse = Vector2.zero;
-        private Rect _dragStartRect = Rect.zero;
-        private Rect _dragLastRect = Rect.zero;
+        private Rect _dragStartRect = RuntimeCompat.ZeroRect();
+        private Rect _dragLastRect = RuntimeCompat.ZeroRect();
         private string _assetBrowserSearchText = string.Empty;
         private string _assetBrowserCandidateFilter = CandidateFilterAll;
         private bool _assetBrowserSearchFocused;
@@ -181,7 +182,7 @@ namespace ShelteredAPI.Scenarios
                 inputCapture.RegisterInteractiveRect(commandDockRect);
 
             string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
-            Rect workspaceTabStripRect = Rect.zero;
+            Rect workspaceTabStripRect = RuntimeCompat.ZeroRect();
             Rect workspaceRect;
             if (activeWorkspaceId != null && windowRects.TryGetValue(activeWorkspaceId, out workspaceRect))
             {
@@ -198,7 +199,7 @@ namespace ShelteredAPI.Scenarios
 
             DrawWindowSet(shell.Windows, windowRects, true, contentRect, inputCapture);
 
-            Rect windowMenuRect = Rect.zero;
+            Rect windowMenuRect = RuntimeCompat.ZeroRect();
             if (_windowMenuOpen && shell.WindowMenuActions != null && shell.WindowMenuActions.Length > 0)
             {
                 windowMenuRect = BuildWindowMenuRect(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight, hudReserveRect);
@@ -207,7 +208,7 @@ namespace ShelteredAPI.Scenarios
                 inputCapture.SetPopupOpen(true);
             }
 
-            Rect popupRect = Rect.zero;
+            Rect popupRect = RuntimeCompat.ZeroRect();
             if (shell.ContextMenu != null && shell.ContextMenu.Visible)
             {
                 popupRect = BuildPopupRect(shell.ContextMenu, scaledWidth, scaledHeight, hudReserveRect);
@@ -440,8 +441,8 @@ namespace ShelteredAPI.Scenarios
             _dragWindowId = null;
             _dragMode = FloatingWindowDragMode.None;
             _dragStartMouse = Vector2.zero;
-            _dragStartRect = Rect.zero;
-            _dragLastRect = Rect.zero;
+            _dragStartRect = RuntimeCompat.ZeroRect();
+            _dragLastRect = RuntimeCompat.ZeroRect();
         }
 
         private static Rect BuildFloatingHeaderDragRect(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -604,7 +605,7 @@ namespace ShelteredAPI.Scenarios
                 return actionRect;
             }
 
-            return Rect.zero;
+            return RuntimeCompat.ZeroRect();
         }
 
         private float MeasureTopBarActionsWidth(ScenarioAuthoringInspectorAction[] actions)
@@ -664,11 +665,11 @@ namespace ShelteredAPI.Scenarios
         private Rect DrawCommandDock(Rect contentRect, ScenarioAuthoringState state)
         {
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
-                return Rect.zero;
+                return RuntimeCompat.ZeroRect();
 
             ScenarioAuthoringInspectorAction[] actions = BuildCommandDockActions(state);
             if (actions == null || actions.Length == 0)
-                return Rect.zero;
+                return RuntimeCompat.ZeroRect();
 
             float width = Mathf.Clamp(24f + (actions.Length * 116f), 360f, 560f);
             Rect rect = new Rect(
@@ -862,7 +863,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             if (count == 0)
-                return Rect.zero;
+                return RuntimeCompat.ZeroRect();
 
             float width = Math.Min(620f, Math.Max(220f, count * 132f + 18f));
             Rect stripRect = new Rect(
@@ -960,7 +961,7 @@ namespace ShelteredAPI.Scenarios
             }
 
             if (window.Collapsed)
-                return Rect.zero;
+                return RuntimeCompat.ZeroRect();
 
             Rect bodyRect = regions.Body;
             GUILayout.BeginArea(bodyRect);
@@ -1054,7 +1055,7 @@ namespace ShelteredAPI.Scenarios
             Rect pickerRect = new Rect(bodyRect.x, bodyRect.y, pickerWidth, bodyRect.height);
             Rect detailsRect = showDetailsPane
                 ? new Rect(pickerRect.xMax + 16f, bodyRect.y, bodyRect.xMax - pickerRect.xMax - 16f, bodyRect.height)
-                : Rect.zero;
+                : RuntimeCompat.ZeroRect();
 
             Rect filterRect = new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 64f);
             DrawCandidateFilterControls(

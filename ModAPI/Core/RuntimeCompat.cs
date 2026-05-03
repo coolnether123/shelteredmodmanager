@@ -51,6 +51,11 @@ namespace ModAPI.Core
             }
         }
 
+        public static Rect ZeroRect()
+        {
+            return new Rect(0f, 0f, 0f, 0f);
+        }
+
         /// <summary>
         /// True when modern SceneManager events exist (Unity 5.4+); false on 5.3.
         /// </summary>

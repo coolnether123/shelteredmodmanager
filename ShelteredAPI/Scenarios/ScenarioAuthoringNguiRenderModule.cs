@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
@@ -259,7 +260,7 @@ namespace ShelteredAPI.Scenarios
                 return rect;
             }
 
-            return Rect.zero;
+            return RuntimeCompat.ZeroRect();
         }
 
         private void DrawToolRail(Rect contentRect, ScenarioAuthoringState state)
