@@ -37,7 +37,7 @@ namespace ShelteredAPI.UI.FieldManual.Layout
                 _viewportLocal.y + _viewportLocal.height * 0.5f, 0);
 
             _clipPanel = _viewport.AddComponent<UIPanel>();
-            _clipPanel.depth = _baseDepth;
+            _clipPanel.depth = ResolvePanelDepth(_baseDepth, _clipPanel);
             _clipPanel.clipping = UIDrawCall.Clipping.SoftClip;
             _clipPanel.baseClipRegion = new Vector4(0, 0, _viewportLocal.width, _viewportLocal.height);
             _clipPanel.clipSoftness = new Vector2(8, 8);
@@ -46,6 +46,26 @@ namespace ShelteredAPI.UI.FieldManual.Layout
             _contentRoot.transform.SetParent(_viewport.transform, false);
             _contentRoot.layer = _viewport.layer;
             _contentRoot.transform.localPosition = Vector3.zero;
+        }
+
+        private static int ResolvePanelDepth(int requestedDepth, UIPanel owner)
+        {
+            int depth = requestedDepth;
+            UIPanel[] panels = Object.FindObjectsOfType<UIPanel>();
+            if (panels == null)
+                return depth;
+
+            for (int i = 0; i < panels.Length; i++)
+            {
+                UIPanel panel = panels[i];
+                if (panel == null || panel == owner)
+                    continue;
+
+                if (panel.depth >= depth)
+                    depth = panel.depth + 1;
+            }
+
+            return depth;
         }
 
         public void AddRow(GameObject row, int height)

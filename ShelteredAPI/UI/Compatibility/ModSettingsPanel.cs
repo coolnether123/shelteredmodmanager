@@ -48,9 +48,7 @@ namespace ShelteredAPI.UI.Compatibility
         private FieldManualWindowChrome _chrome;
         private GameObject _pageFlipRoot;
         private BookPageNavigatorWidget _pageNavigator;
-        private IFieldManualTransition _pageTransition;
-        private FieldManualPageTurnController _pageTurnController;
-        private VanillaPageTurnAssets _pageTurnAssets;
+        private FieldManualBookPageTurn _pageTurn;
         private readonly ModSettingsSearchController _searchController = new ModSettingsSearchController();
         private readonly ModSettingsPresetController _presetController = new ModSettingsPresetController();
         private readonly ModSettingsKeybindStatusController _keybindStatusController = new ModSettingsKeybindStatusController();
@@ -63,7 +61,6 @@ namespace ShelteredAPI.UI.Compatibility
         private bool _isRebuilding = false;
         private bool _isClosing = false;
         private bool _inputLockedExternally = false;
-        private bool _controllerAxisButtonDown;
         private const int MaxSearchLength = 64;
 
         // Colors
@@ -154,7 +151,7 @@ namespace ShelteredAPI.UI.Compatibility
                 : ("Mod Settings - v" + _currentMod.Version);
 
             _chrome = FieldManualWindowChrome.BuildBook(root.gameObject, 50000, title, subtitle);
-            ConfigurePageTurnController(root.gameObject);
+            _pageTurn = FieldManualBookPageTurn.Attach(root.gameObject, _chrome);
             _pageFlipRoot = _chrome.Ui.CreateChild(root.gameObject, "BookPageFlipRoot", Vector3.zero);
 
             float toolsY = 222f;
@@ -178,7 +175,7 @@ namespace ShelteredAPI.UI.Compatibility
 
             float bottomY = -400f;
 
-            _pageNavigator = new BookPageNavigatorWidget(_chrome.Palette, _chrome.Textures, _chrome.Ui, _pageTurnAssets);
+            _pageNavigator = new BookPageNavigatorWidget(_chrome.Palette, _chrome.Textures, _chrome.Ui, _pageTurn != null ? _pageTurn.Assets : null);
             _pageNavigator.Build(_chrome.Regions.FooterRoot, new Vector3(0f, bottomY, 0f),
                 delegate { ChangePage(-1); },
                 delegate { ChangePage(1); });
@@ -202,20 +199,6 @@ namespace ShelteredAPI.UI.Compatibility
             MMLog.WriteDebug("UI Initial Construction Complete. Building Menu Content...");
             BuildMenu(uiFont, ttfFont);
             MMLog.WriteDebug($"UI Built for {_currentMod.Id}. Total settings: {_pages.Sum(p => p.Count)}");
-        }
-
-        private void ConfigurePageTurnController(GameObject root)
-        {
-            _pageTransition = new FieldManualFadeTransition(FieldManualTransitionProfile.VanillaPageInfoFade);
-            _pageTurnAssets = new VanillaPageTurnAssets();
-            _pageTurnController = root.AddComponent<FieldManualPageTurnController>();
-            _pageTurnController.Configure(
-                FieldManualPageTurnProfile.VanillaClipboard,
-                new FieldManualFadeTransition(FieldManualTransitionProfile.FadeOut(0.06f, 0f, UITweener.Method.EaseOut)),
-                _pageTransition,
-                new FieldManualFadeTransition(FieldManualTransitionProfile.Between(0.35f, 1f, 0.12f, 0f, UITweener.Method.EaseOut)),
-                new FieldManualPageTurnAudio(_pageTurnAssets),
-                new FieldManualPageFlipOverlay(_pageTurnAssets, _chrome.Textures, _chrome.Ui, _chrome.Metrics.PanelWidth - 40f, _chrome.Metrics.PanelHeight - 140f));
         }
 
         private void Update()
@@ -348,9 +331,9 @@ namespace ShelteredAPI.UI.Compatibility
             if (_inputLockedExternally || KeybindCaptureListener.HasActiveCapture())
                 return;
 
-            if (_pageTurnController != null)
+            if (_pageTurn != null)
             {
-                _pageTurnController.TryTurn(
+                _pageTurn.TryTurn(
                     delta,
                     _contentRoot,
                     _pageFlipRoot != null ? _pageFlipRoot : _contentRoot,
@@ -370,41 +353,13 @@ namespace ShelteredAPI.UI.Compatibility
 
         private void HandlePageInput()
         {
-            if (_pages.Count <= 1 || _inputLockedExternally || KeybindCaptureListener.HasActiveCapture())
-                return;
-            if (_pageTurnController != null && _pageTurnController.IsLocked)
-                return;
+            if (_pageTurn != null)
+                _pageTurn.HandlePageInput(_pages.Count, IsPageInputBlocked, ChangePage);
+        }
 
-            if (UnityEngine.Input.GetKeyDown(KeyCode.LeftArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
-            {
-                ChangePage(-1);
-                return;
-            }
-
-            if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageDown))
-            {
-                ChangePage(1);
-                return;
-            }
-
-            float horizontal = PlatformInput.GetAxis(PlatformInput.MenuInputAxis.UIhorizontal);
-            if (!_controllerAxisButtonDown)
-            {
-                if (horizontal > 0.5f)
-                {
-                    ChangePage(1);
-                    _controllerAxisButtonDown = true;
-                }
-                else if (horizontal < -0.5f)
-                {
-                    ChangePage(-1);
-                    _controllerAxisButtonDown = true;
-                }
-            }
-            else if (horizontal < 0.5f && horizontal > -0.5f)
-            {
-                _controllerAxisButtonDown = false;
-            }
+        private bool IsPageInputBlocked()
+        {
+            return _inputLockedExternally || KeybindCaptureListener.HasActiveCapture();
         }
 
         private bool CanChangePage(int delta)

@@ -146,7 +146,18 @@ class	ShelteredAPI.Scenarios	TriggerDef	ShelteredAPI/Scenarios/ScenarioDefinitio
 class	ShelteredAPI.Scenarios	TriggersAndEventsDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios	WeatherEventDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios	WinLossConditionsDefinition	ShelteredAPI/Scenarios/ScenarioDefinition.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.UI	ContainerUiAction	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime UI footer action DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	ContainerUiItem	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime UI DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	ContainerUiRequest	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime UI request DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	ContainerUiTransferContext	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime UI callback context intentionally exposed to mods.
+class	ShelteredAPI.UI	CraftingUiIngredient	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime crafting UI DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	CraftingUiRecipe	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime crafting UI DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	CraftingUiRequest	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime crafting UI request DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	ObjectPanelContext	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public object-attached runtime UI callback context intentionally exposed to mods.
+class	ShelteredAPI.UI	ObjectPanelRegistration	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public object-attached runtime UI registration DTO intentionally exposed to mods.
+class	ShelteredAPI.UI	RuntimeUiHandle	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime UI lifecycle handle intentionally exposed to mods.
 class	ShelteredAPI.UI	ShelteredUI	ShelteredAPI/UI/ShelteredUI.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.UI	ShelteredRuntimeUI	ShelteredAPI/UI/Runtime/ShelteredRuntimeUI.cs	Public runtime UI facade intentionally exposed to mods.
 class	ShelteredAPI.UI	UITakeoverSession	ShelteredAPI/UI/UITakeover.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Saves.Paging	ModCompareStatus	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Saves.Paging	VerificationState	ShelteredAPI/Custom Saves/paging/SaveVerification.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -158,6 +169,7 @@ enum	ShelteredAPI.Characters	StackBehavior	ShelteredAPI/Characters/Abstractions/
 enum	ShelteredAPI.Content	CraftStation	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Content	ItemCategory	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Content	TopographyType	ShelteredAPI/Content/ContentRegistry.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+enum	ShelteredAPI.UI	ContainerUiTransferDirection	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public runtime UI transfer direction intentionally exposed to mods.
 enum	ShelteredAPI.Events	TimeTriggerCadence	ShelteredAPI/Events/GameTimeTriggerHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Events	TimeTriggerKind	ShelteredAPI/Events/GameTimeTriggerHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Input	InputContext	ShelteredAPI/Input/InputContext.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.

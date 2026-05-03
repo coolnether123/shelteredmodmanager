@@ -191,7 +191,7 @@ namespace ShelteredAPI.Scenarios
                     ExecuteGuardedUiClick(panel, delegate
                     {
                         MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Hub clicked. panel=" + panel.GetInstanceID() + ".");
-                        EnterCustomMode(panel, state, scenarioButtons);
+                        ScenarioBookBrowserPanel.Show(panel);
                     });
                 };
 
@@ -353,7 +353,7 @@ namespace ShelteredAPI.Scenarios
                 if (selectedScenario == baseCount)
                 {
                     MMLog.WriteInfo("[ShelteredCustomScenarioSelection] OnScenarioChosen routed into custom hub. panel=" + panel.GetInstanceID() + ".");
-                    EnterCustomMode(panel, state, scenarioButtons);
+                    ScenarioBookBrowserPanel.Show(panel);
                     return false;
                 }
 

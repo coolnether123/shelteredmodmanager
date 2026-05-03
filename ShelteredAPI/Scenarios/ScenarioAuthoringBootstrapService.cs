@@ -91,6 +91,51 @@ namespace ShelteredAPI.Scenarios
             return result;
         }
 
+        public ScenarioAuthoringSession QueueExistingDraft(string draftId, SaveManager.SaveType launchSaveType)
+        {
+            if (string.IsNullOrEmpty(draftId))
+                return null;
+
+            ScenarioInfo draftInfo;
+            if (!_draftRepository.TryGet(draftId, out draftInfo) || draftInfo == null)
+                return null;
+
+            SaveEntry startupSave;
+            if (!_draftRepository.TryGetDraftSaveEntry(draftId, out startupSave) || startupSave == null)
+                return null;
+
+            ScenarioBaseGameMode baseMode = ResolveDraftBaseMode(draftInfo);
+            lock (_sync)
+            {
+                if (_pendingSession != null
+                    && string.Equals(_pendingSession.DraftId, draftId, StringComparison.OrdinalIgnoreCase))
+                {
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Reusing pending existing draft bootstrap: " + _pendingSession.DraftId + ".");
+                    return _pendingSession;
+                }
+
+                if (_pendingSession != null)
+                {
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Replacing pending draft bootstrap '" + _pendingSession.DraftId
+                        + "' with existing draft '" + draftId + "'.");
+                    _pendingSession = null;
+                    _lastPendingDraftId = null;
+                    _lastPendingBlockingReason = null;
+                    ResetPendingWarmup();
+                }
+
+                _pendingSession = ScenarioAuthoringSession.Create(
+                    draftInfo,
+                    baseMode,
+                    ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                    startupSave.id,
+                    startupSave.absoluteSlot,
+                    launchSaveType);
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Queued existing draft authoring bootstrap: " + _pendingSession.DraftId + ".");
+                return _pendingSession;
+            }
+        }
+
         public void CancelPendingDraft(string reason)
         {
             ScenarioAuthoringSession pending = null;
@@ -111,6 +156,26 @@ namespace ShelteredAPI.Scenarios
             ClearLaunchRedirects(pending, reason);
             if (pending != null)
                 CleanupPendingDraftArtifacts(pending, reason);
+        }
+
+        private static ScenarioBaseGameMode ResolveDraftBaseMode(ScenarioInfo draftInfo)
+        {
+            if (draftInfo == null || string.IsNullOrEmpty(draftInfo.FilePath))
+                return ScenarioBaseGameMode.Survival;
+
+            try
+            {
+                ScenarioDefinition definition = new ScenarioDefinitionSerializer().Load(draftInfo.FilePath);
+                if (definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
+                    return definition.BaseGameMode;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Could not resolve draft base mode for '"
+                    + draftInfo.Id + "': " + ex.Message);
+            }
+
+            return ScenarioBaseGameMode.Survival;
         }
 
         public void RequestCloseActiveSession(string reason, bool resumeGame)

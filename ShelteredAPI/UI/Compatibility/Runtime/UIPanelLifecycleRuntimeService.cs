@@ -11,6 +11,7 @@ namespace ShelteredAPI.UI.Internal
             UIRuntimeServiceHelper.Run("UIPanelManager.PushPanel", delegate
             {
                 CurrentSink.RaisePanelOpened(panel);
+                RuntimeUiLifecycleService.NotifyPanelOpened(panel);
             });
         }
 
@@ -20,6 +21,7 @@ namespace ShelteredAPI.UI.Internal
             {
                 if (panel != null)
                     CurrentSink.RaisePanelClosed(panel);
+                RuntimeUiLifecycleService.NotifyPanelClosed(panel);
             });
         }
 
@@ -28,6 +30,7 @@ namespace ShelteredAPI.UI.Internal
             UIRuntimeServiceHelper.Run("BasePanel.OnResume", delegate
             {
                 CurrentSink.RaisePanelResumed(panel);
+                RuntimeUiLifecycleService.NotifyPanelResumed(panel);
             });
         }
 
