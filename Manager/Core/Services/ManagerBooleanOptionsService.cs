@@ -13,7 +13,21 @@ namespace Manager.Core.Services
     public sealed class ManagerBooleanOptionsService
     {
         private const string OptionsFileName = "manager_options.json";
+        private const string CustomScenarioEditorOptionId = "ShelteredAPI.PatchCustomScenarioEditor";
         private readonly string _optionsPath;
+        private static readonly ManagerBooleanOptionDefinition[] BuiltInOptions = new ManagerBooleanOptionDefinition[]
+        {
+            new ManagerBooleanOptionDefinition
+            {
+                id = CustomScenarioEditorOptionId,
+                owner = "ShelteredAPI",
+                label = "Custom Scenario Editor",
+                description = "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.",
+                defaultValue = true,
+                requiresRestart = true,
+                sortOrder = 100
+            }
+        };
 
         public ManagerBooleanOptionsService()
         {
@@ -23,6 +37,9 @@ namespace Manager.Core.Services
         public IList<ManagerBooleanOptionRecord> Load()
         {
             ManagerBooleanOptionsFile file = LoadFile();
+            if (EnsureBuiltInOptions(file))
+                SaveFile(file);
+
             List<ManagerBooleanOptionRecord> options = new List<ManagerBooleanOptionRecord>();
             if (file.booleans != null)
                 options.AddRange(file.booleans);
@@ -37,6 +54,7 @@ namespace Manager.Core.Services
                 return;
 
             ManagerBooleanOptionsFile file = LoadFile();
+            EnsureBuiltInOptions(file);
             if (file.booleans == null)
                 file.booleans = new ManagerBooleanOptionRecord[0];
 
@@ -50,6 +68,94 @@ namespace Manager.Core.Services
                 SaveFile(file);
                 return;
             }
+        }
+
+        private static bool EnsureBuiltInOptions(ManagerBooleanOptionsFile file)
+        {
+            if (file == null)
+                return false;
+            if (file.booleans == null)
+                file.booleans = new ManagerBooleanOptionRecord[0];
+
+            bool changed = false;
+            for (int i = 0; i < BuiltInOptions.Length; i++)
+            {
+                ManagerBooleanOptionDefinition definition = BuiltInOptions[i];
+                if (definition == null || string.IsNullOrEmpty(definition.id))
+                    continue;
+
+                int index = FindIndex(file.booleans, definition.id);
+                if (index >= 0)
+                {
+                    ManagerBooleanOptionRecord existing = file.booleans[index];
+                    if (existing == null)
+                    {
+                        file.booleans[index] = CreateRecord(definition, definition.defaultValue);
+                        changed = true;
+                        continue;
+                    }
+
+                    changed |= UpdateMetadata(existing, definition);
+                    continue;
+                }
+
+                file.booleans = Append(file.booleans, CreateRecord(definition, definition.defaultValue));
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static ManagerBooleanOptionRecord CreateRecord(ManagerBooleanOptionDefinition definition, bool value)
+        {
+            return new ManagerBooleanOptionRecord
+            {
+                id = definition.id,
+                owner = definition.owner ?? string.Empty,
+                label = definition.label ?? definition.id,
+                description = definition.description ?? string.Empty,
+                value = value,
+                defaultValue = definition.defaultValue,
+                requiresRestart = definition.requiresRestart,
+                sortOrder = definition.sortOrder
+            };
+        }
+
+        private static bool UpdateMetadata(ManagerBooleanOptionRecord record, ManagerBooleanOptionDefinition definition)
+        {
+            bool changed = false;
+            changed |= SetStringIfDifferent(ref record.owner, definition.owner ?? string.Empty);
+            changed |= SetStringIfDifferent(ref record.label, definition.label ?? definition.id);
+            changed |= SetStringIfDifferent(ref record.description, definition.description ?? string.Empty);
+
+            if (record.defaultValue != definition.defaultValue)
+            {
+                record.defaultValue = definition.defaultValue;
+                changed = true;
+            }
+
+            if (record.requiresRestart != definition.requiresRestart)
+            {
+                record.requiresRestart = definition.requiresRestart;
+                changed = true;
+            }
+
+            if (record.sortOrder != definition.sortOrder)
+            {
+                record.sortOrder = definition.sortOrder;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool SetStringIfDifferent(ref string target, string value)
+        {
+            if (string.Equals(target ?? string.Empty, value ?? string.Empty, StringComparison.Ordinal))
+                return false;
+
+            target = value ?? string.Empty;
+            return true;
         }
 
         private ManagerBooleanOptionsFile LoadFile()
@@ -130,6 +236,33 @@ namespace Manager.Core.Services
             if (sort != 0) return sort;
 
             return string.Compare(left.label ?? left.id, right.label ?? right.id, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int FindIndex(ManagerBooleanOptionRecord[] records, string id)
+        {
+            if (records == null || string.IsNullOrEmpty(id))
+                return -1;
+
+            for (int i = 0; i < records.Length; i++)
+            {
+                ManagerBooleanOptionRecord record = records[i];
+                if (record != null && string.Equals(record.id, id, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+
+            return -1;
+        }
+
+        private static ManagerBooleanOptionRecord[] Append(ManagerBooleanOptionRecord[] records, ManagerBooleanOptionRecord record)
+        {
+            if (records == null)
+                records = new ManagerBooleanOptionRecord[0];
+
+            ManagerBooleanOptionRecord[] next = new ManagerBooleanOptionRecord[records.Length + 1];
+            for (int i = 0; i < records.Length; i++)
+                next[i] = records[i];
+            next[next.Length - 1] = record;
+            return next;
         }
     }
 }

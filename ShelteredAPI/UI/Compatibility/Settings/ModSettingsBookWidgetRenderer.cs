@@ -261,18 +261,18 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 else index = (index + delta) % values.Length;
                 if (index < 0) index += values.Length;
 
-                object next = values.GetValue(index);
-                if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
+                object selectedValue = values.GetValue(index);
+                if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, selectedValue))
                 {
-                    value.text = FormatObjectValue(next);
+                    value.text = FormatObjectValue(selectedValue);
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
-            GameObject previous = CreateButton(row, "PrevEnum", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
-            GameObject next = CreateButton(row, "NextEnum", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
-            AttachTooltip(previous, "Show the previous option for " + SafeLabel(def) + ".");
-            AttachTooltip(next, "Show the next option for " + SafeLabel(def) + ".");
+            GameObject previousButton = CreateButton(row, "PrevEnum", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
+            GameObject nextButton = CreateButton(row, "NextEnum", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
+            AttachTooltip(previousButton, "Show the previous option for " + SafeLabel(def) + ".");
+            AttachTooltip(nextButton, "Show the next option for " + SafeLabel(def) + ".");
         }
 
         private void BuildChoiceControl(GameObject row, SettingDefinition def, object settingsObject)
@@ -292,18 +292,18 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 else index = (index + delta) % options.Count;
                 if (index < 0) index += options.Count;
 
-                string next = options[index];
-                if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
+                string selectedValue = options[index];
+                if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, selectedValue))
                 {
-                    value.text = next;
+                    value.text = selectedValue;
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
-            GameObject previous = CreateButton(row, "PrevChoice", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
-            GameObject next = CreateButton(row, "NextChoice", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
-            AttachTooltip(previous, "Show the previous option for " + SafeLabel(def) + ".");
-            AttachTooltip(next, "Show the next option for " + SafeLabel(def) + ".");
+            GameObject previousButton = CreateButton(row, "PrevChoice", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
+            GameObject nextButton = CreateButton(row, "NextChoice", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
+            AttachTooltip(previousButton, "Show the previous option for " + SafeLabel(def) + ".");
+            AttachTooltip(nextButton, "Show the next option for " + SafeLabel(def) + ".");
         }
 
         private void BuildStringControl(GameObject row, SettingDefinition def, object settingsObject)

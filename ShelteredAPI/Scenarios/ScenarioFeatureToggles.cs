@@ -5,7 +5,7 @@ namespace ShelteredAPI.Scenarios
     internal static class ScenarioFeatureToggles
     {
         public const string CustomScenarioEditorPatchToggleId = "ShelteredAPI.PatchCustomScenarioEditor";
-        public const string CustomScenarioEditorPatchLabel = "Patch Custom Scenario Editor";
+        public const string CustomScenarioEditorPatchLabel = "Custom Scenario Editor";
         public const string CustomScenarioEditorPatchDescription =
             "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.";
 

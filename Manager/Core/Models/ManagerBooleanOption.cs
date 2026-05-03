@@ -21,4 +21,15 @@ namespace Manager.Core.Models
         public bool requiresRestart;
         public int sortOrder;
     }
+
+    public sealed class ManagerBooleanOptionDefinition
+    {
+        public string id;
+        public string owner;
+        public string label;
+        public string description;
+        public bool defaultValue;
+        public bool requiresRestart;
+        public int sortOrder;
+    }
 }
