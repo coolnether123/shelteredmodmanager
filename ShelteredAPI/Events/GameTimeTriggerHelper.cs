@@ -89,7 +89,8 @@ namespace ShelteredAPI.Events
     [PatchPolicy(PatchDomain.Events, "GameTimeTriggerHelper",
         TargetBehavior = "Time-based event scheduling driven from GameTime lifecycle ticks",
         FailureMode = "Scheduled mod triggers stop firing or drift after load and session transitions.",
-        RollbackStrategy = "Disable the Events patch domain or remove the GameTime trigger helper patch host.")]
+        RollbackStrategy = "Disable the Events patch domain or remove the GameTime trigger helper patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class GameTimeTriggerHelper
     {
         public static event Action<TimeTriggerBatch> OnSixHourTick;

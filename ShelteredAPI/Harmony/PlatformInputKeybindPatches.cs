@@ -14,7 +14,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.Input, "ShelteredPlatformInputBridge",
         TargetBehavior = "Vanilla input polling bridge through ModAPI-managed keybindings",
         FailureMode = "Configured keybindings do not override vanilla PC input correctly.",
-        RollbackStrategy = "Disable the Input patch domain or remove the Sheltered platform input bridge.")]
+        RollbackStrategy = "Disable the Input patch domain or remove the Sheltered platform input bridge.",
+        StartupTiming = PatchStartupTiming.MenuCritical)]
     internal static class PlatformInputKeybindPatches
     {
         private const float AxisEpsilon = 0.001f;

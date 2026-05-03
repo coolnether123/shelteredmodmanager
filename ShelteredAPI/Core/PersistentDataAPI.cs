@@ -232,7 +232,8 @@ namespace ShelteredAPI.Persistence
     [PatchPolicy(PatchDomain.SaveFlow, "PersistentDataRegistration",
         TargetBehavior = "Persistent mod data registration during SaveManager startup",
         FailureMode = "Mods using PersistentDataAPI may not load or save their data automatically.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the PersistentDataAPI registration hook.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the PersistentDataAPI registration hook.",
+        StartupTiming = PatchStartupTiming.BootCritical)]
     [HarmonyLib.HarmonyPatch(typeof(SaveManager), "Awake")]
     internal static class PersistentDataAPI_SaveManagerHook
     {

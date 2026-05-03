@@ -51,7 +51,8 @@ namespace ShelteredAPI.Core
     [PatchPolicy(PatchDomain.SaveFlow, "SaveProtection",
         TargetBehavior = "SaveManager.StartSave, SaveManager.Update_LoadData",
         FailureMode = "Mod compatibility verification is skipped or save manifest protection becomes inconsistent.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or skip manual SaveProtection module registration.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or skip manual SaveProtection module registration.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     internal static class SaveProtectionPatches
     {
         private static HarmonyLib.Harmony _harmony;

@@ -8,7 +8,8 @@ namespace ShelteredAPI.Hooks
         TargetBehavior = "Save-exit cancel path logging",
         FailureMode = "Cancel-path diagnostics are incomplete.",
         RollbackStrategy = "Disable the SaveFlow patch domain or remove the cancel trace patch.",
-        IsOptional = true)]
+        IsOptional = true,
+        StartupTiming = PatchStartupTiming.DebugDeferred)]
     [HarmonyPatch(typeof(SaveExitPanel), "OnCancel")]
     internal static class SaveExitPanelOnCancelPatch
     {

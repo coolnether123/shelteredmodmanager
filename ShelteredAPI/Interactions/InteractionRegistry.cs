@@ -190,7 +190,8 @@ namespace ShelteredAPI.Interactions
     [PatchPolicy(PatchDomain.Interactions, "InteractionRegistry",
         TargetBehavior = "Object interaction injection and menu reordering",
         FailureMode = "Registered interaction buttons will not inject or appear in the intended order.",
-        RollbackStrategy = "Disable the Interactions patch domain or remove the interaction registry patch host.")]
+        RollbackStrategy = "Disable the Interactions patch domain or remove the interaction registry patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class InteractionRegistry
     {
         private struct InteractionEntry

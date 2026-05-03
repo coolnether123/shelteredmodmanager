@@ -29,12 +29,22 @@ Patches are classified into domains:
 Patch hosts should declare:
 
 - domain
+- startup timing
 - owning feature
 - target behavior
 - failure mode
 - rollback strategy
 
 This is done with `PatchPolicyAttribute`.
+
+Startup timing values:
+
+- `BootCritical`: needed before first menu/game callbacks, applied during `HarmonyBootstrap.EnsurePatched`
+- `MenuCritical`: applied at first main menu show before menu interactions
+- `SaveFlowCritical`: applied before slot selection, load, save, or save/quit flow proceeds
+- `GameplayDeferred`: applied before session/gameplay bootstrap
+- `EditorDeferred`: applied when custom scenario authoring is enabled/opened
+- `DebugDeferred`: applied only when diagnostics/debug patching is enabled
 
 ## Registration rules
 

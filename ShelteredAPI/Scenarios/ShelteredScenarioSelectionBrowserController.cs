@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Harmony;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
@@ -763,6 +764,8 @@ namespace ShelteredAPI.Scenarios
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Add New ignored because the custom scenario editor is disabled by manager option.");
                 return;
             }
+
+            ShelteredDeferredPatchTriggers.ApplyEditorDeferred("ScenarioSelectionPanel Add New");
 
             UILabel nameLabel = null;
             UILabel descriptionLabel = null;

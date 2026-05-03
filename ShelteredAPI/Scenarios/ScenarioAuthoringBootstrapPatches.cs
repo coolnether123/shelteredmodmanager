@@ -15,7 +15,8 @@ namespace ShelteredAPI.Scenarios
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100)]
+        ManagerToggleSortOrder = 100,
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringBootstrapPatches
     {
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]

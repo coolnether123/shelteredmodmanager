@@ -42,7 +42,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.UI, "MainMenuModsEntry",
         TargetBehavior = "Main menu mods button injection and manager-driven auto-load/new-save flow",
         FailureMode = "Mods entry or manager-driven auto-load flow fails to start from the main menu.",
-        RollbackStrategy = "Disable the UI patch domain or remove the main menu patch host.")]
+        RollbackStrategy = "Disable the UI patch domain or remove the main menu patch host.",
+        StartupTiming = PatchStartupTiming.BootCritical)]
     [HarmonyPatch(typeof(MainMenu), "OnShow")]
     internal static class MainMenu_OnShow_Patch
     {
@@ -55,6 +56,13 @@ namespace ShelteredAPI.Harmony
                 if (!_autoLoadChecked)
                 {
                     _autoLoadChecked = true;
+                    ShelteredDeferredPatchTriggers.ApplyMenuCritical("MainMenu.OnShow");
+                    int autoLoadSlot = HarmonyBootstrap.ReadManagerInt("AutoLoadSaveSlot", 0);
+                    if (autoLoadSlot != 0)
+                    {
+                        ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("MainMenu.OnShow auto-load");
+                        ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("MainMenu.OnShow auto-load");
+                    }
                     HandleAutoLoad(__instance);
                 }
 
@@ -231,7 +239,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.UI, "MainMenuTransitionRedirect",
         TargetBehavior = "Main menu transition redirect into the Mod Manager panel",
         FailureMode = "Main menu transitions return to vanilla flow instead of opening the Mod Manager panel.",
-        RollbackStrategy = "Disable the UI patch domain or remove the menu transition redirect patch.")]
+        RollbackStrategy = "Disable the UI patch domain or remove the menu transition redirect patch.",
+        StartupTiming = PatchStartupTiming.MenuCritical)]
     [HarmonyPatch(typeof(MainMenu), "OnTweenFinished")]
     internal static class MainMenu_OnTweenFinished_Patch
     {
@@ -241,6 +250,12 @@ namespace ShelteredAPI.Harmony
         {
             var tweenField = typeof(MainMenu).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
             var tween = (TweenAlpha)tweenField?.GetValue(__instance);
+
+            if (!TransitioningToMods && tween != null && tween.direction == AnimationOrTween.Direction.Reverse)
+            {
+                ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("MainMenu.OnTweenFinished play transition");
+                ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("MainMenu.OnTweenFinished play transition");
+            }
 
             if (TransitioningToMods && tween != null && tween.direction == AnimationOrTween.Direction.Reverse)
             {
@@ -283,7 +298,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveModeSelection",
         TargetBehavior = "Automatic new-save mode selection during manager-driven flow",
         FailureMode = "Auto-new-save stalls before choosing a game mode.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save mode selector.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save mode selector.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(GameModeSelectionPanel), "OnTweenFinished")]
     internal static class GameModeSelectionPanel_OnTweenFinished_AutoNewSave_Patch
     {
@@ -312,7 +328,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveSlotSelection",
         TargetBehavior = "Automatic slot selection during manager-driven new-save flow",
         FailureMode = "Auto-new-save chooses the wrong slot or stalls before entering gameplay.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save slot selector.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save slot selector.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnTweenFinished")]
     internal static class SlotSelectionPanel_OnTweenFinished_AutoNewSave_Patch
     {

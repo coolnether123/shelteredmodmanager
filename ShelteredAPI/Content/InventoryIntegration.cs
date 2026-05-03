@@ -15,7 +15,8 @@ namespace ShelteredAPI.Content
     [PatchPolicy(PatchDomain.Content, "InventoryIntegration",
         TargetBehavior = "InventoryManager custom-item slot allocation",
         FailureMode = "Custom items may exist in registries but never receive runtime inventory slots.",
-        RollbackStrategy = "Disable the Content patch domain or remove the inventory integration patch.")]
+        RollbackStrategy = "Disable the Content patch domain or remove the inventory integration patch.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     [HarmonyPatch(typeof(InventoryManager), "InitialiseInventory")]
     internal static class InventoryIntegrationPatch
     {
@@ -131,7 +132,8 @@ namespace ShelteredAPI.Content
         FailureMode = "Inventory-flow debug traces are unavailable.",
         RollbackStrategy = "Disable the Diagnostics patch domain or turn off debug patches.",
         IsOptional = true,
-        DeveloperOnly = true)]
+        DeveloperOnly = true,
+        StartupTiming = PatchStartupTiming.DebugDeferred)]
     [HarmonyPatch]
     internal static class InventoryDebugPatches
     {

@@ -13,7 +13,8 @@ namespace ShelteredAPI.Events
     [PatchPolicy(PatchDomain.Events, "FactionEvents",
         TargetBehavior = "Faction spawn and territory growth event bridge",
         FailureMode = "Faction-related callbacks stop firing for mods.",
-        RollbackStrategy = "Disable the Events patch domain or remove the faction event bridge.")]
+        RollbackStrategy = "Disable the Events patch domain or remove the faction event bridge.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class FactionEvents
     {
         /// <summary>

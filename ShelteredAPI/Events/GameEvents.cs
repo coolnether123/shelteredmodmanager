@@ -15,7 +15,8 @@ namespace ShelteredAPI.Events
     [PatchPolicy(PatchDomain.Events, "GameEvents",
         TargetBehavior = "Session, save/load, combat, and party event bridges",
         FailureMode = "Event callbacks stop firing and mods may fall back to their own Harmony patches.",
-        RollbackStrategy = "Disable the Events patch domain or remove the affected event bridge host.")]
+        RollbackStrategy = "Disable the Events patch domain or remove the affected event bridge host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class GameEvents
     {
         public static event Action<int> OnNewDay;

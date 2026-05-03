@@ -14,7 +14,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.UI, "ShelteredModManagerKeybindCleanup",
         TargetBehavior = "Removal of legacy keybind entry points from Mod Manager UI",
         FailureMode = "Duplicate or obsolete keybind entry points remain visible in the Mod Manager panel.",
-        RollbackStrategy = "Disable the UI patch domain or remove the Mod Manager cleanup patch.")]
+        RollbackStrategy = "Disable the UI patch domain or remove the Mod Manager cleanup patch.",
+        StartupTiming = PatchStartupTiming.MenuCritical)]
     [HarmonyPatch(typeof(ModManagerPanel), "Initialise")]
     internal static class ModManagerKeybindsPatches
     {

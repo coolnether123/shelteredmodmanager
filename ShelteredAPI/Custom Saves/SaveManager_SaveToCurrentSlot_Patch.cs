@@ -11,7 +11,8 @@ namespace ShelteredAPI.Hooks
     [PatchPolicy(PatchDomain.SaveFlow, "SaveToCurrentSlotRedirect",
         TargetBehavior = "Pending custom-slot save redirect before vanilla SaveToCurrentSlot execution",
         FailureMode = "New-game or custom-slot saves can target the wrong underlying slot.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the current-slot redirect patch.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the current-slot redirect patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SaveManager), "SaveToCurrentSlot")]
     internal static class SaveManager_SaveToCurrentSlot_Patch
     {

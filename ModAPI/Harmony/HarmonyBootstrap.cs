@@ -179,6 +179,11 @@ namespace ModAPI.Harmony
             return fallback;
         }
 
+        public static void ApplyDeferredPatchGroup(PatchStartupTiming timing, string trigger)
+        {
+            DeferredPatchCoordinator.Apply(timing, trigger);
+        }
+
         private static void StartRetryRunner()
         {
             if (_runnerGo != null) return;
@@ -212,9 +217,13 @@ namespace ModAPI.Harmony
                         opts,
                         runtimeAssembly.GetName().Name,
                         key => ReadManagerString(key, null));
+                    DeferredPatchCoordinator.RegisterSource(harmony, runtimeAssembly, runtimeOptions);
 
                     var patchTimer = Stopwatch.StartNew();
-                    PatchRegistry.ApplyAssembly(harmony, runtimeAssembly, runtimeOptions);
+                    PatchRegistry.ApplyAssembly(
+                        harmony,
+                        runtimeAssembly,
+                        PatchRegistry.CreateTimingOptions(runtimeOptions, PatchStartupTiming.BootCritical));
                     LogStartupTiming("Harmony patch " + runtimeAssembly.GetName().Name, patchTimer);
                 }
                 catch (Exception ex)

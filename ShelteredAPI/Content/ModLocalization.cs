@@ -41,7 +41,8 @@ namespace ShelteredAPI.Content
     [PatchPolicy(PatchDomain.Content, "ModLocalization",
         TargetBehavior = "Localization key interception for ShelteredAPI-managed entries",
         FailureMode = "Literal mod localization falls back to vanilla key lookup and casing can be mangled.",
-        RollbackStrategy = "Disable the Content patch domain or remove the ModLocalization interception patch.")]
+        RollbackStrategy = "Disable the Content patch domain or remove the ModLocalization interception patch.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     [HarmonyPatch(typeof(Localization), "Get", new Type[] { typeof(string), typeof(bool) })]
     internal static class Localization_Get_ModApiPatch
     {

@@ -18,7 +18,8 @@ namespace ShelteredAPI.Debugging
         FailureMode = "Diagnostic breadcrumbs are unavailable during quit/load failures.",
         RollbackStrategy = "Disable the Diagnostics patch domain or turn off debug patches.",
         IsOptional = true,
-        DeveloperOnly = true)]
+        DeveloperOnly = true,
+        StartupTiming = PatchStartupTiming.DebugDeferred)]
     internal static class CrashCorridorMapDiagnostics
     {
         private static readonly FieldInfo LoadingLevelLoadTimeField =

@@ -27,6 +27,19 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
+    /// Startup timing buckets used to defer Harmony patch hosts until their first safe trigger.
+    /// </summary>
+    public enum PatchStartupTiming
+    {
+        BootCritical,
+        MenuCritical,
+        SaveFlowCritical,
+        GameplayDeferred,
+        EditorDeferred,
+        DebugDeferred
+    }
+
+    /// <summary>
     /// Declares governance metadata for a Harmony patch host.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
@@ -47,6 +60,7 @@ namespace ModAPI.Harmony
             ManagerToggleDescription = string.Empty;
             ManagerToggleDefault = true;
             ManagerToggleRequiresRestart = true;
+            StartupTiming = PatchStartupTiming.BootCritical;
         }
 
         /// <summary>The domain that owns the patch.</summary>
@@ -75,6 +89,8 @@ namespace ModAPI.Harmony
         public bool ManagerToggleRequiresRestart { get; set; }
         /// <summary>Sort order used by the desktop Manager for this option.</summary>
         public int ManagerToggleSortOrder { get; set; }
+        /// <summary>Earliest safe runtime timing bucket for applying this patch host.</summary>
+        public PatchStartupTiming StartupTiming { get; set; }
     }
 
     /// <summary>
@@ -89,6 +105,7 @@ namespace ModAPI.Harmony
         {
             PatchOptions = new HarmonyUtil.PatchOptions();
             DisabledDomains = new HashSet<PatchDomain>();
+            IncludedStartupTimings = new HashSet<PatchStartupTiming>();
             IncludeOptionalPatches = true;
             SourceName = string.Empty;
         }
@@ -97,6 +114,8 @@ namespace ModAPI.Harmony
         public HarmonyUtil.PatchOptions PatchOptions { get; set; }
         /// <summary>Domains that should be skipped entirely during patch application.</summary>
         public HashSet<PatchDomain> DisabledDomains { get; private set; }
+        /// <summary>When non-empty, only patch hosts in these startup timing buckets are considered.</summary>
+        public HashSet<PatchStartupTiming> IncludedStartupTimings { get; private set; }
         /// <summary>Whether optional patches should be included.</summary>
         public bool IncludeOptionalPatches { get; set; }
         /// <summary>Human-readable source label used in patch registry logging.</summary>
@@ -128,6 +147,8 @@ namespace ModAPI.Harmony
         public bool IsDangerous;
         /// <summary>Whether governance metadata was explicitly declared.</summary>
         public bool HasExplicitPolicy;
+        /// <summary>Earliest safe runtime timing bucket for applying this patch host.</summary>
+        public PatchStartupTiming StartupTiming;
         /// <summary>The resolved Harmony target methods for the patch host.</summary>
         public List<MethodBase> Targets;
         /// <summary>Optional manager boolean option id that controls this patch host.</summary>
@@ -177,12 +198,21 @@ namespace ModAPI.Harmony
             {
                 if (type == null || !HarmonyUtil.HasHarmonyPatchAttributes(type)) continue;
 
-                var record = CreateRecord(type);
+                PatchStartupTiming startupTiming = ResolveStartupTiming(type);
+                bool includedByTiming = IsStartupTimingIncluded(startupTiming, options);
+                var record = CreateRecord(type, includedByTiming);
                 report.Discovered.Add(record);
 
                 if (!record.HasExplicitPolicy)
                 {
                     report.MissingPolicy.Add(record);
+                }
+
+                if (!includedByTiming)
+                {
+                    report.Skipped.Add(record);
+                    LogSkip(record, options);
+                    continue;
                 }
 
                 if (!ShouldApply(record, options))
@@ -252,6 +282,30 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
+        /// Creates an options copy that only applies the specified startup timing buckets.
+        /// </summary>
+        public static PatchRegistryOptions CreateTimingOptions(PatchRegistryOptions source, params PatchStartupTiming[] timings)
+        {
+            var options = new PatchRegistryOptions();
+            if (source != null)
+            {
+                options.PatchOptions = source.PatchOptions;
+                options.IncludeOptionalPatches = source.IncludeOptionalPatches;
+                options.SourceName = source.SourceName;
+                foreach (PatchDomain domain in source.DisabledDomains)
+                    options.DisabledDomains.Add(domain);
+            }
+
+            if (timings != null)
+            {
+                for (int i = 0; i < timings.Length; i++)
+                    options.IncludedStartupTimings.Add(timings[i]);
+            }
+
+            return options;
+        }
+
+        /// <summary>
         /// Parses and applies disabled patch domains from a configuration string.
         /// </summary>
         public static void ApplyDisabledDomains(HashSet<PatchDomain> domains, string raw)
@@ -276,6 +330,12 @@ namespace ModAPI.Harmony
                 return false;
 
             if (options != null && options.DisabledDomains != null && options.DisabledDomains.Contains(record.Domain))
+                return false;
+
+            if (options != null
+                && options.IncludedStartupTimings != null
+                && options.IncludedStartupTimings.Count > 0
+                && !options.IncludedStartupTimings.Contains(record.StartupTiming))
                 return false;
 
             if (record.IsOptional && options != null && !options.IncludeOptionalPatches)
@@ -309,11 +369,19 @@ namespace ModAPI.Harmony
 
         private static PatchRecord CreateRecord(Type type)
         {
+            return CreateRecord(type, true);
+        }
+
+        private static PatchRecord CreateRecord(Type type, bool resolveTargets)
+        {
             var policy = FindPolicy(type);
             var targets = new List<MethodBase>();
-            var discoveredTargets = HarmonyUtil.GetPatchTargets(type);
-            if (discoveredTargets != null)
-                targets.AddRange(discoveredTargets);
+            if (resolveTargets)
+            {
+                var discoveredTargets = HarmonyUtil.GetPatchTargets(type);
+                if (discoveredTargets != null)
+                    targets.AddRange(discoveredTargets);
+            }
 
             var record = new PatchRecord();
             record.PatchType = type;
@@ -332,6 +400,7 @@ namespace ModAPI.Harmony
             record.DeveloperOnly = (policy != null && policy.DeveloperOnly) || HarmonyUtil.HasDebugAttribute(type);
             record.IsDangerous = HarmonyUtil.HasDangerousAttribute(type);
             record.HasExplicitPolicy = policy != null;
+            record.StartupTiming = policy != null ? policy.StartupTiming : PatchStartupTiming.BootCritical;
             record.Targets = targets;
             record.ManagerToggleId = policy != null ? policy.ManagerToggleId : null;
             record.ManagerToggleLabel = policy != null ? policy.ManagerToggleLabel : null;
@@ -340,6 +409,20 @@ namespace ModAPI.Harmony
             record.ManagerToggleRequiresRestart = policy == null || policy.ManagerToggleRequiresRestart;
             record.ManagerToggleSortOrder = policy != null ? policy.ManagerToggleSortOrder : 0;
             return record;
+        }
+
+        private static PatchStartupTiming ResolveStartupTiming(Type type)
+        {
+            var policy = FindPolicy(type);
+            return policy != null ? policy.StartupTiming : PatchStartupTiming.BootCritical;
+        }
+
+        private static bool IsStartupTimingIncluded(PatchStartupTiming timing, PatchRegistryOptions options)
+        {
+            if (options == null || options.IncludedStartupTimings == null || options.IncludedStartupTimings.Count == 0)
+                return true;
+
+            return options.IncludedStartupTimings.Contains(timing);
         }
 
         private static PatchPolicyAttribute FindPolicy(Type type)
@@ -457,6 +540,7 @@ namespace ModAPI.Harmony
             if (record == null) return "<null>";
             return DescribeType(record.PatchType)
                 + " domain=" + record.Domain
+                + " timing=" + record.StartupTiming
                 + " feature=" + (record.Feature ?? string.Empty)
                 + " target=" + (record.TargetBehavior ?? string.Empty);
         }

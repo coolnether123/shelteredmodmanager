@@ -28,7 +28,8 @@ namespace ShelteredAPI.UI.Compatibility
     [PatchPolicy(PatchDomain.UI, "ModUIHooks",
         TargetBehavior = "Shared button injection into supported runtime panels",
         FailureMode = "Registered ModUIHooks buttons do not appear when panels open.",
-        RollbackStrategy = "Disable the UI patch domain or remove the ModUIHooks patch host.")]
+        RollbackStrategy = "Disable the UI patch domain or remove the ModUIHooks patch host.",
+        StartupTiming = PatchStartupTiming.MenuCritical)]
     internal static class ModUIHooks
     {
         /// <summary>

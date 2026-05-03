@@ -114,6 +114,7 @@
     <Compile Include="Inspector\RuntimeDebuggerUI.cs" />
     <Compile Include="Spine\SpineSettingsHelper.cs" />
     <Compile Include="Harmony\HarmonyBootstrap.cs" />
+    <Compile Include="Harmony\DeferredPatchCoordinator.cs" />
     <Compile Include="Harmony\HarmonyUtil.cs" />
     <Compile Include="Harmony\HarmonyHelper.cs" />
     <Compile Include="Harmony\PatchRegistry.cs" />

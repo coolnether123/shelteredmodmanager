@@ -106,6 +106,7 @@
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
+    <Compile Include="Harmony\ShelteredDeferredPatchTriggers.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
     <Compile Include="Harmony\SettingsKeybindsButtonPatches.cs" />

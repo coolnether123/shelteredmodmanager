@@ -1,5 +1,6 @@
 using HarmonyLib;
 using ModAPI.Actors;
+using ModAPI.Harmony;
 using ShelteredAPI.Events;
 using ShelteredAPI.Actors;
 using System;
@@ -13,6 +14,11 @@ using ModAPI.Util;
 
 namespace ShelteredAPI.Characters.Internal
 {
+    [PatchPolicy(PatchDomain.Characters, "CharacterEffectSystemTicks",
+        TargetBehavior = "Character effect runtime registration and ticking from GameTime lifecycle updates",
+        FailureMode = "Character effects stop registering or advancing during gameplay.",
+        RollbackStrategy = "Disable the Characters patch domain or remove the character effect tick patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal sealed class CharacterEffectSystemImpl : ICharacterEffectSystem, ICharacterFactory, ISaveable
     {
         private const string ActorOwner = "shelteredapi";

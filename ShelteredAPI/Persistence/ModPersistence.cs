@@ -11,7 +11,8 @@ namespace ShelteredAPI.Persistence
     [PatchPolicy(PatchDomain.SaveFlow, "ModPersistenceRegistration",
         TargetBehavior = "Automatic saveable registration when SaveManager starts",
         FailureMode = "Registered mod persistence collections may not attach to the active SaveManager.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the ModPersistence registration hook.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the ModPersistence registration hook.",
+        StartupTiming = PatchStartupTiming.BootCritical)]
     public static class ShelteredPersistence
     {
         public static ShelteredPersistentList<T> CreateList<T>(string uniqueId)

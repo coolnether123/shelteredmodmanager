@@ -10,7 +10,8 @@ namespace ShelteredAPI.Hooks
     [PatchPolicy(PatchDomain.SaveFlow, "SaveGlobalDataCustomSession",
         TargetBehavior = "Global-data save propagation into the active custom session",
         FailureMode = "Custom save sessions miss global-data updates or drift from manifest state.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the custom global-data patch.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the custom global-data patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SaveManager), "SaveGlobalData")]
     internal static class SaveManager_SaveGlobalData_Patch
     {

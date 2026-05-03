@@ -16,7 +16,8 @@ namespace ShelteredAPI.UI.Compatibility
     [PatchPolicy(PatchDomain.UI, "UIIntegration",
         TargetBehavior = "Panel item injection and UI lifecycle events",
         FailureMode = "Custom items or panel lifecycle events do not appear correctly in UI.",
-        RollbackStrategy = "Disable the UI patch domain or isolate the affected panel patch host.")]
+        RollbackStrategy = "Disable the UI patch domain or isolate the affected panel patch host.",
+        StartupTiming = PatchStartupTiming.MenuCritical)]
     internal static class UIPatches
     {
         static UIPatches()

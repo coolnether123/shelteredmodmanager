@@ -15,7 +15,8 @@ namespace ShelteredAPI.Harmony
     [PatchPolicy(PatchDomain.Input, "ShelteredSettingsKeybindsTakeover",
         TargetBehavior = "Vanilla controls-entry takeover into ModAPI keybind UI",
         FailureMode = "Sheltered controls open the vanilla path instead of the managed ModAPI keybind UI.",
-        RollbackStrategy = "Disable the Input patch domain or remove the Sheltered settings takeover host.")]
+        RollbackStrategy = "Disable the Input patch domain or remove the Sheltered settings takeover host.",
+        StartupTiming = PatchStartupTiming.MenuCritical)]
     internal static class SettingsKeybindsButtonPatches
     {
         private static readonly HashSet<string> LoggedPanelTypes = new HashSet<string>(StringComparer.Ordinal);

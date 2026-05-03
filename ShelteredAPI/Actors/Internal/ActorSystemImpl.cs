@@ -14,7 +14,8 @@ namespace ShelteredAPI.Actors.Internal
     [PatchPolicy(PatchDomain.World, "ShelteredActorSystemTicks",
         TargetBehavior = "Sheltered actor system registration and ticking from GameTime lifecycle updates",
         FailureMode = "Actor simulation systems stop registering or advancing with the game clock.",
-        RollbackStrategy = "Disable the World patch domain or remove the Sheltered actor system tick patch host.")]
+        RollbackStrategy = "Disable the World patch domain or remove the Sheltered actor system tick patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal sealed partial class ActorSystemImpl : IActorSystem, ISaveable
     {
         private const string SaveGroupName = "ModAPI_Actors_V1";

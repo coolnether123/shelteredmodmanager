@@ -18,7 +18,8 @@ namespace ShelteredAPI.Content
     [PatchPolicy(PatchDomain.Content, "ContentInjector",
         TargetBehavior = "Custom item, loot, and icon injection into vanilla systems",
         FailureMode = "Registered content exists in metadata but fails to appear in runtime systems or UI.",
-        RollbackStrategy = "Disable the Content patch domain or remove the content injector patch host.")]
+        RollbackStrategy = "Disable the Content patch domain or remove the content injector patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class ContentInjector
     {
         private const int CustomItemTypeStart = 10000;

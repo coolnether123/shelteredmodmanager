@@ -65,7 +65,8 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredCustomScenarioSelection",
         TargetBehavior = "Custom scenario entries are surfaced in the vanilla Sheltered scenario selection panel.",
         FailureMode = "Registered custom scenarios are unavailable from the in-game scenario selection flow.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario selection patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario selection patch host.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(ScenarioSelectionPanel))]
     internal static class ShelteredCustomScenarioSelectionPatches
     {
@@ -164,7 +165,8 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredCustomScenarioSpawn",
         TargetBehavior = "Pending custom scenarios are spawned through Sheltered QuestManager once a new world is ready.",
         FailureMode = "A selected custom scenario reaches save-slot selection but never starts in the new game.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario spawn patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario spawn patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     [HarmonyPatch(typeof(QuestManager), "UpdateManager")]
     internal static class ShelteredCustomScenarioQuestManagerPatches
     {
@@ -186,7 +188,8 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredCustomScenarioStateCleanup",
         TargetBehavior = "Pending custom scenario state is cleared when the player leaves custom scenario startup flow.",
         FailureMode = "A stale pending custom scenario may spawn after the player cancels or starts a vanilla mode.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario state cleanup patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario state cleanup patch host.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     internal static class ShelteredCustomScenarioStateCleanupPatches
     {
         [HarmonyPatch(typeof(GameModeSelectionPanel), "OnSurvivalModeChosen")]
@@ -282,7 +285,8 @@ namespace ShelteredAPI.Scenarios
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100)]
+        ManagerToggleSortOrder = 100,
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringGlobalUiIsolationPatches
     {
         [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
@@ -305,7 +309,8 @@ namespace ShelteredAPI.Scenarios
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100)]
+        ManagerToggleSortOrder = 100,
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringPauseOwnershipPatches
     {
         [HarmonyPatch(typeof(PauseManager), "Pause")]
@@ -354,7 +359,8 @@ namespace ShelteredAPI.Scenarios
         ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
-        ManagerToggleSortOrder = 100)]
+        ManagerToggleSortOrder = 100,
+        StartupTiming = PatchStartupTiming.EditorDeferred)]
     internal static class ScenarioAuthoringSimulationFreezePatches
     {
         [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]
@@ -376,7 +382,8 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredScenarioDefinitionApply",
         TargetBehavior = "Active scenario definitions are applied after save load once the Sheltered world is ready.",
         FailureMode = "A scenario-bound save loads as vanilla until the next successful scenario apply.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the definition apply patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the definition apply patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
     [HarmonyPatch(typeof(QuestManager), "UpdateManager")]
     internal static class ShelteredScenarioDefinitionApplyPatches
     {
@@ -397,7 +404,8 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ShelteredCustomScenarioSlotClickGuard",
         TargetBehavior = "Save-slot clicks are briefly blocked while custom scenario UI buttons are being pressed.",
         FailureMode = "Underlying save-slot controls can steal clicks from the custom scenario hub/list.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario slot click guard patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the custom scenario slot click guard patch host.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     internal static class ShelteredCustomScenarioSlotClickGuardPatches
     {
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnSlotSelected")]

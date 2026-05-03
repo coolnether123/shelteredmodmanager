@@ -15,7 +15,8 @@ namespace ShelteredAPI.Hooks
     [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionPagingInit",
         TargetBehavior = "Paged custom-save initialization when the slot selection panel opens",
         FailureMode = "Paged save UI does not initialize correctly.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot selection init patch.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot selection init patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnShow")]
     internal static class SlotSelectionPanel_OnShow_Patch
     {
@@ -28,7 +29,8 @@ namespace ShelteredAPI.Hooks
     [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionRefreshTakeover",
         TargetBehavior = "Custom-save page takeover for slot info rendering",
         FailureMode = "Custom saves render incorrectly or page state drifts from save metadata.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot info refresh takeover.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot info refresh takeover.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSaveSlotInfo")]
     internal static class SlotSelectionPanel_RefreshSaveSlotInfo_Patch
     {
@@ -46,7 +48,8 @@ namespace ShelteredAPI.Hooks
     [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionLabelRewrite",
         TargetBehavior = "Visible slot label rewrite for paged custom saves",
         FailureMode = "Paged custom slots show misleading slot numbers.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot label rewrite patch.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot label rewrite patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SlotSelectionPanel), "RefreshSlotLabels")]
     internal static class SlotSelectionPanel_RefreshSlotLabels_Patch
     {
@@ -59,7 +62,8 @@ namespace ShelteredAPI.Hooks
     [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionLoadSaveRouting",
         TargetBehavior = "Custom-save create/load/delete routing from slot selection",
         FailureMode = "Loads, deletes, or new games can target the wrong slot or skip verification.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot chosen routing patch.")]
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the slot chosen routing patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
     [HarmonyPatch(typeof(SlotSelectionPanel), "OnSlotChosen")]
     internal static class SlotSelectionPanel_OnSlotChosen_Patch
     {
