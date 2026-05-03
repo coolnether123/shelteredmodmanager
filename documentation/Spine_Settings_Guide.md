@@ -63,6 +63,35 @@ Sliders are granular by default. `StepSize` controls the +/- button increment. T
 public float SpawnRate = 1f;
 ```
 
+Numeric widgets also support display and control tuning:
+
+```csharp
+[ModSetting(
+    "Pregnancy Duration",
+    Min = 1f,
+    Max = 14f,
+    StepSize = 0.5f,
+    FineStepSize = 0.25f,
+    LargeStepSize = 2f,
+    ValueFormat = "0.##",
+    UnitSuffix = " days",
+    Tooltip = "Drag, use +/- buttons, or click the value to type an exact duration.")]
+public float PregnancyDurationDays = 4f;
+```
+
+Useful UI fields:
+- `ValueFormat`: .NET numeric format used by the value label.
+- `UnitSuffix`: text appended to displayed numeric values.
+- `FineStepSize`: +/- button step. Falls back to `StepSize`, then a range-derived default.
+- `LargeStepSize`: +/- button step while Shift is held.
+- `ShowValueInput`: set false to hide exact numeric text entry.
+- `ShowStepperButtons`: set false to hide +/- buttons.
+- `TrueLabel` / `FalseLabel`: custom labels for bool toggles.
+- `ActionLabel`: custom text for method/button settings.
+- `Placeholder`: empty string setting placeholder.
+
+Tooltips are shown when hovering labels and interactive controls. Numeric tooltips also include the active range and step behavior.
+
 ### Pattern B: `ISettingsProvider` + `SpineSettingsHelper.Scan` (Manual Control)
 
 Use this when you need full control over settings ownership, scanning, or save semantics.

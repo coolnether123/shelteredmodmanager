@@ -39,6 +39,18 @@ namespace ModAPI.Spine
         public SliderStepMode SliderStepMode = SliderStepMode.Granular;
         public Type EnumType;
 
+        // UI Behavior
+        public string ValueFormat;
+        public string UnitSuffix;
+        public string TrueLabel;
+        public string FalseLabel;
+        public string ActionLabel;
+        public string Placeholder;
+        public bool ShowValueInput = true;
+        public bool ShowStepperButtons = true;
+        public float? FineStepSize;
+        public float? LargeStepSize;
+
         // Cached Delegates for Performance
         public Action<object, object> Setter;
         public Func<object, object> Getter;

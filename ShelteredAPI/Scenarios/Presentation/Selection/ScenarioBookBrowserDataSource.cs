@@ -30,19 +30,36 @@ namespace ShelteredAPI.Scenarios
             ScenarioBookType selectedType,
             ScenarioCatalogEntry selectedScenario)
         {
+            return BuildRows(view, selectedType, selectedScenario, null);
+        }
+
+        public List<ScenarioBookRowModel> BuildRows(
+            ScenarioBookBrowserViewKind view,
+            ScenarioBookType selectedType,
+            ScenarioCatalogEntry selectedScenario,
+            string searchFilter)
+        {
+            List<ScenarioBookRowModel> rows;
             switch (view)
             {
                 case ScenarioBookBrowserViewKind.Types:
-                    return BuildTypeRows();
+                    rows = BuildTypeRows();
+                    break;
                 case ScenarioBookBrowserViewKind.Scenarios:
-                    return BuildScenarioRows(selectedType);
+                    rows = BuildScenarioRows(selectedType);
+                    break;
                 case ScenarioBookBrowserViewKind.Saves:
-                    return BuildSaveRows(selectedScenario);
+                    rows = BuildSaveRows(selectedScenario);
+                    break;
                 case ScenarioBookBrowserViewKind.DraftDetails:
-                    return new List<ScenarioBookRowModel>();
+                    rows = new List<ScenarioBookRowModel>();
+                    break;
                 default:
-                    return new List<ScenarioBookRowModel>();
+                    rows = new List<ScenarioBookRowModel>();
+                    break;
             }
+
+            return FilterRows(rows, searchFilter);
         }
 
         public string GetHeaderTitle(ScenarioBookBrowserViewKind view, ScenarioBookType selectedType, ScenarioCatalogEntry selectedScenario)
@@ -358,6 +375,68 @@ namespace ShelteredAPI.Scenarios
                 case 4: return "Difficulty: Custom";
                 default: return "Difficulty: Unknown";
             }
+        }
+
+        private static List<ScenarioBookRowModel> FilterRows(List<ScenarioBookRowModel> rows, string searchFilter)
+        {
+            if (rows == null)
+                return new List<ScenarioBookRowModel>();
+            if (string.IsNullOrEmpty(searchFilter))
+                return rows;
+
+            List<ScenarioBookRowModel> filtered = new List<ScenarioBookRowModel>();
+            for (int i = 0; i < rows.Count; i++)
+            {
+                ScenarioBookRowModel row = rows[i];
+                if (MatchesSearch(row, searchFilter))
+                    filtered.Add(row);
+            }
+
+            return filtered;
+        }
+
+        private static bool MatchesSearch(ScenarioBookRowModel row, string searchFilter)
+        {
+            if (row == null)
+                return false;
+
+            return ContainsSearch(row.Title, searchFilter)
+                || ContainsSearch(row.Detail, searchFilter)
+                || ContainsSearch(row.Badge, searchFilter)
+                || ContainsSearch(row.Type.ToString(), searchFilter)
+                || (row.Scenario != null && MatchesScenario(row.Scenario, searchFilter))
+                || (row.Save != null && MatchesSave(row.Save, searchFilter));
+        }
+
+        private static bool MatchesScenario(ScenarioCatalogEntry scenario, string searchFilter)
+        {
+            return ContainsSearch(scenario.ScenarioId, searchFilter)
+                || ContainsSearch(scenario.DisplayName, searchFilter)
+                || ContainsSearch(scenario.Description, searchFilter)
+                || ContainsSearch(scenario.OwnerModId, searchFilter)
+                || ContainsSearch(scenario.Version, searchFilter)
+                || ContainsSearch(scenario.BaseGameMode.ToString(), searchFilter)
+                || ContainsSearch(scenario.Source.ToString(), searchFilter);
+        }
+
+        private static bool MatchesSave(SaveEntry save, string searchFilter)
+        {
+            return ContainsSearch(save.id, searchFilter)
+                || ContainsSearch(save.name, searchFilter)
+                || ContainsSearch(save.createdAt, searchFilter)
+                || ContainsSearch(save.updatedAt, searchFilter)
+                || ContainsSearch(save.gameVersion, searchFilter)
+                || ContainsSearch(save.modApiVersion, searchFilter)
+                || ContainsSearch(save.scenarioId, searchFilter)
+                || ContainsSearch(save.scenarioVersion, searchFilter)
+                || ContainsSearch(GetSaveTime(save), searchFilter)
+                || (save.saveInfo != null && ContainsSearch(save.saveInfo.familyName, searchFilter));
+        }
+
+        private static bool ContainsSearch(string value, string searchFilter)
+        {
+            return !string.IsNullOrEmpty(value)
+                && value.IndexOf(searchFilter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static string Safe(string value, string fallback)

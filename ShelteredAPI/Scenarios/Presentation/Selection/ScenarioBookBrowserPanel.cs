@@ -84,6 +84,9 @@ namespace ShelteredAPI.Scenarios
 
         private void Update()
         {
+            if (_renderer != null)
+                _renderer.HandleSearchInput(HandleSearchFilterChanged);
+
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
                 BackOrClose();
@@ -173,7 +176,7 @@ namespace ShelteredAPI.Scenarios
 
         private void RenderCurrentView(bool animate)
         {
-            _rows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario);
+            _rows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario, GetSearchFilter());
             _pageIndex = Mathf.Clamp(_pageIndex, 0, GetPageCount() - 1);
             ClearPreparedPagesWhenScopeChanged();
 
@@ -270,6 +273,13 @@ namespace ShelteredAPI.Scenarios
                 SetStatus(status);
                 RenderCurrentView(true);
             }));
+        }
+
+        private void HandleSearchFilterChanged()
+        {
+            _pageIndex = 0;
+            ClearPreparedPages();
+            RenderCurrentView(false);
         }
 
         private void SelectType(ScenarioBookType type)
@@ -496,7 +506,12 @@ namespace ShelteredAPI.Scenarios
         private string BuildRenderScopeKey()
         {
             string scenarioId = _selectedScenario != null ? _selectedScenario.ScenarioId : string.Empty;
-            return _view + "|" + _selectedType + "|" + scenarioId + "|rows=" + (_rows != null ? _rows.Count : 0);
+            return _view + "|" + _selectedType + "|" + scenarioId + "|search=" + GetSearchFilter() + "|rows=" + (_rows != null ? _rows.Count : 0);
+        }
+
+        private string GetSearchFilter()
+        {
+            return _renderer != null ? _renderer.SearchFilter : string.Empty;
         }
 
         private void SetStatus(string value)

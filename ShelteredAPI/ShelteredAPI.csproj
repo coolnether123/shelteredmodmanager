@@ -503,6 +503,7 @@
     <Compile Include="UI\FieldManual\Widgets\KeybindRowWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\SectionStampWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\BookPageNavigatorWidget.cs" />
+    <Compile Include="UI\FieldManual\Widgets\BookSearchBarWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\VanillaArrowButtonWidget.cs" />
     <Compile Include="UI\FieldManual\Layout\PanelPageState.cs" />
     <Compile Include="UI\FieldManual\Layout\PaperPagedList.cs" />
@@ -564,7 +565,6 @@
     <Compile Include="UI\Compatibility\Runtime\ModUIHookRuntimeService.cs" />
     <Compile Include="UI\Compatibility\ModManager\ModManagerPanelScaffolding.cs" />
     <Compile Include="UI\Compatibility\ModManager\ModManagerDescriptionScroller.cs" />
-    <Compile Include="UI\Compatibility\Settings\ModSettingsSearchController.cs" />
     <Compile Include="UI\Compatibility\Settings\ModSettingsPresetController.cs" />
     <Compile Include="UI\Compatibility\Settings\ModSettingsKeybindActionReset.cs" />
     <Compile Include="UI\Compatibility\Settings\ModSettingsKeybindLayout.cs" />

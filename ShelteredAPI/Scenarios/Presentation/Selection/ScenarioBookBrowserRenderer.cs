@@ -20,6 +20,8 @@ namespace ShelteredAPI.Scenarios
         private const int RightPageWidth = 430;
         private const int RowPanelHeight = 68;
         private const int DraftInputWidth = 430;
+        private const float SearchBarY = 222f;
+        private const float SearchReservedHeight = 54f;
 
         private sealed class PreparedPage
         {
@@ -35,6 +37,7 @@ namespace ShelteredAPI.Scenarios
         private UIPrimitiveFactory _ui;
         private PaperPagedList _pagedList;
         private BookPageNavigatorWidget _navigator;
+        private BookSearchBarWidget _searchBar;
         private UILabel _statusLabel;
         private UIInput _draftNameInput;
         private UIInput _draftDescriptionInput;
@@ -55,8 +58,25 @@ namespace ShelteredAPI.Scenarios
         {
             _chrome = FieldManualWindowChrome.BuildBook(root, overlayDepth, "Custom Scenarios", "Types, scenarios, and saves");
             _ui = _chrome.Ui;
+            BuildSearchBar();
             BuildPagedList();
             BuildFooter(assets);
+        }
+
+        public string SearchFilter
+        {
+            get { return _searchBar != null ? (_searchBar.Filter ?? string.Empty) : string.Empty; }
+        }
+
+        public bool IsSearchFocused
+        {
+            get { return _searchBar != null && _searchBar.HasFocus; }
+        }
+
+        public void HandleSearchInput(Action onFilterChanged)
+        {
+            if (_searchBar != null)
+                _searchBar.HandleInput("Search scenarios...", onFilterChanged);
         }
 
         public void Render(
@@ -213,9 +233,15 @@ namespace ShelteredAPI.Scenarios
         private void BuildPagedList()
         {
             Rect content = _chrome.Regions.ContentRectLocal;
-            Rect viewport = new Rect(-content.width * 0.5f, -content.height * 0.5f, content.width, content.height);
+            Rect viewport = new Rect(-content.width * 0.5f, -content.height * 0.5f, content.width, content.height - SearchReservedHeight);
             _pagedList = new PaperPagedList(viewport, _ui.NextDepth());
             _pagedList.Build(_chrome.Regions.ContentRoot);
+        }
+
+        private void BuildSearchBar()
+        {
+            _searchBar = new BookSearchBarWidget(_chrome.Palette, _chrome.Textures, _ui);
+            _searchBar.Build(_chrome.Regions.ContentRoot, "ScenarioSearchBar", new Vector3(-300f, SearchBarY, 0f), "Search scenarios...");
         }
 
         private void BuildFooter(VanillaPageTurnAssets assets)

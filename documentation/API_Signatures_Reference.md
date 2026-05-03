@@ -408,6 +408,16 @@ public class ModSettingAttribute : Attribute
     public float MaxValue;
     public float StepSize;
     public SliderStepMode SliderStepMode; // default: Granular
+    public string ValueFormat;
+    public string UnitSuffix;
+    public string TrueLabel;
+    public string FalseLabel;
+    public string ActionLabel;
+    public string Placeholder;
+    public bool ShowValueInput;
+    public bool ShowStepperButtons;
+    public float FineStepSize;
+    public float LargeStepSize;
     public string Category;
     public string DependsOnId;
     public bool ControlsChildVisibility;

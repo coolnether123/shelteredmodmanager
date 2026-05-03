@@ -49,7 +49,7 @@ namespace ShelteredAPI.UI.Compatibility
         private GameObject _pageFlipRoot;
         private BookPageNavigatorWidget _pageNavigator;
         private FieldManualBookPageTurn _pageTurn;
-        private readonly ModSettingsSearchController _searchController = new ModSettingsSearchController();
+        private BookSearchBarWidget _searchBar;
         private readonly ModSettingsPresetController _presetController = new ModSettingsPresetController();
         private readonly ModSettingsKeybindStatusController _keybindStatusController = new ModSettingsKeybindStatusController();
 
@@ -162,14 +162,9 @@ namespace ShelteredAPI.UI.Compatibility
             _presetBarRoot = new GameObject("PresetBar");
             _presetBarRoot.transform.SetParent(_chrome.Regions.ContentRoot.transform, false);
             _presetBarRoot.layer = root.gameObject.layer;
-            _presetBarRoot.transform.localPosition = new Vector3(-260f, toolsY, 0);
+            _presetBarRoot.transform.localPosition = new Vector3(60f, toolsY, 0);
 
-            _searchBarRoot = new GameObject("SearchBar");
-            _searchBarRoot.transform.SetParent(_chrome.Regions.ContentRoot.transform, false);
-            _searchBarRoot.layer = root.gameObject.layer;
-            _searchBarRoot.transform.localPosition = new Vector3(60f, toolsY, 0);
-            
-            CreateSearchBar(_searchBarRoot.transform, uiFont, ttfFont);
+            CreateSearchBar(_chrome.Regions.ContentRoot, new Vector3(-300f, toolsY, 0));
 
             _contentRoot = _chrome.Regions.ContentRoot;
 
@@ -205,8 +200,8 @@ namespace ShelteredAPI.UI.Compatibility
         {
             _keybindStatusController.Update();
 
-            if (!_inputLockedExternally)
-                _searchController.HandleInput(MaxSearchLength, COLOR_SUBTEXT, delegate
+            if (!_inputLockedExternally && _searchBar != null)
+                _searchBar.HandleInput(delegate
                 {
                     HandleSearchFilterChanged();
                 });
@@ -293,9 +288,10 @@ namespace ShelteredAPI.UI.Compatibility
             }
         }
 
-        private void CreateSearchBar(Transform parent, UIFont uiFont, Font ttfFont)
+        private void CreateSearchBar(GameObject parent, Vector3 localPosition)
         {
-            _searchController.CreateSearchBar(parent, uiFont, ttfFont, _whiteTexture, COLOR_SUBTEXT, CreateLabel);
+            _searchBar = new BookSearchBarWidget(_chrome.Palette, _chrome.Textures, _chrome.Ui, MaxSearchLength);
+            _searchBarRoot = _searchBar.Build(parent, "SearchBar", localPosition, "Search settings...");
             MMLog.WriteInfo("[ModSettingsPanel] Search using manual input mode.");
         }
         
@@ -437,7 +433,7 @@ namespace ShelteredAPI.UI.Compatibility
             var visible = hierarchy.GetFlattenedForView(viewMode, settings).ToList();
             
             // Inject Category Headers if not searching
-            if (string.IsNullOrEmpty(_searchController.Filter))
+            if (string.IsNullOrEmpty(SearchFilter))
             {
                 var withCategories = new List<SettingDefinition>();
                 string lastCategory = null;
@@ -464,7 +460,7 @@ namespace ShelteredAPI.UI.Compatibility
             else
             {
                 // Apply Search Filter
-                visible = visible.Where(d => (d.Label ?? d.Id).IndexOf(_searchController.Filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                visible = visible.Where(d => MatchesSearch(d, SearchFilter)).ToList();
             }
 
             if (provider is ICustomSettingsUI custom)
@@ -702,7 +698,7 @@ namespace ShelteredAPI.UI.Compatibility
                 _pageLabels.Add(page.Title);
             }
 
-            if (_pages.Count == 0 || (_pages.Count == 1 && _pages[0].Count == 0 && !string.IsNullOrEmpty(_searchController.Filter)))
+            if (_pages.Count == 0 || (_pages.Count == 1 && _pages[0].Count == 0 && !string.IsNullOrEmpty(SearchFilter)))
             {
                 // Handle no search results.
                 if (_pages.Count == 0)
@@ -831,7 +827,7 @@ namespace ShelteredAPI.UI.Compatibility
 
         private void HandleSearchFilterChanged()
         {
-            bool isSearching = !string.IsNullOrEmpty(_searchController.Filter);
+            bool isSearching = !string.IsNullOrEmpty(SearchFilter);
             if (isSearching)
             {
                 if (!_pageIndexBeforeSearch.HasValue)
@@ -848,6 +844,31 @@ namespace ShelteredAPI.UI.Compatibility
             }
 
             BuildMenu(_activeBitmapFont, _activeTtfFont, true);
+        }
+
+        private string SearchFilter
+        {
+            get { return _searchBar != null ? (_searchBar.Filter ?? string.Empty) : string.Empty; }
+        }
+
+        private static bool MatchesSearch(SettingDefinition def, string filter)
+        {
+            if (def == null)
+                return false;
+            if (string.IsNullOrEmpty(filter))
+                return true;
+
+            return ContainsSearch(def.Label, filter)
+                || ContainsSearch(def.Id, filter)
+                || ContainsSearch(def.Tooltip, filter)
+                || ContainsSearch(def.Category, filter)
+                || ContainsSearch(def.FieldName, filter);
+        }
+
+        private static bool ContainsSearch(string value, string filter)
+        {
+            return !string.IsNullOrEmpty(value)
+                && value.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static ModSettingsKeybindDisplayEntry CreateSyntheticHeader(string title)

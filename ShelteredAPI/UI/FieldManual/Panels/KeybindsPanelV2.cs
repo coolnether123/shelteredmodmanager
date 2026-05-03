@@ -26,6 +26,8 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private const int OverlayDepth = 50100;
         private const string OverlayName = "ShelteredAPI_KeybindBookPanel";
         private const int HeaderRowHeight = 32;
+        private const float SearchBarY = 222f;
+        private const float SearchReservedHeight = 54f;
 
         private static GameObject _instance;
 
@@ -39,6 +41,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private PaperPagedList _pagedList;
         private GameObject _pageFlipRoot;
         private BookPageNavigatorWidget _pageNavigator;
+        private BookSearchBarWidget _searchBar;
         private FieldManualBookPageTurn _pageTurn;
         private readonly PanelPageState _pageState = new PanelPageState();
         private List<List<ModSettingsKeybindDisplayEntry>> _pages = new List<List<ModSettingsKeybindDisplayEntry>>();
@@ -83,10 +86,17 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             PanelFrameRegions regions = _chrome.Regions;
             _pageFlipRoot = _ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
+            BuildSearchBar(regions);
             BuildPagedList(regions);
             BuildTooltipStrip(regions);
             BuildFooter(regions);
             BuildContent();
+        }
+
+        private void BuildSearchBar(PanelFrameRegions regions)
+        {
+            _searchBar = new BookSearchBarWidget(_palette, _chrome.Textures, _ui);
+            _searchBar.Build(regions.ContentRoot, "KeybindSearchBar", new Vector3(-300f, SearchBarY, 0f), "Search controls...");
         }
 
         private void BuildTooltipStrip(PanelFrameRegions regions)
@@ -102,7 +112,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
                 -regions.ContentRectLocal.width * 0.5f,
                 -regions.ContentRectLocal.height * 0.5f,
                 regions.ContentRectLocal.width,
-                regions.ContentRectLocal.height);
+                regions.ContentRectLocal.height - SearchReservedHeight);
 
             _pagedList = new PaperPagedList(viewport, _ui.NextDepth());
             _pagedList.Build(regions.ContentRoot);
@@ -131,7 +141,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             _settingsObject = _settingsProvider.GetSettingsObject();
             List<SettingDefinition> allDefs = _settingsProvider.GetSettings().ToList();
             List<SettingDefinition> displayDefs = allDefs.Where(IsKeybindPanelItem).ToList();
-            List<SettingDefinition> visible = displayDefs.Where(IsVisible).ToList();
+            List<SettingDefinition> visible = displayDefs.Where(IsVisible).Where(MatchesSearch).ToList();
 
             bool pairKeybinds = ModSettingsKeybindLayout.ShouldUseWideKeybindLayout(visible, displayDefs);
             List<ModSettingsKeybindDisplayEntry> entries = ModSettingsKeybindLayout.BuildDisplayEntries(visible, displayDefs, pairKeybinds);
@@ -256,11 +266,15 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         {
             if (_pagedList != null)
                 _pagedList.Clear();
+            _pageState.Reset();
             BuildContent();
         }
 
         private void Update()
         {
+            if (_searchBar != null)
+                _searchBar.HandleInput(delegate { Rebuild(); });
+
             HandlePageInput();
 
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
@@ -274,6 +288,28 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         {
             if (_pageTurn != null)
                 _pageTurn.HandlePageInput(_pageState.PageCount, KeybindCaptureListener.HasActiveCapture, ChangePage);
+        }
+
+        private bool MatchesSearch(SettingDefinition def)
+        {
+            if (def == null)
+                return false;
+
+            string filter = _searchBar != null ? _searchBar.Filter : null;
+            if (string.IsNullOrEmpty(filter))
+                return true;
+
+            return ContainsSearch(def.Label, filter)
+                || ContainsSearch(def.Id, filter)
+                || ContainsSearch(def.Tooltip, filter)
+                || ContainsSearch(def.Category, filter)
+                || ContainsSearch(def.FieldName, filter);
+        }
+
+        private static bool ContainsSearch(string value, string filter)
+        {
+            return !string.IsNullOrEmpty(value)
+                && value.IndexOf(filter, System.StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void ChangePage(int delta)

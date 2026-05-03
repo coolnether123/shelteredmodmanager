@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using ModAPI.Spine;
+using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI.FieldManual.Panels;
 using ShelteredAPI.UI.Internal.Spine;
 using ShelteredAPI.UI.Spine;
@@ -22,6 +23,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private static readonly Color ColorTrack = new Color(0.25f, 0.18f, 0.12f, 0.72f);
         private static readonly Color ColorTrackFill = new Color(0.56f, 0.38f, 0.22f, 0.96f);
         private static readonly Color ColorValue = new Color(0.20f, 0.14f, 0.09f, 1f);
+        private static readonly Color ColorInputBackground = new Color(0.18f, 0.13f, 0.09f, 0.52f);
+        private static readonly Color ColorSwatchBorder = new Color(0.18f, 0.11f, 0.06f, 0.82f);
 
         private const int ColumnWidth = 500;
         private const int LabelWidth = 255;
@@ -95,6 +98,9 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 case SettingType.String:
                     BuildStringControl(row, def, settingsObject);
                     break;
+                case SettingType.Color:
+                    BuildColorControl(row, def, settingsObject);
+                    break;
                 case SettingType.Button:
                     BuildActionControl(row, def, settingsObject);
                     break;
@@ -163,12 +169,12 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         {
             Func<bool> read = delegate { return SpineWidgetRuntime.GetValue<bool>(def, settingsObject); };
             GameObject toggle = null;
-            toggle = CreateButton(row, "Toggle", FormatBool(read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, TrackWidth, 36, delegate
+            toggle = CreateButton(row, "Toggle", FormatBool(def, read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, TrackWidth, 36, delegate
             {
                 bool next = !read();
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
                 {
-                    UpdateButtonLabel(toggle, FormatBool(next));
+                    UpdateButtonLabel(toggle, FormatBool(def, next));
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             });
@@ -189,7 +195,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                     : SpineWidgetRuntime.GetValue<float>(def, settingsObject);
             };
 
-            UILabel value = CreateValueLabel(row, FormatNumeric(read(), snapToInt), new Vector3(ValueX, LabelY, 0f), ValueWidth);
+            UILabel value = CreateValueLabel(row, FormatNumeric(def, read(), snapToInt), new Vector3(ValueX, LabelY, 0f), ValueWidth);
             UITexture fill;
             GameObject track = CreateSliderTrack(row, min, max, read(), out fill);
 
@@ -217,26 +223,34 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
                 {
-                    value.text = FormatNumeric(clamped, snapToInt);
+                    value.text = FormatNumeric(def, clamped, snapToInt);
                     UpdateSliderFill(fill, min, max, clamped);
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
             AddSliderInput(track, min, max, apply);
+            AttachTooltip(track, BuildNumericTooltip(def, min, max, snapToInt));
 
-            float buttonStep = def.StepSize.HasValue && def.StepSize.Value > 0f ? def.StepSize.Value : (snapToInt ? 1f : Mathf.Max(0.01f, (max - min) / 20f));
-            CreateButton(row, "Dec", "-", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() - buttonStep); });
-            CreateButton(row, "Inc", "+", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() + buttonStep); });
+            if (def.ShowValueInput)
+                AddNumericValueInput(value, def, settingsObject, snapToInt, min, max, apply);
+
+            if (def.ShowStepperButtons)
+            {
+                GameObject dec = CreateButton(row, "Dec", "-", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() - ResolveButtonStep(def, min, max, snapToInt)); });
+                GameObject inc = CreateButton(row, "Inc", "+", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() + ResolveButtonStep(def, min, max, snapToInt)); });
+                AttachTooltip(dec, BuildStepTooltip(def, min, max, snapToInt, false));
+                AttachTooltip(inc, BuildStepTooltip(def, min, max, snapToInt, true));
+            }
         }
 
         private void BuildEnumControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             Array values = def.EnumType != null ? Enum.GetValues(def.EnumType) : null;
             Func<object> read = delegate { return SpineWidgetRuntime.GetValue<object>(def, settingsObject); };
-            UILabel value = CreateValueLabel(row, FormatObjectValue(read()), new Vector3(TrackCenterX - 45f, LabelY, 0f), 170);
+            UILabel value = CreateValueLabel(row, FormatObjectValue(read()), new Vector3(TrackCenterX, LabelY, 0f), 140);
 
-            CreateButton(row, "CycleEnum", "Cycle", new Vector3(ColumnWidth - 44f, ControlY, 0f), 15, 88, SmallButtonHeight, delegate
+            Action<int> cycle = delegate(int delta)
             {
                 if (values == null || values.Length == 0)
                     return;
@@ -244,7 +258,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 object current = read();
                 int index = Array.IndexOf(values, current);
                 if (index < 0) index = 0;
-                else index = (index + 1) % values.Length;
+                else index = (index + delta) % values.Length;
+                if (index < 0) index += values.Length;
 
                 object next = values.GetValue(index);
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
@@ -252,15 +267,20 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                     value.text = FormatObjectValue(next);
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
-            });
+            };
+
+            GameObject previous = CreateButton(row, "PrevEnum", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
+            GameObject next = CreateButton(row, "NextEnum", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
+            AttachTooltip(previous, "Show the previous option for " + SafeLabel(def) + ".");
+            AttachTooltip(next, "Show the next option for " + SafeLabel(def) + ".");
         }
 
         private void BuildChoiceControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             Func<string> read = delegate { return SpineWidgetRuntime.GetValue<string>(def, settingsObject) ?? "None"; };
-            UILabel value = CreateValueLabel(row, read(), new Vector3(TrackCenterX - 45f, LabelY, 0f), 170);
+            UILabel value = CreateValueLabel(row, read(), new Vector3(TrackCenterX, LabelY, 0f), 140);
 
-            CreateButton(row, "CycleChoice", "Cycle", new Vector3(ColumnWidth - 44f, ControlY, 0f), 15, 88, SmallButtonHeight, delegate
+            Action<int> cycle = delegate(int delta)
             {
                 List<string> options = def.GetOptions != null ? def.GetOptions(settingsObject).ToList() : new List<string>();
                 if (options.Count == 0)
@@ -269,7 +289,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 string current = read();
                 int index = options.FindIndex(delegate(string option) { return string.Equals(option, current, StringComparison.OrdinalIgnoreCase); });
                 if (index < 0) index = 0;
-                else index = (index + 1) % options.Count;
+                else index = (index + delta) % options.Count;
+                if (index < 0) index += options.Count;
 
                 string next = options[index];
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
@@ -277,29 +298,36 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                     value.text = next;
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
-            });
+            };
+
+            GameObject previous = CreateButton(row, "PrevChoice", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
+            GameObject next = CreateButton(row, "NextChoice", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
+            AttachTooltip(previous, "Show the previous option for " + SafeLabel(def) + ".");
+            AttachTooltip(next, "Show the next option for " + SafeLabel(def) + ".");
         }
 
         private void BuildStringControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             string current = SpineWidgetRuntime.GetValue<string>(def, settingsObject) ?? string.Empty;
-            BuildReadOnlyValue(row, current);
+            CreateTextInput(row, def, settingsObject, current);
         }
 
         private void BuildActionControl(GameObject row, SettingDefinition def, object settingsObject)
         {
-            CreateButton(row, "Execute", "Execute", new Vector3(TrackCenterX, LabelY, 0f), 15, 150, 36, delegate
+            string label = string.IsNullOrEmpty(def.ActionLabel) ? "Execute" : def.ActionLabel;
+            GameObject button = CreateButton(row, "Execute", label, new Vector3(TrackCenterX, LabelY, 0f), 15, 150, 36, delegate
             {
                 if (def.OnChanged != null)
                     def.OnChanged(settingsObject);
                 _panel.OnSettingChanged();
             });
+            AttachTooltip(button, def.Tooltip);
         }
 
         private void BuildSingleKeybindControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             Func<string> display = delegate { return SpineWidgetRuntime.FormatKeyCode(SpineWidgetRuntime.GetValue<KeyCode>(def, settingsObject)); };
-            UILabel value = CreateValueLabel(row, display(), new Vector3(TrackCenterX - 48f, LabelY, 0f), 170);
+            UILabel value = CreateValueLabel(row, display(), new Vector3(TrackCenterX - 52f, LabelY, 0f), 112);
 
             KeybindCaptureListener capture = row.AddComponent<KeybindCaptureListener>();
             capture.ValueLabel = value;
@@ -314,12 +342,87 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 }
             };
 
-            CreateButton(row, "Rebind", "Rebind", new Vector3(ColumnWidth - 48f, ControlY, 0f), 14, 96, SmallButtonHeight, capture.StartCapture);
+            GameObject button = CreateButton(row, "Rebind", "Rebind", new Vector3(ColumnWidth - 48f, ControlY, 0f), 14, 96, SmallButtonHeight, capture.StartCapture);
+            AttachTooltip(button, "Change " + SafeLabel(def) + ".");
+        }
+
+        private void BuildColorControl(GameObject row, SettingDefinition def, object settingsObject)
+        {
+            Color current = SpineWidgetRuntime.GetValue<Color>(def, settingsObject);
+            GameObject swatchRoot = _chrome.Ui.CreateChild(row, "ColorSwatch", new Vector3(TrackCenterX - 35f, LabelY, 0f));
+            _chrome.Ui.CreateQuad(swatchRoot, "Border", _whiteTexture, Vector3.zero, 76, 34, ColorSwatchBorder, _chrome.Ui.NextDepth());
+            UITexture swatch = _chrome.Ui.CreateQuad(swatchRoot, "Color", _whiteTexture, Vector3.zero, 66, 24, current, _chrome.Ui.NextDepth());
+            _chrome.Ui.AddClickCollider(swatchRoot, 76, 34, null);
+
+            UILabel value = CreateValueLabel(row, FormatColor(current), new Vector3(TrackCenterX + 64f, LabelY, 0f), 130);
+            GameObject edit = CreateButton(row, "EditColor", "Pick", new Vector3(ColumnWidth - 48f, ControlY, 0f), 14, 96, SmallButtonHeight, delegate
+            {
+                ModColorPickerPanel.Show(current, delegate(Color selected)
+                {
+                    if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, selected))
+                    {
+                        current = selected;
+                        swatch.color = selected;
+                        value.text = FormatColor(selected);
+                        SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
+                    }
+                });
+            });
+
+            AttachTooltip(swatchRoot, def.Tooltip);
+            AttachTooltip(edit, "Choose a color for " + SafeLabel(def) + ".");
         }
 
         private void BuildReadOnlyValue(GameObject row, string text)
         {
             CreateValueLabel(row, text ?? string.Empty, new Vector3(TrackCenterX, LabelY, 0f), 220);
+        }
+
+        private void CreateTextInput(GameObject row, SettingDefinition def, object settingsObject, string current)
+        {
+            int inputWidth = 220;
+            _chrome.Ui.CreateQuad(row, "StringInputBackground", _whiteTexture, new Vector3(TrackCenterX, LabelY, 0f),
+                inputWidth, 32, ColorInputBackground, _chrome.Ui.NextDepth());
+
+            UILabel value = CreateValueLabel(row, string.IsNullOrEmpty(current) ? ResolvePlaceholder(def) : current,
+                new Vector3(TrackCenterX, LabelY, 0f), inputWidth - 16);
+            value.color = string.IsNullOrEmpty(current) ? _chrome.Palette.InkFaded : ColorValue;
+
+            UIInput input = value.gameObject.AddComponent<UIInput>();
+            input.label = value;
+            input.value = current ?? string.Empty;
+            input.activeTextColor = ColorValue;
+            input.caretColor = ColorValue;
+            input.selectionColor = new Color(0.35f, 0.25f, 0.16f, 0.35f);
+
+            BoxCollider collider = value.gameObject.AddComponent<BoxCollider>();
+            collider.size = new Vector3(inputWidth, 32, 1);
+            collider.center = Vector3.zero;
+
+            Action apply = delegate
+            {
+                string next = input.value ?? string.Empty;
+                if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
+                {
+                    value.text = string.IsNullOrEmpty(next) ? ResolvePlaceholder(def) : next;
+                    value.color = string.IsNullOrEmpty(next) ? _chrome.Palette.InkFaded : ColorValue;
+                    SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
+                }
+                else
+                {
+                    input.value = SpineWidgetRuntime.GetValue<string>(def, settingsObject) ?? string.Empty;
+                }
+            };
+
+            EventDelegate.Add(input.onSubmit, delegate { apply(); });
+            GameObject ok = CreateButton(row, "ApplyText", "OK", new Vector3(ColumnWidth - 48f, ControlY, 0f), 14, 96, SmallButtonHeight, delegate
+            {
+                apply();
+                input.RemoveFocus();
+            });
+
+            AttachTooltip(value.gameObject, def.Tooltip);
+            AttachTooltip(ok, "Apply text for " + SafeLabel(def) + ".");
         }
 
         private UILabel CreateValueLabel(GameObject parent, string text, Vector3 position, int width)
@@ -342,6 +445,54 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             collider.size = new Vector3(TrackWidth, 38f, 1f);
             collider.center = Vector3.zero;
             return hit;
+        }
+
+        private void AddNumericValueInput(UILabel label, SettingDefinition def, object settingsObject, bool snapToInt, float min, float max, Action<float> apply)
+        {
+            if (label == null || apply == null)
+                return;
+
+            UITexture background = _chrome.Ui.CreateQuad(label.transform.parent.gameObject, "NumericInputBackground", _whiteTexture,
+                label.transform.localPosition, ValueWidth + 8, 28, ColorInputBackground, _chrome.Ui.NextDepth());
+            background.depth = label.depth - 1;
+
+            UIInput input = label.gameObject.AddComponent<UIInput>();
+            input.label = label;
+            input.validation = def != null && !string.IsNullOrEmpty(def.UnitSuffix)
+                ? UIInput.Validation.None
+                : (snapToInt ? UIInput.Validation.Integer : UIInput.Validation.Float);
+            input.activeTextColor = ColorValue;
+            input.caretColor = ColorValue;
+            input.selectionColor = new Color(0.35f, 0.25f, 0.16f, 0.35f);
+
+            BoxCollider collider = label.gameObject.AddComponent<BoxCollider>();
+            collider.size = new Vector3(ValueWidth + 8, 28, 1);
+            collider.center = Vector3.zero;
+
+            EventDelegate.Add(input.onSubmit, delegate
+            {
+                float parsed;
+                if (TryParseNumericInput(input.value, def, out parsed))
+                    apply(Mathf.Clamp(parsed, min, max));
+
+                input.RemoveFocus();
+            });
+
+            AttachTooltip(label.gameObject, BuildValueInputTooltip(def, min, max, snapToInt));
+        }
+
+        private static bool TryParseNumericInput(string raw, SettingDefinition def, out float value)
+        {
+            value = 0f;
+            if (string.IsNullOrEmpty(raw))
+                return false;
+
+            string text = raw.Trim();
+            if (def != null && !string.IsNullOrEmpty(def.UnitSuffix) && text.EndsWith(def.UnitSuffix, StringComparison.OrdinalIgnoreCase))
+                text = text.Substring(0, text.Length - def.UnitSuffix.Length).Trim();
+
+            return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+                || float.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
         }
 
         private GameObject CreateButton(GameObject parent, string name, string text, Vector3 position, int fontSize, int width, int height, Action onClick)
@@ -403,19 +554,103 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             return snapToInt ? 1f : 0.01f;
         }
 
-        private static string FormatNumeric(float value, bool snapToInt)
+        private static float ResolveButtonStep(SettingDefinition def, float min, float max, bool snapToInt)
         {
-            return snapToInt ? Mathf.RoundToInt(value).ToString() : value.ToString("0.00", CultureInfo.InvariantCulture);
+            if (IsShiftHeld() && def != null && def.LargeStepSize.HasValue && def.LargeStepSize.Value > 0f)
+                return def.LargeStepSize.Value;
+            if (def != null && def.FineStepSize.HasValue && def.FineStepSize.Value > 0f)
+                return def.FineStepSize.Value;
+            if (def != null && def.StepSize.HasValue && def.StepSize.Value > 0f)
+                return def.StepSize.Value;
+
+            return snapToInt ? 1f : Mathf.Max(0.01f, Mathf.Abs(max - min) / 20f);
         }
 
-        private static string FormatBool(bool value)
+        private static bool IsShiftHeld()
         {
-            return value ? "ON" : "OFF";
+            return UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
+        }
+
+        private static string FormatNumeric(SettingDefinition def, float value, bool snapToInt)
+        {
+            string format = def != null ? def.ValueFormat : null;
+            string formatted;
+            if (snapToInt)
+                formatted = string.IsNullOrEmpty(format)
+                    ? Mathf.RoundToInt(value).ToString()
+                    : value.ToString(format, CultureInfo.InvariantCulture);
+            else
+                formatted = string.IsNullOrEmpty(format)
+                    ? value.ToString("0.00", CultureInfo.InvariantCulture)
+                    : value.ToString(format, CultureInfo.InvariantCulture);
+
+            if (def != null && !string.IsNullOrEmpty(def.UnitSuffix))
+                formatted += def.UnitSuffix;
+
+            return formatted;
+        }
+
+        private static string FormatBool(SettingDefinition def, bool value)
+        {
+            if (value)
+                return def != null && !string.IsNullOrEmpty(def.TrueLabel) ? def.TrueLabel : "ON";
+
+            return def != null && !string.IsNullOrEmpty(def.FalseLabel) ? def.FalseLabel : "OFF";
         }
 
         private static string FormatObjectValue(object value)
         {
             return value != null ? value.ToString() : string.Empty;
+        }
+
+        private static string FormatColor(Color color)
+        {
+            return "#" + ColorUtility.ToHtmlStringRGBA(color);
+        }
+
+        private static string ResolvePlaceholder(SettingDefinition def)
+        {
+            return def != null && !string.IsNullOrEmpty(def.Placeholder) ? def.Placeholder : "Enter text";
+        }
+
+        private static string SafeLabel(SettingDefinition def)
+        {
+            if (def == null)
+                return "this setting";
+            if (!string.IsNullOrEmpty(def.Label))
+                return def.Label;
+            return string.IsNullOrEmpty(def.Id) ? "this setting" : def.Id;
+        }
+
+        private static string BuildNumericTooltip(SettingDefinition def, float min, float max, bool snapToInt)
+        {
+            string text = def != null ? def.Tooltip : null;
+            string range = "Range: " + FormatNumeric(def, min, snapToInt) + " to " + FormatNumeric(def, max, snapToInt) + ".";
+            string step = def != null && def.SliderStepMode == SliderStepMode.Stepped
+                ? " Slider snaps to " + FormatNumeric(def, ResolveSliderStep(def, snapToInt), snapToInt) + " increments."
+                : " Drag for fine adjustment.";
+
+            return string.IsNullOrEmpty(text) ? range + step : text + "\n" + range + step;
+        }
+
+        private static string BuildValueInputTooltip(SettingDefinition def, float min, float max, bool snapToInt)
+        {
+            return BuildNumericTooltip(def, min, max, snapToInt) + "\nClick the value to type an exact number.";
+        }
+
+        private static string BuildStepTooltip(SettingDefinition def, float min, float max, bool snapToInt, bool increase)
+        {
+            float step = ResolveButtonStep(def, min, max, snapToInt);
+            string direction = increase ? "Increase" : "Decrease";
+            string text = direction + " by " + FormatNumeric(def, step, snapToInt) + ".";
+            if (def != null && def.LargeStepSize.HasValue && def.LargeStepSize.Value > 0f)
+                text += " Hold Shift for " + FormatNumeric(def, def.LargeStepSize.Value, snapToInt) + ".";
+            return text;
+        }
+
+        private static void AttachTooltip(GameObject target, string text)
+        {
+            SpineWidgetRuntime.SetTooltip(target, text);
         }
 
         private static void UpdateButtonLabel(GameObject button, string text)

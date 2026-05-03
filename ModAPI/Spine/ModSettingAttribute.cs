@@ -36,6 +36,36 @@ namespace ModAPI.Spine
 
         /// <summary>Whether slider dragging is granular or snapped to StepSize. Defaults to granular.</summary>
         public SliderStepMode SliderStepMode = SliderStepMode.Granular;
+
+        /// <summary>Numeric display format, such as "0.0", "P0", or "0.###".</summary>
+        public string ValueFormat;
+
+        /// <summary>Text appended after displayed values, such as "%", " days", or "x".</summary>
+        public string UnitSuffix;
+
+        /// <summary>Text shown for true boolean values. Defaults to ON.</summary>
+        public string TrueLabel;
+
+        /// <summary>Text shown for false boolean values. Defaults to OFF.</summary>
+        public string FalseLabel;
+
+        /// <summary>Text shown on action button widgets. Defaults to Execute.</summary>
+        public string ActionLabel;
+
+        /// <summary>Placeholder text shown for empty string settings.</summary>
+        public string Placeholder;
+
+        /// <summary>Whether numeric settings expose direct text entry in addition to dragging and buttons.</summary>
+        public bool ShowValueInput = true;
+
+        /// <summary>Whether numeric settings show +/- stepper buttons.</summary>
+        public bool ShowStepperButtons = true;
+
+        /// <summary>Optional small step used by +/- buttons. Falls back to StepSize or range-derived defaults.</summary>
+        public float FineStepSize = 0f;
+
+        /// <summary>Optional larger step used by +/- buttons while Shift is held.</summary>
+        public float LargeStepSize = 0f;
         
         /// <summary>Group settings into collapsible sections. Items with the same Category are grouped together.</summary>
         public string Category;

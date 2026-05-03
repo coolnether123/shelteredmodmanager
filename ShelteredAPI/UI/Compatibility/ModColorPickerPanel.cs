@@ -58,8 +58,8 @@ namespace ShelteredAPI.UI.Compatibility
             Log($"Show called. Initial Color: {initial}");
             if (_instance != null) Destroy(_instance);
             
-            // Use a specific depth that is definitely above the settings panel (11000)
-            var panel = UIUtil.EnsureOverlayPanel("ModAPI_ColorPicker", 13000);
+            // Keep the picker above the book-style settings overlay.
+            var panel = UIUtil.EnsureOverlayPanel("ModAPI_ColorPicker", 60000);
             var go = new GameObject("ColorPicker_Root");
             go.transform.SetParent(panel.transform, false);
             go.transform.localPosition = Vector3.zero;
