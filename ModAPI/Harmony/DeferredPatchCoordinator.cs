@@ -72,7 +72,7 @@ namespace ModAPI.Harmony
             {
                 if (AppliedGroups.Contains(groupKey))
                 {
-                    MMLog.WriteDebug("[DeferredPatchCoordinator] Already applied " + timing
+                    MMLog.WriteDebug("Already applied " + timing
                         + " for " + SafeAssemblyName(source.Assembly)
                         + " trigger=" + (trigger ?? string.Empty) + ".");
                     return;
@@ -84,7 +84,7 @@ namespace ModAPI.Harmony
             Stopwatch timer = Stopwatch.StartNew();
             try
             {
-                MMLog.WriteInfo("[DeferredPatchCoordinator] Applying " + timing
+                MMLog.WriteInfo("Applying " + timing
                     + " patches for " + SafeAssemblyName(source.Assembly)
                     + " trigger=" + (trigger ?? string.Empty) + ".");
 
@@ -93,7 +93,7 @@ namespace ModAPI.Harmony
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[DeferredPatchCoordinator] Failed applying " + timing
+                MMLog.WriteWarning("Failed applying " + timing
                     + " for " + SafeAssemblyName(source.Assembly) + ": " + ex.Message);
             }
             finally

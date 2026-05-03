@@ -516,7 +516,7 @@ namespace ModAPI.Harmony
                 for (int i = 0; i < max; i++)
                 {
                     var record = report.MissingPolicy[i];
-                    MMLog.WriteDebug("Missing policy: " + DescribeRecord(record));
+                    MMLog.WriteInfo("Missing policy: " + DescribeRecord(record));
                 }
             }
         }
