@@ -637,6 +637,11 @@ namespace ShelteredAPI.Saves
 
                 entry.saveInfo.mapSize = ExtractXmlInt(xml, "mapSize", 0);
                 entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", true);
+                entry.saveInfo.rainDiff = ExtractXmlInt(xml, "rainDifficulty", 1);
+                entry.saveInfo.resourceDiff = ExtractXmlInt(xml, "resourcesDifficulty", 1);
+                entry.saveInfo.breachDiff = ExtractXmlInt(xml, "breachDifficulty", 1);
+                entry.saveInfo.factionDiff = ExtractXmlInt(xml, "factionDifficulty", 1);
+                entry.saveInfo.moodDiff = ExtractXmlInt(xml, "moodDifficulty", 1);
             }
             catch (Exception ex)
             {
