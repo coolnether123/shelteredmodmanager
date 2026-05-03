@@ -1,6 +1,7 @@
 using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
+using ShelteredAPI.UI.Internal;
 using UnityEngine;
 
 namespace ShelteredAPI.UI.FieldManual.Frame
@@ -36,7 +37,8 @@ namespace ShelteredAPI.UI.FieldManual.Frame
                 (int)ScreenSpan, (int)ScreenSpan, Color.white, _ui.NextDepth());
             _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
 
-            BuildBook(parent);
+            if (!ModManagerPanelScaffolding.TryCloneScenarioBookVisuals(parent, _ui.NextDepth()))
+                BuildFallbackBook(parent);
 
             GameObject header = _ui.CreateChild(parent, "BookHeader", Vector3.zero);
             GameObject content = _ui.CreateChild(parent, "BookContentRoot", new Vector3(0f, -10f, 0f));
@@ -58,7 +60,7 @@ namespace ShelteredAPI.UI.FieldManual.Frame
             return new PanelFrameRegions(parent, header, content, footer, contentRect);
         }
 
-        private void BuildBook(GameObject parent)
+        private void BuildFallbackBook(GameObject parent)
         {
             _ui.CreateQuad(parent, "BookShadow", _textures.White, new Vector3(8f, -10f, 0f),
                 BookWidth, BookHeight, _palette.PaperShadow, _ui.NextDepth());
