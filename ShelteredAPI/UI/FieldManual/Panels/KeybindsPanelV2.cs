@@ -10,7 +10,6 @@ using ShelteredAPI.UI.FieldManual.Animations;
 using ShelteredAPI.UI.FieldManual.Frame;
 using ShelteredAPI.UI.FieldManual.Layout;
 using ShelteredAPI.UI.FieldManual.Primitives;
-using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 using ShelteredAPI.UI.FieldManual.Widgets;
@@ -138,7 +137,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             buttonFactory.Build(regions.FooterRoot, "DefaultsButton", "Defaults",
                 new Vector3(320f, -400f, 0f), 240, 58, 22, ResetAllDefaults);
 
-            _pageNavigator = new BookPageNavigatorWidget(_palette, _textures, _ui, _pageTurnAssets);
+            _pageNavigator = new BookPageNavigatorWidget(_palette, _chrome.Textures, _ui, _pageTurnAssets);
             _pageNavigator.Build(regions.FooterRoot, new Vector3(0f, -400f, 0f),
                 delegate { ChangePage(-1); },
                 delegate { ChangePage(1); });
@@ -217,10 +216,10 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             if (entries == null || entries.Count == 0)
                 return;
 
-            var headerFactory = new KeybindColumnHeaderWidget(_palette, _metrics, _textures, _ui);
+            var headerFactory = new KeybindColumnHeaderWidget(_palette, _metrics, _chrome.Textures, _ui);
             _pagedList.AddRow(headerFactory.Build(_pagedList.ContentRoot), HeaderRowHeight);
 
-            var rowFactory = new KeybindRowWidget(_palette, _metrics, _textures, _ui, _tooltipBus, _settingsProvider, _settingsObject, ApplyValue, OnValueChanged);
+            var rowFactory = new KeybindRowWidget(_palette, _metrics, _chrome.Textures, _ui, _tooltipBus, _settingsProvider, _settingsObject, ApplyValue, OnValueChanged);
             var stampFactory = new SectionStampWidget(_palette, _metrics, _ui);
 
             for (int i = 0; i < entries.Count; i++)
