@@ -407,6 +407,7 @@ public class ModSettingAttribute : Attribute
     public float MinValue;
     public float MaxValue;
     public float StepSize;
+    public SliderStepMode SliderStepMode; // default: Granular
     public string Category;
     public string DependsOnId;
     public bool ControlsChildVisibility;

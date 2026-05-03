@@ -244,9 +244,9 @@ namespace ShelteredAPI.UI.Internal.Spine
                         if (snapToInt)
                         {
                             var intValue = Mathf.RoundToInt(parsed);
-                            if (def.StepSize.HasValue && def.StepSize.Value > 0)
+                            if (ShouldSnapSliderToStep(def))
                             {
-                                var step = def.StepSize.Value;
+                                var step = ResolveSliderStep(def, true);
                                 intValue = Mathf.RoundToInt(Mathf.Round(parsed / step) * step);
                             }
 
@@ -334,9 +334,9 @@ namespace ShelteredAPI.UI.Internal.Spine
                     var value = Mathf.Lerp(min, max, slider.value);
                     if (snapToInt)
                     {
-                        var step = def.StepSize.HasValue && def.StepSize.Value > 0 ? (int)def.StepSize.Value : 1;
+                        var step = Mathf.Max(1, Mathf.RoundToInt(ResolveSliderStep(def, true)));
                         var raw = Mathf.RoundToInt(value);
-                        if (step > 1)
+                        if (ShouldSnapSliderToStep(def) && step > 1)
                         {
                             var offset = raw - (int)min;
                             var remainder = offset % step;
@@ -363,8 +363,11 @@ namespace ShelteredAPI.UI.Internal.Spine
                     }
                     else
                     {
-                        var step = def.StepSize.HasValue && def.StepSize.Value > 0 ? def.StepSize.Value : 0.01f;
-                        if (step > 0) value = Mathf.Round(value / step) * step;
+                        if (ShouldSnapSliderToStep(def))
+                        {
+                            var step = ResolveSliderStep(def, false);
+                            value = Mathf.Round(value / step) * step;
+                        }
                         if (value < min) value = min;
                         if (value > max) value = max;
                         valueLabel.text = value.ToString("F2");
@@ -386,6 +389,19 @@ namespace ShelteredAPI.UI.Internal.Spine
             }
 
             return container;
+        }
+
+        private static bool ShouldSnapSliderToStep(SettingDefinition def)
+        {
+            return def != null && def.SliderStepMode == SliderStepMode.Stepped;
+        }
+
+        private static float ResolveSliderStep(SettingDefinition def, bool snapToInt)
+        {
+            if (def != null && def.StepSize.HasValue && def.StepSize.Value > 0f)
+                return def.StepSize.Value;
+
+            return snapToInt ? 1f : 0.01f;
         }
 
         private static void UpdateBoolText(UILabel label, bool value)

@@ -8,7 +8,10 @@ using ModAPI.Core;
 using ShelteredAPI.UI.Internal;
 using ShelteredAPI.UI.Internal.Spine;
 using ModAPI.Spine;
+using ShelteredAPI.UI.Compatibility.Settings;
+using ShelteredAPI.UI.FieldManual.Animations;
 using ShelteredAPI.UI.FieldManual.Panels;
+using ShelteredAPI.UI.FieldManual.Widgets;
 using ShelteredAPI.UI.Spine;
 
 namespace ShelteredAPI.UI.Compatibility
@@ -40,11 +43,14 @@ namespace ShelteredAPI.UI.Compatibility
         private UILabel _pagingLabel;
         private GameObject _simpleModeBtn;
         private GameObject _advancedModeBtn;
-        private GameObject _prevBtn;
-        private GameObject _nextBtn;
         private UIFont _activeBitmapFont;
         private Font _activeTtfFont;
         private FieldManualWindowChrome _chrome;
+        private GameObject _pageFlipRoot;
+        private BookPageNavigatorWidget _pageNavigator;
+        private IFieldManualTransition _pageTransition;
+        private FieldManualPageTurnController _pageTurnController;
+        private VanillaPageTurnAssets _pageTurnAssets;
         private readonly ModSettingsSearchController _searchController = new ModSettingsSearchController();
         private readonly ModSettingsPresetController _presetController = new ModSettingsPresetController();
         private readonly ModSettingsKeybindStatusController _keybindStatusController = new ModSettingsKeybindStatusController();
@@ -57,6 +63,7 @@ namespace ShelteredAPI.UI.Compatibility
         private bool _isRebuilding = false;
         private bool _isClosing = false;
         private bool _inputLockedExternally = false;
+        private bool _controllerAxisButtonDown;
         private const int MaxSearchLength = 64;
 
         // Colors
@@ -70,6 +77,8 @@ namespace ShelteredAPI.UI.Compatibility
 
         private const int ROW_HEIGHT = 70;
         private const float WideKeybindRowX = -420f;
+        private const float SettingPageLeftX = -500f;
+        private const float SettingPageRightX = 120f;
         
         /// <summary>
         /// Opens the shared settings window for the supplied mod entry and rebuilds the full UI from its provider.
@@ -145,6 +154,8 @@ namespace ShelteredAPI.UI.Compatibility
                 : ("Mod Settings - v" + _currentMod.Version);
 
             _chrome = FieldManualWindowChrome.BuildBook(root.gameObject, 50000, title, subtitle);
+            ConfigurePageTurnController(root.gameObject);
+            _pageFlipRoot = _chrome.Ui.CreateChild(root.gameObject, "BookPageFlipRoot", Vector3.zero);
 
             float toolsY = 222f;
 
@@ -167,23 +178,44 @@ namespace ShelteredAPI.UI.Compatibility
 
             float bottomY = -400f;
 
-            _prevBtn = CreateButton(root, "BtnPrev", "<", new Vector3(-60, bottomY, 0), 20, Color.white, uiFont, ttfFont, 50, 40, () => ChangePage(-1));
-            _nextBtn = CreateButton(root, "BtnNext", ">", new Vector3(60, bottomY, 0), 20, Color.white, uiFont, ttfFont, 50, 40, () => ChangePage(1));
-            _pagingLabel = CreateLabel(root, "Paging", "1/1", new Vector3(0, bottomY, 0), 18, COLOR_SUBTEXT, uiFont, ttfFont, 100);
-            _pagingLabel.alignment = NGUIText.Alignment.Center;
+            _pageNavigator = new BookPageNavigatorWidget(_chrome.Palette, _chrome.Textures, _chrome.Ui, _pageTurnAssets);
+            _pageNavigator.Build(_chrome.Regions.FooterRoot, new Vector3(0f, bottomY, 0f),
+                delegate { ChangePage(-1); },
+                delegate { ChangePage(1); });
+
+            _pagingLabel = _chrome.Ui.CreateLabel(_chrome.Regions.FooterRoot, "Paging", "Settings",
+                new Vector3(0f, bottomY + 62f, 0f), 18, _chrome.Palette.Ink,
+                360, 28, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _chrome.Ui.NextDepth());
+            _pagingLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+            _pagingLabel.effectStyle = UILabel.Effect.Outline;
+            _pagingLabel.effectColor = new Color(0.86f, 0.78f, 0.56f, 0.55f);
 
             _keybindStatusController.Build(root, new Vector3(0, bottomY + 48, 0), uiFont, ttfFont, CreateLabel);
             ModSettingsKeybindStatusReporter.Attach(_keybindStatusController.Report);
             
-            var defaultsButton = CreateButton(root, "BtnReset", "Defaults", new Vector3(-460f, bottomY, 0), 18, Color.white, uiFont, ttfFont, 160, 58, () => OnResetClicked());
+            var defaultsButton = CreateButton(_chrome.Regions.FooterRoot.transform, "BtnReset", "Defaults", new Vector3(-460f, bottomY, 0), 18, Color.white, uiFont, ttfFont, 160, 58, () => OnResetClicked());
             SpineWidgetRuntime.SetTooltip(defaultsButton, "Restore every setting on this page to its default value.");
 
-            var saveButton = CreateButton(root, "BtnSaveAndClose", "Save & Close", new Vector3(420f, bottomY, 0), 18, Color.white, uiFont, ttfFont, 220, 58, () => OnClose());
+            var saveButton = CreateButton(_chrome.Regions.FooterRoot.transform, "BtnSaveAndClose", "Save & Close", new Vector3(420f, bottomY, 0), 18, Color.white, uiFont, ttfFont, 220, 58, () => OnClose());
             SpineWidgetRuntime.SetTooltip(saveButton, "Save changes and return to the previous settings screen.");
 
             MMLog.WriteDebug("UI Initial Construction Complete. Building Menu Content...");
             BuildMenu(uiFont, ttfFont);
             MMLog.WriteDebug($"UI Built for {_currentMod.Id}. Total settings: {_pages.Sum(p => p.Count)}");
+        }
+
+        private void ConfigurePageTurnController(GameObject root)
+        {
+            _pageTransition = new FieldManualFadeTransition(FieldManualTransitionProfile.VanillaPageInfoFade);
+            _pageTurnAssets = new VanillaPageTurnAssets();
+            _pageTurnController = root.AddComponent<FieldManualPageTurnController>();
+            _pageTurnController.Configure(
+                FieldManualPageTurnProfile.VanillaClipboard,
+                new FieldManualFadeTransition(FieldManualTransitionProfile.FadeOut(0.06f, 0f, UITweener.Method.EaseOut)),
+                _pageTransition,
+                new FieldManualFadeTransition(FieldManualTransitionProfile.Between(0.35f, 1f, 0.12f, 0f, UITweener.Method.EaseOut)),
+                new FieldManualPageTurnAudio(_pageTurnAssets),
+                new FieldManualPageFlipOverlay(_pageTurnAssets, _chrome.Textures, _chrome.Ui, _chrome.Metrics.PanelWidth - 40f, _chrome.Metrics.PanelHeight - 140f));
         }
 
         private void Update()
@@ -206,6 +238,8 @@ namespace ShelteredAPI.UI.Compatibility
                     return;
                 OnClose();
             }
+
+            HandlePageInput();
         }
 
         private void OnResetClicked()
@@ -311,8 +345,81 @@ namespace ShelteredAPI.UI.Compatibility
 
         private void ChangePage(int delta)
         {
-             _currentPageIndex = Mathf.Clamp(_currentPageIndex + delta, 0, _pages.Count - 1);
+            if (_inputLockedExternally || KeybindCaptureListener.HasActiveCapture())
+                return;
+
+            if (_pageTurnController != null)
+            {
+                _pageTurnController.TryTurn(
+                    delta,
+                    _contentRoot,
+                    _pageFlipRoot != null ? _pageFlipRoot : _contentRoot,
+                    _pagingLabel != null ? _pagingLabel.gameObject : (_pageNavigator != null ? _pageNavigator.PageLabelRoot : null),
+                    CanChangePage,
+                    CommitPageChange,
+                    UpdatePageVisibility);
+                return;
+            }
+
+            if (!CanChangePage(delta))
+                return;
+
+            CommitPageChange(delta);
             UpdatePageVisibility();
+        }
+
+        private void HandlePageInput()
+        {
+            if (_pages.Count <= 1 || _inputLockedExternally || KeybindCaptureListener.HasActiveCapture())
+                return;
+            if (_pageTurnController != null && _pageTurnController.IsLocked)
+                return;
+
+            if (UnityEngine.Input.GetKeyDown(KeyCode.LeftArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
+            {
+                ChangePage(-1);
+                return;
+            }
+
+            if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageDown))
+            {
+                ChangePage(1);
+                return;
+            }
+
+            float horizontal = PlatformInput.GetAxis(PlatformInput.MenuInputAxis.UIhorizontal);
+            if (!_controllerAxisButtonDown)
+            {
+                if (horizontal > 0.5f)
+                {
+                    ChangePage(1);
+                    _controllerAxisButtonDown = true;
+                }
+                else if (horizontal < -0.5f)
+                {
+                    ChangePage(-1);
+                    _controllerAxisButtonDown = true;
+                }
+            }
+            else if (horizontal < 0.5f && horizontal > -0.5f)
+            {
+                _controllerAxisButtonDown = false;
+            }
+        }
+
+        private bool CanChangePage(int delta)
+        {
+            if (delta < 0)
+                return _currentPageIndex > 0;
+            if (delta > 0)
+                return _currentPageIndex < _pages.Count - 1;
+
+            return false;
+        }
+
+        private void CommitPageChange(int delta)
+        {
+            _currentPageIndex = Mathf.Clamp(_currentPageIndex + delta, 0, Mathf.Max(0, _pages.Count - 1));
         }
 
         private void BuildMenu(UIFont uiFont, Font ttfFont, bool keepPage = false)
@@ -553,6 +660,9 @@ namespace ShelteredAPI.UI.Compatibility
 
             var pagedEntries = BuildSectionedDisplayEntryPages(displayEntries, itemsPerPage);
             ModSettingsKeybindWidgetBuilder keybindBuilder = useWideKeybindLayout ? CreateKeybindWidgetBuilder(data) : null;
+            ModSettingsBookWidgetRenderer bookRenderer = useWideKeybindLayout
+                ? null
+                : new ModSettingsBookWidgetRenderer(_chrome, _whiteTexture, _activeBitmapFont, _activeTtfFont, this);
 
             for (int i = 0; i < pagedEntries.Count; i++)
             {
@@ -588,7 +698,7 @@ namespace ShelteredAPI.UI.Compatibility
                     }
                     else if (columns == 2)
                     {
-                        x = (col == 0) ? -420f : 80f;
+                        x = (col == 0) ? SettingPageLeftX : SettingPageRightX;
                     }
                     else
                     {
@@ -608,6 +718,10 @@ namespace ShelteredAPI.UI.Compatibility
                     {
                         widget = keybindBuilder.CreateDualKeybindWidget(entry.Primary, entry.Secondary);
                     }
+                    else if (!useWideKeybindLayout)
+                    {
+                        widget = bookRenderer.CreateWidget(_contentRoot, entry.Primary, data, isSectionHeader);
+                    }
                     else
                     {
                         widget = SpineWidgetFactory.CreateWidget(entry.Primary, _contentRoot.transform, data, this);
@@ -618,7 +732,7 @@ namespace ShelteredAPI.UI.Compatibility
                         widget.transform.localPosition = new Vector3(x, y, 0);
                         if (useWideKeybindLayout)
                             ModSettingsKeybindWidgetBuilder.NormalizeWideKeybindWidgetAlignment(widget, entry);
-                        ApplyBookWidgetStyle(widget, isSectionHeader);
+                        ModSettingsBookWidgetRenderer.ApplyStyle(widget, isSectionHeader);
                         pageItems.Add(widget);
                         foreach (var w in widget.GetComponentsInChildren<UIWidget>(true)) w.depth += 100;
 
@@ -641,26 +755,6 @@ namespace ShelteredAPI.UI.Compatibility
                     _pages.Add(new List<GameObject>());
                     _pageLabels.Add(BuildPageLabel("No Results", 1, 1));
                 }
-            }
-        }
-
-        private static void ApplyBookWidgetStyle(GameObject widget, bool isSectionHeader)
-        {
-            if (widget == null)
-                return;
-
-            UILabel[] labels = widget.GetComponentsInChildren<UILabel>(true);
-            for (int i = 0; i < labels.Length; i++)
-            {
-                UILabel label = labels[i];
-                if (label == null)
-                    continue;
-
-                label.color = isSectionHeader ? COLOR_HEADER : COLOR_TEXT;
-                if (label.fontSize <= 0)
-                    continue;
-
-                label.overflowMethod = UILabel.Overflow.ClampContent;
             }
         }
 
@@ -902,14 +996,8 @@ namespace ShelteredAPI.UI.Compatibility
                 _pagingLabel.gameObject.SetActive(hasPages);
                 _pagingLabel.text = GetCurrentPageLabel();
             }
-            if (_prevBtn != null) _prevBtn.SetActive(showPaging);
-            if (_nextBtn != null) _nextBtn.SetActive(showPaging);
-
-            if (showPaging)
-            {
-                UpdateButtonState(_prevBtn, _currentPageIndex > 0, true);
-                UpdateButtonState(_nextBtn, _currentPageIndex < _pages.Count - 1, true);
-            }
+            if (_pageNavigator != null)
+                _pageNavigator.UpdateState(_currentPageIndex, showPaging ? _pages.Count : 1);
         }
 
         private string GetCurrentPageLabel()

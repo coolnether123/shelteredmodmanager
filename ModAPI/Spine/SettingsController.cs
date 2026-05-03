@@ -75,11 +75,11 @@ namespace ModAPI.Spine
                 var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(field, typeof(ModSettingAttribute));
                 if (attr != null)
                 {
-                    var def = CreateDefinition(attr, field);
+                    var def = SettingDefinitionFactory.Create(attr, field, type);
                     def.Getter = CreateGetter(field);
                     def.Setter = CreateSetter(field);
                     def.DefaultValue = def.Getter(owner);
-                    ProcessPresets(field, def);
+                    SettingDefinitionFactory.ApplyPresets(field, def);
                     definitions.Add(def);
                 }
             }
@@ -90,11 +90,11 @@ namespace ModAPI.Spine
                 var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(prop, typeof(ModSettingAttribute));
                 if (attr != null && prop.CanRead && prop.CanWrite)
                 {
-                    var def = CreateDefinition(attr, prop);
+                    var def = SettingDefinitionFactory.Create(attr, prop, type);
                     def.Getter = CreateGetter(prop);
                     def.Setter = CreateSetter(prop);
                     def.DefaultValue = def.Getter(owner);
-                    ProcessPresets(prop, def);
+                    SettingDefinitionFactory.ApplyPresets(prop, def);
                     definitions.Add(def);
                 }
             }
@@ -105,7 +105,7 @@ namespace ModAPI.Spine
                 var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(method, typeof(ModSettingAttribute));
                 if (attr != null && method.GetParameters().Length == 0)
                 {
-                    var def = CreateDefinition(attr, method);
+                    var def = SettingDefinitionFactory.Create(attr, method, type);
                     def.Type = SettingType.Button;
                     def.OnChanged = (obj) => method.Invoke(owner, null);
                     definitions.Add(def);
@@ -113,79 +113,6 @@ namespace ModAPI.Spine
             }
 
             return definitions.OrderBy(d => d.SortOrder).ThenBy(d => d.Label).ToList();
-        }
-
-        private SettingDefinition CreateDefinition(ModSettingAttribute attr, MemberInfo member)
-        {
-            Type memberType = (member is FieldInfo f) ? f.FieldType : (member is PropertyInfo p) ? p.PropertyType : typeof(void);
-            
-            var def = new SettingDefinition
-            {
-                Id = member.Name,
-                FieldName = member.Name,
-                Label = attr.Label ?? member.Name,
-                Tooltip = attr.Tooltip,
-                Mode = attr.Mode,
-                Scope = attr.Scope,
-                CarryOverToNewGamePlus = attr.CarryOverToNewGamePlus,
-                NewGamePlusMerge = attr.NewGamePlusMerge,
-                AllowExternalWrite = attr.AllowExternalWrite,
-                MinValue = attr.MinValue,
-                MaxValue = attr.MaxValue,
-                StepSize = attr.StepSize,
-                Category = attr.Category,
-                SortOrder = attr.SortOrder,
-                DependsOnId = attr.DependsOnId,
-                ControlsChildVisibility = attr.ControlsChildVisibility,
-                RequiresRestart = attr.RequiresRestart,
-                SyncMode = attr.SyncMode
-            };
-
-            ApplyViewVisibilityFromMode(def);
-
-            // Map Types
-            if (attr.Type != SettingType.Unknown) def.Type = attr.Type;
-            else if (memberType == typeof(bool)) def.Type = SettingType.Bool;
-            else if (memberType == typeof(int)) def.Type = SettingType.Int;
-            else if (memberType == typeof(float)) def.Type = SettingType.Float;
-            else if (memberType == typeof(string)) def.Type = SettingType.String;
-            else if (memberType == typeof(KeyCode)) { def.Type = SettingType.Keybind; def.EnumType = memberType; }
-            else if (memberType.IsEnum) { def.Type = SettingType.Enum; def.EnumType = memberType; }
-
-            return def;
-        }
-
-        private static void ApplyViewVisibilityFromMode(SettingDefinition def)
-        {
-            switch (def.Mode)
-            {
-                case SettingMode.Advanced:
-                    def.ShowInSimpleView = false;
-                    def.ShowInAdvancedView = true;
-                    break;
-                case SettingMode.Simple:
-                case SettingMode.Both:
-                default:
-                    def.ShowInSimpleView = true;
-                    def.ShowInAdvancedView = true;
-                    break;
-            }
-        }
-
-        private void ProcessPresets(MemberInfo member, SettingDefinition def)
-        {
-            var presets = Attribute.GetCustomAttributes(member, typeof(ModSettingPresetAttribute));
-            if (presets != null)
-            {
-                foreach (var attr in presets)
-                {
-                    ModSettingPresetAttribute p = attr as ModSettingPresetAttribute;
-                    if (p != null)
-                    {
-                        def.Presets[p.PresetName] = p.Value;
-                    }
-                }
-            }
         }
 
         private Func<object, object> CreateGetter(MemberInfo member)

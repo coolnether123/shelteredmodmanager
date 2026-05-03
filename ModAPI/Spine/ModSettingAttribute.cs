@@ -31,8 +31,11 @@ namespace ModAPI.Spine
         /// <summary>Maximum value for numeric sliders.</summary>
         public float MaxValue = 100f;
         
-        /// <summary>Step increment for sliders/buttons. 0 uses defaults (1 for int, 0.1 for float).</summary>
+        /// <summary>Step increment for +/- buttons, and for sliders when SliderStepMode is Stepped.</summary>
         public float StepSize = 0f; 
+
+        /// <summary>Whether slider dragging is granular or snapped to StepSize. Defaults to granular.</summary>
+        public SliderStepMode SliderStepMode = SliderStepMode.Granular;
         
         /// <summary>Group settings into collapsible sections. Items with the same Category are grouped together.</summary>
         public string Category;

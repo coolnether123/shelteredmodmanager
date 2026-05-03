@@ -31,7 +31,7 @@ namespace ModAPI.Examples
         [ModSetting("Vertical Position", MinValue = -400f, MaxValue = 400f, Mode = SettingMode.Advanced)]
         public float VerticalOffset = 250f;
 
-        [ModSetting("Menu Scale", MinValue = 1, MaxValue = 10, Mode = SettingMode.Simple, StepSize = 1)]
+        [ModSetting("Menu Scale", MinValue = 1, MaxValue = 10, Mode = SettingMode.Simple, StepSize = 1, SliderStepMode = SliderStepMode.Stepped)]
         public int ScaleMultiplier = 2;
 
         [ModSetting("Show Advanced Options", Mode = SettingMode.Both, ControlsChildVisibility = true)]

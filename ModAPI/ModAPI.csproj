@@ -92,6 +92,7 @@
     <Compile Include="UI\ScrollInputBridge.cs" />
     <Compile Include="Spine\SettingsEnums.cs" />
     <Compile Include="Spine\SettingDefinition.cs" />
+    <Compile Include="Spine\SettingDefinitionFactory.cs" />
     <Compile Include="Spine\SettingsHierarchy.cs" />
     <Compile Include="Spine\ModSettingAttribute.cs" />
     <Compile Include="Spine\ISettingsProvider.cs" />

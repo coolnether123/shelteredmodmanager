@@ -542,6 +542,7 @@
     <Compile Include="UI\Compatibility\Settings\ModSettingsKeybindRuntime.cs" />
     <Compile Include="UI\Compatibility\Settings\ModSettingsKeybindStatus.cs" />
     <Compile Include="UI\Compatibility\Settings\ModSettingsKeybindWidgetBuilder.cs" />
+    <Compile Include="UI\Compatibility\Settings\ModSettingsBookWidgetRenderer.cs" />
     <Compile Include="UI\Compatibility\DebugInternal\UIDebugSourceModels.cs" />
     <Compile Include="UI\Compatibility\DebugInternal\UIDebugSourceMethodLocator.cs" />
     <Compile Include="UI\Compatibility\DebugInternal\UIDebugSourceDiffService.cs" />

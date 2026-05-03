@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Linq;
-using UnityEngine;
 using ModAPI.Core;
 
 namespace ModAPI.Spine
@@ -35,8 +34,8 @@ namespace ModAPI.Spine
                     var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(field, typeof(ModSettingAttribute));
                     if (attr != null)
                     {
-                        var def = CreateDefinition(attr, field.Name, field.FieldType, type);
-                        ProcessPresets(field, def);
+                        var def = SettingDefinitionFactory.Create(attr, field, type);
+                        SettingDefinitionFactory.ApplyPresets(field, def);
                         definitions.Add(def);
                         continue;
                     }
@@ -58,8 +57,8 @@ namespace ModAPI.Spine
                     var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(prop, typeof(ModSettingAttribute));
                     if (attr != null)
                     {
-                        var def = CreateDefinition(attr, prop.Name, prop.PropertyType, type);
-                        ProcessPresets(prop, def);
+                        var def = SettingDefinitionFactory.Create(attr, prop, type);
+                        SettingDefinitionFactory.ApplyPresets(prop, def);
                         definitions.Add(def);
                     }
                 }
@@ -75,7 +74,7 @@ namespace ModAPI.Spine
                 var attr = (ModSettingAttribute)Attribute.GetCustomAttribute(method, typeof(ModSettingAttribute));
                 if (attr != null && method.GetParameters().Length == 0)
                 {
-                    var def = CreateDefinition(attr, method.Name, typeof(void), type);
+                    var def = SettingDefinitionFactory.Create(attr, method, type);
                     def.Type = SettingType.Button; 
                     def.OnChanged = (obj) => method.Invoke(obj, null);
                     definitions.Add(def);
@@ -86,163 +85,6 @@ namespace ModAPI.Spine
             // Sort by order
             definitions.Sort((a, b) => a.SortOrder.CompareTo(b.SortOrder));
             return definitions;
-        }
-
-        private static void ProcessPresets(MemberInfo member, SettingDefinition def)
-        {
-            var presets = (ModSettingPresetAttribute[])Attribute.GetCustomAttributes(member, typeof(ModSettingPresetAttribute));
-            foreach (var p in presets) def.Presets[p.PresetName] = p.Value;
-        }
-
-        private static SettingDefinition CreateDefinition(ModSettingAttribute attr, string memberName, Type memberType, Type settingsType)
-        {
-            var def = new SettingDefinition
-            {
-                Id = memberName, 
-                FieldName = memberName,
-                Label = attr.Label ?? memberName,
-                Tooltip = attr.Tooltip,
-                Mode = attr.Mode,
-                AllowExternalWrite = attr.AllowExternalWrite,
-                MinValue = attr.MinValue,
-                MaxValue = attr.MaxValue,
-                StepSize = attr.StepSize,
-                Category = attr.Category,
-                SortOrder = attr.SortOrder,
-                DependsOnId = attr.DependsOnId,
-                ControlsChildVisibility = attr.ControlsChildVisibility,
-                RequiresRestart = attr.RequiresRestart,
-                HeaderColor = string.IsNullOrEmpty(attr.HeaderColor) ? (Color?)null : ParseColor(attr.HeaderColor),
-                SyncMode = attr.SyncMode
-            };
-
-            ApplyViewVisibilityFromMode(def);
-
-            // Wire up OnChanged from attribute (String method name)
-            if (!string.IsNullOrEmpty(attr.OnChanged))
-            {
-                var m = settingsType.GetMethod(attr.OnChanged, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (m != null)
-                {
-                    // Basic Invoke optimization (Cached MethodInfo in closure)
-                    // Note: Full Delegate.CreateDelegate optimization requires generic knowledge of T which is erased here.
-                    def.OnChanged = (obj) => {
-                        try { m.Invoke(obj, null); }
-                        catch (Exception ex) { MMLog.WriteError($"Error invoking OnChanged '{attr.OnChanged}': {ex}"); }
-                    };
-                }
-                else
-                {
-                    MMLog.WriteError($"OnChanged method '{attr.OnChanged}' not found on type {settingsType.Name}");
-                }
-            }
-
-            // Wire up VisibleWhen logic from attribute
-            if (!string.IsNullOrEmpty(attr.VisibilityMethod))
-            {
-                def.VisibleWhen = (obj) => {
-                    try {
-                        var m = settingsType.GetMethod(attr.VisibilityMethod, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (m != null) return (bool)m.Invoke(obj, null);
-                        var p = settingsType.GetProperty(attr.VisibilityMethod, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (p != null) return (bool)p.GetValue(obj, null);
-                        MMLog.WriteError($"VisibilityMethod '{attr.VisibilityMethod}' not found on {settingsType.Name}");
-                        return true;
-                    } catch (Exception ex) {
-                        MMLog.WriteError($"Error executing VisibilityMethod '{attr.VisibilityMethod}': {ex}");
-                        return true;
-                    }
-                };
-            }
-
-            // Wire up OptionsSource logic
-            if (!string.IsNullOrEmpty(attr.OptionsSource))
-            {
-                def.GetOptions = (obj) => {
-                    try {
-                        var m = settingsType.GetMethod(attr.OptionsSource, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (m != null) return (IEnumerable<string>)m.Invoke(obj, null);
-                        var p = settingsType.GetProperty(attr.OptionsSource, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (p != null) return (IEnumerable<string>)p.GetValue(obj, null);
-                        MMLog.WriteError($"OptionsSource '{attr.OptionsSource}' not found on {settingsType.Name}");
-                        return Enumerable.Empty<string>();
-                    } catch (Exception ex) {
-                        MMLog.WriteError($"Error executing OptionsSource '{attr.OptionsSource}': {ex}");
-                        return Enumerable.Empty<string>();
-                    }
-                };
-            }
-
-            // Wire up Validate logic
-            if (!string.IsNullOrEmpty(attr.ValidateMethod))
-            {
-                def.Validate = (newVal, obj) => {
-                    try {
-                        var m = settingsType.GetMethod(attr.ValidateMethod, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (m != null) return (bool)m.Invoke(obj, new[] { newVal });
-                        MMLog.WriteError($"ValidateMethod '{attr.ValidateMethod}' not found on {settingsType.Name}");
-                        return true;
-                    } catch (Exception ex) {
-                        MMLog.WriteError($"Error executing ValidateMethod '{attr.ValidateMethod}': {ex}");
-                        return true;
-                    }
-                };
-            }
-
-            // Map standard C# types to SettingTypes
-            if (attr.Type != SettingType.Unknown)
-            {
-                def.Type = attr.Type;
-            }
-            else
-            {
-                if (memberType == typeof(bool)) def.Type = SettingType.Bool;
-                else if (memberType == typeof(int)) def.Type = SettingType.Int;
-                else if (memberType == typeof(float)) def.Type = SettingType.Float;
-                else if (memberType == typeof(string)) def.Type = SettingType.String;
-                else if (memberType == typeof(KeyCode)) { def.Type = SettingType.Keybind; def.EnumType = memberType; }
-                else if (memberType == typeof(Color)) def.Type = SettingType.Color;
-                else if (memberType.IsEnum)
-                {
-                    def.Type = SettingType.Enum;
-                    def.EnumType = memberType;
-                }
-            }
-
-            return def;
-        }
-
-        private static void ApplyViewVisibilityFromMode(SettingDefinition def)
-        {
-            switch (def.Mode)
-            {
-                case SettingMode.Advanced:
-                    def.ShowInSimpleView = false;
-                    def.ShowInAdvancedView = true;
-                    break;
-                case SettingMode.Simple:
-                case SettingMode.Both:
-                default:
-                    def.ShowInSimpleView = true;
-                    def.ShowInAdvancedView = true;
-                    break;
-            }
-        }
-
-        private static Color ParseColor(string hex)
-        {
-            if (string.IsNullOrEmpty(hex)) return Color.white;
-            try
-            {
-                hex = hex.TrimStart('#');
-                if (hex.Length < 6) return Color.white;
-                float r = int.Parse(hex.Substring(0, 2), System.Globalization.NumberStyles.HexNumber) / 255f;
-                float g = int.Parse(hex.Substring(2, 2), System.Globalization.NumberStyles.HexNumber) / 255f;
-                float b = int.Parse(hex.Substring(4, 2), System.Globalization.NumberStyles.HexNumber) / 255f;
-                float a = hex.Length >= 8 ? int.Parse(hex.Substring(6, 2), System.Globalization.NumberStyles.HexNumber) / 255f : 1f;
-                return new Color(r, g, b, a);
-            }
-            catch { return Color.white; }
         }
     }
 }

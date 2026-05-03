@@ -56,4 +56,13 @@ namespace ModAPI.Spine
         Choice
     }
 
+    /// <summary>
+    /// Controls whether slider movement is continuous or snapped to StepSize.
+    /// </summary>
+    public enum SliderStepMode
+    {
+        Granular,
+        Stepped
+    }
+
 }

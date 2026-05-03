@@ -1,7 +1,6 @@
 using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
-using ShelteredAPI.UI.Internal;
 using UnityEngine;
 
 namespace ShelteredAPI.UI.FieldManual.Frame
@@ -13,10 +12,10 @@ namespace ShelteredAPI.UI.FieldManual.Frame
     internal sealed class ShelteredBookFrame : IPanelFrame
     {
         private const float ScreenSpan = 4000f;
-        private const int FallbackPageWidth = 560;
-        private const int FallbackPageHeight = 660;
-        private const int FallbackBookWidth = 1240;
-        private const int FallbackBookHeight = 720;
+        private const int PageWidth = 560;
+        private const int PageHeight = 660;
+        private const int BookWidth = 1240;
+        private const int BookHeight = 720;
 
         private readonly IThemePalette _palette;
         private readonly IThemeMetrics _metrics;
@@ -37,9 +36,7 @@ namespace ShelteredAPI.UI.FieldManual.Frame
                 (int)ScreenSpan, (int)ScreenSpan, Color.white, _ui.NextDepth());
             _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
 
-            int bookDepth = _ui.NextDepth();
-            if (!ModManagerPanelScaffolding.TryCloneScenarioBookVisuals(parent, bookDepth))
-                BuildFallbackBook(parent);
+            BuildBook(parent);
 
             GameObject header = _ui.CreateChild(parent, "BookHeader", Vector3.zero);
             GameObject content = _ui.CreateChild(parent, "BookContentRoot", new Vector3(0f, -10f, 0f));
@@ -61,23 +58,23 @@ namespace ShelteredAPI.UI.FieldManual.Frame
             return new PanelFrameRegions(parent, header, content, footer, contentRect);
         }
 
-        private void BuildFallbackBook(GameObject parent)
+        private void BuildBook(GameObject parent)
         {
-            _ui.CreateQuad(parent, "BookFallbackShadow", _textures.White, new Vector3(8f, -10f, 0f),
-                FallbackBookWidth, FallbackBookHeight, _palette.PaperShadow, _ui.NextDepth());
+            _ui.CreateQuad(parent, "BookShadow", _textures.White, new Vector3(8f, -10f, 0f),
+                BookWidth, BookHeight, _palette.PaperShadow, _ui.NextDepth());
 
-            _ui.CreateQuad(parent, "BookFallbackCover", _textures.Gunmetal(FallbackBookWidth, FallbackBookHeight),
-                Vector3.zero, FallbackBookWidth, FallbackBookHeight, Color.white, _ui.NextDepth());
+            _ui.CreateQuad(parent, "BookCover", _textures.Gunmetal(BookWidth, BookHeight),
+                Vector3.zero, BookWidth, BookHeight, Color.white, _ui.NextDepth());
 
-            _ui.CreateQuad(parent, "LeftPage", _textures.Paper(FallbackPageWidth, FallbackPageHeight),
-                new Vector3(-300f, 0f, 0f), FallbackPageWidth, FallbackPageHeight, Color.white, _ui.NextDepth());
-            _ui.CreateQuad(parent, "RightPage", _textures.Paper(FallbackPageWidth, FallbackPageHeight),
-                new Vector3(300f, 0f, 0f), FallbackPageWidth, FallbackPageHeight, Color.white, _ui.NextDepth());
+            _ui.CreateQuad(parent, "LeftPage", _textures.Paper(PageWidth, PageHeight),
+                new Vector3(-300f, 0f, 0f), PageWidth, PageHeight, Color.white, _ui.NextDepth());
+            _ui.CreateQuad(parent, "RightPage", _textures.Paper(PageWidth, PageHeight),
+                new Vector3(300f, 0f, 0f), PageWidth, PageHeight, Color.white, _ui.NextDepth());
 
             _ui.CreateQuad(parent, "BookCreaseShadow", _textures.White, Vector3.zero,
-                66, FallbackPageHeight + 20, new Color(0.08f, 0.04f, 0.03f, 0.36f), _ui.NextDepth());
+                66, PageHeight + 20, new Color(0.08f, 0.04f, 0.03f, 0.36f), _ui.NextDepth());
             _ui.CreateQuad(parent, "BookCreaseHighlight", _textures.White, new Vector3(-18f, 0f, 0f),
-                4, FallbackPageHeight, new Color(0.95f, 0.88f, 0.66f, 0.22f), _ui.NextDepth());
+                4, PageHeight, new Color(0.95f, 0.88f, 0.66f, 0.22f), _ui.NextDepth());
 
             Texture2D rivet = _textures.Rivet(18);
             int ringDepth = _ui.NextDepth();

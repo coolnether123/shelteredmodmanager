@@ -56,6 +56,13 @@ public class MyMod : ModManagerBase<MySettings>, IModPlugin
 }
 ```
 
+Sliders are granular by default. `StepSize` controls the +/- button increment. To make slider dragging snap to that increment, opt in explicitly:
+
+```csharp
+[ModSetting("Spawn Rate", Min = 0f, Max = 5f, StepSize = 0.25f, SliderStepMode = SliderStepMode.Stepped)]
+public float SpawnRate = 1f;
+```
+
 ### Pattern B: `ISettingsProvider` + `SpineSettingsHelper.Scan` (Manual Control)
 
 Use this when you need full control over settings ownership, scanning, or save semantics.

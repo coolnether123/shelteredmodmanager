@@ -36,6 +36,7 @@ namespace ModAPI.Spine
         public float? MinValue;
         public float? MaxValue;
         public float? StepSize;
+        public SliderStepMode SliderStepMode = SliderStepMode.Granular;
         public Type EnumType;
 
         // Cached Delegates for Performance

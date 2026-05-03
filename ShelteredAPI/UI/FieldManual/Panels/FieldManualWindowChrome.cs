@@ -5,7 +5,6 @@ using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Widgets;
-using ShelteredAPI.UI.Internal;
 using UnityEngine;
 
 namespace ShelteredAPI.UI.FieldManual.Panels
