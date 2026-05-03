@@ -28,6 +28,7 @@ namespace ShelteredAPI.UI.Compatibility
         
         private UIButton _backButton;
         private UIButton _settingsButton;
+        private ModEntry _currentMod;
         private bool _bookFound;
         private bool _initialized = false;
         private NGUIScrollHelper _scrollHelper;
@@ -161,75 +162,16 @@ namespace ShelteredAPI.UI.Compatibility
             {
                 var mod = mods[i];
                 
-                // Clone button
-                var btnGO = (GameObject)UnityEngine.Object.Instantiate(template.gameObject);
-                btnGO.transform.parent = transform;
-                btnGO.name = "ModBtn_" + mod.Id;
-                btnGO.layer = gameObject.layer;
-                
-                // Remove localization components that override text
-                var localize = btnGO.GetComponentsInChildren<UILocalize>(true);
-                foreach (var loc in localize) UnityEngine.Object.DestroyImmediate(loc);
-                
-                var buttonMsgs = btnGO.GetComponentsInChildren<UIButtonMessage>(true);
-                foreach (var msg in buttonMsgs) UnityEngine.Object.DestroyImmediate(msg);
-                
-                btnGO.SetActive(true);
-                
-                // Position - NGUI uses center pivot by default for positioned elements
-                Vector3 pos = new Vector3(xPos, startY - (i * spacing), 0);
-                btnGO.transform.localPosition = pos;
-                btnGO.transform.localRotation = Quaternion.identity;
-                btnGO.transform.localScale = Vector3.one;
-                
-                // Set size
-                var widget = btnGO.GetComponent<UIWidget>();
-                if (widget != null) 
-                {
-                    widget.width = 300;
-                    widget.height = 70;
-                    widget.depth = 10015; // Above book, below text
-                }
-                
-                // Update label - CRITICAL FIX
-                var label = btnGO.GetComponentInChildren<UILabel>();
-                if (label != null)
-                {
-                    // Destroy any localization on the label itself
-                    var labelLocalize = label.GetComponent<UILocalize>();
-                    if (labelLocalize != null) UnityEngine.Object.DestroyImmediate(labelLocalize);
-                    
-                    label.text = mod.Name;
-                    label.fontSize = 24;
-                    label.color = textColor;
-                    label.alignment = NGUIText.Alignment.Center;
-                    label.overflowMethod = UILabel.Overflow.ShrinkContent;
-                    label.width = 280;
-                    label.depth = 10020; // Text on top
-                    
-                    // Force immediate update
-                    label.ProcessText();
-                    label.MarkAsChanged();
-                }
-                
-                // Set background sprite depths
-                var sprites = btnGO.GetComponentsInChildren<UISprite>(true);
-                foreach (var s in sprites)
-                {
-                    if (s != widget) s.depth = 10015; // Background sprites
-                }
-                
-                // Get the UIButton component
-                var btn = btnGO.GetComponent<UIButton>();
-                if (btn != null)
-                {
-                    if (btn.onClick != null) btn.onClick.Clear();
-                    btn.isEnabled = true;
-                }
-                
                 // Hook up click event with a closure-friendly copy of the mod entry
                 var capture = mod;
-                UIEventListener.Get(btnGO).onClick = (g) => ShowDetails(capture);
+                Vector3 pos = new Vector3(xPos, startY - (i * spacing), 0);
+                UIButton btn = CreatePanelButton(template, "ModBtn_" + mod.Id, mod.Name, pos, 300, 70, 24, textColor, delegate
+                {
+                    ShowDetails(capture);
+                });
+                if (btn == null)
+                    continue;
+                GameObject btnGO = btn.gameObject;
                 
                 _modButtons.Add(btn);
                 _modButtonObjects.Add(btnGO); // For the scroll helper to track
@@ -330,140 +272,119 @@ namespace ShelteredAPI.UI.Compatibility
             // Back button positioned at bottom-left, moved down 40px from original
             Vector3 backPos = new Vector3(-460f, -410f, 0);
             
-            // Clone back button
-            var btnGO = (GameObject)UnityEngine.Object.Instantiate(template.gameObject);
-            btnGO.transform.parent = transform;
-            btnGO.name = "BackButton";
-            btnGO.layer = gameObject.layer;
-            
-            // Remove localization components
-            var localize = btnGO.GetComponentsInChildren<UILocalize>(true);
-            foreach (var loc in localize) UnityEngine.Object.DestroyImmediate(loc);
-            
-            var buttonMsgs = btnGO.GetComponentsInChildren<UIButtonMessage>(true);
-            foreach (var msg in buttonMsgs) UnityEngine.Object.DestroyImmediate(msg);
-            
-            btnGO.SetActive(true);
-            btnGO.transform.localPosition = backPos;
-            btnGO.transform.localRotation = Quaternion.identity;
-            btnGO.transform.localScale = Vector3.one;
-            
-            // Set size
-            var widget = btnGO.GetComponent<UIWidget>();
-            if (widget != null)
-            {
-                widget.width = 200;
-                widget.height = 60;
-                widget.depth = 10015;
-            }
-            
-            // Update label - CRITICAL: Make sure text is visible
-            var label = btnGO.GetComponentInChildren<UILabel>();
-            if (label != null)
-            {
-                var labelLocalize = label.GetComponent<UILocalize>();
-                if (labelLocalize != null) UnityEngine.Object.DestroyImmediate(labelLocalize);
-                
-                label.text = "Back";
-                label.fontSize = 24;
-                label.color = _bookFound ? new Color(0.1f, 0.1f, 0.1f) : Color.white;
-                label.alignment = NGUIText.Alignment.Center;
-                label.depth = 10020;
-                label.ProcessText();
-                label.MarkAsChanged();
-            }
-            
-            // Set background depths
-            var sprites = btnGO.GetComponentsInChildren<UISprite>(true);
-            foreach (var s in sprites)
-            {
-                s.depth = 10015;
-            }
-            
-            // Get button and ensure it's enabled
-            var btn = btnGO.GetComponent<UIButton>();
-            if (btn != null)
-            {
-                if (btn.onClick != null) btn.onClick.Clear();
-                btn.isEnabled = true;
-            }
-            
-            UIEventListener.Get(btnGO).onClick = (g) => OnCancel();
-            _backButton = btn;
+            _backButton = CreatePanelButton(
+                template,
+                "BackButton",
+                "Back",
+                backPos,
+                200,
+                60,
+                24,
+                _bookFound ? new Color(0.1f, 0.1f, 0.1f) : Color.white,
+                OnCancel);
         }
 
         private void CreateSettingsButton(UIButton template)
         {
             // Positioned under description, above back button area's counterpart on right page
             Vector3 pos = new Vector3(300f, -305f, 0); // Centered on right page, closer to description area
-            
-            var btnGO = (GameObject)UnityEngine.Object.Instantiate(template.gameObject);
-            btnGO.transform.parent = transform;
-            btnGO.name = "SettingsButton";
-            btnGO.layer = gameObject.layer;
-            
-            // Cleanup
-            var localize = btnGO.GetComponentsInChildren<UILocalize>(true);
-            foreach (var loc in localize) UnityEngine.Object.DestroyImmediate(loc);
-            
-            var buttonMsgs = btnGO.GetComponentsInChildren<UIButtonMessage>(true);
-            foreach (var msg in buttonMsgs) UnityEngine.Object.DestroyImmediate(msg);
-            
-            btnGO.SetActive(true);
-            btnGO.transform.localPosition = pos;
-            btnGO.transform.localRotation = Quaternion.identity;
-            btnGO.transform.localScale = Vector3.one;
-            
-            // Size
-            var widget = btnGO.GetComponent<UIWidget>();
-            if (widget != null)
+
+            _settingsButton = CreatePanelButton(template, "SettingsButton", "SETTINGS", pos, 200, 50, 22, new Color(0.1f, 0.1f, 0.1f), delegate
             {
-                widget.width = 200;
-                widget.height = 50;
-                widget.depth = 10015;
+                if (_currentMod != null)
+                    ModSettingsPanel.Show(_currentMod);
+            });
+            
+            // Only hide initially - will be shown by ShowDetails if applicable
+            if (_settingsButton != null)
+                _settingsButton.gameObject.SetActive(false);
+        }
+
+        private UIButton CreatePanelButton(UIButton template, string name, string text, Vector3 localPosition, int width, int height, int fontSize, Color labelColor, Action onClick)
+        {
+            UIButton button = UIUtil.CloneButton(template, transform, text);
+            if (button == null)
+                return null;
+
+            GameObject buttonObject = button.gameObject;
+            buttonObject.name = name;
+            buttonObject.layer = gameObject.layer;
+            NGUITools.SetLayer(buttonObject, gameObject.layer);
+            buttonObject.SetActive(true);
+            buttonObject.transform.localPosition = localPosition;
+            buttonObject.transform.localRotation = Quaternion.identity;
+            buttonObject.transform.localScale = Vector3.one;
+
+            ApplyPanelButtonLayout(buttonObject, width, height, fontSize, labelColor);
+            ConfigurePanelButtonClick(button, onClick);
+            return button;
+        }
+
+        private static void ApplyPanelButtonLayout(GameObject buttonObject, int width, int height, int fontSize, Color labelColor)
+        {
+            UIWidget rootWidget = buttonObject.GetComponent<UIWidget>();
+            if (rootWidget != null)
+            {
+                rootWidget.width = width;
+                rootWidget.height = height;
+                rootWidget.depth = 10015;
             }
-            
-            // Label
-            var label = btnGO.GetComponentInChildren<UILabel>();
-            if (label != null)
+
+            BoxCollider collider = buttonObject.GetComponent<BoxCollider>();
+            if (collider != null)
             {
-                var labelLocalize = label.GetComponent<UILocalize>();
-                if (labelLocalize != null) UnityEngine.Object.DestroyImmediate(labelLocalize);
-                
-                label.text = "SETTINGS";
-                label.fontSize = 22;
-                label.color = new Color(0.1f, 0.1f, 0.1f);
+                collider.center = Vector3.zero;
+                collider.size = new Vector3(width, height, 1f);
+            }
+
+            UISprite[] sprites = buttonObject.GetComponentsInChildren<UISprite>(true);
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                if (sprites[i] != null)
+                    sprites[i].depth = 10015;
+            }
+
+            UILabel[] labels = buttonObject.GetComponentsInChildren<UILabel>(true);
+            for (int i = 0; i < labels.Length; i++)
+            {
+                UILabel label = labels[i];
+                if (label == null)
+                    continue;
+
+                label.text = label.text ?? string.Empty;
+                label.fontSize = fontSize;
+                label.color = labelColor;
                 label.alignment = NGUIText.Alignment.Center;
+                label.overflowMethod = UILabel.Overflow.ShrinkContent;
+                label.width = width - 20;
                 label.depth = 10020;
                 label.ProcessText();
                 label.MarkAsChanged();
             }
-            
-            // Depths
-            var sprites = btnGO.GetComponentsInChildren<UISprite>(true);
-            foreach (var s in sprites) s.depth = 10015;
-            
-            var btn = btnGO.GetComponent<UIButton>();
-            if (btn != null)
+        }
+
+        private static void ConfigurePanelButtonClick(UIButton button, Action onClick)
+        {
+            if (button == null)
+                return;
+
+            if (button.onClick != null)
+                button.onClick.Clear();
+            button.isEnabled = true;
+
+            UIEventListener[] inheritedListeners = button.gameObject.GetComponents<UIEventListener>();
+            for (int i = 0; i < inheritedListeners.Length; i++)
             {
-                if (btn.onClick != null) btn.onClick.Clear();
-                btn.isEnabled = true;
+                if (inheritedListeners[i] != null)
+                    UnityEngine.Object.DestroyImmediate(inheritedListeners[i]);
             }
-            
-            UIEventListener.Get(btnGO).onClick = (g) => 
+
+            UIEventListener listener = button.gameObject.AddComponent<UIEventListener>();
+            listener.onClick = delegate(GameObject clicked)
             {
-                // Capture current mod
-                // We need to store current mod in a field since ShowDetails sets it
-                if (_currentMod != null)
-                {
-                    ModSettingsPanel.Show(_currentMod);
-                }
+                if (onClick != null)
+                    onClick();
             };
-            
-            _settingsButton = btn;
-            
-            // Only hide initially - will be shown by ShowDetails if applicable
-            btnGO.SetActive(false); 
         }
 
         private UILabel CreateSimpleLabel(string text, float x, float y, int fontSize, Color color, NGUIText.Alignment alignment, int width)
@@ -584,8 +505,6 @@ namespace ShelteredAPI.UI.Compatibility
             }
         }
         
-        private ModEntry _currentMod;
-
         public override void OnShow()
         {
             IsShowingModManager = true;

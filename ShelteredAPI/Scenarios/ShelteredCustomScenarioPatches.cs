@@ -15,13 +15,12 @@ namespace ShelteredAPI.Scenarios
 {
     internal static class ShelteredCustomScenarioRuntimeState
     {
-        private static int _blockSlotClicksUntilFrame;
         private static int _lastLoggedBlockedUntilFrame = -1;
         private static bool _customModeActive;
 
         public static bool IsSlotClickBlocked
         {
-            get { return Time.frameCount <= _blockSlotClicksUntilFrame; }
+            get { return UIFlowGuard.IsSlotClickBlocked; }
         }
 
         public static void SetCustomModeActive(bool active)
@@ -31,16 +30,17 @@ namespace ShelteredAPI.Scenarios
 
         public static bool ShouldBlockSlotInteraction(Component component)
         {
-            return UIFlowGuard.BlockSlotClicks || IsSlotClickBlocked || _customModeActive;
+            return UIFlowGuard.IsSlotClickBlocked || _customModeActive;
         }
 
         public static void BlockSlotClicksBriefly()
         {
-            _blockSlotClicksUntilFrame = Math.Max(_blockSlotClicksUntilFrame, Time.frameCount + 2);
-            if (_lastLoggedBlockedUntilFrame != _blockSlotClicksUntilFrame)
+            UIFlowGuard.BlockSlotClicksForFrames(2);
+            int blockedUntilFrame = UIFlowGuard.BlockSlotClicksUntilFrame;
+            if (_lastLoggedBlockedUntilFrame != blockedUntilFrame)
             {
-                _lastLoggedBlockedUntilFrame = _blockSlotClicksUntilFrame;
-                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot clicks blocked until frame " + _blockSlotClicksUntilFrame
+                _lastLoggedBlockedUntilFrame = blockedUntilFrame;
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot clicks blocked until frame " + blockedUntilFrame
                     + " (current=" + Time.frameCount + ").");
             }
         }
