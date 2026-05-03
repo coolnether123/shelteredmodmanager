@@ -51,6 +51,8 @@ namespace ShelteredAPI.UI.Internal
                     clone.layer = parent.layer;
                     NGUITools.SetLayer(clone, parent.layer);
 
+                    StripClonedScenarioBehaviors(clone);
+
                     UIButton[] buttons = clone.GetComponentsInChildren<UIButton>(true);
                     for (int i = 0; i < buttons.Length; i++)
                         Object.Destroy(buttons[i].gameObject);
@@ -81,6 +83,82 @@ namespace ShelteredAPI.UI.Internal
             }
 
             return false;
+        }
+
+        private static void StripClonedScenarioBehaviors(GameObject clone)
+        {
+            if (clone == null)
+                return;
+
+            foreach (UILocalize localize in clone.GetComponentsInChildren<UILocalize>(true))
+                Object.Destroy(localize);
+            foreach (UIButtonMessage message in clone.GetComponentsInChildren<UIButtonMessage>(true))
+                Object.Destroy(message);
+            foreach (UIPlaySound sound in clone.GetComponentsInChildren<UIPlaySound>(true))
+                Object.Destroy(sound);
+            foreach (UI_PlaySound sound in clone.GetComponentsInChildren<UI_PlaySound>(true))
+                Object.Destroy(sound);
+            foreach (UIPlayTween tween in clone.GetComponentsInChildren<UIPlayTween>(true))
+                Object.Destroy(tween);
+            foreach (UIPlayAnimation animation in clone.GetComponentsInChildren<UIPlayAnimation>(true))
+                Object.Destroy(animation);
+            foreach (UIKeyNavigation navigation in clone.GetComponentsInChildren<UIKeyNavigation>(true))
+                Object.Destroy(navigation);
+
+            UIEventListener[] listeners = clone.GetComponentsInChildren<UIEventListener>(true);
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                UIEventListener listener = listeners[i];
+                if (listener == null)
+                    continue;
+
+                listener.onSubmit = null;
+                listener.onClick = null;
+                listener.onDoubleClick = null;
+                listener.onHover = null;
+                listener.onPress = null;
+                listener.onSelect = null;
+                listener.onScroll = null;
+                listener.onDrag = null;
+                listener.onDrop = null;
+                listener.onKey = null;
+                listener.enabled = false;
+                Object.Destroy(listener);
+            }
+
+            Collider[] colliders = clone.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                if (colliders[i] == null)
+                    continue;
+
+                colliders[i].enabled = false;
+                Object.Destroy(colliders[i]);
+            }
+
+            Collider2D[] colliders2D = clone.GetComponentsInChildren<Collider2D>(true);
+            for (int i = 0; i < colliders2D.Length; i++)
+            {
+                if (colliders2D[i] == null)
+                    continue;
+
+                colliders2D[i].enabled = false;
+                Object.Destroy(colliders2D[i]);
+            }
+
+            MonoBehaviour[] behaviours = clone.GetComponentsInChildren<MonoBehaviour>(true);
+            for (int i = 0; i < behaviours.Length; i++)
+            {
+                MonoBehaviour behaviour = behaviours[i];
+                if (behaviour == null)
+                    continue;
+
+                if (behaviour is UIWidget || behaviour is UIPanel)
+                    continue;
+
+                behaviour.enabled = false;
+                Object.Destroy(behaviour);
+            }
         }
 
         internal static void CreateClickBlocker(Transform parent, int layer)
