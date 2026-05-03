@@ -19,6 +19,7 @@ namespace ModAPI.Spine
     public class SettingsController : ISettingsProvider, ISettingsProvider2
     {
         private readonly object _owner;
+        private readonly object _notificationTarget;
         private readonly ModEntry _mod;
         private readonly IPluginContext _context;
         private readonly List<SettingDefinition> _definitions;
@@ -32,10 +33,16 @@ namespace ModAPI.Spine
         public bool IsReady { get; private set; }
 
         public SettingsController(IPluginContext context, object owner)
+            : this(context, owner, null)
+        {
+        }
+
+        public SettingsController(IPluginContext context, object owner, object notificationTarget)
         {
             _context = context;
-            _mod = context.Mod;
+            _mod = context != null ? context.Mod : null;
             _owner = owner;
+            _notificationTarget = notificationTarget;
             _definitions = Scan(owner);
             _defById = _definitions.ToDictionary(d => d.Id);
             IsReady = true;
@@ -48,6 +55,13 @@ namespace ModAPI.Spine
         public void OnSettingsLoaded()
         {
             ModManagerBase manager = _owner as ModManagerBase;
+            if (manager != null)
+            {
+                manager.OnSettingsLoaded();
+                return;
+            }
+
+            manager = _notificationTarget as ModManagerBase;
             if (manager != null) manager.OnSettingsLoaded();
         }
 

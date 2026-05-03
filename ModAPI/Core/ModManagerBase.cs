@@ -1,8 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
-using System.Linq; // Added for .Any() extension method
 using UnityEngine;
 using ModAPI.Harmony;
 using ModAPI.Core;
@@ -73,13 +71,13 @@ namespace ModAPI.Core
             RefreshRandomStream();
             
             // 1. Auto-Detect "Inline" Settings if no Config was manually set
-            if (Config == null && HasModSettings(this))
+            if (Config == null && SpineSettingsDiscovery.HasSettings(this))
             {
                 var controller = new SettingsController(context, this);
                 Config = this;
                 
                 // IMMEDIATE ASSIGNMENT (Prevents UI Null Checks)
-                context.Mod.SettingsProvider = controller;
+                SettingsProviderRegistration.Register(context.Mod, context, controller);
                 
                 // Load (Safe to happen now)
                 controller.Load();
@@ -122,18 +120,6 @@ namespace ModAPI.Core
             ScanForPersistence();
         }
 
-        private bool HasModSettings(object target)
-        {
-            if (target == null) return false;
-            var type = target.GetType();
-            return type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                       .Any(f => f.IsDefined(typeof(ModSettingAttribute), true)) ||
-                   type.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                       .Any(p => p.IsDefined(typeof(ModSettingAttribute), true)) ||
-                   type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                       .Any(m => m.IsDefined(typeof(ModSettingAttribute), true));
-        }
-
         protected void CreateSettings<T>() where T : class, new()
         {
             if (Context == null) throw new InvalidOperationException("CreateSettings must be called during or after Initialize.");
@@ -141,7 +127,7 @@ namespace ModAPI.Core
             var config = new T();
             Config = config;
             var controller = new SettingsController(Context, config);
-            Context.Mod.SettingsProvider = controller;
+            SettingsProviderRegistration.Register(Context.Mod, Context, controller);
             controller.Load();
 
             // SUBSCRIBE: Per-Save re-load catch for manual Config

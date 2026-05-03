@@ -808,7 +808,12 @@ namespace ModAPI.Core
 
                     var settingsProvider = plugin as ISettingsProvider;
                     if (entry != null && entry.SettingsProvider == null && settingsProvider != null)
-                        entry.SettingsProvider = settingsProvider;
+                        RegisterSettingsProvider(entry, ctx, settingsProvider, "ISettingsProvider");
+                    else if (entry != null && entry.SettingsProvider != null)
+                        SettingsProviderRegistration.SetContextSettings(ctx, entry.SettingsProvider);
+
+                    if (entry != null && entry.SettingsProvider == null)
+                        TryRegisterDiscoveredSettingsProvider(entry, ctx, plugin);
 
                     MMLog.WriteDebug("Starting plugin: " + type.FullName);
                     plugin.Start(ctx);
@@ -821,6 +826,46 @@ namespace ModAPI.Core
                     _loadErrors++;
                 }
             }
+        }
+
+        private static bool TryRegisterDiscoveredSettingsProvider(ModEntry entry, IPluginContext context, IModPlugin plugin)
+        {
+            object settingsObject;
+            string sourceName;
+            if (!SpineSettingsDiscovery.TryFindSettingsObject(plugin, out settingsObject, out sourceName))
+                return false;
+
+            try
+            {
+                SettingsController controller = new SettingsController(context, settingsObject, plugin);
+                RegisterSettingsProvider(entry, context, controller, "auto-discovered " + sourceName);
+
+                try
+                {
+                    controller.Load();
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError("[PluginManager] Auto-discovered settings load failed for " + entry.Id + ": " + ex.Message);
+                }
+
+                MMLog.WriteInfo("[PluginManager] Auto-registered Spine settings for " + entry.Id + " from " + plugin.GetType().Name + "." + sourceName + ".");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[PluginManager] Auto-discovered settings registration failed for " + entry.Id + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private static void RegisterSettingsProvider(ModEntry entry, IPluginContext context, ISettingsProvider provider, string source)
+        {
+            if (entry == null || provider == null)
+                return;
+
+            SettingsProviderRegistration.Register(entry, context, provider);
+            MMLog.WriteDebug("[PluginManager] Registered settings provider for " + entry.Id + " via " + source + ".");
         }
 
         private static bool IsPluginType(Type type)
