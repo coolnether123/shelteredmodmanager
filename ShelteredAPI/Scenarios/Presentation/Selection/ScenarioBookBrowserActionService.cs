@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Core;
+using ModAPI.Scenarios;
 using ShelteredAPI.Saves;
 
 namespace ShelteredAPI.Scenarios
@@ -9,19 +10,23 @@ namespace ShelteredAPI.Scenarios
         private readonly ScenarioBrowserPanelAdapter _adapter;
         private readonly ScenarioLaunchCoordinator _launchCoordinator;
         private readonly IScenarioSaveLibrary _saveLibrary;
+        private readonly ScenarioDraftMetadataEditService _draftMetadataEditService;
 
         public ScenarioBookBrowserActionService(
             ScenarioBrowserPanelAdapter adapter,
             ScenarioLaunchCoordinator launchCoordinator,
-            IScenarioSaveLibrary saveLibrary)
+            IScenarioSaveLibrary saveLibrary,
+            ScenarioDraftMetadataEditService draftMetadataEditService)
         {
             if (adapter == null) throw new ArgumentNullException("adapter");
             if (launchCoordinator == null) throw new ArgumentNullException("launchCoordinator");
             if (saveLibrary == null) throw new ArgumentNullException("saveLibrary");
+            if (draftMetadataEditService == null) throw new ArgumentNullException("draftMetadataEditService");
 
             _adapter = adapter;
             _launchCoordinator = launchCoordinator;
             _saveLibrary = saveLibrary;
+            _draftMetadataEditService = draftMetadataEditService;
         }
 
         public bool StartScenario(ScenarioCatalogEntry entry, out string status)
@@ -122,6 +127,35 @@ namespace ShelteredAPI.Scenarios
                 MMLog.WriteWarning("[ScenarioBookBrowser] Failed to create scenario authoring draft: " + ex.Message);
                 return false;
             }
+        }
+
+        public bool UpdateDraftMetadata(ScenarioCatalogEntry entry, string displayName, string description, out ScenarioInfo updatedInfo, out string status)
+        {
+            updatedInfo = null;
+            status = null;
+            if (entry == null || entry.Source != ScenarioCatalogSource.Draft)
+            {
+                status = "Select a draft scenario first.";
+                return false;
+            }
+
+            string error;
+            if (!_draftMetadataEditService.TryUpdate(
+                    entry.ScenarioId,
+                    new ScenarioDraftMetadataUpdate
+                    {
+                        DisplayName = displayName,
+                        Description = description
+                    },
+                    out updatedInfo,
+                    out error))
+            {
+                status = "Could not save draft details: " + Safe(error, "unknown error");
+                return false;
+            }
+
+            status = "Draft details saved.";
+            return true;
         }
 
         public bool LoadSave(ScenarioCatalogEntry entry, SaveEntry save, out string status)

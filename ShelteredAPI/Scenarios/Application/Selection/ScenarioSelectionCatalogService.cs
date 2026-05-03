@@ -217,7 +217,14 @@ namespace ShelteredAPI.Scenarios
                 if (draft == null || string.IsNullOrEmpty(draft.Id))
                     continue;
 
-                ScenarioBaseGameMode baseGameMode = ResolveDraftBaseGameMode(draft);
+                ScenarioDefinition definition = LoadDraftDefinition(draft);
+                ScenarioBaseGameMode baseGameMode = ResolveDraftBaseGameMode(definition);
+                string displayName = definition != null && !string.IsNullOrEmpty(definition.DisplayName)
+                    ? definition.DisplayName
+                    : (string.IsNullOrEmpty(draft.DisplayName) ? draft.Id : draft.DisplayName);
+                string description = definition != null && definition.Description != null
+                    ? definition.Description
+                    : "Authoring draft. Open the editor to continue working on this scenario.";
                 entries.Add(new ScenarioCatalogEntry
                 {
                     ScenarioId = draft.Id,
@@ -226,8 +233,8 @@ namespace ShelteredAPI.Scenarios
                     LaunchMode = ScenarioLaunchMode.AuthoringDraft,
                     BaseGameMode = baseGameMode,
                     DefaultSaveType = ScenarioSelectionIds.GetDefaultSaveType(baseGameMode),
-                    DisplayName = string.IsNullOrEmpty(draft.DisplayName) ? draft.Id : draft.DisplayName,
-                    Description = "Authoring draft. Open the editor to continue working on this scenario.",
+                    DisplayName = displayName,
+                    Description = description,
                     Version = draft.Version,
                     OwnerModId = draft.OwnerModId,
                     Order = order + i,
@@ -262,21 +269,25 @@ namespace ShelteredAPI.Scenarios
             return ScenarioBaseGameMode.Survival;
         }
 
-        private ScenarioBaseGameMode ResolveDraftBaseGameMode(ScenarioInfo draft)
+        private ScenarioDefinition LoadDraftDefinition(ScenarioInfo draft)
         {
             if (draft == null || string.IsNullOrEmpty(draft.FilePath))
-                return ScenarioBaseGameMode.Survival;
+                return null;
 
             try
             {
-                ScenarioDefinition definition = _definitionSerializer.Load(draft.FilePath);
-                if (definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
-                    return definition.BaseGameMode;
+                return _definitionSerializer.Load(draft.FilePath);
             }
             catch
             {
+                return null;
             }
+        }
 
+        private static ScenarioBaseGameMode ResolveDraftBaseGameMode(ScenarioDefinition definition)
+        {
+            if (definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
+                return definition.BaseGameMode;
             return ScenarioBaseGameMode.Survival;
         }
 

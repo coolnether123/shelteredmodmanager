@@ -213,6 +213,7 @@
     <Compile Include="Scenarios\Application\Authoring\PlacementGhostSessionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\PlacementPaletteService.cs" />
     <Compile Include="Scenarios\Application\Authoring\RoomVisualPaletteService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioDraftMetadataEditService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPngImportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />

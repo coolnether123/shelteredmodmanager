@@ -6,7 +6,8 @@ namespace ShelteredAPI.Scenarios
     {
         Types,
         Scenarios,
-        Saves
+        Saves,
+        DraftDetails
     }
 
     internal enum ScenarioBookType
@@ -39,5 +40,12 @@ namespace ShelteredAPI.Scenarios
         public ScenarioBookType Type;
         public ScenarioCatalogEntry Scenario;
         public SaveEntry Save;
+    }
+
+    internal sealed class ScenarioBookDraftEditorModel
+    {
+        public ScenarioCatalogEntry Scenario;
+        public string DisplayName;
+        public string Description;
     }
 }

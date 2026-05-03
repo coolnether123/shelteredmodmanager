@@ -26,6 +26,7 @@ namespace ShelteredAPI.Scenarios
         private ScenarioCatalogEntry _selectedScenario;
         private List<ScenarioBookRowModel> _rows = new List<ScenarioBookRowModel>();
         private int _pageIndex;
+        private string _lastRenderScopeKey;
         private bool _isClosing;
 
         private IScenarioSelectionCatalogService Catalog
@@ -41,6 +42,11 @@ namespace ShelteredAPI.Scenarios
         private ScenarioLaunchCoordinator LaunchCoordinator
         {
             get { return ScenarioCompositionRoot.Resolve<ScenarioLaunchCoordinator>(); }
+        }
+
+        private ScenarioDraftMetadataEditService DraftMetadataEditService
+        {
+            get { return ScenarioCompositionRoot.Resolve<ScenarioDraftMetadataEditService>(); }
         }
 
         public static void Show(ScenarioSelectionPanel panel)
@@ -63,7 +69,7 @@ namespace ShelteredAPI.Scenarios
         {
             _adapter.SetInputEnabled(false);
             _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary);
-            _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary);
+            _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService);
             _dataSource.Refresh();
 
             VanillaPageTurnAssets pageTurnAssets = new VanillaPageTurnAssets();
@@ -95,6 +101,9 @@ namespace ShelteredAPI.Scenarios
 
         private void ChangePage(int delta)
         {
+            int targetPage = ResolveTargetPageIndex(delta);
+            PreparePage(targetPage);
+
             if (_pageTurn != null)
             {
                 _pageTurn.TryTurn(
@@ -117,6 +126,9 @@ namespace ShelteredAPI.Scenarios
 
         private bool CanChangePage(int delta)
         {
+            if (_view == ScenarioBookBrowserViewKind.Saves && GetPageCount() > 1)
+                return delta != 0;
+
             if (delta < 0)
                 return _pageIndex > 0;
             if (delta > 0)
@@ -125,9 +137,33 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
+        private int ResolveTargetPageIndex(int delta)
+        {
+            int pageCount = GetPageCount();
+            if (pageCount <= 0)
+                return 0;
+
+            if (_view == ScenarioBookBrowserViewKind.Saves && pageCount > 1)
+            {
+                int wrapped = (_pageIndex + delta) % pageCount;
+                return wrapped < 0 ? wrapped + pageCount : wrapped;
+            }
+
+            return Mathf.Clamp(_pageIndex + delta, 0, pageCount - 1);
+        }
+
         private void CommitPageChange(int delta)
         {
-            _pageIndex = Mathf.Clamp(_pageIndex + delta, 0, GetPageCount() - 1);
+            int pageCount = GetPageCount();
+            if (_view == ScenarioBookBrowserViewKind.Saves && pageCount > 1)
+            {
+                _pageIndex = (_pageIndex + delta) % pageCount;
+                if (_pageIndex < 0)
+                    _pageIndex += pageCount;
+                return;
+            }
+
+            _pageIndex = Mathf.Clamp(_pageIndex + delta, 0, pageCount - 1);
         }
 
         private void RenderCurrentPageWithoutAnimation()
@@ -139,23 +175,46 @@ namespace ShelteredAPI.Scenarios
         {
             _rows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario);
             _pageIndex = Mathf.Clamp(_pageIndex, 0, GetPageCount() - 1);
+            ClearPreparedPagesWhenScopeChanged();
 
-            _renderer.Render(
-                _view,
-                _selectedScenario,
-                _rows,
-                _pageIndex,
-                GetPageCount(),
-                _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
-                _dataSource.GetHeaderDetail(_view, _selectedScenario),
-                HandleRowSelected,
-                HandleDeleteSelected);
+            if (_view == ScenarioBookBrowserViewKind.DraftDetails)
+            {
+                _renderer.RenderDraftEditor(
+                    BuildDraftEditorModel(),
+                    _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
+                    _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                    HandleDraftDetailsSaved,
+                    HandleDraftOpenRequested);
+            }
+            else
+            {
+                int pageCount = GetPageCount();
+                string cacheKey = BuildPageCacheKey(_pageIndex);
+                if (!animate && _renderer.TryRenderPreparedPage(cacheKey, _pageIndex, pageCount))
+                {
+                    PrepareAdjacentPages();
+                    return;
+                }
+
+                _renderer.Render(
+                    _view,
+                    _selectedScenario,
+                    _rows,
+                    _pageIndex,
+                    pageCount,
+                    _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
+                    _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                    HandleRowSelected,
+                    HandleDeleteSelected);
+            }
 
             if (animate && _pageTurn != null && _pageTurn.PageTransition != null)
             {
                 _pageTurn.PageTransition.Play(_renderer.ContentRoot);
                 _pageTurn.PageTransition.Play(_renderer.PageLabelRoot);
             }
+
+            PrepareAdjacentPages();
         }
 
         private void HandleRowSelected(ScenarioBookRowModel row)
@@ -172,6 +231,7 @@ namespace ShelteredAPI.Scenarios
                     SelectType(row.Type);
                     break;
                 case ScenarioBookRowKind.Scenario:
+                    _selectedType = row.Type;
                     SelectScenario(row.Scenario);
                     break;
                 case ScenarioBookRowKind.StartScenario:
@@ -218,6 +278,7 @@ namespace ShelteredAPI.Scenarios
             _selectedScenario = null;
             _view = ScenarioBookBrowserViewKind.Scenarios;
             _pageIndex = 0;
+            ClearPreparedPages();
             SetStatus("Choose a scenario.");
             RenderCurrentView(true);
         }
@@ -228,10 +289,54 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             _selectedScenario = scenario;
-            _view = ScenarioBookBrowserViewKind.Saves;
+            _view = scenario.Source == ScenarioCatalogSource.Draft
+                ? ScenarioBookBrowserViewKind.DraftDetails
+                : ScenarioBookBrowserViewKind.Saves;
             _pageIndex = 0;
-            SetStatus("Choose a save slot for " + Safe(scenario.DisplayName, scenario.ScenarioId) + ".");
+            ClearPreparedPages();
+            SetStatus(_view == ScenarioBookBrowserViewKind.DraftDetails
+                ? "Edit draft details or open " + Safe(scenario.DisplayName, scenario.ScenarioId) + "."
+                : "Choose a save slot for " + Safe(scenario.DisplayName, scenario.ScenarioId) + ".");
             RenderCurrentView(true);
+        }
+
+        private ScenarioBookDraftEditorModel BuildDraftEditorModel()
+        {
+            return new ScenarioBookDraftEditorModel
+            {
+                Scenario = _selectedScenario,
+                DisplayName = _selectedScenario != null ? Safe(_selectedScenario.DisplayName, _selectedScenario.ScenarioId) : string.Empty,
+                Description = _selectedScenario != null ? (_selectedScenario.Description ?? string.Empty) : string.Empty
+            };
+        }
+
+        private void HandleDraftDetailsSaved(ScenarioBookDraftEditorModel model)
+        {
+            if (model == null)
+                return;
+
+            ModAPI.Scenarios.ScenarioInfo updatedInfo;
+            string status;
+            if (!_actions.UpdateDraftMetadata(_selectedScenario, model.DisplayName, model.Description, out updatedInfo, out status))
+            {
+                SetStatus(status);
+                return;
+            }
+
+            string scenarioId = _selectedScenario != null ? _selectedScenario.ScenarioId : (updatedInfo != null ? updatedInfo.Id : null);
+            _dataSource.Refresh();
+            ScenarioCatalogEntry refreshed;
+            if (!string.IsNullOrEmpty(scenarioId) && Catalog.TryGet(scenarioId, out refreshed))
+                _selectedScenario = refreshed;
+
+            ClearPreparedPages();
+            SetStatus(status);
+            RenderCurrentView(false);
+        }
+
+        private void HandleDraftOpenRequested()
+        {
+            RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(_selectedScenario, out status); });
         }
 
         private void RunLaunchAction(ScenarioBookLaunchAction action)
@@ -251,13 +356,14 @@ namespace ShelteredAPI.Scenarios
 
         private void BackOrClose()
         {
-            if (_view == ScenarioBookBrowserViewKind.Saves)
+            if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
             {
                 _selectedScenario = null;
                 _view = _selectedType == ScenarioBookType.Published
                     ? ScenarioBookBrowserViewKind.Types
                     : ScenarioBookBrowserViewKind.Scenarios;
                 _pageIndex = 0;
+                ClearPreparedPages();
                 SetStatus(_view == ScenarioBookBrowserViewKind.Types ? "Choose a scenario category." : "Choose a scenario.");
                 RenderCurrentView(true);
                 return;
@@ -267,6 +373,7 @@ namespace ShelteredAPI.Scenarios
             {
                 _view = ScenarioBookBrowserViewKind.Types;
                 _pageIndex = 0;
+                ClearPreparedPages();
                 SetStatus("Choose a scenario type.");
                 RenderCurrentView(true);
                 return;
@@ -320,11 +427,76 @@ namespace ShelteredAPI.Scenarios
 
         private int GetPageCount()
         {
+            if (_view == ScenarioBookBrowserViewKind.DraftDetails)
+                return 1;
+
             int rowCount = Math.Max(1, _rows != null ? _rows.Count : 0);
             if (_view == ScenarioBookBrowserViewKind.Saves)
                 return rowCount;
 
             return Math.Max(1, (rowCount + RowsPerPage - 1) / RowsPerPage);
+        }
+
+        private void PrepareAdjacentPages()
+        {
+            int pageCount = GetPageCount();
+            if (_renderer == null || pageCount <= 1 || _view == ScenarioBookBrowserViewKind.DraftDetails)
+                return;
+
+            if (CanChangePage(1))
+                PreparePage(ResolveTargetPageIndex(1));
+            if (CanChangePage(-1))
+                PreparePage(ResolveTargetPageIndex(-1));
+        }
+
+        private void PreparePage(int pageIndex)
+        {
+            if (_renderer == null || _view == ScenarioBookBrowserViewKind.DraftDetails)
+                return;
+
+            int pageCount = GetPageCount();
+            if (pageCount <= 1 || pageIndex < 0 || pageIndex >= pageCount)
+                return;
+
+            _renderer.PreparePage(
+                BuildPageCacheKey(pageIndex),
+                _view,
+                _selectedScenario,
+                _rows,
+                pageIndex,
+                pageCount,
+                _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
+                _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                HandleRowSelected,
+                HandleDeleteSelected);
+        }
+
+        private void ClearPreparedPagesWhenScopeChanged()
+        {
+            string scopeKey = BuildRenderScopeKey();
+            if (string.Equals(_lastRenderScopeKey, scopeKey, StringComparison.Ordinal))
+                return;
+
+            ClearPreparedPages();
+            _lastRenderScopeKey = scopeKey;
+        }
+
+        private void ClearPreparedPages()
+        {
+            if (_renderer != null)
+                _renderer.ClearPreparedPages();
+            _lastRenderScopeKey = null;
+        }
+
+        private string BuildPageCacheKey(int pageIndex)
+        {
+            return BuildRenderScopeKey() + "|page=" + pageIndex;
+        }
+
+        private string BuildRenderScopeKey()
+        {
+            string scenarioId = _selectedScenario != null ? _selectedScenario.ScenarioId : string.Empty;
+            return _view + "|" + _selectedType + "|" + scenarioId + "|rows=" + (_rows != null ? _rows.Count : 0);
         }
 
         private void SetStatus(string value)

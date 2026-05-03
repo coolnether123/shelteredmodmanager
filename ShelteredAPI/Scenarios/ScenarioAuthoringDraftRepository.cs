@@ -202,6 +202,54 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
+        public bool TryUpdateMetadata(string draftId, string displayName, string description, out ScenarioInfo updatedInfo, out string error)
+        {
+            updatedInfo = null;
+            error = null;
+
+            if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(displayName))
+            {
+                error = "Scenario name is required.";
+                return false;
+            }
+
+            lock (_sync)
+            {
+                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try
+                    {
+                        ScenarioDefinition definition = _serializer.Load(files[i]);
+                        if (definition == null || !string.Equals(definition.Id, draftId, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        definition.DisplayName = displayName;
+                        definition.Description = description ?? string.Empty;
+                        _serializer.Save(definition, files[i]);
+                        updatedInfo = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Updated draft metadata for '" + draftId + "'.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        error = ex.Message;
+                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to update draft metadata for '" + draftId + "': " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+
+            error = "Draft '" + draftId + "' was not found.";
+            return false;
+        }
+
         public bool DeleteDraft(string draftId, string reason)
         {
             if (string.IsNullOrEmpty(draftId))
