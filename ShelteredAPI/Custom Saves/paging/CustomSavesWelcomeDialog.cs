@@ -16,6 +16,10 @@ namespace ShelteredAPI.Saves.Paging
 
         private const int WINDOW_WIDTH = 860;
         private const int WINDOW_HEIGHT = 520;
+        private const int CONTENT_WIDTH = WINDOW_WIDTH - 120;
+        private const int TITLE_HEIGHT = 48;
+        private const int BODY_HEIGHT = 310;
+        private const int BUTTON_LABEL_PADDING = 20;
 
         private static readonly Color ColorHeader = new Color(0.9f, 0.85f, 0.7f);
         private static readonly Color ColorText = new Color(0.95f, 0.95f, 0.95f, 1f);
@@ -79,7 +83,8 @@ namespace ShelteredAPI.Saves.Paging
 
             var title = CreateLabel(root, "Title", "WELCOME TO CUSTOM SAVES",
                 new Vector3(0, WINDOW_HEIGHT / 2 - 60, 0), 34, ColorHeader, uiFont, ttfFont, 20);
-            title.alignment = NGUIText.Alignment.Center;
+            ConfigureTextBox(title, CONTENT_WIDTH, TITLE_HEIGHT, NGUIText.Alignment.Center, false);
+            title.overflowMethod = UILabel.Overflow.ClampContent;
 
             string bodyText =
                 "Pages 2+ contain unlimited custom save slots.\n" +
@@ -91,8 +96,7 @@ namespace ShelteredAPI.Saves.Paging
 
             var body = CreateLabel(root, "Body", bodyText,
                 new Vector3(0, 40, 0), 24, ColorText, uiFont, ttfFont, 20);
-            body.alignment = NGUIText.Alignment.Center;
-            body.width = WINDOW_WIDTH - 120;
+            ConfigureTextBox(body, CONTENT_WIDTH, BODY_HEIGHT, NGUIText.Alignment.Center, true);
             body.overflowMethod = UILabel.Overflow.ResizeHeight;
             body.spacingY = 6;
 
@@ -151,6 +155,18 @@ namespace ShelteredAPI.Saves.Paging
             return label;
         }
 
+        private static void ConfigureTextBox(UILabel label, int width, int height, NGUIText.Alignment alignment, bool multiLine)
+        {
+            if (label == null)
+                return;
+
+            label.pivot = UIWidget.Pivot.Center;
+            label.alignment = alignment;
+            label.width = width;
+            label.height = height;
+            label.multiLine = multiLine;
+        }
+
         private GameObject CreateButton(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int w, int h, Action onClick)
         {
             var go = new GameObject(name);
@@ -174,9 +190,10 @@ namespace ShelteredAPI.Saves.Paging
             label.color = color;
             label.depth = 101;
             label.alignment = NGUIText.Alignment.Center;
-            label.overflowMethod = UILabel.Overflow.ResizeFreely;
+            label.overflowMethod = UILabel.Overflow.ShrinkContent;
             label.bitmapFont = uiFont;
             label.trueTypeFont = ttfFont;
+            ConfigureTextBox(label, w - BUTTON_LABEL_PADDING, h - BUTTON_LABEL_PADDING, NGUIText.Alignment.Center, false);
 
             var col = go.AddComponent<BoxCollider>();
             col.size = new Vector3(w, h, 1);
