@@ -192,7 +192,7 @@ namespace ModAPI.Harmony
                     continue;
                 }
 
-                var patched = HarmonyUtil.PatchType(harmony, type, options.PatchOptions);
+                var patched = HarmonyUtil.PatchKnownType(harmony, type, options.PatchOptions, record.Targets);
                 if (patched != null && patched.Count > 0)
                 {
                     report.Applied.Add(record);

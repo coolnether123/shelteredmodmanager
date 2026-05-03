@@ -24,9 +24,25 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        public static T Resolve<T>() where T : class
+        public static void EnsureRuntimeInitialized()
         {
             EnsureInitialized();
+        }
+
+        public static void EnsureAuthoringInitialized()
+        {
+            EnsureInitialized();
+        }
+
+        public static T Resolve<T>() where T : class
+        {
+            EnsureAuthoringInitialized();
+            return _provider.Get<T>();
+        }
+
+        public static T ResolveRuntime<T>() where T : class
+        {
+            EnsureRuntimeInitialized();
             return _provider.Get<T>();
         }
 

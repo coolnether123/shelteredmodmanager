@@ -11,6 +11,8 @@ namespace ModAPI.Core
     public static class ManagerBooleanOptions
     {
         private static readonly object Sync = new object();
+        private static ManagerBooleanOptionsFile _cachedFile;
+        private static bool _cacheLoaded;
 
         public static void RegisterBooleanOption(ManagerBooleanOptionDefinition definition)
         {
@@ -19,31 +21,31 @@ namespace ModAPI.Core
 
             lock (Sync)
             {
-                ManagerBooleanOptionsFile file = LoadFile();
+                ManagerBooleanOptionsFile file = GetCachedFile();
                 int index = FindIndex(file, definition.Id);
                 bool value = definition.DefaultValue;
 
                 if (index >= 0)
                     value = file.booleans[index].value;
 
-                ManagerBooleanOptionRecord record = new ManagerBooleanOptionRecord
-                {
-                    id = definition.Id,
-                    owner = definition.Owner ?? string.Empty,
-                    label = definition.Label ?? definition.Id,
-                    description = definition.Description ?? string.Empty,
-                    value = value,
-                    defaultValue = definition.DefaultValue,
-                    requiresRestart = definition.RequiresRestart,
-                    sortOrder = definition.SortOrder
-                };
-
                 if (index >= 0)
-                    file.booleans[index] = record;
+                {
+                    if (file.booleans[index] == null)
+                    {
+                        file.booleans[index] = CreateRecord(definition, value);
+                        SaveFile(file);
+                    }
+                    else if (UpdateRecordMetadata(file.booleans[index], definition, value))
+                    {
+                        SaveFile(file);
+                    }
+                }
                 else
+                {
+                    ManagerBooleanOptionRecord record = CreateRecord(definition, value);
                     file.booleans = Append(file.booleans, record);
-
-                SaveFile(file);
+                    SaveFile(file);
+                }
             }
         }
 
@@ -54,7 +56,7 @@ namespace ModAPI.Core
 
             lock (Sync)
             {
-                ManagerBooleanOptionsFile file = LoadFile();
+                ManagerBooleanOptionsFile file = GetCachedFile();
                 int index = FindIndex(file, id);
                 return index >= 0 ? file.booleans[index].value : fallback;
             }
@@ -67,14 +69,29 @@ namespace ModAPI.Core
 
             lock (Sync)
             {
-                ManagerBooleanOptionsFile file = LoadFile();
+                ManagerBooleanOptionsFile file = GetCachedFile();
                 int index = FindIndex(file, id);
                 if (index < 0)
+                    return;
+
+                if (file.booleans[index].value == value)
                     return;
 
                 file.booleans[index].value = value;
                 SaveFile(file);
             }
+        }
+
+        private static ManagerBooleanOptionsFile GetCachedFile()
+        {
+            if (!_cacheLoaded || _cachedFile == null)
+            {
+                _cachedFile = LoadFile();
+                _cacheLoaded = true;
+            }
+
+            NormalizeFile(_cachedFile);
+            return _cachedFile;
         }
 
         private static ManagerBooleanOptionsFile LoadFile()
@@ -106,12 +123,7 @@ namespace ModAPI.Core
 
         private static void SaveFile(ManagerBooleanOptionsFile file)
         {
-            if (file == null)
-                file = new ManagerBooleanOptionsFile();
-            if (file.booleans == null)
-                file.booleans = new ManagerBooleanOptionRecord[0];
-            if (file.version <= 0)
-                file.version = 1;
+            NormalizeFile(file);
 
             try
             {
@@ -125,11 +137,84 @@ namespace ModAPI.Core
                 if (File.Exists(path))
                     File.Delete(path);
                 File.Move(tmp, path);
+                _cachedFile = file;
+                _cacheLoaded = true;
             }
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ManagerBooleanOptions] Failed to write manager options: " + ex.Message);
             }
+        }
+
+        private static void NormalizeFile(ManagerBooleanOptionsFile file)
+        {
+            if (file == null)
+                return;
+            if (file.booleans == null)
+                file.booleans = new ManagerBooleanOptionRecord[0];
+            if (file.version <= 0)
+                file.version = 1;
+        }
+
+        private static ManagerBooleanOptionRecord CreateRecord(ManagerBooleanOptionDefinition definition, bool value)
+        {
+            return new ManagerBooleanOptionRecord
+            {
+                id = definition.Id,
+                owner = definition.Owner ?? string.Empty,
+                label = definition.Label ?? definition.Id,
+                description = definition.Description ?? string.Empty,
+                value = value,
+                defaultValue = definition.DefaultValue,
+                requiresRestart = definition.RequiresRestart,
+                sortOrder = definition.SortOrder
+            };
+        }
+
+        private static bool UpdateRecordMetadata(ManagerBooleanOptionRecord record, ManagerBooleanOptionDefinition definition, bool value)
+        {
+            if (record == null || definition == null)
+                return false;
+
+            bool changed = false;
+            changed |= SetStringIfDifferent(ref record.owner, definition.Owner ?? string.Empty);
+            changed |= SetStringIfDifferent(ref record.label, definition.Label ?? definition.Id);
+            changed |= SetStringIfDifferent(ref record.description, definition.Description ?? string.Empty);
+
+            if (record.defaultValue != definition.DefaultValue)
+            {
+                record.defaultValue = definition.DefaultValue;
+                changed = true;
+            }
+
+            if (record.requiresRestart != definition.RequiresRestart)
+            {
+                record.requiresRestart = definition.RequiresRestart;
+                changed = true;
+            }
+
+            if (record.sortOrder != definition.SortOrder)
+            {
+                record.sortOrder = definition.SortOrder;
+                changed = true;
+            }
+
+            if (record.value != value && string.IsNullOrEmpty(record.id))
+            {
+                record.value = value;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private static bool SetStringIfDifferent(ref string target, string value)
+        {
+            if (string.Equals(target ?? string.Empty, value ?? string.Empty, StringComparison.Ordinal))
+                return false;
+
+            target = value ?? string.Empty;
+            return true;
         }
 
         private static int FindIndex(ManagerBooleanOptionsFile file, string id)

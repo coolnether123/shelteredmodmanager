@@ -32,7 +32,7 @@ namespace ShelteredAPI.Core
             {
                 if (_initialized) return;
 
-                MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureInitialized", ScenarioCompositionRoot.EnsureInitialized);
+                MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureRuntimeInitialized", ScenarioCompositionRoot.EnsureRuntimeInitialized);
                 MeasureStartupPhase("ShelteredAPI ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle", ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle);
                 if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 {
@@ -133,11 +133,19 @@ namespace ShelteredAPI.Core
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
             RegisterApi(ShelteredApiAliasIds.ActorSerialization, (IActorSerializationService)actors);
 
-            ICustomScenarioService customScenarios = ScenarioCompositionRoot.Resolve<ICustomScenarioService>();
-            IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
-            ScenarioCompositionRoot.Resolve<IScenarioRuntimeBindingService>().EnsureHooked();
+            ICustomScenarioService customScenarios = ScenarioCompositionRoot.ResolveRuntime<ICustomScenarioService>();
+            ScenarioCompositionRoot.ResolveRuntime<IScenarioRuntimeBindingService>().EnsureHooked();
             RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
             RegisterApi(ShelteredApiAliasIds.CustomScenarios, customScenarios);
+
+        }
+
+        internal static void EnsureAuthoringApiRegistered()
+        {
+            if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
+                return;
+
+            IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
             RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);
             RegisterApi(ShelteredApiAliasIds.ScenarioAuthoring, scenarioAuthoring);
         }

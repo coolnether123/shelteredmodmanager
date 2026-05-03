@@ -8,6 +8,9 @@ namespace ModAPI.Core
 {
     internal static class SharedAssemblyResolver
     {
+        private static readonly object CacheSync = new object();
+        private static Assembly[] _availableSharedRuntimeAssemblies;
+
         private static readonly string[] AlwaysSharedRuntimeAssemblyNames = new[]
         {
             "ModAPI",
@@ -43,6 +46,12 @@ namespace ModAPI.Core
 
         internal static Assembly[] LoadAvailableSharedRuntimeAssemblies()
         {
+            lock (CacheSync)
+            {
+                if (_availableSharedRuntimeAssemblies != null)
+                    return (Assembly[])_availableSharedRuntimeAssemblies.Clone();
+            }
+
             var result = new List<Assembly>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string[] directories = GetSharedRuntimeDirectories();
@@ -78,7 +87,13 @@ namespace ModAPI.Core
                 }
             }
 
-            return result.ToArray();
+            Assembly[] assemblies = result.ToArray();
+            lock (CacheSync)
+            {
+                _availableSharedRuntimeAssemblies = assemblies;
+            }
+
+            return (Assembly[])assemblies.Clone();
         }
 
         internal static Assembly ResolveSharedAssembly(string simpleName)

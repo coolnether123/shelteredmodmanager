@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Core;
@@ -15,6 +17,9 @@ namespace ModAPI.Harmony
     {
         private static bool _installed = false;
         private static GameObject _runnerGo;
+        private static readonly object ManagerSettingsSync = new object();
+        private static Dictionary<string, string> _managerSettings;
+        private static bool _managerSettingsLoaded;
 
         static HarmonyBootstrap()
         {
@@ -114,26 +119,57 @@ namespace ModAPI.Harmony
 
         public static string ReadManagerString(string key, string fallback)
         {
+            if (string.IsNullOrEmpty(key))
+                return fallback;
+
+            string value;
+            if (GetManagerSettings().TryGetValue(key, out value))
+                return value;
+
+            return fallback;
+        }
+
+        private static Dictionary<string, string> GetManagerSettings()
+        {
+            lock (ManagerSettingsSync)
+            {
+                if (_managerSettingsLoaded && _managerSettings != null)
+                    return _managerSettings;
+
+                _managerSettings = LoadManagerSettings();
+                _managerSettingsLoaded = true;
+                return _managerSettings;
+            }
+        }
+
+        private static Dictionary<string, string> LoadManagerSettings()
+        {
+            var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                string gameRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, ".."));
-                string smmDir = System.IO.Path.Combine(gameRoot, "SMM");
-                string binDir = System.IO.Path.Combine(smmDir, "bin");
-                var ini = System.IO.Path.Combine(binDir, "mod_manager.ini");
-                if (!System.IO.File.Exists(ini)) return fallback;
-                foreach (var raw in System.IO.File.ReadAllLines(ini))
+                string gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                string smmDir = Path.Combine(gameRoot, "SMM");
+                string binDir = Path.Combine(smmDir, "bin");
+                var ini = Path.Combine(binDir, "mod_manager.ini");
+                if (!File.Exists(ini)) return settings;
+
+                string[] lines = File.ReadAllLines(ini);
+                for (int i = 0; i < lines.Length; i++)
                 {
+                    string raw = lines[i];
                     if (string.IsNullOrEmpty(raw)) continue;
                     var line = raw.Trim();
                     if (line.StartsWith("#") || line.StartsWith(";") || line.StartsWith("[")) continue;
-                    var idx = line.IndexOf('='); if (idx <= 0) continue;
+                    var idx = line.IndexOf('=');
+                    if (idx <= 0) continue;
                     var k = line.Substring(0, idx).Trim();
-                    var v = line.Substring(idx + 1).Trim();
-                    if (k.Equals(key, StringComparison.OrdinalIgnoreCase)) return v;
+                    if (string.IsNullOrEmpty(k)) continue;
+                    settings[k] = line.Substring(idx + 1).Trim();
                 }
             }
             catch { }
-            return fallback;
+
+            return settings;
         }
 
         public static int ReadManagerInt(string key, int fallback)

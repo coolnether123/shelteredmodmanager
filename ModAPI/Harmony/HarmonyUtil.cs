@@ -112,6 +112,70 @@ namespace ModAPI.Harmony
             }
         }
 
+        internal static IList<MethodBase> PatchKnownType(
+            HarmonyLib.Harmony h,
+            Type type,
+            PatchOptions options,
+            IList<MethodBase> knownTargets)
+        {
+            if (h == null || type == null) return new MethodBase[0];
+            if (options == null) options = new PatchOptions();
+
+            try
+            {
+                if (!options.AllowDebugPatches && HasDebugAttribute(type))
+                {
+                    options.OnResult?.Invoke((object)type, "skipped: DebugPatch not enabled");
+                    return new MethodBase[0];
+                }
+
+                if (!options.AllowDangerousPatches && HasDangerousAttribute(type))
+                {
+                    options.OnResult?.Invoke((object)type, "skipped: Dangerous not enabled");
+                    return new MethodBase[0];
+                }
+
+                if (knownTargets != null)
+                    ValidateTargets(type, knownTargets, options);
+
+                var proc = new PatchClassProcessor(h, type);
+                var patched = proc.Patch();
+
+                if (patched != null && patched.Count > 0)
+                {
+                    foreach (var m in patched)
+                        options.OnResult?.Invoke((object)m, "patched");
+                    return patched.Cast<MethodBase>().ToList();
+                }
+
+                options.OnResult?.Invoke((object)type, "no methods patched");
+                return new MethodBase[0];
+            }
+            catch (Exception ex)
+            {
+                options.OnResult?.Invoke((object)type, "error: " + ex.Message);
+                return new MethodBase[0];
+            }
+        }
+
+        private static void ValidateTargets(Type patchType, IEnumerable<MethodBase> targets, PatchOptions options)
+        {
+            foreach (var m in targets)
+            {
+                var key = TargetKey(m);
+                if (!options.AllowDangerousPatches && SensitiveDeny.Contains(key) && !HasDangerousAttribute(patchType))
+                {
+                    options.OnResult?.Invoke((object)m, "skipped: sensitive target requires [Dangerous]");
+                    throw new InvalidOperationException("Sensitive target requires [Dangerous].");
+                }
+                if (!options.AllowStructReturns && IsStructReturn(m) && !HasDangerousAttribute(patchType))
+                {
+                    options.OnResult?.Invoke((object)m, "skipped: struct-return target not allowed");
+                    throw new InvalidOperationException("Struct-return target not allowed.");
+                }
+            }
+        }
+
         public static void PatchAll(HarmonyLib.Harmony h, Assembly asm, IPluginContext ctx)
         {
             var opts = new PatchOptions();

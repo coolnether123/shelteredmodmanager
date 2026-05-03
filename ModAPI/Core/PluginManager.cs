@@ -30,6 +30,9 @@ namespace ModAPI.Core
         private GameObject _loaderRoot;
         private string _gameRoot;
         private string _modsRoot;
+        private const int ActivationBatchMinMods = 2;
+        private const int ActivationBatchMaxMods = 4;
+        private const int ActivationBatchBudgetMs = 18;
 
         private sealed class PreparedPluginAssembly
         {
@@ -706,10 +709,10 @@ namespace ModAPI.Core
             }
 
             MMLog.WriteInfo("Sliced plugin activation scheduled for " + preparedMods.Count + " mod(s).");
-            runner.Enqueue(delegate { ActivateNextPreparedMod(state); });
+            runner.Enqueue(delegate { ActivateNextPreparedModBatch(state); });
         }
 
-        private void ActivateNextPreparedMod(PreparedModActivationState state)
+        private void ActivateNextPreparedModBatch(PreparedModActivationState state)
         {
             if (state == null)
                 return;
@@ -723,24 +726,39 @@ namespace ModAPI.Core
                 return;
             }
 
-            var prepared = state.PreparedMods[state.NextModIndex];
-            state.NextModIndex++;
+            var batchTimer = Stopwatch.StartNew();
+            int activated = 0;
+            while (state.NextModIndex < state.PreparedMods.Count && activated < ActivationBatchMaxMods)
+            {
+                var prepared = state.PreparedMods[state.NextModIndex];
+                state.NextModIndex++;
+                activated++;
 
-            var timer = Stopwatch.StartNew();
-            try
-            {
-                ActivatePreparedMod(prepared);
+                var timer = Stopwatch.StartNew();
+                try
+                {
+                    ActivatePreparedMod(prepared);
+                }
+                catch (Exception ex)
+                {
+                    var entry = prepared != null ? prepared.Entry : null;
+                    MMLog.WriteError("error activating mod '" + SafeEntryId(entry) + "': " + ex.Message);
+                    _loadErrors++;
+                }
+                finally
+                {
+                    var entry = prepared != null ? prepared.Entry : null;
+                    LogStartupTiming("ActivateMod " + SafeEntryId(entry), timer);
+                }
+
+                if (activated >= ActivationBatchMinMods && batchTimer.ElapsedMilliseconds >= ActivationBatchBudgetMs)
+                    break;
             }
-            catch (Exception ex)
+
+            if (state.NextModIndex >= state.PreparedMods.Count)
             {
-                var entry = prepared != null ? prepared.Entry : null;
-                MMLog.WriteError("error activating mod '" + SafeEntryId(entry) + "': " + ex.Message);
-                _loadErrors++;
-            }
-            finally
-            {
-                var entry = prepared != null ? prepared.Entry : null;
-                LogStartupTiming("ActivateMod " + SafeEntryId(entry), timer);
+                CompletePreparedModActivation(state);
+                return;
             }
 
             var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
@@ -751,7 +769,7 @@ namespace ModAPI.Core
                 return;
             }
 
-            runner.Enqueue(delegate { ActivateNextPreparedMod(state); });
+            runner.Enqueue(delegate { ActivateNextPreparedModBatch(state); });
         }
 
         private void ActivateRemainingPreparedMods(PreparedModActivationState state)

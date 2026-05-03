@@ -1,4 +1,5 @@
 using ModAPI.Core;
+using ShelteredAPI.Core;
 using UnityEngine;
 
 namespace ShelteredAPI.Scenarios
@@ -45,7 +46,8 @@ namespace ShelteredAPI.Scenarios
         {
             try
             {
-                ScenarioCompositionRoot.EnsureInitialized();
+                ScenarioCompositionRoot.EnsureAuthoringInitialized();
+                ShelteredApiRuntimeBootstrap.EnsureAuthoringApiRegistered();
                 ScenarioAuthoringBootstrapService.Instance.Update();
                 ScenarioSpriteSwapService.Instance.Update();
             }
