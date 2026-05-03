@@ -34,20 +34,39 @@ namespace ModAPI.Spine
             var provider = GetSettingsProvider(modId);
             if (provider == null) return false;
 
-            var settings = provider.GetSettingsObject();
+            SettingDefinition targetDefinition = null;
             var definitions = provider.GetSettings();
-
             foreach (var def in definitions)
             {
                 if (def.Id == settingId)
                 {
-                    if (!def.AllowExternalWrite) return false;
+                    targetDefinition = def;
+                    break;
+                }
+            }
 
-                    var field = settings.GetType().GetField(def.FieldName);
-                    if (field != null)
+            if (targetDefinition == null || !targetDefinition.AllowExternalWrite)
+                return false;
+
+            ISettingsProvider3 layeredProvider = provider as ISettingsProvider3;
+            if (layeredProvider != null)
+                return layeredProvider.TrySaveSetting(settingId, value, SettingsWriteTarget.DeclaredScope);
+
+            var settings = provider.GetSettingsObject();
+            foreach (var def in provider.GetSettings())
+            {
+                if (def.Id == settingId)
+                {
+                    if (def.Validate != null && !def.Validate(value, settings))
+                        return false;
+
+                    if (def.Setter != null)
                     {
-                        field.SetValue(settings, value);
+                        def.Setter(settings, value);
                         def.OnChanged?.Invoke(settings);
+                        ISettingsProvider2 persistentProvider = provider as ISettingsProvider2;
+                        if (persistentProvider != null)
+                            persistentProvider.Save();
                         return true;
                     }
                 }

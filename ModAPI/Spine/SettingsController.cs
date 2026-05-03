@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
 using UnityEngine;
@@ -16,7 +15,7 @@ namespace ModAPI.Spine
     /// Core manager for ModAPI settings. Replaces ModSettings and AutoSettingsProvider.
     /// Handles manual JSON serialization, delegate caching, and New Game+ logic.
     /// </summary>
-    public class SettingsController : ISettingsProvider, ISettingsProvider2
+    public class SettingsController : ISettingsProvider, ISettingsProvider2, ISettingsProvider3
     {
         private readonly object _owner;
         private readonly object _notificationTarget;
@@ -24,6 +23,8 @@ namespace ModAPI.Spine
         private readonly IPluginContext _context;
         private readonly List<SettingDefinition> _definitions;
         private readonly Dictionary<string, SettingDefinition> _defById;
+        private readonly Dictionary<string, object> _loadedGlobalValues = new Dictionary<string, object>();
+        private readonly Dictionary<string, object> _loadedPerSaveValues = new Dictionary<string, object>();
         
         private bool _isDirty;
         private float _lastWriteTime;
@@ -52,6 +53,117 @@ namespace ModAPI.Spine
         public object GetSettingsObject() => _owner;
         public string SerializeToJson() => SerializeJsonInternal();
 
+        public IEnumerable<SettingValueSnapshot> GetValueSnapshots()
+        {
+            foreach (var def in _definitions)
+            {
+                if (def.Type == SettingType.Button)
+                    continue;
+
+                object current = def.Getter != null ? def.Getter(_owner) : null;
+                object globalValue;
+                bool hasGlobal = _loadedGlobalValues.TryGetValue(def.Id, out globalValue);
+                object saveValue;
+                bool hasSave = _loadedPerSaveValues.TryGetValue(def.Id, out saveValue);
+
+                object activeValue = def.DefaultValue;
+                SettingsValueSource source = SettingsValueSource.Default;
+                if (def.Scope == SettingsScope.Global)
+                {
+                    if (hasGlobal)
+                    {
+                        activeValue = globalValue;
+                        source = SettingsValueSource.Global;
+                    }
+                }
+                else
+                {
+                    if (hasSave)
+                    {
+                        activeValue = saveValue;
+                        source = SettingsValueSource.ActiveSave;
+                    }
+                    else if (hasGlobal)
+                    {
+                        activeValue = globalValue;
+                        source = SettingsValueSource.Global;
+                    }
+                }
+
+                yield return new SettingValueSnapshot
+                {
+                    SettingId = def.Id,
+                    Scope = def.Scope,
+                    DefaultValue = def.DefaultValue,
+                    CurrentValue = current,
+                    GlobalValue = hasGlobal ? globalValue : null,
+                    HasGlobalValue = hasGlobal,
+                    ActiveSaveValue = hasSave ? saveValue : null,
+                    HasActiveSaveValue = hasSave,
+                    ActivePersistedValue = activeValue,
+                    ActiveSource = source,
+                    IsTweakedFromActive = !ValuesEqual(current, activeValue)
+                };
+            }
+        }
+
+        public bool TrySaveSetting(string settingId, object value, SettingsWriteTarget target)
+        {
+            SettingDefinition def;
+            if (string.IsNullOrEmpty(settingId) || !_defById.TryGetValue(settingId, out def) || def.Type == SettingType.Button)
+                return false;
+
+            object converted;
+            try
+            {
+                converted = ConvertValue(value, ResolveSettingType(def));
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("Failed to convert setting '" + settingId + "': " + ex.Message);
+                return false;
+            }
+
+            if (def.Validate != null && !def.Validate(converted, _owner))
+                return false;
+
+            if (target == SettingsWriteTarget.DeclaredScope)
+                target = def.Scope == SettingsScope.PerSave ? SettingsWriteTarget.ActiveSave : SettingsWriteTarget.GlobalDefaults;
+
+            if (target == SettingsWriteTarget.GlobalDefaults)
+            {
+                _loadedGlobalValues[def.Id] = converted;
+                if (def.Scope == SettingsScope.Global)
+                {
+                    ApplySettingValue(def, converted);
+                    NotifySettingChanged(def);
+                }
+
+                WriteToDisk(SettingsScope.Global);
+                return true;
+            }
+
+            if (target == SettingsWriteTarget.ActiveSave)
+            {
+                ApplySettingValue(def, converted);
+                NotifySettingChanged(def);
+
+                if (def.Scope == SettingsScope.PerSave)
+                {
+                    if (WriteToDisk(SettingsScope.PerSave))
+                        _loadedPerSaveValues[def.Id] = converted;
+                }
+                else if (WriteToDisk(SettingsScope.Global))
+                {
+                    _loadedGlobalValues[def.Id] = converted;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
         public void OnSettingsLoaded()
         {
             ModManagerBase manager = _owner as ModManagerBase;
@@ -71,6 +183,8 @@ namespace ModAPI.Spine
             {
                 if (def.Setter != null) def.Setter(_owner, def.DefaultValue);
             }
+            _loadedGlobalValues.Clear();
+            _loadedPerSaveValues.Clear();
             _isDirty = true;
             Save();
         }
@@ -90,8 +204,8 @@ namespace ModAPI.Spine
                 if (attr != null)
                 {
                     var def = SettingDefinitionFactory.Create(attr, field, type);
-                    def.Getter = CreateGetter(field);
-                    def.Setter = CreateSetter(field);
+                    def.Getter = SettingDefinitionFactory.CreateGetter(field);
+                    def.Setter = SettingDefinitionFactory.CreateSetter(field);
                     def.DefaultValue = def.Getter(owner);
                     SettingDefinitionFactory.ApplyPresets(field, def);
                     definitions.Add(def);
@@ -105,8 +219,8 @@ namespace ModAPI.Spine
                 if (attr != null && prop.CanRead && prop.CanWrite)
                 {
                     var def = SettingDefinitionFactory.Create(attr, prop, type);
-                    def.Getter = CreateGetter(prop);
-                    def.Setter = CreateSetter(prop);
+                    def.Getter = SettingDefinitionFactory.CreateGetter(prop);
+                    def.Setter = SettingDefinitionFactory.CreateSetter(prop);
                     def.DefaultValue = def.Getter(owner);
                     SettingDefinitionFactory.ApplyPresets(prop, def);
                     definitions.Add(def);
@@ -129,54 +243,16 @@ namespace ModAPI.Spine
             return definitions.OrderBy(d => d.SortOrder).ThenBy(d => d.Label).ToList();
         }
 
-        private Func<object, object> CreateGetter(MemberInfo member)
-        {
-            var targetParam = Expression.Parameter(typeof(object), "target");
-            Expression body;
-            if (member is FieldInfo field) body = Expression.Field(Expression.Convert(targetParam, field.DeclaringType), field);
-            else if (member is PropertyInfo prop) body = Expression.Property(Expression.Convert(targetParam, prop.DeclaringType), prop);
-            else return null;
-
-            return Expression.Lambda<Func<object, object>>(Expression.Convert(body, typeof(object)), targetParam).Compile();
-        }
-
-        private Action<object, object> CreateSetter(MemberInfo member)
-        {
-            if (member is FieldInfo field)
-            {
-                return (target, value) => {
-                    try { field.SetValue(target, value); }
-                    catch (Exception ex) { MMLog.WriteError("Error setting field " + field.Name + ": " + ex.Message); }
-                };
-            }
-            
-            if (member is PropertyInfo prop)
-            {
-                var setMethod = prop.GetSetMethod(true);
-                if (setMethod == null) return null;
-
-                var targetParam = Expression.Parameter(typeof(object), "target");
-                var valueParam = Expression.Parameter(typeof(object), "value");
-                Type memberType = prop.PropertyType;
-
-                Expression body = Expression.Call(
-                    Expression.Convert(targetParam, prop.DeclaringType),
-                    setMethod,
-                    Expression.Convert(valueParam, memberType)
-                );
-
-                return Expression.Lambda<Action<object, object>>(body, targetParam, valueParam).Compile();
-            }
-
-            return null;
-        }
-
         #endregion
 
         #region Persistence
 
         public void Load()
         {
+            ResetDefinitionsToDefaults();
+            _loadedGlobalValues.Clear();
+            _loadedPerSaveValues.Clear();
+
             // Load Global
             string globalPath = GetPath(SettingsScope.Global);
             if (File.Exists(globalPath)) ApplyJson(File.ReadAllText(globalPath), SettingsScope.Global);
@@ -192,15 +268,17 @@ namespace ModAPI.Spine
         public void Save()
         {
             _serializedCache = SerializeJsonInternal();
-            WriteToDisk(SettingsScope.Global);
-            WriteToDisk(SettingsScope.PerSave);
+            if (WriteToDisk(SettingsScope.Global))
+                CapturePersistedValues(SettingsScope.Global);
+            if (WriteToDisk(SettingsScope.PerSave))
+                CapturePersistedValues(SettingsScope.PerSave);
             _isDirty = false;
         }
 
-        private void WriteToDisk(SettingsScope scope)
+        private bool WriteToDisk(SettingsScope scope)
         {
             string path = GetPath(scope);
-            if (string.IsNullOrEmpty(path)) return;
+            if (string.IsNullOrEmpty(path)) return false;
 
             string dir = Path.GetDirectoryName(path);
             if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
@@ -217,7 +295,7 @@ namespace ModAPI.Spine
                     File.WriteAllText(tmp, json);
                     if (File.Exists(path)) File.Delete(path);
                     File.Move(tmp, path);
-                    break;
+                    return true;
                 }
                 catch (IOException)
                 {
@@ -226,6 +304,8 @@ namespace ModAPI.Spine
                     System.Threading.Thread.Sleep(100);
                 }
             }
+
+            return false;
         }
 
         private string GetPath(SettingsScope scope)
@@ -264,7 +344,7 @@ namespace ModAPI.Spine
             {
                 if (def.Type == SettingType.Button) continue;
                 if (!first) sb.Append(",");
-                sb.Append($"\"{def.Id}\":{ValueToJson(def.Getter(_owner))}");
+                sb.Append("\"").Append(Escape(def.Id)).Append("\":").Append(ValueToJson(def.Getter(_owner)));
                 first = false;
             }
             sb.Append("}");
@@ -277,15 +357,44 @@ namespace ModAPI.Spine
             var sb = new StringBuilder();
             sb.Append("{");
             bool first = true;
-            foreach (var def in _definitions.Where(d => d.Scope == scope))
+            foreach (var def in _definitions)
             {
                 if (def.Type == SettingType.Button) continue;
+
+                object value;
+                if (!TryGetValueForPersistedScope(def, scope, out value))
+                    continue;
+
                 if (!first) sb.Append(",");
-                sb.Append($"\"{def.Id}\":{ValueToJson(def.Getter(_owner))}");
+                sb.Append("\"").Append(Escape(def.Id)).Append("\":").Append(ValueToJson(value));
                 first = false;
             }
             sb.Append("}");
             return sb.ToString();
+        }
+
+        private bool TryGetValueForPersistedScope(SettingDefinition def, SettingsScope scope, out object value)
+        {
+            value = null;
+            if (def == null)
+                return false;
+
+            if (scope == SettingsScope.Global)
+            {
+                if (def.Scope == SettingsScope.Global)
+                {
+                    value = def.Getter(_owner);
+                    return true;
+                }
+
+                return _loadedGlobalValues.TryGetValue(def.Id, out value);
+            }
+
+            if (def.Scope != SettingsScope.PerSave)
+                return false;
+
+            value = def.Getter(_owner);
+            return true;
         }
 
         private string ValueToJson(object val)
@@ -330,7 +439,7 @@ namespace ModAPI.Spine
             foreach (var f in fields)
             {
                 if (!f1) res.Append(",");
-                res.Append($"\"{f.Name}\":{ValueToJson(f.GetValue(obj))}");
+                res.Append("\"").Append(Escape(f.Name)).Append("\":").Append(ValueToJson(f.GetValue(obj)));
                 f1 = false;
             }
             res.Append("}");
@@ -352,13 +461,28 @@ namespace ModAPI.Spine
             var data = ParseJson(json);
             foreach (var kvp in data)
             {
-                if (_defById.TryGetValue(kvp.Key, out var def) && def.Scope == scope)
+                SettingDefinition def;
+                if (!_defById.TryGetValue(kvp.Key, out def))
+                    continue;
+
+                if (scope == SettingsScope.PerSave && def.Scope != SettingsScope.PerSave)
+                    continue;
+
+                if (scope == SettingsScope.Global && def.Scope != SettingsScope.Global && def.Scope != SettingsScope.PerSave)
+                    continue;
+
+                if (scope == SettingsScope.Global || def.Scope == scope)
                 {
                     try
                     {
                         Type targetType = ResolveSettingType(def);
                         object val = ConvertValue(kvp.Value, targetType);
-                        def.Setter(_owner, val);
+                        if (scope == SettingsScope.Global)
+                            _loadedGlobalValues[def.Id] = val;
+                        else
+                            _loadedPerSaveValues[def.Id] = val;
+
+                        ApplySettingValue(def, val);
                     }
                     catch (Exception ex) { MMLog.WriteError($"Failed to apply setting {kvp.Key}: {ex.Message}"); }
                 }
@@ -398,66 +522,259 @@ namespace ModAPI.Spine
 
         private Dictionary<string, object> ParseJson(string json)
         {
-            // Extremely simplified JSON parser for flat KV pairs. 
-            // In a real implementation, this would be a full recursive descent parser.
-            var results = new Dictionary<string, object>();
             int i = 0;
-            while (i < json.Length)
-            {
-                if (json[i] == '\"')
-                {
-                    string key = ReadString(json, ref i);
-                    while (i < json.Length && json[i] != ':') i++;
-                    i++; // skip colon
-                    object val = ReadValue(json, ref i);
-                    results[key] = val;
-                }
-                i++;
-            }
-            return results;
+            object root = ReadValue(json, ref i);
+            Dictionary<string, object> result = root as Dictionary<string, object>;
+            return result ?? new Dictionary<string, object>();
         }
 
         private string ReadString(string json, ref int i)
         {
-            i++; // skip start quote
-            var sb = new StringBuilder();
-            while (i < json.Length && json[i] != '\"')
-            {
-                if (json[i] == '\\' && i + 1 < json.Length) { i++; sb.Append(json[i]); }
-                else sb.Append(json[i]);
+            if (i < json.Length && json[i] == '\"')
                 i++;
+
+            var sb = new StringBuilder();
+            while (i < json.Length)
+            {
+                char c = json[i++];
+                if (c == '\"')
+                    break;
+
+                if (c == '\\' && i < json.Length)
+                {
+                    char escaped = json[i++];
+                    switch (escaped)
+                    {
+                        case 'n': sb.Append('\n'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 't': sb.Append('\t'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '"': sb.Append('"'); break;
+                        default: sb.Append(escaped); break;
+                    }
+                }
+                else
+                {
+                    sb.Append(c);
+                }
             }
             return sb.ToString();
         }
 
+        private Dictionary<string, object> ReadObject(string json, ref int i)
+        {
+            var result = new Dictionary<string, object>();
+            if (i < json.Length && json[i] == '{')
+                i++;
+
+            while (i < json.Length)
+            {
+                SkipWhitespace(json, ref i);
+                if (i >= json.Length)
+                    break;
+                if (json[i] == '}')
+                {
+                    i++;
+                    break;
+                }
+
+                string key = ReadString(json, ref i);
+                SkipWhitespace(json, ref i);
+                if (i < json.Length && json[i] == ':')
+                    i++;
+
+                result[key] = ReadValue(json, ref i);
+
+                SkipWhitespace(json, ref i);
+                if (i < json.Length && json[i] == ',')
+                    i++;
+            }
+
+            return result;
+        }
+
+        private List<object> ReadArray(string json, ref int i)
+        {
+            var result = new List<object>();
+            if (i < json.Length && json[i] == '[')
+                i++;
+
+            while (i < json.Length)
+            {
+                SkipWhitespace(json, ref i);
+                if (i >= json.Length)
+                    break;
+                if (json[i] == ']')
+                {
+                    i++;
+                    break;
+                }
+
+                result.Add(ReadValue(json, ref i));
+                SkipWhitespace(json, ref i);
+                if (i < json.Length && json[i] == ',')
+                    i++;
+            }
+
+            return result;
+        }
+
+        private static void SkipWhitespace(string json, ref int i)
+        {
+            while (i < json.Length && char.IsWhiteSpace(json[i]))
+                i++;
+        }
+
+        private static bool MatchLiteral(string json, ref int i, string literal, object value, out object result)
+        {
+            result = null;
+            if (i + literal.Length > json.Length)
+                return false;
+
+            for (int j = 0; j < literal.Length; j++)
+            {
+                if (json[i + j] != literal[j])
+                    return false;
+            }
+
+            i += literal.Length;
+            result = value;
+            return true;
+        }
+
         private object ReadValue(string json, ref int i)
         {
-            while (i < json.Length && char.IsWhiteSpace(json[i])) i++;
+            SkipWhitespace(json, ref i);
             if (i >= json.Length) return null;
 
             if (json[i] == '\"') return ReadString(json, ref i);
-            if (json[i] == 't') { i += 3; return true; }
-            if (json[i] == 'f') { i += 4; return false; }
-            if (json[i] == 'n') { i += 3; return null; }
+            if (json[i] == '{') return ReadObject(json, ref i);
+            if (json[i] == '[') return ReadArray(json, ref i);
+
+            object literal;
+            if (MatchLiteral(json, ref i, "true", true, out literal)) return literal;
+            if (MatchLiteral(json, ref i, "false", false, out literal)) return literal;
+            if (MatchLiteral(json, ref i, "null", null, out literal)) return literal;
             
             // Number
             int start = i;
             while (i < json.Length && (char.IsDigit(json[i]) || json[i] == '.' || json[i] == '-' || json[i] == '+' || json[i] == 'e' || json[i] == 'E')) i++;
             string s = json.Substring(start, i - start);
-            i--; // back up for outer loop
             return s;
         }
 
         private object ConvertValue(object val, Type targetType)
         {
             if (val == null) return null;
+            if (targetType == null || targetType == typeof(object)) return val;
+            if (targetType.IsInstanceOfType(val)) return val;
             if (targetType.IsEnum) return Enum.Parse(targetType, val.ToString());
             if (targetType == typeof(bool)) return val.ToString().ToLower() == "true";
+            if (targetType == typeof(string)) return val.ToString();
             if (targetType == typeof(int)) return int.Parse(val.ToString(), CultureInfo.InvariantCulture);
             if (targetType == typeof(float)) return float.Parse(val.ToString(), CultureInfo.InvariantCulture);
             if (targetType == typeof(double)) return double.Parse(val.ToString(), CultureInfo.InvariantCulture);
             if (targetType == typeof(long)) return long.Parse(val.ToString(), CultureInfo.InvariantCulture);
+            if (targetType == typeof(Color)) return ConvertColor(val);
             return val;
+        }
+
+        private static Color ConvertColor(object val)
+        {
+            Dictionary<string, object> data = val as Dictionary<string, object>;
+            if (data != null)
+            {
+                return new Color(
+                    ReadFloat(data, "r", 1f),
+                    ReadFloat(data, "g", 1f),
+                    ReadFloat(data, "b", 1f),
+                    ReadFloat(data, "a", 1f));
+            }
+
+            string text = val as string;
+            if (!string.IsNullOrEmpty(text))
+            {
+                Color parsed;
+                if (ColorUtility.TryParseHtmlString(text, out parsed))
+                    return parsed;
+            }
+
+            return Color.white;
+        }
+
+        private static float ReadFloat(Dictionary<string, object> data, string key, float fallback)
+        {
+            object raw;
+            if (data == null || !data.TryGetValue(key, out raw) || raw == null)
+                return fallback;
+
+            float value;
+            return float.TryParse(raw.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+                ? value
+                : fallback;
+        }
+
+        private void ResetDefinitionsToDefaults()
+        {
+            foreach (var def in _definitions)
+            {
+                if (def.Type == SettingType.Button)
+                    continue;
+
+                ApplySettingValue(def, def.DefaultValue);
+            }
+        }
+
+        private void CapturePersistedValues(SettingsScope scope)
+        {
+            if (scope == SettingsScope.PerSave)
+                _loadedPerSaveValues.Clear();
+
+            foreach (var def in _definitions)
+            {
+                if (def.Type == SettingType.Button)
+                    continue;
+
+                if (scope == SettingsScope.Global)
+                {
+                    if (def.Scope == SettingsScope.Global)
+                        _loadedGlobalValues[def.Id] = def.Getter(_owner);
+                }
+                else if (def.Scope == SettingsScope.PerSave)
+                {
+                    _loadedPerSaveValues[def.Id] = def.Getter(_owner);
+                }
+            }
+        }
+
+        private void ApplySettingValue(SettingDefinition def, object value)
+        {
+            if (def == null || def.Setter == null)
+                return;
+
+            def.Setter(_owner, value);
+        }
+
+        private void NotifySettingChanged(SettingDefinition def)
+        {
+            if (def != null && def.OnChanged != null)
+                def.OnChanged(_owner);
+        }
+
+        private static bool ValuesEqual(object left, object right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null)
+                return false;
+
+            if (left is IConvertible && right is IConvertible)
+                return string.Equals(
+                    Convert.ToString(left, CultureInfo.InvariantCulture),
+                    Convert.ToString(right, CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal);
+
+            return left.Equals(right);
         }
 
         #endregion
@@ -483,7 +800,8 @@ namespace ModAPI.Spine
                     try
                     {
                         var carryJson = kvp.Value;
-                        var rawValue = ReadValue(carryJson, ref (new int[]{0}[0])); // Hacky way to pass 0 by ref
+                        int index = 0;
+                        var rawValue = ReadValue(carryJson, ref index);
                         double carryVal = Convert.ToDouble(ConvertValue(rawValue, typeof(double)), CultureInfo.InvariantCulture);
                         
                         MergeSetting(def, carryVal);

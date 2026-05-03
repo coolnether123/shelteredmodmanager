@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Core;
@@ -61,6 +62,57 @@ namespace ModAPI.Spine
                 if (preset != null)
                     def.Presets[preset.PresetName] = preset.Value;
             }
+        }
+
+        public static Func<object, object> CreateGetter(MemberInfo member)
+        {
+            var targetParam = Expression.Parameter(typeof(object), "target");
+            Expression body;
+
+            FieldInfo field = member as FieldInfo;
+            if (field != null)
+                body = Expression.Field(Expression.Convert(targetParam, field.DeclaringType), field);
+            else
+            {
+                PropertyInfo prop = member as PropertyInfo;
+                if (prop != null && prop.CanRead)
+                    body = Expression.Property(Expression.Convert(targetParam, prop.DeclaringType), prop);
+                else
+                    return null;
+            }
+
+            return Expression.Lambda<Func<object, object>>(Expression.Convert(body, typeof(object)), targetParam).Compile();
+        }
+
+        public static Action<object, object> CreateSetter(MemberInfo member)
+        {
+            FieldInfo field = member as FieldInfo;
+            if (field != null)
+            {
+                return delegate(object target, object value)
+                {
+                    try { field.SetValue(target, value); }
+                    catch (Exception ex) { MMLog.WriteError("Error setting field " + field.Name + ": " + ex.Message); }
+                };
+            }
+
+            PropertyInfo prop = member as PropertyInfo;
+            if (prop != null && prop.CanWrite)
+            {
+                MethodInfo setMethod = prop.GetSetMethod(true);
+                if (setMethod == null) return null;
+
+                var targetParam = Expression.Parameter(typeof(object), "target");
+                var valueParam = Expression.Parameter(typeof(object), "value");
+                Expression body = Expression.Call(
+                    Expression.Convert(targetParam, prop.DeclaringType),
+                    setMethod,
+                    Expression.Convert(valueParam, prop.PropertyType));
+
+                return Expression.Lambda<Action<object, object>>(body, targetParam, valueParam).Compile();
+            }
+
+            return null;
         }
 
         private static Type ResolveMemberType(MemberInfo member)

@@ -35,6 +35,9 @@ namespace ModAPI.Spine
                     if (attr != null)
                     {
                         var def = SettingDefinitionFactory.Create(attr, field, type);
+                        def.Getter = SettingDefinitionFactory.CreateGetter(field);
+                        def.Setter = SettingDefinitionFactory.CreateSetter(field);
+                        def.DefaultValue = def.Getter != null ? def.Getter(settingsObject) : null;
                         SettingDefinitionFactory.ApplyPresets(field, def);
                         definitions.Add(def);
                         continue;
@@ -58,6 +61,9 @@ namespace ModAPI.Spine
                     if (attr != null)
                     {
                         var def = SettingDefinitionFactory.Create(attr, prop, type);
+                        def.Getter = SettingDefinitionFactory.CreateGetter(prop);
+                        def.Setter = SettingDefinitionFactory.CreateSetter(prop);
+                        def.DefaultValue = def.Getter != null ? def.Getter(settingsObject) : null;
                         SettingDefinitionFactory.ApplyPresets(prop, def);
                         definitions.Add(def);
                     }

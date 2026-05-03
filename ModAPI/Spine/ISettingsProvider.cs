@@ -43,6 +43,56 @@ namespace ModAPI.Spine
         string SerializeToJson();
     }
 
+    /// <summary>
+    /// Selects which persisted layer receives a settings write.
+    /// </summary>
+    public enum SettingsWriteTarget
+    {
+        /// <summary>Use the setting definition's declared scope.</summary>
+        DeclaredScope,
+        /// <summary>Write the user-wide default used when a save has no override.</summary>
+        GlobalDefaults,
+        /// <summary>Write the active save override.</summary>
+        ActiveSave
+    }
+
+    /// <summary>
+    /// Describes which layer currently supplies a setting's active value.
+    /// </summary>
+    public enum SettingsValueSource
+    {
+        Default,
+        Global,
+        ActiveSave
+    }
+
+    /// <summary>
+    /// Snapshot used by settings UI to compare edited runtime values with persisted layers.
+    /// </summary>
+    public sealed class SettingValueSnapshot
+    {
+        public string SettingId { get; set; }
+        public SettingsScope Scope { get; set; }
+        public object DefaultValue { get; set; }
+        public object CurrentValue { get; set; }
+        public object GlobalValue { get; set; }
+        public bool HasGlobalValue { get; set; }
+        public object ActiveSaveValue { get; set; }
+        public bool HasActiveSaveValue { get; set; }
+        public object ActivePersistedValue { get; set; }
+        public SettingsValueSource ActiveSource { get; set; }
+        public bool IsTweakedFromActive { get; set; }
+    }
+
+    /// <summary>
+    /// Extended interface for layered settings state and targeted writes.
+    /// </summary>
+    public interface ISettingsProvider3 : ISettingsProvider2
+    {
+        IEnumerable<SettingValueSnapshot> GetValueSnapshots();
+        bool TrySaveSetting(string settingId, object value, SettingsWriteTarget target);
+    }
+
     public static class SettingsProviderExtensions
     {
         public static bool GetBool(this ISettingsProvider provider, string id, bool defaultValue = false)
