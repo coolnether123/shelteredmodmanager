@@ -55,6 +55,11 @@ namespace ModAPI.Core
             get { return Path.Combine(Path.Combine(SmmRoot, "bin"), "mod_manager.ini"); }
         }
 
+        public static string ManagerOptionsPath
+        {
+            get { return Path.Combine(Path.Combine(SmmRoot, "bin"), "manager_options.json"); }
+        }
+
         public static string ModApiRoot
         {
             get

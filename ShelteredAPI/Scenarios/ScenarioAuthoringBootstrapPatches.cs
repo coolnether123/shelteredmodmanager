@@ -9,7 +9,13 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringBootstrap",
         TargetBehavior = "Scenario authoring drafts bootstrap into a real vanilla new game, run briefly once the world is ready, then pause into authoring.",
         FailureMode = "Create Scenario falls back to a plain new game without entering authoring mode.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring bootstrap patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring bootstrap patch host.",
+        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
+        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
+        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
+        ManagerToggleDefault = true,
+        ManagerToggleRequiresRestart = true,
+        ManagerToggleSortOrder = 100)]
     internal static class ScenarioAuthoringBootstrapPatches
     {
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]

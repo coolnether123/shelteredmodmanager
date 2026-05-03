@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using Manager.Core.Models;
+using Manager.Core.Services;
 
 namespace Manager.Views
 {
@@ -30,6 +32,10 @@ namespace Manager.Views
         private Label _managerNexusModIdLabel;
         private TextBox _managerNexusModIdTextBox;
         private Panel _separator;
+        private Label _runtimeFeaturesLabel;
+        private Button _runtimeFeaturesRefreshButton;
+        private Panel _runtimeFeaturesPanel;
+        private Label _runtimeFeaturesEmptyLabel;
         private CheckBox _devModeCheckBox;
         private GroupBox _devSettingsGroup;
         private CheckBox _verboseLoggingCheckBox;
@@ -46,6 +52,9 @@ namespace Manager.Views
         private bool _skipNextNexusApiAutoHide;
         private bool _showAdvancedNexusOptions;
         private ToolTip _helpToolTip;
+        private readonly ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
+        private readonly List<CheckBox> _runtimeFeatureCheckBoxes = new List<CheckBox>();
+        private IList<ManagerBooleanOptionRecord> _runtimeOptions = new List<ManagerBooleanOptionRecord>();
         private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/users/myaccount?tab=api";
 
         public event SettingsChangedHandler SettingsChanged;
@@ -194,6 +203,30 @@ namespace Manager.Views
             _separator.Height = 1;
             _separator.Width = 700;
 
+            _runtimeFeaturesLabel = new Label();
+            _runtimeFeaturesLabel.Text = "Runtime Features";
+            _runtimeFeaturesLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _runtimeFeaturesLabel.AutoSize = true;
+
+            _runtimeFeaturesRefreshButton = new Button();
+            _runtimeFeaturesRefreshButton.Text = "Refresh";
+            _runtimeFeaturesRefreshButton.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+            _runtimeFeaturesRefreshButton.Size = new Size(82, 27);
+            _runtimeFeaturesRefreshButton.FlatStyle = FlatStyle.Flat;
+            _runtimeFeaturesRefreshButton.Cursor = Cursors.Hand;
+
+            _runtimeFeaturesPanel = new Panel();
+            _runtimeFeaturesPanel.BorderStyle = BorderStyle.FixedSingle;
+            _runtimeFeaturesPanel.Size = new Size(700, 70);
+
+            _runtimeFeaturesEmptyLabel = new Label();
+            _runtimeFeaturesEmptyLabel.Text = "No runtime feature toggles have been registered yet. Launch the game once to let ModAPI create them.";
+            _runtimeFeaturesEmptyLabel.Font = new Font("Segoe UI", 9f);
+            _runtimeFeaturesEmptyLabel.AutoSize = false;
+            _runtimeFeaturesEmptyLabel.Size = new Size(660, 36);
+            _runtimeFeaturesEmptyLabel.Location = new Point(12, 12);
+            _runtimeFeaturesPanel.Controls.Add(_runtimeFeaturesEmptyLabel);
+
             _devModeCheckBox = new CheckBox();
             _devModeCheckBox.Text = "Developer Mode (Advanced)";
             _devModeCheckBox.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -254,6 +287,9 @@ namespace Manager.Views
             Controls.Add(_nexusAdvancedToggleLink);
             Controls.Add(_nexusAdvancedPanel);
             Controls.Add(_separator);
+            Controls.Add(_runtimeFeaturesLabel);
+            Controls.Add(_runtimeFeaturesRefreshButton);
+            Controls.Add(_runtimeFeaturesPanel);
             Controls.Add(_devModeCheckBox);
             Controls.Add(_devSettingsGroup);
             Controls.Add(_resetButton);
@@ -287,6 +323,7 @@ namespace Manager.Views
             _nexusApiRevealButton.MouseDown += NexusApiRevealButton_MouseDown;
             _nexusApiRevealButton.Click += NexusApiRevealButton_Click;
             _nexusAdvancedToggleLink.LinkClicked += NexusAdvancedToggleLink_LinkClicked;
+            _runtimeFeaturesRefreshButton.Click += RuntimeFeaturesRefreshButton_Click;
             _resetButton.Click += ResetButton_Click;
             _resetWindowButton.Click += ResetWindowButton_Click;
         }
@@ -314,6 +351,7 @@ namespace Manager.Views
             int y = 20;
             y = LayoutAppearanceSection(x, y);
             y = LayoutNexusSection(x, y);
+            y = LayoutRuntimeFeaturesSection(x, y);
             y = LayoutDeveloperSection(x, y);
             LayoutActionButtons(x, y);
         }
@@ -358,6 +396,16 @@ namespace Manager.Views
             return y + 24;
         }
 
+        private int LayoutRuntimeFeaturesSection(int x, int y)
+        {
+            _runtimeFeaturesLabel.Location = new Point(x, y);
+            _runtimeFeaturesRefreshButton.Location = new Point(x + 618, y - 2);
+            y += 32;
+            _runtimeFeaturesPanel.Location = new Point(x, y);
+            _runtimeFeaturesPanel.Width = 700;
+            return y + _runtimeFeaturesPanel.Height + 24;
+        }
+
         private int LayoutDeveloperSection(int x, int y)
         {
             _devModeCheckBox.Location = new Point(x, y);
@@ -391,6 +439,72 @@ namespace Manager.Views
             _managerNexusModIdTextBox.Enabled = enabled;
         }
 
+        private void LoadRuntimeOptions()
+        {
+            _runtimeOptions = _runtimeOptionsService.Load();
+            RebuildRuntimeFeatureControls();
+        }
+
+        private void RebuildRuntimeFeatureControls()
+        {
+            for (int i = 0; i < _runtimeFeatureCheckBoxes.Count; i++)
+            {
+                CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
+                if (checkBox != null)
+                    _runtimeFeaturesPanel.Controls.Remove(checkBox);
+            }
+
+            _runtimeFeatureCheckBoxes.Clear();
+            int optionCount = _runtimeOptions != null ? _runtimeOptions.Count : 0;
+            _runtimeFeaturesEmptyLabel.Visible = optionCount == 0;
+
+            int y = 10;
+            for (int i = 0; i < optionCount; i++)
+            {
+                ManagerBooleanOptionRecord option = _runtimeOptions[i];
+                if (option == null || string.IsNullOrEmpty(option.id))
+                    continue;
+
+                CheckBox checkBox = new CheckBox();
+                checkBox.Text = BuildRuntimeOptionText(option);
+                checkBox.Checked = option.value;
+                checkBox.Tag = option;
+                checkBox.AutoSize = true;
+                checkBox.Font = new Font("Segoe UI", 9.5f);
+                checkBox.Location = new Point(12, y);
+                checkBox.CheckedChanged += RuntimeFeatureCheckBox_CheckedChanged;
+                _helpToolTip.SetToolTip(checkBox, BuildRuntimeOptionTooltip(option));
+                _runtimeFeaturesPanel.Controls.Add(checkBox);
+                _runtimeFeatureCheckBoxes.Add(checkBox);
+                y += 28;
+            }
+
+            _runtimeFeaturesPanel.Height = optionCount == 0 ? 70 : Math.Max(54, y + 10);
+            ApplyRuntimeFeatureTheme(_isDarkMode);
+        }
+
+        private static string BuildRuntimeOptionText(ManagerBooleanOptionRecord option)
+        {
+            string label = !string.IsNullOrEmpty(option.label) ? option.label : option.id;
+            if (!string.IsNullOrEmpty(option.owner))
+                label = option.owner + ": " + label;
+            if (option.requiresRestart)
+                label += " (restart required)";
+            return label;
+        }
+
+        private static string BuildRuntimeOptionTooltip(ManagerBooleanOptionRecord option)
+        {
+            string tooltip = option != null ? (option.description ?? string.Empty) : string.Empty;
+            if (option != null && option.requiresRestart)
+            {
+                if (tooltip.Length > 0)
+                    tooltip += "\n\n";
+                tooltip += "Restart the game for changes to take effect.";
+            }
+            return tooltip;
+        }
+
         private void LoadFromSettings()
         {
             if (_settings == null)
@@ -418,6 +532,7 @@ namespace Manager.Views
                 ApplyNexusApiKeyDisplayMode();
                 SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
                 UpdateNexusStatusLabels();
+                LoadRuntimeOptions();
                 UpdateDynamicLayout();
             }
             finally
@@ -713,6 +828,26 @@ namespace Manager.Views
             UpdateDynamicLayout();
         }
 
+        private void RuntimeFeaturesRefreshButton_Click(object sender, EventArgs e)
+        {
+            LoadRuntimeOptions();
+            UpdateDynamicLayout();
+        }
+
+        private void RuntimeFeatureCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_suppressEvents)
+                return;
+
+            CheckBox checkBox = sender as CheckBox;
+            ManagerBooleanOptionRecord option = checkBox != null ? checkBox.Tag as ManagerBooleanOptionRecord : null;
+            if (option == null || string.IsNullOrEmpty(option.id))
+                return;
+
+            option.value = checkBox.Checked;
+            _runtimeOptionsService.SetBool(option.id, option.value);
+        }
+
         private void ResetButton_Click(object sender, EventArgs e)
         {
             if (MessageBox.Show("Reset all settings to defaults?", "Confirm Reset",
@@ -763,6 +898,7 @@ namespace Manager.Views
                 _managerNexusModIdTextBox.BackColor = Color.FromArgb(60, 60, 62);
                 _managerNexusModIdTextBox.ForeColor = Color.White;
                 _separator.BackColor = Color.FromArgb(92, 92, 96);
+                ApplyRuntimeFeatureTheme(true);
                 _devModeCheckBox.ForeColor = Color.White;
                 _devSettingsGroup.ForeColor = Color.White;
                 _devSettingsGroup.BackColor = Color.FromArgb(50, 50, 52);
@@ -799,6 +935,7 @@ namespace Manager.Views
                 _managerNexusModIdTextBox.BackColor = SystemColors.Window;
                 _managerNexusModIdTextBox.ForeColor = SystemColors.WindowText;
                 _separator.BackColor = SystemColors.ControlDark;
+                ApplyRuntimeFeatureTheme(false);
                 _devModeCheckBox.ForeColor = SystemColors.ControlText;
                 _devSettingsGroup.ForeColor = SystemColors.ControlText;
                 _devSettingsGroup.BackColor = SystemColors.Control;
@@ -809,6 +946,39 @@ namespace Manager.Views
                 ApplyButtonTheme(_nexusApiRevealButton, false);
                 ApplyButtonTheme(_resetButton, false);
                 ApplyButtonTheme(_resetWindowButton, false);
+            }
+        }
+
+        private void ApplyRuntimeFeatureTheme(bool isDark)
+        {
+            if (_runtimeFeaturesLabel == null)
+                return;
+
+            if (isDark)
+            {
+                _runtimeFeaturesLabel.ForeColor = Color.White;
+                _runtimeFeaturesPanel.BackColor = Color.FromArgb(50, 50, 52);
+                _runtimeFeaturesEmptyLabel.ForeColor = Color.Gainsboro;
+                ApplyButtonTheme(_runtimeFeaturesRefreshButton, true);
+                for (int i = 0; i < _runtimeFeatureCheckBoxes.Count; i++)
+                {
+                    CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
+                    if (checkBox != null)
+                        checkBox.ForeColor = Color.White;
+                }
+            }
+            else
+            {
+                _runtimeFeaturesLabel.ForeColor = SystemColors.ControlText;
+                _runtimeFeaturesPanel.BackColor = SystemColors.Control;
+                _runtimeFeaturesEmptyLabel.ForeColor = SystemColors.ControlText;
+                ApplyButtonTheme(_runtimeFeaturesRefreshButton, false);
+                for (int i = 0; i < _runtimeFeatureCheckBoxes.Count; i++)
+                {
+                    CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
+                    if (checkBox != null)
+                        checkBox.ForeColor = SystemColors.ControlText;
+                }
             }
         }
 

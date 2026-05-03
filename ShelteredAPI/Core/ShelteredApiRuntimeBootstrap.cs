@@ -32,8 +32,16 @@ namespace ShelteredAPI.Core
                 if (_initialized) return;
 
                 ScenarioCompositionRoot.EnsureInitialized();
-                ScenarioAuthoringInputActions.EnsureRegistered();
-                ScenarioAuthoringRuntimeDriver.EnsureCreated();
+                ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle();
+                if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
+                {
+                    ScenarioAuthoringInputActions.EnsureRegistered();
+                    ScenarioAuthoringRuntimeDriver.EnsureCreated();
+                }
+                else
+                {
+                    MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Custom scenario editor runtime hooks are disabled by manager option.");
+                }
                 ShelteredVanillaInputActions.EnsureRegistered();
                 ShelteredKeybindsProvider.Instance.EnsureLoaded();
                 ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
@@ -124,7 +132,6 @@ namespace ShelteredAPI.Core
             ICustomScenarioService customScenarios = ScenarioCompositionRoot.Resolve<ICustomScenarioService>();
             IScenarioAuthoringBackend scenarioAuthoring = ScenarioCompositionRoot.Resolve<IScenarioAuthoringBackend>();
             ScenarioCompositionRoot.Resolve<IScenarioRuntimeBindingService>().EnsureHooked();
-            ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>().RefreshDefinitionCatalog();
             RegisterApi(GameRuntimeApiIds.CustomScenarios, customScenarios);
             RegisterApi(ShelteredApiAliasIds.CustomScenarios, customScenarios);
             RegisterApi(GameRuntimeApiIds.ScenarioAuthoring, scenarioAuthoring);

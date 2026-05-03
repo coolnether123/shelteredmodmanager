@@ -258,7 +258,13 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringGlobalUiIsolation",
         TargetBehavior = "Global gameplay hotkeys do not steal focus while scenario authoring owns the live shelter scene.",
         FailureMode = "Pause/map/clipboard hotkeys can still open vanilla panels during authoring pause.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring global UI isolation patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring global UI isolation patch host.",
+        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
+        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
+        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
+        ManagerToggleDefault = true,
+        ManagerToggleRequiresRestart = true,
+        ManagerToggleSortOrder = 100)]
     internal static class ScenarioAuthoringGlobalUiIsolationPatches
     {
         [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
@@ -275,7 +281,13 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringPauseOwnership",
         TargetBehavior = "Scenario authoring owns pause without allowing the vanilla pause panel/menu stack to reopen.",
         FailureMode = "Authoring pause can route back through the vanilla pause flow and reopen the pause menu panel.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring pause ownership patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring pause ownership patch host.",
+        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
+        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
+        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
+        ManagerToggleDefault = true,
+        ManagerToggleRequiresRestart = true,
+        ManagerToggleSortOrder = 100)]
     internal static class ScenarioAuthoringPauseOwnershipPatches
     {
         [HarmonyPatch(typeof(PauseManager), "Pause")]
@@ -318,7 +330,13 @@ namespace ShelteredAPI.Scenarios
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringSimulationFreeze",
         TargetBehavior = "Scenario authoring keeps Sheltered's simulation and game clock frozen even when the vanilla pause panel is hidden.",
         FailureMode = "The editor hides the pause menu, but shelter actors and in-game time keep advancing.",
-        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring simulation freeze patch host.")]
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring simulation freeze patch host.",
+        ManagerToggleId = ScenarioFeatureToggles.CustomScenarioEditorPatchToggleId,
+        ManagerToggleLabel = ScenarioFeatureToggles.CustomScenarioEditorPatchLabel,
+        ManagerToggleDescription = ScenarioFeatureToggles.CustomScenarioEditorPatchDescription,
+        ManagerToggleDefault = true,
+        ManagerToggleRequiresRestart = true,
+        ManagerToggleSortOrder = 100)]
     internal static class ScenarioAuthoringSimulationFreezePatches
     {
         [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]

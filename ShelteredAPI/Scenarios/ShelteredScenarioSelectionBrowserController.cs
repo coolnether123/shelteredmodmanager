@@ -757,6 +757,12 @@ namespace ShelteredAPI.Scenarios
 
         private void StartNewScenarioEditor(ScenarioSelectionPanel panel)
         {
+            if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Add New ignored because the custom scenario editor is disabled by manager option.");
+                return;
+            }
+
             UILabel nameLabel = null;
             UILabel descriptionLabel = null;
             UILabel highScoreLabel = null;
@@ -957,8 +963,13 @@ namespace ShelteredAPI.Scenarios
         private static string BuildBrowserDescription(BrowserPanelState state, int scenarioCount)
         {
             int totalPages = GetTotalPages(state, scenarioCount);
-            return scenarioCount + " custom scenario(s) available. Page " + (state.Page + 1) + " of " + totalPages
-                + ". Use " + PreviousPageLabel + " and " + NextPageLabel + " to browse, or choose " + AddNewLabel + " to start a new draft.";
+            string description = scenarioCount + " custom scenario(s) available. Page " + (state.Page + 1) + " of " + totalPages
+                + ". Use " + PreviousPageLabel + " and " + NextPageLabel + " to browse.";
+
+            if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
+                description += " Choose " + AddNewLabel + " to start a new draft.";
+
+            return description;
         }
 
         private static void SetPage(BrowserPanelState state, int page, int scenarioCount)
@@ -1008,22 +1019,25 @@ namespace ShelteredAPI.Scenarios
             ScenarioLayoutMetrics metrics = GetOrCreateLayoutMetrics(state, sourceButton);
             ScenarioPagingUi pagingUi = new ScenarioPagingUi();
 
-            UIButton addNewButton = CloneScenarioButton(sourceButton, root, "ShelteredAPI_CustomScenario_AddButton");
-            if (addNewButton != null)
+            if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
             {
-                addNewButton.transform.localPosition = metrics.AddNewButtonPosition;
-                ConfigureButton(addNewButton.gameObject, AddNewLabel, ScenarioButtonVisualStyle.Action);
-                BindPressGuard(panel, addNewButton.gameObject);
-                UIEventListener.Get(addNewButton.gameObject).onClick = delegate(GameObject go)
+                UIButton addNewButton = CloneScenarioButton(sourceButton, root, "ShelteredAPI_CustomScenario_AddButton");
+                if (addNewButton != null)
                 {
-                    ExecuteGuardedUiClick(panel, delegate
+                    addNewButton.transform.localPosition = metrics.AddNewButtonPosition;
+                    ConfigureButton(addNewButton.gameObject, AddNewLabel, ScenarioButtonVisualStyle.Action);
+                    BindPressGuard(panel, addNewButton.gameObject);
+                    UIEventListener.Get(addNewButton.gameObject).onClick = delegate(GameObject go)
                     {
-                        StartNewScenarioEditor(panel);
-                    });
-                };
-                addNewButton.gameObject.SetActive(false);
-                pagingUi.AddNewButton = addNewButton;
-                LogUiElementLayout(panel, "AddNewButton", addNewButton.gameObject, "action");
+                        ExecuteGuardedUiClick(panel, delegate
+                        {
+                            StartNewScenarioEditor(panel);
+                        });
+                    };
+                    addNewButton.gameObject.SetActive(false);
+                    pagingUi.AddNewButton = addNewButton;
+                    LogUiElementLayout(panel, "AddNewButton", addNewButton.gameObject, "action");
+                }
             }
 
             pagingUi.PreviousButton = CreatePagingButton(
@@ -1105,7 +1119,7 @@ namespace ShelteredAPI.Scenarios
             if (state == null || state.PagingUi == null)
                 return;
 
-            SetButtonVisible(state.PagingUi.AddNewButton, visible);
+            SetButtonVisible(state.PagingUi.AddNewButton, visible && ScenarioFeatureToggles.IsCustomScenarioEditorEnabled());
             SetButtonVisible(state.PagingUi.PreviousButton, visible);
             SetButtonVisible(state.PagingUi.NextButton, visible);
             if (state.PagingUi.PageLabel != null && state.PagingUi.PageLabel.gameObject != null)

@@ -337,6 +337,7 @@
     <Compile Include="Scenarios\Presentation\UiKit\Widgets\ScenarioUiWidgets.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\ScenarioUiKit.cs" />
     <Compile Include="Scenarios\ScenarioCompositionRoot.cs" />
+    <Compile Include="Scenarios\ScenarioFeatureToggles.cs" />
     <Compile Include="Scenarios\Lifecycle\ScenarioLifecycleService.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringBootstrapPatches.cs" />
     <Compile Include="Scenarios\ScenarioAuthoringBootstrapService.cs" />

@@ -42,6 +42,11 @@ namespace ModAPI.Harmony
             TargetBehavior = string.Empty;
             FailureMode = string.Empty;
             RollbackStrategy = string.Empty;
+            ManagerToggleId = string.Empty;
+            ManagerToggleLabel = string.Empty;
+            ManagerToggleDescription = string.Empty;
+            ManagerToggleDefault = true;
+            ManagerToggleRequiresRestart = true;
         }
 
         /// <summary>The domain that owns the patch.</summary>
@@ -58,6 +63,18 @@ namespace ModAPI.Harmony
         public bool IsOptional { get; set; }
         /// <summary>True when the patch is intended only for developer/debug scenarios.</summary>
         public bool DeveloperOnly { get; set; }
+        /// <summary>Optional manager boolean option id that controls this patch host.</summary>
+        public string ManagerToggleId { get; set; }
+        /// <summary>Human-readable label for the manager boolean option.</summary>
+        public string ManagerToggleLabel { get; set; }
+        /// <summary>Human-readable detail text for the manager boolean option.</summary>
+        public string ManagerToggleDescription { get; set; }
+        /// <summary>Default manager boolean option value.</summary>
+        public bool ManagerToggleDefault { get; set; }
+        /// <summary>Whether changing the manager boolean option requires a game restart.</summary>
+        public bool ManagerToggleRequiresRestart { get; set; }
+        /// <summary>Sort order used by the desktop Manager for this option.</summary>
+        public int ManagerToggleSortOrder { get; set; }
     }
 
     /// <summary>
@@ -113,6 +130,18 @@ namespace ModAPI.Harmony
         public bool HasExplicitPolicy;
         /// <summary>The resolved Harmony target methods for the patch host.</summary>
         public List<MethodBase> Targets;
+        /// <summary>Optional manager boolean option id that controls this patch host.</summary>
+        public string ManagerToggleId;
+        /// <summary>Human-readable label for the manager boolean option.</summary>
+        public string ManagerToggleLabel;
+        /// <summary>Human-readable detail text for the manager boolean option.</summary>
+        public string ManagerToggleDescription;
+        /// <summary>Default manager boolean option value.</summary>
+        public bool ManagerToggleDefault;
+        /// <summary>Whether changing the manager boolean option requires a game restart.</summary>
+        public bool ManagerToggleRequiresRestart;
+        /// <summary>Sort order used by the desktop Manager for this option.</summary>
+        public int ManagerToggleSortOrder;
     }
 
     /// <summary>
@@ -243,6 +272,9 @@ namespace ModAPI.Harmony
         private static bool ShouldApply(PatchRecord record, PatchRegistryOptions options)
         {
             if (record == null) return false;
+            if (!ShouldApplyManagerToggle(record, options))
+                return false;
+
             if (options != null && options.DisabledDomains != null && options.DisabledDomains.Contains(record.Domain))
                 return false;
 
@@ -253,6 +285,26 @@ namespace ModAPI.Harmony
                 return false;
 
             return true;
+        }
+
+        private static bool ShouldApplyManagerToggle(PatchRecord record, PatchRegistryOptions options)
+        {
+            if (record == null || string.IsNullOrEmpty(record.ManagerToggleId))
+                return true;
+
+            string sourceName = options != null ? options.SourceName : string.Empty;
+            ManagerBooleanOptions.RegisterBooleanOption(new ManagerBooleanOptionDefinition
+            {
+                Id = record.ManagerToggleId,
+                Owner = !string.IsNullOrEmpty(sourceName) ? sourceName : "runtime",
+                Label = !string.IsNullOrEmpty(record.ManagerToggleLabel) ? record.ManagerToggleLabel : record.Feature,
+                Description = record.ManagerToggleDescription ?? string.Empty,
+                DefaultValue = record.ManagerToggleDefault,
+                RequiresRestart = record.ManagerToggleRequiresRestart,
+                SortOrder = record.ManagerToggleSortOrder
+            });
+
+            return ManagerBooleanOptions.GetBool(record.ManagerToggleId, record.ManagerToggleDefault);
         }
 
         private static PatchRecord CreateRecord(Type type)
@@ -281,6 +333,12 @@ namespace ModAPI.Harmony
             record.IsDangerous = HarmonyUtil.HasDangerousAttribute(type);
             record.HasExplicitPolicy = policy != null;
             record.Targets = targets;
+            record.ManagerToggleId = policy != null ? policy.ManagerToggleId : null;
+            record.ManagerToggleLabel = policy != null ? policy.ManagerToggleLabel : null;
+            record.ManagerToggleDescription = policy != null ? policy.ManagerToggleDescription : null;
+            record.ManagerToggleDefault = policy == null || policy.ManagerToggleDefault;
+            record.ManagerToggleRequiresRestart = policy == null || policy.ManagerToggleRequiresRestart;
+            record.ManagerToggleSortOrder = policy != null ? policy.ManagerToggleSortOrder : 0;
             return record;
         }
 
