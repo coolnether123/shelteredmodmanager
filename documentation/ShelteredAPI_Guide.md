@@ -125,7 +125,8 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 - use `ShelteredEvents` for game, UI, faction, and time-trigger events
 - use `ShelteredContent` for item, recipe, loot, asset, localization, and inventory helper operations
 - use `ShelteredSaves` and `ShelteredSaveEvents` for custom save operations
-- use `ShelteredUI` for panel takeovers and Sheltered keybind UI
+- use `ShelteredUI` for small, targeted changes to vanilla panels and Sheltered keybind UI
+- use `ShelteredRuntimeUI` for mod-owned panels such as custom containers or crafting screens
 - actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
 - item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
 - custom scenario registration contracts, lifecycle state/events, opaque definition factories, catalog metadata, dependency manifest conversion, and validation result containers live in `ModAPI.Scenarios`
@@ -134,3 +135,70 @@ public sealed class LongRoadScenario : ShelteredCustomScenarioBase
 - the content injector is manager-scoped and will rebind when a new family/session recreates Sheltered runtime managers
 - register triggers and runtime behavior in `Start(...)`, not constructors
 - use unique IDs for triggers, actor bindings, components, and adapters
+
+## 5. Runtime UI Panels
+
+`ShelteredRuntimeUI` is the supported path for mod-owned UI. It keeps NGUI details internal: mod code provides request DTOs, item/recipe DTOs, and callbacks, while ShelteredAPI owns overlay roots, panel depth, refresh, rebind, and close behavior.
+
+Use `ShelteredUI` when you are taking over a small part of a vanilla panel. Use `ShelteredRuntimeUI` when the panel belongs to your mod. Avoid cloning vanilla NGUI templates directly, and avoid patching panel `Update` loops just to keep custom UI alive.
+
+Container example:
+
+```csharp
+using ShelteredAPI.Content;
+using ShelteredAPI.UI;
+
+RuntimeUiHandle handle = ShelteredRuntimeUI.OpenContainer(new ContainerUiRequest
+{
+    PanelId = "com.example.fridge.panel",
+    Title = "Fridge",
+    OwnerId = "com.example.fridge",
+    Categories = new[] { ItemCategory.Food, ItemCategory.Water },
+    InitialCategory = ItemCategory.Food,
+    EmptyText = "Nothing stored",
+    TransferQuantity = 1,
+    TransferDirection = ContainerUiTransferDirection.OutOfContainer,
+    SortComparison = (left, right) => string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase),
+    CanTransfer = item => item.Count > 0,
+    Items = new[]
+    {
+        new ContainerUiItem("Ration", "Ration", ItemCategory.Food, 3) { Subtitle = "Long-life food" },
+        new ContainerUiItem("Water", "Water", ItemCategory.Water, 8) { CountText = "8L" }
+    },
+    Actions = new[]
+    {
+        new ContainerUiAction
+        {
+            Id = "take_all",
+            Text = "Take All",
+            IsEnabled = () => HasFridgeItems(),
+            Execute = panel => TakeAllFridgeItems(panel)
+        }
+    },
+    OnItemSelected = item => { /* show details or transfer */ },
+    OnTransferRequested = transfer => { /* move one item */ },
+    OnClosed = () => { /* persist panel state if needed */ }
+});
+
+handle.Refresh();
+```
+
+Object-attached panels can register an interaction entry and open the same DTO-driven UI:
+
+```csharp
+ShelteredRuntimeUI.RegisterObjectPanel(new ObjectPanelRegistration
+{
+    ObjectType = ObjectManager.ObjectType.Freezer,
+    ObjectId = "com.example.fridge",
+    InteractionText = "Open Fridge",
+    Open = context => ShelteredRuntimeUI.OpenContainer(new ContainerUiRequest
+    {
+        PanelId = "com.example.fridge.panel",
+        Title = "Fridge",
+        OwnerId = "com.example.fridge",
+        AttachedObject = context.TargetObject,
+        Categories = new[] { ItemCategory.Food, ItemCategory.Water },
+        ItemSource = () => BuildFridgeItems(context.TargetObject)
+    })
+});
+```

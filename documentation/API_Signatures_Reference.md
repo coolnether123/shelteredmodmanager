@@ -538,6 +538,88 @@ public static class ShelteredUI
 }
 ```
 
+Runtime UI facade:
+
+```csharp
+public static class ShelteredRuntimeUI
+{
+    public static RuntimeUiHandle OpenContainer(ContainerUiRequest request);
+    public static RuntimeUiHandle OpenCrafting(CraftingUiRequest request);
+    public static IDisposable RegisterObjectPanel(ObjectPanelRegistration registration);
+    public static bool IsOpen(string panelId);
+    public static void Refresh(string panelId);
+    public static void Close(string panelId);
+    public static void CloseAll();
+}
+
+public sealed class RuntimeUiHandle : IDisposable
+{
+    public string PanelId { get; }
+    public bool IsOpen { get; }
+    public void Refresh();
+    public void Close();
+    public void Dispose();
+}
+
+public sealed class ContainerUiRequest
+{
+    public string PanelId { get; set; }
+    public string Title { get; set; }
+    public string OwnerId { get; set; }
+    public IList<ContainerUiItem> Items { get; set; }
+    public Func<IList<ContainerUiItem>> ItemSource { get; set; }
+    public ItemCategory[] Categories { get; set; }
+    public ItemCategory? InitialCategory { get; set; }
+    public string[] AllowedItemIds { get; set; }
+    public string EmptyText { get; set; }
+    public int TransferQuantity { get; set; }
+    public ContainerUiTransferDirection TransferDirection { get; set; }
+    public bool CloseOnTransfer { get; set; }
+    public bool RefreshEveryFrame { get; set; }
+    public Obj_Base AttachedObject { get; set; }
+    public Comparison<ContainerUiItem> SortComparison { get; set; }
+    public Func<ContainerUiItem, bool> CanSelect { get; set; }
+    public Func<ContainerUiItem, bool> CanTransfer { get; set; }
+    public Func<ContainerUiItem, string> FormatCount { get; set; }
+    public IList<ContainerUiAction> Actions { get; set; }
+    public Action<ContainerUiItem> OnItemSelected { get; set; }
+    public Action<ContainerUiTransferContext> OnTransferRequested { get; set; }
+    public Action<RuntimeUiHandle> OnRefreshed { get; set; }
+    public Action OnClosed { get; set; }
+}
+
+public sealed class ContainerUiItem
+{
+    public string ItemId { get; set; }
+    public string DisplayName { get; set; }
+    public string Subtitle { get; set; }
+    public ItemCategory Category { get; set; }
+    public int Count { get; set; }
+    public string CountText { get; set; }
+    public bool? IsEnabled { get; set; }
+    public bool? IsTransferEnabled { get; set; }
+    public object Tag { get; set; }
+}
+
+public sealed class ContainerUiAction
+{
+    public string Id { get; set; }
+    public string Text { get; set; }
+    public Func<bool> IsEnabled { get; set; }
+    public Action<RuntimeUiHandle> Execute { get; set; }
+}
+
+public sealed class ObjectPanelRegistration
+{
+    public string ObjectId { get; set; }
+    public ObjectManager.ObjectType ObjectType { get; set; }
+    public string InteractionText { get; set; }
+    public int Priority { get; set; }
+    public Func<ObjectPanelContext, bool> CanOpen { get; set; }
+    public Func<ObjectPanelContext, RuntimeUiHandle> Open { get; set; }
+}
+```
+
 `ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
 
 ```csharp
