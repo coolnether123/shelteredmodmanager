@@ -24,6 +24,8 @@ namespace ShelteredAPI.Scenarios
         private readonly IScenarioDependencyVerifier _dependencyVerifier;
         private readonly ICustomScenarioLifecycleService _lifecycleService;
         private readonly ScenarioEventHub _events;
+        private readonly object _definitionCatalogSync = new object();
+        private bool _definitionCatalogLoaded;
 
         public static ShelteredCustomScenarioService Instance
         {
@@ -86,6 +88,10 @@ namespace ShelteredAPI.Scenarios
         public void RefreshDefinitionCatalog()
         {
             _definitionCatalog.RefreshDefinitionCatalog();
+            lock (_definitionCatalogSync)
+            {
+                _definitionCatalogLoaded = true;
+            }
         }
 
         public ScenarioInfo[] ListDefinitions()
@@ -117,6 +123,7 @@ namespace ShelteredAPI.Scenarios
 
         public bool TryGet(string scenarioId, out CustomScenarioInfo scenario)
         {
+            EnsureDefinitionCatalogLoaded();
             scenario = null;
             ScenarioRecord record;
             if (!_registrations.TryGet(scenarioId, out record))
@@ -128,7 +135,23 @@ namespace ShelteredAPI.Scenarios
 
         public CustomScenarioInfo[] List()
         {
+            EnsureDefinitionCatalogLoaded();
             return _registrations.ListInfos();
+        }
+
+        private void EnsureDefinitionCatalogLoaded()
+        {
+            if (_definitionCatalogLoaded)
+                return;
+
+            lock (_definitionCatalogSync)
+            {
+                if (_definitionCatalogLoaded)
+                    return;
+
+                _definitionCatalog.RefreshDefinitionCatalog();
+                _definitionCatalogLoaded = true;
+            }
         }
 
         public bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage)

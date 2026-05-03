@@ -44,6 +44,13 @@ namespace ModAPI.Core
             public List<PreparedPluginAssembly> Assemblies = new List<PreparedPluginAssembly>();
         }
 
+        private sealed class PreparedModActivationState
+        {
+            public List<PreparedModLoad> PreparedMods;
+            public Action OnComplete;
+            public int NextModIndex;
+        }
+
         /// <summary>
         /// Mods that were discovered and accepted by load-order filtering for this session.
         /// </summary>
@@ -94,11 +101,12 @@ namespace ModAPI.Core
             _startupStopwatch = Stopwatch.StartNew();
             _loadErrors = 0;
 
-            InitializeLoader(doorstepGameObject);
-            LogAssemblyResolution();
-            LogSceneApiDetection();
+            MeasureStartupPhase("InitializeLoader", delegate { InitializeLoader(doorstepGameObject); });
+            MeasureStartupPhase("LogAssemblyResolution", LogAssemblyResolution);
+            MeasureStartupPhase("LogSceneApiDetection", LogSceneApiDetection);
 
-            var orderedModIds = ReadLoadOrderFromFile(_modsRoot);
+            List<string> orderedModIds = null;
+            MeasureStartupPhase("ReadLoadOrder", delegate { orderedModIds = ReadLoadOrderFromFile(_modsRoot); });
 
             if (orderedModIds != null && orderedModIds.Count == 0)
             {
@@ -109,9 +117,9 @@ namespace ModAPI.Core
                 return;
             }
 
-            DiscoverAndOrderMods(orderedModIds);
+            MeasureStartupPhase("DiscoverAndOrderMods", delegate { DiscoverAndOrderMods(orderedModIds); });
 
-            AttachInspectorTools();
+            MeasureStartupPhase("AttachInspectorTools", AttachInspectorTools);
 
             if (LoadedMods == null || LoadedMods.Count == 0)
             {
@@ -135,6 +143,43 @@ namespace ModAPI.Core
             MMLog.Write(string.Format("Startup complete in {0}ms. Loaded {1} plugin(s), {2} error(s).", ms, _plugins.Count, _loadErrors));
         }
 
+        private static void MeasureStartupPhase(string phaseName, Action action)
+        {
+            if (action == null)
+                return;
+
+            var timer = Stopwatch.StartNew();
+            try
+            {
+                action();
+            }
+            finally
+            {
+                LogStartupTiming(phaseName, timer);
+            }
+        }
+
+        private static void LogStartupTiming(string phaseName, Stopwatch timer)
+        {
+            if (timer == null)
+                return;
+
+            timer.Stop();
+            MMLog.WriteWithSource(
+                MMLog.LogLevel.Info,
+                MMLog.LogCategory.General,
+                "StartupTiming",
+                phaseName + " took " + timer.ElapsedMilliseconds + "ms.");
+        }
+
+        private static string SafeEntryId(ModEntry entry)
+        {
+            if (entry == null || string.IsNullOrEmpty(entry.Id))
+                return "<unknown>";
+
+            return entry.Id;
+        }
+
         private void StartBackgroundPluginActivation(List<ModEntry> orderedMods)
         {
             var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
@@ -147,31 +192,31 @@ namespace ModAPI.Core
             }
 
             MMLog.WriteDebug("Background startup preload beginning for " + orderedMods.Count + " mod(s).");
-            ModThreads.RunAsync(
+            var prepareTimer = Stopwatch.StartNew();
+            ModThreads.RunAsync<List<PreparedModLoad>>(
                 delegate
                 {
                     return PrepareModLoads(orderedMods);
                 },
                 delegate(List<PreparedModLoad> preparedMods)
                 {
+                    LogStartupTiming("PrepareModLoads background", prepareTimer);
                     try
                     {
-                        ActivatePreparedMods(preparedMods);
+                        StartPreparedModActivation(preparedMods, CompleteStartupLog);
                     }
                     catch (Exception ex)
                     {
                         MMLog.WriteWarning("Async startup activation failed on main thread. Falling back to synchronous activation: " + ex.Message);
-                        LoadAndInitializePlugins(orderedMods);
-                    }
-                    finally
-                    {
+                        MeasureStartupPhase("LoadAndInitializePlugins fallback", delegate { LoadAndInitializePlugins(orderedMods); });
                         CompleteStartupLog();
                     }
                 },
                 delegate(Exception ex)
                 {
+                    LogStartupTiming("PrepareModLoads background failed", prepareTimer);
                     MMLog.WriteWarning("Background startup preload failed. Falling back to synchronous activation: " + ex.Message);
-                    LoadAndInitializePlugins(orderedMods);
+                    MeasureStartupPhase("LoadAndInitializePlugins fallback", delegate { LoadAndInitializePlugins(orderedMods); });
                     CompleteStartupLog();
                 });
         }
@@ -203,13 +248,16 @@ namespace ModAPI.Core
             var runner = _loaderRoot.GetComponent<PluginRunner>() ?? _loaderRoot.AddComponent<PluginRunner>();
             runner.Manager = this;
 
-            SharedAssemblyResolver.LoadAvailableSharedRuntimeAssemblies();
-            HarmonyBootstrap.EnsurePatched();
+            MeasureStartupPhase("SharedAssemblyResolver.LoadAvailableSharedRuntimeAssemblies", delegate
+            {
+                SharedAssemblyResolver.LoadAvailableSharedRuntimeAssemblies();
+            });
+            MeasureStartupPhase("HarmonyBootstrap.EnsurePatched", HarmonyBootstrap.EnsurePatched);
 
             try
             {
-                InitializeLoadedGameRuntimeBootstraps();
-                SaveRuntimeAdapters.EnsureRuntimeReady();
+                MeasureStartupPhase("InitializeLoadedGameRuntimeBootstraps", InitializeLoadedGameRuntimeBootstraps);
+                MeasureStartupPhase("SaveRuntimeAdapters.EnsureRuntimeReady", SaveRuntimeAdapters.EnsureRuntimeReady);
 
                 // Initialize Core Systems
                 GameLifecycleSources.AddAfterLoad(ModRandomState.Load);
@@ -391,9 +439,13 @@ namespace ModAPI.Core
 
         private List<PreparedModLoad> PrepareModLoads(List<ModEntry> orderedMods)
         {
+            var timer = Stopwatch.StartNew();
             var prepared = new List<PreparedModLoad>();
             if (orderedMods == null || orderedMods.Count == 0)
+            {
+                LogStartupTiming("PrepareModLoads total", timer);
                 return prepared;
+            }
 
             for (int i = 0; i < orderedMods.Count; i++)
             {
@@ -407,14 +459,19 @@ namespace ModAPI.Core
                 prepared.Add(modLoad);
             }
 
+            LogStartupTiming("PrepareModLoads total", timer);
             return prepared;
         }
 
         private static List<PreparedPluginAssembly> PrepareAssemblies(ModEntry entry)
         {
+            var timer = Stopwatch.StartNew();
             var assemblies = new List<PreparedPluginAssembly>();
             if (entry == null || string.IsNullOrEmpty(entry.AssembliesPath) || !Directory.Exists(entry.AssembliesPath))
+            {
+                LogStartupTiming("PrepareAssemblies " + SafeEntryId(entry), timer);
                 return assemblies;
+            }
 
             string[] dllFiles = new string[0];
             try
@@ -424,6 +481,7 @@ namespace ModAPI.Core
             catch (Exception ex)
             {
                 MMLog.WriteWarning("PrepareAssemblies failed to enumerate DLLs for '" + entry.Id + "': " + ex.Message);
+                LogStartupTiming("PrepareAssemblies " + SafeEntryId(entry), timer);
                 return assemblies;
             }
 
@@ -462,6 +520,7 @@ namespace ModAPI.Core
                 }
             }
 
+            LogStartupTiming("PrepareAssemblies " + SafeEntryId(entry), timer);
             return assemblies;
         }
 
@@ -612,26 +671,141 @@ namespace ModAPI.Core
             if (preparedMods == null)
                 preparedMods = new List<PreparedModLoad>();
 
-            RegisterPreparedModAssemblies(preparedMods);
-            InitializeGameRuntimeBootstraps(preparedMods);
+            MeasureStartupPhase("RegisterPreparedModAssemblies", delegate { RegisterPreparedModAssemblies(preparedMods); });
+            MeasureStartupPhase("InitializePreparedGameRuntimeBootstraps", delegate { InitializeGameRuntimeBootstraps(preparedMods); });
 
             for (int i = 0; i < preparedMods.Count; i++)
             {
-                var prepared = preparedMods[i];
+                ActivatePreparedMod(preparedMods[i]);
+            }
+
+            LogPluginActivationComplete();
+        }
+
+        private void StartPreparedModActivation(List<PreparedModLoad> preparedMods, Action onComplete)
+        {
+            if (preparedMods == null)
+                preparedMods = new List<PreparedModLoad>();
+
+            MeasureStartupPhase("RegisterPreparedModAssemblies", delegate { RegisterPreparedModAssemblies(preparedMods); });
+            MeasureStartupPhase("InitializePreparedGameRuntimeBootstraps", delegate { InitializeGameRuntimeBootstraps(preparedMods); });
+
+            var state = new PreparedModActivationState
+            {
+                PreparedMods = preparedMods,
+                OnComplete = onComplete,
+                NextModIndex = 0
+            };
+
+            var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
+            if (runner == null)
+            {
+                MMLog.WriteWarning("PluginRunner became unavailable during sliced activation. Activating remaining mods synchronously.");
+                ActivateRemainingPreparedMods(state);
+                return;
+            }
+
+            MMLog.WriteInfo("Sliced plugin activation scheduled for " + preparedMods.Count + " mod(s).");
+            runner.Enqueue(delegate { ActivateNextPreparedMod(state); });
+        }
+
+        private void ActivateNextPreparedMod(PreparedModActivationState state)
+        {
+            if (state == null)
+                return;
+
+            if (state.PreparedMods == null)
+                state.PreparedMods = new List<PreparedModLoad>();
+
+            if (state.NextModIndex >= state.PreparedMods.Count)
+            {
+                CompletePreparedModActivation(state);
+                return;
+            }
+
+            var prepared = state.PreparedMods[state.NextModIndex];
+            state.NextModIndex++;
+
+            var timer = Stopwatch.StartNew();
+            try
+            {
+                ActivatePreparedMod(prepared);
+            }
+            catch (Exception ex)
+            {
                 var entry = prepared != null ? prepared.Entry : null;
-                if (prepared == null || entry == null)
-                    continue;
+                MMLog.WriteError("error activating mod '" + SafeEntryId(entry) + "': " + ex.Message);
+                _loadErrors++;
+            }
+            finally
+            {
+                var entry = prepared != null ? prepared.Entry : null;
+                LogStartupTiming("ActivateMod " + SafeEntryId(entry), timer);
+            }
 
-                for (int j = 0; j < prepared.Assemblies.Count; j++)
+            var runner = _loaderRoot != null ? _loaderRoot.GetComponent<PluginRunner>() : null;
+            if (runner == null)
+            {
+                MMLog.WriteWarning("PluginRunner became unavailable during sliced activation. Activating remaining mods synchronously.");
+                ActivateRemainingPreparedMods(state);
+                return;
+            }
+
+            runner.Enqueue(delegate { ActivateNextPreparedMod(state); });
+        }
+
+        private void ActivateRemainingPreparedMods(PreparedModActivationState state)
+        {
+            if (state == null)
+                return;
+
+            if (state.PreparedMods == null)
+                state.PreparedMods = new List<PreparedModLoad>();
+
+            while (state.NextModIndex < state.PreparedMods.Count)
+            {
+                var prepared = state.PreparedMods[state.NextModIndex];
+                state.NextModIndex++;
+                try
                 {
-                    var preparedAssembly = prepared.Assemblies[j];
-                    if (preparedAssembly == null || preparedAssembly.Assembly == null)
-                        continue;
-
-                    ActivatePluginTypes(entry, preparedAssembly.Types);
+                    ActivatePreparedMod(prepared);
+                }
+                catch (Exception ex)
+                {
+                    var entry = prepared != null ? prepared.Entry : null;
+                    MMLog.WriteError("error activating mod '" + SafeEntryId(entry) + "': " + ex.Message);
+                    _loadErrors++;
                 }
             }
 
+            CompletePreparedModActivation(state);
+        }
+
+        private void CompletePreparedModActivation(PreparedModActivationState state)
+        {
+            LogPluginActivationComplete();
+            if (state != null && state.OnComplete != null)
+                state.OnComplete();
+        }
+
+        private void ActivatePreparedMod(PreparedModLoad prepared)
+        {
+            var entry = prepared != null ? prepared.Entry : null;
+            if (prepared == null || entry == null)
+                return;
+
+            for (int j = 0; j < prepared.Assemblies.Count; j++)
+            {
+                var preparedAssembly = prepared.Assemblies[j];
+                if (preparedAssembly == null || preparedAssembly.Assembly == null)
+                    continue;
+
+                ActivatePluginTypes(entry, preparedAssembly.Types);
+            }
+        }
+
+        private void LogPluginActivationComplete()
+        {
             MMLog.Write(string.Format("LoadAndInitializePlugins complete. Total plugins loaded: {0}", _plugins.Count));
         }
 
@@ -703,6 +877,7 @@ namespace ModAPI.Core
                 if (string.IsNullOrEmpty(key) || !_initializedGameRuntimeBootstraps.Add(key))
                     continue;
 
+                var timer = Stopwatch.StartNew();
                 try
                 {
                     var bootstrap = (IGameRuntimeBootstrap)Activator.CreateInstance(type);
@@ -714,6 +889,10 @@ namespace ModAPI.Core
                     MMLog.WritePluginError(type.FullName, "game runtime bootstrap", ex);
                     MMLog.WriteError("Failed to initialize game runtime bootstrap '" + type.FullName + "': " + ex.Message);
                     _loadErrors++;
+                }
+                finally
+                {
+                    LogStartupTiming("RuntimeBootstrap " + type.FullName, timer);
                 }
             }
         }
@@ -791,7 +970,12 @@ namespace ModAPI.Core
 
                 try
                 {
-                    var plugin = (IModPlugin)Activator.CreateInstance(type);
+                    IModPlugin plugin = null;
+                    MeasureStartupPhase("Plugin " + type.FullName + " constructor", delegate
+                    {
+                        plugin = (IModPlugin)Activator.CreateInstance(type);
+                    });
+
                     var pluginRoot = new GameObject("Mod-" + SafeModIdFor(type));
                     pluginRoot.transform.SetParent(_loaderRoot.transform, false);
 
@@ -804,7 +988,7 @@ namespace ModAPI.Core
                     var ss = plugin as IModSessionEvents; if (ss != null) _sessionEvents.Add(ss);
 
                     MMLog.WriteDebug("Initializing plugin: " + type.FullName);
-                    plugin.Initialize(ctx);
+                    MeasureStartupPhase("Plugin " + type.FullName + " Initialize", delegate { plugin.Initialize(ctx); });
 
                     var settingsProvider = plugin as ISettingsProvider;
                     if (entry != null && entry.SettingsProvider == null && settingsProvider != null)
@@ -816,7 +1000,7 @@ namespace ModAPI.Core
                         TryRegisterDiscoveredSettingsProvider(entry, ctx, plugin);
 
                     MMLog.WriteDebug("Starting plugin: " + type.FullName);
-                    plugin.Start(ctx);
+                    MeasureStartupPhase("Plugin " + type.FullName + " Start", delegate { plugin.Start(ctx); });
                     ctx.Log.Info("Started.");
                 }
                 catch (Exception ex)

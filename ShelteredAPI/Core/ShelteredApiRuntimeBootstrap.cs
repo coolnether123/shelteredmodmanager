@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
 using ModAPI.Harmony;
@@ -31,23 +32,26 @@ namespace ShelteredAPI.Core
             {
                 if (_initialized) return;
 
-                ScenarioCompositionRoot.EnsureInitialized();
-                ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle();
+                MeasureStartupPhase("ShelteredAPI ScenarioCompositionRoot.EnsureInitialized", ScenarioCompositionRoot.EnsureInitialized);
+                MeasureStartupPhase("ShelteredAPI ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle", ScenarioFeatureToggles.RegisterCustomScenarioEditorToggle);
                 if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 {
-                    ScenarioAuthoringInputActions.EnsureRegistered();
-                    ScenarioAuthoringRuntimeDriver.EnsureCreated();
+                    MeasureStartupPhase("ShelteredAPI ScenarioAuthoringInputActions.EnsureRegistered", ScenarioAuthoringInputActions.EnsureRegistered);
+                    MeasureStartupPhase("ShelteredAPI ScenarioAuthoringRuntimeDriver.EnsureCreated", ScenarioAuthoringRuntimeDriver.EnsureCreated);
                 }
                 else
                 {
                     MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Custom scenario editor runtime hooks are disabled by manager option.");
                 }
-                ShelteredVanillaInputActions.EnsureRegistered();
-                ShelteredKeybindsProvider.Instance.EnsureLoaded();
-                ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
-                EnsurePersistenceGuard();
-                EnsureApiRegistrations();
-                EnsureSaveProtectionPatches();
+                MeasureStartupPhase("ShelteredAPI ShelteredVanillaInputActions.EnsureRegistered", ShelteredVanillaInputActions.EnsureRegistered);
+                MeasureStartupPhase("ShelteredAPI ShelteredKeybindsProvider.EnsureLoaded", ShelteredKeybindsProvider.Instance.EnsureLoaded);
+                MeasureStartupPhase("ShelteredAPI ScrollInputService.RegisterSource", delegate
+                {
+                    ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);
+                });
+                MeasureStartupPhase("ShelteredAPI EnsurePersistenceGuard", EnsurePersistenceGuard);
+                MeasureStartupPhase("ShelteredAPI EnsureApiRegistrations", EnsureApiRegistrations);
+                MeasureStartupPhase("ShelteredAPI EnsureSaveProtectionPatches", EnsureSaveProtectionPatches);
 
                 _initialized = true;
                 MMLog.WriteInfo("[ShelteredApiRuntimeBootstrap] Core ShelteredAPI input and keybind systems initialized.");
@@ -175,6 +179,27 @@ namespace ShelteredAPI.Core
                 return;
 
             ModAPIRegistry.RegisterAPI<T>(apiId, implementation, ProviderId);
+        }
+
+        private static void MeasureStartupPhase(string phaseName, Action action)
+        {
+            if (action == null)
+                return;
+
+            var timer = Stopwatch.StartNew();
+            try
+            {
+                action();
+            }
+            finally
+            {
+                timer.Stop();
+                MMLog.WriteWithSource(
+                    MMLog.LogLevel.Info,
+                    MMLog.LogCategory.General,
+                    "StartupTiming",
+                    phaseName + " took " + timer.ElapsedMilliseconds + "ms.");
+            }
         }
     }
 

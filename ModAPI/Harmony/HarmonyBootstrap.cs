@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Core;
@@ -77,8 +78,13 @@ namespace ModAPI.Harmony
                     opts,
                     asm.GetName().Name,
                     key => ReadManagerString(key, null));
+                var corePatchTimer = Stopwatch.StartNew();
                 PatchRegistry.ApplyAssembly(harmony, asm, registryOptions);
+                LogStartupTiming("Harmony patch " + asm.GetName().Name, corePatchTimer);
+
+                var runtimePatchTimer = Stopwatch.StartNew();
                 PatchGameRuntimeAssemblies(harmony, asm, opts);
+                LogStartupTiming("Harmony patch game runtime assemblies", runtimePatchTimer);
 
                 _installed = true;
 
@@ -171,7 +177,9 @@ namespace ModAPI.Harmony
                         runtimeAssembly.GetName().Name,
                         key => ReadManagerString(key, null));
 
+                    var patchTimer = Stopwatch.StartNew();
                     PatchRegistry.ApplyAssembly(harmony, runtimeAssembly, runtimeOptions);
+                    LogStartupTiming("Harmony patch " + runtimeAssembly.GetName().Name, patchTimer);
                 }
                 catch (Exception ex)
                 {
@@ -216,6 +224,19 @@ namespace ModAPI.Harmony
         {
             try { return assembly != null ? assembly.GetName().Name : "<null>"; }
             catch { return "<unknown>"; }
+        }
+
+        private static void LogStartupTiming(string phaseName, Stopwatch timer)
+        {
+            if (timer == null)
+                return;
+
+            timer.Stop();
+            MMLog.WriteWithSource(
+                MMLog.LogLevel.Info,
+                MMLog.LogCategory.General,
+                "StartupTiming",
+                phaseName + " took " + timer.ElapsedMilliseconds + "ms.");
         }
     }
 
