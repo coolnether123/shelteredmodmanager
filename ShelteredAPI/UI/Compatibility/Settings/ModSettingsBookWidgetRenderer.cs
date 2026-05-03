@@ -26,24 +26,28 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private static readonly Color ColorInputBackground = new Color(0.18f, 0.13f, 0.09f, 0.52f);
         private static readonly Color ColorSwatchBorder = new Color(0.18f, 0.11f, 0.06f, 0.82f);
 
-        private const int ColumnWidth = 500;
-        private const int LabelWidth = 255;
-        private const int ValueWidth = 86;
-        private const int TrackWidth = 150;
+        private const int ColumnWidth = 980;
+        private const int LabelWidth = 430;
+        private const int ValueWidth = 76;
+        private const int TrackWidth = 136;
         private const int TrackHeight = 18;
         private const int SmallButtonWidth = 38;
         private const int SmallButtonHeight = 34;
+        private const int CycleValueWidth = 140;
+        private const int CycleValueHeight = 36;
         private const int HeaderFontSize = 24;
-        private const int LabelFontSize = 18;
-        private const int ValueFontSize = 18;
-        private const int ControlFontSize = 16;
-        private const float LabelY = 10f;
-        private const float ControlY = -17f;
-        private const float RuleY = -38f;
-        private const float ValueX = 270f;
-        private const float TrackCenterX = 385f;
-        private const float DecreaseX = 291f;
-        private const float IncreaseX = 479f;
+        private const int LabelFontSize = 16;
+        private const int ValueFontSize = 16;
+        private const int ControlFontSize = 15;
+        private const float LabelY = 0f;
+        private const float ControlY = 0f;
+        private const float RuleY = -26f;
+        private const float ValueX = 750f;
+        private const float TrackCenterX = 750f;
+        private const float DecreaseX = 630f;
+        private const float IncreaseX = 870f;
+        private const float CyclePreviousX = 630f;
+        private const float CycleNextX = 870f;
 
         private readonly FieldManualWindowChrome _chrome;
         private readonly Texture2D _whiteTexture;
@@ -168,17 +172,24 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private void BuildBoolControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             Func<bool> read = delegate { return SpineWidgetRuntime.GetValue<bool>(def, settingsObject); };
-            GameObject toggle = null;
-            toggle = CreateButton(row, "Toggle", FormatBool(def, read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, TrackWidth, 36, delegate
+            GameObject valueButton = null;
+            Action toggle = delegate
             {
                 bool next = !read();
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
                 {
-                    UpdateButtonLabel(toggle, FormatBool(def, next));
+                    UpdateButtonLabel(valueButton, FormatBool(def, next));
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
-            });
-            SpineWidgetRuntime.SetTooltip(toggle, def.Tooltip);
+            };
+
+            GameObject previousButton = CreateButton(row, "PrevToggle", "<", new Vector3(CyclePreviousX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, toggle);
+            valueButton = CreateButton(row, "Toggle", FormatBool(def, read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, CycleValueWidth, CycleValueHeight, toggle);
+            GameObject nextButton = CreateButton(row, "NextToggle", ">", new Vector3(CycleNextX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, toggle);
+
+            SpineWidgetRuntime.SetTooltip(previousButton, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(valueButton, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(nextButton, def.Tooltip);
         }
 
         private void BuildNumericControl(GameObject row, SettingDefinition def, object settingsObject, bool snapToInt)
@@ -237,8 +248,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
             if (def.ShowStepperButtons)
             {
-                GameObject dec = CreateButton(row, "Dec", "-", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() - ResolveButtonStep(def, min, max, snapToInt)); });
-                GameObject inc = CreateButton(row, "Inc", "+", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() + ResolveButtonStep(def, min, max, snapToInt)); });
+                GameObject dec = CreateButton(row, "Dec", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() - ResolveButtonStep(def, min, max, snapToInt)); });
+                GameObject inc = CreateButton(row, "Inc", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { apply(read() + ResolveButtonStep(def, min, max, snapToInt)); });
                 AttachTooltip(dec, BuildStepTooltip(def, min, max, snapToInt, false));
                 AttachTooltip(inc, BuildStepTooltip(def, min, max, snapToInt, true));
             }
@@ -248,7 +259,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         {
             Array values = def.EnumType != null ? Enum.GetValues(def.EnumType) : null;
             Func<object> read = delegate { return SpineWidgetRuntime.GetValue<object>(def, settingsObject); };
-            UILabel value = CreateValueLabel(row, FormatObjectValue(read()), new Vector3(TrackCenterX, LabelY, 0f), 140);
+            GameObject valueButton = null;
 
             Action<int> cycle = delegate(int delta)
             {
@@ -264,21 +275,23 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 object selectedValue = values.GetValue(index);
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, selectedValue))
                 {
-                    value.text = FormatObjectValue(selectedValue);
+                    UpdateButtonLabel(valueButton, FormatObjectValue(selectedValue));
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
-            GameObject previousButton = CreateButton(row, "PrevEnum", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
-            GameObject nextButton = CreateButton(row, "NextEnum", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
+            GameObject previousButton = CreateButton(row, "PrevEnum", "<", new Vector3(CyclePreviousX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
+            valueButton = CreateButton(row, "EnumValue", FormatObjectValue(read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, CycleValueWidth, CycleValueHeight, delegate { cycle(1); });
+            GameObject nextButton = CreateButton(row, "NextEnum", ">", new Vector3(CycleNextX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
             AttachTooltip(previousButton, "Show the previous option for " + SafeLabel(def) + ".");
+            AttachTooltip(valueButton, "Show the next option for " + SafeLabel(def) + ".");
             AttachTooltip(nextButton, "Show the next option for " + SafeLabel(def) + ".");
         }
 
         private void BuildChoiceControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             Func<string> read = delegate { return SpineWidgetRuntime.GetValue<string>(def, settingsObject) ?? "None"; };
-            UILabel value = CreateValueLabel(row, read(), new Vector3(TrackCenterX, LabelY, 0f), 140);
+            GameObject valueButton = null;
 
             Action<int> cycle = delegate(int delta)
             {
@@ -295,14 +308,16 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 string selectedValue = options[index];
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, selectedValue))
                 {
-                    value.text = selectedValue;
+                    UpdateButtonLabel(valueButton, selectedValue);
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
-            GameObject previousButton = CreateButton(row, "PrevChoice", "<", new Vector3(DecreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
-            GameObject nextButton = CreateButton(row, "NextChoice", ">", new Vector3(IncreaseX, ControlY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
+            GameObject previousButton = CreateButton(row, "PrevChoice", "<", new Vector3(CyclePreviousX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
+            valueButton = CreateButton(row, "ChoiceValue", read(), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, CycleValueWidth, CycleValueHeight, delegate { cycle(1); });
+            GameObject nextButton = CreateButton(row, "NextChoice", ">", new Vector3(CycleNextX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
             AttachTooltip(previousButton, "Show the previous option for " + SafeLabel(def) + ".");
+            AttachTooltip(valueButton, "Show the next option for " + SafeLabel(def) + ".");
             AttachTooltip(nextButton, "Show the next option for " + SafeLabel(def) + ".");
         }
 

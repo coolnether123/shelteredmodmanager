@@ -38,6 +38,7 @@ namespace ShelteredAPI.UI.Compatibility
         
         // UI References
         private GameObject _contentRoot;
+        private GameObject _pageContentRoot;
         private GameObject _presetBarRoot;
         private GameObject _searchBarRoot;
         private UILabel _pagingLabel;
@@ -69,13 +70,14 @@ namespace ShelteredAPI.UI.Compatibility
         private static readonly Color COLOR_SUBTEXT = new Color(0.36f, 0.30f, 0.23f, 1f);
         private static readonly Color COLOR_BTN_ACTIVE = new Color(0.88f, 0.76f, 0.63f, 1f);
         private static readonly Color COLOR_BTN_INACTIVE = new Color(0.70f, 0.60f, 0.50f, 1f);
-        private static readonly Color COLOR_PRESET_MATCH = new Color(0.33f, 0.48f, 0.31f, 1f);
-        private static readonly Color COLOR_CUSTOM = new Color(0.62f, 0.46f, 0.18f, 1f);
-
         private const int ROW_HEIGHT = 70;
         private const float WideKeybindRowX = -420f;
-        private const float SettingPageLeftX = -540f;
-        private const float SettingPageRightX = 100f;
+        private const float BookSettingsRowX = -500f;
+        private const float SettingPageLeftX = -530f;
+        private const float SettingPageRightX = 80f;
+        private const float ToolRowY = 222f;
+        private const float FooterButtonY = -400f;
+        private const float PresetBarX = 260f;
         
         /// <summary>
         /// Opens the shared settings window for the supplied mod entry and rebuilds the full UI from its provider.
@@ -154,7 +156,7 @@ namespace ShelteredAPI.UI.Compatibility
             _pageTurn = FieldManualBookPageTurn.Attach(root.gameObject, _chrome);
             _pageFlipRoot = _chrome.Ui.CreateChild(root.gameObject, "BookPageFlipRoot", Vector3.zero);
 
-            float toolsY = 222f;
+            float toolsY = ToolRowY;
 
             _advancedModeBtn = CreateButton(_chrome.Regions.ContentRoot.transform, "BtnAdvanced", "Advanced", new Vector3(470f, toolsY, 0), 15, COLOR_TEXT, uiFont, ttfFont, 120, 34, () => SetViewMode(SettingMode.Advanced));
             _simpleModeBtn = CreateButton(_chrome.Regions.ContentRoot.transform, "BtnSimple", "Simple", new Vector3(340f, toolsY, 0), 15, COLOR_TEXT, uiFont, ttfFont, 120, 34, () => SetViewMode(SettingMode.Simple));
@@ -162,13 +164,14 @@ namespace ShelteredAPI.UI.Compatibility
             _presetBarRoot = new GameObject("PresetBar");
             _presetBarRoot.transform.SetParent(_chrome.Regions.ContentRoot.transform, false);
             _presetBarRoot.layer = root.gameObject.layer;
-            _presetBarRoot.transform.localPosition = new Vector3(60f, toolsY, 0);
+            _presetBarRoot.transform.localPosition = new Vector3(PresetBarX, toolsY, 0);
 
             CreateSearchBar(_chrome.Regions.ContentRoot, new Vector3(-300f, toolsY, 0));
 
             _contentRoot = _chrome.Regions.ContentRoot;
+            _pageContentRoot = _chrome.Ui.CreateChild(_contentRoot, "SettingsPageContentRoot", Vector3.zero);
 
-            float bottomY = -400f;
+            float bottomY = FooterButtonY;
 
             _pageNavigator = new BookPageNavigatorWidget(_chrome.Palette, _chrome.Textures, _chrome.Ui, _pageTurn != null ? _pageTurn.Assets : null);
             _pageNavigator.Build(_chrome.Regions.FooterRoot, new Vector3(0f, bottomY, 0f),
@@ -294,6 +297,11 @@ namespace ShelteredAPI.UI.Compatibility
             _searchBarRoot = _searchBar.Build(parent, "SearchBar", localPosition, "Search settings...");
             MMLog.WriteInfo("[ModSettingsPanel] Search using manual input mode.");
         }
+
+        private GameObject GetPageContentRoot()
+        {
+            return _pageContentRoot != null ? _pageContentRoot : _contentRoot;
+        }
         
         private void CaptureTemplates(UIFont uiFont, Font ttfFont)
         {
@@ -331,8 +339,8 @@ namespace ShelteredAPI.UI.Compatibility
             {
                 _pageTurn.TryTurn(
                     delta,
-                    _contentRoot,
-                    _pageFlipRoot != null ? _pageFlipRoot : _contentRoot,
+                    GetPageContentRoot(),
+                    _pageFlipRoot != null ? _pageFlipRoot : GetPageContentRoot(),
                     _pagingLabel != null ? _pagingLabel.gameObject : (_pageNavigator != null ? _pageNavigator.PageLabelRoot : null),
                     CanChangePage,
                     CommitPageChange,
@@ -466,7 +474,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (provider is ICustomSettingsUI custom)
             {
                 var customRoot = new GameObject("CustomUI");
-                customRoot.transform.SetParent(_contentRoot.transform, false);
+                customRoot.transform.SetParent(GetPageContentRoot().transform, false);
                 customRoot.transform.localPosition = Vector3.zero;
                 custom.DrawSettings(customRoot, (float)_chrome.Regions.ContentRectLocal.width - 60f, (float)_chrome.Regions.ContentRectLocal.height - 60f);
                 _pages.Add(new List<GameObject> { customRoot });
@@ -483,7 +491,7 @@ namespace ShelteredAPI.UI.Compatibility
                 }
                 else
                 {
-                    CreatePaginatedGrid(visible, allDefs, settings, 12, 2, 66, 140f, false);
+                    CreatePaginatedGrid(visible, allDefs, settings, 8, 1, 50, 140f, false);
                 }
             }
 
@@ -518,7 +526,7 @@ namespace ShelteredAPI.UI.Compatibility
 
             _presetBarRoot.SetActive(true);
             
-            float boxW = 200;
+            float boxW = 170;
             float boxH = 40;
             float arrowSize = 40;
 
@@ -530,11 +538,14 @@ namespace ShelteredAPI.UI.Compatibility
 
             // 2. Preset Name Box
             UITexture presetBackground = _chrome.Ui.CreateQuad(_presetBarRoot, "PresetDisplay", _whiteTexture, Vector3.zero, (int)boxW, (int)boxH, COLOR_BTN_INACTIVE, _chrome.Ui.NextDepth());
-            var lbl = CreateLabel(_presetBarRoot.transform, "PresetLabel", _presetController.CurrentPresetName.ToUpper(), Vector3.zero, 18, COLOR_TEXT, uiFont, ttfFont, 101);
+            var lbl = _chrome.Ui.CreateLabel(_presetBarRoot, "PresetLabel", _presetController.CurrentPresetName.ToUpper(), Vector3.zero, 18, COLOR_TEXT, (int)boxW - 20, (int)boxH - 6, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _chrome.Ui.NextDepth());
             lbl.alignment = NGUIText.Alignment.Center;
+            lbl.overflowMethod = UILabel.Overflow.ShrinkContent;
             
-            if (_presetController.CurrentPresetName == "Custom") presetBackground.color = COLOR_CUSTOM;
-            else presetBackground.color = COLOR_PRESET_MATCH;
+            if (_presetController.CurrentPresetName == "Custom")
+                presetBackground.color = COLOR_SUBTEXT;
+            else
+                presetBackground.color = COLOR_BTN_INACTIVE;
 
             // 3. Right Arrow
             CreateButton(_presetBarRoot.transform, "PresetNext", ">", 
@@ -645,7 +656,7 @@ namespace ShelteredAPI.UI.Compatibility
                     }
                     else if (columns == 1)
                     {
-                        x = -260f;
+                        x = BookSettingsRowX;
                     }
                     else if (columns == 2)
                     {
@@ -671,11 +682,11 @@ namespace ShelteredAPI.UI.Compatibility
                     }
                     else if (!useWideKeybindLayout)
                     {
-                        widget = bookRenderer.CreateWidget(_contentRoot, entry.Primary, data, isSectionHeader);
+                        widget = bookRenderer.CreateWidget(GetPageContentRoot(), entry.Primary, data, isSectionHeader);
                     }
                     else
                     {
-                        widget = SpineWidgetFactory.CreateWidget(entry.Primary, _contentRoot.transform, data, this);
+                        widget = SpineWidgetFactory.CreateWidget(entry.Primary, GetPageContentRoot().transform, data, this);
                     }
 
                     if (widget != null)
@@ -712,7 +723,7 @@ namespace ShelteredAPI.UI.Compatibility
         private ModSettingsKeybindWidgetBuilder CreateKeybindWidgetBuilder(object settingsObject)
         {
             return new ModSettingsKeybindWidgetBuilder(
-                _contentRoot,
+                GetPageContentRoot(),
                 _currentMod != null ? _currentMod.SettingsProvider : null,
                 settingsObject,
                 _whiteTexture,
