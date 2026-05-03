@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Xml;
 using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
@@ -23,6 +24,7 @@ namespace ShelteredAPI.Scenarios
                 VerifyRoundTripAndCatalog(root, result);
                 VerifyDependencies(result);
                 VerifyAssetEscapes(root, result);
+                VerifySecureXmlParsing(result);
             }
             catch (Exception ex)
             {
@@ -79,6 +81,29 @@ namespace ShelteredAPI.Scenarios
 
             ScenarioValidationResult mismatched = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "2.0.0")).Validate(definition, null);
             Assert(ContainsIssue(mismatched, "version mismatch"), "Version-mismatched dependency was not reported.", result);
+
+            ScenarioDefinition typedDefinition = CreateDefinition("Scenario.TypedDependency");
+            typedDefinition.ModDependencies.Add(new ScenarioModDependencyDefinition
+            {
+                ModId = "Typed.Required.Mod",
+                Version = "4.0.0",
+                Kind = ScenarioModDependencyKind.Required,
+                Manual = true
+            });
+            typedDefinition.ModDependencies.Add(new ScenarioModDependencyDefinition
+            {
+                ModId = "Typed.Optional.Mod",
+                Version = "1.0.0",
+                Kind = ScenarioModDependencyKind.Optional,
+                Manual = true
+            });
+
+            ScenarioDependencyService dependencyService = new ScenarioDependencyService(new VerificationDefinitionReader(typedDefinition));
+            ScenarioModDependency[] dependencies = dependencyService.LoadDefinitionDependencies(typedDefinition.Id);
+            Assert(HasDependency(dependencies, "Typed.Required.Mod", "4.0.0"),
+                "Typed required ModDependency was not included in the scenario dependency manifest.", result);
+            Assert(!HasDependency(dependencies, "Typed.Optional.Mod", "1.0.0"),
+                "Typed optional ModDependency should not lock scenario startup.", result);
         }
 
         private static void VerifyAssetEscapes(string root, ScenarioValidationResult result)
@@ -95,6 +120,18 @@ namespace ShelteredAPI.Scenarios
 
             ScenarioValidationResult validation = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(definition, pack1File);
             Assert(ContainsIssue(validation, "escapes the scenario pack folder"), "Sibling-prefix asset escape was not blocked.", result);
+        }
+
+        private static void VerifySecureXmlParsing(ScenarioValidationResult result)
+        {
+            try
+            {
+                new ScenarioDefinitionSerializer().FromXml("<!DOCTYPE Scenario [<!ENTITY xxe SYSTEM \"file:///C:/Windows/win.ini\">]><Scenario><Meta><Id>&xxe;</Id><DisplayName>Invalid</DisplayName></Meta></Scenario>");
+                Assert(false, "Scenario XML parser allowed a DTD/external entity declaration.", result);
+            }
+            catch (XmlException)
+            {
+            }
         }
 
         private static string CreateScenarioPack(string root, string packName, string scenarioId, string assetPath)
@@ -170,6 +207,22 @@ namespace ShelteredAPI.Scenarios
             return false;
         }
 
+        private static bool HasDependency(ScenarioModDependency[] dependencies, string modId, string version)
+        {
+            for (int i = 0; dependencies != null && i < dependencies.Length; i++)
+            {
+                ScenarioModDependency dependency = dependencies[i];
+                if (dependency != null
+                    && string.Equals(dependency.modId, modId, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(dependency.version ?? string.Empty, version ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static void Assert(bool condition, string message, ScenarioValidationResult result)
         {
             if (!condition && result != null)
@@ -228,6 +281,48 @@ namespace ShelteredAPI.Scenarios
                 for (int i = 0; i < directories.Length; i++)
                     folders.Add(new ScenarioModFolder(Path.GetFileName(directories[i]), directories[i]));
                 return folders.ToArray();
+            }
+        }
+
+        private sealed class VerificationDefinitionReader : IScenarioDefinitionReader
+        {
+            private readonly ScenarioDefinition _definition;
+
+            public VerificationDefinitionReader(ScenarioDefinition definition)
+            {
+                _definition = definition;
+            }
+
+            public ScenarioInfo[] ListAll()
+            {
+                return new ScenarioInfo[0];
+            }
+
+            public bool TryGetInfo(string scenarioId, out ScenarioInfo info)
+            {
+                info = null;
+                return false;
+            }
+
+            public ScenarioValidationResult Validate(string scenarioId)
+            {
+                return new ScenarioValidationResult();
+            }
+
+            public bool TryLoad(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)
+            {
+                definition = _definition;
+                scenarioFilePath = null;
+                validation = new ScenarioValidationResult();
+                return definition != null;
+            }
+
+            public bool TryLoadUnchecked(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out string errorMessage)
+            {
+                definition = _definition;
+                scenarioFilePath = null;
+                errorMessage = definition == null ? "No verification definition." : null;
+                return definition != null;
             }
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ModAPI.Core;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
@@ -49,13 +50,42 @@ namespace ShelteredAPI.Scenarios
                     return new ScenarioModDependency[0];
                 }
 
-                return ScenarioDependencyManifest.FromDependencyStrings(definition.Dependencies);
+                return ScenarioDependencyManifest.Merge(
+                    ScenarioDependencyManifest.FromDependencyStrings(definition.Dependencies),
+                    FromRequiredModDependencies(definition.ModDependencies));
             }
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ScenarioDependencyService] Failed to load dependency manifest for '" + scenarioId + "': " + ex.Message);
                 return new ScenarioModDependency[0];
             }
+        }
+
+        private static ScenarioModDependency[] FromRequiredModDependencies(IList<ScenarioModDependencyDefinition> dependencies)
+        {
+            if (dependencies == null || dependencies.Count == 0)
+                return new ScenarioModDependency[0];
+
+            List<ScenarioModDependency> required = new List<ScenarioModDependency>();
+            for (int i = 0; i < dependencies.Count; i++)
+            {
+                ScenarioModDependencyDefinition dependency = dependencies[i];
+                if (dependency == null
+                    || dependency.Kind != ScenarioModDependencyKind.Required
+                    || string.IsNullOrEmpty(dependency.ModId))
+                {
+                    continue;
+                }
+
+                required.Add(new ScenarioModDependency
+                {
+                    modId = dependency.ModId,
+                    version = dependency.Version,
+                    warnings = new string[0]
+                });
+            }
+
+            return ScenarioDependencyManifest.CloneRequiredMods(required.ToArray());
         }
 
         private static SlotManifest ToSlotManifest(ScenarioDependencyManifestData manifest)

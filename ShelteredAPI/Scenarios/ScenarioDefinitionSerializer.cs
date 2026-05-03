@@ -21,15 +21,27 @@ namespace ShelteredAPI.Scenarios
             if (string.IsNullOrEmpty(filePath))
                 throw new ArgumentException("Scenario file path is required.", "filePath");
 
-            XmlDocument document = new XmlDocument();
-            document.Load(filePath);
+            XmlDocument document = CreateDocument();
+            using (XmlReader reader = XmlReader.Create(filePath, CreateReaderSettings()))
+            {
+                document.Load(reader);
+            }
             return ReadDocument(document);
         }
 
         public ScenarioDefinition FromXml(string xml)
         {
-            XmlDocument document = new XmlDocument();
-            document.LoadXml(xml);
+            if (xml == null)
+                throw new ArgumentNullException("xml");
+
+            XmlDocument document = CreateDocument();
+            using (StringReader stringReader = new StringReader(xml))
+            {
+                using (XmlReader reader = XmlReader.Create(stringReader, CreateReaderSettings()))
+                {
+                    document.Load(reader);
+                }
+            }
             return ReadDocument(document);
         }
 
@@ -84,6 +96,21 @@ namespace ShelteredAPI.Scenarios
                 definition.Version,
                 filePath,
                 ownerModId);
+        }
+
+        private static XmlDocument CreateDocument()
+        {
+            XmlDocument document = new XmlDocument();
+            document.XmlResolver = null;
+            return document;
+        }
+
+        private static XmlReaderSettings CreateReaderSettings()
+        {
+            XmlReaderSettings settings = new XmlReaderSettings();
+            settings.ProhibitDtd = true;
+            settings.XmlResolver = null;
+            return settings;
         }
 
         private static ScenarioDefinition ReadDocument(XmlDocument document)
