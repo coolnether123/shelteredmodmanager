@@ -83,20 +83,15 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            if (entry.IsVanilla)
-            {
-                error = "Vanilla scenarios are launched through the stock scenario panel flow.";
-                return false;
-            }
-
             CustomScenarioInfo scenario = entry.CustomScenario;
-            if (scenario == null || string.IsNullOrEmpty(scenario.Id))
+            bool usesCustomLifecycle = !entry.IsVanilla;
+            if (usesCustomLifecycle && (scenario == null || string.IsNullOrEmpty(scenario.Id)))
             {
                 error = "Modded scenario entry is missing its descriptor.";
                 return false;
             }
 
-            if (!_scenarioLifecycle.MarkSelected(scenario.Id))
+            if (usesCustomLifecycle && !_scenarioLifecycle.MarkSelected(scenario.Id))
             {
                 error = "MarkSelected failed for scenario " + scenario.Id + ".";
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
@@ -106,24 +101,26 @@ namespace ShelteredAPI.Scenarios
             SaveEntry startupSave;
             try
             {
-                startupSave = _saveLibrary.CreateNext(scenario.Id, new SaveCreateOptions
+                startupSave = _saveLibrary.CreateNext(entry.StorageScenarioId, new SaveCreateOptions
                 {
-                    name = string.IsNullOrEmpty(saveName) ? scenario.DisplayName : saveName
+                    name = string.IsNullOrEmpty(saveName) ? entry.DisplayName : saveName
                 });
             }
             catch (Exception ex)
             {
                 error = "Failed to allocate startup save: " + ex.Message;
                 MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
-                _scenarioLifecycle.ClearState();
+                if (usesCustomLifecycle)
+                    _scenarioLifecycle.ClearState();
                 return false;
             }
 
             if (startupSave == null)
             {
                 error = "Save library returned a null startup save.";
-                MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error + " scenarioId=" + scenario.Id + ".");
-                _scenarioLifecycle.ClearState();
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error + " scenarioId=" + entry.StorageScenarioId + ".");
+                if (usesCustomLifecycle)
+                    _scenarioLifecycle.ClearState();
                 return false;
             }
 
@@ -136,7 +133,7 @@ namespace ShelteredAPI.Scenarios
             };
 
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] PrepareNewGame ready. scenarioId="
-                + scenario.Id + " saveId=" + startupSave.id + " slot=" + startupSave.absoluteSlot
+                + entry.StorageScenarioId + " saveId=" + startupSave.id + " slot=" + startupSave.absoluteSlot
                 + " virtualSaveType=" + preparation.VirtualSaveType + ".");
             return true;
         }
@@ -154,7 +151,7 @@ namespace ShelteredAPI.Scenarios
             error = null;
 
             if (adapter == null) { error = "adapter is null"; return false; }
-            if (preparation == null || preparation.StartupSave == null || preparation.Scenario == null)
+            if (preparation == null || preparation.StartupSave == null || preparation.Entry == null)
             {
                 error = "preparation is incomplete";
                 return false;
@@ -175,7 +172,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            if (!BeginCustomisationTransition(adapter, "custom scenario '" + preparation.Scenario.Id + "'", virtualSaveType))
+            if (!BeginCustomisationTransition(adapter, BuildLaunchTargetLabel(preparation), virtualSaveType))
             {
                 error = "Could not push the customisation panel.";
                 _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
@@ -207,7 +204,8 @@ namespace ShelteredAPI.Scenarios
                 }
             }
 
-            _scenarioLifecycle.ClearState();
+            if (preparation.Scenario != null)
+                _scenarioLifecycle.ClearState();
         }
 
         public bool QueueAuthoringDraftLaunch(
@@ -382,6 +380,18 @@ namespace ShelteredAPI.Scenarios
                 case SaveManager.SaveType.SlotStasis: return 5;
                 default: return 1;
             }
+        }
+
+        private static string BuildLaunchTargetLabel(NewGamePreparation preparation)
+        {
+            if (preparation == null || preparation.Entry == null)
+                return "scenario";
+
+            string id = preparation.Entry.StorageScenarioId;
+            if (preparation.Scenario != null && !string.IsNullOrEmpty(preparation.Scenario.Id))
+                id = preparation.Scenario.Id;
+
+            return "scenario '" + id + "'";
         }
     }
 }

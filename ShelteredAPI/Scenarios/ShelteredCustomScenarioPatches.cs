@@ -219,31 +219,12 @@ namespace ShelteredAPI.Scenarios
             if (currentPage != 0)
                 return;
 
-            PlatformSaveProxy.Target pendingTarget;
             bool draftCancelled = false;
-            if (PlatformSaveProxy.TryGetNextSave(SaveManager.SaveType.Slot1, out pendingTarget) && pendingTarget != null)
+            SaveManager.SaveType[] startupSaveTypes = GetScenarioStartupSaveTypes();
+            for (int i = 0; i < startupSaveTypes.Length; i++)
             {
-                IScenarioSaveLibrary saveLibrary = ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>();
-                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Customisation cancelled before game start. Clearing queued startup save. scenarioId="
-                    + pendingTarget.scenarioId + " saveId=" + pendingTarget.saveId + ".");
-
-                bool isDraftStartup = string.Equals(
-                    pendingTarget.scenarioId,
-                    ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
-                    StringComparison.OrdinalIgnoreCase);
-
-                if (isDraftStartup)
-                {
-                    ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
+                if (ClearQueuedStartupSave(startupSaveTypes[i]))
                     draftCancelled = true;
-                }
-                else if (!string.IsNullOrEmpty(pendingTarget.scenarioId)
-                    && !string.Equals(pendingTarget.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase))
-                {
-                    saveLibrary.Delete(pendingTarget.scenarioId, pendingTarget.saveId);
-                }
-
-                saveLibrary.ClearQueuedNewGameSave(SaveManager.SaveType.Slot1);
             }
 
             // Guard covers the edge case where a draft was queued but no save target was
@@ -252,6 +233,43 @@ namespace ShelteredAPI.Scenarios
                 ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
 
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
+        }
+
+        private static SaveManager.SaveType[] GetScenarioStartupSaveTypes()
+        {
+            return new SaveManager.SaveType[]
+            {
+                SaveManager.SaveType.Slot1,
+                SaveManager.SaveType.Slot2,
+                SaveManager.SaveType.Slot3,
+                SaveManager.SaveType.SlotSurrounded,
+                SaveManager.SaveType.SlotStasis
+            };
+        }
+
+        private static bool ClearQueuedStartupSave(SaveManager.SaveType saveType)
+        {
+            PlatformSaveProxy.Target pendingTarget;
+            if (!PlatformSaveProxy.TryGetNextSave(saveType, out pendingTarget) || pendingTarget == null)
+                return false;
+
+            IScenarioSaveLibrary saveLibrary = ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>();
+            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Customisation cancelled before game start. Clearing queued startup save. scenarioId="
+                + pendingTarget.scenarioId + " saveId=" + pendingTarget.saveId + " saveType=" + saveType + ".");
+
+            bool isDraftStartup = string.Equals(
+                pendingTarget.scenarioId,
+                ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                StringComparison.OrdinalIgnoreCase);
+
+            if (isDraftStartup)
+                ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Customisation was cancelled before the scenario world started.");
+            else if (!string.IsNullOrEmpty(pendingTarget.scenarioId)
+                && !string.Equals(pendingTarget.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase))
+                saveLibrary.Delete(pendingTarget.scenarioId, pendingTarget.saveId);
+
+            saveLibrary.ClearQueuedNewGameSave(saveType);
+            return isDraftStartup;
         }
     }
 

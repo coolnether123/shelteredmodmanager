@@ -28,12 +28,12 @@ namespace ShelteredAPI.Scenarios
         private static readonly Color AvailableButtonColor = new Color(0.88f, 0.76f, 0.63f, 1f);
         private static readonly Color AvailableHoverColor = new Color(0.97f, 0.85f, 0.70f, 1f);
         private static readonly Color AvailablePressedColor = new Color(0.74f, 0.61f, 0.49f, 1f);
-        private static readonly Color HubButtonColor = new Color(0.87f, 0.75f, 0.62f, 1f);
-        private static readonly Color HubHoverColor = new Color(0.96f, 0.84f, 0.69f, 1f);
-        private static readonly Color HubPressedColor = new Color(0.73f, 0.60f, 0.48f, 1f);
-        private static readonly Color ActionButtonColor = new Color(0.90f, 0.78f, 0.64f, 1f);
-        private static readonly Color ActionHoverColor = new Color(0.99f, 0.86f, 0.71f, 1f);
-        private static readonly Color ActionPressedColor = new Color(0.76f, 0.62f, 0.49f, 1f);
+        private static readonly Color HubButtonColor = AvailableButtonColor;
+        private static readonly Color HubHoverColor = AvailableHoverColor;
+        private static readonly Color HubPressedColor = AvailablePressedColor;
+        private static readonly Color ActionButtonColor = AvailableButtonColor;
+        private static readonly Color ActionHoverColor = AvailableHoverColor;
+        private static readonly Color ActionPressedColor = AvailablePressedColor;
         private static readonly Color LockedButtonColor = new Color(0.77f, 0.57f, 0.54f, 1f);
         private static readonly Color LockedHoverColor = new Color(0.86f, 0.66f, 0.62f, 1f);
         private static readonly Color LockedPressedColor = new Color(0.66f, 0.47f, 0.45f, 1f);
@@ -183,7 +183,7 @@ namespace ShelteredAPI.Scenarios
                 // Sheltered's cloned NGUI buttons can still inherit surprising click behavior
                 // through the scene/prefab wiring, so the custom hub must live in its own space.
                 hubButton.transform.localPosition = state.LayoutMetrics.HubButtonPosition;
-                ConfigureButton(hubButton.gameObject, HubLabel, ScenarioButtonVisualStyle.Hub);
+                ConfigureButton(hubButton.gameObject, HubLabel, ScenarioButtonVisualStyle.Hub, state.LayoutMetrics);
                 LogUiElementLayout(panel, "HubButton", hubButton.gameObject, "hub");
                 BindPressGuard(panel, hubButton.gameObject);
                 UIEventListener.Get(hubButton.gameObject).onClick = delegate(GameObject go)
@@ -478,7 +478,8 @@ namespace ShelteredAPI.Scenarios
                 ConfigureButton(
                     button.gameObject,
                     locked ? entry.Label + " [LOCKED]" : entry.Label,
-                    locked ? ScenarioButtonVisualStyle.Locked : ScenarioButtonVisualStyle.Available);
+                    locked ? ScenarioButtonVisualStyle.Locked : ScenarioButtonVisualStyle.Available,
+                    metrics);
                 BindPressGuard(panel, button.gameObject);
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Created scenario button. panel=" + panel.GetInstanceID()
                     + " slot=" + i + " scenarioId=" + scenario.Id + " locked=" + locked + ".");
@@ -1025,7 +1026,7 @@ namespace ShelteredAPI.Scenarios
                 if (addNewButton != null)
                 {
                     addNewButton.transform.localPosition = metrics.AddNewButtonPosition;
-                    ConfigureButton(addNewButton.gameObject, AddNewLabel, ScenarioButtonVisualStyle.Action);
+                    ConfigureButton(addNewButton.gameObject, AddNewLabel, ScenarioButtonVisualStyle.Action, metrics);
                     BindPressGuard(panel, addNewButton.gameObject);
                     UIEventListener.Get(addNewButton.gameObject).onClick = delegate(GameObject go)
                     {
@@ -1098,7 +1099,7 @@ namespace ShelteredAPI.Scenarios
 
             GameObject buttonObject = button.gameObject;
             buttonObject.transform.localPosition = SnapLocalPosition(position);
-            ConfigureButton(buttonObject, label, ScenarioButtonVisualStyle.PagingEnabled);
+            ConfigureButton(buttonObject, label, ScenarioButtonVisualStyle.PagingEnabled, state != null ? state.LayoutMetrics : null);
             BindPressGuard(panel, buttonObject);
             UIEventListener.Get(buttonObject).onClick = delegate(GameObject go)
             {
@@ -1184,7 +1185,8 @@ namespace ShelteredAPI.Scenarios
             ConfigureButton(
                 button.gameObject,
                 GetButtonLabelText(button.gameObject),
-                enabled ? ScenarioButtonVisualStyle.PagingEnabled : ScenarioButtonVisualStyle.PagingDisabled);
+                enabled ? ScenarioButtonVisualStyle.PagingEnabled : ScenarioButtonVisualStyle.PagingDisabled,
+                null);
             button.SetState(enabled ? UIButtonColor.State.Normal : UIButtonColor.State.Disabled, true);
         }
 
@@ -1289,6 +1291,11 @@ namespace ShelteredAPI.Scenarios
 
         private static void ConfigureButton(GameObject buttonObject, string label, ScenarioButtonVisualStyle style)
         {
+            ConfigureButton(buttonObject, label, style, null);
+        }
+
+        private static void ConfigureButton(GameObject buttonObject, string label, ScenarioButtonVisualStyle style, ScenarioLayoutMetrics metrics)
+        {
             if (buttonObject == null)
                 return;
 
@@ -1333,15 +1340,14 @@ namespace ShelteredAPI.Scenarios
                 labels[i].alignment = NGUIText.Alignment.Center;
             }
 
-            int targetWidth = style == ScenarioButtonVisualStyle.PagingEnabled || style == ScenarioButtonVisualStyle.PagingDisabled
+            bool isPaging = style == ScenarioButtonVisualStyle.PagingEnabled || style == ScenarioButtonVisualStyle.PagingDisabled;
+            int targetWidth = isPaging
                 ? CompactPagingButtonWidth
-                : CompactButtonWidth;
-            int targetHeight = style == ScenarioButtonVisualStyle.PagingEnabled || style == ScenarioButtonVisualStyle.PagingDisabled
+                : Mathf.RoundToInt(metrics != null && metrics.ButtonWidth > 1f ? metrics.ButtonWidth : CompactButtonWidth);
+            int targetHeight = isPaging
                 ? CompactPagingButtonHeight
-                : CompactButtonHeight;
-            int targetFontSize = style == ScenarioButtonVisualStyle.PagingEnabled || style == ScenarioButtonVisualStyle.PagingDisabled
-                ? CompactPagingButtonFontSize
-                : CompactButtonFontSize;
+                : Mathf.RoundToInt(metrics != null && metrics.ButtonHeight > 1f ? metrics.ButtonHeight : CompactButtonHeight);
+            int targetFontSize = isPaging ? CompactPagingButtonFontSize : CompactButtonFontSize;
             ApplyButtonSizing(buttonObject, primaryLabel, targetWidth, targetHeight, targetFontSize);
 
             if (primaryLabel != null)

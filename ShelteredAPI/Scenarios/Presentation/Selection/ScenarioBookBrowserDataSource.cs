@@ -223,12 +223,9 @@ namespace ShelteredAPI.Scenarios
                     continue;
                 }
 
-                if (entry.Source != ScenarioCatalogSource.Modded)
-                    continue;
-
-                if (type == ScenarioBookType.Surrounded && entry.BaseGameMode == ScenarioBaseGameMode.Surrounded)
+                if (type == ScenarioBookType.Surrounded && IsPlayableScenarioMode(entry, ScenarioBaseGameMode.Surrounded))
                     entries.Add(entry);
-                else if (type == ScenarioBookType.Stasis && entry.BaseGameMode == ScenarioBaseGameMode.Stasis)
+                else if (type == ScenarioBookType.Stasis && IsPlayableScenarioMode(entry, ScenarioBaseGameMode.Stasis))
                     entries.Add(entry);
             }
 
@@ -263,9 +260,19 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
+        private static bool IsPlayableScenarioMode(ScenarioCatalogEntry entry, ScenarioBaseGameMode mode)
+        {
+            if (entry == null || entry.BaseGameMode != mode)
+                return false;
+
+            return entry.Source == ScenarioCatalogSource.Modded || entry.Source == ScenarioCatalogSource.Vanilla;
+        }
+
         private static string BuildScenarioDetail(ScenarioCatalogEntry entry)
         {
-            string owner = !string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "local";
+            string owner = entry.Source == ScenarioCatalogSource.Vanilla
+                ? "vanilla"
+                : (!string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "local");
             string mode = entry.BaseGameMode.ToString();
             string state = entry.CanStart ? "Ready" : "Locked";
             return owner + " - " + mode + " - " + state;
