@@ -147,6 +147,7 @@ namespace ShelteredAPI.UI
 
         public string ObjectId { get; set; }
         public ObjectManager.ObjectType ObjectType { get; set; }
+        public string InteractionId { get; set; }
         public string InteractionText { get; set; }
         public int Priority { get; set; }
         public Func<ObjectPanelContext, bool> CanOpen { get; set; }

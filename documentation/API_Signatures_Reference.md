@@ -549,6 +549,7 @@ public static class ShelteredRuntimeUI
     public static bool IsOpen(string panelId);
     public static void Refresh(string panelId);
     public static void Close(string panelId);
+    public static void CloseOwner(string ownerId);
     public static void CloseAll();
 }
 
@@ -613,6 +614,7 @@ public sealed class ObjectPanelRegistration
 {
     public string ObjectId { get; set; }
     public ObjectManager.ObjectType ObjectType { get; set; }
+    public string InteractionId { get; set; }
     public string InteractionText { get; set; }
     public int Priority { get; set; }
     public Func<ObjectPanelContext, bool> CanOpen { get; set; }

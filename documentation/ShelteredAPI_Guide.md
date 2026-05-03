@@ -190,6 +190,7 @@ ShelteredRuntimeUI.RegisterObjectPanel(new ObjectPanelRegistration
 {
     ObjectType = ObjectManager.ObjectType.Freezer,
     ObjectId = "com.example.fridge",
+    InteractionId = "com.example.fridge.open",
     InteractionText = "Open Fridge",
     Open = context => ShelteredRuntimeUI.OpenContainer(new ContainerUiRequest
     {
@@ -202,3 +203,5 @@ ShelteredRuntimeUI.RegisterObjectPanel(new ObjectPanelRegistration
     })
 });
 ```
+
+`InteractionText` is display text; ShelteredAPI maps it into the vanilla context menu localization path for you. `InteractionId` is optional, but using a stable id keeps menu entries deterministic across text changes.

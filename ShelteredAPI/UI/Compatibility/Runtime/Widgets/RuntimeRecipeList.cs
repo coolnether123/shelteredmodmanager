@@ -25,7 +25,7 @@ namespace ShelteredAPI.UI.Internal
                 GameObject row = RuntimeWidgetUtil.CreateChild(parent, "RecipeRow_" + i, new Vector3(0f, 128f - i * 42f, 0f));
                 RuntimeWidgetUtil.CreateBox(row, "Background", 560, 36, available ? new Color(0.12f, 0.14f, 0.13f, 0.94f) : new Color(0.1f, 0.1f, 0.1f, 0.7f), Vector3.zero, depth + i * 3);
                 RuntimeWidgetUtil.CreateLabel(row, recipe != null ? recipe.DisplayName : string.Empty, 360, 28, 18, new Vector3(-92f, -1f, 0f), NGUIText.Alignment.Left, depth + i * 3 + 1);
-                RuntimeButton.Create(row, "Craft", "Craft", 82, 26, new Vector3(228f, 0f, 0f), depth + i * 3 + 2, delegate
+                RuntimeButton.Create(row, "Craft", "Craft", 82, 26, new Vector3(228f, 0f, 0f), depth + i * 3 + 2, available && onCraft != null, delegate
                 {
                     if (available && onCraft != null)
                         onCraft(recipe);

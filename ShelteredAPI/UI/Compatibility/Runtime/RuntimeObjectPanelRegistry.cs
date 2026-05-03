@@ -1,11 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
+using ModAPI.Core;
+using ShelteredAPI.Content;
 using ShelteredAPI.Interactions;
 
 namespace ShelteredAPI.UI.Internal
 {
     internal static class RuntimeObjectPanelRegistry
     {
+        private const string InteractionKeyPrefix = "shelteredapi.runtimeui.";
+        private const string InteractionLocalizationPrefix = "Object.Interaction.";
+
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, ObjectPanelRegistration> Registrations =
             new Dictionary<string, ObjectPanelRegistration>(StringComparer.OrdinalIgnoreCase);
@@ -27,10 +33,11 @@ namespace ShelteredAPI.UI.Internal
             lock (Sync)
                 Registrations[registrationId] = registration;
 
+            RegisterInteractionText(registrationId, registration.InteractionText);
+
             InteractionRegistry.For(objectType)
-                .Add(registration.InteractionText, typeof(RuntimeObjectPanelInteraction))
+                .Add(registrationId, typeof(RuntimeObjectPanelInteraction))
                 .WithPriority(registration.Priority > 0 ? registration.Priority : 1)
-                .When(delegate(Obj_Base obj) { return CanOpen(registrationId, obj, null); })
                 .OnInjected(delegate(Obj_Base obj, Int_Base interaction)
                 {
                     RuntimeObjectPanelInteraction runtime = interaction as RuntimeObjectPanelInteraction;
@@ -51,7 +58,15 @@ namespace ShelteredAPI.UI.Internal
             if (registration.CanOpen == null)
                 return true;
 
-            return registration.CanOpen(new ObjectPanelContext(registration.ObjectId, target, member));
+            try
+            {
+                return registration.CanOpen(new ObjectPanelContext(registration.ObjectId, target, member));
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write("ERROR in RuntimeObjectPanelRegistry.CanOpen: " + ex);
+                return false;
+            }
         }
 
         public static bool TryOpen(string registrationId, Obj_Base target, FamilyMember member)
@@ -63,8 +78,16 @@ namespace ShelteredAPI.UI.Internal
             if (!CanOpen(registrationId, target, member))
                 return false;
 
-            registration.Open(new ObjectPanelContext(registration.ObjectId, target, member));
-            return true;
+            try
+            {
+                registration.Open(new ObjectPanelContext(registration.ObjectId, target, member));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write("ERROR in RuntimeObjectPanelRegistry.Open: " + ex);
+                return false;
+            }
         }
 
         private static bool TryGet(string registrationId, out ObjectPanelRegistration registration)
@@ -88,10 +111,53 @@ namespace ShelteredAPI.UI.Internal
 
         private static string BuildRegistrationId(ObjectPanelRegistration registration, ObjectManager.ObjectType objectType)
         {
-            if (!string.IsNullOrEmpty(registration.ObjectId))
-                return registration.ObjectId + "::" + registration.InteractionText;
+            string source = registration.InteractionId;
+            if (string.IsNullOrEmpty(source))
+            {
+                string owner = !string.IsNullOrEmpty(registration.ObjectId)
+                    ? registration.ObjectId
+                    : objectType.ToString();
+                source = owner + "." + registration.InteractionText;
+            }
 
-            return objectType + "::" + registration.InteractionText;
+            return InteractionKeyPrefix + NormalizeInteractionId(source);
+        }
+
+        private static string NormalizeInteractionId(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "panel";
+
+            StringBuilder builder = new StringBuilder(value.Length);
+            bool previousWasSeparator = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = char.ToLowerInvariant(value[i]);
+                bool allowed = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_';
+                if (allowed)
+                {
+                    builder.Append(c);
+                    previousWasSeparator = c == '.' || c == '-' || c == '_';
+                    continue;
+                }
+
+                if (!previousWasSeparator)
+                {
+                    builder.Append('_');
+                    previousWasSeparator = true;
+                }
+            }
+
+            string normalized = builder.Length > 0 ? builder.ToString().Trim('.', '-', '_') : string.Empty;
+            return !string.IsNullOrEmpty(normalized) ? normalized : "panel";
+        }
+
+        private static void RegisterInteractionText(string registrationId, string interactionText)
+        {
+            if (string.IsNullOrEmpty(registrationId))
+                return;
+
+            ModLocalization.Set(InteractionLocalizationPrefix + registrationId, interactionText ?? string.Empty);
         }
 
         private static ObjectManager.ObjectType ResolveObjectType(ObjectPanelRegistration registration)
@@ -141,6 +207,11 @@ namespace ShelteredAPI.UI.Internal
             _registrationId = registrationId;
         }
 
+        public override void Awake()
+        {
+            obj = GetComponent<Obj_Base>();
+        }
+
         public override string GetInstanceTypeName()
         {
             return "ShelteredAPI.RuntimeObjectPanelInteraction";
@@ -159,7 +230,7 @@ namespace ShelteredAPI.UI.Internal
         public override bool IsPlayerSelectable()
         {
             Obj_Base target = obj != null ? obj : GetComponent<Obj_Base>();
-            return target != null && RuntimeObjectPanelRegistry.CanOpen(_registrationId, target, null);
+            return target != null && RuntimeObjectPanelRegistry.CanOpen(_registrationId, target, GetSelectedMember());
         }
 
         public override bool IsPlayerSelectableWithoutValidMember()
@@ -171,6 +242,18 @@ namespace ShelteredAPI.UI.Internal
         {
             Obj_Base target = obj != null ? obj : GetComponent<Obj_Base>();
             return target != null && RuntimeObjectPanelRegistry.TryOpen(_registrationId, target, member);
+        }
+
+        private static FamilyMember GetSelectedMember()
+        {
+            try
+            {
+                return InteractionManager.Instance != null ? InteractionManager.Instance.GetSelectedFamilyMember() : null;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }
