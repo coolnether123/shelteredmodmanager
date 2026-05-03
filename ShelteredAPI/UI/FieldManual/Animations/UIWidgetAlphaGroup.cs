@@ -1,12 +1,15 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace ShelteredAPI.UI.FieldManual.Animations
 {
     /// <summary>
-    /// Applies a normalized alpha multiplier to all child NGUI widgets.
+    /// Applies a normalized alpha multiplier to visible child NGUI widgets.
     /// </summary>
     internal sealed class UIWidgetAlphaGroup : MonoBehaviour
     {
+        private static readonly Dictionary<UIWidget, float> OriginalAlphas = new Dictionary<UIWidget, float>();
+
         private UIWidget[] _widgets = new UIWidget[0];
         private float[] _baseAlphas = new float[0];
         private float _from;
@@ -61,14 +64,51 @@ namespace ShelteredAPI.UI.FieldManual.Animations
 
         private void CaptureWidgets()
         {
-            _widgets = GetComponentsInChildren<UIWidget>(true);
+            PruneDestroyedAlphaEntries();
+            _widgets = GetComponentsInChildren<UIWidget>(false);
             _baseAlphas = new float[_widgets.Length];
 
             for (int i = 0; i < _widgets.Length; i++)
             {
                 UIWidget widget = _widgets[i];
-                _baseAlphas[i] = widget != null ? widget.alpha : 0f;
+                if (widget == null)
+                {
+                    _baseAlphas[i] = 0f;
+                    continue;
+                }
+
+                float baseAlpha;
+                if (!OriginalAlphas.TryGetValue(widget, out baseAlpha))
+                {
+                    baseAlpha = widget.alpha;
+                    OriginalAlphas[widget] = baseAlpha;
+                }
+
+                _baseAlphas[i] = baseAlpha;
             }
+        }
+
+        private static void PruneDestroyedAlphaEntries()
+        {
+            if (OriginalAlphas.Count == 0)
+                return;
+
+            List<UIWidget> destroyed = null;
+            foreach (UIWidget widget in OriginalAlphas.Keys)
+            {
+                if (widget != null)
+                    continue;
+
+                if (destroyed == null)
+                    destroyed = new List<UIWidget>();
+                destroyed.Add(widget);
+            }
+
+            if (destroyed == null)
+                return;
+
+            for (int i = 0; i < destroyed.Count; i++)
+                OriginalAlphas.Remove(destroyed[i]);
         }
 
         private void ApplyAlpha(float alpha)

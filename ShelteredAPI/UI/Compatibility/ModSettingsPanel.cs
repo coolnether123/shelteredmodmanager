@@ -77,8 +77,8 @@ namespace ShelteredAPI.UI.Compatibility
 
         private const int ROW_HEIGHT = 70;
         private const float WideKeybindRowX = -420f;
-        private const float SettingPageLeftX = -500f;
-        private const float SettingPageRightX = 120f;
+        private const float SettingPageLeftX = -540f;
+        private const float SettingPageRightX = 100f;
         
         /// <summary>
         /// Opens the shared settings window for the supplied mod entry and rebuilds the full UI from its provider.
@@ -532,7 +532,7 @@ namespace ShelteredAPI.UI.Compatibility
                 }
                 else
                 {
-                    CreatePaginatedGrid(visible, allDefs, settings, 14, 2, 55, 145f, false);
+                    CreatePaginatedGrid(visible, allDefs, settings, 12, 2, 66, 140f, false);
                 }
             }
 
