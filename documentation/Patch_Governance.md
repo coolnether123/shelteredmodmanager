@@ -1,6 +1,6 @@
 # Patch Governance
 
-This document defines how Harmony patches are governed inside SMM during the ModAPI 1.3 beta line.
+This document defines how Harmony patches are governed inside SMM during the ModAPI 1.3 Beta.3 line.
 
 ## Goals
 
@@ -58,7 +58,7 @@ The registry honors these controls:
 
 ## Compatibility policy
 
-During ModAPI 1.3 beta:
+During ModAPI 1.3 Beta.3:
 
 - keep existing public ModAPI patch-related behavior working
 - prefer internal refactors over public API moves

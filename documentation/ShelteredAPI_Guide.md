@@ -1,6 +1,6 @@
-# ShelteredAPI Guide (Current v1.3 Line)
+# ShelteredAPI Guide (v1.3 Beta.3)
 
-`ShelteredAPI` supplies Sheltered-specific product APIs and runtime implementations while `ModAPI` stays host-neutral. The 1.3 line is a breaking clean API line.
+`ShelteredAPI` supplies Sheltered-specific product APIs and runtime implementations while `ModAPI` stays host-neutral. The 1.3 Beta.3 line is a breaking clean API line.
 
 Canonical signatures: `documentation/API_Signatures_Reference.md`.
 

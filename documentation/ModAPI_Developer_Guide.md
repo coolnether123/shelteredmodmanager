@@ -1,4 +1,4 @@
-# ModAPI Developer Guide (Current v1.3 Line)
+# ModAPI Developer Guide (v1.3 Beta.3)
 
 ## Compatibility Matrix
 
@@ -11,7 +11,7 @@
 
 Exact signatures: `documentation/API_Signatures_Reference.md`.
 
-The 1.3 line is a breaking clean API line. `ModAPI.dll` is the neutral framework assembly and no longer references Sheltered `Assembly-CSharp` or the manager application. Sheltered runtime behavior is provided by `ShelteredAPI.dll` through public facades and neutral `GameRuntime.*` services.
+The 1.3 Beta.3 line is a breaking clean API line. `ModAPI.dll` is the neutral framework assembly and no longer references Sheltered `Assembly-CSharp` or the manager application. Sheltered runtime behavior is provided by `ShelteredAPI.dll` through public facades and neutral `GameRuntime.*` services.
 
 ## Assembly Rule
 

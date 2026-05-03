@@ -1,4 +1,4 @@
-# ShelteredAPI Content Guide
+# ShelteredAPI Content Guide (v1.3 Beta.3)
 
 This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 1.3 breaking clean API line.
 

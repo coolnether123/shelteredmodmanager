@@ -1,4 +1,4 @@
-# Spine Settings Framework Guide (Current v1.3 Line)
+# Spine Settings Framework Guide (v1.3 Beta.3)
 
 ## Compatibility Matrix
 

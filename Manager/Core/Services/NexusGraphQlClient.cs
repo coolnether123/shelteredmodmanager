@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Web.Script.Serialization;
+using Manager.Core;
 
 namespace Manager.Core.Services
 {
@@ -44,7 +45,7 @@ namespace Manager.Core.Services
                 request.Method = "POST";
                 request.ContentType = "application/json";
                 request.Accept = "application/json";
-                request.UserAgent = "ShelteredModManager/1.3.0";
+                request.UserAgent = AppVersionInfo.UserAgent;
                 request.Timeout = 15000;
                 request.ReadWriteTimeout = 15000;
                 request.KeepAlive = false;

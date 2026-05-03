@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Web.Script.Serialization;
+using Manager.Core;
 using Manager.Core.Models;
 
 namespace Manager.Core.Services
@@ -372,7 +373,7 @@ query modFiles($modId: ID!, $gameId: ID!){
                 request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
                 request.Headers["apikey"] = apiKey;
                 request.Headers["application-name"] = "Sheltered Mod Manager";
-                request.Headers["application-version"] = "1.3.0";
+                request.Headers["application-version"] = AppVersionInfo.NexusHeader;
 
                 using (var response = (HttpWebResponse)request.GetResponse())
                 using (var stream = response.GetResponseStream())

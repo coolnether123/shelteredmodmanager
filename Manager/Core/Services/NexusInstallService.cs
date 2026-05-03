@@ -4,6 +4,7 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Web.Script.Serialization;
+using Manager.Core;
 using Manager.Core.Models;
 
 namespace Manager.Core.Services
@@ -97,7 +98,7 @@ namespace Manager.Core.Services
             {
                 using (var web = new WebClient())
                 {
-                    web.Headers["User-Agent"] = "ShelteredModManager/1.3.0";
+                    web.Headers["User-Agent"] = AppVersionInfo.UserAgent;
                     web.DownloadFile(downloadUrl, archivePath);
                 }
             }

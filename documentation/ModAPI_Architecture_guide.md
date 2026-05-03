@@ -1,6 +1,6 @@
-# ModAPI v1.3 Architecture Guide
+# ModAPI v1.3 Beta.3 Architecture Guide
 
-This document summarizes the current loader/runtime architecture. The 1.3 line is a breaking clean API line.
+This document summarizes the current loader/runtime architecture. The 1.3 Beta.3 line is a breaking clean API line.
 
 For exact signatures, use `documentation/API_Signatures_Reference.md`.
 

@@ -1,4 +1,4 @@
-# How to Develop a Plugin | Sheltered Mod Manager v1.3
+# How to Develop a Plugin | Sheltered Mod Manager v1.3 Beta.3
 
 This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
 

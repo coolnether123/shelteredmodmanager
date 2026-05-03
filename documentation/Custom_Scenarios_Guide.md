@@ -1,6 +1,6 @@
-# Custom Scenarios Guide
+# Custom Scenarios Guide (v1.3 Beta.3)
 
-The 1.3 line is a breaking clean API line.
+The 1.3 Beta.3 line is a breaking clean API line.
 
 ## Assembly Rule
 
@@ -187,15 +187,74 @@ This keeps the browser usable for arbitrarily large scenario catalogs without in
 
 `Add New Scenario` creates an in-memory draft with the default id `com.author.scenario.new` through internal browser/editor services. XML and code authors should use `ShelteredScenarioAuthoring` to create, load, validate, save, and run framework verification for scenario definitions; browser controllers and editor backend services are not public API. The Survivors workspace exposes the character editor for both starting crew and future survivors: add/remove starting people, move the start crew order, cycle names/gender/age, step individual stats, cycle strength/weakness traits, copy full identity from a selected live family member, and copy or clear appearance. Future survivors use the same character editor row underneath their arrival scheduling controls.
 
-Public XML authoring helpers:
+## Public XML Authoring API
+
+Use `ShelteredScenarioAuthoring` for XML scenario files and in-memory XML edits. Use `ShelteredScenarios` for the live catalog/registration surface. The editor controllers, browser controllers, serializers, validators, and runtime apply services are internal implementation details.
+
+Create a new XML-backed definition:
+
+```csharp
+ScenarioDefinition definition = ShelteredScenarioAuthoring.CreateDefinition(ScenarioBaseGameMode.Survival);
+definition.Id = "com.example.scenario.longroad";
+definition.DisplayName = "The Long Road";
+definition.Description = "Start light and survive seven days.";
+definition.Author = "Example Author";
+definition.Version = "1.0.0";
+
+definition.StartingInventory.OverrideRandomStart = true;
+definition.StartingInventory.Items.Add(new ItemEntry { ItemId = "Water", Quantity = 4 });
+
+ScenarioValidationResult validation = ShelteredScenarioAuthoring.ValidateDefinition(definition, filePath);
+if (validation.IsValid)
+    ShelteredScenarioAuthoring.SaveDefinition(definition, filePath);
+```
+
+Edit an existing XML scenario file:
 
 ```csharp
 ScenarioDefinition definition = ShelteredScenarioAuthoring.LoadDefinition(filePath);
+definition.DisplayName = "The Long Road - Revised";
+definition.ModDependencies.Add(new ScenarioModDependencyDefinition
+{
+    ModId = "com.example.content",
+    Version = "1.0.0",
+    Kind = ScenarioModDependencyKind.Required,
+    Manual = true
+});
+
 ScenarioValidationResult validation = ShelteredScenarioAuthoring.ValidateDefinition(definition, filePath);
 
 if (validation.IsValid)
     ShelteredScenarioAuthoring.SaveDefinition(definition, filePath);
 ```
+
+Convert between XML text and DTOs without touching disk:
+
+```csharp
+ScenarioDefinition definition = ShelteredScenarioAuthoring.FromXml(xmlText);
+string updatedXml = ShelteredScenarioAuthoring.ToXml(definition);
+```
+
+Work with the loaded mod XML catalog:
+
+```csharp
+ShelteredScenarios.RefreshXmlDefinitions();
+ScenarioInfo[] xmlScenarios = ShelteredScenarios.ListXmlDefinitions();
+
+ScenarioDefinition definition;
+string scenarioFilePath;
+ScenarioValidationResult validation;
+if (ShelteredScenarioAuthoring.TryLoadXmlDefinition(
+    "com.example.scenario.longroad",
+    out definition,
+    out scenarioFilePath,
+    out validation))
+{
+    // The definition is valid and came from scenarioFilePath.
+}
+```
+
+`TryLoadXmlDefinition` returns `false` when the scenario id is not indexed, the XML cannot be read, or validation has errors. In all cases, inspect the returned `ScenarioValidationResult` for author-facing messages. `ValidateXmlDefinition(scenarioId)` is useful when you only need the validation result for a catalog entry.
 
 ## Dependencies And UI Blocking
 
@@ -210,6 +269,17 @@ or the compact string form used by the serializer:
 ```xml
 <Requires>com.example.content@1.0.0</Requires>
 ```
+
+Typed dependency declarations are also supported:
+
+```xml
+<Dependencies>
+  <ModDependency id="com.example.content" version="1.0.0" kind="Required" manual="true" />
+  <ModDependency id="com.example.cosmetics" kind="Optional" manual="true" />
+</Dependencies>
+```
+
+Only required dependencies block startup. Optional dependencies are shown in compatibility reporting but do not lock the scenario. Required `<Requires>` and required `<ModDependency>` entries are both included in the save-style dependency manifest used by the scenario browser.
 
 The scenario list labels unsatisfied entries as `[LOCKED]`. The description states whether required mods are missing, version-mismatched, or unverifiable. Starting is blocked by `ShelteredCustomScenarioService.MarkSelected`; even if a confirmation window is shown, a mismatch does not leave pending scenario state behind.
 
@@ -265,4 +335,6 @@ Run the built-in harness from a debug mod or immediate window when validating th
 ScenarioValidationResult result = ShelteredScenarioAuthoring.RunFrameworkVerification();
 ```
 
-`result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, or asset escape validation fails.
+XML parsing rejects DTD and external entity declarations. Scenario XML should be plain data under a `<Scenario>` root; do not rely on external XML entities or document type declarations.
+
+`result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, secure XML parsing, or asset escape validation fails.

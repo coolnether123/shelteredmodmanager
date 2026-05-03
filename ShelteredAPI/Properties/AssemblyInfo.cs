@@ -30,6 +30,6 @@ using System.Runtime.InteropServices;
 //      Revision
 //
 [assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
-[assembly: AssemblyInformationalVersion("v0.1")]
+[assembly: AssemblyFileVersion("1.3.0.3")]
+[assembly: AssemblyInformationalVersion("1.3.0-beta.3")]
 [assembly: InternalsVisibleTo("ModAPI")]

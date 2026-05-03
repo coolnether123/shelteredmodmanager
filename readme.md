@@ -255,3 +255,4 @@ Use this table to choose the shortest useful path.
 | Author custom scenarios | [Custom Scenarios Guide](documentation/Custom_Scenarios_Guide.md) |
 | Patch game code with Harmony | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) |
 | Check exact API signatures | [API Signatures Reference](documentation/API_Signatures_Reference.md) |
+| Review this release | [Beta.3 Release Notes](documentation/Release_Beta.3.md) |

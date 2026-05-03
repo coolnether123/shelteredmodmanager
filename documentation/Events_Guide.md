@@ -1,7 +1,7 @@
 # ModAPI + ShelteredAPI Events Guide
-## Current v1.3 Line
+## Current v1.3 Beta.3 Line
 
-The 1.3 line is a breaking clean API line.
+The 1.3 Beta.3 line is a breaking clean API line.
 
 Use `documentation/API_Signatures_Reference.md` for exact current signatures.
 

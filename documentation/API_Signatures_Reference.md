@@ -1,6 +1,6 @@
-# ModAPI + ShelteredAPI v1.3 API Signatures Reference
+# ModAPI + ShelteredAPI v1.3 Beta.3 API Signatures Reference
 
-This is the source-of-truth signature sheet for the current code in this repo. The 1.3 line is a breaking clean API line.
+This is the source-of-truth signature sheet for the current code in this repo. The 1.3 Beta.3 line is a breaking clean API line.
 
 Related usage guide:
 - `documentation/ShelteredAPI_Characters_Guide.md`
@@ -749,6 +749,13 @@ public static class ShelteredScenarios
     public static ScenarioInfo[] ListXmlDefinitions();
     public static void RefreshXmlDefinitions();
 }
+
+// XML scenario authoring facade.
+// CreateDefinition creates an in-memory DTO.
+// LoadDefinition/SaveDefinition read and write scenario.xml files.
+// FromXml/ToXml edit XML text without disk IO.
+// ValidateDefinition validates a DTO against an optional scenario file path for pack-relative assets.
+// TryLoadXmlDefinition loads a catalog entry by scenario id and returns validation details on failure.
 
 public static class ShelteredScenarioAuthoring
 {

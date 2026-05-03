@@ -1,6 +1,6 @@
-# Settings and Persistence (Current v1.3 Line)
+# Settings and Persistence (v1.3 Beta.3)
 
-The 1.3 line is a breaking clean API line.
+The 1.3 Beta.3 line is a breaking clean API line.
 
 ## Assembly Rule
 

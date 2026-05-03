@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using Manager.Core;
 using Manager.Core.Models;
 using Manager.Core.Services;
 using Manager.Views;
@@ -54,7 +55,7 @@ namespace Manager
         private DateTime _lastNoChangeSettingsReloadLogUtc = DateTime.MinValue;
         private bool _startupNexusUpdateAnnouncementsPending = true;
         private int _nexusAccountRequestToken;
-        private const string APP_VERSION = "1.3.0";
+        private const string APP_VERSION = AppVersionInfo.Display;
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -435,7 +436,7 @@ namespace Manager
             // 
             // _aboutTab
             // 
-            this._aboutTab.AppVersion = "1.3.0";
+            this._aboutTab.AppVersion = APP_VERSION;
             this._aboutTab.Author = "Coolnether123";
             this._aboutTab.Dock = System.Windows.Forms.DockStyle.Fill;
             this._aboutTab.Location = new System.Drawing.Point(0, 0);
