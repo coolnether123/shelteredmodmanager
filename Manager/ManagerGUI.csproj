@@ -114,6 +114,7 @@
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
     <Compile Include="Core\Services\NexusGraphQlClient.cs" />
     <Compile Include="Core\Services\NexusReferenceResolver.cs" />
+    <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
     <Compile Include="Core\Services\NexusInstallService.cs" />

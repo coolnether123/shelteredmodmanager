@@ -18,6 +18,7 @@ namespace Manager.Views
     {
         private enum NexusViewMode { Updates, Installed, Discover }
         private enum NexusItemState { UpdateAvailable, InstalledCurrent, InstalledUnlinked, Available }
+        private enum NexusInstallFileChoice { Stable, Prerelease, Cancel }
 
         private sealed class NexusBrowserItem
         {
@@ -394,12 +395,14 @@ namespace Manager.Views
                         int comparison = NexusVersionComparer.CompareVersions(_managerVersion, remote.Version);
                         string localVersion = FormatVersion(_managerVersion);
                         string remoteVersion = FormatVersion(remote.Version);
+                        string remoteChannel = FormatReleaseChannelSuffix(remote.Version);
+                        string localChannel = FormatReleaseChannelSuffix(_managerVersion);
                         if (comparison < 0)
-                            _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + ")";
+                            _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + remoteChannel + ")";
                         else if (comparison == 0)
-                            _managerStatusLabel.Text = "SMM: current (" + localVersion + ")";
+                            _managerStatusLabel.Text = "SMM: current (" + localVersion + localChannel + ")";
                         else
-                            _managerStatusLabel.Text = "SMM: local build newer than Nexus";
+                            _managerStatusLabel.Text = "SMM: local build newer than Nexus (" + localVersion + localChannel + ")";
                     });
                 }
                 catch { }
@@ -504,8 +507,8 @@ namespace Manager.Views
             item.State = state;
             item.PrimaryText = mod.DisplayName;
             item.SecondaryText = state == NexusItemState.UpdateAvailable
-                ? FormatVersion(mod.Version) + " -> " + FormatVersion(mod.NexusRemoteVersion)
-                : FormatVersion(mod.Version) + (mod.HasNexusReference ? " linked to Nexus" : " not linked");
+                ? FormatVersionWithChannel(mod.Version) + " -> " + FormatVersionWithChannel(mod.NexusRemoteVersion)
+                : FormatVersionWithChannel(mod.Version) + (mod.HasNexusReference ? " linked to Nexus" : " not linked");
             if (HasApiIssue(mod))
                 item.SecondaryText += " | " + GetApiIssueText(mod);
             item.BadgeText = GetBadgeText(state);
@@ -519,7 +522,7 @@ namespace Manager.Views
             item.RemoteMod = remote;
             item.State = state;
             item.PrimaryText = remote.Name;
-            item.SecondaryText = FormatVersion(remote.Version) + (local != null ? (" | installed as " + local.DisplayName) : " | not installed");
+            item.SecondaryText = FormatVersionWithChannel(remote.Version) + (local != null ? (" | installed as " + local.DisplayName) : " | not installed");
             item.BadgeText = GetBadgeText(state);
             return item;
         }
@@ -636,10 +639,33 @@ namespace Manager.Views
                     gameId = selected.GameId;
                 }
 
-                var file = _nexusService.GetPreferredInstallFile(gameId, selected.ModId, out error);
-                if (!string.IsNullOrEmpty(error) || file == null)
+                var files = _nexusService.GetModFiles(gameId, selected.ModId, out error);
+                if (!string.IsNullOrEmpty(error) || files == null || files.Count == 0)
                 {
                     FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "No installable file was returned."));
+                    return;
+                }
+
+                var stableFile = _nexusService.SelectPreferredInstallFile(files, false);
+                var prereleaseFile = _nexusService.SelectPreferredPrereleaseInstallFile(files);
+                var file = stableFile ?? prereleaseFile;
+
+                if (prereleaseFile != null &&
+                    (stableFile == null || prereleaseFile.FileId != stableFile.FileId))
+                {
+                    NexusInstallFileChoice choice = PromptForPrereleaseInstall(selected, prereleaseFile, stableFile);
+                    if (choice == NexusInstallFileChoice.Cancel)
+                    {
+                        FinishInstallWithError("Install canceled.");
+                        return;
+                    }
+
+                    file = choice == NexusInstallFileChoice.Prerelease ? prereleaseFile : stableFile;
+                }
+
+                if (file == null)
+                {
+                    FinishInstallWithError("Install failed: No stable installable file was returned.");
                     return;
                 }
 
@@ -671,6 +697,55 @@ namespace Manager.Views
                 }
                 catch { }
             });
+        }
+
+        private NexusInstallFileChoice PromptForPrereleaseInstall(NexusRemoteMod mod, NexusRemoteModFile prereleaseFile, NexusRemoteModFile stableFile)
+        {
+            if (IsDisposed || Disposing)
+                return NexusInstallFileChoice.Cancel;
+
+            if (InvokeRequired)
+            {
+                NexusInstallFileChoice choice = NexusInstallFileChoice.Cancel;
+                try
+                {
+                    Invoke((MethodInvoker)delegate
+                    {
+                        choice = PromptForPrereleaseInstall(mod, prereleaseFile, stableFile);
+                    });
+                }
+                catch
+                {
+                    return NexusInstallFileChoice.Cancel;
+                }
+                return choice;
+            }
+
+            string channel = NexusReleaseClassifier.GetDisplayLabel(NexusReleaseClassifier.ClassifyFile(prereleaseFile));
+            string modName = mod != null && !string.IsNullOrEmpty(mod.Name) ? mod.Name : "this mod";
+            string stableText = stableFile != null
+                ? "Stable file: " + FormatNexusFileLabel(stableFile)
+                : "No stable file was found.";
+
+            string message =
+                "Nexus has a " + channel + " file for " + modName + "." + Environment.NewLine + Environment.NewLine +
+                "Prerelease file: " + FormatNexusFileLabel(prereleaseFile) + Environment.NewLine +
+                stableText + Environment.NewLine + Environment.NewLine;
+
+            if (stableFile != null)
+            {
+                message += "Choose Yes to install the " + channel + " file, No to install the stable file, or Cancel to stop.";
+                DialogResult result = MessageBox.Show(this, message, "Install Nexus prerelease?", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                if (result == DialogResult.Yes)
+                    return NexusInstallFileChoice.Prerelease;
+                if (result == DialogResult.No)
+                    return NexusInstallFileChoice.Stable;
+                return NexusInstallFileChoice.Cancel;
+            }
+
+            message += "Choose Yes to install the " + channel + " file, or No to stop.";
+            DialogResult prereleaseOnlyResult = MessageBox.Show(this, message, "Install Nexus prerelease?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            return prereleaseOnlyResult == DialogResult.Yes ? NexusInstallFileChoice.Prerelease : NexusInstallFileChoice.Cancel;
         }
 
         private void OpenPageButton_Click(object sender, EventArgs e)
@@ -999,6 +1074,31 @@ namespace Manager.Views
             if (string.IsNullOrEmpty(value))
                 return "Unknown";
             return value.StartsWith("v", StringComparison.OrdinalIgnoreCase) ? value : "v" + value;
+        }
+
+        private static string FormatVersionWithChannel(string version)
+        {
+            return FormatVersion(version) + FormatReleaseChannelSuffix(version);
+        }
+
+        private static string FormatNexusFileLabel(NexusRemoteModFile file)
+        {
+            if (file == null)
+                return "Unknown file";
+
+            string name = !string.IsNullOrEmpty(file.Name) ? file.Name : ("File #" + file.FileId);
+            string version = !string.IsNullOrEmpty(file.Version) ? FormatVersion(file.Version) : "Unknown version";
+            string category = !string.IsNullOrEmpty(file.Category) ? file.Category : "uncategorized";
+            return name + " (" + version + ", " + category + ")";
+        }
+
+        private static string FormatReleaseChannelSuffix(string version)
+        {
+            NexusReleaseChannel channel = NexusReleaseClassifier.ClassifyVersion(version);
+            if (channel == NexusReleaseChannel.Stable)
+                return string.Empty;
+
+            return " " + NexusReleaseClassifier.GetDisplayLabel(channel);
         }
 
         private static string BuildConnectionText(NexusAccountStatus status)

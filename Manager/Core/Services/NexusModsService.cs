@@ -302,14 +302,44 @@ query modFiles($modId: ID!, $gameId: ID!){
 
         public NexusRemoteModFile GetPreferredInstallFile(int gameId, int modId, out string errorMessage)
         {
+            return GetPreferredInstallFile(gameId, modId, false, out errorMessage);
+        }
+
+        public NexusRemoteModFile GetPreferredInstallFile(int gameId, int modId, bool includePrerelease, out string errorMessage)
+        {
             errorMessage = null;
             var files = GetModFiles(gameId, modId, out errorMessage);
             if (!string.IsNullOrEmpty(errorMessage) || files.Count == 0)
                 return null;
 
+            return SelectPreferredInstallFile(files, includePrerelease);
+        }
+
+        public NexusRemoteModFile SelectPreferredInstallFile(List<NexusRemoteModFile> files, bool includePrerelease)
+        {
+            return SelectPreferredInstallFile(files, includePrerelease, false);
+        }
+
+        public NexusRemoteModFile SelectPreferredPrereleaseInstallFile(List<NexusRemoteModFile> files)
+        {
+            return SelectPreferredInstallFile(files, true, true);
+        }
+
+        private NexusRemoteModFile SelectPreferredInstallFile(List<NexusRemoteModFile> files, bool includePrerelease, bool prereleaseOnly)
+        {
             NexusRemoteModFile best = null;
             foreach (var file in files)
             {
+                if (file == null)
+                    continue;
+
+                bool isPrerelease = NexusReleaseClassifier.IsPrerelease(file);
+                if (!includePrerelease && isPrerelease)
+                    continue;
+
+                if (prereleaseOnly && !isPrerelease)
+                    continue;
+
                 if (best == null)
                 {
                     best = file;

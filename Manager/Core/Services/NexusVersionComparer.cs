@@ -9,6 +9,8 @@ namespace Manager.Core.Services
     /// </summary>
     public static class NexusVersionComparer
     {
+        private static readonly Regex PrereleaseTokenPattern = new Regex(@"(^|[^a-z0-9])(?:rc|release[\s._-]*candidate|beta|alpha|preview|experimental|nightly|dev(?:elopment)?|test|pre[\s._-]*release|prerelease|pre)(?:[\s._-]*\d+)?($|[^a-z0-9])", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
         /// <summary>
         /// Compares local and remote versions.
         /// Returns -1 when local is older, 0 when equal/unknown, 1 when local is newer.
@@ -27,8 +29,8 @@ namespace Manager.Core.Services
 
             List<int> localParts;
             List<int> remoteParts;
-            bool localParsed = TryParseNumericParts(local, out localParts);
-            bool remoteParsed = TryParseNumericParts(remote, out remoteParts);
+            bool localParsed = TryParseNumericParts(GetCoreVersionText(local), out localParts);
+            bool remoteParsed = TryParseNumericParts(GetCoreVersionText(remote), out remoteParts);
 
             if (localParsed && remoteParsed)
             {
@@ -40,6 +42,30 @@ namespace Manager.Core.Services
                     if (lv < rv) return -1;
                     if (lv > rv) return 1;
                 }
+
+                NexusReleaseChannel localChannel = NexusReleaseClassifier.ClassifyVersion(local);
+                NexusReleaseChannel remoteChannel = NexusReleaseClassifier.ClassifyVersion(remote);
+                int channelComparison = GetReleaseChannelRank(localChannel).CompareTo(GetReleaseChannelRank(remoteChannel));
+                if (channelComparison != 0)
+                    return channelComparison < 0 ? -1 : 1;
+
+                if (localChannel != NexusReleaseChannel.Stable && remoteChannel != NexusReleaseChannel.Stable)
+                {
+                    List<int> localFullParts;
+                    List<int> remoteFullParts;
+                    if (TryParseNumericParts(local, out localFullParts) && TryParseNumericParts(remote, out remoteFullParts))
+                    {
+                        int fullMax = Math.Max(localFullParts.Count, remoteFullParts.Count);
+                        for (int i = 0; i < fullMax; i++)
+                        {
+                            int lv = i < localFullParts.Count ? localFullParts[i] : 0;
+                            int rv = i < remoteFullParts.Count ? remoteFullParts[i] : 0;
+                            if (lv < rv) return -1;
+                            if (lv > rv) return 1;
+                        }
+                    }
+                }
+
                 return 0;
             }
 
@@ -65,6 +91,39 @@ namespace Manager.Core.Services
                 normalized = normalized.Substring(1).Trim();
 
             return normalized;
+        }
+
+        private static string GetCoreVersionText(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            Match prerelease = PrereleaseTokenPattern.Match(value);
+            if (prerelease.Success && prerelease.Index > 0)
+                return value.Substring(0, prerelease.Index);
+
+            return value;
+        }
+
+        private static int GetReleaseChannelRank(NexusReleaseChannel channel)
+        {
+            switch (channel)
+            {
+                case NexusReleaseChannel.Stable:
+                    return 100;
+                case NexusReleaseChannel.ReleaseCandidate:
+                    return 90;
+                case NexusReleaseChannel.Beta:
+                    return 80;
+                case NexusReleaseChannel.Preview:
+                    return 70;
+                case NexusReleaseChannel.Alpha:
+                    return 60;
+                case NexusReleaseChannel.Prerelease:
+                    return 50;
+                default:
+                    return 0;
+            }
         }
 
         private static bool TryParseNumericParts(string value, out List<int> parts)
