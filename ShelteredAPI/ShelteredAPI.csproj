@@ -504,6 +504,7 @@
     <Compile Include="UI\FieldManual\Tooltips\TooltipBus.cs" />
     <Compile Include="UI\FieldManual\Tooltips\HoverTooltipTrigger.cs" />
     <Compile Include="UI\FieldManual\Tooltips\TooltipDisplayWidget.cs" />
+    <Compile Include="UI\FieldManual\Panels\FieldManualWindowChrome.cs" />
     <Compile Include="UI\FieldManual\Panels\KeybindsPanelV2.cs" />
     <Compile Include="Content\Compatibility\InventoryHelper.cs" />
     <Compile Include="Content\Compatibility\ShelteredItemContentBridge.cs" />

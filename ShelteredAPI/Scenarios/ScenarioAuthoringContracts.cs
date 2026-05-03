@@ -739,6 +739,14 @@ namespace ShelteredAPI.Scenarios
         public string Status { get; set; }
     }
 
+    internal sealed class ScenarioAuthoringToolButtonViewModel
+    {
+        public ScenarioAuthoringTool Tool { get; set; }
+        public string Label { get; set; }
+        public string IconText { get; set; }
+        public ScenarioAuthoringInspectorAction Action { get; set; }
+    }
+
     internal sealed class ScenarioAuthoringContextMenuModel
     {
         public bool Visible { get; set; }
@@ -777,6 +785,7 @@ namespace ShelteredAPI.Scenarios
         public ScenarioAuthoringInspectorAction[] Tabs { get; set; }
         public ScenarioAuthoringInspectorAction[] ToolbarActions { get; set; }
         public ScenarioAuthoringInspectorAction[] LayoutActions { get; set; }
+        public ScenarioAuthoringToolButtonViewModel[] ToolButtons { get; set; }
         public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
         public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
         public ScenarioAuthoringInspectorDocument SpritePickerDocument { get; set; }

@@ -174,7 +174,7 @@ namespace ShelteredAPI.Scenarios
         {
             DrawPanel("TopBar", rect, _panelColor, true, BaseDepth);
             DrawLabel("TopTitle", rect, new Rect(18f, 9f, 215f, 28f), "SHELTERED", 24, _titleColor, NGUIText.Alignment.Left, BaseDepth + 4);
-            DrawLabel("TopSubtitle", rect, new Rect(18f, 36f, 230f, 20f), "SCENARIO EDITOR", 15, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+            DrawLabel("TopSubtitle", rect, new Rect(18f, 36f, 230f, 20f), "SCENARIO WORKSHOP", 15, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
 
             float actionRight = rect.xMax - 14f;
             float toolbarX = Math.Max(rect.x + 250f, actionRight - MeasureTopBarActionsWidth(shell.ToolbarActions));

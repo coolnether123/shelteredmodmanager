@@ -7,7 +7,7 @@ using UnityEngine;
 namespace ShelteredAPI.Scenarios
 {
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringBootstrap",
-        TargetBehavior = "Scenario authoring drafts bootstrap into a real vanilla new game and pause once the world is ready.",
+        TargetBehavior = "Scenario authoring drafts bootstrap into a real vanilla new game, run briefly once the world is ready, then pause into authoring.",
         FailureMode = "Create Scenario falls back to a plain new game without entering authoring mode.",
         RollbackStrategy = "Disable the Scenarios patch domain or remove the scenario authoring bootstrap patch host.")]
     internal static class ScenarioAuthoringBootstrapPatches

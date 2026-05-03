@@ -89,6 +89,7 @@ namespace ShelteredAPI.Scenarios
                 Tabs = _stageNavigationBuilder.BuildTabs(state),
                 ToolbarActions = _stageNavigationBuilder.BuildToolbarActions(state),
                 LayoutActions = _stageNavigationBuilder.BuildLayoutActions(state),
+                ToolButtons = _stageNavigationBuilder.BuildToolButtons(state),
                 WindowMenuActions = _stageNavigationBuilder.BuildWindowMenuActions(state, _windowRegistry),
                 Windows = windows.ToArray(),
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
@@ -141,13 +142,13 @@ namespace ShelteredAPI.Scenarios
                 Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                 Items = new[]
                 {
-                    Text("Hold Ctrl to enter selection mode. Cyan outline follows the hovered target, yellow marks the selected target."),
-                    Text("Left Click confirms the hovered target. Right Click clears the current selection."),
-                    Text("F5 saves the draft, F6 toggles the shell, and F7 toggles playtest mode."),
-                    Text("Ctrl+Z undoes, Ctrl+Y redoes, Ctrl+C copies, Ctrl+V pastes, Ctrl+R reverts the selected target's sprite."),
-                    Text("Authoring pause freezes simulation without opening Sheltered's vanilla pause menu."),
-                    Text("Use the Assets workflow to replace existing visuals or place new snapped scene sprites on the shelter map."),
-                    Text("Use playtest to make real Sheltered changes in the shelter, then stop playtest and capture the live family, inventory, or spawned objects back into the draft.")
+                    Text("Hold Ctrl to inspect shelter objects. Cyan follows the hovered object, yellow marks the selected object."),
+                    Text("Left Click picks the hovered object. Right Click clears the current selection."),
+                    Text("F5 saves the draft, F6 toggles the workshop, and F7 toggles playtest mode."),
+                    Text("Ctrl+Z undoes, Ctrl+Y redoes, Ctrl+C copies, Ctrl+V pastes, Ctrl+R reverts selected art."),
+                    Text("The workshop pauses the shelter without opening Sheltered's vanilla pause menu."),
+                    Text("Use Art to replace existing visuals or place new snapped scene sprites on the shelter map."),
+                    Text("Use Test to apply the draft, let Sheltered run, then capture live family, supplies, or spawned objects back into the draft.")
                 }
             });
 
@@ -180,15 +181,15 @@ namespace ShelteredAPI.Scenarios
                         {
                             Id = "empty",
                             Title = "Inspector",
-                            Expanded = true,
-                            Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
-                            Items = new[]
-                            {
-                                Text("Hold the selection modifier and hover a world object to inspect it.")
-                            }
-                        }
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[]
+                    {
+                        Text("Pick a shelter object to review its scenario rules, dependencies, and authored visual changes.")
                     }
-                };
+                }
+            }
+        };
             }
 
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
@@ -214,7 +215,8 @@ namespace ShelteredAPI.Scenarios
             sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
             sections.Add(BuildWarningsSection(scopeAllowed, target, objectPlacement, definition, captureReason));
 
-            sections.Add(BuildAdvancedDebugSection(target));
+            if (state != null && state.Settings != null && state.Settings.GetBool("debug.overlays", false))
+                sections.Add(BuildAdvancedDebugSection(target));
 
             return new ScenarioAuthoringInspectorDocument
             {
@@ -243,16 +245,16 @@ namespace ShelteredAPI.Scenarios
                 "TG",
                 ResolvePreviewSprite(target),
                 true));
-            items.Add(Property("Display Name", Safe(target.DisplayName)));
-            items.Add(Property("Type", friendlyKind));
-            items.Add(Property("Selection Scope", _targetClassifier.FormatScopeLabel(classification)));
-            items.Add(Property("Scenario Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
-            items.Add(Property("Draft Status", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement)));
-            items.Add(Property("Start State", FormatStartState(objectPlacement)));
+            items.Add(Property("Name", Safe(target.DisplayName)));
+            items.Add(Property("Kind", friendlyKind));
+            items.Add(Property("Layer", _targetClassifier.FormatScopeLabel(classification)));
+            items.Add(Property("Draft Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
+            items.Add(Property("Draft State", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement)));
+            items.Add(Property("Starts", FormatStartState(objectPlacement)));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "object_summary",
-                Title = "Object Summary",
+                Title = "Selection",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = items.ToArray()
@@ -266,15 +268,15 @@ namespace ShelteredAPI.Scenarios
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(Property("Foundation", Safe(objectPlacement != null ? objectPlacement.RequiredFoundationId : null)));
-            items.Add(Property("Bunker Expansion", Safe(objectPlacement != null ? objectPlacement.RequiredBunkerExpansionId : null)));
+            items.Add(Property("Expansion", Safe(objectPlacement != null ? objectPlacement.RequiredBunkerExpansionId : null)));
             items.Add(Property("Unlock Gate", Safe(objectPlacement != null ? objectPlacement.UnlockGateId : null)));
-            items.Add(Property("Scheduled Activation", Safe(objectPlacement != null ? objectPlacement.ScheduledActivationId : null)));
-            items.Add(Property("Timeline Entries", linkedTimelineEntries.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Dependency / Mod", target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId) ? "Scenario authored" : "Vanilla or live object"));
+            items.Add(Property("Activation", Safe(objectPlacement != null ? objectPlacement.ScheduledActivationId : null)));
+            items.Add(Property("Timeline Links", linkedTimelineEntries.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Property("Source", target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId) ? "Scenario authored" : "Vanilla or live object"));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "scenario_behavior",
-                Title = "Scenario Behavior",
+                Title = "Scenario Rules",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
@@ -326,7 +328,7 @@ namespace ShelteredAPI.Scenarios
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "primary_actions",
-                Title = "Primary Actions",
+                Title = "Actions",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = items.ToArray()
@@ -974,7 +976,7 @@ namespace ShelteredAPI.Scenarios
                     {
                         Property("Draft", Safe(state.ActiveDraftId)),
                         Property("Base Mode", editorSession != null && editorSession.WorkingDefinition != null ? editorSession.WorkingDefinition.BaseGameMode.ToString() : "Unknown"),
-                        Property("Simulation", ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Running (playtest)" : "Frozen (authoring pause)"),
+                        Property("Simulation", ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Running (test)" : "Paused for workshop"),
                         Property("Playtest", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"),
                         Property("Applied To World", editorSession != null && editorSession.HasAppliedToCurrentWorld ? "Yes" : "No"),
                         Property("Dirty Sections", CountDirtyFlags(editorSession).ToString())

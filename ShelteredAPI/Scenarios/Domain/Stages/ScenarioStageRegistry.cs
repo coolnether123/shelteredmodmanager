@@ -12,14 +12,14 @@ namespace ShelteredAPI.Scenarios
         public ScenarioStageRegistry()
         {
             _definitions = new List<ScenarioStageDefinition>();
-            Register(new ScenarioStageDefinition(ScenarioStageKind.Bunker, "Bunker", 0, ScenarioStageKind.None, true, true, "Shelter structure, visual layers, and authored bunker edits."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.BunkerBackground, "Background", 0, ScenarioStageKind.Bunker, false, true, "Back-layer bunker authoring."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Bunker, "World", 0, ScenarioStageKind.None, true, true, "Shelter structure, visual layers, and authored bunker edits."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.BunkerBackground, "Backdrop", 0, ScenarioStageKind.Bunker, false, true, "Back-layer bunker authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.BunkerSurface, "Surface", 1, ScenarioStageKind.Bunker, false, true, "Surface-layer bunker authoring."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.BunkerInside, "Inside", 2, ScenarioStageKind.Bunker, false, true, "Interior bunker authoring."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.InventoryStorage, "Inventory / Storage", 1, ScenarioStageKind.None, true, true, "Starting inventory and storage authoring."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.People, "People", 2, ScenarioStageKind.None, true, true, "Family and character authoring."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.Events, "Events", 3, ScenarioStageKind.None, true, true, "Triggers and event authoring."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.Quests, "Quests", 4, ScenarioStageKind.None, true, true, "Quest authoring."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.BunkerInside, "Interior", 2, ScenarioStageKind.Bunker, false, true, "Interior bunker authoring."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.InventoryStorage, "Supplies", 1, ScenarioStageKind.None, true, true, "Starting inventory and storage authoring."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.People, "Cast", 2, ScenarioStageKind.None, true, true, "Family and character authoring."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Events, "Timeline", 3, ScenarioStageKind.None, true, true, "Triggers and event authoring."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Quests, "Story", 4, ScenarioStageKind.None, true, true, "Quest authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Map, "Map", 5, ScenarioStageKind.None, true, true, "Map-facing scenario authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Test, "Test", 6, ScenarioStageKind.None, true, true, "Playtest and live-apply workflow."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Publish, "Publish", 7, ScenarioStageKind.None, true, true, "Validation and publish readiness."));

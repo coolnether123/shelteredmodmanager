@@ -35,8 +35,8 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private object _settingsObject;
         private IThemePalette _palette;
         private IThemeMetrics _metrics;
-        private ProceduralTextureLibrary _textures;
         private UIPrimitiveFactory _ui;
+        private FieldManualWindowChrome _chrome;
         private PaperPagedList _pagedList;
         private GameObject _pageFlipRoot;
         private BookPageNavigatorWidget _pageNavigator;
@@ -61,14 +61,8 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             }
 
             if (_instance != null) Destroy(_instance);
-            UIFontCache.RefreshIfMissing();
 
-            UIPanel overlay = UIUtil.EnsureOverlayPanel(OverlayName, OverlayDepth);
-            GameObject root = new GameObject("KeybindBook_Root");
-            root.transform.SetParent(overlay.transform, false);
-            root.layer = overlay.gameObject.layer;
-            root.transform.localPosition = Vector3.zero;
-            root.transform.localScale = Vector3.one;
+            GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "KeybindBook_Root");
             _instance = root;
 
             KeybindsPanelV2 panel = root.AddComponent<KeybindsPanelV2>();
@@ -78,24 +72,22 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
         private void Initialise(GameObject root)
         {
-            _palette = new FieldManualPalette();
-            _metrics = new FieldManualMetrics();
-            _textures = new ProceduralTextureLibrary(_palette);
+            string title = _mod.Name ?? "Controls";
+            string subtitle = string.IsNullOrEmpty(_mod.Version) ? "Input Bindings" : ("Input Bindings - v" + _mod.Version);
+
+            _chrome = FieldManualWindowChrome.BuildBook(root, OverlayDepth, title, subtitle);
+            _palette = _chrome.Palette;
+            _metrics = _chrome.Metrics;
+            _ui = _chrome.Ui;
             _pageTransition = new FieldManualFadeTransition(FieldManualTransitionProfile.VanillaPageInfoFade);
             _pageTurnAssets = new VanillaPageTurnAssets();
 
-            UIFontCache.FontResult fonts = UIFontCache.GetFonts();
-            _ui = new UIPrimitiveFactory(fonts.Bitmap, fonts.TTF, OverlayDepth);
             ConfigurePageTurnController(root);
-
-            string title = _mod.Name ?? "Controls";
-            string subtitle = string.IsNullOrEmpty(_mod.Version) ? "Input Bindings" : ("Input Bindings - v" + _mod.Version);
 
             _tooltipBus = new TooltipBus();
             _tooltipBus.DefaultMessage = TooltipMessage.Hint("Select an action. Click a binding to change it.");
 
-            IPanelFrame frame = new ShelteredBookFrame(_palette, _metrics, _textures, _ui);
-            PanelFrameRegions regions = frame.Build(root, title, subtitle);
+            PanelFrameRegions regions = _chrome.Regions;
             _pageFlipRoot = _ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
             BuildPagedList(regions);
@@ -113,7 +105,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
                 _pageTransition,
                 new FieldManualFadeTransition(FieldManualTransitionProfile.Between(0.35f, 1f, 0.12f, 0f, UITweener.Method.EaseOut)),
                 new FieldManualPageTurnAudio(_pageTurnAssets),
-                new FieldManualPageFlipOverlay(_pageTurnAssets, _textures, _ui, _metrics.PanelWidth - 40f, _metrics.PanelHeight - 140f));
+                new FieldManualPageFlipOverlay(_pageTurnAssets, _chrome.Textures, _ui, _metrics.PanelWidth - 40f, _metrics.PanelHeight - 140f));
         }
 
         private void BuildTooltipStrip(PanelFrameRegions regions)
@@ -138,7 +130,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
         private void BuildFooter(PanelFrameRegions regions)
         {
-            var buttonFactory = new BookButtonWidget(_palette, _textures, _ui);
+            var buttonFactory = _chrome.Buttons;
 
             buttonFactory.Build(regions.FooterRoot, "BackButton", "Back",
                 new Vector3(-460f, -400f, 0f), 200, 58, 24, Close);
@@ -388,7 +380,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             if (_tooltipBus != null) { _tooltipBus.Clear(); _tooltipBus = null; }
             ISettingsProvider2 sp2 = _mod.SettingsProvider as ISettingsProvider2;
             if (sp2 != null) sp2.Save();
-            if (_textures != null) _textures.Dispose();
+            if (_chrome != null) { _chrome.Dispose(); _chrome = null; }
             RaiseClosedOnce();
             if (_instance != null) Destroy(_instance);
             _instance = null;
@@ -397,7 +389,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private void OnDestroy()
         {
             if (_tooltipDisplay != null) _tooltipDisplay.Detach();
-            if (_textures != null) _textures.Dispose();
+            if (_chrome != null) { _chrome.Dispose(); _chrome = null; }
             RaiseClosedOnce();
             if (_instance == gameObject) _instance = null;
         }

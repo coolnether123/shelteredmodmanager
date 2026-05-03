@@ -14,7 +14,7 @@ namespace ShelteredAPI.Scenarios
                 return;
 
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
-            viewModel.Title = "SHELTERED / SCENARIO EDITOR";
+            viewModel.Title = "SHELTERED / SCENARIO WORKSHOP";
             viewModel.Subtitle = definition != null ? Safe(definition.DisplayName) : "No active scenario";
             viewModel.TimeLabel = null;
         }

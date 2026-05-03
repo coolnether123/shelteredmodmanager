@@ -172,7 +172,7 @@ namespace ShelteredAPI.Scenarios
 
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
 
-            Rect toolRailRect = DrawToolRail(contentRect, _snapshot.State);
+            Rect toolRailRect = DrawToolRail(contentRect, shell, _snapshot.State);
             if (toolRailRect.width > 0f && toolRailRect.height > 0f)
                 inputCapture.RegisterInteractiveRect(toolRailRect);
 
@@ -513,9 +513,11 @@ namespace ShelteredAPI.Scenarios
             const float secondaryRowY = 54f;
             const float secondaryRowHeight = 30f;
 
-            Rect brandRect = new Rect(rect.x + 18f, rect.y + 10f, 190f, rect.height - 18f);
+            Rect brandRect = new Rect(rect.x + 18f, rect.y + 10f, 220f, rect.height - 18f);
             GUI.Label(new Rect(brandRect.x, brandRect.y - 1f, brandRect.width, 30f), "SHELTERED", _titleStyle);
-            GUI.Label(new Rect(brandRect.x, brandRect.y + 27f, brandRect.width, 22f), "SCENARIO EDITOR", _smallTitleStyle);
+            GUI.Label(new Rect(brandRect.x, brandRect.y + 27f, brandRect.width, 22f), "SCENARIO WORKSHOP", _smallTitleStyle);
+            if (shell != null && !string.IsNullOrEmpty(shell.Subtitle))
+                GUI.Label(new Rect(brandRect.x, brandRect.y + 52f, brandRect.width, 18f), ShortenToFit(shell.Subtitle, brandRect.width, _mutedTextStyle), _mutedTextStyle);
 
             float primaryRowLeft = brandRect.xMax + 20f;
             float actionRight = rect.xMax - 10f;
@@ -622,39 +624,41 @@ namespace ShelteredAPI.Scenarios
             return width;
         }
 
-        private Rect DrawToolRail(Rect contentRect, ScenarioAuthoringState state)
+        private Rect DrawToolRail(Rect contentRect, ScenarioAuthoringShellViewModel shell, ScenarioAuthoringState state)
         {
-            Rect rect = new Rect(contentRect.x + 4f, contentRect.y + 26f, ToolRailWidth, 500f);
+            ScenarioAuthoringToolButtonViewModel[] buttons = shell != null ? shell.ToolButtons : null;
+            int count = buttons != null ? buttons.Length : 0;
+            float height = Math.Min(560f, Math.Max(112f, 16f + (count * 78f)));
+            Rect rect = new Rect(contentRect.x + 4f, contentRect.y + 26f, ToolRailWidth, height);
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
 
             float y = rect.y + 10f;
-            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.Select, ScenarioAuthoringActionIds.ActionToolSelect, ">", "Select");
-            y += 78f;
-            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "[]", "Objects");
-            y += 78f;
-            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "##", "Structure");
-            y += 78f;
-            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 82f), state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "/\\", "Walls &\nWiring");
-            y += 88f;
-            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "P", "Assets");
-            y += 78f;
-            DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "WL", "Win/Loss");
+            for (int i = 0; buttons != null && i < buttons.Length; i++)
+            {
+                DrawToolRailButton(new Rect(rect.x + 8f, y, rect.width - 16f, 72f), state, buttons[i]);
+                y += 78f;
+                if (y + 72f > rect.yMax)
+                    break;
+            }
             return rect;
         }
 
-        private void DrawToolRailButton(Rect rect, ScenarioAuthoringState state, ScenarioAuthoringTool tool, string actionId, string icon, string label)
+        private void DrawToolRailButton(Rect rect, ScenarioAuthoringState state, ScenarioAuthoringToolButtonViewModel button)
         {
-            bool active = state != null && state.ActiveTool == tool;
+            if (button == null || button.Action == null)
+                return;
+
+            bool active = state != null && state.ActiveTool == button.Tool;
             GUIStyle style = active ? _activeButtonStyle : _buttonStyle;
-            if (GUI.Button(rect, GUIContent.none, style))
+            if (GUI.Button(rect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style))
             {
-                ScenarioAuthoringBackendService.Instance.ExecuteAction(actionId);
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(button.Action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
 
-            GUI.Label(new Rect(rect.x, rect.y + 11f, rect.width, 22f), icon, _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 2f, rect.y + 42f, rect.width - 4f, rect.height - 44f), label, _mutedTextStyle);
+            GUI.Label(new Rect(rect.x + 2f, rect.y + 9f, rect.width - 4f, 22f), button.IconText ?? string.Empty, _sectionTitleStyle);
+            GUI.Label(new Rect(rect.x + 2f, rect.y + 42f, rect.width - 4f, rect.height - 44f), button.Label ?? string.Empty, _mutedTextStyle);
         }
 
         private Rect DrawCommandDock(Rect contentRect, ScenarioAuthoringState state)
@@ -662,54 +666,103 @@ namespace ShelteredAPI.Scenarios
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
                 return Rect.zero;
 
-            float width = 430f;
+            ScenarioAuthoringInspectorAction[] actions = BuildCommandDockActions(state);
+            if (actions == null || actions.Length == 0)
+                return Rect.zero;
+
+            float width = Mathf.Clamp(24f + (actions.Length * 116f), 360f, 560f);
             Rect rect = new Rect(
                 contentRect.x + ((contentRect.width - width) * 0.5f),
                 contentRect.yMax - CommandDockHeight - 22f,
                 width,
                 CommandDockHeight);
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
+            float gap = 8f;
+            float buttonWidth = (rect.width - 20f - (gap * (actions.Length - 1))) / actions.Length;
             float x = rect.x + 10f;
-            DrawButton(new Rect(x, rect.y + 8f, 102f, 32f), new ScenarioAuthoringInspectorAction
+            for (int i = 0; i < actions.Length; i++)
             {
-                Id = ScenarioAuthoringActionIds.ActionToolSelect,
-                Label = "Select",
-                Hint = "Switch to selection mode.",
-                Enabled = true,
-                Emphasized = state != null && state.ActiveTool == ScenarioAuthoringTool.Select
-            }, false);
-            x += 116f;
-            DrawButton(new Rect(x, rect.y + 8f, 86f, 32f), DisabledAction("Move"), false);
-            x += 96f;
-            DrawButton(new Rect(x, rect.y + 8f, 90f, 32f), DisabledAction("Rotate"), false);
-            x += 100f;
-            DrawButton(new Rect(x, rect.y + 8f, 86f, 32f), BuildDeleteAction(state), false);
+                DrawButton(new Rect(x, rect.y + 8f, buttonWidth, 32f), actions[i], false);
+                x += buttonWidth + gap;
+            }
             return rect;
         }
 
-        private static ScenarioAuthoringInspectorAction DisabledAction(string label)
+        private static ScenarioAuthoringInspectorAction[] BuildCommandDockActions(ScenarioAuthoringState state)
+        {
+            ScenarioAuthoringTarget target = state != null ? state.SelectedTarget : null;
+            bool hasTarget = target != null;
+            bool authoredTarget = hasTarget && !string.IsNullOrEmpty(target.ScenarioReferenceId);
+            bool canReplace = hasTarget && target.SupportsReplace;
+            bool insideLayer = state != null && state.ActiveStage == ScenarioStageKind.BunkerInside;
+
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            actions.Add(new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionToolSelect,
+                Label = "Select",
+                Hint = "Pick and inspect shelter objects.",
+                Enabled = true,
+                Emphasized = state != null && state.ActiveTool == ScenarioAuthoringTool.Select
+            });
+
+            if (!hasTarget)
+            {
+                actions.Add(new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionToolAssets,
+                    Label = "Place Art",
+                    Hint = "Open the scenario art tray for snapped scene assets.",
+                    Enabled = true
+                });
+                actions.Add(new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionCaptureShelterObjects,
+                    Label = "Capture Live",
+                    Hint = insideLayer
+                        ? "Capture the current live shelter object layout into the draft."
+                        : "Switch to Interior before capturing live shelter objects.",
+                    Enabled = insideLayer
+                });
+                actions.Add(DisabledAction("No Selection", "Pick a live or authored object to edit object-specific rules."));
+                return actions.ToArray();
+            }
+
+            actions.Add(new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
+                Label = authoredTarget ? "Refresh" : "Capture",
+                Hint = authoredTarget ? "Refresh this authored placement from the live object." : "Capture this live object into the scenario draft.",
+                Enabled = true,
+                Emphasized = !authoredTarget
+            });
+            actions.Add(new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
+                Label = "Edit Art",
+                Hint = canReplace ? "Open the selected visual in the art editor." : "This target has no replaceable visual.",
+                Enabled = canReplace
+            });
+            actions.Add(new ScenarioAuthoringInspectorAction
+            {
+                Id = authoredTarget
+                    ? ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove
+                    : ScenarioAuthoringActionIds.ActionSelectionClear,
+                Label = authoredTarget ? "Remove" : "Clear",
+                Hint = authoredTarget ? "Remove this authored placement from the draft." : "Clear the current selection.",
+                Enabled = true,
+                Emphasized = authoredTarget
+            });
+            return actions.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorAction DisabledAction(string label, string hint)
         {
             return new ScenarioAuthoringInspectorAction
             {
                 Label = label,
-                Hint = label + " is not available for the current target.",
+                Hint = hint,
                 Enabled = false
-            };
-        }
-
-        private static ScenarioAuthoringInspectorAction BuildDeleteAction(ScenarioAuthoringState state)
-        {
-            ScenarioAuthoringTarget target = state != null ? state.SelectedTarget : null;
-            bool canRemovePlacement = target != null && !string.IsNullOrEmpty(target.ScenarioReferenceId);
-            return new ScenarioAuthoringInspectorAction
-            {
-                Id = canRemovePlacement
-                    ? ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove
-                    : ScenarioAuthoringActionIds.ActionSelectionClear,
-                Label = canRemovePlacement ? "Delete" : "Clear",
-                Hint = canRemovePlacement ? "Remove this authored placement." : "Clear the current selection.",
-                Enabled = target != null,
-                Emphasized = canRemovePlacement
             };
         }
 
@@ -940,7 +993,7 @@ namespace ShelteredAPI.Scenarios
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
-                "INSPECTOR",
+                !string.IsNullOrEmpty(window.Title) ? window.Title.ToUpperInvariant() : "SELECTION",
                 null,
                 false,
                 34f,

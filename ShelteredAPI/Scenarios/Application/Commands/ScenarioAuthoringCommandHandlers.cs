@@ -218,7 +218,7 @@ namespace ShelteredAPI.Scenarios
                 case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
                     if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Calendar, true))
                         return false;
-                    message = "Calendar opened.";
+                    message = "Schedule opened.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellCloseSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, false))

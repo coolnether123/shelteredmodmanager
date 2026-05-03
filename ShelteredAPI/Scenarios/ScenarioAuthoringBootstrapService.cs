@@ -3,12 +3,14 @@ using ModAPI.Core;
 using ShelteredAPI.Events;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace ShelteredAPI.Scenarios
 {
     internal sealed class ScenarioAuthoringBootstrapService
     {
+        private const float DraftWarmupSeconds = 2f;
         private readonly object _sync = new object();
         private readonly ScenarioAuthoringBackendService _backend;
         private readonly ScenarioAuthoringDraftRepository _draftRepository;
@@ -20,6 +22,8 @@ namespace ShelteredAPI.Scenarios
         private ScenarioAuthoringSession _activeSession;
         private string _lastPendingDraftId;
         private string _lastPendingBlockingReason;
+        private string _warmupDraftId;
+        private float _warmupElapsedSeconds;
 
         public static ScenarioAuthoringBootstrapService Instance
         {
@@ -58,12 +62,13 @@ namespace ShelteredAPI.Scenarios
                         return _pendingSession;
                     }
 
-                    // Stale draft with a different base mode — replace it. Cleanup happens
+                    // Stale draft with a different base mode - replace it. Cleanup happens
                     // after releasing the lock so file I/O doesn't block other callers.
                     obsolete = _pendingSession;
                     _pendingSession = null;
                     _lastPendingDraftId = null;
                     _lastPendingBlockingReason = null;
+                    ResetPendingWarmup();
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Discarding pending draft '" + obsolete.DraftId
                         + "' (mode=" + obsolete.BaseMode + ") to create new " + baseMode + " draft.");
                 }
@@ -100,6 +105,7 @@ namespace ShelteredAPI.Scenarios
                 _pendingSession = null;
                 _lastPendingDraftId = null;
                 _lastPendingBlockingReason = null;
+                ResetPendingWarmup();
             }
 
             ClearLaunchRedirects(pending, reason);
@@ -137,6 +143,7 @@ namespace ShelteredAPI.Scenarios
             {
                 _lastPendingDraftId = pending.DraftId;
                 _lastPendingBlockingReason = null;
+                ResetPendingWarmup();
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Pending draft '" + pending.DraftId + "' waiting to bootstrap. BaseMode="
                     + pending.BaseMode + ", ScenarioFile=" + pending.ScenarioFilePath + ".");
             }
@@ -153,6 +160,9 @@ namespace ShelteredAPI.Scenarios
 
                 return;
             }
+
+            if (!TryCompleteDraftWarmup(pending))
+                return;
 
             if (!string.IsNullOrEmpty(_lastPendingBlockingReason))
             {
@@ -187,12 +197,47 @@ namespace ShelteredAPI.Scenarios
                 _pendingSession = null;
                 _lastPendingDraftId = null;
                 _lastPendingBlockingReason = null;
+                ResetPendingWarmup();
             }
 
             _backend.SetActiveSession(pending);
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Activated authoring session for draft '" + pending.DraftId
                 + "'. Opening authoring shell.");
             _menuService.Open(pending, true);
+        }
+
+        private bool TryCompleteDraftWarmup(ScenarioAuthoringSession pending)
+        {
+            if (pending == null)
+                return false;
+
+            if (!string.Equals(_warmupDraftId, pending.DraftId, StringComparison.Ordinal))
+            {
+                _warmupDraftId = pending.DraftId;
+                _warmupElapsedSeconds = 0f;
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId
+                    + "' world is ready. Letting the shelter run for "
+                    + DraftWarmupSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                    + " seconds before authoring pause.");
+            }
+
+            if (!PauseManager.isPaused && Time.timeScale > 0f)
+                _warmupElapsedSeconds += Time.deltaTime;
+
+            if (_warmupElapsedSeconds < DraftWarmupSeconds)
+                return false;
+
+            MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId
+                + "' warmup completed after "
+                + _warmupElapsedSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
+                + " seconds of running simulation. Loading editor session.");
+            return true;
+        }
+
+        private void ResetPendingWarmup()
+        {
+            _warmupDraftId = null;
+            _warmupElapsedSeconds = 0f;
         }
 
         private void ActivateScenarioBinding(ScenarioAuthoringSession session)
