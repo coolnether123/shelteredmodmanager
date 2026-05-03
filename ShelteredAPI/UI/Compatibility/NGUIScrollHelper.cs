@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ModAPI.Core;
@@ -23,6 +24,42 @@ namespace ShelteredAPI.UI.Compatibility
         private float _maxX = 1000f;  // Right bound for mouse check
         private int _currentOffset = 0;
         private int _maxVisibleItems;
+        public event Action StateChanged;
+
+        public int ItemCount
+        {
+            get { return _items != null ? _items.Count : 0; }
+        }
+
+        public int MaxVisibleItems
+        {
+            get { return _maxVisibleItems; }
+        }
+
+        public int CurrentOffset
+        {
+            get { return _currentOffset; }
+        }
+
+        public int MaxOffset
+        {
+            get { return Mathf.Max(0, ItemCount - _maxVisibleItems); }
+        }
+
+        public bool CanScroll
+        {
+            get { return ItemCount > _maxVisibleItems; }
+        }
+
+        public bool CanScrollUp
+        {
+            get { return _currentOffset > 0; }
+        }
+
+        public bool CanScrollDown
+        {
+            get { return _currentOffset < MaxOffset; }
+        }
         
         /// <summary>
         /// Initialize the scroll helper with the list of items and bounds
@@ -125,6 +162,15 @@ namespace ShelteredAPI.UI.Compatibility
             _currentOffset = Mathf.Clamp(_currentOffset + delta, 0, Mathf.Max(0, _items.Count - _maxVisibleItems));
             return _currentOffset != previousOffset;
         }
+
+        public bool ScrollBy(int delta)
+        {
+            if (!ApplyScrollStep(delta))
+                return false;
+
+            UpdateItemPositions();
+            return true;
+        }
         
         private void UpdateItemPositions()
         {
@@ -150,6 +196,9 @@ namespace ShelteredAPI.UI.Compatibility
                     _items[i].transform.localPosition = new Vector3(pos.x, yPos, pos.z);
                 }
             }
+
+            if (StateChanged != null)
+                StateChanged();
         }
         
         /// <summary>

@@ -28,12 +28,41 @@ namespace ShelteredAPI.UI.Compatibility
         
         private UIButton _backButton;
         private UIButton _settingsButton;
+        private UIButton _scrollUpButton;
+        private UIButton _scrollDownButton;
+        private UILabel _modScrollIndicator;
         private ModEntry _currentMod;
         private bool _bookFound;
         private bool _initialized = false;
         private NGUIScrollHelper _scrollHelper;
         private ModManagerDescriptionScroller _descriptionScroller;
         private List<GameObject> _modButtonObjects = new List<GameObject>();
+        private const float FooterButtonY = -400f;
+        private const float ModListX = -280f;
+        private const float ModListTopY = 160f;
+        private const float ModListBottomY = -260f;
+        private const float ModListSpacingY = 84f;
+        private const int ModButtonWidth = 320;
+        private const int ModButtonHeight = 74;
+        private const int ModButtonFontSize = 24;
+        private const int ScrollButtonWidth = 112;
+        private const int ScrollButtonHeight = 42;
+        private const int ScrollButtonFontSize = 18;
+        private static readonly Color BookButtonColor = new Color(0.88f, 0.76f, 0.63f, 1f);
+        private static readonly Color BookButtonHoverColor = new Color(0.97f, 0.85f, 0.70f, 1f);
+        private static readonly Color BookButtonPressedColor = new Color(0.74f, 0.61f, 0.49f, 1f);
+        private static readonly Color BookButtonDisabledColor = new Color(0.52f, 0.45f, 0.39f, 0.95f);
+        private static readonly Color BookLabelColor = new Color(0.18f, 0.13f, 0.09f, 1f);
+        private static readonly Color BookDisabledLabelColor = new Color(0.34f, 0.29f, 0.24f, 0.9f);
+        private static readonly Color PageIndicatorColor = new Color(0.21f, 0.16f, 0.11f, 1f);
+
+        private enum PanelButtonVisualStyle
+        {
+            Book,
+            Action,
+            ScrollEnabled,
+            ScrollDisabled
+        }
 
         public static void ShowPanel()
         {
@@ -108,7 +137,7 @@ namespace ShelteredAPI.UI.Compatibility
                 }
 
                 // Mod list buttons (left page, centered vertically)
-                CreateModButtons(buttonTemplate, textColor);
+                CreateModButtons(buttonTemplate);
 
                 // Details labels (right page)
                 CreateDetailLabels(textColor);
@@ -122,24 +151,9 @@ namespace ShelteredAPI.UI.Compatibility
                 // Show first mod by default
                 var mods = ModRuntime.LoadedMods;
                 if (mods.Count > 0) ShowDetails(mods[0]);
-                
-                // --- SETUP SCROLLING for mod list ---
-                // Available space: from startY (160) to just above back button (-300)
-                // This gives us room for ~5-6 buttons before needing to scroll.
-                // We restrict scrolling input to the left page bounds (X: -600 to 0).
-                if (_modButtonObjects.Count > 0)
-                {
-                    _scrollHelper = gameObject.AddComponent<NGUIScrollHelper>();
-                    _scrollHelper.Initialize(
-                        items: _modButtonObjects,
-                        startY: 160f,
-                        itemSpacing: 90f,
-                        minY: -300f, 
-                        maxY: 160f,  
-                        minX: -600f, 
-                        maxX: 0f     
-                    );
-                }
+
+                CreateModScrollControls(buttonTemplate);
+                SetupModListScrolling();
             }
             catch (Exception ex) 
             { 
@@ -149,23 +163,26 @@ namespace ShelteredAPI.UI.Compatibility
             base.Initialise();
         }
 
-        private void CreateModButtons(UIButton template, Color textColor)
+        private void CreateModButtons(UIButton template)
         {
             var mods = ModRuntime.LoadedMods;
-            
-            // Position on left page - need to center the buttons
-            float startY = 160f;
-            float spacing = 90f;
-            float xPos = -280f; // Left page center
-            
+
             for (int i = 0; i < mods.Count; i++)
             {
                 var mod = mods[i];
-                
-                // Hook up click event with a closure-friendly copy of the mod entry
                 var capture = mod;
-                Vector3 pos = new Vector3(xPos, startY - (i * spacing), 0);
-                UIButton btn = CreatePanelButton(template, "ModBtn_" + mod.Id, mod.Name, pos, 300, 70, 24, textColor, delegate
+                Vector3 pos = new Vector3(ModListX, ModListTopY - (i * ModListSpacingY), 0);
+                UIButton btn = CreatePanelButton(
+                    template,
+                    "ModBtn_" + mod.Id,
+                    mod.Name,
+                    pos,
+                    ModButtonWidth,
+                    ModButtonHeight,
+                    ModButtonFontSize,
+                    BookLabelColor,
+                    PanelButtonVisualStyle.Book,
+                    delegate
                 {
                     ShowDetails(capture);
                 });
@@ -176,6 +193,113 @@ namespace ShelteredAPI.UI.Compatibility
                 _modButtons.Add(btn);
                 _modButtonObjects.Add(btnGO); // For the scroll helper to track
             }
+        }
+
+        private void SetupModListScrolling()
+        {
+            if (_modButtonObjects.Count == 0)
+            {
+                UpdateModScrollControls();
+                return;
+            }
+
+            _scrollHelper = gameObject.AddComponent<NGUIScrollHelper>();
+            _scrollHelper.StateChanged += UpdateModScrollControls;
+            _scrollHelper.Initialize(
+                items: _modButtonObjects,
+                startY: ModListTopY,
+                itemSpacing: ModListSpacingY,
+                minY: ModListBottomY,
+                maxY: ModListTopY,
+                minX: -600f,
+                maxX: 0f);
+            UpdateModScrollControls();
+        }
+
+        private void CreateModScrollControls(UIButton template)
+        {
+            _scrollUpButton = CreatePanelButton(
+                template,
+                "ModScrollUpButton",
+                "UP",
+                new Vector3(ModListX - 115f, -326f, 0f),
+                ScrollButtonWidth,
+                ScrollButtonHeight,
+                ScrollButtonFontSize,
+                BookLabelColor,
+                PanelButtonVisualStyle.ScrollEnabled,
+                delegate { ScrollModList(-1); });
+
+            _scrollDownButton = CreatePanelButton(
+                template,
+                "ModScrollDownButton",
+                "DOWN",
+                new Vector3(ModListX + 115f, -326f, 0f),
+                ScrollButtonWidth,
+                ScrollButtonHeight,
+                ScrollButtonFontSize,
+                BookLabelColor,
+                PanelButtonVisualStyle.ScrollEnabled,
+                delegate { ScrollModList(1); });
+
+            _modScrollIndicator = CreateSimpleLabel(string.Empty, ModListX, -326f, 18, PageIndicatorColor, NGUIText.Alignment.Center, 140);
+            if (_modScrollIndicator != null)
+            {
+                _modScrollIndicator.name = "ModScrollIndicator";
+                _modScrollIndicator.effectStyle = UILabel.Effect.Outline;
+                _modScrollIndicator.effectColor = new Color(0f, 0f, 0f, 0.85f);
+                _modScrollIndicator.overflowMethod = UILabel.Overflow.ResizeFreely;
+            }
+
+            UpdateModScrollControls();
+        }
+
+        private void ScrollModList(int delta)
+        {
+            if (_scrollHelper != null && _scrollHelper.ScrollBy(delta))
+                UpdateModScrollControls();
+        }
+
+        private void UpdateModScrollControls()
+        {
+            bool canScroll = _scrollHelper != null && _scrollHelper.CanScroll;
+            SetScrollControlVisible(_scrollUpButton, canScroll);
+            SetScrollControlVisible(_scrollDownButton, canScroll);
+            if (_modScrollIndicator != null && _modScrollIndicator.gameObject != null)
+                _modScrollIndicator.gameObject.SetActive(canScroll);
+
+            if (!canScroll)
+                return;
+
+            SetScrollButtonState(_scrollUpButton, _scrollHelper.CanScrollUp);
+            SetScrollButtonState(_scrollDownButton, _scrollHelper.CanScrollDown);
+
+            int first = _scrollHelper.CurrentOffset + 1;
+            int last = Math.Min(_scrollHelper.ItemCount, _scrollHelper.CurrentOffset + _scrollHelper.MaxVisibleItems);
+            _modScrollIndicator.text = first + "-" + last + " of " + _scrollHelper.ItemCount;
+            _modScrollIndicator.ProcessText();
+            _modScrollIndicator.MarkAsChanged();
+        }
+
+        private static void SetScrollControlVisible(UIButton button, bool visible)
+        {
+            if (button != null && button.gameObject != null)
+                button.gameObject.SetActive(visible);
+        }
+
+        private static void SetScrollButtonState(UIButton button, bool enabled)
+        {
+            if (button == null || button.gameObject == null)
+                return;
+
+            button.isEnabled = enabled;
+            ApplyPanelButtonLayout(
+                button.gameObject,
+                ScrollButtonWidth,
+                ScrollButtonHeight,
+                ScrollButtonFontSize,
+                enabled ? BookLabelColor : BookDisabledLabelColor,
+                enabled ? PanelButtonVisualStyle.ScrollEnabled : PanelButtonVisualStyle.ScrollDisabled);
         }
 
         private void CreateDetailLabels(Color textColor)
@@ -240,7 +364,7 @@ namespace ShelteredAPI.UI.Compatibility
             
             _detailDescription = descLabelGO.AddComponent<UILabel>();
             _detailDescription.text = "";
-            _detailDescription.fontSize = 32;
+            _detailDescription.fontSize = 24;
             _detailDescription.color = textColor;
             _detailDescription.alignment = NGUIText.Alignment.Left;
             _detailDescription.width = 440;
@@ -269,8 +393,7 @@ namespace ShelteredAPI.UI.Compatibility
 
         private void CreateBackButton(UIButton template)
         {
-            // Back button positioned at bottom-left, moved down 40px from original
-            Vector3 backPos = new Vector3(-460f, -410f, 0);
+            Vector3 backPos = new Vector3(-460f, FooterButtonY, 0);
             
             _backButton = CreatePanelButton(
                 template,
@@ -278,18 +401,18 @@ namespace ShelteredAPI.UI.Compatibility
                 "Back",
                 backPos,
                 200,
-                60,
+                58,
                 24,
-                _bookFound ? new Color(0.1f, 0.1f, 0.1f) : Color.white,
+                BookLabelColor,
+                PanelButtonVisualStyle.Action,
                 OnCancel);
         }
 
         private void CreateSettingsButton(UIButton template)
         {
-            // Positioned under description, above back button area's counterpart on right page
-            Vector3 pos = new Vector3(300f, -305f, 0); // Centered on right page, closer to description area
+            Vector3 pos = new Vector3(320f, FooterButtonY, 0);
 
-            _settingsButton = CreatePanelButton(template, "SettingsButton", "SETTINGS", pos, 200, 50, 22, new Color(0.1f, 0.1f, 0.1f), delegate
+            _settingsButton = CreatePanelButton(template, "SettingsButton", "SETTINGS", pos, 240, 58, 22, BookLabelColor, PanelButtonVisualStyle.Action, delegate
             {
                 if (_currentMod != null)
                     ModSettingsPanel.Show(_currentMod);
@@ -300,7 +423,17 @@ namespace ShelteredAPI.UI.Compatibility
                 _settingsButton.gameObject.SetActive(false);
         }
 
-        private UIButton CreatePanelButton(UIButton template, string name, string text, Vector3 localPosition, int width, int height, int fontSize, Color labelColor, Action onClick)
+        private UIButton CreatePanelButton(
+            UIButton template,
+            string name,
+            string text,
+            Vector3 localPosition,
+            int width,
+            int height,
+            int fontSize,
+            Color labelColor,
+            PanelButtonVisualStyle visualStyle,
+            Action onClick)
         {
             UIButton button = UIUtil.CloneButton(template, transform, text);
             if (button == null)
@@ -315,12 +448,12 @@ namespace ShelteredAPI.UI.Compatibility
             buttonObject.transform.localRotation = Quaternion.identity;
             buttonObject.transform.localScale = Vector3.one;
 
-            ApplyPanelButtonLayout(buttonObject, width, height, fontSize, labelColor);
+            ApplyPanelButtonLayout(buttonObject, width, height, fontSize, labelColor, visualStyle);
             ConfigurePanelButtonClick(button, onClick);
             return button;
         }
 
-        private static void ApplyPanelButtonLayout(GameObject buttonObject, int width, int height, int fontSize, Color labelColor)
+        private static void ApplyPanelButtonLayout(GameObject buttonObject, int width, int height, int fontSize, Color labelColor, PanelButtonVisualStyle visualStyle)
         {
             UIWidget rootWidget = buttonObject.GetComponent<UIWidget>();
             if (rootWidget != null)
@@ -337,6 +470,14 @@ namespace ShelteredAPI.UI.Compatibility
                 collider.size = new Vector3(width, height, 1f);
             }
 
+            UIWidget backgroundWidget = FindButtonBackgroundWidget(buttonObject);
+            if (backgroundWidget != null)
+            {
+                backgroundWidget.width = width;
+                backgroundWidget.height = height;
+                backgroundWidget.depth = 10015;
+            }
+
             UISprite[] sprites = buttonObject.GetComponentsInChildren<UISprite>(true);
             for (int i = 0; i < sprites.Length; i++)
             {
@@ -345,21 +486,141 @@ namespace ShelteredAPI.UI.Compatibility
             }
 
             UILabel[] labels = buttonObject.GetComponentsInChildren<UILabel>(true);
+            UILabel primaryLabel = GetPrimaryLabel(labels);
+            Color defaultColor;
+            Color hoverColor;
+            Color pressedColor;
+            Color disabledColor;
+            Color resolvedLabelColor;
+            ResolvePanelButtonVisualStyle(
+                visualStyle,
+                labelColor,
+                out defaultColor,
+                out hoverColor,
+                out pressedColor,
+                out disabledColor,
+                out resolvedLabelColor);
+
             for (int i = 0; i < labels.Length; i++)
             {
                 UILabel label = labels[i];
                 if (label == null)
                     continue;
 
-                label.text = label.text ?? string.Empty;
+                bool isPrimary = label == primaryLabel;
+                label.enabled = isPrimary;
+                label.transform.SetParent(buttonObject.transform, false);
+                label.transform.localPosition = Vector3.zero;
+                label.transform.localRotation = Quaternion.identity;
+                label.transform.localScale = Vector3.one;
+                label.text = isPrimary ? label.text ?? string.Empty : string.Empty;
                 label.fontSize = fontSize;
-                label.color = labelColor;
+                label.color = resolvedLabelColor;
+                label.effectStyle = UILabel.Effect.Outline;
+                label.effectColor = new Color(0f, 0f, 0f, 0.75f);
                 label.alignment = NGUIText.Alignment.Center;
                 label.overflowMethod = UILabel.Overflow.ShrinkContent;
                 label.width = width - 20;
+                label.height = height - 8;
+                label.multiLine = true;
+                label.maxLineCount = 2;
+                label.pivot = UIWidget.Pivot.Center;
                 label.depth = 10020;
                 label.ProcessText();
                 label.MarkAsChanged();
+            }
+
+            UIButton button = buttonObject.GetComponent<UIButton>();
+            if (button != null)
+            {
+                button.defaultColor = defaultColor;
+                button.hover = hoverColor;
+                button.pressed = pressedColor;
+                button.disabledColor = disabledColor;
+                button.duration = 0.08f;
+                button.SetState(button.isEnabled ? UIButtonColor.State.Normal : UIButtonColor.State.Disabled, true);
+            }
+
+            NGUITools.UpdateWidgetCollider(buttonObject, true);
+        }
+
+        private static UIWidget FindButtonBackgroundWidget(GameObject buttonObject)
+        {
+            if (buttonObject == null)
+                return null;
+
+            UIWidget[] widgets = buttonObject.GetComponentsInChildren<UIWidget>(true);
+            UIWidget best = null;
+            int bestArea = int.MinValue;
+            for (int i = 0; i < widgets.Length; i++)
+            {
+                UIWidget widget = widgets[i];
+                if (widget == null || widget is UILabel)
+                    continue;
+
+                int area = widget.width * widget.height;
+                if (best == null || area > bestArea)
+                {
+                    best = widget;
+                    bestArea = area;
+                }
+            }
+
+            return best ?? buttonObject.GetComponent<UIWidget>();
+        }
+
+        private static UILabel GetPrimaryLabel(IList<UILabel> labels)
+        {
+            if (labels == null)
+                return null;
+
+            UILabel best = null;
+            int bestWidth = int.MinValue;
+            for (int i = 0; i < labels.Count; i++)
+            {
+                UILabel label = labels[i];
+                if (label == null)
+                    continue;
+
+                int score = Math.Max(label.width, label.fontSize);
+                if (best == null || score > bestWidth)
+                {
+                    best = label;
+                    bestWidth = score;
+                }
+            }
+
+            return best;
+        }
+
+        private static void ResolvePanelButtonVisualStyle(
+            PanelButtonVisualStyle style,
+            Color fallbackLabelColor,
+            out Color defaultColor,
+            out Color hoverColor,
+            out Color pressedColor,
+            out Color disabledColor,
+            out Color labelColor)
+        {
+            switch (style)
+            {
+                case PanelButtonVisualStyle.ScrollDisabled:
+                    defaultColor = new Color(0.56f, 0.48f, 0.40f, 0.95f);
+                    hoverColor = defaultColor;
+                    pressedColor = defaultColor;
+                    disabledColor = defaultColor;
+                    labelColor = BookDisabledLabelColor;
+                    break;
+                case PanelButtonVisualStyle.Action:
+                case PanelButtonVisualStyle.ScrollEnabled:
+                case PanelButtonVisualStyle.Book:
+                default:
+                    defaultColor = BookButtonColor;
+                    hoverColor = BookButtonHoverColor;
+                    pressedColor = BookButtonPressedColor;
+                    disabledColor = BookButtonDisabledColor;
+                    labelColor = fallbackLabelColor.a > 0f ? fallbackLabelColor : BookLabelColor;
+                    break;
             }
         }
 
