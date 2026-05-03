@@ -460,8 +460,15 @@
     <Compile Include="UI\FieldManual\Theme\FieldManualMetrics.cs" />
     <Compile Include="UI\FieldManual\Animations\IFieldManualTransition.cs" />
     <Compile Include="UI\FieldManual\Animations\FieldManualFadeTransition.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualFallbackPageFlip.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualPageFlipOverlay.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualPageTurnAudio.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualPageTurnController.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualPageTurnProfile.cs" />
+    <Compile Include="UI\FieldManual\Animations\FieldManualTimedDestroy.cs" />
     <Compile Include="UI\FieldManual\Animations\FieldManualTransitionProfile.cs" />
     <Compile Include="UI\FieldManual\Animations\UIWidgetAlphaGroup.cs" />
+    <Compile Include="UI\FieldManual\Animations\VanillaPageTurnAssets.cs" />
     <Compile Include="UI\FieldManual\Textures\ITextureLibrary.cs" />
     <Compile Include="UI\FieldManual\Textures\ProceduralTextureLibrary.cs" />
     <Compile Include="UI\FieldManual\Textures\Generators\TextureCanvas.cs" />
@@ -486,6 +493,7 @@
     <Compile Include="UI\FieldManual\Widgets\KeybindRowWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\SectionStampWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\BookPageNavigatorWidget.cs" />
+    <Compile Include="UI\FieldManual\Widgets\VanillaArrowButtonWidget.cs" />
     <Compile Include="UI\FieldManual\Layout\PanelPageState.cs" />
     <Compile Include="UI\FieldManual\Layout\PaperPagedList.cs" />
     <Compile Include="UI\FieldManual\Layout\PaperPagePaginator.cs" />

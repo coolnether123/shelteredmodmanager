@@ -38,8 +38,11 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private ProceduralTextureLibrary _textures;
         private UIPrimitiveFactory _ui;
         private PaperPagedList _pagedList;
+        private GameObject _pageFlipRoot;
         private BookPageNavigatorWidget _pageNavigator;
         private IFieldManualTransition _pageTransition;
+        private FieldManualPageTurnController _pageTurnController;
+        private VanillaPageTurnAssets _pageTurnAssets;
         private readonly PanelPageState _pageState = new PanelPageState();
         private List<List<ModSettingsKeybindDisplayEntry>> _pages = new List<List<ModSettingsKeybindDisplayEntry>>();
         private int _pageItemHeightBudget;
@@ -79,9 +82,11 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             _metrics = new FieldManualMetrics();
             _textures = new ProceduralTextureLibrary(_palette);
             _pageTransition = new FieldManualFadeTransition(FieldManualTransitionProfile.VanillaPageInfoFade);
+            _pageTurnAssets = new VanillaPageTurnAssets();
 
             UIFontCache.FontResult fonts = UIFontCache.GetFonts();
             _ui = new UIPrimitiveFactory(fonts.Bitmap, fonts.TTF, OverlayDepth);
+            ConfigurePageTurnController(root);
 
             string title = _mod.Name ?? "Controls";
             string subtitle = string.IsNullOrEmpty(_mod.Version) ? "Input Bindings" : ("Input Bindings - v" + _mod.Version);
@@ -91,11 +96,24 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
             IPanelFrame frame = new ShelteredBookFrame(_palette, _metrics, _textures, _ui);
             PanelFrameRegions regions = frame.Build(root, title, subtitle);
+            _pageFlipRoot = _ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
             BuildPagedList(regions);
             BuildTooltipStrip(regions);
             BuildFooter(regions);
             BuildContent();
+        }
+
+        private void ConfigurePageTurnController(GameObject root)
+        {
+            _pageTurnController = root.AddComponent<FieldManualPageTurnController>();
+            _pageTurnController.Configure(
+                FieldManualPageTurnProfile.VanillaClipboard,
+                new FieldManualFadeTransition(FieldManualTransitionProfile.FadeOut(0.06f, 0f, UITweener.Method.EaseOut)),
+                _pageTransition,
+                new FieldManualFadeTransition(FieldManualTransitionProfile.Between(0.35f, 1f, 0.12f, 0f, UITweener.Method.EaseOut)),
+                new FieldManualPageTurnAudio(_pageTurnAssets),
+                new FieldManualPageFlipOverlay(_pageTurnAssets, _textures, _ui, _metrics.PanelWidth - 40f, _metrics.PanelHeight - 140f));
         }
 
         private void BuildTooltipStrip(PanelFrameRegions regions)
@@ -128,7 +146,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             buttonFactory.Build(regions.FooterRoot, "DefaultsButton", "Defaults",
                 new Vector3(320f, -400f, 0f), 240, 58, 22, ResetAllDefaults);
 
-            _pageNavigator = new BookPageNavigatorWidget(_palette, _textures, _ui);
+            _pageNavigator = new BookPageNavigatorWidget(_palette, _textures, _ui, _pageTurnAssets);
             _pageNavigator.Build(regions.FooterRoot, new Vector3(0f, -400f, 0f),
                 delegate { ChangePage(-1); },
                 delegate { ChangePage(1); });
@@ -197,6 +215,9 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
             if (_pageNavigator != null)
                 _pageNavigator.UpdateState(_pageState.CurrentPageIndex, _pageState.PageCount);
+
+            if (animate && _pageTransition != null && _pageNavigator != null)
+                _pageTransition.Play(_pageNavigator.PageLabelRoot);
         }
 
         private void BuildCurrentPageRows(List<ModSettingsKeybindDisplayEntry> entries)
@@ -280,6 +301,8 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         {
             if (_pageState.PageCount <= 1 || KeybindCaptureListener.HasActiveCapture())
                 return;
+            if (_pageTurnController != null && _pageTurnController.IsLocked)
+                return;
 
             if (UnityEngine.Input.GetKeyDown(KeyCode.LeftArrow) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
             {
@@ -318,10 +341,43 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             if (KeybindCaptureListener.HasActiveCapture())
                 return;
 
+            if (_pageTurnController != null)
+            {
+                _pageTurnController.TryTurn(
+                    delta,
+                    _pagedList != null ? _pagedList.ContentRoot : null,
+                    _pageFlipRoot != null ? _pageFlipRoot : (_pagedList != null ? _pagedList.Viewport : null),
+                    _pageNavigator != null ? _pageNavigator.PageLabelRoot : null,
+                    CanChangePage,
+                    CommitPageChange,
+                    RenderCurrentPageWithoutAnimation);
+                return;
+            }
+
             if (!_pageState.MoveBy(delta))
                 return;
 
             RenderCurrentPage(true);
+        }
+
+        private bool CanChangePage(int delta)
+        {
+            if (delta < 0)
+                return _pageState.CanGoPrevious;
+            if (delta > 0)
+                return _pageState.CanGoNext;
+
+            return false;
+        }
+
+        private void CommitPageChange(int delta)
+        {
+            _pageState.MoveBy(delta);
+        }
+
+        private void RenderCurrentPageWithoutAnimation()
+        {
+            RenderCurrentPage(false);
         }
 
         private void Close()

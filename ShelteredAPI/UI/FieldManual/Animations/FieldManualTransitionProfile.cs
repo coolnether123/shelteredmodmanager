@@ -27,5 +27,15 @@ namespace ShelteredAPI.UI.FieldManual.Animations
         {
             return new FieldManualTransitionProfile(0f, 1f, duration, delay, method);
         }
+
+        public static FieldManualTransitionProfile FadeOut(float duration, float delay, UITweener.Method method)
+        {
+            return new FieldManualTransitionProfile(1f, 0f, duration, delay, method);
+        }
+
+        public static FieldManualTransitionProfile Between(float fromAlpha, float toAlpha, float duration, float delay, UITweener.Method method)
+        {
+            return new FieldManualTransitionProfile(fromAlpha, toAlpha, duration, delay, method);
+        }
     }
 }
