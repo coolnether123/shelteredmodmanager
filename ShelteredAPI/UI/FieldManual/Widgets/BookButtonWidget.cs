@@ -28,25 +28,24 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         {
             Texture2D restTexture = _textures.Keycap(width, height, KeycapState.Rest);
             Texture2D hoverTexture = _textures.Keycap(width, height, KeycapState.Hover);
-            GameObject root = _ui.CreateChild(parent, name, position);
-            UITexture bg = _ui.CreateQuad(root, name + "Bg", restTexture,
-                Vector3.zero, width, height, Color.white, _ui.NextDepth());
-            UILabel label = _ui.CreateLabel(root, name + "Label", text,
-                Vector3.zero, fontSize, _palette.Ink,
+            UITexture bg = _ui.CreateQuad(parent, name + "Bg", restTexture,
+                position, width, height, Color.white, _ui.NextDepth());
+            UILabel label = _ui.CreateLabel(parent, name + "Label", text,
+                position, fontSize, _palette.Ink,
                 width - 20, height - 6, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
             label.overflowMethod = UILabel.Overflow.ShrinkContent;
-            _ui.AddClickCollider(root, width, height, onClick);
-            HoverVisualState hover = root.AddComponent<HoverVisualState>();
+            _ui.AddClickCollider(bg.gameObject, width, height, onClick);
+            HoverVisualState hover = bg.gameObject.AddComponent<HoverVisualState>();
             hover.TextureTarget = bg;
             hover.RestTexture = restTexture;
             hover.HoverTexture = hoverTexture;
             hover.Widgets = new UIWidget[] { label };
             hover.RestColors = new Color[] { _palette.Ink };
             hover.HoverColors = new Color[] { _palette.KeycapInk };
-            hover.ScaleTarget = root.transform;
+            hover.ScaleTarget = bg.transform;
             hover.RestScale = 1f;
             hover.HoverScale = 1.035f;
-            return root;
+            return bg.gameObject;
         }
     }
 }
