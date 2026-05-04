@@ -101,6 +101,7 @@
     <Compile Include="Core\ServiceContainer.cs" />
     <Compile Include="Core\ShelteredApiIds.cs" />
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
+    <Compile Include="Core\ShelteredUnityLogNormalizers.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />
     <Compile Include="Core\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveProtection.cs" />

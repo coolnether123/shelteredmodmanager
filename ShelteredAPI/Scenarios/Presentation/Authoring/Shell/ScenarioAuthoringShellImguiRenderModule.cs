@@ -820,7 +820,7 @@ namespace ShelteredAPI.Scenarios
         private void DrawStatusBar(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
             GUI.Box(rect, GUIContent.none, _statusStyle);
-            const float rightControlsWidth = 382f;
+            const float rightControlsWidth = 528f;
             float rightControlsX = Math.Max(rect.x + 220f, rect.xMax - rightControlsWidth);
             float statusRight = rightControlsX - 18f;
             float x = rect.x + 26f;
@@ -847,9 +847,22 @@ namespace ShelteredAPI.Scenarios
                 Emphasized = isPlaytesting
             }, false);
 
-            GUI.Label(new Rect(rightControlsX + 156f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
-            GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 112f, 4f), GUIContent.none, _uiContext.Styles.Field);
-            GUI.Label(new Rect(rightControlsX + 310f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
+            Rect pauseMenuRect = new Rect(rect.xMax - 144f, rect.y + 9f, 128f, 28f);
+            DrawButton(pauseMenuRect, new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionOpenPauseMenu,
+                Label = "Pause Menu",
+                Hint = "Open the vanilla pause menu while the editor keeps the shelter paused.",
+                Enabled = true,
+                Emphasized = false
+            }, false);
+
+            if (pauseMenuRect.x - (rightControlsX + 156f) > 120f)
+            {
+                GUI.Label(new Rect(rightControlsX + 156f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
+                GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 80f, 4f), GUIContent.none, _uiContext.Styles.Field);
+                GUI.Label(new Rect(rightControlsX + 278f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
+            }
         }
 
         private Rect DrawCollapsedWindowStrip(Rect statusRect, ScenarioAuthoringShellWindowViewModel[] windows)

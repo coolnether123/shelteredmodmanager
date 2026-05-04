@@ -8,11 +8,6 @@ namespace ShelteredAPI.Persistence
     /// <summary>
     /// Manages automatic persistence for mod data.
     /// </summary>
-    [PatchPolicy(PatchDomain.SaveFlow, "ModPersistenceRegistration",
-        TargetBehavior = "Automatic saveable registration when SaveManager starts",
-        FailureMode = "Registered mod persistence collections may not attach to the active SaveManager.",
-        RollbackStrategy = "Disable the SaveFlow patch domain or remove the ModPersistence registration hook.",
-        StartupTiming = PatchStartupTiming.BootCritical)]
     public static class ShelteredPersistence
     {
         public static ShelteredPersistentList<T> CreateList<T>(string uniqueId)
@@ -49,6 +44,11 @@ namespace ShelteredAPI.Persistence
         /// <summary>
         /// Global hook to ensure all mod collections are registered with SaveManager when it awakes.
         /// </summary>
+        [PatchPolicy(PatchDomain.SaveFlow, "ModPersistenceRegistration",
+            TargetBehavior = "Automatic saveable registration when SaveManager starts",
+            FailureMode = "Registered mod persistence collections may not attach to the active SaveManager.",
+            RollbackStrategy = "Disable the SaveFlow patch domain or remove the ModPersistence registration hook.",
+            StartupTiming = PatchStartupTiming.BootCritical)]
         [HarmonyLib.HarmonyPatch(typeof(SaveManager), "Awake")]
         private static class SaveManager_Awake_Patch
         {

@@ -180,6 +180,32 @@ namespace ModAPI.Core
             try
             {
                 var msg = condition ?? string.Empty;
+                UnityLogNormalization normalization;
+
+                if (UnityLogNormalizationRegistry.TryNormalize(msg, stackTrace, type, out normalization))
+                {
+                    if (string.IsNullOrEmpty(normalization.OnceKey))
+                    {
+                        MMLog.WriteWithSource(
+                            normalization.Level,
+                            MMLog.LogCategory.General,
+                            normalization.Source,
+                            normalization.Message);
+                    }
+                    else
+                    {
+                        MMLog.LogOnce(normalization.OnceKey, delegate
+                        {
+                            MMLog.WriteWithSource(
+                                normalization.Level,
+                                MMLog.LogCategory.General,
+                                normalization.Source,
+                                normalization.Message);
+                        });
+                    }
+
+                    return;
+                }
 
                 if (UnityLogFilter.ShouldSuppress(msg, type))
                 {

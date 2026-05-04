@@ -331,6 +331,9 @@ namespace ShelteredAPI.Scenarios
             if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
                 return true;
 
+            if (ScenarioAuthoringPauseService.Instance.HandleVanillaResumeRequest())
+                return false;
+
             MMLog.WriteInfo("[ScenarioAuthoringPause] Ignored vanilla resume request while scenario authoring owned the pause state.");
             return false;
         }

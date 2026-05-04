@@ -77,7 +77,7 @@ namespace ShelteredAPI.UI.Compatibility
         private const float SettingPageRightX = 80f;
         private const float ToolRowY = 222f;
         private const float FooterButtonY = -400f;
-        private const float PresetBarX = 260f;
+        private const float PresetBarX = 120f;
         
         /// <summary>
         /// Opens the shared settings window for the supplied mod entry and rebuilds the full UI from its provider.

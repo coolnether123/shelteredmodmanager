@@ -66,6 +66,7 @@ namespace ShelteredAPI.Scenarios
         public const string ActionShellTabShell = "shell.tab.shell";
         public const string ActionSave = "editor.save";
         public const string ActionPlaytest = "editor.playtest.toggle";
+        public const string ActionOpenPauseMenu = "editor.pause_menu.open";
         public const string ActionCloseEditor = "editor.close";
         public const string ActionConvertToNormal = "editor.convert_to_normal";
         public const string ActionSelectionClear = "selection.clear";

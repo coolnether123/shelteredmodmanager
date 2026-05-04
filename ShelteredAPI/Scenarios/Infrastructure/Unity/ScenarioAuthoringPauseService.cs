@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios
         private static readonly FieldInfo OnResumeField = typeof(PauseManager).GetField("OnResume", BindingFlags.Static | BindingFlags.NonPublic);
         private bool _ownsPause;
         private bool _ownsInjectedPauseDepth;
+        private bool _pauseMenuExplicitlyOpened;
         private float _authoringPauseStartedAt;
         private string _lastOwnerReason;
 
@@ -79,11 +80,13 @@ namespace ShelteredAPI.Scenarios
             {
                 _ownsPause = false;
                 _ownsInjectedPauseDepth = false;
+                _pauseMenuExplicitlyOpened = false;
                 _authoringPauseStartedAt = 0f;
                 _lastOwnerReason = null;
                 return;
             }
 
+            _pauseMenuExplicitlyOpened = false;
             SuppressPauseMenu(pauseManager, "ReleasePause");
             bool remainingPauseState = PauseManager.isPaused;
             if (_ownsInjectedPauseDepth)
@@ -96,19 +99,76 @@ namespace ShelteredAPI.Scenarios
                 + ", remainingPauseState=" + remainingPauseState + ".");
             _ownsPause = false;
             _ownsInjectedPauseDepth = false;
+            _pauseMenuExplicitlyOpened = false;
             _authoringPauseStartedAt = 0f;
             _lastOwnerReason = null;
         }
 
         public bool ShouldSuppressPauseMenu()
         {
-            return _ownsPause && ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();
+            return _ownsPause && !_pauseMenuExplicitlyOpened && ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();
         }
 
         public bool IsPauseMenuPanel(BasePanel panel)
         {
             PauseManager pauseManager = ResolvePauseManager();
             return pauseManager != null && panel != null && ReferenceEquals(panel, pauseManager.pauseMenuPanel);
+        }
+
+        public bool OpenPauseMenu(string reason)
+        {
+            PauseManager pauseManager = ResolvePauseManager();
+            if (pauseManager == null)
+                return false;
+
+            if (!ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+            {
+                PauseManager.Pause();
+                return true;
+            }
+
+            if (!_ownsPause && !EnsurePaused(reason))
+                return false;
+
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager.pauseMenuPanel;
+            if (panelManager == null || pauseMenu == null)
+            {
+                MMLog.WarnOnce("ScenarioAuthoringPause.OpenPauseMenu.Unavailable",
+                    "Cannot open the vanilla pause menu because the panel manager or pause menu panel was unavailable.");
+                return false;
+            }
+
+            _pauseMenuExplicitlyOpened = true;
+            if (!panelManager.IsPanelOnStack(pauseMenu))
+                panelManager.PushPanel(pauseMenu);
+            else if (!pauseMenu.IsShowing())
+                pauseMenu.gameObject.SetActive(true);
+
+            Time.timeScale = 0f;
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Opened the vanilla pause menu while keeping scenario authoring pause ownership. Reason="
+                + (reason ?? "unspecified") + ".");
+            return true;
+        }
+
+        public bool HandleVanillaResumeRequest()
+        {
+            if (!_pauseMenuExplicitlyOpened || !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation())
+                return false;
+
+            PauseManager pauseManager = ResolvePauseManager();
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager != null ? pauseManager.pauseMenuPanel : null;
+            if (panelManager != null && pauseMenu != null && panelManager.IsPanelOnStack(pauseMenu))
+                panelManager.PopPanel(pauseMenu);
+
+            if (pauseMenu != null && pauseMenu.IsShowing())
+                pauseMenu.gameObject.SetActive(false);
+
+            _pauseMenuExplicitlyOpened = false;
+            Time.timeScale = 0f;
+            MMLog.WriteInfo("[ScenarioAuthoringPause] Closed the explicitly opened pause menu without resuming scenario authoring.");
+            return true;
         }
 
         private static PauseManager ResolvePauseManager()
@@ -121,6 +181,7 @@ namespace ShelteredAPI.Scenarios
 
         private bool MaintainOwnedPause(PauseManager pauseManager)
         {
+            RefreshExplicitPauseMenuState(pauseManager);
             SuppressPauseMenu(pauseManager, "MaintainOwnedPause");
             if (!PauseManager.isPaused && _ownsInjectedPauseDepth)
             {
@@ -135,6 +196,19 @@ namespace ShelteredAPI.Scenarios
             }
 
             return true;
+        }
+
+        private void RefreshExplicitPauseMenuState(PauseManager pauseManager)
+        {
+            if (!_pauseMenuExplicitlyOpened)
+                return;
+
+            UIPanelManager panelManager = UIPanelManager.instance;
+            BasePanel pauseMenu = pauseManager != null ? pauseManager.pauseMenuPanel : null;
+            bool isOpen = pauseMenu != null
+                && ((panelManager != null && panelManager.IsPanelOnStack(pauseMenu)) || pauseMenu.IsShowing());
+            if (!isOpen)
+                _pauseMenuExplicitlyOpened = false;
         }
 
         private static bool TryEnterAuthoringPause(PauseManager pauseManager)
@@ -189,9 +263,12 @@ namespace ShelteredAPI.Scenarios
             return PauseManager.isPaused;
         }
 
-        private static void SuppressPauseMenu(PauseManager pauseManager, string context)
+        private void SuppressPauseMenu(PauseManager pauseManager, string context)
         {
             if (pauseManager == null)
+                return;
+
+            if (_pauseMenuExplicitlyOpened)
                 return;
 
             UIPanelManager panelManager = UIPanelManager.instance;

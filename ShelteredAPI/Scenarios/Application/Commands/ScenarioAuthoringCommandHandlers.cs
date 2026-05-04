@@ -697,6 +697,8 @@ namespace ShelteredAPI.Scenarios
                     return SaveDraft(state, out message);
                 case ScenarioAuthoringActionIds.ActionPlaytest:
                     return TogglePlaytest(state, out message);
+                case ScenarioAuthoringActionIds.ActionOpenPauseMenu:
+                    return OpenPauseMenu(out message);
                 case ScenarioAuthoringActionIds.ActionConvertToNormal:
                     _editorService.ConvertToNormalSave();
                     message = "Scenario binding converted to a normal save.";
@@ -709,6 +711,13 @@ namespace ShelteredAPI.Scenarios
                     handled = false;
                     return false;
             }
+        }
+
+        private static bool OpenPauseMenu(out string message)
+        {
+            bool opened = ScenarioAuthoringPauseService.Instance.OpenPauseMenu("Scenario authoring pause menu button.");
+            message = opened ? "Pause menu opened." : "Pause menu could not be opened.";
+            return true;
         }
 
         private bool CycleBaseMode(int direction, out string message)

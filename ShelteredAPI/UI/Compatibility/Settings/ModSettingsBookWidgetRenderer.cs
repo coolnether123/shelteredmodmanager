@@ -477,6 +477,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
             UIInput input = label.gameObject.AddComponent<UIInput>();
             input.label = label;
+            input.value = label.text ?? string.Empty;
             input.validation = def != null && !string.IsNullOrEmpty(def.UnitSuffix)
                 ? UIInput.Validation.None
                 : (snapToInt ? UIInput.Validation.Integer : UIInput.Validation.Float);
@@ -488,14 +489,20 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             collider.size = new Vector3(ValueWidth + 8, 28, 1);
             collider.center = Vector3.zero;
 
-            EventDelegate.Add(input.onSubmit, delegate
+            Action submit = delegate
             {
                 float parsed;
                 if (TryParseNumericInput(input.value, def, out parsed))
                     apply(Mathf.Clamp(parsed, min, max));
 
                 input.RemoveFocus();
-            });
+            };
+
+            EventDelegate.Add(input.onSubmit, delegate { submit(); });
+
+            NumericInputSubmitListener submitListener = label.gameObject.AddComponent<NumericInputSubmitListener>();
+            submitListener.Input = input;
+            submitListener.Submit = submit;
 
             AttachTooltip(label.gameObject, BuildValueInputTooltip(def, min, max, snapToInt));
         }
@@ -554,10 +561,35 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
         private static void ApplySliderPointer(GameObject hit, float min, float max, Action<float> apply)
         {
-            Vector3 world = UICamera.lastHit.point;
+            Vector3 world;
+            if (!TryGetCurrentPointerWorld(hit, out world))
+                world = UICamera.lastHit.point;
+
             Vector3 local = hit.transform.InverseTransformPoint(world);
             float normalized = Mathf.Clamp01((local.x + TrackWidth * 0.5f) / TrackWidth);
             apply(Mathf.Lerp(min, max, normalized));
+        }
+
+        private static bool TryGetCurrentPointerWorld(GameObject hit, out Vector3 world)
+        {
+            world = Vector3.zero;
+            if (hit == null)
+                return false;
+
+            Camera camera = UICamera.currentCamera;
+            if (camera == null)
+                camera = Camera.main;
+            if (camera == null)
+                return false;
+
+            Ray ray = camera.ScreenPointToRay(UnityEngine.Input.mousePosition);
+            Plane plane = new Plane(hit.transform.forward, hit.transform.position);
+            float distance;
+            if (!plane.Raycast(ray, out distance))
+                return false;
+
+            world = ray.GetPoint(distance);
+            return true;
         }
 
         private static bool ShouldSnapSliderToStep(SettingDefinition def)
@@ -693,6 +725,25 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             {
                 if (labels[i] != null && labels[i].enabled)
                     labels[i].text = text ?? string.Empty;
+            }
+        }
+
+        private sealed class NumericInputSubmitListener : MonoBehaviour
+        {
+            public UIInput Input;
+            public Action Submit;
+
+            private void Update()
+            {
+                if (Input == null || Submit == null || !Input.isSelected)
+                    return;
+
+                if (!UnityEngine.Input.GetKeyDown(KeyCode.Return) && !UnityEngine.Input.GetKeyDown(KeyCode.KeypadEnter))
+                    return;
+
+                Submit();
+                if (UICamera.selectedObject == gameObject)
+                    UICamera.selectedObject = null;
             }
         }
     }
