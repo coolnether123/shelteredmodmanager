@@ -49,17 +49,14 @@ namespace ShelteredAPI.UI.Compatibility
         private const int ScrollButtonWidth = 112;
         private const int ScrollButtonHeight = 42;
         private const int ScrollButtonFontSize = 18;
-        private const string ScrollPreviousLabel = "<";
-        private const string ScrollNextLabel = ">";
         private static readonly Color BookButtonColor = new Color(0.88f, 0.76f, 0.63f, 1f);
         private static readonly Color BookButtonHoverColor = new Color(0.97f, 0.85f, 0.70f, 1f);
         private static readonly Color BookButtonPressedColor = new Color(0.74f, 0.61f, 0.49f, 1f);
         private static readonly Color BookButtonDisabledColor = new Color(0.52f, 0.45f, 0.39f, 0.95f);
         private static readonly Color BookTextColor = new Color(0.17f, 0.16f, 0.16f, 1f);
         private static readonly Color BookSubtextColor = new Color(0.39f, 0.34f, 0.28f, 1f);
-        private static readonly Color BookKeycapLabelColor = new Color(0.93f, 0.88f, 0.80f, 1f);
         private static readonly Color BookLabelColor = BookTextColor;
-        private static readonly Color BookDisabledLabelColor = new Color(0.64f, 0.58f, 0.50f, 0.9f);
+        private static readonly Color BookDisabledLabelColor = new Color(0.39f, 0.34f, 0.28f, 0.9f);
         private static readonly Color PageIndicatorColor = BookSubtextColor;
 
         private enum PanelButtonVisualStyle
@@ -227,7 +224,7 @@ namespace ShelteredAPI.UI.Compatibility
             _scrollUpButton = CreatePanelButton(
                 template,
                 "ModScrollUpButton",
-                ScrollPreviousLabel,
+                "UP",
                 new Vector3(ModListX - 115f, ModScrollControlsY, 0f),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
@@ -239,7 +236,7 @@ namespace ShelteredAPI.UI.Compatibility
             _scrollDownButton = CreatePanelButton(
                 template,
                 "ModScrollDownButton",
-                ScrollNextLabel,
+                "DOWN",
                 new Vector3(ModListX + 115f, ModScrollControlsY, 0f),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
@@ -300,7 +297,6 @@ namespace ShelteredAPI.UI.Compatibility
             button.isEnabled = enabled;
             ApplyPanelButtonLayout(
                 button.gameObject,
-                GetScrollButtonLabel(button.gameObject),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
                 ScrollButtonFontSize,
@@ -454,12 +450,12 @@ namespace ShelteredAPI.UI.Compatibility
             buttonObject.transform.localRotation = Quaternion.identity;
             buttonObject.transform.localScale = Vector3.one;
 
-            ApplyPanelButtonLayout(buttonObject, text, width, height, fontSize, labelColor, visualStyle);
+            ApplyPanelButtonLayout(buttonObject, width, height, fontSize, labelColor, visualStyle);
             ConfigurePanelButtonClick(button, onClick);
             return button;
         }
 
-        private static void ApplyPanelButtonLayout(GameObject buttonObject, string text, int width, int height, int fontSize, Color labelColor, PanelButtonVisualStyle visualStyle)
+        private static void ApplyPanelButtonLayout(GameObject buttonObject, int width, int height, int fontSize, Color labelColor, PanelButtonVisualStyle visualStyle)
         {
             UIWidget rootWidget = buttonObject.GetComponent<UIWidget>();
             if (rootWidget != null)
@@ -519,7 +515,7 @@ namespace ShelteredAPI.UI.Compatibility
                 label.transform.localPosition = Vector3.zero;
                 label.transform.localRotation = Quaternion.identity;
                 label.transform.localScale = Vector3.one;
-                label.text = isPrimary ? text ?? string.Empty : string.Empty;
+                label.text = isPrimary ? label.text ?? string.Empty : string.Empty;
                 label.fontSize = fontSize;
                 label.color = resolvedLabelColor;
                 label.effectStyle = UILabel.Effect.None;
@@ -598,14 +594,6 @@ namespace ShelteredAPI.UI.Compatibility
             return best;
         }
 
-        private static string GetScrollButtonLabel(GameObject buttonObject)
-        {
-            if (buttonObject != null && buttonObject.name == "ModScrollUpButton")
-                return ScrollPreviousLabel;
-
-            return ScrollNextLabel;
-        }
-
         private static void ResolvePanelButtonVisualStyle(
             PanelButtonVisualStyle style,
             Color fallbackLabelColor,
@@ -624,14 +612,8 @@ namespace ShelteredAPI.UI.Compatibility
                     disabledColor = defaultColor;
                     labelColor = BookDisabledLabelColor;
                     break;
-                case PanelButtonVisualStyle.ScrollEnabled:
-                    defaultColor = BookButtonPressedColor;
-                    hoverColor = BookButtonHoverColor;
-                    pressedColor = BookButtonPressedColor;
-                    disabledColor = BookButtonDisabledColor;
-                    labelColor = BookKeycapLabelColor;
-                    break;
                 case PanelButtonVisualStyle.Action:
+                case PanelButtonVisualStyle.ScrollEnabled:
                 case PanelButtonVisualStyle.Book:
                 default:
                     defaultColor = BookButtonColor;

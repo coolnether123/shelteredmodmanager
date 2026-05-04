@@ -70,11 +70,7 @@ namespace ShelteredAPI.UI.Compatibility
         private static readonly Color COLOR_SUBTEXT = new Color(0.36f, 0.30f, 0.23f, 1f);
         private static readonly Color COLOR_BTN_ACTIVE = new Color(0.88f, 0.76f, 0.63f, 1f);
         private static readonly Color COLOR_BTN_INACTIVE = new Color(0.70f, 0.60f, 0.50f, 1f);
-        private static readonly Color COLOR_BTN_INACTIVE_TEXT = new Color(0.93f, 0.88f, 0.80f, 1f);
         private const int ROW_HEIGHT = 70;
-        private const int BookSettingsItemsPerPage = 10;
-        private const int BookSettingsRowHeight = 45;
-        private const float BookSettingsStartY = 174f;
         private const float WideKeybindRowX = -420f;
         private const float BookSettingsRowX = -500f;
         private const float SettingPageLeftX = -530f;
@@ -495,7 +491,7 @@ namespace ShelteredAPI.UI.Compatibility
                 }
                 else
                 {
-                    CreatePaginatedGrid(visible, allDefs, settings, BookSettingsItemsPerPage, 1, BookSettingsRowHeight, BookSettingsStartY, false);
+                    CreatePaginatedGrid(visible, allDefs, settings, 8, 1, 50, 140f, false);
                 }
             }
 
@@ -1032,26 +1028,8 @@ namespace ShelteredAPI.UI.Compatibility
                     }
                 }
             }
-            if (backgroundWidget)
-                backgroundWidget.color = ResolveModeButtonBackgroundColor(allowed, active);
-            if (lbl)
-                lbl.color = ResolveModeButtonTextColor(allowed, active);
-        }
-
-        private static Color ResolveModeButtonBackgroundColor(bool allowed, bool active)
-        {
-            if (!allowed)
-                return Color.Lerp(COLOR_BTN_INACTIVE, Color.black, 0.25f);
-
-            return active ? COLOR_BTN_ACTIVE : COLOR_BTN_INACTIVE;
-        }
-
-        private static Color ResolveModeButtonTextColor(bool allowed, bool active)
-        {
-            if (!allowed)
-                return Color.gray;
-
-            return active ? COLOR_TEXT : COLOR_BTN_INACTIVE_TEXT;
+            if (!allowed) { if (backgroundWidget) backgroundWidget.color = Color.Lerp(COLOR_BTN_INACTIVE, Color.black, 0.25f); if (lbl) lbl.color = Color.gray; }
+            else { if (backgroundWidget) backgroundWidget.color = active ? COLOR_BTN_ACTIVE : COLOR_BTN_INACTIVE; if (lbl) lbl.color = active ? COLOR_TEXT : COLOR_SUBTEXT; }
         }
 
         private UILabel CreateLabel(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int depth)

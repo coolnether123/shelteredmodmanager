@@ -14,9 +14,6 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
     {
         private const int DefaultInputWidth = 320;
         private const int DefaultInputHeight = 35;
-        private static readonly Color InputBackgroundColor = new Color(0.83f, 0.76f, 0.58f, 0.88f);
-        private static readonly Color InputTextColor = new Color(0.16f, 0.12f, 0.08f, 1f);
-        private static readonly Color PlaceholderColor = new Color(0.44f, 0.37f, 0.27f, 1f);
 
         private readonly IThemePalette _palette;
         private readonly ITextureLibrary _textures;
@@ -55,7 +52,7 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
             _inputRoot = _ui.CreateChild(root, "SearchInput", new Vector3(60f, 0f, 0f));
             _ui.CreateQuad(_inputRoot, "SearchInputPaper", _textures.White, Vector3.zero,
-                DefaultInputWidth, DefaultInputHeight, InputBackgroundColor, _ui.NextDepth());
+                DefaultInputWidth, DefaultInputHeight, new Color(0.12f, 0.10f, 0.08f, 0.78f), _ui.NextDepth());
             _ui.AddClickCollider(_inputRoot, DefaultInputWidth, DefaultInputHeight, null);
 
             _displayLabel = _ui.CreateLabel(_inputRoot, "SearchText", string.Empty,
@@ -154,12 +151,12 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             if (string.IsNullOrEmpty(Filter))
             {
                 _displayLabel.text = _hasFocus ? "|" : emptyText;
-                _displayLabel.color = _hasFocus ? InputTextColor : PlaceholderColor;
+                _displayLabel.color = _hasFocus ? Color.white : _palette.InkFaded;
                 return;
             }
 
             _displayLabel.text = _hasFocus ? (Filter + "|") : Filter;
-            _displayLabel.color = InputTextColor;
+            _displayLabel.color = Color.white;
         }
 
         private static bool IsHoveredWithin(GameObject root)
