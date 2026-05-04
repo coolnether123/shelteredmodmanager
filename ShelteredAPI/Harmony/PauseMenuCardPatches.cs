@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
@@ -37,7 +38,9 @@ namespace ShelteredAPI.Harmony
         private const float FallbackCardSpacing = -90f;
         private const int VanillaWalletDepthOffset = 30;
         private const int InjectedWalletDepthOffset = 90;
-        private static readonly Vector3 VanillaWalletBaseOffset = new Vector3(-60f, 0f, 0f);
+        private static readonly Vector3 VanillaWalletBaseOffset = new Vector3(-120f, 0f, 0f);
+        private static readonly Vector3 InjectedWalletBaseOffset = new Vector3(-120f, 0f, -20f);
+        internal static readonly Vector3 CardLocalPositionCompensation = new Vector3(60f, 0f, 0f);
 
         private static readonly PauseMenuInjectedCardDefinition KeybindsCard = new PauseMenuInjectedCardDefinition(
             KeybindsCardName,
@@ -66,65 +69,65 @@ namespace ShelteredAPI.Harmony
 
             float step = ResolveCardStep(hierarchy.SettingsTab, hierarchy.SaveExitTab);
             RestoreVanillaTabLocalPositions(hierarchy);
-            ClearLegacyInjectedWallet(hierarchy.Menu);
+            ClearLegacyInjectedCards(hierarchy.Background);
 
             Vector3 originalWalletPosition = PauseMenuOriginalPosition.Capture(hierarchy.Background.gameObject).OriginalLocalPosition;
-            Vector3 walletPosition = originalWalletPosition + VanillaWalletBaseOffset;
-            float cardGap = Mathf.Abs(step);
-
-            GameObject keybindCard = PauseMenuWalletBuilder.EnsureInjectedCard(
-                hierarchy.Background,
-                hierarchy.SettingsTab.gameObject,
-                KeybindsCardName);
-            GameObject modsCard = PauseMenuWalletBuilder.EnsureInjectedCard(
-                hierarchy.Background,
-                hierarchy.SaveExitTab.gameObject,
-                ModsCardName);
-
-            Vector3 settingsPosition = OffsetY(PauseMenuOriginalPosition.Capture(hierarchy.SettingsTab.gameObject).OriginalLocalPosition, -cardGap);
-            Vector3 saveExitPosition = OffsetY(PauseMenuOriginalPosition.Capture(hierarchy.SaveExitTab.gameObject).OriginalLocalPosition, -cardGap);
-            Vector3 keybindsPosition = OffsetY(PauseMenuOriginalPosition.Capture(hierarchy.SettingsTab.gameObject).OriginalLocalPosition, cardGap);
-            Vector3 modsPosition = OffsetY(PauseMenuOriginalPosition.Capture(hierarchy.SaveExitTab.gameObject).OriginalLocalPosition, cardGap);
-
-            PauseMenuWalletPositioner.ApplyCoreLocalPosition(hierarchy.Background.gameObject, walletPosition);
-            PauseMenuWalletPositioner.ApplyCoreLocalPosition(hierarchy.SettingsTab.gameObject, settingsPosition);
-            PauseMenuWalletPositioner.ApplyCoreLocalPosition(hierarchy.SaveExitTab.gameObject, saveExitPosition);
-
-            if (keybindCard != null)
-            {
-                PauseMenuWalletPositioner.ApplyCoreLocalPosition(keybindCard, keybindsPosition);
-                PauseMenuWalletBuilder.ConfigureInjectedCard(keybindCard, KeybindsCard);
-                PauseMenuWalletDepthService.ApplyDepthOffset(keybindCard, InjectedWalletDepthOffset);
-            }
-
-            if (modsCard != null)
-            {
-                PauseMenuWalletPositioner.ApplyCoreLocalPosition(modsCard, modsPosition);
-                PauseMenuWalletBuilder.ConfigureInjectedCard(modsCard, ModsCard);
-                PauseMenuWalletDepthService.ApplyDepthOffset(modsCard, InjectedWalletDepthOffset);
-            }
-
-            PauseMenuWalletDepthService.ApplyDepthOffset(hierarchy.SettingsTab.gameObject, VanillaWalletDepthOffset);
-            PauseMenuWalletDepthService.ApplyDepthOffset(hierarchy.SaveExitTab.gameObject, VanillaWalletDepthOffset);
-
-            PauseMenuWalletDebugService.LogUnifiedStackPlan(
+            PauseMenuWalletLayout layout = PauseMenuWalletLayoutService.Resolve(
                 hierarchy.Background.gameObject,
                 originalWalletPosition,
-                walletPosition,
-                keybindsPosition,
-                modsPosition,
-                settingsPosition,
-                saveExitPosition,
                 step,
-                cardGap);
-            PauseMenuWalletDebugService.LogUnifiedLayout(
+                InjectedWalletBaseOffset,
+                VanillaWalletBaseOffset);
+
+            GameObject injectedWallet = PauseMenuWalletBuilder.EnsureInjectedWallet(
                 hierarchy.Menu,
+                hierarchy.Background.gameObject,
+                InjectedWalletName);
+
+            if (injectedWallet != null)
+            {
+                PauseMenuWalletDepthService.ApplyDepthOffset(injectedWallet, InjectedWalletDepthOffset);
+                PauseMenuWalletPositioner.ApplyCoreLocalPosition(injectedWallet, layout.InjectedWalletPosition);
+                PauseMenuWalletBuilder.ConfigureInjectedWallet(
+                    injectedWallet,
+                    hierarchy.SettingsTab,
+                    hierarchy.SaveExitTab,
+                    KeybindsCard,
+                    ModsCard);
+                PauseMenuWalletFaceDepthService.BringWalletFacesForward(
+                    injectedWallet,
+                    KeybindsCardName,
+                    ModsCardName);
+            }
+
+            PauseMenuWalletDepthService.ApplyDepthOffset(hierarchy.Background.gameObject, VanillaWalletDepthOffset);
+            PauseMenuWalletFaceDepthService.BringWalletFacesForward(
+                hierarchy.Background.gameObject,
+                "tab1",
+                "tab2");
+            PauseMenuWalletPositioner.ApplyCoreLocalPosition(
+                hierarchy.Background.gameObject,
+                layout.VanillaWalletPosition);
+
+            PauseMenuWalletDebugService.LogStackPlan(
+                hierarchy.Background.gameObject,
+                originalWalletPosition,
+                layout.InjectedWalletPosition,
+                layout.VanillaWalletPosition,
+                step,
+                layout.WalletGap,
+                layout.WalletVisibleHeight);
+            PauseMenuWalletDebugService.LogLayout(
+                hierarchy.Menu,
+                injectedWallet,
                 hierarchy.Background.gameObject,
                 KeybindsCardName,
                 ModsCardName);
 
-            MMLog.WriteInfo("[PauseMenuCardPatches] Pause menu wallet injected or refreshed. model=single-wallet/4-cards cardGap=" + cardGap
-                + " wallet=" + FormatVector(walletPosition) + ".");
+            MMLog.WriteInfo("[PauseMenuCardPatches] Pause menu wallets injected or refreshed. model=2-wallets/2-cards-each gap=" + layout.WalletGap
+                + " visibleHeight=" + layout.WalletVisibleHeight
+                + " injected=" + FormatVector(layout.InjectedWalletPosition)
+                + " vanilla=" + FormatVector(layout.VanillaWalletPosition) + ".");
         }
 
         private static float ResolveCardStep(Transform settingsTab, Transform saveExitTab)
@@ -142,11 +145,6 @@ namespace ShelteredAPI.Harmony
                 return step;
 
             return FallbackCardSpacing;
-        }
-
-        private static Vector3 OffsetY(Vector3 value, float offset)
-        {
-            return new Vector3(value.x, value.y + offset, value.z);
         }
 
         private static bool TryResolveChildCardStep(Transform settingsTab, Transform saveExitTab, out float step)
@@ -212,9 +210,9 @@ namespace ShelteredAPI.Harmony
                 return;
 
             if (hierarchy.SettingsTab != null)
-                hierarchy.SettingsTab.localPosition = PauseMenuOriginalPosition.Capture(hierarchy.SettingsTab.gameObject).OriginalLocalPosition;
+                hierarchy.SettingsTab.localPosition = PauseMenuOriginalPosition.Capture(hierarchy.SettingsTab.gameObject).OriginalLocalPosition + CardLocalPositionCompensation;
             if (hierarchy.SaveExitTab != null)
-                hierarchy.SaveExitTab.localPosition = PauseMenuOriginalPosition.Capture(hierarchy.SaveExitTab.gameObject).OriginalLocalPosition;
+                hierarchy.SaveExitTab.localPosition = PauseMenuOriginalPosition.Capture(hierarchy.SaveExitTab.gameObject).OriginalLocalPosition + CardLocalPositionCompensation;
         }
 
         private static void ClearLegacyInjectedCards(Transform vanillaWallet)
@@ -224,14 +222,6 @@ namespace ShelteredAPI.Harmony
 
             DestroyChildIfPresent(vanillaWallet, KeybindsCardName);
             DestroyChildIfPresent(vanillaWallet, ModsCardName);
-        }
-
-        private static void ClearLegacyInjectedWallet(Transform menu)
-        {
-            if (menu == null)
-                return;
-
-            DestroyChildIfPresent(menu, InjectedWalletName);
         }
 
         private static void DestroyChildIfPresent(Transform parent, string name)
@@ -314,6 +304,208 @@ namespace ShelteredAPI.Harmony
         }
     }
 
+    internal sealed class PauseMenuWalletLayout
+    {
+        public readonly Vector3 InjectedWalletPosition;
+        public readonly Vector3 VanillaWalletPosition;
+        public readonly float WalletGap;
+        public readonly float WalletVisibleHeight;
+
+        public PauseMenuWalletLayout(
+            Vector3 injectedWalletPosition,
+            Vector3 vanillaWalletPosition,
+            float walletGap,
+            float walletVisibleHeight)
+        {
+            InjectedWalletPosition = injectedWalletPosition;
+            VanillaWalletPosition = vanillaWalletPosition;
+            WalletGap = walletGap;
+            WalletVisibleHeight = walletVisibleHeight;
+        }
+    }
+
+    internal static class PauseMenuWalletLayoutService
+    {
+        private const float FallbackWalletVisibleHeight = 552f;
+        private const float MinimumWalletGapPadding = 12f;
+        private const float MinimumWalletSeparation = 18f;
+
+        public static PauseMenuWalletLayout Resolve(
+            GameObject templateWallet,
+            Vector3 originalWalletPosition,
+            float cardStep,
+            Vector3 injectedBaseOffset,
+            Vector3 vanillaBaseOffset)
+        {
+            float visibleHeight = ResolveVisibleHeight(templateWallet);
+            float walletGap = ResolveWalletGap(visibleHeight, cardStep);
+            Vector3 halfGap = new Vector3(0f, walletGap * 0.5f, 0f);
+
+            return new PauseMenuWalletLayout(
+                originalWalletPosition + injectedBaseOffset + halfGap,
+                originalWalletPosition + vanillaBaseOffset - halfGap,
+                walletGap,
+                visibleHeight);
+        }
+
+        private static float ResolveWalletGap(float visibleHeight, float cardStep)
+        {
+            float cardBasedGap = Mathf.Abs(cardStep) * 2f + MinimumWalletGapPadding;
+            float walletBoundsGap = Mathf.Max(1f, visibleHeight + MinimumWalletSeparation);
+            return Mathf.Max(cardBasedGap, walletBoundsGap);
+        }
+
+        private static float ResolveVisibleHeight(GameObject wallet)
+        {
+            if (wallet == null || wallet.transform == null)
+                return FallbackWalletVisibleHeight;
+
+            Bounds bounds = NGUIMath.CalculateRelativeWidgetBounds(wallet.transform, true);
+            if (bounds.size.y >= 1f)
+                return bounds.size.y;
+
+            UIWidget widget = wallet.GetComponentInChildren<UIWidget>(true);
+            return widget != null && widget.height > 0 ? widget.height : FallbackWalletVisibleHeight;
+        }
+    }
+
+    internal static class PauseMenuComponentCleanup
+    {
+        public static int DestroyComponentsOnSelf<TComponent>(GameObject root) where TComponent : Component
+        {
+            if (root == null)
+                return 0;
+
+            int destroyed = 0;
+            TComponent[] components = root.GetComponents<TComponent>();
+            for (int i = 0; i < components.Length; i++)
+            {
+                TComponent component = components[i];
+                if (component == null)
+                    continue;
+
+                Disable(component);
+                UnityEngine.Object.Destroy(component);
+                destroyed++;
+            }
+
+            return destroyed;
+        }
+
+        public static int DestroyComponents<TComponent>(GameObject root) where TComponent : Component
+        {
+            if (root == null)
+                return 0;
+
+            int destroyed = 0;
+            TComponent[] components = root.GetComponentsInChildren<TComponent>(true);
+            for (int i = 0; i < components.Length; i++)
+            {
+                TComponent component = components[i];
+                if (component == null)
+                    continue;
+
+                Disable(component);
+                UnityEngine.Object.Destroy(component);
+                destroyed++;
+            }
+
+            return destroyed;
+        }
+
+        public static int CountChildComponentsExcludingRoot<TComponent>(GameObject root) where TComponent : Component
+        {
+            if (root == null)
+                return 0;
+
+            int count = 0;
+            TComponent[] components = root.GetComponentsInChildren<TComponent>(true);
+            for (int i = 0; i < components.Length; i++)
+            {
+                TComponent component = components[i];
+                if (component == null || component.gameObject == root)
+                    continue;
+
+                count++;
+            }
+
+            return count;
+        }
+
+        public static int ResetAndDestroyEventListeners(GameObject root)
+        {
+            if (root == null)
+                return 0;
+
+            int destroyed = 0;
+            UIEventListener[] listeners = root.GetComponentsInChildren<UIEventListener>(true);
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                UIEventListener listener = listeners[i];
+                if (listener == null)
+                    continue;
+
+                listener.onSubmit = null;
+                listener.onClick = null;
+                listener.onDoubleClick = null;
+                listener.onHover = null;
+                listener.onPress = null;
+                listener.onSelect = null;
+                listener.onScroll = null;
+                listener.onDrag = null;
+                listener.onDrop = null;
+                listener.onKey = null;
+                listener.enabled = false;
+                UnityEngine.Object.Destroy(listener);
+                destroyed++;
+            }
+
+            return destroyed;
+        }
+
+        public static int ClearEventListenerActions(GameObject root)
+        {
+            if (root == null)
+                return 0;
+
+            int cleared = 0;
+            UIEventListener[] listeners = root.GetComponentsInChildren<UIEventListener>(true);
+            for (int i = 0; i < listeners.Length; i++)
+            {
+                UIEventListener listener = listeners[i];
+                if (listener == null)
+                    continue;
+
+                listener.onSubmit = null;
+                listener.onClick = null;
+                listener.onDoubleClick = null;
+                listener.onPress = null;
+                listener.onScroll = null;
+                listener.onDrag = null;
+                listener.onDrop = null;
+                listener.onKey = null;
+                cleared++;
+            }
+
+            return cleared;
+        }
+
+        private static void Disable(Component component)
+        {
+            Behaviour behaviour = component as Behaviour;
+            if (behaviour != null)
+                behaviour.enabled = false;
+
+            Collider collider = component as Collider;
+            if (collider != null)
+                collider.enabled = false;
+
+            Collider2D collider2D = component as Collider2D;
+            if (collider2D != null)
+                collider2D.enabled = false;
+        }
+    }
+
     internal static class PauseMenuWalletBuilder
     {
         public static GameObject EnsureInjectedWallet(Transform parent, GameObject templateWallet, string objectName)
@@ -323,10 +515,7 @@ namespace ShelteredAPI.Harmony
 
             Transform existing = parent.Find(objectName);
             if (existing != null)
-            {
-                existing.gameObject.SetActive(templateWallet.activeSelf);
-                return existing.gameObject;
-            }
+                RetireExistingInjectedWallet(existing);
 
             GameObject clone = UnityEngine.Object.Instantiate(templateWallet) as GameObject;
             if (clone == null)
@@ -340,51 +529,27 @@ namespace ShelteredAPI.Harmony
             clone.layer = ResolveUiLayer(templateWallet);
             NGUITools.SetLayer(clone, clone.layer);
             StripTemplateState(clone);
-            DisableLocalPositionTweens(clone);
+            SuppressInjectedWalletMotion(clone);
             clone.SetActive(templateWallet.activeSelf);
             return clone;
         }
 
-        public static GameObject EnsureInjectedCard(Transform parent, GameObject templateCard, string objectName)
+        private static void RetireExistingInjectedWallet(Transform existing)
         {
-            if (parent == null || templateCard == null || string.IsNullOrEmpty(objectName))
-                return null;
-
-            Transform existing = parent.Find(objectName);
-            if (existing != null)
-            {
-                existing.gameObject.SetActive(templateCard.activeSelf);
-                return existing.gameObject;
-            }
-
-            GameObject clone = UnityEngine.Object.Instantiate(templateCard) as GameObject;
-            if (clone == null)
-                return null;
-
-            clone.name = objectName;
-            clone.transform.SetParent(parent, false);
-            clone.transform.localPosition = templateCard.transform.localPosition;
-            clone.transform.localRotation = templateCard.transform.localRotation;
-            clone.transform.localScale = templateCard.transform.localScale;
-            clone.layer = templateCard.layer;
-            NGUITools.SetLayer(clone, clone.layer);
-            StripTemplateState(clone);
-            DisableLocalPositionTweens(clone);
-            clone.SetActive(templateCard.activeSelf);
-            return clone;
-        }
-
-        public static void ConfigureInjectedCard(GameObject card, PauseMenuInjectedCardDefinition definition)
-        {
-            if (card == null || definition == null)
+            if (existing == null)
                 return;
 
-            card.name = definition.ObjectName;
-            PauseMenuCardBuilder.ConfigureExistingCard(card, definition);
+            GameObject oldWallet = existing.gameObject;
+            oldWallet.SetActive(false);
+            oldWallet.name = oldWallet.name + "_Retired_" + Time.frameCount;
+            UnityEngine.Object.Destroy(oldWallet);
+            MMLog.WriteInfo("[PauseMenuCardPatches] Retired stale injected wallet before rebuilding from the current vanilla template.");
         }
 
         public static void ConfigureInjectedWallet(
             GameObject wallet,
+            Transform keybindTemplate,
+            Transform modsTemplate,
             PauseMenuInjectedCardDefinition keybindsCard,
             PauseMenuInjectedCardDefinition modsCard)
         {
@@ -402,8 +567,20 @@ namespace ShelteredAPI.Harmony
 
             keybindTab.name = keybindsCard.ObjectName;
             modsTab.name = modsCard.ObjectName;
+            RestoreTabTransform(keybindTab.transform, keybindTemplate, PauseMenuCardAugmentationService.CardLocalPositionCompensation);
+            RestoreTabTransform(modsTab.transform, modsTemplate, PauseMenuCardAugmentationService.CardLocalPositionCompensation);
             PauseMenuCardBuilder.ConfigureExistingCard(keybindTab, keybindsCard);
             PauseMenuCardBuilder.ConfigureExistingCard(modsTab, modsCard);
+        }
+
+        private static void RestoreTabTransform(Transform tab, Transform template, Vector3 localPositionCompensation)
+        {
+            if (tab == null || template == null)
+                return;
+
+            tab.localPosition = template.localPosition + localPositionCompensation;
+            tab.localRotation = template.localRotation;
+            tab.localScale = template.localScale;
         }
 
         private static GameObject ResolveTab(Transform wallet, string stableName, string vanillaName)
@@ -430,53 +607,30 @@ namespace ShelteredAPI.Harmony
 
         private static void StripTemplateState(GameObject clone)
         {
-            PauseMenuOriginalPosition[] positions = clone.GetComponentsInChildren<PauseMenuOriginalPosition>(true);
-            for (int i = 0; i < positions.Length; i++)
-            {
-                if (positions[i] != null)
-                    UnityEngine.Object.Destroy(positions[i]);
-            }
-
-            PauseMenuOriginalTweenPosition[] tweens = clone.GetComponentsInChildren<PauseMenuOriginalTweenPosition>(true);
-            for (int i = 0; i < tweens.Length; i++)
-            {
-                if (tweens[i] != null)
-                    UnityEngine.Object.Destroy(tweens[i]);
-            }
-
-            PauseMenuOriginalWidgetDepth[] widgetDepths = clone.GetComponentsInChildren<PauseMenuOriginalWidgetDepth>(true);
-            for (int i = 0; i < widgetDepths.Length; i++)
-            {
-                if (widgetDepths[i] != null)
-                    UnityEngine.Object.Destroy(widgetDepths[i]);
-            }
-
-            PauseMenuOriginalPanelDepth[] panelDepths = clone.GetComponentsInChildren<PauseMenuOriginalPanelDepth>(true);
-            for (int i = 0; i < panelDepths.Length; i++)
-            {
-                if (panelDepths[i] != null)
-                    UnityEngine.Object.Destroy(panelDepths[i]);
-            }
-
-            PauseMenuOriginalWidgetColor[] widgetColors = clone.GetComponentsInChildren<PauseMenuOriginalWidgetColor>(true);
-            for (int i = 0; i < widgetColors.Length; i++)
-            {
-                if (widgetColors[i] != null)
-                    UnityEngine.Object.Destroy(widgetColors[i]);
-            }
+            PauseMenuComponentCleanup.DestroyComponents<PauseMenuWalletPositionLock>(clone);
+            PauseMenuComponentCleanup.DestroyComponents<PauseMenuOriginalPosition>(clone);
+            PauseMenuComponentCleanup.DestroyComponents<PauseMenuOriginalTweenPosition>(clone);
+            PauseMenuComponentCleanup.DestroyComponents<PauseMenuOriginalWidgetDepth>(clone);
+            PauseMenuComponentCleanup.DestroyComponents<PauseMenuOriginalPanelDepth>(clone);
+            PauseMenuComponentCleanup.DestroyComponents<PauseMenuOriginalWidgetColor>(clone);
         }
 
-        private static void DisableLocalPositionTweens(GameObject clone)
+        public static void SuppressInjectedWalletMotion(GameObject wallet)
         {
-            TweenPosition[] tweens = clone.GetComponentsInChildren<TweenPosition>(true);
-            for (int i = 0; i < tweens.Length; i++)
-            {
-                TweenPosition tween = tweens[i];
-                if (tween == null)
-                    continue;
+            if (wallet == null)
+                return;
 
-                tween.enabled = false;
-            }
+            int rootPauseButtons = PauseMenuComponentCleanup.DestroyComponentsOnSelf<PauseMenuButton>(wallet);
+            int rootPlayTweens = PauseMenuComponentCleanup.DestroyComponentsOnSelf<UIPlayTween>(wallet);
+            int rootPositionTweens = PauseMenuComponentCleanup.DestroyComponentsOnSelf<TweenPosition>(wallet);
+            int preservedPauseButtons = PauseMenuComponentCleanup.CountChildComponentsExcludingRoot<PauseMenuButton>(wallet);
+            int preservedPositionTweens = PauseMenuComponentCleanup.CountChildComponentsExcludingRoot<TweenPosition>(wallet);
+            MMLog.WriteInfo("[PauseMenuCardPatches] Suppressed injected wallet root motion on " + wallet.name
+                + " rootPauseButtons=" + rootPauseButtons
+                + " rootPlayTweens=" + rootPlayTweens
+                + " rootPositionTweens=" + rootPositionTweens
+                + " preservedCardPauseButtons=" + preservedPauseButtons
+                + " preservedChildPositionTweens=" + preservedPositionTweens + ".");
         }
     }
 
@@ -497,13 +651,7 @@ namespace ShelteredAPI.Harmony
             UILabel primaryLabel = FindPrimaryLabel(card);
             ConfigureLabels(card, primaryLabel, definition.LabelText);
             ConfigureSprites(card, definition, primaryLabel);
-            ConfigureButtons(card, definition);
-
-            PauseMenuButton pauseButton = card.GetComponent<PauseMenuButton>();
-            if (pauseButton != null)
-                pauseButton.CancelHighlight();
-
-            NGUITools.UpdateWidgetCollider(card, true);
+            ConfigureButtons(card, definition, primaryLabel);
         }
 
         private static UILabel FindPrimaryLabel(GameObject card)
@@ -548,7 +696,7 @@ namespace ShelteredAPI.Harmony
                 bool isPrimary = label == primaryLabel;
                 label.enabled = isPrimary;
                 label.text = isPrimary ? text : string.Empty;
-                label.color = LabelColor;
+                label.color = WithAlpha(LabelColor, isPrimary ? 0f : LabelColor.a);
                 label.effectStyle = UILabel.Effect.Outline;
                 label.effectColor = LabelOutlineColor;
                 label.overflowMethod = UILabel.Overflow.ShrinkContent;
@@ -557,6 +705,12 @@ namespace ShelteredAPI.Harmony
                 label.ProcessText();
                 label.MarkAsChanged();
             }
+        }
+
+        private static Color WithAlpha(Color color, float alpha)
+        {
+            color.a = alpha;
+            return color;
         }
 
         private static void ConfigureSprites(GameObject card, PauseMenuInjectedCardDefinition definition, UILabel primaryLabel)
@@ -597,7 +751,7 @@ namespace ShelteredAPI.Harmony
             }
         }
 
-        private static void ConfigureButtons(GameObject card, PauseMenuInjectedCardDefinition definition)
+        private static void ConfigureButtons(GameObject card, PauseMenuInjectedCardDefinition definition, UILabel primaryLabel)
         {
             UIButton targetButton = FindPrimaryButton(card);
             UIButton[] buttons = card.GetComponentsInChildren<UIButton>(true);
@@ -613,7 +767,11 @@ namespace ShelteredAPI.Harmony
             }
 
             if (targetButton != null)
+            {
+                PauseMenuCardActionBinder.ConfigureClickSurface(card, targetButton);
                 PauseMenuCardActionBinder.Bind(targetButton, definition.OnClick);
+                PauseMenuCardHoverBinder.Bind(card, targetButton, primaryLabel);
+            }
         }
 
         private static UIButton FindPrimaryButton(GameObject card)
@@ -701,68 +859,273 @@ namespace ShelteredAPI.Harmony
 
     }
 
+    internal static class PauseMenuCardHoverBinder
+    {
+        public static void Bind(GameObject card, UIButton targetButton, UILabel primaryLabel)
+        {
+            if (card == null || targetButton == null || targetButton.gameObject == null)
+                return;
+
+            PauseMenuButton pauseButton = ResolvePauseMenuButton(card, targetButton.gameObject);
+            UIWidget selectionWidget = targetButton.GetComponent<UIWidget>();
+            PauseMenuInjectedCardHoverController controller = targetButton.gameObject.GetComponent<PauseMenuInjectedCardHoverController>();
+            if (controller == null)
+                controller = targetButton.gameObject.AddComponent<PauseMenuInjectedCardHoverController>();
+
+            bool vanillaHighlightReady = TryCancelHighlight(pauseButton, card.name);
+            controller.Configure(card.name, pauseButton, primaryLabel, selectionWidget, vanillaHighlightReady);
+            MMLog.WriteInfo("[PauseMenuCardPatches] Hover controller bound for " + card.name
+                + " target=" + targetButton.gameObject.name
+                + " pauseButton=" + (pauseButton != null ? pauseButton.gameObject.name : "<none>")
+                + " label=" + (primaryLabel != null ? primaryLabel.gameObject.name : "<none>")
+                + " selectionWidget=" + (selectionWidget != null ? selectionWidget.gameObject.name : "<none>")
+                + " vanillaReady=" + vanillaHighlightReady + ".");
+        }
+
+        private static PauseMenuButton ResolvePauseMenuButton(GameObject card, GameObject buttonObject)
+        {
+            if (buttonObject != null)
+            {
+                PauseMenuButton onButton = buttonObject.GetComponent<PauseMenuButton>();
+                if (onButton != null)
+                    return onButton;
+            }
+
+            if (card == null)
+                return null;
+
+            PauseMenuButton onCard = card.GetComponent<PauseMenuButton>();
+            if (onCard != null)
+                return onCard;
+
+            return card.GetComponentInChildren<PauseMenuButton>(true);
+        }
+
+        private static bool TryCancelHighlight(PauseMenuButton pauseButton, string cardName)
+        {
+            if (pauseButton == null)
+                return false;
+
+            try
+            {
+                pauseButton.CancelHighlight();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[PauseMenuCardPatches] Failed to reset vanilla hover state for "
+                    + (cardName ?? "<unknown>") + ": " + ex.Message);
+                return false;
+            }
+        }
+    }
+
+    internal sealed class PauseMenuInjectedCardHoverController : MonoBehaviour
+    {
+        private const float FallbackFadeDuration = 0.14f;
+        private const float RestAlpha = 0f;
+        private const float HoverAlpha = 1f;
+
+        private string _cardName;
+        private PauseMenuButton _pauseButton;
+        private UILabel _label;
+        private UIWidget _selectionWidget;
+        private bool _vanillaHighlightReady;
+        private bool _configured;
+        private bool _animatingFallback;
+        private float _targetLabelAlpha;
+        private float _targetSelectionAlpha;
+        private bool _hasLoggedHoverState;
+        private bool _lastHoverState;
+        private bool _lastHoverWasSelect;
+
+        public void Configure(string cardName, PauseMenuButton pauseButton, UILabel label, UIWidget selectionWidget, bool vanillaHighlightReady)
+        {
+            _cardName = cardName ?? gameObject.name;
+            _pauseButton = pauseButton;
+            _label = label;
+            _selectionWidget = selectionWidget;
+            _vanillaHighlightReady = vanillaHighlightReady;
+            _configured = true;
+
+            if (!_vanillaHighlightReady)
+                SetFallbackHighlighted(false, true);
+        }
+
+        private void OnHover(bool selected)
+        {
+            if (PlatformInput.InputMethod != PlatformInput.InputType.KeyboardMouse && selected)
+                return;
+
+            ApplyHighlight(selected, false);
+        }
+
+        private void OnSelect(bool selected)
+        {
+            if (PlatformInput.InputMethod == PlatformInput.InputType.KeyboardMouse && selected)
+                return;
+
+            ApplyHighlight(selected, true);
+        }
+
+        private void ApplyHighlight(bool selected, bool selectionEvent)
+        {
+            if (!_configured)
+                return;
+
+            if (_vanillaHighlightReady)
+            {
+                if (_pauseButton == null)
+                {
+                    _vanillaHighlightReady = false;
+                }
+                else if (_pauseButton.gameObject != gameObject)
+                {
+                    try
+                    {
+                        if (selectionEvent)
+                            _pauseButton.OnSelect(selected);
+                        else
+                            _pauseButton.OnHover(selected);
+                        LogHighlight(selected, selectionEvent, "vanilla-forward");
+                        return;
+                    }
+                    catch (Exception ex)
+                    {
+                        _vanillaHighlightReady = false;
+                        MMLog.WriteWarning("[PauseMenuCardPatches] Vanilla hover forwarding failed for "
+                            + gameObject.name + ": " + ex.Message);
+                    }
+                }
+                else
+                {
+                    return;
+                }
+            }
+
+            SetFallbackHighlighted(selected, false);
+            LogHighlight(selected, selectionEvent, "fallback");
+        }
+
+        private void LogHighlight(bool selected, bool selectionEvent, string route)
+        {
+            if (_hasLoggedHoverState && _lastHoverState == selected && _lastHoverWasSelect == selectionEvent)
+                return;
+
+            _hasLoggedHoverState = true;
+            _lastHoverState = selected;
+            _lastHoverWasSelect = selectionEvent;
+            MMLog.WriteInfo("[PauseMenuCardPatches] Hover event card=" + (_cardName ?? gameObject.name)
+                + " target=" + gameObject.name
+                + " selected=" + selected
+                + " event=" + (selectionEvent ? "select" : "hover")
+                + " route=" + route
+                + " input=" + PlatformInput.InputMethod
+                + " hovered=" + (UICamera.hoveredObject != null ? UICamera.hoveredObject.name : "<none>")
+                + " selectedObject=" + (UICamera.selectedObject != null ? UICamera.selectedObject.name : "<none>")
+                + " labelAlpha=" + ReadAlpha(_label).ToString("0.00")
+                + " selectionAlpha=" + ReadAlpha(_selectionWidget).ToString("0.00") + ".");
+        }
+
+        private void SetFallbackHighlighted(bool highlighted, bool immediate)
+        {
+            _targetLabelAlpha = highlighted ? HoverAlpha : RestAlpha;
+            _targetSelectionAlpha = highlighted ? HoverAlpha : RestAlpha;
+
+            if (immediate)
+            {
+                ApplyFallbackAlpha(_targetLabelAlpha, _targetSelectionAlpha);
+                _animatingFallback = false;
+                return;
+            }
+
+            _animatingFallback = true;
+        }
+
+        private void Update()
+        {
+            if (!_configured || _vanillaHighlightReady || !_animatingFallback)
+                return;
+
+            float delta = FallbackFadeDuration > 0f ? Time.unscaledDeltaTime / FallbackFadeDuration : 1f;
+            float labelAlpha = Mathf.MoveTowards(ReadAlpha(_label), _targetLabelAlpha, delta);
+            float selectionAlpha = Mathf.MoveTowards(ReadAlpha(_selectionWidget), _targetSelectionAlpha, delta);
+            ApplyFallbackAlpha(labelAlpha, selectionAlpha);
+
+            if (Mathf.Abs(labelAlpha - _targetLabelAlpha) < 0.001f
+                && Mathf.Abs(selectionAlpha - _targetSelectionAlpha) < 0.001f)
+                _animatingFallback = false;
+        }
+
+        private void ApplyFallbackAlpha(float labelAlpha, float selectionAlpha)
+        {
+            SetAlpha(_label, labelAlpha);
+            SetAlpha(_selectionWidget, selectionAlpha);
+        }
+
+        private static float ReadAlpha(UIWidget widget)
+        {
+            return widget != null ? widget.alpha : 0f;
+        }
+
+        private static void SetAlpha(UIWidget widget, float alpha)
+        {
+            if (widget == null)
+                return;
+
+            widget.alpha = Mathf.Clamp01(alpha);
+            widget.MarkAsChanged();
+        }
+    }
+
     internal static class PauseMenuCardActionBinder
     {
+        public static void ConfigureClickSurface(GameObject card, UIButton targetButton)
+        {
+            if (card == null || targetButton == null || targetButton.gameObject == null)
+                return;
+
+            int disabledColliders = 0;
+            BoxCollider[] colliders = card.GetComponentsInChildren<BoxCollider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                BoxCollider collider = colliders[i];
+                if (collider == null || collider.gameObject == targetButton.gameObject)
+                    continue;
+
+                collider.enabled = false;
+                disabledColliders++;
+            }
+
+            BoxCollider targetCollider = targetButton.GetComponent<BoxCollider>();
+            if (targetCollider == null)
+                targetCollider = targetButton.gameObject.AddComponent<BoxCollider>();
+
+            UIWidget targetWidget = targetButton.GetComponent<UIWidget>();
+            if (targetWidget != null)
+            {
+                targetCollider.size = new Vector3(Mathf.Max(1f, targetWidget.width), Mathf.Max(1f, targetWidget.height), 1f);
+                targetCollider.center = Vector3.zero;
+            }
+
+            targetCollider.enabled = true;
+            MMLog.WriteInfo("[PauseMenuCardPatches] Configured click surface for " + card.name
+                + " target=" + targetButton.gameObject.name
+                + " colliderSize=" + FormatVector(targetCollider.size)
+                + " disabledColliders=" + disabledColliders + ".");
+        }
+
         public static void StripInheritedActions(GameObject card)
         {
             if (card == null)
                 return;
 
-            UILocalize[] localizers = card.GetComponentsInChildren<UILocalize>(true);
-            for (int i = 0; i < localizers.Length; i++)
-            {
-                if (localizers[i] == null)
-                    continue;
-
-                localizers[i].enabled = false;
-                UnityEngine.Object.Destroy(localizers[i]);
-            }
-
-            UIButtonMessage[] messages = card.GetComponentsInChildren<UIButtonMessage>(true);
-            for (int i = 0; i < messages.Length; i++)
-            {
-                if (messages[i] == null)
-                    continue;
-
-                messages[i].enabled = false;
-                UnityEngine.Object.Destroy(messages[i]);
-            }
-
-            UIPlayAnimation[] animations = card.GetComponentsInChildren<UIPlayAnimation>(true);
-            for (int i = 0; i < animations.Length; i++)
-            {
-                if (animations[i] == null)
-                    continue;
-
-                animations[i].enabled = false;
-                UnityEngine.Object.Destroy(animations[i]);
-            }
-
-            UIPlayTween[] playTweens = card.GetComponentsInChildren<UIPlayTween>(true);
-            for (int i = 0; i < playTweens.Length; i++)
-            {
-                if (playTweens[i] == null)
-                    continue;
-
-                playTweens[i].enabled = false;
-                UnityEngine.Object.Destroy(playTweens[i]);
-            }
-
-            UIKeyNavigation[] navigations = card.GetComponentsInChildren<UIKeyNavigation>(true);
-            for (int i = 0; i < navigations.Length; i++)
-            {
-                if (navigations[i] == null)
-                    continue;
-
-                navigations[i].enabled = false;
-                UnityEngine.Object.Destroy(navigations[i]);
-            }
-
-            UIEventListener[] listeners = card.GetComponentsInChildren<UIEventListener>(true);
-            for (int i = 0; i < listeners.Length; i++)
-            {
-                ResetListener(listeners[i]);
-            }
+            PauseMenuComponentCleanup.DestroyComponents<UILocalize>(card);
+            PauseMenuComponentCleanup.DestroyComponents<UIButtonMessage>(card);
+            PauseMenuComponentCleanup.DestroyComponents<UIPlayAnimation>(card);
+            PauseMenuComponentCleanup.DestroyComponents<UIPlayTween>(card);
+            PauseMenuComponentCleanup.DestroyComponents<UIKeyNavigation>(card);
+            PauseMenuComponentCleanup.ClearEventListenerActions(card);
         }
 
         public static void Bind(UIButton button, Action action)
@@ -781,24 +1144,11 @@ namespace ShelteredAPI.Harmony
             });
         }
 
-        private static void ResetListener(UIEventListener listener)
+        private static string FormatVector(Vector3 value)
         {
-            if (listener == null)
-                return;
-
-            listener.onSubmit = null;
-            listener.onClick = null;
-            listener.onDoubleClick = null;
-            listener.onHover = null;
-            listener.onPress = null;
-            listener.onSelect = null;
-            listener.onScroll = null;
-            listener.onDrag = null;
-            listener.onDrop = null;
-            listener.onKey = null;
-            listener.enabled = false;
-            UnityEngine.Object.Destroy(listener);
+            return "(" + value.x.ToString("0.0") + "," + value.y.ToString("0.0") + "," + value.z.ToString("0.0") + ")";
         }
+
     }
 
     internal static class PauseMenuCardActions
@@ -807,7 +1157,8 @@ namespace ShelteredAPI.Harmony
         {
             try
             {
-                MMLog.WriteDebug("[PauseMenuCardPatches] Opening keybinds from pause menu.");
+                MMLog.WriteInfo("[PauseMenuCardPatches] Opening keybinds from pause menu.");
+                PauseMenuCustomOverlayGuard.HidePauseMenuForDirectOverlay("keybinds");
                 ShelteredKeybindsUI.Show();
             }
             catch (Exception ex)
@@ -820,13 +1171,60 @@ namespace ShelteredAPI.Harmony
         {
             try
             {
-                MMLog.WriteDebug("[PauseMenuCardPatches] Opening mod manager from pause menu.");
+                MMLog.WriteInfo("[PauseMenuCardPatches] Opening mod manager from pause menu.");
                 ModManagerPanel.ShowPanel();
             }
             catch (Exception ex)
             {
                 MMLog.WriteError("[PauseMenuCardPatches] Failed to open mod manager from pause menu: " + ex);
             }
+        }
+    }
+
+    internal static class PauseMenuCustomOverlayGuard
+    {
+        private static readonly List<GameObject> TemporarilyHiddenPanels = new List<GameObject>();
+        private static bool _restoreHooked;
+
+        public static void HidePauseMenuForDirectOverlay(string source)
+        {
+            EnsureRestoreHook();
+
+            BasePanel topPanel = UIPanelManager.instance != null ? UIPanelManager.instance.GetTopPanel() : null;
+            if (!(topPanel is MainMenuPanel) || topPanel.gameObject == null || !topPanel.gameObject.activeSelf)
+                return;
+
+            if (!TemporarilyHiddenPanels.Contains(topPanel.gameObject))
+                TemporarilyHiddenPanels.Add(topPanel.gameObject);
+
+            topPanel.gameObject.SetActive(false);
+            UICamera.selectedObject = null;
+            MMLog.WriteInfo("[PauseMenuCardPatches] Temporarily hid pause menu before opening " + source + ".");
+        }
+
+        private static void EnsureRestoreHook()
+        {
+            if (_restoreHooked)
+                return;
+
+            _restoreHooked = true;
+            ShelteredKeybindsUIV2.Closed += RestoreHiddenPanels;
+        }
+
+        private static void RestoreHiddenPanels()
+        {
+            if (TemporarilyHiddenPanels.Count == 0)
+                return;
+
+            for (int i = 0; i < TemporarilyHiddenPanels.Count; i++)
+            {
+                GameObject panel = TemporarilyHiddenPanels[i];
+                if (panel != null)
+                    panel.SetActive(true);
+            }
+
+            MMLog.WriteInfo("[PauseMenuCardPatches] Restored " + TemporarilyHiddenPanels.Count + " temporarily hidden pause menu panel(s).");
+            TemporarilyHiddenPanels.Clear();
         }
     }
 
@@ -912,72 +1310,114 @@ namespace ShelteredAPI.Harmony
         }
     }
 
+    internal static class PauseMenuWalletFaceDepthService
+    {
+        public static void BringWalletFacesForward(GameObject wallet, params string[] cardNames)
+        {
+            if (wallet == null)
+                return;
+
+            List<Transform> cardRoots = ResolveCardRoots(wallet.transform, cardNames);
+            if (cardRoots.Count == 0)
+                return;
+
+            UIWidget[] widgets = wallet.GetComponentsInChildren<UIWidget>(true);
+            int maxCardDepth = int.MinValue;
+            for (int i = 0; i < widgets.Length; i++)
+            {
+                UIWidget widget = widgets[i];
+                if (widget == null || !IsUnderAny(widget.transform, cardRoots))
+                    continue;
+
+                maxCardDepth = Math.Max(maxCardDepth, widget.depth);
+            }
+
+            if (maxCardDepth == int.MinValue)
+                return;
+
+            int updated = 0;
+            int firstDepth = maxCardDepth + 1;
+            for (int i = 0; i < widgets.Length; i++)
+            {
+                UIWidget widget = widgets[i];
+                if (widget == null || IsUnderAny(widget.transform, cardRoots))
+                    continue;
+
+                widget.depth = firstDepth + updated;
+                widget.MarkAsChanged();
+                updated++;
+            }
+
+            MMLog.WriteInfo("[PauseMenuCardPatches] Raised wallet faces for " + wallet.name
+                + " faceWidgets=" + updated
+                + " cardMaxDepth=" + maxCardDepth
+                + " firstFaceDepth=" + (updated > 0 ? firstDepth.ToString() : "<none>") + ".");
+        }
+
+        private static List<Transform> ResolveCardRoots(Transform wallet, string[] cardNames)
+        {
+            List<Transform> roots = new List<Transform>();
+            if (wallet == null || cardNames == null)
+                return roots;
+
+            for (int i = 0; i < cardNames.Length; i++)
+            {
+                string cardName = cardNames[i];
+                if (string.IsNullOrEmpty(cardName))
+                    continue;
+
+                Transform child = wallet.Find(cardName);
+                if (child != null && !roots.Contains(child))
+                    roots.Add(child);
+            }
+
+            return roots;
+        }
+
+        private static bool IsUnderAny(Transform current, List<Transform> roots)
+        {
+            if (current == null || roots == null)
+                return false;
+
+            for (int i = 0; i < roots.Count; i++)
+            {
+                if (IsUnder(current, roots[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsUnder(Transform current, Transform root)
+        {
+            Transform cursor = current;
+            while (cursor != null)
+            {
+                if (cursor == root)
+                    return true;
+
+                cursor = cursor.parent;
+            }
+
+            return false;
+        }
+    }
+
     internal static class PauseMenuWalletDebugService
     {
-        public static void LogUnifiedStackPlan(
-            GameObject wallet,
-            Vector3 originalWalletPosition,
-            Vector3 walletPosition,
-            Vector3 keybindsPosition,
-            Vector3 modsPosition,
-            Vector3 settingsPosition,
-            Vector3 saveExitPosition,
-            float cardStep,
-            float cardGap)
-        {
-            float walletHeight = ResolveLargestWidgetHeight(wallet);
-            MMLog.WriteInfo("[PauseMenuCardPatches] Unified wallet stack plan"
-                + " originalWallet=" + FormatVector(originalWalletPosition)
-                + " wallet=" + FormatVector(walletPosition)
-                + " keybinds=" + FormatVector(keybindsPosition)
-                + " mods=" + FormatVector(modsPosition)
-                + " settings=" + FormatVector(settingsPosition)
-                + " saveExit=" + FormatVector(saveExitPosition)
-                + " cardStep=" + cardStep.ToString("0.0")
-                + " cardGap=" + cardGap.ToString("0.0")
-                + " largestWidgetHeight=" + walletHeight.ToString("0.0") + ".");
-        }
-
-        public static void LogUnifiedLayout(
-            Transform menu,
-            GameObject wallet,
-            string keybindsCardName,
-            string modsCardName)
-        {
-            bool previous = UIDebug.Enabled;
-            UIDebug.Enabled = true;
-            try
-            {
-                if (menu != null)
-                    UIDebug.LogWidgetHierarchy(menu, 2);
-
-                LogWallet("Unified", wallet);
-                LogCard("Keybinds", wallet, keybindsCardName);
-                LogCard("Mods", wallet, modsCardName);
-                LogCard("Settings", wallet, "tab1");
-                LogCard("SaveExit", wallet, "tab2");
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[PauseMenuCardPatches] UI debug logging failed: " + ex.Message);
-            }
-            finally
-            {
-                UIDebug.Enabled = previous;
-            }
-        }
-
         public static void LogStackPlan(
             GameObject templateWallet,
             Vector3 originalWalletPosition,
             Vector3 injectedWalletPosition,
             Vector3 vanillaWalletPosition,
             float cardStep,
-            float walletGap)
+            float walletGap,
+            float walletVisibleHeight)
         {
             float walletHeight = ResolveLargestWidgetHeight(templateWallet);
             float xDelta = Mathf.Abs(injectedWalletPosition.x - vanillaWalletPosition.x);
             float yDelta = Mathf.Abs(injectedWalletPosition.y - vanillaWalletPosition.y);
+            float walletOverlap = Mathf.Max(0f, walletVisibleHeight - yDelta);
             MMLog.WriteInfo("[PauseMenuCardPatches] Wallet stack plan"
                 + " original=" + FormatVector(originalWalletPosition)
                 + " injected=" + FormatVector(injectedWalletPosition)
@@ -986,6 +1426,8 @@ namespace ShelteredAPI.Harmony
                 + " walletGap=" + walletGap.ToString("0.0")
                 + " yDelta=" + yDelta.ToString("0.0")
                 + " xDelta=" + xDelta.ToString("0.0")
+                + " visibleHeight=" + walletVisibleHeight.ToString("0.0")
+                + " verticalOverlap=" + walletOverlap.ToString("0.0")
                 + " largestWidgetHeight=" + walletHeight.ToString("0.0")
                 + " alignedX=" + (xDelta < 0.1f) + ".");
         }
@@ -1062,6 +1504,10 @@ namespace ShelteredAPI.Harmony
             UIDebug.ValidateNGUISetup(card, "PauseMenu " + label + " card");
             UIWidget widget = card.GetComponentInChildren<UIWidget>(true);
             UIButton button = card.GetComponentInChildren<UIButton>(true);
+            PauseMenuButton[] pauseButtons = card.GetComponentsInChildren<PauseMenuButton>(true);
+            UITweener[] tweens = card.GetComponentsInChildren<UITweener>(true);
+            UIEventListener[] listeners = card.GetComponentsInChildren<UIEventListener>(true);
+            BoxCollider[] colliders = card.GetComponentsInChildren<BoxCollider>(true);
             int effectiveDepth = widget != null ? UIDebug.GetEffectiveDepth(widget) : 0;
 
             MMLog.WriteInfo("[PauseMenuCardPatches] " + label
@@ -1070,9 +1516,29 @@ namespace ShelteredAPI.Harmony
                 + " widgetDepth=" + (widget != null ? widget.depth.ToString() : "<none>")
                 + " effectiveDepth=" + effectiveDepth
                 + " buttonDelegates=" + (button != null && button.onClick != null ? button.onClick.Count.ToString() : "<none>")
+                + " pauseButtons=" + pauseButtons.Length
+                + " tweens=" + tweens.Length
+                + " eventListeners=" + listeners.Length
+                + " enabledColliders=" + CountEnabledColliders(colliders)
                 + ".");
 
             LogWidgetChildren(label, card);
+        }
+
+        private static int CountEnabledColliders(BoxCollider[] colliders)
+        {
+            if (colliders == null)
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                BoxCollider collider = colliders[i];
+                if (collider != null && collider.enabled)
+                    count++;
+            }
+
+            return count;
         }
 
         private static void LogWidgetChildren(string label, GameObject card)
@@ -1155,6 +1621,7 @@ namespace ShelteredAPI.Harmony
             Vector3 delta = targetLocalPosition - originalPosition.OriginalLocalPosition;
             RetargetPositionTweens(wallet, delta);
             ApplyLocalPosition(wallet, targetLocalPosition);
+            PauseMenuWalletPositionLock.Bind(wallet, targetLocalPosition);
         }
 
         private static void RetargetPositionTweens(GameObject wallet, Vector3 delta)
@@ -1172,7 +1639,7 @@ namespace ShelteredAPI.Harmony
             }
         }
 
-        private static void ApplyLocalPosition(GameObject wallet, Vector3 targetLocalPosition)
+        internal static void ApplyLocalPosition(GameObject wallet, Vector3 targetLocalPosition)
         {
             UIRect rect = wallet.GetComponent<UIRect>();
             if (rect != null && rect.isAnchored)
@@ -1185,6 +1652,43 @@ namespace ShelteredAPI.Harmony
             }
 
             wallet.transform.localPosition = targetLocalPosition;
+        }
+    }
+
+    internal sealed class PauseMenuWalletPositionLock : MonoBehaviour
+    {
+        private const float Epsilon = 0.01f;
+        private Vector3 _targetLocalPosition;
+        private bool _configured;
+
+        public static void Bind(GameObject wallet, Vector3 targetLocalPosition)
+        {
+            if (wallet == null)
+                return;
+
+            PauseMenuWalletPositionLock positionLock = wallet.GetComponent<PauseMenuWalletPositionLock>();
+            if (positionLock == null)
+                positionLock = wallet.AddComponent<PauseMenuWalletPositionLock>();
+
+            positionLock._targetLocalPosition = targetLocalPosition;
+            positionLock._configured = true;
+            positionLock.Apply();
+        }
+
+        private void LateUpdate()
+        {
+            Apply();
+        }
+
+        private void Apply()
+        {
+            if (!_configured || transform == null)
+                return;
+
+            if ((transform.localPosition - _targetLocalPosition).sqrMagnitude <= Epsilon * Epsilon)
+                return;
+
+            PauseMenuWalletPositioner.ApplyLocalPosition(gameObject, _targetLocalPosition);
         }
     }
 

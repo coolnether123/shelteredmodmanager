@@ -29,9 +29,10 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
         private const int ColumnWidth = 980;
         private const int LabelWidth = 430;
-        private const int ValueWidth = 76;
-        private const int TrackWidth = 112;
-        private const int TrackHeight = 18;
+        private const int TrackWidth = 170;
+        private const int TrackHeight = 16;
+        private const int SliderThumbWidth = 58;
+        private const int SliderThumbHeight = 28;
         private const int SmallButtonWidth = 38;
         private const int SmallButtonHeight = 34;
         private const int CycleValueWidth = 140;
@@ -40,14 +41,14 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private const int LabelFontSize = 16;
         private const int ValueFontSize = 16;
         private const int ControlFontSize = 15;
+        private const string NumericInputValueLabelName = "NumericInputValue";
         private const float LabelY = 0f;
         private const float ControlY = 0f;
         private const float RuleY = -26f;
         private const float TrackCenterX = 750f;
-        private const float NumericValueX = 822f;
-        private const float NumericTrackCenterX = 720f;
-        private const float DecreaseX = 630f;
-        private const float IncreaseX = 900f;
+        private const float NumericTrackCenterX = 748f;
+        private const float DecreaseX = 600f;
+        private const float IncreaseX = 930f;
         private const float CyclePreviousX = 630f;
         private const float CycleNextX = 870f;
 
@@ -56,6 +57,15 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private readonly UIFont _bitmapFont;
         private readonly Font _ttfFont;
         private readonly ModSettingsPanel _panel;
+
+        private sealed class NumericSliderVisual
+        {
+            public GameObject HitRoot;
+            public GameObject ThumbRoot;
+            public UITexture Fill;
+            public UILabel ValueLabel;
+            public UIInput ValueInput;
+        }
 
         public ModSettingsBookWidgetRenderer(
             FieldManualWindowChrome chrome,
@@ -208,9 +218,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                     : SpineWidgetRuntime.GetValue<float>(def, settingsObject);
             };
 
-            UILabel value = CreateValueLabel(row, FormatNumeric(def, read(), snapToInt), new Vector3(NumericValueX, LabelY, 0f), ValueWidth);
-            UITexture fill;
-            GameObject track = CreateSliderTrack(row, min, max, read(), out fill);
+            NumericSliderVisual sliderVisual = CreateSliderTrack(row, min, max, read(), FormatNumeric(def, read(), snapToInt));
+            UILabel value = sliderVisual.ValueLabel;
 
             Action<float> apply = delegate(float raw)
             {
@@ -236,17 +245,19 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
                 {
-                    value.text = FormatNumeric(def, clamped, snapToInt);
-                    UpdateSliderFill(fill, min, max, clamped);
+                    UpdateSliderVisual(sliderVisual, min, max, clamped, FormatNumeric(def, clamped, snapToInt));
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
-            AddSliderInput(track, min, max, apply);
-            AttachTooltip(track, BuildNumericTooltip(def, min, max, snapToInt));
+            AddSliderInput(sliderVisual.HitRoot, sliderVisual.HitRoot, min, max, apply);
+            AttachTooltip(sliderVisual.HitRoot, BuildNumericTooltip(def, min, max, snapToInt));
+            AttachTooltip(sliderVisual.ThumbRoot, BuildNumericTooltip(def, min, max, snapToInt));
 
             if (def.ShowValueInput)
-                AddNumericValueInput(value, def, settingsObject, snapToInt, min, max, apply);
+                sliderVisual.ValueInput = AddNumericValueInput(sliderVisual.ThumbRoot, value, def, settingsObject, snapToInt, min, max, apply);
+
+            AddSliderThumbInput(sliderVisual.ThumbRoot, sliderVisual.HitRoot, sliderVisual.ValueInput, min, max, apply);
 
             if (def.ShowStepperButtons)
             {
@@ -449,44 +460,58 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             return value;
         }
 
-        private GameObject CreateSliderTrack(GameObject row, float min, float max, float value, out UITexture fill)
+        private NumericSliderVisual CreateSliderTrack(GameObject row, float min, float max, float value, string displayText)
         {
             _chrome.Ui.CreateQuad(row, "SliderTrackShadow", _whiteTexture, new Vector3(NumericTrackCenterX + 1f, ControlY - 1f, 0f), TrackWidth + 6, TrackHeight + 6, new Color(0.08f, 0.04f, 0.02f, 0.28f), _chrome.Ui.NextDepth());
             _chrome.Ui.CreateQuad(row, "SliderTrack", _whiteTexture, new Vector3(NumericTrackCenterX, ControlY, 0f), TrackWidth, TrackHeight, ColorTrack, _chrome.Ui.NextDepth());
-            fill = _chrome.Ui.CreateQuad(row, "SliderFill", _whiteTexture, new Vector3(NumericTrackCenterX - TrackWidth * 0.5f, ControlY, 0f), 1, TrackHeight - 4, ColorTrackFill, _chrome.Ui.NextDepth());
+            UITexture fill = _chrome.Ui.CreateQuad(row, "SliderFill", _whiteTexture, new Vector3(NumericTrackCenterX - TrackWidth * 0.5f, ControlY, 0f), 1, TrackHeight - 4, ColorTrackFill, _chrome.Ui.NextDepth());
             fill.pivot = UIWidget.Pivot.Left;
-            UpdateSliderFill(fill, min, max, value);
 
             GameObject hit = _chrome.Ui.CreateChild(row, "SliderHit", new Vector3(NumericTrackCenterX, ControlY, 0f));
             BoxCollider collider = hit.AddComponent<BoxCollider>();
             collider.size = new Vector3(TrackWidth, 38f, 1f);
             collider.center = Vector3.zero;
-            return hit;
+
+            GameObject thumb = _chrome.Ui.CreateChild(row, "SliderThumb", Vector3.zero);
+            _chrome.Ui.CreateQuad(thumb, "SliderThumbBackground", _whiteTexture, Vector3.zero,
+                SliderThumbWidth, SliderThumbHeight, ColorInputBackground, _chrome.Ui.NextDepth());
+            UILabel valueLabel = _chrome.Ui.CreateLabel(thumb, NumericInputValueLabelName, displayText,
+                Vector3.zero, ValueFontSize, ColorInputValue,
+                SliderThumbWidth - 8, SliderThumbHeight - 4, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _chrome.Ui.NextDepth());
+            valueLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            BoxCollider thumbCollider = thumb.AddComponent<BoxCollider>();
+            thumbCollider.size = new Vector3(SliderThumbWidth, SliderThumbHeight, 1f);
+            thumbCollider.center = Vector3.zero;
+
+            NumericSliderVisual visual = new NumericSliderVisual
+            {
+                HitRoot = hit,
+                ThumbRoot = thumb,
+                Fill = fill,
+                ValueLabel = valueLabel
+            };
+            UpdateSliderVisual(visual, min, max, value, displayText);
+            return visual;
         }
 
-        private void AddNumericValueInput(UILabel label, SettingDefinition def, object settingsObject, bool snapToInt, float min, float max, Action<float> apply)
+        private UIInput AddNumericValueInput(GameObject inputHost, UILabel label, SettingDefinition def, object settingsObject, bool snapToInt, float min, float max, Action<float> apply)
         {
-            if (label == null || apply == null)
-                return;
+            if (inputHost == null || label == null || apply == null)
+                return null;
 
-            UITexture background = _chrome.Ui.CreateQuad(label.transform.parent.gameObject, "NumericInputBackground", _whiteTexture,
-                label.transform.localPosition, ValueWidth + 8, 28, ColorInputBackground, _chrome.Ui.NextDepth());
-            background.depth = label.depth - 1;
-            label.name = "NumericInputValue";
+            label.name = NumericInputValueLabelName;
             label.color = ColorInputValue;
 
             UIInput input = label.gameObject.AddComponent<UIInput>();
             input.label = label;
+            input.value = label.text ?? string.Empty;
             input.validation = def != null && !string.IsNullOrEmpty(def.UnitSuffix)
                 ? UIInput.Validation.None
                 : (snapToInt ? UIInput.Validation.Integer : UIInput.Validation.Float);
             input.activeTextColor = ColorInputValue;
             input.caretColor = ColorInputValue;
             input.selectionColor = new Color(0.35f, 0.25f, 0.16f, 0.35f);
-
-            BoxCollider collider = label.gameObject.AddComponent<BoxCollider>();
-            collider.size = new Vector3(ValueWidth + 8, 28, 1);
-            collider.center = Vector3.zero;
 
             EventDelegate.Add(input.onSubmit, delegate
             {
@@ -497,7 +522,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 input.RemoveFocus();
             });
 
-            AttachTooltip(label.gameObject, BuildValueInputTooltip(def, min, max, snapToInt));
+            AttachTooltip(inputHost, BuildValueInputTooltip(def, min, max, snapToInt));
+            return input;
         }
 
         private static bool TryParseNumericInput(string raw, SettingDefinition def, out float value)
@@ -522,34 +548,61 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             return _chrome.Buttons.Build(parent, name, text, position, width, height, fontSize, onClick);
         }
 
-        private static void UpdateSliderFill(UITexture fill, float min, float max, float value)
+        private static void UpdateSliderVisual(NumericSliderVisual visual, float min, float max, float value, string displayText)
         {
-            if (fill == null)
+            if (visual == null)
                 return;
 
             float normalized = Mathf.Clamp01(Mathf.InverseLerp(min, max, value));
-            fill.width = Mathf.Max(1, Mathf.RoundToInt(TrackWidth * normalized));
+            if (visual.Fill != null)
+                visual.Fill.width = Mathf.Max(1, Mathf.RoundToInt(TrackWidth * normalized));
+            if (visual.ThumbRoot != null)
+            {
+                float x = NumericTrackCenterX - TrackWidth * 0.5f + TrackWidth * normalized;
+                visual.ThumbRoot.transform.localPosition = new Vector3(x, ControlY, 0f);
+            }
+            if (visual.ValueLabel != null)
+            {
+                visual.ValueLabel.text = displayText ?? string.Empty;
+                UIInput input = visual.ValueInput;
+                if (input != null && !input.isSelected)
+                    input.value = visual.ValueLabel.text;
+            }
         }
 
-        private static void AddSliderInput(GameObject hit, float min, float max, Action<float> apply)
+        private static void AddSliderInput(GameObject target, GameObject coordinateRoot, float min, float max, Action<float> apply)
         {
-            if (hit == null || apply == null)
+            if (target == null || coordinateRoot == null || apply == null)
                 return;
 
-            UIEventListener listener = UIEventListener.Get(hit);
+            UIEventListener listener = UIEventListener.Get(target);
             listener.onClick = delegate(GameObject go)
             {
-                ApplySliderPointer(hit, min, max, apply);
+                ApplySliderPointer(coordinateRoot, min, max, apply);
             };
             listener.onDrag = delegate(GameObject go, Vector2 delta)
             {
-                ApplySliderPointer(hit, min, max, apply);
+                ApplySliderPointer(coordinateRoot, min, max, apply);
             };
             listener.onPress = delegate(GameObject go, bool pressed)
             {
                 if (pressed)
-                    ApplySliderPointer(hit, min, max, apply);
+                    ApplySliderPointer(coordinateRoot, min, max, apply);
             };
+        }
+
+        private static void AddSliderThumbInput(GameObject thumb, GameObject coordinateRoot, UIInput input, float min, float max, Action<float> apply)
+        {
+            if (thumb == null || coordinateRoot == null || apply == null)
+                return;
+
+            SliderThumbInteraction interaction = thumb.AddComponent<SliderThumbInteraction>();
+            interaction.CoordinateRoot = coordinateRoot;
+            interaction.ValueInput = input;
+            interaction.Min = min;
+            interaction.Max = max;
+            interaction.TrackWidth = TrackWidth;
+            interaction.Apply = apply;
         }
 
         private static void ApplySliderPointer(GameObject hit, float min, float max, Action<float> apply)
@@ -677,7 +730,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             if (label == null)
                 return ColorText;
 
-            if (label.name == "NumericInputValue")
+            if (label.name == NumericInputValueLabelName)
                 return ColorInputValue;
 
             return label.name == "Value" ? ColorValue : ColorText;
@@ -694,6 +747,102 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 if (labels[i] != null && labels[i].enabled)
                     labels[i].text = text ?? string.Empty;
             }
+        }
+    }
+
+    internal sealed class SliderThumbInteraction : MonoBehaviour
+    {
+        private const float HoldToDragSeconds = 0.18f;
+        private const float DragStartPixels = 5f;
+
+        public GameObject CoordinateRoot;
+        public UIInput ValueInput;
+        public float Min;
+        public float Max;
+        public float TrackWidth;
+        public Action<float> Apply;
+
+        private bool _pressed;
+        private bool _dragging;
+        private float _pressTime;
+        private Vector3 _pressMousePosition;
+
+        private void OnPress(bool pressed)
+        {
+            if (pressed)
+            {
+                _pressed = true;
+                _dragging = false;
+                _pressTime = Time.realtimeSinceStartup;
+                _pressMousePosition = UnityEngine.Input.mousePosition;
+                return;
+            }
+
+            if (!_pressed)
+                return;
+
+            bool shouldSelect = !_dragging;
+            _pressed = false;
+            _dragging = false;
+
+            if (shouldSelect)
+                SelectValueInput();
+        }
+
+        private void OnDrag(Vector2 delta)
+        {
+            if (!_pressed)
+                return;
+
+            BeginDrag();
+            ApplyPointerValue();
+        }
+
+        private void Update()
+        {
+            if (!_pressed || _dragging)
+                return;
+
+            bool heldLongEnough = Time.realtimeSinceStartup - _pressTime >= HoldToDragSeconds;
+            bool movedEnough = (UnityEngine.Input.mousePosition - _pressMousePosition).sqrMagnitude >= DragStartPixels * DragStartPixels;
+            if (heldLongEnough || movedEnough)
+            {
+                BeginDrag();
+                ApplyPointerValue();
+            }
+        }
+
+        private void BeginDrag()
+        {
+            if (_dragging)
+                return;
+
+            _dragging = true;
+            if (ValueInput != null)
+                ValueInput.RemoveFocus();
+            if (UICamera.selectedObject == (ValueInput != null ? ValueInput.gameObject : null))
+                UICamera.selectedObject = null;
+        }
+
+        private void SelectValueInput()
+        {
+            if (ValueInput == null)
+                return;
+
+            ValueInput.isSelected = true;
+            UICamera.selectedObject = ValueInput.gameObject;
+        }
+
+        private void ApplyPointerValue()
+        {
+            if (CoordinateRoot == null || Apply == null)
+                return;
+
+            Vector3 world = UICamera.lastHit.point;
+            Vector3 local = CoordinateRoot.transform.InverseTransformPoint(world);
+            float width = TrackWidth > 0f ? TrackWidth : 1f;
+            float normalized = Mathf.Clamp01((local.x + width * 0.5f) / width);
+            Apply(Mathf.Lerp(Min, Max, normalized));
         }
     }
 }
