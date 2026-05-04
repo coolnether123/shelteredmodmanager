@@ -28,10 +28,22 @@ namespace ShelteredAPI.Input
             return UnityLegacyAxisReader.IsSignificant(pan.x) || UnityLegacyAxisReader.IsSignificant(pan.y);
         }
 
+        public static bool TryReadCurrentMapPanVector(out Vector2 pan)
+        {
+            pan = ReadCurrentPanVector(true);
+            return UnityLegacyAxisReader.IsSignificant(pan.x) || UnityLegacyAxisReader.IsSignificant(pan.y);
+        }
+
         private static Vector2 ReadCurrentTouchpadPanVector()
         {
+            return ReadCurrentPanVector(false);
+        }
+
+        private static Vector2 ReadCurrentPanVector(bool includeMapWheelLikePan)
+        {
             UnityScrollGestureSample sample = UnityIndirectScrollClassifier.GetCurrentSample();
-            if (sample.Kind != UnityScrollGestureKind.Indirect)
+            if (sample.Kind != UnityScrollGestureKind.Indirect
+                && (!includeMapWheelLikePan || !UnityIndirectScrollClassifier.IsMapPanGesture(sample)))
                 return Vector2.zero;
 
             Vector2 pan = sample.Delta * ShelteredInputTuning.TouchpadMovementSpeed;

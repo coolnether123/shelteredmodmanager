@@ -6,7 +6,8 @@ namespace ShelteredAPI.Input
     {
         None,
         MouseWheel,
-        Indirect
+        Indirect,
+        Pinch
     }
 
     internal struct UnityScrollGestureSample

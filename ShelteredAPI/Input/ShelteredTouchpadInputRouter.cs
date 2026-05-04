@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using ModAPI.InputServices;
 using ModAPI.InputActions;
 using UnityEngine;
@@ -81,7 +82,7 @@ namespace ShelteredAPI.Input
                         value = 0f;
                         return false;
                     }
-                    value = ReadTouchpadOrFallbackHorizontal(raw, MenuHorizontalAxes);
+                    value = ReadMapPanOrFallbackHorizontal(raw, MenuHorizontalAxes);
                     return true;
 
                 case PlatformInput.MenuInputAxis.UIvertical:
@@ -90,11 +91,11 @@ namespace ShelteredAPI.Input
                         value = 0f;
                         return false;
                     }
-                    value = ReadTouchpadOrFallbackVertical(raw, MenuVerticalAxes);
+                    value = ReadMapPanOrFallbackVertical(raw, MenuVerticalAxes);
                     return true;
 
                 case PlatformInput.MenuInputAxis.UIscroll:
-                    if (!ScrollInputService.IsIndirectScrollActive())
+                    if (!ShouldRouteGestureMenuScroll())
                         return TryGetVanillaMenuScroll(raw, out value);
 
                     TryGetMenuScroll(raw, out value);
@@ -109,6 +110,16 @@ namespace ShelteredAPI.Input
         private static void TryGetMenuScroll(bool raw, out float value)
         {
             value = 0f;
+            if (IsMapPanPanelOpen())
+            {
+                if (UnityIndirectScrollClassifier.IsCurrentFramePinchZoom()
+                    && ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.Anywhere(raw), out value))
+                {
+                    value *= ShelteredInputTuning.ZoomSpeed;
+                }
+                return;
+            }
+
             if (ShouldRouteMenuScrollToUi())
             {
                 ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.Anywhere(raw), out value);
@@ -120,6 +131,17 @@ namespace ShelteredAPI.Input
 
             if (ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.Anywhere(raw), out value))
                 value *= ShelteredInputTuning.ZoomSpeed;
+        }
+
+        private static bool ShouldRouteGestureMenuScroll()
+        {
+            if (ScrollInputService.IsIndirectScrollActive())
+                return true;
+
+            if (UnityIndirectScrollClassifier.IsCurrentFramePinchZoom())
+                return true;
+
+            return IsMapPanPanelOpen() && UnityIndirectScrollClassifier.IsCurrentFrameMapPanGesture();
         }
 
         private static float ReadTouchpadOrFallbackHorizontal(bool raw, params string[] fallbackAxisNames)
@@ -138,6 +160,29 @@ namespace ShelteredAPI.Input
                 return UnityLegacyAxisReader.IsSignificant(pan.y) ? pan.y : 0f;
 
             return UnityTouchpadPanReader.ReadVerticalPan(raw, fallbackAxisNames);
+        }
+
+        private static float ReadMapPanOrFallbackHorizontal(bool raw, params string[] fallbackAxisNames)
+        {
+            Vector2 pan;
+            if (UnityTouchpadPanReader.TryReadCurrentMapPanVector(out pan))
+                return UnityLegacyAxisReader.IsSignificant(pan.x) ? pan.x : 0f;
+
+            return UnityTouchpadPanReader.ReadHorizontalPan(raw, fallbackAxisNames);
+        }
+
+        private static float ReadMapPanOrFallbackVertical(bool raw, params string[] fallbackAxisNames)
+        {
+            Vector2 pan;
+            if (UnityTouchpadPanReader.TryReadCurrentMapPanVector(out pan))
+                return UnityLegacyAxisReader.IsSignificant(pan.y) ? pan.y : 0f;
+
+            float strongest = UnityTouchpadPanReader.ReadVerticalPan(raw, fallbackAxisNames);
+            float scrollPan = UnityLegacyAxisReader.ReadStrongest(raw, VanillaMenuScrollAxis) * ShelteredInputTuning.TouchpadMovementSpeed;
+            scrollPan = Mathf.Clamp(scrollPan, -1f, 1f);
+
+            strongest = UnityLegacyAxisReader.PickStronger(strongest, scrollPan);
+            return UnityLegacyAxisReader.IsSignificant(strongest) ? strongest : 0f;
         }
 
         private static void TryGetInfoPaneScroll(bool raw, out float value)
@@ -169,7 +214,15 @@ namespace ShelteredAPI.Input
 
             value *= ShelteredInputTuning.MouseScrollSpeed;
             if (IsMapPanPanelOpen())
+            {
+                if (!UnityIndirectScrollClassifier.IsCurrentFramePinchZoom())
+                {
+                    value = 0f;
+                    return true;
+                }
+
                 value *= ShelteredInputTuning.ZoomSpeed;
+            }
 
             return true;
         }
@@ -209,7 +262,7 @@ namespace ShelteredAPI.Input
 
         private static bool ShouldRouteMenuTouchpadPan()
         {
-            if (!UnityIndirectScrollClassifier.IsCurrentFrameIndirectScroll())
+            if (!UnityIndirectScrollClassifier.IsCurrentFrameMapPanGesture())
                 return false;
 
             return IsMapPanPanelOpen();
@@ -230,15 +283,24 @@ namespace ShelteredAPI.Input
             if (string.Equals(panelName, "PartyMapPanel", StringComparison.Ordinal))
                 return true;
 
-            if (!string.Equals(panelName, "ExpeditionMainPanelNew", StringComparison.Ordinal))
-                return false;
+            if (string.Equals(panelName, "SurroundedMapPanel", StringComparison.Ordinal))
+                return true;
 
-            return IsPanelMapScreenVisible(panel);
+            if (string.Equals(panelName, "ExpeditionMainPanelNew", StringComparison.Ordinal)
+                && IsPanelMapScreenVisible(panel))
+            {
+                return true;
+            }
+
+            if (panel.GetComponent<UI_ExpeditionMap>() != null)
+                return true;
+
+            return panel.GetComponentInChildren<UI_ExpeditionMap>(false) != null;
         }
 
         private static bool IsPanelMapScreenVisible(BasePanel panel)
         {
-            var field = panel.GetType().GetField("MapScreen");
+            var field = panel.GetType().GetField("MapScreen", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (field == null)
                 return false;
 
