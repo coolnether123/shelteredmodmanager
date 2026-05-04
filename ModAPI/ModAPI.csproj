@@ -71,6 +71,7 @@
     <Compile Include="Core\ModRuntime.cs" />
     <Compile Include="Core\ModLog.cs" />
     <Compile Include="Core\MMLog.cs" />
+    <Compile Include="Core\UnityLogFilter.cs" />
     <Compile Include="Core\ModApiPaths.cs" />
     <Compile Include="Core\ManagerBooleanOptions.cs" />
     <Compile Include="Core\SaveExitTracer.cs" />

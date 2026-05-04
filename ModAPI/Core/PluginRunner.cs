@@ -181,8 +181,7 @@ namespace ModAPI.Core
             {
                 var msg = condition ?? string.Empty;
 
-                // Filter out achievement spam - the game logs these as errors/warnings even if they are successful
-                if (msg.Contains("Achievement:") || msg.Contains("Already achieved:"))
+                if (UnityLogFilter.ShouldSuppress(msg, type))
                 {
                     return;
                 }
@@ -213,7 +212,7 @@ namespace ModAPI.Core
                 var sceneName = TryGetSceneName(scene);
                 if (string.IsNullOrEmpty(sceneName))
                 {
-                    MMLog.WarnOnce("PluginRunner.OnSceneLoadedModern.SceneName", "Received loaded-scene callback with unresolved scene name.");
+                    MMLog.WriteDebug("Received loaded-scene callback with unresolved scene name.");
                     return;
                 }
 
@@ -243,7 +242,7 @@ namespace ModAPI.Core
                 var sceneName = TryGetSceneName(scene);
                 if (string.IsNullOrEmpty(sceneName))
                 {
-                    MMLog.WarnOnce("PluginRunner.OnSceneUnloadedModern.SceneName", "Received unloaded-scene callback with unresolved scene name.");
+                    MMLog.WriteDebug("Received unloaded-scene callback with unresolved scene name.");
                     return;
                 }
 
