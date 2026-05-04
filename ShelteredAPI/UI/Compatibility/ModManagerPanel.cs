@@ -40,11 +40,12 @@ namespace ShelteredAPI.UI.Compatibility
         private const float FooterButtonY = -400f;
         private const float ModListX = -280f;
         private const float ModListTopY = 160f;
-        private const float ModListBottomY = -260f;
-        private const float ModListSpacingY = 84f;
-        private const int ModButtonWidth = 320;
-        private const int ModButtonHeight = 74;
-        private const int ModButtonFontSize = 24;
+        private const float ModListBottomY = -180f;
+        private const float ModListSpacingY = 85f;
+        private const float ModScrollControlsY = -252f;
+        private const int ModButtonWidth = 370;
+        private const int ModButtonHeight = 78;
+        private const int ModButtonFontSize = 22;
         private const int ScrollButtonWidth = 112;
         private const int ScrollButtonHeight = 42;
         private const int ScrollButtonFontSize = 18;
@@ -52,9 +53,11 @@ namespace ShelteredAPI.UI.Compatibility
         private static readonly Color BookButtonHoverColor = new Color(0.97f, 0.85f, 0.70f, 1f);
         private static readonly Color BookButtonPressedColor = new Color(0.74f, 0.61f, 0.49f, 1f);
         private static readonly Color BookButtonDisabledColor = new Color(0.52f, 0.45f, 0.39f, 0.95f);
-        private static readonly Color BookLabelColor = new Color(0.18f, 0.13f, 0.09f, 1f);
-        private static readonly Color BookDisabledLabelColor = new Color(0.34f, 0.29f, 0.24f, 0.9f);
-        private static readonly Color PageIndicatorColor = new Color(0.21f, 0.16f, 0.11f, 1f);
+        private static readonly Color BookTextColor = new Color(0.17f, 0.16f, 0.16f, 1f);
+        private static readonly Color BookSubtextColor = new Color(0.39f, 0.34f, 0.28f, 1f);
+        private static readonly Color BookLabelColor = BookTextColor;
+        private static readonly Color BookDisabledLabelColor = new Color(0.39f, 0.34f, 0.28f, 0.9f);
+        private static readonly Color PageIndicatorColor = BookSubtextColor;
 
         private enum PanelButtonVisualStyle
         {
@@ -122,7 +125,7 @@ namespace ShelteredAPI.UI.Compatibility
                 }
 
                 // --- CREATE UI ELEMENTS ---
-                Color textColor = _bookFound ? new Color(0.1f, 0.1f, 0.1f) : Color.white;
+                Color textColor = _bookFound ? BookTextColor : Color.white;
 
                 // Title (left page, top-center)
                 // Force single-line title rendering to prevent occasional trailing-character wrap.
@@ -222,7 +225,7 @@ namespace ShelteredAPI.UI.Compatibility
                 template,
                 "ModScrollUpButton",
                 "UP",
-                new Vector3(ModListX - 115f, -326f, 0f),
+                new Vector3(ModListX - 115f, ModScrollControlsY, 0f),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
                 ScrollButtonFontSize,
@@ -234,7 +237,7 @@ namespace ShelteredAPI.UI.Compatibility
                 template,
                 "ModScrollDownButton",
                 "DOWN",
-                new Vector3(ModListX + 115f, -326f, 0f),
+                new Vector3(ModListX + 115f, ModScrollControlsY, 0f),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
                 ScrollButtonFontSize,
@@ -242,12 +245,11 @@ namespace ShelteredAPI.UI.Compatibility
                 PanelButtonVisualStyle.ScrollEnabled,
                 delegate { ScrollModList(1); });
 
-            _modScrollIndicator = CreateSimpleLabel(string.Empty, ModListX, -326f, 18, PageIndicatorColor, NGUIText.Alignment.Center, 140);
+            _modScrollIndicator = CreateSimpleLabel(string.Empty, ModListX, ModScrollControlsY, 18, PageIndicatorColor, NGUIText.Alignment.Center, 140);
             if (_modScrollIndicator != null)
             {
                 _modScrollIndicator.name = "ModScrollIndicator";
-                _modScrollIndicator.effectStyle = UILabel.Effect.Outline;
-                _modScrollIndicator.effectColor = new Color(0f, 0f, 0f, 0.85f);
+                _modScrollIndicator.effectStyle = UILabel.Effect.None;
                 _modScrollIndicator.overflowMethod = UILabel.Overflow.ResizeFreely;
             }
 
@@ -312,10 +314,10 @@ namespace ShelteredAPI.UI.Compatibility
             _detailTitle.overflowMethod = UILabel.Overflow.ShrinkContent;
             
             // Version - centered
-            _detailVersion = CreateSimpleLabel("", rightX, 230f, 20, new Color(0.5f, 0.5f, 0.5f), NGUIText.Alignment.Center, 420);
+            _detailVersion = CreateSimpleLabel("", rightX, 230f, 20, BookSubtextColor, NGUIText.Alignment.Center, 420);
             
             // Authors - centered
-            _detailAuthors = CreateSimpleLabel("", rightX, 195f, 20, new Color(0.3f, 0.3f, 0.45f), NGUIText.Alignment.Center, 420);
+            _detailAuthors = CreateSimpleLabel("", rightX, 195f, 20, BookSubtextColor, NGUIText.Alignment.Center, 420);
             
             // Description - scrollable on right page
             // Create a clipping panel for the description area
@@ -516,8 +518,7 @@ namespace ShelteredAPI.UI.Compatibility
                 label.text = isPrimary ? label.text ?? string.Empty : string.Empty;
                 label.fontSize = fontSize;
                 label.color = resolvedLabelColor;
-                label.effectStyle = UILabel.Effect.Outline;
-                label.effectColor = new Color(0f, 0f, 0f, 0.75f);
+                label.effectStyle = UILabel.Effect.None;
                 label.alignment = NGUIText.Alignment.Center;
                 label.overflowMethod = UILabel.Overflow.ShrinkContent;
                 label.width = width - 20;

@@ -23,13 +23,14 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private static readonly Color ColorTrack = new Color(0.25f, 0.18f, 0.12f, 0.72f);
         private static readonly Color ColorTrackFill = new Color(0.56f, 0.38f, 0.22f, 0.96f);
         private static readonly Color ColorValue = new Color(0.20f, 0.14f, 0.09f, 1f);
+        private static readonly Color ColorInputValue = new Color(0.93f, 0.88f, 0.80f, 1f);
         private static readonly Color ColorInputBackground = new Color(0.18f, 0.13f, 0.09f, 0.52f);
         private static readonly Color ColorSwatchBorder = new Color(0.18f, 0.11f, 0.06f, 0.82f);
 
         private const int ColumnWidth = 980;
         private const int LabelWidth = 430;
         private const int ValueWidth = 76;
-        private const int TrackWidth = 136;
+        private const int TrackWidth = 112;
         private const int TrackHeight = 18;
         private const int SmallButtonWidth = 38;
         private const int SmallButtonHeight = 34;
@@ -42,10 +43,11 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private const float LabelY = 0f;
         private const float ControlY = 0f;
         private const float RuleY = -26f;
-        private const float ValueX = 750f;
         private const float TrackCenterX = 750f;
+        private const float NumericValueX = 822f;
+        private const float NumericTrackCenterX = 720f;
         private const float DecreaseX = 630f;
-        private const float IncreaseX = 870f;
+        private const float IncreaseX = 900f;
         private const float CyclePreviousX = 630f;
         private const float CycleNextX = 870f;
 
@@ -135,7 +137,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
                 label.color = isSectionHeader
                     ? ColorHeader
-                    : (label.name == "Value" ? ColorValue : ColorText);
+                    : ResolveStyledLabelColor(label);
                 if (label.fontSize <= 0)
                     continue;
 
@@ -206,7 +208,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                     : SpineWidgetRuntime.GetValue<float>(def, settingsObject);
             };
 
-            UILabel value = CreateValueLabel(row, FormatNumeric(def, read(), snapToInt), new Vector3(ValueX, LabelY, 0f), ValueWidth);
+            UILabel value = CreateValueLabel(row, FormatNumeric(def, read(), snapToInt), new Vector3(NumericValueX, LabelY, 0f), ValueWidth);
             UITexture fill;
             GameObject track = CreateSliderTrack(row, min, max, read(), out fill);
 
@@ -449,13 +451,13 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
         private GameObject CreateSliderTrack(GameObject row, float min, float max, float value, out UITexture fill)
         {
-            _chrome.Ui.CreateQuad(row, "SliderTrackShadow", _whiteTexture, new Vector3(TrackCenterX + 1f, ControlY - 1f, 0f), TrackWidth + 6, TrackHeight + 6, new Color(0.08f, 0.04f, 0.02f, 0.28f), _chrome.Ui.NextDepth());
-            _chrome.Ui.CreateQuad(row, "SliderTrack", _whiteTexture, new Vector3(TrackCenterX, ControlY, 0f), TrackWidth, TrackHeight, ColorTrack, _chrome.Ui.NextDepth());
-            fill = _chrome.Ui.CreateQuad(row, "SliderFill", _whiteTexture, new Vector3(TrackCenterX - TrackWidth * 0.5f, ControlY, 0f), 1, TrackHeight - 4, ColorTrackFill, _chrome.Ui.NextDepth());
+            _chrome.Ui.CreateQuad(row, "SliderTrackShadow", _whiteTexture, new Vector3(NumericTrackCenterX + 1f, ControlY - 1f, 0f), TrackWidth + 6, TrackHeight + 6, new Color(0.08f, 0.04f, 0.02f, 0.28f), _chrome.Ui.NextDepth());
+            _chrome.Ui.CreateQuad(row, "SliderTrack", _whiteTexture, new Vector3(NumericTrackCenterX, ControlY, 0f), TrackWidth, TrackHeight, ColorTrack, _chrome.Ui.NextDepth());
+            fill = _chrome.Ui.CreateQuad(row, "SliderFill", _whiteTexture, new Vector3(NumericTrackCenterX - TrackWidth * 0.5f, ControlY, 0f), 1, TrackHeight - 4, ColorTrackFill, _chrome.Ui.NextDepth());
             fill.pivot = UIWidget.Pivot.Left;
             UpdateSliderFill(fill, min, max, value);
 
-            GameObject hit = _chrome.Ui.CreateChild(row, "SliderHit", new Vector3(TrackCenterX, ControlY, 0f));
+            GameObject hit = _chrome.Ui.CreateChild(row, "SliderHit", new Vector3(NumericTrackCenterX, ControlY, 0f));
             BoxCollider collider = hit.AddComponent<BoxCollider>();
             collider.size = new Vector3(TrackWidth, 38f, 1f);
             collider.center = Vector3.zero;
@@ -470,14 +472,16 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             UITexture background = _chrome.Ui.CreateQuad(label.transform.parent.gameObject, "NumericInputBackground", _whiteTexture,
                 label.transform.localPosition, ValueWidth + 8, 28, ColorInputBackground, _chrome.Ui.NextDepth());
             background.depth = label.depth - 1;
+            label.name = "NumericInputValue";
+            label.color = ColorInputValue;
 
             UIInput input = label.gameObject.AddComponent<UIInput>();
             input.label = label;
             input.validation = def != null && !string.IsNullOrEmpty(def.UnitSuffix)
                 ? UIInput.Validation.None
                 : (snapToInt ? UIInput.Validation.Integer : UIInput.Validation.Float);
-            input.activeTextColor = ColorValue;
-            input.caretColor = ColorValue;
+            input.activeTextColor = ColorInputValue;
+            input.caretColor = ColorInputValue;
             input.selectionColor = new Color(0.35f, 0.25f, 0.16f, 0.35f);
 
             BoxCollider collider = label.gameObject.AddComponent<BoxCollider>();
@@ -666,6 +670,17 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private static void AttachTooltip(GameObject target, string text)
         {
             SpineWidgetRuntime.SetTooltip(target, text);
+        }
+
+        private static Color ResolveStyledLabelColor(UILabel label)
+        {
+            if (label == null)
+                return ColorText;
+
+            if (label.name == "NumericInputValue")
+                return ColorInputValue;
+
+            return label.name == "Value" ? ColorValue : ColorText;
         }
 
         private static void UpdateButtonLabel(GameObject button, string text)
