@@ -9,15 +9,20 @@ namespace Manager.Views
     /// </summary>
     public class AboutTab : UserControl
     {
+        private const string IssuesUrl = "https://github.com/coolnether123/shelteredmodmanager/issues";
+        private const string NexusModsUrl = "https://www.nexusmods.com/games/sheltered";
+        private const string NexusManagerUrl = "https://www.nexusmods.com/sheltered/mods/1";
+
         private Label _titleLabel;
         private Label _versionLabel;
         private Label _authorLabel;
         private RichTextBox _descriptionBox;
         private Label _linksLabel;
-        
-        private LinkLabel _nexusLink;
-        private LinkLabel _githubLink;
-        
+
+        private LinkLabel _issuesLink;
+        private LinkLabel _nexusModsLink;
+        private LinkLabel _nexusManagerLink;
+
         private Label _creditsLabel;
         private RichTextBox _creditsBox;
 
@@ -25,21 +30,26 @@ namespace Manager.Views
         private string _appVersion = "1.0.0";
         private string _author = "Coolnether123";
 
-        public string AppVersion 
-        { 
-            get { return _appVersion; } 
-            set 
-            { 
+        public string AppVersion
+        {
+            get { return _appVersion; }
+            set
+            {
                 _appVersion = value;
                 if (_versionLabel != null)
                     _versionLabel.Text = "Version " + (_appVersion ?? string.Empty);
-            } 
+            }
         }
-        
-        public string Author 
-        { 
-            get { return _author; } 
-            set { _author = value; } 
+
+        public string Author
+        {
+            get { return _author; }
+            set
+            {
+                _author = value;
+                if (_authorLabel != null)
+                    _authorLabel.Text = "Maintained by " + (_author ?? string.Empty);
+            }
         }
 
         public AboutTab()
@@ -54,7 +64,6 @@ namespace Manager.Views
 
             int yPos = 20;
 
-            // Title
             _titleLabel = new Label();
             _titleLabel.Text = "Sheltered Mod Manager";
             _titleLabel.Font = new Font("Segoe UI", 18f, FontStyle.Bold);
@@ -62,7 +71,6 @@ namespace Manager.Views
             _titleLabel.Location = new Point(20, yPos);
             yPos += 45;
 
-            // Version
             _versionLabel = new Label();
             _versionLabel.Text = "Version " + _appVersion;
             _versionLabel.Font = new Font("Segoe UI", 11f);
@@ -71,38 +79,39 @@ namespace Manager.Views
             _versionLabel.Location = new Point(20, yPos);
             yPos += 30;
 
-            // Author
             _authorLabel = new Label();
-            _authorLabel.Text = "by " + _author;
+            _authorLabel.Text = "Maintained by " + _author;
             _authorLabel.Font = new Font("Segoe UI", 10f);
             _authorLabel.AutoSize = true;
             _authorLabel.Location = new Point(20, yPos);
             yPos += 40;
 
             int rightColumnX = 600;
-            int rightColumnY = 135; // Align with description top
+            int rightColumnY = 135;
 
             _descriptionBox = new RichTextBox();
             _descriptionBox.Text =
-                "Sheltered Mod Manager is a modding framework for Sheltered.\n\n" +
+                "Sheltered Mod Manager is a modding framework for Sheltered by Unicube and Team17. It installs non-destructively alongside the game and supports Steam/GOG 32-bit builds and Epic 64-bit builds.\n\n" +
 
                 "Core features:\n" +
-                "• Unlimited save slots with custom paging UI.\n" +
-                "• Save protection - tracks mods per save and warns on mismatches.\n" +
-                "• In-game mod manager accessible from the main menu.\n" +
-                "• Plugin loader with dependency resolution.\n" +
-                "• Supports Steam/GOG (32-bit) and Epic (64-bit) via UnityDoorstop.\n\n" +
+                "- Plugin loader with dependency resolution and load order management.\n" +
+                "- Unlimited save slots for vanilla scenarios with mod tracking and verification.\n" +
+                "- Desktop and in-game mod managers.\n" +
+                "- Rebindable Sheltered and mod-defined keybindings.\n" +
 
-                "Developer API (early development):\n" +
-                "• Item and food injection, custom recipes.\n" +
-                "• Event subscriptions and Harmony integration.\n" +
-                "• Runtime inspector (F9).\n\n" +
+                "Experimental scenario support:\n" +
+                "- Custom scenario browser, XML scenario packs, triggers, scheduled effects, and win/loss runtime support.\n\n" +
 
-                "Originally created by benjaminfoo (2019). Maintained by Coolnether123 (2026).";
+                "Developer API:\n" +
+                "- ModAPI.dll provides the neutral modding framework surface.\n" +
+                "- ShelteredAPI.dll provides Sheltered content, saves, UI, input, events, actors, scenarios, and Harmony integration.\n" +
+                "- ModManagerBase, attribute settings, Spine settings UI, isolated persistence, event bus, and runtime inspector (F9).\n\n" +
+
+                "Originally created by benjaminfoo in 2019. Maintained by Coolnether123 from 2025 to present with the original author's permission.";
 
             _descriptionBox.Font = new Font("Segoe UI", 10f);
             _descriptionBox.Location = new Point(20, yPos);
-            _descriptionBox.Size = new Size(rightColumnX - 60, this.Height - yPos - 20); // Maintain gap to right column
+            _descriptionBox.Size = new Size(rightColumnX - 60, this.Height - yPos - 20);
             _descriptionBox.ReadOnly = true;
             _descriptionBox.Multiline = true;
             _descriptionBox.WordWrap = true;
@@ -110,7 +119,6 @@ namespace Manager.Views
             _descriptionBox.ScrollBars = RichTextBoxScrollBars.Vertical;
             _descriptionBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom;
 
-            // Links section
             _linksLabel = new Label();
             _linksLabel.Text = "Resources & Community";
             _linksLabel.UseMnemonic = false;
@@ -119,23 +127,15 @@ namespace Manager.Views
             _linksLabel.Location = new Point(rightColumnX, rightColumnY);
             rightColumnY += 30;
 
-            _nexusLink = new LinkLabel();
-            _nexusLink.Text = "Nexus Mods";
-            _nexusLink.Font = new Font("Segoe UI", 10f);
-            _nexusLink.AutoSize = true;
-            _nexusLink.Location = new Point(rightColumnX + 10, rightColumnY);
-            _nexusLink.LinkClicked += NexusLink_LinkClicked;
+            _issuesLink = CreateLinkLabel("GitHub Issues", rightColumnX + 10, rightColumnY, IssuesLink_LinkClicked);
             rightColumnY += 25;
 
-            _githubLink = new LinkLabel();
-            _githubLink.Text = "GitHub Repository";
-            _githubLink.Font = new Font("Segoe UI", 10f);
-            _githubLink.AutoSize = true;
-            _githubLink.Location = new Point(rightColumnX + 10, rightColumnY);
-            _githubLink.LinkClicked += GithubLink_LinkClicked;
+            _nexusModsLink = CreateLinkLabel("Nexus Mods - Sheltered", rightColumnX + 10, rightColumnY, NexusModsLink_LinkClicked);
+            rightColumnY += 25;
+
+            _nexusManagerLink = CreateLinkLabel("Sheltered Mod Manager on Nexus", rightColumnX + 10, rightColumnY, NexusManagerLink_LinkClicked);
             rightColumnY += 50;
 
-            // Credits section
             _creditsLabel = new Label();
             _creditsLabel.Text = "Credits & Acknowledgments";
             _creditsLabel.UseMnemonic = false;
@@ -145,15 +145,15 @@ namespace Manager.Views
             rightColumnY += 30;
 
             _creditsBox = new RichTextBox();
-            _creditsBox.Text = "• Unicube: Developer of Sheltered.\n" +
-                   "• Team17: Publisher of Sheltered.\n" +
-                   "• benjaminfoo: Original 2019 mod loader foundation.\n" +
-                   "• NeighTools: UnityDoorstop injection framework.\n" +
-                   "• Andreas Pardeike: Harmony patching library.\n" +
-                   "• Coolnether123: 2026 active development.";
+            _creditsBox.Text = "- Coolnether123: 2025 maintenance and development.\n" +
+                   "- benjaminfoo: Original 2019 mod loader foundation.\n" +
+                   "- Team17: Publisher of Sheltered.\n" +
+                   "- Unicube: Original game developers.\n" +
+                   "- NeighTools: UnityDoorstop injection framework.\n" +
+                   "- Andreas Pardeike: Harmony runtime patching library.";
             _creditsBox.Font = new Font("Segoe UI", 10f);
             _creditsBox.Location = new Point(rightColumnX, rightColumnY);
-            _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20); // Dynamic width and height
+            _creditsBox.Size = new Size(this.Width - rightColumnX - 40, this.Height - rightColumnY - 20);
             _creditsBox.ReadOnly = true;
             _creditsBox.Multiline = true;
             _creditsBox.WordWrap = true;
@@ -161,31 +161,45 @@ namespace Manager.Views
             _creditsBox.ScrollBars = RichTextBoxScrollBars.Vertical;
             _creditsBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
 
-            // Add controls
             this.Controls.Add(_titleLabel);
             this.Controls.Add(_versionLabel);
             this.Controls.Add(_authorLabel);
             this.Controls.Add(_descriptionBox);
             this.Controls.Add(_linksLabel);
-            this.Controls.Add(_nexusLink);
-            this.Controls.Add(_githubLink);
+            this.Controls.Add(_issuesLink);
+            this.Controls.Add(_nexusModsLink);
+            this.Controls.Add(_nexusManagerLink);
             this.Controls.Add(_creditsLabel);
             this.Controls.Add(_creditsBox);
 
             this.ResumeLayout();
         }
 
-        private void NexusLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private LinkLabel CreateLinkLabel(string text, int x, int y, LinkLabelLinkClickedEventHandler handler)
         {
-            OpenUrl("https://www.nexusmods.com/sheltered/mods/");
+            LinkLabel link = new LinkLabel();
+            link.Text = text;
+            link.Font = new Font("Segoe UI", 10f);
+            link.AutoSize = true;
+            link.Location = new Point(x, y);
+            link.LinkClicked += handler;
+            return link;
         }
 
-        private void GithubLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private void IssuesLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            OpenUrl("https://github.com/coolnether123/shelteredmodmanager");
+            OpenUrl(IssuesUrl);
         }
 
+        private void NexusModsLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            OpenUrl(NexusModsUrl);
+        }
 
+        private void NexusManagerLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            OpenUrl(NexusManagerUrl);
+        }
 
         private void OpenUrl(string url)
         {
@@ -201,7 +215,7 @@ namespace Manager.Views
         }
 
         /// <summary>
-        /// Apply theme
+        /// Apply theme.
         /// </summary>
         public void ApplyTheme(bool isDark)
         {
@@ -219,9 +233,10 @@ namespace Manager.Views
                 _creditsLabel.ForeColor = Color.White;
                 _creditsBox.BackColor = Color.FromArgb(45, 45, 48);
                 _creditsBox.ForeColor = Color.White;
-                
-                _nexusLink.LinkColor = Color.LightBlue;
-                _githubLink.LinkColor = Color.LightBlue;
+
+                _issuesLink.LinkColor = Color.LightBlue;
+                _nexusModsLink.LinkColor = Color.LightBlue;
+                _nexusManagerLink.LinkColor = Color.LightBlue;
             }
             else
             {
@@ -235,11 +250,11 @@ namespace Manager.Views
                 _creditsLabel.ForeColor = SystemColors.ControlText;
                 _creditsBox.BackColor = SystemColors.Control;
                 _creditsBox.ForeColor = SystemColors.ControlText;
-                
-                _nexusLink.LinkColor = SystemColors.HotTrack;
-                _githubLink.LinkColor = SystemColors.HotTrack;
+
+                _issuesLink.LinkColor = SystemColors.HotTrack;
+                _nexusModsLink.LinkColor = SystemColors.HotTrack;
+                _nexusManagerLink.LinkColor = SystemColors.HotTrack;
             }
         }
     }
 }
-

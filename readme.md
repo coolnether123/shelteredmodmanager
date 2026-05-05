@@ -240,7 +240,7 @@ Currently available:
 
 - **Issues:** [GitHub Issues](https://github.com/coolnether123/shelteredmodmanager/issues)
 - **Sheltered Mods:** [Nexus Mods - Sheltered](https://www.nexusmods.com/games/sheltered)
-- **Nexus Comments:** [Sheltered Mod Manager](https://www.nexusmods.com/games/sheltered/mods/1)
+- **Nexus Comments:** [Sheltered Mod Manager](https://www.nexusmods.com/sheltered/mods/1)
 
 ## Documentation
 
