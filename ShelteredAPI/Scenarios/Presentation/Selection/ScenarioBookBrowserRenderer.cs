@@ -451,18 +451,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 80, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
 
             GameObject card = _ui.CreateChild(parent, "SaveSlotCard", new Vector3(RightPageX, 40f, 0f));
-            Color background = row.IsLocked
-                ? new Color(0.72f, 0.50f, 0.46f, 0.44f)
-                : new Color(0.92f, 0.84f, 0.66f, 0.36f);
-            Color hoverBackground = row.IsLocked
-                ? new Color(0.78f, 0.53f, 0.48f, 0.62f)
-                : new Color(1f, 0.91f, 0.68f, 0.56f);
+            Color background = BookSelectionRowStyle.Background(row.IsLocked);
+            Color hoverBackground = BookSelectionRowStyle.HoverBackground(row.IsLocked);
 
             UITexture bg = _ui.CreateQuad(card, "Background", _chrome.Textures.White, Vector3.zero,
                 RightPageWidth, 245, background, _ui.NextDepth());
 
             UILabel title = _ui.CreateLabel(card, "Title", row.Title,
-                new Vector3(-190f, 80f, 0f), 24, row.IsLocked ? _chrome.Palette.StampRed : _chrome.Palette.Ink,
+                new Vector3(-190f, 80f, 0f), 24, BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
                 RightPageWidth - 42, 72, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.multiLine = true;
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
@@ -508,14 +504,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             hover.RestColors = new Color[]
             {
                 background,
-                row.IsLocked ? _chrome.Palette.StampRed : _chrome.Palette.Ink,
+                BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
                 _chrome.Palette.InkFaded,
                 _chrome.Palette.Ink
             };
             hover.HoverColors = new Color[]
             {
                 hoverBackground,
-                row.IsLocked ? _chrome.Palette.StampRed : _chrome.Palette.Ink,
+                BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
                 _chrome.Palette.Ink,
                 _chrome.Palette.Ink
             };
@@ -622,21 +618,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             Action<ScenarioBookRowModel> delete)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookRow_" + index, Vector3.zero);
-            Color background = row.IsLocked
-                ? new Color(0.72f, 0.50f, 0.46f, 0.44f)
-                : new Color(0.92f, 0.84f, 0.66f, 0.32f);
-            Color hoverBackground = row.IsLocked
-                ? new Color(0.78f, 0.53f, 0.48f, 0.62f)
-                : new Color(1f, 0.91f, 0.68f, 0.54f);
-            UITexture leftBg = _ui.CreateQuad(root, "LeftPageBackground", _chrome.Textures.White, new Vector3(LeftPageX, 0f, 0f),
-                LeftPageWidth, RowPanelHeight, background, _ui.NextDepth());
-            UITexture rightBg = _ui.CreateQuad(root, "RightPageBackground", _chrome.Textures.White, new Vector3(RightPageX, 0f, 0f),
-                RightPageWidth, RowPanelHeight, background, _ui.NextDepth());
+            UITexture leftBg;
+            UITexture rightBg;
+            BookSelectionRowStyle.BuildSplitPageBackground(root, _ui, _chrome.Textures,
+                LeftPageX, RightPageX, LeftPageWidth, RightPageWidth, RowPanelHeight, row.IsLocked,
+                out leftBg, out rightBg);
             if (select != null && row.Kind != ScenarioBookRowKind.Empty)
                 _ui.AddClickCollider(root, RowHitWidth, RowPanelHeight, delegate { select(row); });
 
             UILabel title = _ui.CreateLabel(root, "Title", row.Title,
-                new Vector3(-520f, 14f, 0f), 21, row.IsLocked ? _chrome.Palette.StampRed : _chrome.Palette.Ink,
+                new Vector3(-520f, 14f, 0f), 21, BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
                 LeftPageWidth - 24, 28, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             title.overflowMethod = UILabel.Overflow.ShrinkContent;
 
@@ -658,7 +649,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             if (row.Kind != ScenarioBookRowKind.Empty)
-                AttachHover(root, leftBg, rightBg, title, detail, badge, background, hoverBackground, row);
+                AttachHover(root, leftBg, rightBg, title, detail, badge, row);
 
             return root;
         }
@@ -670,31 +661,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             UILabel title,
             UILabel detail,
             UILabel badge,
-            Color background,
-            Color hoverBackground,
             ScenarioBookRowModel row)
         {
-            HoverVisualState hover = root.AddComponent<HoverVisualState>();
-            hover.Widgets = new UIWidget[] { leftBg, rightBg, title, detail, badge };
-            hover.RestColors = new Color[]
-            {
-                background,
-                background,
-                row.IsLocked ? _chrome.Palette.StampRed : _chrome.Palette.Ink,
-                _chrome.Palette.InkFaded,
-                _chrome.Palette.Ink
-            };
-            hover.HoverColors = new Color[]
-            {
-                hoverBackground,
-                hoverBackground,
-                row.IsLocked ? _chrome.Palette.StampRed : _chrome.Palette.Ink,
-                _chrome.Palette.Ink,
-                _chrome.Palette.Ink
-            };
-            hover.ScaleTarget = root.transform;
-            hover.RestScale = 1f;
-            hover.HoverScale = 1.01f;
+            BookSelectionRowStyle.AttachSplitPageHover(root, leftBg, rightBg,
+                new UIWidget[] { title, detail, badge },
+                new Color[]
+                {
+                    BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
+                    _chrome.Palette.InkFaded,
+                    _chrome.Palette.Ink
+                },
+                new Color[]
+                {
+                    BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
+                    _chrome.Palette.Ink,
+                    _chrome.Palette.Ink
+                },
+                row.IsLocked,
+                1.01f);
         }
 
         private static string Safe(string value, string fallback)

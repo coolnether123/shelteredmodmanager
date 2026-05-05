@@ -43,7 +43,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 string backupPath = filePath + ".bak";
                 if (File.Exists(backupPath))
                 {
-                    throw new InvalidDataException(
+                    throw new IOException(
                         "Scenario XML could not be loaded from '" + filePath + "'. A backup is available at '" + backupPath + "'. Restore it manually or fix the XML before retrying. " + ex.Message,
                         ex);
                 }

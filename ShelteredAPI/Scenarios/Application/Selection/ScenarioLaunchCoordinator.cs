@@ -37,9 +37,14 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public SaveManager.SaveType GetVirtualSaveType(ScenarioCatalogEntry entry)
         {
             if (entry != null)
-                return entry.DefaultSaveType;
+            {
+                if (!entry.IsVanilla)
+                    return ScenarioSelectionIds.GetCustomScenarioTransportSaveType();
 
-            return SaveManager.SaveType.Slot1;
+                return entry.DefaultSaveType;
+            }
+
+            return ScenarioSelectionIds.GetCustomScenarioTransportSaveType();
         }
 
         /// <summary>

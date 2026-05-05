@@ -15,16 +15,16 @@ namespace ShelteredAPI.Saves{
     {
         static bool Prefix(SaveManager __instance)
         {
-            MMLog.Write("[SaveGlobalData_Patch] TRIGGERED.");
+            MMLog.WriteDebug("[SaveGlobalData_Patch] SaveGlobalData prefix invoked.");
             // If we are currently in a custom save session
             if (SaveRuntimeState.ActiveCustomSave != null)
             {
-                MMLog.Write("[SaveGlobalData_Patch] Intercepting in-game save for active custom save.");
+                MMLog.WriteDebug("[SaveGlobalData_Patch] Intercepting in-game save for active custom save.");
                 try
                 {
                     var saveData = new SaveData();
                     var saveables = Traverse.Create(__instance).Field("m_saveables").GetValue<System.Collections.Generic.List<ISaveable>>();
-                    MMLog.Write($"[SaveGlobalData_Patch] Found {saveables.Count} ISaveable objects to process.");
+                    MMLog.WriteDebug($"[SaveGlobalData_Patch] Found {saveables.Count} ISaveable objects to process.");
 
                     foreach (var saveable in saveables)
                     {

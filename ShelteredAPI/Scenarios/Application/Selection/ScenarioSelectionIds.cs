@@ -65,6 +65,11 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             return SaveManager.SaveType.Slot1;
         }
 
+        public static SaveManager.SaveType GetCustomScenarioTransportSaveType()
+        {
+            return SaveManager.SaveType.Slot1;
+        }
+
         public static ScenarioBaseGameMode GetBaseGameMode(string scenarioId)
         {
             if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase))

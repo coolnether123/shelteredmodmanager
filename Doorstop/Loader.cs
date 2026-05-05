@@ -511,6 +511,14 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
     private static readonly HashSet<string> _resolveVersionMismatchLogged = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private bool _bootstrapStarted = false;
 
+    private static bool IsExpectedOptionalAssemblyProbe(string assemblyName)
+    {
+        return string.Equals(
+            assemblyName,
+            "System.Runtime.InteropServices.RuntimeInformation",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     void Awake()
     {
         if (_isInitialized)
@@ -655,11 +663,14 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
                     return System.Reflection.Assembly.LoadFrom(secondPath);
                 }
 
-                bool shouldLogMiss;
-                lock (_resolveLogLock) shouldLogMiss = _resolveMissLogged.Add(assemblyName);
-                if (shouldLogMiss)
+                if (!IsExpectedOptionalAssemblyProbe(assemblyName))
                 {
-                    LoaderDebugLog.Write(string.Format("[Bootstrap] AssemblyResolve miss: {0}", args.Name));
+                    bool shouldLogMiss;
+                    lock (_resolveLogLock) shouldLogMiss = _resolveMissLogged.Add(assemblyName);
+                    if (shouldLogMiss)
+                    {
+                        LoaderDebugLog.Write(string.Format("[Bootstrap] AssemblyResolve miss: {0}", args.Name));
+                    }
                 }
                 return null;
             };

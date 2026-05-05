@@ -31,8 +31,8 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private const int OverlayDepth = 50100;
         private const string OverlayName = "ShelteredAPI_KeybindBookPanel";
         private const int HeaderRowHeight = 32;
-        private const float SearchBarY = 222f;
-        private const float SearchReservedHeight = 54f;
+        private const float SearchBarY = 254f;
+        private const float SearchReservedHeight = 0f;
 
         private static GameObject _instance;
 

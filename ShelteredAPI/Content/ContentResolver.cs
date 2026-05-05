@@ -14,7 +14,7 @@ namespace ShelteredAPI.Content
     {
         public static List<ResolvedItem> ResolveItems()
         {
-            MMLog.Write($"ResolveItems called. ContentRegistry.Items count: {ContentRegistry.Items.Count}");
+            MMLog.WriteDebug($"[ContentResolver] ResolveItems called. ContentRegistry.Items count: {ContentRegistry.Items.Count}");
             var resolved = new List<ResolvedItem>();
             foreach (var def in ContentRegistry.Items)
             {
@@ -30,9 +30,9 @@ namespace ShelteredAPI.Content
                     Icon = icon,
                     Prefab = prefab
                 });
-                MMLog.Write($"Resolved item: {def.Id} (assembly: {asm?.GetName().Name ?? "null"})");
+                MMLog.WriteDebug($"[ContentResolver] Resolved item: {def.Id} (assembly: {asm?.GetName().Name ?? "null"})");
             }
-            MMLog.Write($"ResolveItems complete: {resolved.Count} items");
+            MMLog.WriteDebug($"[ContentResolver] ResolveItems complete: {resolved.Count} items");
             return resolved;
         }
 

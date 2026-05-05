@@ -26,7 +26,7 @@ namespace ShelteredAPI.Content
         /// </summary>
         static void Postfix(InventoryManager __instance)
         {
-            MMLog.Write("Postfix patch called!");
+            MMLog.WriteDebug("[InventoryIntegration] InventoryManager.InitialiseInventory postfix invoked.");
             
             // Ensure ContentInjector has run before we try to add slots
             // The RuntimeInitializeOnLoadMethod trigger sometimes doesn't fire in time,

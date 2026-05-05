@@ -19,6 +19,11 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
     /// </summary>
     internal sealed class KeybindRowWidget
     {
+        private const int LeftPageX = -300;
+        private const int RightPageX = 300;
+        private const int LeftPageWidth = 470;
+        private const int RightPageWidth = 430;
+
         private readonly IThemePalette _palette;
         private readonly IThemeMetrics _metrics;
         private readonly ITextureLibrary _textures;
@@ -57,6 +62,11 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             KeybindRowLayout layout = KeybindRowLayout.Create(_metrics);
 
             GameObject row = _ui.CreateChild(parent, "Row_" + (entry.Primary != null ? entry.Primary.Id : "row"), Vector3.zero);
+            UITexture leftBg;
+            UITexture rightBg;
+            BookSelectionRowStyle.BuildSplitPageBackground(row, _ui, _textures,
+                LeftPageX, RightPageX, LeftPageWidth, RightPageWidth, _metrics.RowHeight - 6, false,
+                out leftBg, out rightBg);
 
             UILabel actionText = _ui.CreateLabel(row, "Action", actionLabel,
                 new Vector3(layout.ActionLabelX, 0, 0),
@@ -132,6 +142,12 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
                 });
 
             _ui.AddClickCollider(row, layout.RowWidth, _metrics.RowHeight, null);
+            BookSelectionRowStyle.AttachSplitPageHover(row, leftBg, rightBg,
+                new UIWidget[] { actionText },
+                new Color[] { _palette.Ink },
+                new Color[] { _palette.Ink },
+                false,
+                1.01f);
             AttachTooltips(row, entry, actionLabel, primaryCap, secondaryCap, clearButton, resetButton);
 
             return row;

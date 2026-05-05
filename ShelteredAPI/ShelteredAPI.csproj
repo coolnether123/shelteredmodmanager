@@ -512,6 +512,7 @@
     <Compile Include="UI\FieldManual\Frame\FieldManualFrame.cs" />
     <Compile Include="UI\FieldManual\Frame\ShelteredBookFrame.cs" />
     <Compile Include="UI\FieldManual\Widgets\BookButtonWidget.cs" />
+    <Compile Include="UI\FieldManual\Widgets\BookSelectionRowStyle.cs" />
     <Compile Include="UI\FieldManual\Widgets\KeybindColumnHeaderWidget.cs" />
     <Compile Include="UI\FieldManual\Widgets\KeybindRowLayout.cs" />
     <Compile Include="UI\FieldManual\Widgets\KeycapWidget.cs" />
