@@ -167,7 +167,7 @@ Minimal XML:
 </Scenario>
 ```
 
-XML packs are refreshed when the custom scenario UI opens. If a code registration and an XML pack share the same scenario id, the code registration wins.
+XML packs are refreshed when the custom scenario UI opens. If a code registration and an XML pack share the same scenario id, the code registration wins. If an active save binding references an XML scenario that is missing at load time, the runtime keeps that binding in a blocked pending state and retries after the catalog refreshes in the same session.
 
 ### Triggers
 
@@ -208,6 +208,8 @@ ScenarioValidationResult validation = ShelteredScenarioAuthoring.ValidateDefinit
 if (validation.IsValid)
     ShelteredScenarioAuthoring.SaveDefinition(definition, filePath);
 ```
+
+`SaveDefinition` never overwrites the live `scenario.xml` directly. It writes a same-directory temp file, parses that temp file back into a scenario definition, then replaces the live file and leaves `scenario.xml.bak` when replacing an existing file. If a write or replace fails, the previous `scenario.xml` remains in place. If loading a scenario file fails and a `.bak` exists, the loader reports the backup path instead of silently discarding local edits.
 
 Edit an existing XML scenario file:
 
@@ -296,6 +298,8 @@ When a custom scenario successfully spawns, the runtime stores a `ScenarioRuntim
 
 Failed spawns, dependency failures, and canceled startup flows clear pending scenario state and do not write a new binding. On later loads, active bindings let ShelteredAPI re-load the XML definition by `ScenarioId` and apply supported scenario data after the world is ready. Code-only scenarios still keep identity/version metadata in the save, but reload-time XML application requires a matching `scenario.xml` pack.
 
+Public custom-scenario save helpers such as `ShelteredSaves.ListScenario`, `GetScenario`, `CreateScenario`, `OverwriteScenario`, and `DeleteScenario` only accept custom scenario ids. Reserved built-in ids, including `Standard`, `Vanilla.Surrounded`, `Vanilla.Stasis`, and `ScenarioAuthoringDrafts`, throw before resolving any save path. Use explicit built-in helpers such as `ListStandard`, `GetStandard`, `OverwriteStandard`, and `DeleteStandard` when your mod intentionally works with standard save slots.
+
 ## Current Apply Support
 
 Applied now:
@@ -337,4 +341,4 @@ ScenarioValidationResult result = ShelteredScenarioAuthoring.RunFrameworkVerific
 
 XML parsing rejects DTD and external entity declarations. Scenario XML should be plain data under a `<Scenario>` root; do not rely on external XML entities or document type declarations.
 
-`result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, secure XML parsing, or asset escape validation fails.
+`result.IsValid` is `false` if round-trip serialization, dependency verification, catalog discovery, secure XML parsing, atomic XML replacement, or asset escape validation fails.

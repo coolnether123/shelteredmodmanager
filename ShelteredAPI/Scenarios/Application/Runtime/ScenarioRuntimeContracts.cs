@@ -78,6 +78,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
     internal interface IScenarioDefinitionCatalogService
     {
+        int CatalogRevision { get; }
         void RefreshDefinitionCatalog();
         ScenarioInfo[] ListDefinitions();
         ScenarioValidationResult ValidateDefinition(string scenarioId);

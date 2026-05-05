@@ -395,7 +395,7 @@ namespace ShelteredAPI.Core
                 context.ScenarioId = string.IsNullOrEmpty(pending.scenarioId) ? "Standard" : pending.scenarioId;
                 var pendingEntry = string.Equals(context.ScenarioId, "Standard", StringComparison.OrdinalIgnoreCase)
                     ? ShelteredAPI.Saves.ExpandedVanillaSaves.Get(pending.saveId)
-                    : ShelteredAPI.Saves.ScenarioSaves.Get(context.ScenarioId, pending.saveId);
+                    : ShelteredAPI.Saves.ScenarioSaves.GetTrustedRegistry(context.ScenarioId).GetSave(pending.saveId);
                 if (pendingEntry != null)
                 {
                     context.AbsoluteSlot = pendingEntry.absoluteSlot;

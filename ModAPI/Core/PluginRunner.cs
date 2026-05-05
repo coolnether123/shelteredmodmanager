@@ -89,6 +89,7 @@ namespace ModAPI.Core
             SaveExitTracker.Mark("OnApplicationQuit", "Unity is quitting");
             MMLog.WriteInfo("Application is quitting detected. Shutting down plugins...");
             if (Manager != null) Manager.ShutdownAll();
+            UnityLogFilter.LogSuppressionSummary("application shutdown");
             MMLog.Flush();
         }
 
@@ -97,6 +98,7 @@ namespace ModAPI.Core
         /// </summary>
         private void OnDestroy()
         {
+            UnityLogFilter.LogSuppressionSummary("runner teardown");
             UnhookUnityLogBridge();
             if (_useModernApi && _sceneLoadedDelegate != null)
             {
@@ -185,29 +187,34 @@ namespace ModAPI.Core
                 if (UnityLogNormalizationRegistry.TryNormalize(msg, stackTrace, type, out normalization))
                 {
                     if (normalization.Suppress)
-                        return;
-
-                    if (string.IsNullOrEmpty(normalization.OnceKey))
                     {
-                        MMLog.WriteWithSource(
-                            normalization.Level,
-                            MMLog.LogCategory.General,
-                            normalization.Source,
-                            normalization.Message);
+                        if (UnityLogFilter.ShouldSuppressNormalized(msg, type, normalization))
+                            return;
                     }
                     else
                     {
-                        MMLog.LogOnce(normalization.OnceKey, delegate
+                        if (string.IsNullOrEmpty(normalization.OnceKey))
                         {
                             MMLog.WriteWithSource(
                                 normalization.Level,
                                 MMLog.LogCategory.General,
                                 normalization.Source,
                                 normalization.Message);
-                        });
-                    }
+                        }
+                        else
+                        {
+                            MMLog.LogOnce(normalization.OnceKey, delegate
+                            {
+                                MMLog.WriteWithSource(
+                                    normalization.Level,
+                                    MMLog.LogCategory.General,
+                                    normalization.Source,
+                                    normalization.Message);
+                            });
+                        }
 
-                    return;
+                        return;
+                    }
                 }
 
                 if (UnityLogFilter.ShouldSuppress(msg, type))

@@ -15,8 +15,11 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 
 - Split API surface: neutral `ModAPI.dll` plus Sheltered-specific `ShelteredAPI.dll`.
 - Custom scenario browser, XML packs, authoring tools, dependency lockout, trigger runtime, scheduled effects, and win/loss support. This surface is experimental for Beta.3 testing.
+- Custom-scenario save APIs now reject reserved built-in save ids such as `Standard`, `Vanilla.Surrounded`, `Vanilla.Stasis`, and draft storage. Mods should use the explicit `ShelteredSaves.*Standard` helpers for built-in save buckets.
+- Scenario authoring writes `scenario.xml` through same-directory temp files, parse validation, replace, and `.bak` recovery files so failed writes preserve the previous XML.
 - Rebindable vanilla and mod-defined keybindings with conflict handling and persistence.
-- Desktop and in-game mod manager improvements, including mod metadata, load order, Nexus discovery, and compatibility status.
+- Desktop and in-game mod manager improvements, including mod metadata, load order, Nexus discovery, install file-set verification/rollback, and compatibility status.
+- Unity log filtering is severity-aware: errors, asserts, and exceptions are never suppressed, and benign warning/log suppression is counted for diagnostics.
 - Save expansion and save verification for missing mods and version mismatches.
 
 ## Documentation Readiness
@@ -32,6 +35,7 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 - Run `tools\verify-modapi-boundary.cmd`.
 - Run `tools\verify-shelteredapi-public-surface.cmd`.
 - Run `tools\test-shelteredapi-contracts.cmd`.
+- Run `tools\verify-runtimecompat-rect.cmd`.
 - Smoke test Steam/GOG package against `Sheltered.exe`.
 - Smoke test Epic package against `ShelteredWindows64_EOS.exe`.
 - Verify `SMM\Manager.exe` About tab shows `Version 1.3.0-beta.3`.

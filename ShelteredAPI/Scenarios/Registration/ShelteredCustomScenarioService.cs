@@ -96,6 +96,11 @@ namespace ShelteredAPI.Scenarios.Registration{
             }
         }
 
+        public int CatalogRevision
+        {
+            get { return _definitionCatalog.CatalogRevision; }
+        }
+
         public ScenarioInfo[] ListDefinitions()
         {
             return _definitionCatalog.ListDefinitions();

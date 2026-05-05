@@ -67,7 +67,7 @@ Example:
 }
 ```
 
-Optional fields supported by `ModAbout` include `entryType`, `dependsOn`, `loadBefore`, `loadAfter`, `tags`, `website`, `missingModWarning`, `debugLogging`.
+Optional fields supported by `ModAbout` include `entryType`, `dependsOn`, `loadBefore`, `loadAfter`, `tags`, `website`, `requiredModApiVersion`, `requiredShelteredApiVersion`, `missingModWarning`, and `debugLogging`. Runtime activation checks the required API version fields when present and blocks incompatible mods with an early compatibility message.
 
 ## 4. Lifecycle Contract
 

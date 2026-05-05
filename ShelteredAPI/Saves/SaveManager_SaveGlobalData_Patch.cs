@@ -44,7 +44,7 @@ namespace ShelteredAPI.Saves{
                         : "Standard";
                     ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
                         ? (ISaveApi)ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetRegistry(scenarioId);
+                        : ScenarioSaves.GetTrustedRegistry(scenarioId);
                     var updatedEntry = saveApi.Overwrite(active.id, null, bytes);
                     if (updatedEntry != null)
                     {

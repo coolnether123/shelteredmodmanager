@@ -456,6 +456,14 @@ namespace ModAPI.Core
                 if (entry == null)
                     continue;
 
+                string compatibilityReason;
+                if (!IsRuntimeApiCompatible(entry, out compatibilityReason))
+                {
+                    MMLog.WriteError("PrepareModLoads: blocked incompatible mod '" + SafeEntryId(entry) + "': " + compatibilityReason);
+                    _loadErrors++;
+                    continue;
+                }
+
                 var modLoad = new PreparedModLoad();
                 modLoad.Entry = entry;
                 modLoad.Assemblies = PrepareAssemblies(entry);
@@ -623,6 +631,14 @@ namespace ModAPI.Core
             foreach (var entry in orderedMods)
             {
                 MMLog.WriteDebug($"Processing mod: {entry.Id}");
+
+                string compatibilityReason;
+                if (!IsRuntimeApiCompatible(entry, out compatibilityReason))
+                {
+                    MMLog.WriteError("Blocked incompatible mod '" + SafeEntryId(entry) + "' before assembly load: " + compatibilityReason);
+                    _loadErrors++;
+                    continue;
+                }
 
                 List<Assembly> modAssemblies = null;
                 try
@@ -811,6 +827,14 @@ namespace ModAPI.Core
             var entry = prepared != null ? prepared.Entry : null;
             if (prepared == null || entry == null)
                 return;
+
+            string compatibilityReason;
+            if (!IsRuntimeApiCompatible(entry, out compatibilityReason))
+            {
+                MMLog.WriteError("Blocked incompatible mod '" + SafeEntryId(entry) + "' before plugin activation: " + compatibilityReason);
+                _loadErrors++;
+                return;
+            }
 
             for (int j = 0; j < prepared.Assemblies.Count; j++)
             {
@@ -1083,6 +1107,101 @@ namespace ModAPI.Core
             {
                 return false;
             }
+        }
+
+        private static bool IsRuntimeApiCompatible(ModEntry entry, out string reason)
+        {
+            return RuntimeApiCompatibility.IsRuntimeApiCompatible(
+                entry != null ? entry.About : null,
+                TryGetRuntimeApiVersion,
+                out reason);
+        }
+
+        private static bool TryGetRuntimeApiVersion(string apiName, out string version, out string failureReason)
+        {
+            version = null;
+            failureReason = null;
+
+            Assembly assembly = null;
+            if (string.Equals(apiName, RuntimeApiCompatibility.ModApiName, StringComparison.OrdinalIgnoreCase))
+                assembly = Assembly.GetExecutingAssembly();
+            else
+                assembly = FindLoadedRuntimeAssembly(apiName);
+
+            if (assembly == null)
+            {
+                failureReason = "not loaded";
+                return false;
+            }
+
+            string location = SafeAssemblyPath(assembly);
+            if (!string.IsNullOrEmpty(location) && File.Exists(location))
+            {
+                try
+                {
+                    FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(location);
+                    if (!string.IsNullOrEmpty(versionInfo.FileVersion))
+                    {
+                        version = versionInfo.FileVersion;
+                        return true;
+                    }
+
+                    if (!string.IsNullOrEmpty(versionInfo.ProductVersion))
+                    {
+                        version = versionInfo.ProductVersion;
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failureReason = "unreadable: " + ex.Message;
+                    return false;
+                }
+            }
+
+            try
+            {
+                Version assemblyVersion = assembly.GetName().Version;
+                if (assemblyVersion == null)
+                {
+                    failureReason = "missing";
+                    return false;
+                }
+
+                version = assemblyVersion.ToString();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                failureReason = "unreadable: " + ex.Message;
+                return false;
+            }
+        }
+
+        private static Assembly FindLoadedRuntimeAssembly(string apiName)
+        {
+            if (string.IsNullOrEmpty(apiName))
+                return null;
+
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int i = 0; assemblies != null && i < assemblies.Length; i++)
+            {
+                Assembly assembly = assemblies[i];
+                if (assembly == null)
+                    continue;
+
+                try
+                {
+                    AssemblyName name = assembly.GetName();
+                    if (name != null && string.Equals(name.Name, apiName, StringComparison.OrdinalIgnoreCase))
+                        return assembly;
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
         }
 
         /// <summary>

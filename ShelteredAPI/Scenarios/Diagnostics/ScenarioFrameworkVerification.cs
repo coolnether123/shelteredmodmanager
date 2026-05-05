@@ -4,9 +4,11 @@ using System.IO;
 using System.Xml;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
+using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Diagnostics{
     /// <summary>
@@ -28,6 +30,9 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyDependencies(result);
                 VerifyAssetEscapes(root, result);
                 VerifySecureXmlParsing(result);
+                VerifyScenarioSaveIdGuards(result);
+                VerifyAtomicScenarioWrites(root, result);
+                VerifyMissingDefinitionRefreshRetry(result);
             }
             catch (Exception ex)
             {
@@ -137,6 +142,136 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             }
         }
 
+        private static void VerifyScenarioSaveIdGuards(ScenarioValidationResult result)
+        {
+            string[] reservedIds = new string[]
+            {
+                ScenarioSaveIdGuards.StandardStorageScenarioId,
+                ScenarioSaveIdGuards.VanillaSurroundedScenarioId,
+                ScenarioSaveIdGuards.VanillaStasisScenarioId,
+                ScenarioSaveIdGuards.ScenarioAuthoringDraftStorageScenarioId
+            };
+
+            for (int i = 0; i < reservedIds.Length; i++)
+            {
+                string reservedId = reservedIds[i];
+                Assert(ScenarioSaveIdGuards.IsReservedStorageId(reservedId), "Reserved scenario save id was not recognized: " + reservedId, result);
+                AssertThrowsReserved(delegate { ScenarioSaveIdGuards.RequireCustomScenarioId(reservedId, "ScenarioFrameworkVerification"); },
+                    "Reserved scenario save id was accepted by the custom scenario guard: " + reservedId,
+                    result);
+            }
+
+            string customId = "com.example.scenario.valid";
+            Assert(!ScenarioSaveIdGuards.IsReservedStorageId(customId), "Valid custom scenario save id was treated as reserved.", result);
+            Assert(ScenarioSaveIdGuards.RequireCustomScenarioId(customId, "ScenarioFrameworkVerification") == customId,
+                "Valid custom scenario save id was not preserved by the guard.", result);
+
+            AssertThrowsReserved(delegate { ShelteredSaves.DeleteScenario(ScenarioSaveIdGuards.StandardStorageScenarioId, "__verification__"); },
+                "DeleteScenario accepted the Standard save root through the custom scenario facade.",
+                result);
+            AssertThrowsReserved(delegate { ShelteredSaves.OverwriteScenario(ScenarioSaveIdGuards.StandardStorageScenarioId, "__verification__", null, new byte[0]); },
+                "OverwriteScenario accepted the Standard save root through the custom scenario facade.",
+                result);
+        }
+
+        private static void AssertThrowsReserved(Action action, string message, ScenarioValidationResult result)
+        {
+            try
+            {
+                if (action != null)
+                    action();
+                Assert(false, message, result);
+            }
+            catch (ArgumentException ex)
+            {
+                Assert(ex.Message.IndexOf("reserved for built-in saves", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "Reserved scenario save id guard threw without an actionable message.",
+                    result);
+            }
+        }
+
+        private static void VerifyAtomicScenarioWrites(string root, ScenarioValidationResult result)
+        {
+            string scenarioFile = Path.Combine(Path.Combine(root, "Atomic"), ScenarioDefinitionSerializer.DefaultFileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(scenarioFile));
+
+            ScenarioDefinitionSerializer serializer = new ScenarioDefinitionSerializer();
+            ScenarioDefinition original = CreateDefinition("Scenario.Atomic");
+            original.DisplayName = "Original Atomic Scenario";
+            serializer.Save(original, scenarioFile);
+            string originalXml = File.ReadAllText(scenarioFile);
+
+            ScenarioDefinition updated = CreateDefinition("Scenario.Atomic");
+            updated.DisplayName = "Updated Atomic Scenario";
+            serializer.Save(updated, scenarioFile);
+
+            string backupPath = scenarioFile + ".bak";
+            Assert(File.Exists(backupPath), "Atomic scenario save did not create a .bak file when replacing an existing scenario.xml.", result);
+            Assert(serializer.Load(scenarioFile).DisplayName == "Updated Atomic Scenario", "Atomic scenario save did not write a parseable replacement scenario.xml.", result);
+            Assert(serializer.Load(backupPath).DisplayName == "Original Atomic Scenario", "Atomic scenario save backup did not preserve the previous parseable scenario.xml.", result);
+
+            using (FileStream locked = File.Open(scenarioFile, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                try
+                {
+                    ScenarioDefinition blocked = CreateDefinition("Scenario.Atomic");
+                    blocked.DisplayName = "Blocked Atomic Scenario";
+                    serializer.Save(blocked, scenarioFile);
+                    Assert(false, "Atomic scenario save unexpectedly succeeded while scenario.xml was locked.", result);
+                }
+                catch (IOException)
+                {
+                }
+            }
+
+            string afterFailureXml = File.ReadAllText(scenarioFile);
+            Assert(string.Equals(afterFailureXml, serializer.ToXml(updated), StringComparison.Ordinal)
+                || afterFailureXml.IndexOf("Updated Atomic Scenario", StringComparison.Ordinal) >= 0,
+                "Failed atomic scenario save did not leave the previous scenario.xml intact.", result);
+            Assert(originalXml.IndexOf("Original Atomic Scenario", StringComparison.Ordinal) >= 0, "Verification setup failed to capture the original XML.", result);
+        }
+
+        private static void VerifyMissingDefinitionRefreshRetry(ScenarioValidationResult result)
+        {
+            string scenarioId = "Scenario.RetryAfterCatalogRefresh";
+            VerificationDefinitionCatalogService catalog = new VerificationDefinitionCatalogService(scenarioId);
+            VerificationRuntimeBindingService bindings = new VerificationRuntimeBindingService(new ScenarioRuntimeBinding
+            {
+                ScenarioId = scenarioId,
+                VersionApplied = "1.0.0",
+                IsActive = true
+            });
+            VerificationScenarioApplier applier = new VerificationScenarioApplier();
+
+            ScenarioRuntimeOrchestrator orchestrator = new ScenarioRuntimeOrchestrator(
+                new VerificationLifecycleService(),
+                new VerificationCustomScenarioRegistry(),
+                new VerificationDependencyVerifier(),
+                new VerificationDefinitionFactory(),
+                catalog,
+                bindings,
+                new VerificationRuntimeDefinitionOverrideProvider(),
+                applier,
+                new VerificationSpriteSwapEngine(),
+                new VerificationSceneSpritePlacementEngine(),
+                new VerificationVanillaScenarioRuntime());
+
+            orchestrator.UpdateActiveScenarioApply();
+            Assert(catalog.TryLoadCount == 1, "Missing definition was not checked during the first active binding apply.", result);
+            Assert(applier.ApplyCount == 0, "Missing definition unexpectedly applied.", result);
+
+            orchestrator.UpdateActiveScenarioApply();
+            Assert(catalog.TryLoadCount == 1, "Blocked missing definition retried before the catalog changed.", result);
+
+            ScenarioDefinition restored = CreateDefinition(scenarioId);
+            catalog.RestoreDefinition(restored, Path.Combine(Path.GetTempPath(), "scenario.xml"));
+            catalog.RefreshDefinitionCatalog();
+            orchestrator.UpdateActiveScenarioApply();
+
+            Assert(applier.ApplyCount == 1, "Catalog refresh did not cause the blocked active binding to retry and apply.", result);
+            Assert(object.ReferenceEquals(applier.LastDefinition, restored), "Active binding retry applied the wrong restored scenario definition.", result);
+        }
+
         private static string CreateScenarioPack(string root, string packName, string scenarioId, string assetPath)
         {
             string packRoot = Path.Combine(Path.Combine(root, packName), "Scenarios\\Main");
@@ -242,6 +377,230 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             catch
             {
             }
+        }
+
+        private sealed class VerificationDefinitionCatalogService : IScenarioDefinitionCatalogService
+        {
+            private readonly string _scenarioId;
+            private ScenarioDefinition _definition;
+            private string _scenarioFilePath;
+
+            public VerificationDefinitionCatalogService(string scenarioId)
+            {
+                _scenarioId = scenarioId;
+            }
+
+            public int CatalogRevision { get; private set; }
+            public int TryLoadCount { get; private set; }
+
+            public void RestoreDefinition(ScenarioDefinition definition, string scenarioFilePath)
+            {
+                _definition = definition;
+                _scenarioFilePath = scenarioFilePath;
+            }
+
+            public void RefreshDefinitionCatalog()
+            {
+                CatalogRevision++;
+            }
+
+            public ScenarioInfo[] ListDefinitions()
+            {
+                return new ScenarioInfo[0];
+            }
+
+            public ScenarioValidationResult ValidateDefinition(string scenarioId)
+            {
+                ScenarioDefinition definition;
+                string scenarioFilePath;
+                ScenarioValidationResult validation;
+                TryLoadDefinition(scenarioId, out definition, out scenarioFilePath, out validation);
+                return validation;
+            }
+
+            public bool TryLoadDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)
+            {
+                TryLoadCount++;
+                definition = null;
+                scenarioFilePath = null;
+                validation = new ScenarioValidationResult();
+
+                if (_definition == null || !string.Equals(scenarioId, _scenarioId, StringComparison.OrdinalIgnoreCase))
+                {
+                    validation.AddError("Scenario is not indexed: " + scenarioId);
+                    return false;
+                }
+
+                definition = _definition;
+                scenarioFilePath = _scenarioFilePath;
+                return true;
+            }
+        }
+
+        private sealed class VerificationRuntimeBindingService : IScenarioRuntimeBindingService
+        {
+            private ScenarioRuntimeBinding _binding;
+            private int _revision;
+
+            public VerificationRuntimeBindingService(ScenarioRuntimeBinding binding)
+            {
+                _binding = binding;
+            }
+
+            public ScenarioRuntimeBinding CurrentBinding { get { return _binding; } }
+            public int CurrentRevision { get { return _revision; } }
+            public void EnsureHooked() { }
+
+            public void SetBinding(ScenarioRuntimeBinding binding)
+            {
+                _binding = binding;
+                _revision++;
+            }
+
+            public void ConvertToNormalSave() { }
+            public ScenarioRuntimeBinding GetActiveBindingForStartup() { return _binding; }
+        }
+
+        private sealed class VerificationScenarioApplier : IScenarioApplier
+        {
+            public int ApplyCount { get; private set; }
+            public ScenarioDefinition LastDefinition { get; private set; }
+
+            public ScenarioApplyResult ApplyAll(ScenarioDefinition definition)
+            {
+                return ApplyAll(definition, null);
+            }
+
+            public ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath)
+            {
+                ApplyCount++;
+                LastDefinition = definition;
+                return new ScenarioApplyResult();
+            }
+        }
+
+        private sealed class VerificationRuntimeDefinitionOverrideProvider : IScenarioRuntimeDefinitionOverrideProvider
+        {
+            public bool TryGetDefinitionOverride(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath)
+            {
+                definition = null;
+                scenarioFilePath = null;
+                return false;
+            }
+        }
+
+        private sealed class VerificationVanillaScenarioRuntime : IVanillaScenarioRuntime
+        {
+            public bool IsWorldReady(out string blockingReason)
+            {
+                blockingReason = null;
+                return true;
+            }
+
+            public bool TrySpawnScenario(ScenarioDef definition, out QuestInstance instance, out string reason)
+            {
+                instance = null;
+                reason = "Not used by verification.";
+                return false;
+            }
+
+            public bool TryStartQuest(string questId, out string reason)
+            {
+                reason = "Not used by verification.";
+                return false;
+            }
+
+            public bool TryGetQuestInstance(int instanceId, out QuestInstance instance, out string reason)
+            {
+                instance = null;
+                reason = "Not used by verification.";
+                return false;
+            }
+
+            public List<QuestInstance> GetCurrentQuests()
+            {
+                return new List<QuestInstance>();
+            }
+
+            public bool TryFinishQuest(QuestInstance instance, bool success, out string reason)
+            {
+                reason = "Not used by verification.";
+                return false;
+            }
+        }
+
+        private sealed class VerificationLifecycleService : ICustomScenarioLifecycleService
+        {
+            public CustomScenarioState CurrentState { get { return null; } }
+            public bool MarkSelected(string scenarioId) { return false; }
+            public bool MarkSpawned(string scenarioId) { return false; }
+            public void ClearState() { }
+        }
+
+        private sealed class VerificationCustomScenarioRegistry : ICustomScenarioRegistry
+        {
+            public bool TryGet(string scenarioId, out CustomScenarioInfo scenario)
+            {
+                scenario = null;
+                return false;
+            }
+
+            public CustomScenarioInfo[] List()
+            {
+                return new CustomScenarioInfo[0];
+            }
+        }
+
+        private sealed class VerificationDependencyVerifier : IScenarioDependencyVerifier
+        {
+            public SlotManifest CreateDependencyManifest(CustomScenarioInfo info)
+            {
+                return new SlotManifest();
+            }
+
+            public ScenarioDependencyVerificationState VerifyDependencies(CustomScenarioInfo info)
+            {
+                return ScenarioDependencyVerificationState.Match;
+            }
+        }
+
+        private sealed class VerificationDefinitionFactory : IScenarioDefinitionFactory
+        {
+            public bool TryCreateDefinition(string scenarioId, CustomScenarioBuildContext context, out object definition, out string errorMessage)
+            {
+                definition = null;
+                errorMessage = "Not used by verification.";
+                return false;
+            }
+
+            public bool TryCreateScenarioDef(string scenarioId, CustomScenarioBuildContext context, out ScenarioDef definition, out string errorMessage)
+            {
+                definition = null;
+                errorMessage = "Not used by verification.";
+                return false;
+            }
+
+            public ScenarioDef BuildScenarioDefFromDefinition(string scenarioId)
+            {
+                return null;
+            }
+        }
+
+        private sealed class VerificationSpriteSwapEngine : IScenarioSpriteSwapEngine
+        {
+            public void Activate(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result) { }
+            public void Update() { }
+            public void Clear(string reason) { }
+        }
+
+        private sealed class VerificationSceneSpritePlacementEngine : IScenarioSceneSpritePlacementEngine
+        {
+            public int Activate(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)
+            {
+                return 0;
+            }
+
+            public void Clear(string reason) { }
         }
 
         private sealed class VerificationDependencyResolver : IScenarioDependencyVersionResolver

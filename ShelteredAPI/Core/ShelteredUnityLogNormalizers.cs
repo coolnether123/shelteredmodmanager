@@ -46,6 +46,9 @@ namespace ShelteredAPI.Core
         {
             normalization = null;
 
+            if (type == LogType.Exception || type == LogType.Error || type == LogType.Assert)
+                return false;
+
             string message = condition ?? string.Empty;
             if (!message.StartsWith("BoxColliders does not support negative scale or size.", StringComparison.Ordinal)
                 || message.IndexOf("UI Root/" + "Settings" + "PCPanel/MenuParent/", StringComparison.Ordinal) < 0

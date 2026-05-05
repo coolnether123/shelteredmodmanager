@@ -144,6 +144,7 @@
     <Compile Include="Core\ModAboutReader.cs" />
     <Compile Include="Core\ModDiscovery.cs" />
     <Compile Include="Core\ModPrefs.cs" />
+    <Compile Include="Core\RuntimeApiCompatibility.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
     <Compile Include="Core\CollectionCompatibility.cs" />
     <Compile Include="Core\SaveSystemImpl.cs" />

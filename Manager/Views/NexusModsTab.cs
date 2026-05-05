@@ -691,6 +691,8 @@ namespace Manager.Views
                     {
                         _installSelectedButton.Enabled = true;
                         EmitActivity("Install complete: " + selected.Name + " -> " + result.InstalledPath);
+                        if (!string.IsNullOrEmpty(result.VerificationSummary))
+                            EmitActivity("Install verified: " + result.VerificationSummary);
                         if (InstallCompleted != null)
                             InstallCompleted();
                     });

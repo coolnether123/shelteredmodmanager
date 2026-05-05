@@ -15,6 +15,8 @@ namespace ModAPI.Harmony
         private static readonly object Sync = new object();
         private static readonly List<PatchSource> Sources = new List<PatchSource>();
         private static readonly HashSet<string> AppliedGroups = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly HashSet<string> ApplyingGroups = new HashSet<string>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, string> LastFailures = new Dictionary<string, string>(StringComparer.Ordinal);
 
         /// <summary>
         /// Registers an assembly that may contain deferred governed patch hosts.
@@ -78,10 +80,27 @@ namespace ModAPI.Harmony
                     return;
                 }
 
-                AppliedGroups.Add(groupKey);
+                if (ApplyingGroups.Contains(groupKey))
+                {
+                    MMLog.WriteDebug("Deferred patch group already applying " + timing
+                        + " for " + SafeAssemblyName(source.Assembly)
+                        + " trigger=" + (trigger ?? string.Empty) + ".");
+                    return;
+                }
+
+                string previousFailure;
+                if (LastFailures.TryGetValue(groupKey, out previousFailure) && !string.IsNullOrEmpty(previousFailure))
+                {
+                    MMLog.WriteDebug("Retrying deferred patch group after previous failure " + timing
+                        + " for " + SafeAssemblyName(source.Assembly)
+                        + " trigger=" + (trigger ?? string.Empty) + ".");
+                }
+
+                ApplyingGroups.Add(groupKey);
             }
 
             Stopwatch timer = Stopwatch.StartNew();
+            bool applied = false;
             try
             {
                 MMLog.WriteInfo("Applying " + timing
@@ -90,15 +109,36 @@ namespace ModAPI.Harmony
 
                 PatchRegistryOptions timingOptions = PatchRegistry.CreateTimingOptions(source.Options, timing);
                 PatchRegistry.ApplyAssembly(source.Harmony, source.Assembly, timingOptions);
+                applied = true;
+                lock (Sync)
+                {
+                    AppliedGroups.Add(groupKey);
+                    LastFailures.Remove(groupKey);
+                }
             }
             catch (Exception ex)
             {
+                lock (Sync)
+                {
+                    LastFailures[groupKey] = ex.ToString();
+                }
                 MMLog.WriteWarning("Failed applying " + timing
-                    + " for " + SafeAssemblyName(source.Assembly) + ": " + ex.Message);
+                    + " for " + SafeAssemblyName(source.Assembly) + ": " + ex.Message
+                    + ". The group remains retryable on a later trigger.");
             }
             finally
             {
+                lock (Sync)
+                {
+                    ApplyingGroups.Remove(groupKey);
+                }
+
                 LogStartupTiming("Deferred Harmony patch " + SafeAssemblyName(source.Assembly) + " " + timing, timer);
+                if (applied)
+                {
+                    MMLog.WriteInfo("Deferred Harmony patch group applied: " + timing
+                        + " for " + SafeAssemblyName(source.Assembly) + ".");
+                }
             }
         }
 

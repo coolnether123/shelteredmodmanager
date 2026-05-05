@@ -48,6 +48,7 @@ The 1.3 line is a breaking clean API line. It separates the neutral modding fram
 
 - **ModAPI/ShelteredAPI split:** `ModAPI.dll` owns neutral contracts; `ShelteredAPI.dll` owns Sheltered content, saves, input, UI, events, actors, and scenarios.
 - **Custom scenarios (experimental):** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes. Beta.3 testers should treat this as an active testing surface.
+- **Release-gated safety fixes:** custom-scenario save APIs reject built-in save ids, scenario XML saves use temp/validate/replace with backups, Unity log filtering never suppresses errors/asserts/exceptions, and Nexus installs verify copied files before success.
 - **Rebindable controls:** Vanilla Sheltered actions and mod-defined input actions share one keybinding UI with persisted bindings and conflict handling.
 - **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
 

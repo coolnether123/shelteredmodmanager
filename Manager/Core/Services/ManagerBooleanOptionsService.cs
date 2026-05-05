@@ -14,6 +14,7 @@ namespace Manager.Core.Services
     {
         private const string OptionsFileName = "manager_options.json";
         private const string CustomScenarioEditorOptionId = "ShelteredAPI.PatchCustomScenarioEditor";
+        private const string DisableUnityLogSuppressionOptionId = "ModAPI.DisableUnityLogSuppression";
         private readonly string _optionsPath;
         private static readonly ManagerBooleanOptionDefinition[] BuiltInOptions = new ManagerBooleanOptionDefinition[]
         {
@@ -23,9 +24,19 @@ namespace Manager.Core.Services
                 owner = "ShelteredAPI",
                 label = "Custom Scenario Editor",
                 description = "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.",
-                defaultValue = true,
+                defaultValue = false,
                 requiresRestart = true,
                 sortOrder = 100
+            },
+            new ManagerBooleanOptionDefinition
+            {
+                id = DisableUnityLogSuppressionOptionId,
+                owner = "ModAPI",
+                label = "Disable Unity Log Suppression",
+                description = "Mirrors all Unity warnings/logs into SMM logs. Errors, asserts, and exceptions are always mirrored regardless of this option.",
+                defaultValue = false,
+                requiresRestart = true,
+                sortOrder = 20
             }
         };
 

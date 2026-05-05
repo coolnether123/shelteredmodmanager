@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
         private readonly ScenarioSaveDescriptorMirror _saveDescriptorMirror;
         private readonly IScenarioDefinitionDependencyReader _dependencyReader;
         private readonly IScenarioDefinitionFactory _definitionFactory;
+        private int _catalogRevision;
 
         public ScenarioDefinitionRegistrationSync(
             IScenarioDefinitionCatalog definitionCatalog,
@@ -36,6 +37,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
         {
             _definitionCatalog.Refresh();
             SyncDefinitionRegistrations();
+            _catalogRevision++;
+        }
+
+        public int CatalogRevision
+        {
+            get { return _catalogRevision; }
         }
 
         public ScenarioInfo[] ListDefinitions()

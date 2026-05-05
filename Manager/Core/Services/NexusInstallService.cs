@@ -13,6 +13,7 @@ namespace Manager.Core.Services
         public string InstalledPath { get; set; }
         public string BackupPath { get; set; }
         public string DownloadedArchivePath { get; set; }
+        public string VerificationSummary { get; set; }
     }
 
     /// <summary>
@@ -139,6 +140,7 @@ namespace Manager.Core.Services
 
             string targetPath = Path.Combine(modsPath, targetFolderName);
             string backupPath = null;
+            string verificationSummary = string.Empty;
 
             try
             {
@@ -157,6 +159,15 @@ namespace Manager.Core.Services
 
                 CopyDirectoryRecursive(sourceModRoot, targetPath);
                 WriteNexusMetadata(targetPath, mod.GameDomain, mod.ModId);
+
+                if (!VerifyInstalledMod(sourceModRoot, targetPath, mod, file, out verificationSummary, out errorMessage))
+                {
+                    errorMessage = "Install verification failed: " + errorMessage;
+                    RestoreBackupAfterFailedInstall(targetPath, backupPath, ref errorMessage);
+                    return null;
+                }
+
+                System.Diagnostics.Debug.WriteLine("Nexus install verification passed: " + verificationSummary);
             }
             catch (Exception ex)
             {
@@ -174,18 +185,29 @@ namespace Manager.Core.Services
             result.InstalledPath = targetPath;
             result.BackupPath = backupPath;
             result.DownloadedArchivePath = string.Empty;
+            result.VerificationSummary = verificationSummary;
             return result;
         }
 
         private static void RestoreBackupAfterFailedInstall(string targetPath, string backupPath, ref string errorMessage)
         {
-            if (string.IsNullOrEmpty(targetPath) || string.IsNullOrEmpty(backupPath) || !Directory.Exists(backupPath))
+            if (string.IsNullOrEmpty(targetPath))
                 return;
 
             try
             {
+                bool removedFailedInstall = Directory.Exists(targetPath);
                 TryDeleteDirectory(targetPath);
-                Directory.Move(backupPath, targetPath);
+                if (!string.IsNullOrEmpty(backupPath) && Directory.Exists(backupPath))
+                {
+                    Directory.Move(backupPath, targetPath);
+                    AppendInstallRollbackMessage(ref errorMessage, "Backup restored after failed install.");
+                }
+                else if (removedFailedInstall)
+                {
+                    AppendInstallRollbackMessage(ref errorMessage, "Removed failed install.");
+                    System.Diagnostics.Debug.WriteLine("Nexus install rollback: removed failed install at " + targetPath);
+                }
             }
             catch (Exception restoreEx)
             {
@@ -194,6 +216,126 @@ namespace Manager.Core.Services
                     ? restoreMessage.Trim()
                     : errorMessage + restoreMessage;
             }
+        }
+
+        private static void AppendInstallRollbackMessage(ref string errorMessage, string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            errorMessage = string.IsNullOrEmpty(errorMessage)
+                ? message
+                : errorMessage + " " + message;
+        }
+
+        private static bool VerifyInstalledMod(
+            string sourceModRoot,
+            string targetPath,
+            NexusRemoteMod mod,
+            NexusRemoteModFile file,
+            out string verificationSummary,
+            out string errorMessage)
+        {
+            verificationSummary = string.Empty;
+            errorMessage = null;
+
+            if (string.IsNullOrEmpty(targetPath) || !Directory.Exists(targetPath))
+            {
+                errorMessage = "Installed mod folder is missing.";
+                return false;
+            }
+
+            global::Manager.ModTypes.ModAboutInfo about;
+            string normalizedId;
+            string displayName;
+            string previewPath;
+            if (!global::Manager.ModAboutReader.TryLoad(targetPath, out about, out normalizedId, out displayName, out previewPath) || about == null)
+            {
+                errorMessage = "Installed mod is missing a readable About/About.json file.";
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(about.id) || string.IsNullOrEmpty(about.name) || string.IsNullOrEmpty(about.version))
+            {
+                errorMessage = "Installed About.json is missing required id, name, or version metadata.";
+                return false;
+            }
+
+            string nexusJson = Path.Combine(Path.Combine(targetPath, "About"), "Nexus.json");
+            if (!File.Exists(nexusJson))
+            {
+                errorMessage = "Installed Nexus metadata file was not written.";
+                return false;
+            }
+
+            if (!VerifyCopiedFiles(sourceModRoot, targetPath, out errorMessage))
+                return false;
+
+            verificationSummary = "About.json id=" + about.id
+                + ", copied file set verified"
+                + ", nexusModId=" + (mod != null ? mod.ModId.ToString() : "unknown")
+                + ", fileId=" + (file != null ? file.FileId.ToString() : "unknown") + ".";
+            return true;
+        }
+
+        private static bool VerifyCopiedFiles(string sourceModRoot, string targetPath, out string errorMessage)
+        {
+            errorMessage = null;
+            if (string.IsNullOrEmpty(sourceModRoot) || !Directory.Exists(sourceModRoot))
+            {
+                errorMessage = "Extracted source mod folder is unavailable for verification.";
+                return false;
+            }
+
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(sourceModRoot, "*", SearchOption.AllDirectories);
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "Could not enumerate extracted files for verification: " + ex.Message;
+                return false;
+            }
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                string relative = GetRelativePath(sourceModRoot, files[i]);
+                string installed = Path.Combine(targetPath, relative);
+                if (!File.Exists(installed))
+                {
+                    errorMessage = "Expected installed file is missing: " + relative;
+                    return false;
+                }
+
+                try
+                {
+                    FileInfo sourceInfo = new FileInfo(files[i]);
+                    FileInfo installedInfo = new FileInfo(installed);
+                    if (sourceInfo.Length != installedInfo.Length)
+                    {
+                        errorMessage = "Installed file length mismatch: " + relative;
+                        return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = "Could not verify installed file '" + relative + "': " + ex.Message;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string GetRelativePath(string root, string path)
+        {
+            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            string fullPath = Path.GetFullPath(path);
+            if (fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+                return fullPath.Substring(fullRoot.Length);
+            return Path.GetFileName(path);
         }
 
         private static string GetManagerBinPath()

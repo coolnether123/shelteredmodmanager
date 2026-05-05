@@ -26,6 +26,10 @@ namespace ModAPI.Core
         public string website;       // optional website                          
         public string nexusGameDomain; // optional Nexus game domain (e.g. sheltered)
         public int nexusModId;       // optional Nexus legacy mod ID
+        public string requiredModApiVersion; // optional minimum ModAPI version
+        public string modApiVersion; // legacy optional ModAPI version declaration
+        public string requiredShelteredApiVersion; // optional minimum host-specific API version
+        public string shelteredApiVersion; // legacy optional host-specific API version declaration
         public string missingModWarning; // optional warning if mod is missing from save
         public bool debugLogging;    // optional: enables Log.Debug() for this mod
     }

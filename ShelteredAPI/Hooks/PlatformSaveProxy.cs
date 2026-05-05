@@ -116,7 +116,7 @@ namespace ShelteredAPI.Hooks
                     bool isStandardScenario = string.Equals(scenarioId, "Standard", StringComparison.OrdinalIgnoreCase);
                     ISaveApi saveApi = isStandardScenario
                         ? ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetRegistry(scenarioId);
+                        : ScenarioSaves.GetTrustedRegistry(scenarioId);
 
                     // FORCE SYNC: the registry overwrite path uses blocking file writes so the
                     // redirect is durable before the vanilla caller continues.
@@ -130,7 +130,7 @@ namespace ShelteredAPI.Hooks
                     // Create Manifest immediately for new saves
                     SaveRegistryCore registry = isStandardScenario
                         ? (SaveRegistryCore)ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetRegistry(scenarioId);
+                        : ScenarioSaves.GetTrustedRegistry(scenarioId);
                     registry.UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
 
                     // Set this as the active save for the rest of the session
@@ -160,7 +160,7 @@ namespace ShelteredAPI.Hooks
                     bool isStandardScenario = string.Equals(active.scenarioId, "Standard", StringComparison.OrdinalIgnoreCase);
                     ISaveApi saveApi = isStandardScenario
                         ? ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetRegistry(active.scenarioId);
+                        : ScenarioSaves.GetTrustedRegistry(active.scenarioId);
 
                     // FORCE SYNC: Uses blocking file writes through the owning registry.
                     var result = saveApi.Overwrite(active.id, new SaveOverwriteOptions(), data);
@@ -220,7 +220,7 @@ namespace ShelteredAPI.Hooks
 
                     ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
                         ? ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetRegistry(scenarioId);
+                        : ScenarioSaves.GetTrustedRegistry(scenarioId);
 
                     var entry = saveApi.Get(saveId);
                     if (entry == null)

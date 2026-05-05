@@ -102,7 +102,7 @@ namespace ShelteredAPI.Core
             string scopeId = string.IsNullOrEmpty(target.scenarioId) ? "Standard" : target.scenarioId;
             return ExpandedVanillaSaves.IsStandardScenario(scopeId)
                 ? ExpandedVanillaSaves.Get(target.saveId)
-                : ScenarioSaves.Get(scopeId, target.saveId);
+                : ScenarioSaves.GetTrustedRegistry(scopeId).GetSave(target.saveId);
         }
 
         private static SaveManager.SaveType ResolveCurrentSaveType()

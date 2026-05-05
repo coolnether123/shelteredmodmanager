@@ -29,12 +29,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             if (string.IsNullOrEmpty(filePath))
                 throw new ArgumentException("Scenario file path is required.", "filePath");
 
-            XmlDocument document = CreateDocument();
-            using (XmlReader reader = XmlReader.Create(filePath, CreateReaderSettings()))
+            try
             {
-                document.Load(reader);
+                XmlDocument document = CreateDocument();
+                using (XmlReader reader = XmlReader.Create(filePath, CreateReaderSettings()))
+                {
+                    document.Load(reader);
+                }
+                return ReadDocument(document);
             }
-            return ReadDocument(document);
+            catch (Exception ex)
+            {
+                string backupPath = filePath + ".bak";
+                if (File.Exists(backupPath))
+                {
+                    throw new InvalidDataException(
+                        "Scenario XML could not be loaded from '" + filePath + "'. A backup is available at '" + backupPath + "'. Restore it manually or fix the XML before retrying. " + ex.Message,
+                        ex);
+                }
+
+                throw;
+            }
         }
 
         public ScenarioDefinition FromXml(string xml)
@@ -64,13 +79,31 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 Directory.CreateDirectory(directory);
 
+            string tempPath = BuildTempPath(filePath);
             XmlWriterSettings settings = new XmlWriterSettings();
             settings.Indent = true;
             settings.Encoding = System.Text.Encoding.UTF8;
 
-            using (XmlWriter writer = XmlWriter.Create(filePath, settings))
+            try
             {
-                WriteDocument(definition, writer);
+                using (FileStream stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    using (XmlWriter writer = XmlWriter.Create(stream, settings))
+                    {
+                        WriteDocument(definition, writer);
+                    }
+
+                    stream.Flush();
+                }
+
+                Load(tempPath);
+                ReplaceValidatedTempFile(tempPath, filePath);
+                tempPath = null;
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(tempPath))
+                    TryDeleteFile(tempPath);
             }
         }
 
@@ -111,6 +144,75 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             XmlDocument document = new XmlDocument();
             document.XmlResolver = null;
             return document;
+        }
+
+        private static string BuildTempPath(string filePath)
+        {
+            string directory = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(directory))
+                directory = Directory.GetCurrentDirectory();
+
+            string name = Path.GetFileName(filePath);
+            return Path.Combine(directory, name + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        }
+
+        private static void ReplaceValidatedTempFile(string tempPath, string filePath)
+        {
+            if (File.Exists(filePath))
+            {
+                string backupPath = filePath + ".bak";
+                try
+                {
+                    File.Replace(tempPath, filePath, backupPath, false);
+                    return;
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    ReplaceWithBackupFallback(tempPath, filePath, backupPath);
+                    return;
+                }
+                catch (NotSupportedException)
+                {
+                    ReplaceWithBackupFallback(tempPath, filePath, backupPath);
+                    return;
+                }
+            }
+
+            File.Move(tempPath, filePath);
+        }
+
+        private static void ReplaceWithBackupFallback(string tempPath, string filePath, string backupPath)
+        {
+            bool backupCreated = false;
+            if (File.Exists(filePath))
+            {
+                File.Copy(filePath, backupPath, true);
+                backupCreated = true;
+                File.Delete(filePath);
+            }
+
+            try
+            {
+                File.Move(tempPath, filePath);
+            }
+            catch
+            {
+                if (backupCreated && File.Exists(backupPath) && !File.Exists(filePath))
+                    File.Copy(backupPath, filePath, true);
+                throw;
+            }
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+            }
         }
 
         private static XmlReaderSettings CreateReaderSettings()

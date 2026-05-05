@@ -139,7 +139,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             if (ExpandedVanillaSaves.IsStandardScenario(storageScenarioId))
                 return (SaveRegistryCore)ExpandedVanillaSaves.Instance;
 
-            return ScenarioSaves.GetRegistry(storageScenarioId);
+            return ScenarioSaves.GetTrustedRegistry(storageScenarioId);
         }
 
         private static string ResolveStorageScenarioId(string scenarioId, SaveEntry entry)

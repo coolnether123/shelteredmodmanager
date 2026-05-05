@@ -9,10 +9,15 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public const string VanillaSurroundedScenarioId = "Vanilla.Surrounded";
         public const string VanillaStasisScenarioId = "Vanilla.Stasis";
 
+        public static bool IsReservedStorageId(string scenarioId)
+        {
+            return ScenarioSaveIdGuards.IsReservedStorageId(scenarioId);
+        }
+
         public static bool IsStandardScenario(string scenarioId)
         {
-            return string.Equals(scenarioId, StandardStorageScenarioId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(scenarioId, VanillaStandardScenarioId, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(scenarioId, ScenarioSaveIdGuards.StandardStorageScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, ScenarioSaveIdGuards.VanillaStandardScenarioId, StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsVanillaScenario(string scenarioId)

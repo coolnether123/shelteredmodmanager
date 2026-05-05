@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
@@ -21,6 +22,10 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly IVanillaScenarioRuntime _vanillaRuntime;
         private string _lastAppliedKey;
+        private string _blockedApplyKey;
+        private int _blockedCatalogRevision = -1;
+        private ScenarioRuntimeApplyBlockReason _blockedReason = ScenarioRuntimeApplyBlockReason.None;
+        private string _blockedDetails;
 
         public ScenarioRuntimeOrchestrator(
             ICustomScenarioLifecycleService customScenarioLifecycle,
@@ -110,6 +115,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 + "|" + binding.ScenarioId + "|" + (binding.VersionApplied ?? string.Empty);
             if (string.Equals(_lastAppliedKey, applyKey, StringComparison.OrdinalIgnoreCase))
                 return;
+            if (IsApplyStillBlocked(applyKey))
+                return;
 
             string reason;
             if (!_vanillaRuntime.IsWorldReady(out reason))
@@ -120,15 +127,22 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             ScenarioValidationResult validation;
             if (!TryResolveDefinition(binding, out definition, out scenarioFilePath, out validation))
             {
-                LogValidationFailure(binding.ScenarioId, validation);
-                _lastAppliedKey = applyKey;
+                MarkApplyBlocked(applyKey, binding.ScenarioId, ClassifyDefinitionFailure(validation), FormatValidationFailure(validation));
                 return;
             }
 
-            ScenarioApplyResult apply = _applier.ApplyAll(definition, scenarioFilePath);
-            _lastAppliedKey = applyKey;
-            MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Applied active scenario binding: " + binding.ScenarioId
-                + " messages=" + apply.Messages.Length + ".");
+            try
+            {
+                ScenarioApplyResult apply = _applier.ApplyAll(definition, scenarioFilePath);
+                _lastAppliedKey = applyKey;
+                ClearApplyBlocked();
+                MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Applied active scenario binding: " + binding.ScenarioId
+                    + " messages=" + apply.Messages.Length + ".");
+            }
+            catch (Exception ex)
+            {
+                MarkApplyBlocked(applyKey, binding.ScenarioId, ScenarioRuntimeApplyBlockReason.RuntimeApplyException, ex.Message);
+            }
         }
 
         private bool TryResolveDefinition(ScenarioRuntimeBinding binding, out ScenarioDefinition definition, out string scenarioFilePath, out ScenarioValidationResult validation)
@@ -148,20 +162,76 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             return _definitionCatalog.TryLoadDefinition(binding.ScenarioId, out definition, out scenarioFilePath, out validation);
         }
 
-        private static void LogValidationFailure(string scenarioId, ScenarioValidationResult validation)
+        private bool IsApplyStillBlocked(string applyKey)
         {
-            if (validation == null)
+            return !string.IsNullOrEmpty(_blockedApplyKey)
+                && string.Equals(_blockedApplyKey, applyKey, StringComparison.OrdinalIgnoreCase)
+                && _blockedCatalogRevision == _definitionCatalog.CatalogRevision
+                && _blockedReason != ScenarioRuntimeApplyBlockReason.None;
+        }
+
+        private void MarkApplyBlocked(string applyKey, string scenarioId, ScenarioRuntimeApplyBlockReason reason, string details)
+        {
+            string normalizedDetails = details ?? string.Empty;
+            bool changed = !string.Equals(_blockedApplyKey, applyKey, StringComparison.OrdinalIgnoreCase)
+                || _blockedCatalogRevision != _definitionCatalog.CatalogRevision
+                || _blockedReason != reason
+                || !string.Equals(_blockedDetails ?? string.Empty, normalizedDetails, StringComparison.Ordinal);
+
+            _blockedApplyKey = applyKey;
+            _blockedCatalogRevision = _definitionCatalog.CatalogRevision;
+            _blockedReason = reason;
+            _blockedDetails = normalizedDetails;
+
+            if (changed)
             {
-                MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] Scenario failed to load: " + scenarioId);
-                return;
+                MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] Active scenario binding is blocked for '" + scenarioId
+                    + "' (" + reason + "). It will retry after the scenario catalog changes or the binding is updated. "
+                    + normalizedDetails);
             }
+        }
+
+        private void ClearApplyBlocked()
+        {
+            _blockedApplyKey = null;
+            _blockedCatalogRevision = -1;
+            _blockedReason = ScenarioRuntimeApplyBlockReason.None;
+            _blockedDetails = null;
+        }
+
+        private static ScenarioRuntimeApplyBlockReason ClassifyDefinitionFailure(ScenarioValidationResult validation)
+        {
+            if (validation == null || validation.Issues.Length == 0)
+                return ScenarioRuntimeApplyBlockReason.MissingDefinition;
 
             ScenarioValidationIssue[] issues = validation.Issues;
             for (int i = 0; i < issues.Length; i++)
             {
-                if (issues[i] != null)
-                    MMLog.WriteWarning("[ScenarioRuntimeOrchestrator] " + scenarioId + " " + issues[i].Severity + ": " + issues[i].Message);
+                if (issues[i] != null
+                    && !string.IsNullOrEmpty(issues[i].Message)
+                    && issues[i].Message.IndexOf("not indexed", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return ScenarioRuntimeApplyBlockReason.MissingDefinition;
+                }
             }
+
+            return ScenarioRuntimeApplyBlockReason.InvalidDefinition;
+        }
+
+        private static string FormatValidationFailure(ScenarioValidationResult validation)
+        {
+            if (validation == null || validation.Issues.Length == 0)
+                return "Scenario definition could not be resolved.";
+
+            List<string> parts = new List<string>();
+            ScenarioValidationIssue[] issues = validation.Issues;
+            for (int i = 0; i < issues.Length; i++)
+            {
+                if (issues[i] != null)
+                    parts.Add(issues[i].Severity + ": " + issues[i].Message);
+            }
+
+            return parts.Count == 0 ? "Scenario definition could not be resolved." : string.Join("; ", parts.ToArray());
         }
 
         private void BindSpawnedQuestInstance(QuestInstance instance)
@@ -178,5 +248,14 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Bound scenario QuestInstance id "
                 + instance.id.ToString() + " to scenario '" + (binding.ScenarioId ?? string.Empty) + "'.");
         }
+    }
+
+    internal enum ScenarioRuntimeApplyBlockReason
+    {
+        None = 0,
+        MissingDefinition = 1,
+        InvalidDefinition = 2,
+        MissingDependency = 3,
+        RuntimeApplyException = 4
     }
 }

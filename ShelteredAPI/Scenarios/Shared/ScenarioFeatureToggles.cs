@@ -15,7 +15,7 @@ namespace ShelteredAPI.Scenarios.Shared{
                 Owner = "ShelteredAPI",
                 Label = CustomScenarioEditorPatchLabel,
                 Description = CustomScenarioEditorPatchDescription,
-                DefaultValue = true,
+                DefaultValue = false,
                 RequiresRestart = true,
                 SortOrder = 100
             });
@@ -23,7 +23,7 @@ namespace ShelteredAPI.Scenarios.Shared{
 
         public static bool IsCustomScenarioEditorEnabled()
         {
-            return ManagerBooleanOptions.GetBool(CustomScenarioEditorPatchToggleId, true);
+            return ManagerBooleanOptions.GetBool(CustomScenarioEditorPatchToggleId, false);
         }
     }
 }

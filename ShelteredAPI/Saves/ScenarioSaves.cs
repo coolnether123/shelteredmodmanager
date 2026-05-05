@@ -13,7 +13,7 @@ namespace ShelteredAPI.Saves
         /// <summary>
         /// Gets the registry for a specific scenario. Marked internal for use by PlatformSaveProxy.
         /// </summary>
-        internal static SaveRegistryCore GetRegistry(string scenarioId)
+        internal static SaveRegistryCore GetTrustedRegistry(string scenarioId)
         {
             lock (_lock)
             {
@@ -27,66 +27,50 @@ namespace ShelteredAPI.Saves
 
         public static SaveEntry[] List(string scenarioId, int page, int pageSize)
         {
-            if (string.IsNullOrEmpty(scenarioId) || scenarioId.Equals("Standard", StringComparison.OrdinalIgnoreCase))
-            {
-                MMLog.WriteError("ScenarioSaves.List: Invalid or reserved scenarioId provided.");
-                return new SaveEntry[0];
-            }
-            return GetRegistry(scenarioId).ListSaves(page, pageSize);
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.List");
+            return GetTrustedRegistry(scenarioId).ListSaves(page, pageSize);
         }
 
         public static SaveEntry Get(string scenarioId, string saveId)
         {
-            if (string.IsNullOrEmpty(scenarioId)) return null;
-            return GetRegistry(scenarioId).GetSave(saveId);
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.Get");
+            return GetTrustedRegistry(scenarioId).GetSave(saveId);
         }
 
         public static SaveEntry Create(string scenarioId, SaveCreateOptions options)
         {
-            if (string.IsNullOrEmpty(scenarioId) || scenarioId.Equals("Standard", StringComparison.OrdinalIgnoreCase))
-            {
-                MMLog.WriteError("ScenarioSaves.Create: Invalid or reserved scenarioId provided.");
-                return null;
-            }
-            return GetRegistry(scenarioId).CreateSave(options);
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.Create");
+            return GetTrustedRegistry(scenarioId).CreateSave(options);
         }
 
         public static SaveEntry CreateNext(string scenarioId, SaveCreateOptions options)
         {
-            if (string.IsNullOrEmpty(scenarioId) || scenarioId.Equals("Standard", StringComparison.OrdinalIgnoreCase))
-            {
-                MMLog.WriteError("ScenarioSaves.CreateNext: Invalid or reserved scenarioId provided.");
-                return null;
-            }
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.CreateNext");
 
             SaveCreateOptions normalized = options ?? new SaveCreateOptions();
             if (normalized.absoluteSlot <= 0)
                 normalized.absoluteSlot = GetNextAvailableSlot(scenarioId);
 
-            return GetRegistry(scenarioId).CreateSave(normalized);
+            return GetTrustedRegistry(scenarioId).CreateSave(normalized);
         }
 
         public static int GetNextAvailableSlot(string scenarioId)
         {
-            if (string.IsNullOrEmpty(scenarioId) || scenarioId.Equals("Standard", StringComparison.OrdinalIgnoreCase))
-            {
-                MMLog.WriteError("ScenarioSaves.GetNextAvailableSlot: Invalid or reserved scenarioId provided.");
-                return 0;
-            }
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.GetNextAvailableSlot");
 
-            return GetRegistry(scenarioId).GetNextCreatableSlot();
+            return GetTrustedRegistry(scenarioId).GetNextCreatableSlot();
         }
 
         public static bool Delete(string scenarioId, string saveId)
         {
-            if (string.IsNullOrEmpty(scenarioId)) return false;
-            return GetRegistry(scenarioId).DeleteSave(saveId);
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.Delete");
+            return GetTrustedRegistry(scenarioId).DeleteSave(saveId);
         }
 
         public static SaveEntry Overwrite(string scenarioId, string saveId, SaveOverwriteOptions opts, byte[] xmlBytes)
         {
-            if (string.IsNullOrEmpty(scenarioId)) return null;
-            return GetRegistry(scenarioId).OverwriteSave(saveId, opts, xmlBytes);
+            scenarioId = ScenarioSaveIdGuards.RequireCustomScenarioId(scenarioId, "ScenarioSaves.Overwrite");
+            return GetTrustedRegistry(scenarioId).OverwriteSave(saveId, opts, xmlBytes);
         }
     }
 }

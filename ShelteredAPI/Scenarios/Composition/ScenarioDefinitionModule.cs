@@ -43,7 +43,12 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioDefinitionDependencyReader>(),
                     resolver.Get<IScenarioDefinitionFactory>());
             });
-            services.AddSingleton<IScenarioDefinitionCatalogService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioDefinitionRegistrationSync>(); });
+            services.AddSingleton<IScenarioDefinitionCatalogService>(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioDefinitionCatalogRefreshCoordinator(
+                    resolver.Get<ScenarioDefinitionRegistrationSync>(),
+                    delegate { return resolver.Get<IScenarioRuntimeOrchestrator>(); });
+            });
         }
     }
 }
