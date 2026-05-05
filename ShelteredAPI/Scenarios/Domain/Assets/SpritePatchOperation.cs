@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Assets{
     /// <summary>
     /// Type of sprite patch operation.
     /// </summary>

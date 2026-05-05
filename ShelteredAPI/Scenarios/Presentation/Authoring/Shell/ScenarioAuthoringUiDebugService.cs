@@ -5,9 +5,12 @@ using System.Text;
 using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringUiDebugService
     {
         internal struct LayoutRect

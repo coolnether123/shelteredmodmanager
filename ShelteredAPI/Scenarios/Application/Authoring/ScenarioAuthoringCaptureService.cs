@@ -4,8 +4,12 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCaptureService
     {
         private readonly IScenarioDraftMutationService _draftMutationService;

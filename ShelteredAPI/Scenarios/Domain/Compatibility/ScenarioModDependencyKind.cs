@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Compatibility{
     /// <summary>
     /// Relationship between a scenario and another mod.
     /// </summary>

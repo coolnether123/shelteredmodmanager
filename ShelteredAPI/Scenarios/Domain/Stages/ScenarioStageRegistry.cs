@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+namespace ShelteredAPI.Scenarios.Domain.Stages{
     /// <summary>
     /// Built-in scenario authoring stage catalog.
     /// Use this to drive editor navigation or map validation messages to user-facing sections.

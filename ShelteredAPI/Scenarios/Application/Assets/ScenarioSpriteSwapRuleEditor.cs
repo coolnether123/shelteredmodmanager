@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Assets{
     // Pure, stateless helpers for reading and mutating SpriteSwap rules. Split out of
     // ScenarioSpriteSwapAuthoringService so history, clipboard, and apply paths can
     // share the exact same rule semantics.

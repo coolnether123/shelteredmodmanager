@@ -1,5 +1,4 @@
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Compatibility{
     internal interface IScenarioModContentResolver
     {
         bool TryResolveOwner(string contentId, out string modId, out string version);

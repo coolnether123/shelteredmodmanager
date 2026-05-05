@@ -11,6 +11,9 @@ using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI;
 using UnityEngine;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.Input
 {
     /// <summary>

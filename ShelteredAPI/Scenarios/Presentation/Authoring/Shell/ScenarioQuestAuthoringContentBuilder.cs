@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Presentation.Inspector;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioQuestAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
         private const int CatalogPreviewLimit = 20;

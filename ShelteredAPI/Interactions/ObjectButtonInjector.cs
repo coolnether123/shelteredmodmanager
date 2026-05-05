@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Interactions
 {
     /// <summary>

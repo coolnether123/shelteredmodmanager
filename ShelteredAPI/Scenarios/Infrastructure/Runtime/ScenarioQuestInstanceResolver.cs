@@ -1,7 +1,8 @@
 using System;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioQuestInstanceResolver : IScenarioQuestInstanceResolver
     {
         private readonly IVanillaScenarioRuntime _vanillaRuntime;

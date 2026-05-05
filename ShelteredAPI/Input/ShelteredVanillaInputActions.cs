@@ -4,6 +4,9 @@ using ModAPI.InputActions;
 using ModAPI.Core;
 using UnityEngine;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Input
 {
     /// <summary>

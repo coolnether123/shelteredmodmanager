@@ -3,6 +3,8 @@ using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
 
+
+using ShelteredAPI.Content;
 namespace ShelteredAPI.UI.FieldManual.Animations
 {
     internal enum PageTurnArrowDirection

@@ -7,6 +7,9 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using ShelteredAPI.UI.Internal;
 
+
+using ShelteredAPI.Saves;
+using ShelteredAPI.UI.Internal.Runtime;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

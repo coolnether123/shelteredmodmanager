@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Application.Conditions{
     internal sealed class ScenarioConditionEvaluatorRegistry
     {
         private readonly List<IScenarioConditionEvaluator> _evaluators = new List<IScenarioConditionEvaluator>();

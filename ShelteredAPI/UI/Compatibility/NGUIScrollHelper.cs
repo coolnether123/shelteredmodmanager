@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
 using ModAPI.InputServices;
 
 namespace ShelteredAPI.UI.Compatibility

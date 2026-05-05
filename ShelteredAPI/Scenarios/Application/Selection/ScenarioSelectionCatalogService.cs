@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSelectionCatalogService : IScenarioSelectionCatalogService
     {
         private readonly ICustomScenarioRegistry _customScenarios;

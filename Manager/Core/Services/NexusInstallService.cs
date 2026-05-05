@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Net;
 using System.Reflection;
-using System.Threading;
 using System.Web.Script.Serialization;
 using Manager.Core;
 using Manager.Core.Models;
@@ -21,6 +20,18 @@ namespace Manager.Core.Services
     /// </summary>
     public class NexusInstallService
     {
+        private readonly IArchiveExtractor _archiveExtractor;
+
+        public NexusInstallService()
+            : this(new ZipArchiveExtractor())
+        {
+        }
+
+        internal NexusInstallService(IArchiveExtractor archiveExtractor)
+        {
+            _archiveExtractor = archiveExtractor ?? new ZipArchiveExtractor();
+        }
+
         public static void CleanupStartupArtifacts()
         {
             try
@@ -108,8 +119,12 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            if (!ExtractZip(archivePath, extractPath, out errorMessage))
+            if (!_archiveExtractor.TryExtract(archivePath, extractPath, out errorMessage))
+            {
+                TryDeleteDirectory(extractPath);
+                TryDeleteFile(archivePath);
                 return null;
+            }
 
             string sourceModRoot = FindModRoot(extractPath);
             if (string.IsNullOrEmpty(sourceModRoot) || !Directory.Exists(sourceModRoot))
@@ -248,79 +263,6 @@ namespace Manager.Core.Services
                 return topDirectories[0];
 
             return null;
-        }
-
-        private static bool ExtractZip(string zipPath, string destination, out string errorMessage)
-        {
-            errorMessage = null;
-
-            try
-            {
-                if (!Directory.Exists(destination))
-                    Directory.CreateDirectory(destination);
-
-                Type shellType = Type.GetTypeFromProgID("Shell.Application");
-                if (shellType == null)
-                {
-                    errorMessage = "Shell extraction is unavailable on this system.";
-                    return false;
-                }
-
-                object shell = Activator.CreateInstance(shellType);
-                object src = shellType.InvokeMember("NameSpace", BindingFlags.InvokeMethod, null, shell, new object[] { zipPath });
-                object dst = shellType.InvokeMember("NameSpace", BindingFlags.InvokeMethod, null, shell, new object[] { destination });
-
-                if (src == null || dst == null)
-                {
-                    errorMessage = "Could not open archive for extraction.";
-                    return false;
-                }
-
-                object items = src.GetType().InvokeMember("Items", BindingFlags.InvokeMethod, null, src, null);
-                // 16: no UI, 4: no confirmation, 1024: no progress box
-                dst.GetType().InvokeMember("CopyHere", BindingFlags.InvokeMethod, null, dst, new object[] { items, 16 + 4 + 1024 });
-
-                DateTime until = DateTime.UtcNow.AddSeconds(45);
-                int lastCount = -1;
-                int stableTicks = 0;
-
-                while (DateTime.UtcNow < until)
-                {
-                    int count = 0;
-                    try { count = Directory.GetFileSystemEntries(destination).Length; }
-                    catch { }
-
-                    if (count > 0)
-                    {
-                        if (count == lastCount)
-                        {
-                            stableTicks++;
-                            if (stableTicks >= 3)
-                                return true;
-                        }
-                        else
-                        {
-                            stableTicks = 0;
-                        }
-                    }
-
-                    lastCount = count;
-                    Thread.Sleep(500);
-                }
-
-                if (Directory.GetFileSystemEntries(destination).Length == 0)
-                {
-                    errorMessage = "Archive extraction produced no files.";
-                    return false;
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = "Archive extraction failed: " + ex.Message;
-                return false;
-            }
         }
 
         private static void WriteNexusMetadata(string installedModPath, string gameDomain, int modId)

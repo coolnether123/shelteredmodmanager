@@ -6,9 +6,8 @@ using ShelteredAPI.UI.FieldManual.Panels;
 using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Widgets;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Selection;
+namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserRenderer : IDisposable
     {
         private const int HeaderHeight = 86;

@@ -3,8 +3,8 @@ using System.Xml;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     internal static class SpritePatchSerializer
     {
         public static SpritePatchDefinition ReadPatch(XmlElement element, System.Func<XmlElement, string, string, string> attributeOrChild, System.Func<XmlElement, string, XmlElement> child, System.Func<XmlElement, string, int, int> readIntAttribute)

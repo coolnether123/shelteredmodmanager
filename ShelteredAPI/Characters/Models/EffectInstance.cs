@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Abstractions;
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Characters.Models{
     /// <summary>
     /// Runtime state for one active character effect.
     /// The instance tracks timing, stack count, source mod, and custom effect data.

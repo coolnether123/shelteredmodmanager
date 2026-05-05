@@ -1,7 +1,7 @@
 using System;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Application.Commands{
     internal delegate bool ScenarioCommandCallback(ScenarioAuthoringState state, string actionId, out string message);
 
     internal sealed class ScenarioCommandRegistration : IScenarioCommandHandler

@@ -2,9 +2,9 @@ using System;
 using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Persistence;
+using ShelteredAPI.UI.FieldManual.Textures;
+namespace ShelteredAPI.Scenarios.Registration{
     internal sealed class ScenarioRegistrationValidator
     {
         public CustomScenarioRegistration Normalize(CustomScenarioRegistration registration, Assembly callerAssembly, out string error)

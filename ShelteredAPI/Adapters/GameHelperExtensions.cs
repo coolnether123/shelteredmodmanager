@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using ModAPI.Core;
 
+
+using ShelteredAPI.Content;
 namespace ShelteredAPI.Adapters
 {
     /// <summary>

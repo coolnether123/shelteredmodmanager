@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using ShelteredAPI.Characters.Internal;
 
+using ShelteredAPI.Characters.Abstractions;
+using ShelteredAPI.Characters.Models;
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Characters
 {
     /// <summary>

@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Timeline;
+namespace ShelteredAPI.Scenarios.Presentation.Timeline{
     internal sealed class ScenarioTimelineViewModelBuilder
     {
         public ScenarioTimelineViewModel Build(List<ScenarioTimelineDay> days)

@@ -11,6 +11,8 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Paging;
 
+
+using ShelteredAPI.Persistence;
 namespace ShelteredAPI.Core
 {
     /// <summary>

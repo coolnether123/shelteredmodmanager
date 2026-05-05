@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
 using ModAPI.Harmony;
 using ShelteredAPI.UI.Internal;
 using ModAPI.Reflection;
 using UnityEngine;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.UI.Internal.Runtime;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

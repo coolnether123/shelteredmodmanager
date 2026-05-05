@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioDefinitionRegistrationSync : IScenarioDefinitionCatalogService
     {
         private readonly IScenarioDefinitionCatalog _definitionCatalog;

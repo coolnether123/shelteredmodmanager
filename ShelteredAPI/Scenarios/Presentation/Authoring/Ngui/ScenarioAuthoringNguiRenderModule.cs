@@ -4,9 +4,13 @@ using System.Text;
 using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
     internal sealed class ScenarioAuthoringNguiRenderModule : IScenarioAuthoringRenderModule
     {
         private const string OverlayName = "ShelteredAPI_ScenarioAuthoringOverlay";

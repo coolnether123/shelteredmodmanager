@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Abstractions;
+namespace ShelteredAPI.Characters.Models{
     internal class CharacterDataModel : ICharacterData
     {
         private readonly object _customDataLock = new object();

@@ -12,8 +12,16 @@ using ModAPI.UI;
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Harmony;
+using ShelteredAPI.Scenarios.Presentation.Selection;
+using ShelteredAPI.Scenarios.Registration;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ShelteredScenarioSelectionBrowserController
     {
         private const string HubLabel = "Custom Scenarios";
@@ -702,7 +710,7 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            // Allocation succeeded — only now do we tear down the custom mode UI
+            // Allocation succeeded Ã¢â‚¬â€ only now do we tear down the custom mode UI
             // and commit the queued target + customisation transition.
             ExitCustomMode(panel, state, scenarioButtons);
             ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();

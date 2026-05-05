@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringInputCaptureService
     {
         private readonly List<Rect> _interactiveRects = new List<Rect>();

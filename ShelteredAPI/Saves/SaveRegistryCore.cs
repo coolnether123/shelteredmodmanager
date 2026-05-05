@@ -1,0 +1,1387 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Text.RegularExpressions;
+using UnityEngine;
+using ModAPI.Core;
+
+using ShelteredAPI.Hooks;
+namespace ShelteredAPI.Saves
+{
+    /// <summary>
+    /// Provides central logic for managing mod-aware save files.
+    /// 
+    /// REFACTORED: No longer uses a global manifest.json file.
+    /// - Save entries are discovered by scanning Slot_* directories
+    /// - Save metadata is read from the XML file on demand
+    /// - Per-slot manifest.json files store only mod tracking data
+    /// </summary>
+    internal class SaveRegistryCore : ISaveApi
+    {
+        private readonly object _lock = new object();
+        private readonly string _scenarioId;
+        
+        // Cache of discovered entries, keyed by absoluteSlot
+        // Invalidated when saves are created/deleted
+        private Dictionary<int, SaveEntry> _entryCache;
+        private bool _cacheValid = false;
+
+        public SaveRegistryCore(string scenarioId)
+        {
+            this._scenarioId = scenarioId;
+        }
+
+        // --- ISaveApi Implementation ---
+        public SaveEntry Get(string saveId) => GetSave(saveId);
+        public SaveEntry Overwrite(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes) => OverwriteSave(saveId, opts, xmlBytes);
+
+        /// <summary>
+        /// Returns all save entries by scanning Slot_* directories.
+        /// </summary>
+        public SaveEntry[] ListSaves()
+        {
+            return GetValidEntriesList().ToArray();
+        }
+
+        private List<SaveEntry> GetValidEntriesList()
+        {
+            var entries = GetAllEntries();
+            var results = new List<SaveEntry>();
+            
+            foreach (var e in entries.Values)
+            {
+                var savePath = DirectoryProvider.EntryPath(_scenarioId, e.absoluteSlot);
+                if (File.Exists(savePath))
+                {
+                    results.Add(e);
+                }
+            }
+
+            results.Sort((a, b) => a.absoluteSlot.CompareTo(b.absoluteSlot));
+            return results;
+        }
+
+        public SaveEntry[] ListSaves(int page, int pageSize)
+        {
+            var all = ListSaves();
+            if (all == null || all.Length == 0) return new SaveEntry[0];
+            int start = Math.Max(0, page * pageSize);
+            if (start >= all.Length) return new SaveEntry[0];
+            int count = Math.Min(pageSize, all.Length - start);
+            var result = new SaveEntry[count];
+            Array.Copy(all, start, result, 0, count);
+            return result;
+        }
+
+        public SaveEntry GetSave(string saveId)
+        {
+            foreach (var e in GetAllEntries().Values)
+                if (e.id == saveId) return e;
+            return null;
+        }
+
+        /// <summary>
+        /// Gets a save entry by its absolute slot number.
+        /// </summary>
+        public SaveEntry GetSaveBySlot(int absoluteSlot)
+        {
+            var entries = GetAllEntries();
+            if (entries.TryGetValue(absoluteSlot, out var entry))
+                return entry;
+            return null;
+        }
+
+        /// <summary>
+        /// Deletes a save by its absolute slot number.
+        /// </summary>
+        public bool DeleteBySlot(int absoluteSlot)
+        {
+            MMLog.Write($"DeleteBySlot called for slot {absoluteSlot}");
+
+            var deleted = DeleteSlotDirectory(absoluteSlot, "DeleteBySlot", true);
+            if (deleted)
+            {
+                InvalidateCache();
+                MMLog.Write($"DeleteBySlot: Successfully deleted slot {absoluteSlot}");
+            }
+            return deleted;
+        }
+
+        public int CountSaves()
+        {
+            return GetValidEntriesList().Count;
+        }
+
+        public int GetMaxSlot()
+        {
+            var valid = GetValidEntriesList();
+            if (valid.Count == 0) return 0;
+            return valid[valid.Count - 1].absoluteSlot;
+        }
+
+        // NEW: Shutdown Coordination Flag
+        public static bool DiscoveryPaused = false;
+
+        public static void PauseDiscovery() => DiscoveryPaused = true;
+        public static void ResumeDiscovery() => DiscoveryPaused = false;
+
+        /// <summary>
+        /// Discovers all save slots by scanning directories.
+        /// Reads metadata from XML files on demand.
+        /// </summary>
+        private Dictionary<int, SaveEntry> GetAllEntries()
+        {
+            lock (_lock)
+            {
+                // CRITICAL FIX: If discovery is paused (during shutdown), do NOT touch the disk.
+                // Return whatever we have in cache, or an empty list if nothing.
+                if (DiscoveryPaused)
+                {
+                    return _entryCache ?? new Dictionary<int, SaveEntry>();
+                }
+
+                if (_cacheValid && _entryCache != null)
+                    return _entryCache;
+
+                _entryCache = new Dictionary<int, SaveEntry>();
+
+                var scenarioRoot = DirectoryProvider.ScenarioRoot(_scenarioId, false);
+                if (!Directory.Exists(scenarioRoot))
+                {
+                    _cacheValid = true;
+                    return _entryCache;
+                }
+
+                var dirs = Directory.GetDirectories(scenarioRoot, "Slot_*");
+                foreach (var dir in dirs)
+                {
+                    var dirName = Path.GetFileName(dir);
+                    var numPart = dirName.Substring(5); // "Slot_" is 5 chars
+                    if (int.TryParse(numPart, out int absoluteSlot))
+                    {
+                        var savePath = Path.Combine(dir, "SaveData.xml");
+                        try
+                        {
+                            // Discover slot even if XML is missing (e.g. newly created slot)
+                            var entry = BuildEntryFromSlot(absoluteSlot, savePath);
+                            if (entry != null)
+                                _entryCache[absoluteSlot] = entry;
+                        }
+                        catch (Exception ex)
+                        {
+                            MMLog.WriteError($"Error reading slot {absoluteSlot}: {ex.Message}");
+                        }
+                    }
+                }
+                
+                _cacheValid = true;
+                return _entryCache;
+            }
+        }
+
+        /// <summary>
+        /// Builds a SaveEntry by reading metadata from the XML file.
+        /// </summary>
+        private SaveEntry BuildEntryFromSlot(int absoluteSlot, string savePath)
+        {
+            var entry = new SaveEntry
+            {
+                id = $"{_scenarioId}_{absoluteSlot}", // Stable ID based on scenario and slot
+                absoluteSlot = absoluteSlot,
+                name = $"Slot {absoluteSlot}",
+                scenarioId = _scenarioId,
+                saveInfo = new SaveInfo()
+            };
+
+
+            if (File.Exists(savePath))
+            {
+                try
+                {
+                    // Read basic file info (safe OS operation)
+                    var bytes = File.ReadAllBytes(savePath);
+                    entry.createdAt = File.GetCreationTimeUtc(savePath).ToString("o");
+                    entry.updatedAt = File.GetLastWriteTimeUtc(savePath).ToString("o");
+                    entry.fileSize = bytes.Length;
+                    entry.crc32 = CRC32.Compute(bytes);
+
+                    // SAFE: We now use manual regex parsing which doesn't rely on Unity objects.
+                    // This is safe to run even during shutdown.
+                    TryUpdateEntryInfo(entry, bytes);
+                    
+                    // Use family name as display name if available
+                    if (!string.IsNullOrEmpty(entry.saveInfo?.familyName))
+                        entry.name = entry.saveInfo.familyName;
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError($"Error parsing {savePath}: {ex.Message}");
+                }
+            }
+            else
+            {
+                // Directory exists but no XML yet
+                var dir = Path.GetDirectoryName(savePath);
+                entry.createdAt = Directory.GetCreationTimeUtc(dir).ToString("o");
+                entry.updatedAt = Directory.GetLastWriteTimeUtc(dir).ToString("o");
+                entry.name = "New Game";
+            }
+
+            return entry;
+        }
+
+        /// <summary>
+        /// Invalidates the entry cache, forcing re-discovery on next access.
+        /// </summary>
+        private void InvalidateCache()
+        {
+            lock (_lock)
+            {
+                _cacheValid = false;
+                _entryCache = null;
+            }
+        }
+
+        public SaveEntry CreateSave(SaveCreateOptions opts)
+        {
+            SaveCreateOptions normalized = NormalizeCreateOptions(opts);
+            var now = DateTime.UtcNow.ToString("o");
+            var entry = new SaveEntry
+            {
+                id = $"{_scenarioId}_{normalized.absoluteSlot}",
+                absoluteSlot = normalized.absoluteSlot,
+                name = NameSanitizer.SanitizeName(normalized.name) ?? $"Slot {normalized.absoluteSlot}",
+                createdAt = now,
+                updatedAt = now,
+                gameVersion = Application.version,
+                modApiVersion = "1",
+                scenarioId = _scenarioId,
+                scenarioVersion = ScenarioRegistry.GetScenario(_scenarioId)?.version ?? "1.0",
+                saveInfo = new SaveInfo()
+            };
+
+            // Ensure slot directory exists
+            DirectoryProvider.SlotRoot(_scenarioId, normalized.absoluteSlot, true);
+            
+            InvalidateCache();
+            return entry;
+        }
+
+        private SaveCreateOptions NormalizeCreateOptions(SaveCreateOptions opts)
+        {
+            SaveCreateOptions normalized = new SaveCreateOptions();
+            if (opts != null)
+            {
+                normalized.name = opts.name;
+                normalized.extraJson = opts.extraJson;
+                normalized.absoluteSlot = opts.absoluteSlot;
+            }
+
+            if (normalized.absoluteSlot <= 0)
+                normalized.absoluteSlot = GetNextCreatableSlot();
+
+            return normalized;
+        }
+
+        internal int GetNextCreatableSlot()
+        {
+            int firstSlot = ExpandedVanillaSaves.IsStandardScenario(_scenarioId) ? 4 : 1;
+            int maxSlot = firstSlot - 1;
+
+            foreach (int slot in GetAllEntries().Keys)
+            {
+                if (slot >= firstSlot && slot > maxSlot)
+                    maxSlot = slot;
+            }
+
+            return maxSlot + 1;
+        }
+
+        public SaveEntry OverwriteSave(string saveId, SaveOverwriteOptions opts, byte[] xmlBytes)
+        {
+            
+            // Normal Flow: Find entry by ID (triggers discovery)
+            var entry = GetSave(saveId);
+            if (entry == null) return null;
+
+
+            if (opts != null && !string.IsNullOrEmpty(opts.name)) 
+                entry.name = NameSanitizer.SanitizeName(opts.name);
+            entry.updatedAt = DateTime.UtcNow.ToString("o");
+            
+            if (xmlBytes != null)
+            {
+                WriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc);
+                entry.fileSize = size;
+                entry.crc32 = crc;
+
+                TryUpdateEntryInfo(entry, xmlBytes);
+                
+                // Update per-slot manifest (Mod List only)
+                UpdateSlotManifest(entry.absoluteSlot, entry.saveInfo);
+            }
+            
+            InvalidateCache();
+            return entry;
+        }
+
+        public bool DeleteSave(string saveId)
+        {
+            MMLog.Write($"DeleteSave called with ID: '{saveId}'");
+            
+            var entry = GetSave(saveId);
+            if (entry == null)
+            {
+                MMLog.WriteError($"DeleteSave: Entry not found for ID '{saveId}'");
+                return false;
+            }
+
+            MMLog.Write($"DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
+
+            var deleted = DeleteSlotDirectory(entry.absoluteSlot, "DeleteSave", false);
+            if (!deleted)
+            {
+                return false;
+            }
+            
+            // Delete preview if exists
+            try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
+
+            InvalidateCache();
+            MMLog.Write($"DeleteSave: Completed for slot {entry.absoluteSlot}");
+            return true;
+        }
+
+        private bool DeleteSlotDirectory(int absoluteSlot, string operation, bool failIfMissing)
+        {
+            var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot, false);
+            MMLog.Write(string.Format("{0}: Slot directory = '{1}'", operation, slotRoot));
+
+            try
+            {
+                if (!Directory.Exists(slotRoot))
+                {
+                    MMLog.WriteError(string.Format("{0}: Directory does not exist: '{1}'", operation, slotRoot));
+                    return !failIfMissing;
+                }
+
+                string deletedRoot = DirectoryProvider.DeletedRoot(_scenarioId);
+                string deletedName = string.Format("Slot_{0}_{1:yyyyMMdd_HHmmss}", absoluteSlot, DateTime.UtcNow);
+                string deletedPath = Path.Combine(deletedRoot, deletedName);
+                while (Directory.Exists(deletedPath))
+                {
+                    deletedPath = Path.Combine(deletedRoot, deletedName + "_" + Path.GetRandomFileName().Replace(".", string.Empty));
+                }
+
+                MMLog.Write(string.Format("{0}: Moving directory '{1}' to '{2}'", operation, slotRoot, deletedPath));
+                Directory.Move(slotRoot, deletedPath);
+                MMLog.Write(string.Format("{0}: Directory quarantined successfully", operation));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError(string.Format("{0}: Failed to delete slot directory: {1}", operation, ex.Message));
+                return false;
+            }
+        }
+
+        internal void UpdateSlotManifest(int absoluteSlot, SaveInfo info)
+        {
+            try
+            {
+                var newManifest = CreateCurrentManifestSnapshot(info);
+                string manifestPath;
+                string error;
+                if (!TryWriteSlotManifest(_scenarioId, absoluteSlot, newManifest, out manifestPath, out error))
+                {
+                    MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {error}");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"FAILED to update slot manifest for Slot {absoluteSlot}: {ex}");
+            }
+        }
+
+        internal static SlotManifest CreateCurrentManifestSnapshot(SaveInfo info)
+        {
+            var currentMods = new List<LoadedModInfo>();
+
+            foreach (var mod in ModRuntime.GetLoadedModsSnapshot())
+            {
+                if (mod == null) continue;
+
+                string warning = mod.About?.missingModWarning;
+                currentMods.Add(new LoadedModInfo
+                {
+                    modId = mod.Id,
+                    version = mod.Version,
+                    warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
+                });
+            }
+
+            return new SlotManifest
+            {
+                lastModified = DateTime.UtcNow.ToString("o"),
+                family_name = info != null ? info.familyName : "Unknown",
+                lastLoadedMods = currentMods.ToArray()
+            };
+        }
+
+
+        // REMOVED: LoadManifest() - now using GetAllEntries() for directory-based discovery
+
+
+        // REMOVED: ReconcileManifestWithSlots() - discovery now handled by GetAllEntries()
+
+        /// <summary>
+        /// Condenses save slots to remove gaps in numbering.
+        /// Works directly with directories without using a global manifest.
+        /// </summary>
+        public void CondenseSlots()
+        {
+            var entries = ListSaves();
+            if (entries == null || entries.Length == 0) return;
+
+            // Determines starting slot based on scenario type
+            int expectedSlot = (_scenarioId == "Standard") ? 4 : 1;
+            
+            bool changed = false;
+            foreach (var entry in entries)
+            {
+                // Skip reserved vanilla slots for Standard scenario
+                if (_scenarioId == "Standard" && entry.absoluteSlot < 4) continue;
+
+                if (entry.absoluteSlot > expectedSlot)
+                {
+                    // Move it!
+                    bool success = false;
+                    try
+                    {
+                        var oldDir = DirectoryProvider.SlotRoot(_scenarioId, entry.absoluteSlot, false);
+                        var newDir = DirectoryProvider.SlotRoot(_scenarioId, expectedSlot, false);
+
+                        // Check for collision
+                        if (Directory.Exists(newDir))
+                        {
+                            // If empty, delete it to allow move
+                            if (Directory.GetFiles(newDir).Length == 0 && Directory.GetDirectories(newDir).Length == 0)
+                            {
+                                Directory.Delete(newDir);
+                            }
+                            else
+                            {
+                                MMLog.WriteError($"Cannot move {entry.absoluteSlot} to {expectedSlot} - target not empty.");
+                                expectedSlot++; 
+                                continue; 
+                            }
+                        }
+
+                        Directory.Move(oldDir, newDir);
+                        MMLog.Write($"Moved save from Slot {entry.absoluteSlot} to Slot {expectedSlot}");
+                        success = true;
+                        changed = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        MMLog.WriteError($"Failed to move slot {entry.absoluteSlot} to {expectedSlot}: {ex.Message}");
+                    }
+                    
+                    if (success) expectedSlot++;
+                }
+                else if (entry.absoluteSlot == expectedSlot)
+                {
+                    expectedSlot++;
+                }
+            }
+
+            if (changed)
+            {
+                InvalidateCache();
+            }
+        }
+
+
+        // REMOVED: SaveManifestFile() - no longer using global manifest
+        
+
+        // REMOVED: SerializeManifest() - no longer needed without global manifest
+        
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
+        }
+        
+
+        // REMOVED: DeserializeManifest(), ParseSaveEntry(), ParseSaveInfo() - no longer needed
+        
+        private static int FindMatchingBracket(string s, int start, char open, char close)
+        {
+            int depth = 0;
+            for (int i = start; i < s.Length; i++)
+            {
+                if (s[i] == open) depth++;
+                else if (s[i] == close) depth--;
+                if (depth == 0) return i;
+            }
+            return -1;
+        }
+        
+        private static string ParseStringField(string json, string field)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return "";
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return "";
+            int quoteStart = json.IndexOf('"', colonPos + 1);
+            if (quoteStart < 0) return "";
+            int quoteEnd = quoteStart + 1;
+            while (quoteEnd < json.Length)
+            {
+                if (json[quoteEnd] == '"' && json[quoteEnd - 1] != '\\')
+                    break;
+                quoteEnd++;
+            }
+            if (quoteEnd >= json.Length) return "";
+            string value = json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+            // Unescape
+            return value.Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\\"", "\"").Replace("\\\\", "\\");
+        }
+        
+        private static int ParseIntField(string json, string field, int defaultValue)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return defaultValue;
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return defaultValue;
+            int valStart = colonPos + 1;
+            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
+            int valEnd = valStart;
+            while (valEnd < json.Length && (char.IsDigit(json[valEnd]) || json[valEnd] == '-')) valEnd++;
+            if (valEnd <= valStart) return defaultValue;
+            if (int.TryParse(json.Substring(valStart, valEnd - valStart), out int result))
+                return result;
+            return defaultValue;
+        }
+        
+        private static long ParseLongField(string json, string field, long defaultValue)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return defaultValue;
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return defaultValue;
+            int valStart = colonPos + 1;
+            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
+            int valEnd = valStart;
+            while (valEnd < json.Length && (char.IsDigit(json[valEnd]) || json[valEnd] == '-')) valEnd++;
+            if (valEnd <= valStart) return defaultValue;
+            if (long.TryParse(json.Substring(valStart, valEnd - valStart), out long result))
+                return result;
+            return defaultValue;
+        }
+        
+        private static bool ParseBoolField(string json, string field, bool defaultValue)
+        {
+            string pattern = $"\"{field}\"";
+            int pos = json.IndexOf(pattern);
+            if (pos < 0) return defaultValue;
+            int colonPos = json.IndexOf(':', pos + pattern.Length);
+            if (colonPos < 0) return defaultValue;
+            int valStart = colonPos + 1;
+            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
+            if (valStart + 4 <= json.Length && json.Substring(valStart, 4).ToLower() == "true")
+                return true;
+            if (valStart + 5 <= json.Length && json.Substring(valStart, 5).ToLower() == "false")
+                return false;
+            return defaultValue;
+        }
+
+        private void WriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
+        {
+            var path = DirectoryProvider.EntryPath(_scenarioId, absoluteSlot);
+            var tmp = path + ".tmp";
+            fileSize = 0; crc = 0;
+            try
+            {
+                File.WriteAllBytes(tmp, xmlBytes);
+                fileSize = new FileInfo(tmp).Length;
+                crc = CRC32.Compute(xmlBytes);
+                try { File.Replace(tmp, path, null); }
+                catch { File.Copy(tmp, path, true); File.Delete(tmp); }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"FAILED writing entry file for Slot_{absoluteSlot}: {ex.Message}");
+            }
+        }
+
+
+        private static void TryUpdateEntryInfo(SaveEntry entry, byte[] xmlBytes)
+        {
+            try
+            {
+                // SAFETY FIX: Avoid using 'new SaveData(bytes)' which relies on Unity serialization.
+                // During shutdown, referencing Unity objects can cause Access Violations.
+                // Instead, we parse the XML string directly using Regex.
+                
+                string xml = Encoding.UTF8.GetString(xmlBytes);
+
+                entry.saveInfo.familyName = ExtractXmlValue(xml, "familyName", "Unknown");
+                entry.saveInfo.daysSurvived = ExtractXmlInt(xml, "daysSurvived", 0);
+                entry.saveInfo.difficulty = ExtractXmlInt(xml, "difficultySetting", 1);
+                entry.saveInfo.saveTime = ExtractXmlValue(xml, "timestamp", "");
+
+                entry.saveInfo.mapSize = ExtractXmlInt(xml, "mapSize", 0);
+                entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", true);
+                entry.saveInfo.rainDiff = ExtractXmlInt(xml, "rainDifficulty", 1);
+                entry.saveInfo.resourceDiff = ExtractXmlInt(xml, "resourcesDifficulty", 1);
+                entry.saveInfo.breachDiff = ExtractXmlInt(xml, "breachDifficulty", 1);
+                entry.saveInfo.factionDiff = ExtractXmlInt(xml, "factionDifficulty", 1);
+                entry.saveInfo.moodDiff = ExtractXmlInt(xml, "moodDifficulty", 1);
+            }
+            catch (Exception ex)
+            {
+                MMLog.Write("CRITICAL parse error in metadata: " + ex);
+            }
+        }
+
+        private static string ExtractXmlValue(string xml, string tag, string defaultValue)
+        {
+            // Case-insensitive match, handling potential attributes inside the opening tag
+            var match = Regex.Match(xml, $"<{tag}[^>]*>(.*?)</{tag}>", RegexOptions.Singleline);
+            return match.Success ? match.Groups[1].Value : defaultValue;
+        }
+
+        private static int ExtractXmlInt(string xml, string tag, int defaultValue)
+        {
+            var val = ExtractXmlValue(xml, tag, null);
+            if (val != null && int.TryParse(val, out int result)) return result;
+            return defaultValue;
+        }
+
+        private static float ExtractXmlFloat(string xml, string tag, float defaultValue)
+        {
+            var val = ExtractXmlValue(xml, tag, null);
+            if (val != null && float.TryParse(val, out float result)) return result;
+            return defaultValue;
+        }
+
+        private static bool ExtractXmlBool(string xml, string tag, bool defaultValue)
+        {
+            var val = ExtractXmlValue(xml, tag, null);
+            if (val != null && bool.TryParse(val, out bool result)) return result;
+            return defaultValue;
+        }
+
+
+
+        // REMOVED: UniqueName() - no longer needed, names come from XML
+
+        /// <summary>
+        /// Serializes a SlotManifest to JSON using manual StringBuilder formatting.
+        /// </summary>
+        /// <remarks>
+        /// IMPORTANT: Unity's JsonUtility.ToJson() has a critical limitation - it CANNOT serialize
+        /// arrays of custom classes (like LoadedModInfo[]). When you call JsonUtility.ToJson() on
+        /// a SlotManifest, it will silently omit the 'lastLoadedMods' field from the output JSON,
+        /// even though the array is populated in memory. This causes saves to appear as having 0 mods.
+        /// 
+        /// We must use manual StringBuilder formatting to ensure the mod list is actually written.
+        /// The companion DeserializeSlotManifest() method uses custom parsing to read this format.
+        /// </remarks>
+        internal static string SerializeSlotManifest(SlotManifest manifest)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("{");
+            sb.AppendLine($"    \"manifestVersion\": {manifest.manifestVersion},");
+            sb.AppendLine($"    \"lastModified\": \"{manifest.lastModified}\",");
+            sb.Append($"    \"family_name\": \"{manifest.family_name}\"");
+            
+            if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
+            {
+                sb.AppendLine(",");
+                sb.AppendLine("    \"lastLoadedMods\": [");
+                for (int i = 0; i < manifest.lastLoadedMods.Length; i++)
+                {
+                    var mod = manifest.lastLoadedMods[i];
+                    sb.Append("        { ");
+                    sb.Append($"\"modId\": \"{mod.modId}\", ");
+                    sb.Append($"\"version\": \"{mod.version}\", ");
+                    sb.Append("\"warnings\": [");
+                    
+                    if (mod.warnings != null && mod.warnings.Length > 0)
+                    {
+                        for (int w = 0; w < mod.warnings.Length; w++)
+                        {
+                            sb.Append($"\"{mod.warnings[w]}\"");
+                            if (w < mod.warnings.Length - 1) sb.Append(", ");
+                        }
+                    }
+                    
+                    sb.Append("] }");
+                    if (i < manifest.lastLoadedMods.Length - 1) sb.AppendLine(",");
+                    else sb.AppendLine();
+                }
+                sb.AppendLine("    ]");
+            }
+            else
+            {
+                sb.AppendLine();
+            }
+            
+            sb.Append("}");
+            return sb.ToString();
+        }
+
+        internal static bool TryWriteSlotManifest(string scenarioId, int absoluteSlot, SlotManifest manifest, out string manifestPath, out string error)
+        {
+            manifestPath = null;
+            error = null;
+
+            if (manifest == null)
+            {
+                error = "Manifest was null.";
+                return false;
+            }
+
+            try
+            {
+                var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, true);
+                manifestPath = Path.Combine(slotRoot, "manifest.json");
+                File.WriteAllText(manifestPath, SerializeSlotManifest(manifest));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+
+
+        /// <summary>
+        /// Deserializes a SlotManifest from JSON.
+        /// </summary>
+        /// <remarks>
+        /// IMPORTANT: Unity's JsonUtility.FromJson fails to deserialize arrays of objects when 
+        /// they are written in compact/inline format like: { "modId": "...", "version": "..." }
+        /// 
+        /// This happens because early versions used StringBuilder to serialize manifests with 
+        /// inline object formatting. JsonUtility is extremely strict about whitespace and only
+        /// reliably deserializes the multi-line format it produces itself.
+        /// 
+        /// To maintain backward compatibility with existing save files, we manually parse the
+        /// lastLoadedMods array while letting JsonUtility handle simple scalar fields.
+        /// </remarks>
+        internal static SlotManifest DeserializeSlotManifest(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return new SlotManifest();
+            
+            var result = new SlotManifest();
+            
+            try
+            {
+                // Parse basic fields with JsonUtility (it handles these fine)
+                result = JsonUtility.FromJson<SlotManifest>(json) ?? new SlotManifest();
+                
+                // Manual parse for lastLoadedMods array since JsonUtility struggles with inline objects
+                var mods = new List<LoadedModInfo>();
+                
+                // Find the lastLoadedMods array content
+                int arrayStart = json.IndexOf("\"lastLoadedMods\"");
+                if (arrayStart >= 0)
+                {
+                    int bracketStart = json.IndexOf('[', arrayStart);
+                    if (bracketStart >= 0)
+                    {
+                        int bracketEnd = FindMatchingBracketIgnoringStrings(json, bracketStart, '[', ']');
+
+                        if (bracketEnd > bracketStart)
+                        {
+                            string arrayContent = json.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
+
+                            var objects = ExtractTopLevelJsonObjects(arrayContent);
+                            for (int i = 0; i < objects.Count; i++)
+                            {
+                                var mod = ParseLoadedModInfo(objects[i]);
+                                if (mod != null) mods.Add(mod);
+                            }
+                        }
+                    }
+                }
+                
+                result.lastLoadedMods = mods.ToArray();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"DeserializeSlotManifest: Parse error: {ex.Message}");
+            }
+            
+            return result;
+        }
+        
+        private static LoadedModInfo ParseLoadedModInfo(string objJson)
+        {
+            try
+            {
+                var info = new LoadedModInfo();
+                
+                // Extract modId
+                info.modId = ExtractJsonStringValue(objJson, "modId");
+                
+                // Extract version
+                info.version = ExtractJsonStringValue(objJson, "version");
+                
+                // Extract warnings array (simple case - just get string values)
+                var warnings = new List<string>();
+                int warningsStart = objJson.IndexOf("\"warnings\"");
+                if (warningsStart >= 0)
+                {
+                    int arrStart = objJson.IndexOf('[', warningsStart);
+                    int arrEnd = FindMatchingBracketIgnoringStrings(objJson, arrStart, '[', ']');
+                    if (arrStart >= 0 && arrEnd > arrStart)
+                    {
+                        string arrContent = objJson.Substring(arrStart + 1, arrEnd - arrStart - 1).Trim();
+                        if (!string.IsNullOrEmpty(arrContent))
+                        {
+                            warnings.AddRange(ParseJsonStringArray(arrContent));
+                        }
+                    }
+                }
+                info.warnings = warnings.ToArray();
+                
+                return info;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+        
+        private static string ExtractJsonStringValue(string json, string key)
+        {
+            string pattern = "\"" + key + "\"";
+            int keyIndex = json.IndexOf(pattern);
+            if (keyIndex < 0) return "";
+            
+            int colonIndex = json.IndexOf(':', keyIndex + pattern.Length);
+            if (colonIndex < 0) return "";
+
+            int quoteStart = -1;
+            for (int i = colonIndex + 1; i < json.Length; i++)
+            {
+                if (!char.IsWhiteSpace(json[i]))
+                {
+                    if (json[i] != '"') return "";
+                    quoteStart = i;
+                    break;
+                }
+            }
+            if (quoteStart < 0) return "";
+
+            string value;
+            int nextIndex;
+            if (!TryReadJsonString(json, quoteStart, out value, out nextIndex)) return "";
+            return value;
+        }
+
+        private static int FindMatchingBracketIgnoringStrings(string s, int start, char open, char close)
+        {
+            if (string.IsNullOrEmpty(s) || start < 0 || start >= s.Length || s[start] != open) return -1;
+
+            int depth = 0;
+            bool inString = false;
+            bool escaping = false;
+            for (int i = start; i < s.Length; i++)
+            {
+                char c = s[i];
+
+                if (inString)
+                {
+                    if (escaping) escaping = false;
+                    else if (c == '\\') escaping = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+
+                if (c == '"') inString = true;
+                else if (c == open) depth++;
+                else if (c == close)
+                {
+                    depth--;
+                    if (depth == 0) return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static List<string> ExtractTopLevelJsonObjects(string arrayContent)
+        {
+            var objects = new List<string>();
+            if (string.IsNullOrEmpty(arrayContent)) return objects;
+
+            bool inString = false;
+            bool escaping = false;
+            int depth = 0;
+            int objectStart = -1;
+
+            for (int i = 0; i < arrayContent.Length; i++)
+            {
+                char c = arrayContent[i];
+
+                if (inString)
+                {
+                    if (escaping) escaping = false;
+                    else if (c == '\\') escaping = true;
+                    else if (c == '"') inString = false;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    inString = true;
+                    continue;
+                }
+
+                if (c == '{')
+                {
+                    if (depth == 0) objectStart = i;
+                    depth++;
+                    continue;
+                }
+
+                if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0 && objectStart >= 0)
+                    {
+                        objects.Add(arrayContent.Substring(objectStart, i - objectStart + 1));
+                        objectStart = -1;
+                    }
+                }
+            }
+
+            return objects;
+        }
+
+        private static List<string> ParseJsonStringArray(string arrayContent)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(arrayContent)) return result;
+
+            int i = 0;
+            while (i < arrayContent.Length)
+            {
+                while (i < arrayContent.Length && (char.IsWhiteSpace(arrayContent[i]) || arrayContent[i] == ',')) i++;
+                if (i >= arrayContent.Length) break;
+
+                if (arrayContent[i] != '"')
+                {
+                    while (i < arrayContent.Length && arrayContent[i] != ',') i++;
+                    continue;
+                }
+
+                string value;
+                int nextIndex;
+                if (!TryReadJsonString(arrayContent, i, out value, out nextIndex))
+                {
+                    break;
+                }
+
+                result.Add(value);
+                i = nextIndex;
+            }
+
+            return result;
+        }
+
+        private static bool TryReadJsonString(string source, int quoteStart, out string value, out int nextIndex)
+        {
+            value = string.Empty;
+            nextIndex = quoteStart;
+            if (string.IsNullOrEmpty(source) || quoteStart < 0 || quoteStart >= source.Length || source[quoteStart] != '"')
+            {
+                return false;
+            }
+
+            var sb = new StringBuilder();
+            bool escaping = false;
+
+            for (int i = quoteStart + 1; i < source.Length; i++)
+            {
+                char c = source[i];
+
+                if (escaping)
+                {
+                    switch (c)
+                    {
+                        case '"': sb.Append('"'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '/': sb.Append('/'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case 'n': sb.Append('\n'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 't': sb.Append('\t'); break;
+                        default: sb.Append(c); break;
+                    }
+                    escaping = false;
+                    continue;
+                }
+
+                if (c == '\\')
+                {
+                    escaping = true;
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    value = sb.ToString();
+                    nextIndex = i + 1;
+                    return true;
+                }
+
+                sb.Append(c);
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Reads SaveInfo from a save file's XML data.
+        /// Extracts all game settings including difficulty fields.
+        /// </summary>
+        public static SaveInfo ReadSaveInfoFromXml(byte[] xmlBytes)
+        {
+            var info = new SaveInfo();
+            if (xmlBytes == null || xmlBytes.Length == 0) return info;
+
+            try
+            {
+                var sd = new SaveData(xmlBytes);
+                var gameInfo = sd.info;
+                info.familyName = gameInfo.m_familyName;
+                info.daysSurvived = gameInfo.m_daysSurvived;
+                info.difficulty = gameInfo.m_diffSetting;
+                info.saveTime = gameInfo.m_saveTime;
+                
+                // Extract all difficulty settings for proper game loading
+                info.rainDiff = gameInfo.m_rainDiff;
+                info.resourceDiff = gameInfo.m_resourceDiff;
+                info.breachDiff = gameInfo.m_breachDiff;
+                info.factionDiff = gameInfo.m_factionDiff;
+                info.moodDiff = gameInfo.m_moodDiff;
+                info.mapSize = gameInfo.m_mapSize;
+                info.fog = gameInfo.m_fog;
+                
+                sd.Finished();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"Failed to read SaveInfo from XML: {ex.Message}");
+            }
+
+            return info;
+        }
+
+        /// <summary>
+        /// Reads SaveInfo from a vanilla save slot (1-3).
+        /// Handles the XOR decryption used by the game's PlatformSave_PC.
+        /// </summary>
+        public static SaveInfo ReadVanillaSaveInfo(int slotNumber)
+        {
+            try
+            {
+                // Get the vanilla save path (same as PlatformSave_PC.GetSavePath)
+                string savesPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "saves");
+                string fileName;
+                
+                switch (slotNumber)
+                {
+                    case 1: fileName = "savedata_01.dat"; break;
+                    case 2: fileName = "savedata_02.dat"; break;
+                    case 3: fileName = "savedata_03.dat"; break;
+                    default: return null;
+                }
+                
+                string fullPath = Path.Combine(savesPath, fileName);
+                
+                if (!File.Exists(fullPath))
+                {
+                    return null;  // Return null for empty slots
+                }
+                
+                // Read and decrypt the file (XOR cipher from PlatformSave_PC)
+                byte[] encryptedData = File.ReadAllBytes(fullPath);
+                byte[] decryptedData = DecryptVanillaSave(encryptedData);
+                
+                // Parse the decrypted XML
+                var info = ReadSaveInfoFromXml(decryptedData);
+                return info;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
+                return null;  // Return null on error
+            }
+        }
+
+        /// <summary>
+        /// Reads the manifest.json for a specific slot.
+        /// </summary>
+        internal static SlotManifest ReadSlotManifest(string scenarioId, int absoluteSlot)
+        {
+            try
+            {
+                var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, false);
+                var path = Path.Combine(slotRoot, "manifest.json");
+                if (File.Exists(path))
+                {
+                    return DeserializeSlotManifest(File.ReadAllText(path));
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug($"Failed to read slot manifest for {scenarioId}/{absoluteSlot}: {ex.Message}");
+            }
+            return null;
+        }
+        
+        /// <summary>
+        /// Decrypts vanilla save data using the XOR cipher from PlatformSave_PC.
+        /// </summary>
+        private static byte[] DecryptVanillaSave(byte[] encryptedData)
+        {
+            if (encryptedData == null || encryptedData.Length == 0)
+                return encryptedData;
+            
+            // XOR keys from PlatformSave_PC
+            byte[] xorKey = new byte[] { 172, 242, 115, 58, 254, 222, 170, 33, 48, 13, 167, 21, 139, 109, 74, 186, 171 };
+            byte[] xorOrder = new byte[] { 0, 2, 4, 1, 6, 15, 13, 16, 8, 3, 12, 10, 5, 9, 11, 7, 14 };
+            
+            byte[] decrypted = new byte[encryptedData.Length];
+            int keyIndex = 0;
+            
+            for (int i = 0; i < encryptedData.Length; i++)
+            {
+                decrypted[i] = (byte)(encryptedData[i] ^ xorKey[xorOrder[keyIndex++]]);
+                if (keyIndex >= xorOrder.Length)
+                    keyIndex = 0;
+            }
+            
+            return decrypted;
+        }
+
+        /// <summary>
+        /// Checks if there are gaps in the save slot numbers.
+        /// For Standard scenario, slots start at 4 (1-3 are vanilla).
+        /// </summary>
+        public bool HasGaps()
+        {
+            var entries = ListSaves();
+            if (entries == null || entries.Length == 0) return false;
+
+            int startSlot = (_scenarioId == "Standard") ? 4 : 1;
+            var slots = new List<int>();
+            foreach (var e in entries)
+            {
+                if (_scenarioId == "Standard" && e.absoluteSlot < 4) continue;
+                slots.Add(e.absoluteSlot);
+            }
+            if (slots.Count == 0) 
+            {
+                MMLog.WriteDebug("HasGaps: No custom saves in manifest.");
+                return false;
+            }
+
+            slots.Sort();
+            MMLog.WriteDebug($"HasGaps: checking {slots.Count} saves. Scenario: {_scenarioId}");
+            int expected = startSlot;
+            foreach (var slot in slots)
+            {
+                if (slot != expected) 
+                {
+                    MMLog.WriteDebug($"HasGaps: GAP FOUND! Expected {expected}, found {slot}");
+                    return true;
+                }
+                expected++;
+            }
+            MMLog.WriteDebug("HasGaps: No gaps found.");
+            return false;
+        }
+
+        /// <summary>
+        /// Runs the condense operation to close gaps in slot numbers.
+        /// </summary>
+        public void RunCondense()
+        {
+            CondenseSlots();
+        }
+    }
+
+    /// <summary>
+    /// Handles one-time startup check for save slot gaps and user preference for auto-condensing.
+    /// </summary>
+    internal static class SaveCondenseManager
+    {
+        private static bool _checked = false;
+        private static bool _pendingPrompt = false;
+
+        /// <summary>
+        /// Checks for gaps in save slots at startup. If gaps exist and user preference is "ask",
+        /// sets a flag to show a prompt when the main menu appears.
+        /// </summary>
+        public static void CheckOnStartup()
+        {
+            if (_checked) return;
+            _checked = true;
+
+            try
+            {
+                MMLog.WriteDebug("Starting startup gap check...");
+                var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                
+                if (!registry.HasGaps())
+                {
+                    return;
+                }
+
+                var pref = ReadCondensePreference();
+                MMLog.Write($"Gaps detected. User preference from INI: '{pref}'");
+
+                if (pref == "yes" || pref == "true")
+                {
+                    MMLog.Write("Auto-condensing saves (user preference: yes).");
+                    registry.RunCondense();
+                }
+                else if (pref == "no" || pref == "false")
+                {
+                    MMLog.Write("Skipping condense (user preference: no).");
+                }
+                else
+                {
+                    MMLog.Write("Preference is 'ask'. Flagging for prompt on Main Menu.");
+                    _pendingPrompt = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"Error during startup check: {ex}");
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the user needs to be prompted about condensing.
+        /// </summary>
+        public static bool NeedsPrompt() => _pendingPrompt;
+
+        /// <summary>
+        /// Called when user makes a choice in the prompt dialog.
+        /// </summary>
+        public static void OnUserChoice(bool condense, bool remember)
+        {
+            _pendingPrompt = false;
+
+            if (remember)
+            {
+                WriteCondensePreference(condense ? "yes" : "no");
+            }
+
+            if (condense)
+            {
+                try
+                {
+                    var registry = (SaveRegistryCore)ExpandedVanillaSaves.Instance;
+                    registry.RunCondense();
+                    MMLog.Write("Condensed saves per user request.");
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteError($"Error condensing: {ex}");
+                }
+            }
+        }
+
+        private static string ReadCondensePreference()
+        {
+            try
+            {
+                var ini = DirectoryProvider.ConfigPath;
+                if (!File.Exists(ini)) return "ask";
+
+                foreach (var raw in File.ReadAllLines(ini))
+                {
+                    if (string.IsNullOrEmpty(raw)) continue;
+                    var line = raw.Trim();
+                    if (line.StartsWith("#") || line.StartsWith(";") || line.StartsWith("[")) continue;
+                    var idx = line.IndexOf('=');
+                    if (idx <= 0) continue;
+                    var k = line.Substring(0, idx).Trim();
+                    var v = line.Substring(idx + 1).Trim().ToLowerInvariant();
+                    if (k.Equals("AutoCondenseSaves", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MMLog.Write($"Read preference: '{v}'");
+                        return v;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug($"Error reading preference: {ex.Message}");
+            }
+            
+            MMLog.Write($"Read preference: 'ask' (default)");
+            return "ask";
+        }
+
+        private static void WriteCondensePreference(string value)
+        {
+            try
+            {
+                var ini = DirectoryProvider.ConfigPath;
+                var smmDir = DirectoryProvider.SmmRoot;
+                
+                if (!Directory.Exists(smmDir))
+                    Directory.CreateDirectory(smmDir);
+
+                var lines = new List<string>();
+                bool found = false;
+
+                if (File.Exists(ini))
+                {
+                    foreach (var raw in File.ReadAllLines(ini))
+                    {
+                        var line = raw.Trim();
+                        if (line.StartsWith("AutoCondenseSaves", StringComparison.OrdinalIgnoreCase))
+                        {
+                            lines.Add($"AutoCondenseSaves={value}");
+                            found = true;
+                        }
+                        else
+                        {
+                            lines.Add(raw);
+                        }
+                    }
+                }
+
+                if (!found)
+                    lines.Add($"AutoCondenseSaves={value}");
+
+                File.WriteAllLines(ini, lines.ToArray());
+                MMLog.WriteDebug($"Saved preference: AutoCondenseSaves={value}");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"Error writing preference: {ex}");
+            }
+        }
+    }
+}

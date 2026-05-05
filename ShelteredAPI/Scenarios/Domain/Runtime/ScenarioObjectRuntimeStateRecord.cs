@@ -1,7 +1,8 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Domain.Objects;
+namespace ShelteredAPI.Scenarios.Domain.Runtime{
     internal class ScenarioObjectRuntimeStateRecord
     {
         public string ScenarioObjectId { get; set; }

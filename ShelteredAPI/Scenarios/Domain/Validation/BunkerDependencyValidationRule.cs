@@ -3,8 +3,10 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+using ShelteredAPI.Scenarios.Domain.Objects;
+namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class BunkerDependencyValidationRule : IScenarioValidationRule
     {
         public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)

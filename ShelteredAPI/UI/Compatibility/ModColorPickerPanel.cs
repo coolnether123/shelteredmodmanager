@@ -3,8 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using ShelteredAPI.UI.Spine;
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
-
 namespace ShelteredAPI.UI.Compatibility
 {
     // [LOCKED OFF] - This feature has been intentionally disabled.

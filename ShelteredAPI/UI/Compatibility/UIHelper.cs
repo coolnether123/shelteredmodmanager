@@ -1,10 +1,12 @@
-using ShelteredAPI.UI.Compatibility;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using UnityEngine;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

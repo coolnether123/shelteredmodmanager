@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioApplyResult
     {
         private readonly List<string> _messages = new List<string>();

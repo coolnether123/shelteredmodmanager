@@ -5,6 +5,7 @@ using ModAPI.Harmony;
 using ShelteredAPI.Core;
 using UnityEngine;
 
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Harmony
 {
     [PatchPolicy(PatchDomain.SaveFlow, "LoadingTransitionRecovery",

@@ -12,6 +12,13 @@ using System.Runtime.Serialization.Formatters.Binary;
 using UnityEngine;
 using ModAPI.Util;
 
+
+using ShelteredAPI.Characters;
+using ShelteredAPI.Characters.Abstractions;
+using ShelteredAPI.Characters.Models;
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
 namespace ShelteredAPI.Characters.Internal
 {
     [PatchPolicy(PatchDomain.Characters, "CharacterEffectSystemTicks",

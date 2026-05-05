@@ -5,6 +5,8 @@ using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
 
+
+using ShelteredAPI.Persistence;
 namespace ShelteredAPI.Content
 {
     /// <summary>

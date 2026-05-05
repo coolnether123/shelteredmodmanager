@@ -3,6 +3,8 @@ using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
 
+
+using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.UI.FieldManual.Frame
 {
     /// <summary>
@@ -82,7 +84,7 @@ namespace ShelteredAPI.UI.FieldManual.Frame
                 titleWidth, 20,
                 NGUIText.Alignment.Left, UIWidget.Pivot.Left, titleDepth);
 
-            _ui.CreateLabel(header, "FileNumber", "FILE № SHL-INPUT",
+            _ui.CreateLabel(header, "FileNumber", "FILE â„– SHL-INPUT",
                 new Vector3(stripW * 0.5f - 24, 0, 0), 14, new Color(_palette.Brass.r, _palette.Brass.g, _palette.Brass.b, 0.95f),
                 fileNumberWidth, 24,
                 NGUIText.Alignment.Right, UIWidget.Pivot.Right, titleDepth);

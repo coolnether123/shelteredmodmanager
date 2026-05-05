@@ -1,5 +1,4 @@
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Presentation.Timeline{
     internal sealed class ScenarioTimelineViewModel
     {
         public ScenarioTimelineDayViewModel[] Days { get; set; }

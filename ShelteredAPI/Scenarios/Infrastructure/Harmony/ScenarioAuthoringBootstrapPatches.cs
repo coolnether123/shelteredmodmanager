@@ -4,8 +4,12 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
     [PatchPolicy(PatchDomain.Scenarios, "ScenarioAuthoringBootstrap",
         TargetBehavior = "Scenario authoring drafts bootstrap into a real vanilla new game, run briefly once the world is ready, then pause into authoring.",
         FailureMode = "Create Scenario falls back to a plain new game without entering authoring mode.",

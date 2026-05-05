@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Xml;
-
-namespace ShelteredAPI.Scenarios.Serialization
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Map;
+namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     internal sealed class ScenarioMapXmlSerializer
     {
         public MapAuthoringDefinition Read(XmlElement element)

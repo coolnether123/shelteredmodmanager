@@ -1,8 +1,9 @@
 using ModAPI.Inspector;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     // Single owner of BoundsHighlighter's hover/selection/secondary transforms. Keeps
     // the selection service free of rendering concerns and gives copy/paste an obvious
     // place to pin its visual source marker.

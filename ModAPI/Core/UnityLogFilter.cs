@@ -13,7 +13,6 @@ namespace ModAPI.Core
             return IsBenignAchievementNoise(message)
                 || IsBenignUnityAudioUpgradeNoise(message)
                 || IsBenignMissingPlatformScriptNoise(message)
-                || IsBenignVanillaSettingsColliderNoise(message)
                 || IsBenignEpicLoginMarker(message);
         }
 
@@ -34,13 +33,6 @@ namespace ModAPI.Core
         {
             return string.Equals(message, "The referenced script on this Behaviour is missing!", StringComparison.Ordinal)
                 || string.Equals(message, "The referenced script on this Behaviour (Game Object 'SteamWorks') is missing!", StringComparison.Ordinal);
-        }
-
-        private static bool IsBenignVanillaSettingsColliderNoise(string message)
-        {
-            return message.StartsWith("BoxColliders does not support negative scale or size.", StringComparison.Ordinal)
-                && message.IndexOf("UI Root/" + "Settings" + "PCPanel/MenuParent/", StringComparison.Ordinal) >= 0
-                && message.IndexOf("/left_arrow", StringComparison.Ordinal) >= 0;
         }
 
         private static bool IsBenignEpicLoginMarker(string message)

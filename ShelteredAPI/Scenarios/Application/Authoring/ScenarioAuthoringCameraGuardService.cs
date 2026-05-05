@@ -1,5 +1,6 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCameraGuardService
     {
         private readonly ScenarioAuthoringInputCaptureService _inputCaptureService;

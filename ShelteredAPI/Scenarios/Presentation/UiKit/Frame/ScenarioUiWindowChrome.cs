@@ -1,9 +1,9 @@
 using UnityEngine;
-using ShelteredAPI.Scenarios.UiKit.Layout;
-using ShelteredAPI.Scenarios.UiKit.Theme;
-
-namespace ShelteredAPI.Scenarios.UiKit.Frame
-{
+using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Layout;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+using ShelteredAPI.UI.FieldManual.Tooltips;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
     /// <summary>
     /// Default scenario authoring window chrome. Paints the panel background,
     /// header strip with title/subtitle, and optionally a footer strip.

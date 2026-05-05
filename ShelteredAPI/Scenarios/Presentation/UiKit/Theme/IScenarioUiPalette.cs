@@ -1,7 +1,5 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Theme
-{
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// <summary>
     /// Color palette for a scenario authoring window theme. Roles describe the
     /// material the surface represents (panel, panel-alt, accent, danger) rather

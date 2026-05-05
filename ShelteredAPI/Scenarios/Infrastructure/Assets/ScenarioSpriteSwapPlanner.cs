@@ -4,8 +4,10 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSpriteSwapPlanner
     {
         private readonly IScenarioSpriteAssetResolver _assetResolver;

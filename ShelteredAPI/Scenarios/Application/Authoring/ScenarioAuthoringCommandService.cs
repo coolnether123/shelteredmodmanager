@@ -1,7 +1,13 @@
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Commands;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Application.Stages;
+using ShelteredAPI.Scenarios.Application.Timeline;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCommandService
     {
         private readonly ScenarioCommandDispatcher _dispatcher;

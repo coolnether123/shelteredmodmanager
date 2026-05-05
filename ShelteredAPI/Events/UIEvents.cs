@@ -2,6 +2,8 @@ using System;
 using ModAPI.Core;
 using UnityEngine;
 
+
+using ShelteredAPI.Saves;
 namespace ShelteredAPI.Events
 {
     /// <summary>

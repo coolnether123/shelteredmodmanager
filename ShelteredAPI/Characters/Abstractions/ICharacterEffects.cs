@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Models;
+using ShelteredAPI.Saves;
+namespace ShelteredAPI.Characters.Abstractions{
     /// <summary>
     /// Manages active effects on one character proxy.
     /// Apply and remove effects through this API so lifecycle events, serialization, and stacking stay consistent.

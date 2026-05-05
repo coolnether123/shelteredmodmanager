@@ -1,7 +1,8 @@
 using System;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
     internal sealed class ScenarioAuthoringContextMenuService
     {
         private readonly object _sync = new object();

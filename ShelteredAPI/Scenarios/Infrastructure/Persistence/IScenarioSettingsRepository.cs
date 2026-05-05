@@ -1,5 +1,4 @@
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
     internal interface IScenarioSettingsRepository
     {
         string Load();

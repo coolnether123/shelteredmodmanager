@@ -4,9 +4,9 @@ using ModAPI.Core;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioDependencyService : IScenarioDependencyVerifier, IScenarioDefinitionDependencyReader
     {
         private readonly IScenarioDefinitionReader _definitionReader;

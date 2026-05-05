@@ -1,7 +1,17 @@
 using ShelteredAPI.Core;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Application.Objects;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Application.Stages;
+using ShelteredAPI.Scenarios.Application.Timeline;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioAuthoringModule
     {
         public static void AddScenarioAuthoringModule(this ServiceCollection services)

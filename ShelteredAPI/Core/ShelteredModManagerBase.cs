@@ -2,6 +2,9 @@ using ModAPI.Core;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 
+
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Core
 {
     /// <summary>

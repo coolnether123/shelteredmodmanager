@@ -1,8 +1,10 @@
 using System;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     /// <summary>
     /// Pure layout calculations for the IMGUI authoring shell. Owns the spatial
     /// constants and Rect math so the render module only handles drawing.

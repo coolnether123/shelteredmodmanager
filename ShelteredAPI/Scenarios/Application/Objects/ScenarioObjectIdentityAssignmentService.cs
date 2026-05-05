@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Objects{
     internal sealed class ScenarioObjectIdentityAssignmentService
     {
         public ScenarioObjectIdentityAssignmentSummary AssignMissingIds(ScenarioDefinition definition)

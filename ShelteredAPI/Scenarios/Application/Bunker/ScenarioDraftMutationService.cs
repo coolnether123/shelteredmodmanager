@@ -1,9 +1,9 @@
 using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Bunker{
     internal interface IScenarioDraftMutationService
     {
         bool HasActiveDraft { get; }

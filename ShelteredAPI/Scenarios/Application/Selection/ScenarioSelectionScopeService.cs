@@ -1,8 +1,12 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSelectionScopeService
     {
         private readonly ScenarioTargetClassifier _classifier;

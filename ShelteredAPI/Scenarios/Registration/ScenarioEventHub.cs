@@ -1,9 +1,8 @@
 using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+namespace ShelteredAPI.Scenarios.Registration{
     internal sealed class ScenarioEventHub
     {
         private readonly IScenarioStateManager _stateManager;

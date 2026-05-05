@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Textures
-{
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures{
     /// <summary>
     /// Single source of 1x1 flat-colour <see cref="Texture2D"/>s for IMGUI
     /// backgrounds. Replaces the per-renderer <c>MakeTexture</c> helpers that

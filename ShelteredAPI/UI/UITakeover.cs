@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 
+
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.UI
 {
     /// <summary>

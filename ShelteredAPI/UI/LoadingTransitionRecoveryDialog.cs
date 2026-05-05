@@ -68,14 +68,14 @@ namespace ShelteredAPI.UI
                 transform,
                 "Message",
                 message ?? string.Empty,
-                new Vector3(0f, 18f, 0f),
+                new Vector3(-WindowWidth / 2f + 45f, WindowHeight / 2f - 120f, 0f),
                 16,
                 TextColor,
                 fonts.Bitmap,
                 fonts.TTF,
                 100);
             messageLabel.alignment = NGUIText.Alignment.Left;
-            messageLabel.pivot = UIWidget.Pivot.Top;
+            messageLabel.pivot = UIWidget.Pivot.TopLeft;
             messageLabel.width = WindowWidth - 90;
             messageLabel.height = WindowHeight - 150;
             messageLabel.multiLine = true;

@@ -6,8 +6,16 @@ using ModAPI.Scenarios;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringBootstrapService
     {
         private const float DraftWarmupSeconds = 2f;

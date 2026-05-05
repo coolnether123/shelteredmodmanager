@@ -1,9 +1,11 @@
 using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Lifecycle{
     internal sealed class ScenarioLifecycleService : ICustomScenarioLifecycleService
     {
         private readonly IScenarioRegistrationStore _store;

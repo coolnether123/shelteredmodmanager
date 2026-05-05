@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class SpritePatchValidator
     {
         public bool IsValid(SpritePatchDefinition patch)

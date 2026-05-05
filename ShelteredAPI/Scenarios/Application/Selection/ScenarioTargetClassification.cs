@@ -1,5 +1,4 @@
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioTargetClassification
     {
         public ScenarioTargetScope PrimaryScope { get; set; }

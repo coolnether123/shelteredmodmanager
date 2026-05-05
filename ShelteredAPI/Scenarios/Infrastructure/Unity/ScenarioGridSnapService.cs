@@ -1,7 +1,5 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioGridSnapService
     {
         public static bool TryGetCell(Vector3 worldPosition, out int gridX, out int gridY)

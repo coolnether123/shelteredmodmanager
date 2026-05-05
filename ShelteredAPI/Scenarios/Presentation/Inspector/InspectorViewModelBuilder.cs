@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Presentation.Inspector{
     internal sealed class InspectorViewModelBuilder
     {
         public ScenarioAuthoringInspectorSection BuildSessionSection(

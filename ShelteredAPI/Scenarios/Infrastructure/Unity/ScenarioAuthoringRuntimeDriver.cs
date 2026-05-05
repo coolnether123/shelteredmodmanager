@@ -1,9 +1,11 @@
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioAuthoringRuntimeDriver : MonoBehaviour
     {
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioAuthoring.RuntimeDriver";

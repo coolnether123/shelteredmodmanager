@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Definitions{
     /// <summary>
     /// Indexes Sheltered scenario.xml files from each loaded mod's Scenarios folder.
     /// </summary>

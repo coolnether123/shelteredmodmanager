@@ -1,7 +1,6 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Theme
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// <summary>
     /// An immutable bundle of the live palette, metrics, and the user-driven
     /// panel opacity setting. Themes are cheap value objects: build a new one

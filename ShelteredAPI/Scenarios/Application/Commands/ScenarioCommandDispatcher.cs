@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Application.Commands{
     internal sealed class ScenarioCommandDispatcher
     {
         private readonly List<IScenarioCommandHandler> _handlers = new List<IScenarioCommandHandler>();

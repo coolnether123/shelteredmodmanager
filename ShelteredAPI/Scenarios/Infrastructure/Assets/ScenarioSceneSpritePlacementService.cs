@@ -1,8 +1,10 @@
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSceneSpritePlacementService : IScenarioSceneSpritePlacementEngine
     {
         private readonly IScenarioSpriteAssetResolver _assetResolver;

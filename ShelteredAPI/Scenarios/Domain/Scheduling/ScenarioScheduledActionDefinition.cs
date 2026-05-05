@@ -2,8 +2,9 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+namespace ShelteredAPI.Scenarios.Domain.Scheduling{
     /// <summary>
     /// Action scheduled on the scenario timeline.
     /// Conditions and gate checks run before effects are dispatched.

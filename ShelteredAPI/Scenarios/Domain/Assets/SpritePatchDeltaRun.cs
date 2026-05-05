@@ -1,9 +1,7 @@
 using System;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Assets{
     /// <summary>
     /// Horizontal run of pixels in a sprite patch.
     /// This compact shape keeps generated sprite edits readable and small in XML.

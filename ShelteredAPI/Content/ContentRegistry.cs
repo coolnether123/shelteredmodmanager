@@ -4,6 +4,9 @@ using System.Collections.ObjectModel;
 using ModAPI.Core;
 using UnityEngine;
 
+
+using ShelteredAPI.Persistence;
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Content
 {
     /// <summary>Result of a content registration attempt.</summary>

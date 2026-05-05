@@ -2,9 +2,7 @@ using System;
 using ModAPI.Core;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSaveLibrary : IScenarioSaveLibrary
     {
         public ScenarioSaveLibrary()

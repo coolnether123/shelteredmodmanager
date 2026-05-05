@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Models;
+namespace ShelteredAPI.Characters.Abstractions{
     internal interface ICharacterEffectSystem
     {
         void RegisterEffectType<T>(string effectId) where T : ICharacterEffect, new();

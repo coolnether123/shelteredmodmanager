@@ -1,7 +1,8 @@
 using System;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Models;
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Characters.Abstractions{
     /// <summary>
     /// Custom behavior attached to a Sheltered character for a duration.
     /// Implement this when a mod needs ticking, stackable, or serialized character effects.

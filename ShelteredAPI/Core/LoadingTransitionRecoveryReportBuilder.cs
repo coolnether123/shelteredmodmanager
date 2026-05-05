@@ -1,5 +1,6 @@
 using System;
 
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Core
 {
     internal sealed class LoadingTransitionRecoveryReportBuilder
@@ -13,7 +14,7 @@ namespace ShelteredAPI.Core
         {
             return "Recovered failed load. reason=" + reason +
                 ", source=" + SourceScene(transition) +
-                ", target=" + TargetScene(transition) +
+                ", target=" + Target(transition) +
                 ", activeScene=" + activeScene +
                 ", phase=" + Phase(transition) +
                 ", request=" + RequestReason(transition) +
@@ -33,7 +34,7 @@ namespace ShelteredAPI.Core
             string text = "ShelteredAPI detected a failed loading transition and returned you to the main menu.\n\n" +
                 "Reason: " + reason + "\n" +
                 "From: " + SourceScene(transition) + "\n" +
-                "Target: " + TargetScene(transition) + "\n" +
+                "Target: " + Target(transition) + "\n" +
                 "Last scene: " + activeScene + "\n" +
                 "SaveManager: " + LoadingTransitionRuntime.DescribeSaveManagerState();
 
@@ -55,9 +56,15 @@ namespace ShelteredAPI.Core
             return transition != null ? LoadingTransitionText.UnknownIfEmpty(transition.SourceScene) : "<unknown>";
         }
 
-        private static string TargetScene(LoadingTransitionState transition)
+        private static string Target(LoadingTransitionState transition)
         {
-            return transition != null ? LoadingTransitionText.UnknownIfEmpty(transition.TargetScene) : "<unknown>";
+            if (transition == null)
+                return "<unknown>";
+
+            if (!string.IsNullOrEmpty(transition.TargetScene))
+                return transition.TargetScene;
+
+            return LoadingTransitionText.UnknownIfEmpty(transition.TargetLabel);
         }
 
         private static string Phase(LoadingTransitionState transition)

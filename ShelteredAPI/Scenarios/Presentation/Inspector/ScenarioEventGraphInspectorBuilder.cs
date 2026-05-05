@@ -2,9 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+namespace ShelteredAPI.Scenarios.Presentation.Inspector{
     internal static class ScenarioEventGraphInspectorBuilder
     {
         public static List<ScenarioAuthoringInspectorItem> BuildItems(ScenarioDefinition definition)

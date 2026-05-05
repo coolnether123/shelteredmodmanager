@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Scheduling{
     /// <summary>
     /// Scenario-local time expressed as day, hour, and minute.
     /// Defaults to day 1 at 08:00 to match the typical start-of-run authoring baseline.

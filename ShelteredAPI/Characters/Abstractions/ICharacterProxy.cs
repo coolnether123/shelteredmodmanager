@@ -1,7 +1,7 @@
 using System;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Characters.Abstractions{
     /// <summary>
     /// Stable identity and ownership information for a Sheltered character.
     /// This is the part of a character proxy that can be used without touching live game objects.

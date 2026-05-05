@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Domain.Stages;
+namespace ShelteredAPI.Scenarios.Application.Stages{
     internal sealed class ScenarioStageCoordinator
     {
         private readonly ScenarioStageRegistry _registry;

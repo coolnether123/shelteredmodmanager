@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Selection{
     /// <summary>
     /// Thin Traverse-based wrapper for the private NGUI fields on
     /// <see cref="ScenarioSelectionPanel"/>. Centralises every reflective access so
@@ -106,6 +104,44 @@ namespace ShelteredAPI.Scenarios
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ScenarioBrowserPanelAdapter] SetInputEnabled failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        public bool SetSelectedSlot(int slotIndex)
+        {
+            SlotSelectionPanel slotPanel = GetSlotSelectionPanel();
+            if (slotPanel == null)
+                return false;
+
+            try
+            {
+                Traverse slotTraverse = Traverse.Create(slotPanel);
+                slotTraverse.Field("m_selectedSlot").SetValue(slotIndex);
+                slotTraverse.Field("m_inputEnabled").SetValue(true);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioBrowserPanelAdapter] SetSelectedSlot failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        public bool ChooseSelectedSlot()
+        {
+            SlotSelectionPanel slotPanel = GetSlotSelectionPanel();
+            if (slotPanel == null)
+                return false;
+
+            try
+            {
+                slotPanel.OnSlotChosen();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioBrowserPanelAdapter] ChooseSelectedSlot failed: " + ex.Message);
                 return false;
             }
         }

@@ -1,5 +1,4 @@
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class PlacementGhostSessionService
     {
         internal sealed class Session

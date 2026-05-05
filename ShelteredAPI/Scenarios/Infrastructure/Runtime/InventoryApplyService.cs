@@ -4,8 +4,10 @@ using ShelteredAPI.Content;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content.Compatibility;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class InventoryApplyService
     {
         private static readonly FieldInfo InventoryRandomStartCountField = typeof(InventoryManager).GetField("numberOfRandomStartingItems", BindingFlags.NonPublic | BindingFlags.Instance);

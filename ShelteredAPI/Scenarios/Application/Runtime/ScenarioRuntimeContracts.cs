@@ -4,9 +4,12 @@ using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal enum ScenarioDependencyVerificationState
     {
         Match = 0,
@@ -186,6 +189,11 @@ namespace ShelteredAPI.Scenarios
         ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath);
     }
 
+    internal interface IScenarioRuntimeDefinitionOverrideProvider
+    {
+        bool TryGetDefinitionOverride(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath);
+    }
+
     internal interface IScenarioPlaytestOrchestrator
     {
         ScenarioApplyResult BeginPlaytest(ScenarioEditorSession session, string scenarioFilePath);
@@ -199,7 +207,6 @@ namespace ShelteredAPI.Scenarios
         ScenarioEditorSession LoadEditMode(string scenarioFilePath);
         ScenarioValidationResult CommitChanges(string scenarioFilePath);
         ScenarioApplyResult BeginPlaytest();
-        bool TryGetActiveWorkingDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath);
         void EndPlaytest();
         void ConvertToNormalSave();
         void RequestRestart();

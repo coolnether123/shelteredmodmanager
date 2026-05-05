@@ -1,9 +1,7 @@
 using UnityEngine;
-using ShelteredAPI.Scenarios.UiKit.Textures;
-using ShelteredAPI.Scenarios.UiKit.Theme;
-
-namespace ShelteredAPI.Scenarios.UiKit
-{
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit{
     /// <summary>
     /// Cached <see cref="GUIStyle"/>s for the scenario authoring UiKit. Built
     /// once from a <see cref="ScenarioUiTheme"/> and a shared

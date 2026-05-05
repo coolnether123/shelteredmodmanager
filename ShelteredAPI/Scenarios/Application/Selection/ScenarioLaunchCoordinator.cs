@@ -3,9 +3,10 @@ using ModAPI.Core;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Core;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Selection{
     /// <summary>
     /// Owns the "what happens after the player picks a scenario+save" flow.
     /// Routes new-game, load, and delete through <see cref="IScenarioSaveLibrary"/>
@@ -42,7 +43,7 @@ namespace ShelteredAPI.Scenarios
         }
 
         /// <summary>
-        /// Result of <see cref="PrepareNewGame"/> — an allocated, validated startup save plus
+        /// Result of <see cref="PrepareNewGame"/> Ã¢â‚¬â€ an allocated, validated startup save plus
         /// the virtual save type the caller should commit through <see cref="CommitNewGame"/>.
         /// Held by the caller across the UI mode change so the browser can exit
         /// custom mode only after allocation has succeeded.
@@ -274,7 +275,8 @@ namespace ShelteredAPI.Scenarios
             }
 
             int selectedScenario;
-            if (!TryGetVanillaScenarioSelectionIndex(entry, out selectedScenario))
+            int selectedSlot;
+            if (!TryGetVanillaScenarioSelection(entry, out selectedScenario, out selectedSlot))
             {
                 error = "Vanilla scenario cannot be launched from the scenario panel: " + entry.ScenarioId + ".";
                 return false;
@@ -285,10 +287,27 @@ namespace ShelteredAPI.Scenarios
                 _scenarioLifecycle.ClearState();
                 adapter.SetInputEnabled(true);
                 adapter.SetSelectedScenario(selectedScenario);
+
+                if (!adapter.SetSelectedSlot(selectedSlot))
+                {
+                    error = "Could not bind vanilla scenario slot " + (selectedSlot + 1) + ".";
+                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error + " scenarioId=" + entry.ScenarioId + ".");
+                    return false;
+                }
+
+                LoadingTransitionRecoveryService.NotifyMenuTransitionRequested(
+                    "vanilla scenario '" + entry.ScenarioId + "'",
+                    "ScenarioLaunchCoordinator.LaunchVanillaScenario");
                 adapter.Panel.OnScenarioChosen();
+                if (!adapter.ChooseSelectedSlot())
+                {
+                    error = "Could not invoke vanilla scenario slot " + (selectedSlot + 1) + ".";
+                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error + " scenarioId=" + entry.ScenarioId + ".");
+                    return false;
+                }
 
                 MMLog.WriteInfo("[ScenarioLaunchCoordinator] Vanilla scenario launch routed through stock selection flow. scenarioId="
-                    + entry.ScenarioId + " selectedIndex=" + selectedScenario + ".");
+                    + entry.ScenarioId + " selectedIndex=" + selectedScenario + " selectedSlot=" + selectedSlot + ".");
                 return true;
             }
             catch (Exception ex)
@@ -513,9 +532,10 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        private static bool TryGetVanillaScenarioSelectionIndex(ScenarioCatalogEntry entry, out int selectedScenario)
+        private static bool TryGetVanillaScenarioSelection(ScenarioCatalogEntry entry, out int selectedScenario, out int selectedSlot)
         {
             selectedScenario = -1;
+            selectedSlot = -1;
             if (entry == null)
                 return false;
 
@@ -523,9 +543,11 @@ namespace ShelteredAPI.Scenarios
             {
                 case ScenarioLaunchMode.Surrounded:
                     selectedScenario = 0;
+                    selectedSlot = 3;
                     return true;
                 case ScenarioLaunchMode.Stasis:
                     selectedScenario = 1;
+                    selectedSlot = 4;
                     return true;
                 default:
                     return false;

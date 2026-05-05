@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Effects{
     /// <summary>
     /// Built-in effect types that scenario actions can execute.
     /// Custom effect dispatchers can extend behavior without changing the neutral DTO.

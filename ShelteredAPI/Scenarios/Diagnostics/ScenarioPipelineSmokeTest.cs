@@ -5,8 +5,10 @@ using ModAPI.Core;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Diagnostics{
     /// <summary>
     /// Developer-only smoke harness for Sprint 1. It is not wired into startup because
     /// bad scenario XML should never block normal game boot; call this from a debug mod

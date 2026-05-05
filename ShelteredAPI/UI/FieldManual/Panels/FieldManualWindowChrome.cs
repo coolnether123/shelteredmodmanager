@@ -7,6 +7,8 @@ using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Widgets;
 using UnityEngine;
 
+
+using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.UI.FieldManual.Panels
 {
     /// <summary>

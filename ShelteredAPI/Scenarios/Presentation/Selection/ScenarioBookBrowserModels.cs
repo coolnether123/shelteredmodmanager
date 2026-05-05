@@ -1,7 +1,6 @@
 using ShelteredAPI.Saves;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Selection;
+namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal enum ScenarioBookBrowserViewKind
     {
         Types,

@@ -2,8 +2,14 @@ using System;
 using ShelteredAPI.Content;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content.Compatibility;
+using ShelteredAPI.Scenarios.Application.Conditions;
+using ShelteredAPI.Scenarios.Application.Effects;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScheduledInventoryRuntimeService : IScenarioEffectHandler, IScenarioConditionEvaluator
     {
         public bool CanHandle(ScenarioEffectKind kind)

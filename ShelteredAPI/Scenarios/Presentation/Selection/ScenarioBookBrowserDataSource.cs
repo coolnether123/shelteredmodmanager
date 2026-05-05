@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserDataSource
     {
         private readonly IScenarioSelectionCatalogService _catalog;

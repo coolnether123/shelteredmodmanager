@@ -3,9 +3,11 @@ using System.Globalization;
 using System.Reflection;
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal static class ScenarioObjectStatePropertyService
     {
         private const string Prefix = "state.";

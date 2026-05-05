@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Domain.Bunker{
     /// <summary>
     /// Authored foundation footprint on the bunker grid.
     /// Object placements can depend on foundation IDs so runtime placement respects structural progression.

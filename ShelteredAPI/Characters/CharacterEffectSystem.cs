@@ -1,5 +1,7 @@
 using ShelteredAPI.Characters.Internal;
 
+
+using ShelteredAPI.Characters.Abstractions;
 namespace ShelteredAPI.Characters
 {
     internal static class CharacterEffectSystem

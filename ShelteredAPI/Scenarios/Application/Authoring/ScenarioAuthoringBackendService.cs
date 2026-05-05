@@ -3,8 +3,17 @@ using ModAPI.Core;
 using ModAPI.InputActions;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Application.Stages;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringBackendService : IScenarioAuthoringBackend
     {
         private readonly object _sync = new object();

@@ -1,10 +1,7 @@
 using HarmonyLib;
-using ShelteredAPI.Characters;
 using ModAPI.Harmony;
 using UnityEngine;
-
-namespace ShelteredAPI.Characters.Internal
-{
+namespace ShelteredAPI.Characters{
     [PatchPolicy(PatchDomain.Characters, "PartyEvents",
         TargetBehavior = "Expedition party composition change notifications",
         FailureMode = "Party helper callbacks stop tracking member changes accurately.",

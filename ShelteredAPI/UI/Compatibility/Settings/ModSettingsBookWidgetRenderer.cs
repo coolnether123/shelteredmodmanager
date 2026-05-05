@@ -9,6 +9,8 @@ using ShelteredAPI.UI.Internal.Spine;
 using ShelteredAPI.UI.Spine;
 using UnityEngine;
 
+
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.UI.Compatibility.Settings
 {
     /// <summary>

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
@@ -52,6 +53,61 @@ namespace ShelteredAPI.Core
             AudioListener.pause = false;
             ResetLoadingScreen();
             ResetSaveManager();
+        }
+
+        public static bool TryReturnToMainMenu()
+        {
+            try
+            {
+                UIPanelManager panelManager = UIPanelManager.instance;
+                if (panelManager == null)
+                    return false;
+
+                MainMenu mainMenu = UnityEngine.Object.FindObjectOfType<MainMenu>();
+                if (mainMenu == null)
+                    return false;
+
+                ClearQueuedPanelOperations(panelManager);
+
+                int guard = 0;
+                while (guard++ < 12)
+                {
+                    BasePanel top = panelManager.GetTopPanel();
+                    if (top == null)
+                        break;
+
+                    if (top is MainMenu)
+                    {
+                        RestoreMainMenu(mainMenu);
+                        ResetPanelManagerInput(panelManager);
+                        MMLog.WriteInfo("[LoadingTransitionRecovery] Returned to main menu by unwinding panel stack. stack=" + panelManager.GetStackCount() + ".");
+                        return true;
+                    }
+
+                    int before = panelManager.GetStackCount();
+                    panelManager.PopTop();
+                    int after = panelManager.GetStackCount();
+                    if (after >= before)
+                        break;
+                }
+
+                if (panelManager.GetTopPanel() == null)
+                {
+                    panelManager.PushPanel(mainMenu);
+                    RestoreMainMenu(mainMenu);
+                    ResetPanelManagerInput(panelManager);
+                    MMLog.WriteInfo("[LoadingTransitionRecovery] Returned to main menu by pushing MainMenu onto an empty panel stack.");
+                    return true;
+                }
+
+                ResetPanelManagerInput(panelManager);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[LoadingTransitionRecovery] Failed to unwind menu panel stack: " + ex.Message);
+            }
+
+            return false;
         }
 
         private static void ResetLoadingScreen()
@@ -112,6 +168,46 @@ namespace ShelteredAPI.Core
             FieldInfo stateField = typeof(SaveManager).GetField("m_state", BindingFlags.Instance | BindingFlags.NonPublic);
             if (stateField != null)
                 stateField.SetValue(manager, Enum.Parse(stateField.FieldType, "Idle"));
+        }
+
+        private static void RestoreMainMenu(MainMenu mainMenu)
+        {
+            if (mainMenu == null)
+                return;
+
+            if (!mainMenu.gameObject.activeSelf)
+                mainMenu.gameObject.SetActive(true);
+
+            SetPrivateField(mainMenu, "m_userSignedOut", false);
+            SetPrivateField(mainMenu, "m_inputEnabled", true);
+        }
+
+        private static void ClearQueuedPanelOperations(UIPanelManager panelManager)
+        {
+            if (panelManager == null)
+                return;
+
+            ClearListField(panelManager, "m_panels_to_push");
+            ClearListField(panelManager, "m_panels_to_pop");
+        }
+
+        private static void ResetPanelManagerInput(UIPanelManager panelManager)
+        {
+            if (panelManager == null)
+                return;
+
+            SetPrivateField(panelManager, "m_bInputActive", true);
+            SetPrivateField(panelManager, "m_bNextFrameInputActive", true);
+            SetPrivateField(panelManager, "m_bTimePaused", false);
+            SetPrivateField(panelManager, "m_bIgnoreInput", false);
+            panelManager.UpdateTimeAndInput();
+        }
+
+        private static void ClearListField(object instance, string fieldName)
+        {
+            IList list = GetPrivateField(instance, fieldName) as IList;
+            if (list != null)
+                list.Clear();
         }
 
         private static void SetPrivateField(object instance, string fieldName, object value)

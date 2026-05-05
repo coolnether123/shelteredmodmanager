@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class VanillaScenarioRuntimeGateway : IVanillaScenarioRuntime
     {
         public bool IsWorldReady(out string blockingReason)

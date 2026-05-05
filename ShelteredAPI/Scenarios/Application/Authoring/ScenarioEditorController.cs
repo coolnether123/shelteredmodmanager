@@ -4,8 +4,12 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Objects;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEditorController : IScenarioEditorService
     {
         private readonly IScenarioEditorSessionStore _sessionStore;
@@ -151,26 +155,6 @@ namespace ShelteredAPI.Scenarios
             }
 
             return _playtestOrchestrator.BeginPlaytest(session, _sessionStore.CurrentFilePath);
-        }
-
-        public bool TryGetActiveWorkingDefinition(string scenarioId, out ScenarioDefinition definition, out string scenarioFilePath)
-        {
-            definition = null;
-            scenarioFilePath = null;
-
-            ScenarioEditorSession session = _sessionStore.Current;
-            if (session == null || session.WorkingDefinition == null)
-                return false;
-
-            if (!string.IsNullOrEmpty(scenarioId)
-                && !string.Equals(session.WorkingDefinition.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            definition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
-            scenarioFilePath = _sessionStore.CurrentFilePath;
-            return definition != null;
         }
 
         public void EndPlaytest()

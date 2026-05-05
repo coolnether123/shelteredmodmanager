@@ -2,9 +2,10 @@ using System;
 using ModAPI.Events;
 using ShelteredAPI.Events;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioStateManager : IScenarioStateManager
     {
         private const string StateChangedEventName = "ShelteredAPI.Scenarios.StateChanged";

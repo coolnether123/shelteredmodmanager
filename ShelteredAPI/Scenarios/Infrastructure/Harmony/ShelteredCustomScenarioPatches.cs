@@ -11,8 +11,15 @@ using ModAPI.Scenarios;
 using ModAPI.UI;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Registration;
+using ShelteredAPI.Scenarios.Shared;
+using ShelteredAPI.UI.FieldManual.Tooltips;
+namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
     internal static class ShelteredCustomScenarioRuntimeState
     {
         private static int _lastLoggedBlockedUntilFrame = -1;

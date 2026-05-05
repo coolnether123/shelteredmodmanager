@@ -3,8 +3,13 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Conditions;
+using ShelteredAPI.Scenarios.Application.Effects;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Application.Scheduling{
     internal sealed class ScenarioScheduleRuntimeCoordinator
     {
         private readonly ScenarioRuntimeStateService _stateService;

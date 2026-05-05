@@ -2,8 +2,8 @@ using System;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.UI.Internal.Settings;
+namespace ShelteredAPI.Scenarios.Domain.Stages{
     /// <summary>
     /// Metadata for one scenario editor stage.
     /// Used by authoring UI to group sections and by validation to report where issues belong.

@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Domain.Timeline{
     /// <summary>
     /// Category used to group scenario timeline entries in editor and diagnostics views.
     /// </summary>

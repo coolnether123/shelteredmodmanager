@@ -6,8 +6,10 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSpriteAssetResolver : IScenarioSpriteAssetResolver
     {
         private readonly object _sync = new object();

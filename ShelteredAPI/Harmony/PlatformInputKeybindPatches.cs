@@ -6,6 +6,9 @@ using ShelteredAPI.Input;
 using ShelteredAPI.Scenarios;
 using UnityEngine;
 
+
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Harmony
 {
     /// <summary>

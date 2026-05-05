@@ -1,7 +1,10 @@
 using ShelteredAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Lifecycle;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioLifecycleModule
     {
         public static void AddScenarioLifecycleModule(this ServiceCollection services)

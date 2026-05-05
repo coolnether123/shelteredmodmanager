@@ -1,8 +1,8 @@
 using System;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal interface IScenarioAuthoringWindowContentBuilder
     {
         ScenarioAuthoringWindowContentKind ContentKind { get; }

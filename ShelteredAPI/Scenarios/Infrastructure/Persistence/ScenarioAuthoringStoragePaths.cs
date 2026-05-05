@@ -1,9 +1,7 @@
 using System;
 using System.IO;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
     internal static class ScenarioAuthoringStoragePaths
     {
         private const string ShellFolderName = "ScenarioAuthoring";
@@ -13,7 +11,7 @@ namespace ShelteredAPI.Scenarios
             string gameRoot;
             try
             {
-                gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                gameRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, ".."));
             }
             catch
             {
@@ -49,7 +47,7 @@ namespace ShelteredAPI.Scenarios
             string gameRoot;
             try
             {
-                gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                gameRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, ".."));
             }
             catch
             {

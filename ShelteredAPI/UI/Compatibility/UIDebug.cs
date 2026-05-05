@@ -5,6 +5,10 @@ using System.Text;
 using UnityEngine;
 using ModAPI.Core;
 
+
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>
@@ -197,7 +201,7 @@ namespace ShelteredAPI.UI.Compatibility
             while (t != null)
             {
                 string pad = new string(' ', depth * 2);
-                string status = t.gameObject.activeSelf ? "✓" : "✗ INACTIVE";
+                string status = t.gameObject.activeSelf ? "âœ“" : "âœ— INACTIVE";
                 var panel = t.GetComponent<UIPanel>();
                 string panelInfo = panel != null ? $" [Panel depth={panel.depth}]" : "";
                 sb.AppendLine($"  {pad}{status} {t.name} (Layer={t.gameObject.layer}){panelInfo}");
@@ -337,7 +341,7 @@ namespace ShelteredAPI.UI.Compatibility
                 return false;
             }
             
-            if (Enabled) MMLog.WriteDebug($"[UIDebug] VerifyDelegateCount({label}): ✓ Has {actual} delegate(s) as expected");
+            if (Enabled) MMLog.WriteDebug($"[UIDebug] VerifyDelegateCount({label}): âœ“ Has {actual} delegate(s) as expected");
             return true;
         }
 
@@ -568,7 +572,7 @@ namespace ShelteredAPI.UI.Compatibility
             if (issues.Count > 0)
             {
                 MMLog.WriteError($"[UIDebug] Validation FAILED for '{go.name}' ({label}):");
-                foreach (var issue in issues) MMLog.WriteError($"  ✗ {issue}");
+                foreach (var issue in issues) MMLog.WriteError($"  âœ— {issue}");
                 return false;
             }
             

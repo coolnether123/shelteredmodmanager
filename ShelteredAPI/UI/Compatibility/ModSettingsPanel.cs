@@ -14,6 +14,10 @@ using ShelteredAPI.UI.FieldManual.Panels;
 using ShelteredAPI.UI.FieldManual.Widgets;
 using ShelteredAPI.UI.Spine;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.Persistence;
+using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

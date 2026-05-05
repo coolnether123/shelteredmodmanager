@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
     internal sealed class ScenarioAuthoringScrollFocusService
     {
         private readonly List<ScrollRegion> _frameRegions = new List<ScrollRegion>();

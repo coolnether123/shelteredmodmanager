@@ -1,8 +1,9 @@
 using System;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+namespace ShelteredAPI.Scenarios.Application.Bunker{
     internal sealed class ScenarioBunkerSupportResolver
     {
         public string ResolveNearestFoundationId(ScenarioBunkerGridDefinition grid, ScenarioVector3 position)

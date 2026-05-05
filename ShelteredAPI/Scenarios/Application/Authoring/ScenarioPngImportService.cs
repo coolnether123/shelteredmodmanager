@@ -4,8 +4,9 @@ using System.IO;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioPngImportService
     {
         private const string ImportFolderName = "Imports";

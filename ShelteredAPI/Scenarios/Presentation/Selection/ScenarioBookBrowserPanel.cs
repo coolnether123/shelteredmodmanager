@@ -4,9 +4,10 @@ using ModAPI.Core;
 using ShelteredAPI.UI.FieldManual.Animations;
 using ShelteredAPI.UI.FieldManual.Panels;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Composition;
+namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserPanel : MonoBehaviour
     {
         internal const int RowsPerPage = 5;

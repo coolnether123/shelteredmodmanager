@@ -1,8 +1,6 @@
 using UnityEngine.SceneManagement;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioWorldReady
     {
         public static bool IsReady()

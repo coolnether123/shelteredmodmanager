@@ -3,8 +3,12 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class GateConditionValidationRule : IScenarioValidationRule
     {
         public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)

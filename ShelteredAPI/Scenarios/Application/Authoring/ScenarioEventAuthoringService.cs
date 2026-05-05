@@ -1,8 +1,12 @@
 using System;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEventAuthoringService
     {
         private readonly ScenarioTriggerAuthoringService _triggers;

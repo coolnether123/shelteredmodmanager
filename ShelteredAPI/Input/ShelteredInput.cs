@@ -1,3 +1,5 @@
+using ShelteredAPI.Content;
+
 namespace ShelteredAPI.Input
 {
     /// <summary>

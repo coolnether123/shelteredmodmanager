@@ -119,6 +119,7 @@
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
+    <Compile Include="Core\Services\ArchiveExtraction.cs" />
     <Compile Include="Core\Services\NexusInstallService.cs" />
     <!-- Custom Controls -->
     <Compile Include="Controls\SearchBox.cs">

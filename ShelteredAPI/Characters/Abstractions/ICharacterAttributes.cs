@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Models;
+namespace ShelteredAPI.Characters.Abstractions{
     /// <summary>
     /// Mod-facing attribute modifiers for a character.
     /// Use this for temporary or mod-scoped adjustments instead of mutating vanilla stats directly.

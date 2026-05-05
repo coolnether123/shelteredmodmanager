@@ -1,7 +1,7 @@
 using ModAPI.Core;
-using ShelteredAPI.Events;
 using UnityEngine;
 
+using ShelteredAPI.Saves;
 namespace ShelteredAPI.Events
 {
     internal sealed class ShelteredUiLifecycleEventSink : IUiLifecycleEventSink

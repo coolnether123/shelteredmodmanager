@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal enum ScenarioPlaytestState
     {
         Idle = 0,

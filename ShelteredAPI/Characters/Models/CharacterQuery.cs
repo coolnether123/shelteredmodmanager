@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Abstractions;
+namespace ShelteredAPI.Characters.Models{
     /// <summary>
     /// Fluent query builder over the current Sheltered character proxy set.
     /// Queries are evaluated when <see cref="ToList"/>, <see cref="FirstOrDefault"/>, or <see cref="Count"/> is called.

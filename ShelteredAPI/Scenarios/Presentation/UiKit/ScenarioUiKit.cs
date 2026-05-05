@@ -1,9 +1,12 @@
-using ShelteredAPI.Scenarios.UiKit.Frame;
-using ShelteredAPI.Scenarios.UiKit.Textures;
-using ShelteredAPI.Scenarios.UiKit.Theme;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+using ShelteredAPI.UI.FieldManual.Tooltips;
 
-namespace ShelteredAPI.Scenarios.UiKit
-{
+namespace ShelteredAPI.Scenarios.Presentation.UiKit{
     /// <summary>
     /// Composition root for the scenario authoring UiKit. Hand a render module
     /// the live <see cref="ScenarioAuthoringSettingsSnapshot"/> and a context

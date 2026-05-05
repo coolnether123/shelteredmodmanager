@@ -1,7 +1,13 @@
 using System;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Conditions;
+using ShelteredAPI.Scenarios.Application.Effects;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioTriggerRuntimeService : IScenarioTriggerRuntimeService, IScenarioEffectHandler, IScenarioConditionEvaluator
     {
         private readonly ScenarioRuntimeStateService _stateService;

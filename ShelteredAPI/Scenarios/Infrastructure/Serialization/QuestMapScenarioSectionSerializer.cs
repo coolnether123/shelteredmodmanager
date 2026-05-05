@@ -4,8 +4,9 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios.Serialization
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Map;
+namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     internal sealed class QuestMapScenarioSectionSerializer
     {
         private readonly ScenarioMapXmlSerializer _mapSerializer = new ScenarioMapXmlSerializer();

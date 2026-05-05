@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class ScenarioValidationPipeline
     {
         private readonly List<IScenarioValidationRule> _rules = new List<IScenarioValidationRule>();

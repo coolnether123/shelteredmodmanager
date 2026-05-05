@@ -1,8 +1,9 @@
 using ModAPI.InputActions;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioAuthoringInputActions
     {
         private static bool _registered;

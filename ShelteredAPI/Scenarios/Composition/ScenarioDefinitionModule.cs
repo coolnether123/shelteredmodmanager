@@ -1,7 +1,9 @@
 using ShelteredAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioDefinitionModule
     {
         public static void AddScenarioDefinitionModule(this ServiceCollection services)

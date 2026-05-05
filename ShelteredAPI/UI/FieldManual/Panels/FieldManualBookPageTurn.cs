@@ -3,6 +3,7 @@ using ModAPI.Core;
 using ShelteredAPI.UI.FieldManual.Animations;
 using UnityEngine;
 
+using ShelteredAPI.Content;
 namespace ShelteredAPI.UI.FieldManual.Panels
 {
     /// <summary>

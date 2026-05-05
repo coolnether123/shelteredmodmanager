@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioTargetClassifier
     {
         public ScenarioTargetClassification Classify(ScenarioAuthoringTarget target)

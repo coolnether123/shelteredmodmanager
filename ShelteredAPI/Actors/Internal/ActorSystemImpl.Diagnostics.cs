@@ -4,6 +4,9 @@ using ModAPI.Util;
 using System;
 using System.Collections.Generic;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Actors.Internal
 {
     internal sealed partial class ActorSystemImpl

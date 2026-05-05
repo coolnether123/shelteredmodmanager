@@ -1,10 +1,9 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Layout
-{
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Layout{
     /// <summary>
     /// Pure rect-math primitives for laying out the inside of a window. Composes
-    /// with <see cref="ShelteredAPI.Scenarios.ScenarioAuthoringShellLayout"/> rather
+    /// with <see cref="ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioAuthoringShellLayout"/> rather
     /// than replacing it: the shell layout owns top-level regions (top bar,
     /// inspector, workspace) and this engine subdivides them.
     /// </summary>

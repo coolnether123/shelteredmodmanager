@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal static class ScenarioAuthoringActionParser
     {
         public static bool TryIndex(string actionId, string prefix, int count, out int index)

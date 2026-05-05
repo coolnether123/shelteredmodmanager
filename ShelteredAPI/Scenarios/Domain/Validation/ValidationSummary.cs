@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class ValidationSummary
     {
         private readonly List<ValidationIssue> _issues = new List<ValidationIssue>();

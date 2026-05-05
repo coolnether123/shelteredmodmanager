@@ -3,8 +3,12 @@ using ModAPI.Core;
 using ShelteredAPI.Events;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ShelteredScenarioRuntimeBindingManager : IScenarioRuntimeBindingService
     {
         private readonly IScenarioStateManager _stateManager;

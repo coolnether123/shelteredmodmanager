@@ -1,5 +1,4 @@
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Assets{
     internal enum ScenarioPlaceableAssetKind
     {
         VisualOnly = 0,

@@ -1,7 +1,5 @@
 using ModAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Shared{
     internal static class ScenarioFeatureToggles
     {
         public const string CustomScenarioEditorPatchToggleId = "ShelteredAPI.PatchCustomScenarioEditor";

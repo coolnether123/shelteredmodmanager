@@ -2,8 +2,6 @@ using System;
 using System.Linq;
 using UnityEngine;
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
-
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

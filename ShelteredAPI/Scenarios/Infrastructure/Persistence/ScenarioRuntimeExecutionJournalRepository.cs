@@ -4,8 +4,11 @@ using ModAPI.Core;
 using ShelteredAPI.Events;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Domain.Objects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
     internal sealed class ScenarioRuntimeExecutionJournalRepository
     {
         private const string SaveGroupName = "CustomScenarioRuntimeState";

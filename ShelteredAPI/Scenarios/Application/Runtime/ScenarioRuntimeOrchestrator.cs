@@ -3,8 +3,10 @@ using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioRuntimeOrchestrator : IScenarioRuntimeOrchestrator
     {
         private readonly ICustomScenarioLifecycleService _customScenarioLifecycle;
@@ -13,7 +15,7 @@ namespace ShelteredAPI.Scenarios
         private readonly IScenarioDefinitionFactory _definitionFactory;
         private readonly IScenarioDefinitionCatalogService _definitionCatalog;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
-        private readonly IScenarioEditorService _editorService;
+        private readonly IScenarioRuntimeDefinitionOverrideProvider _definitionOverrideProvider;
         private readonly IScenarioApplier _applier;
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
@@ -27,7 +29,7 @@ namespace ShelteredAPI.Scenarios
             IScenarioDefinitionFactory definitionFactory,
             IScenarioDefinitionCatalogService definitionCatalog,
             IScenarioRuntimeBindingService runtimeBindingService,
-            IScenarioEditorService editorService,
+            IScenarioRuntimeDefinitionOverrideProvider definitionOverrideProvider,
             IScenarioApplier applier,
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
@@ -39,7 +41,7 @@ namespace ShelteredAPI.Scenarios
             _definitionFactory = definitionFactory;
             _definitionCatalog = definitionCatalog;
             _runtimeBindingService = runtimeBindingService;
-            _editorService = editorService;
+            _definitionOverrideProvider = definitionOverrideProvider;
             _applier = applier;
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
@@ -137,7 +139,7 @@ namespace ShelteredAPI.Scenarios
             if (binding == null || string.IsNullOrEmpty(binding.ScenarioId))
                 return false;
 
-            if (_editorService.TryGetActiveWorkingDefinition(binding.ScenarioId, out definition, out scenarioFilePath))
+            if (_definitionOverrideProvider.TryGetDefinitionOverride(binding.ScenarioId, out definition, out scenarioFilePath))
             {
                 MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Using active authoring definition for scenario '" + binding.ScenarioId + "'.");
                 return true;

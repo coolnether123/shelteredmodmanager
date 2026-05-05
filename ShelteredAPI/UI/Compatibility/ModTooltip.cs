@@ -1,7 +1,5 @@
 using UnityEngine;
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
-
 namespace ShelteredAPI.UI.Compatibility
 {
     internal class ModTooltip : MonoBehaviour

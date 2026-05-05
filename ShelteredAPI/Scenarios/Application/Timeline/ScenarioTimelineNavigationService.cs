@@ -1,7 +1,13 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Domain.Timeline;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+namespace ShelteredAPI.Scenarios.Application.Timeline{
     internal sealed class ScenarioTimelineNavigationService
     {
         private readonly ScenarioAuthoringLayoutService _layoutService;

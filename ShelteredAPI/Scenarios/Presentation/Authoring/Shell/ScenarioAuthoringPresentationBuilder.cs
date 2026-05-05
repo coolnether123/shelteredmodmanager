@@ -5,8 +5,33 @@ using System.IO;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Compatibility;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Application.Timeline;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Objects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Domain.Timeline;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Presentation.Inspector;
+using ShelteredAPI.Scenarios.Presentation.Timeline;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringPresentationBuilder
     {
         private readonly ScenarioAuthoringCaptureService _captureService;
@@ -1011,8 +1036,8 @@ namespace ShelteredAPI.Scenarios
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
                     {
-                        Property("Shelter Tiles", "Visible · Locked"),
-                        Property("Shelter Objects", "Visible · Locked"),
+                        Property("Shelter Tiles", "Visible Ã‚Â· Locked"),
+                        Property("Shelter Objects", "Visible Ã‚Â· Locked"),
                         Property("Scene Art", "Visible"),
                         Property("Triggers", "Visible"),
                         Property("Pathing", "Visible"),

@@ -1,7 +1,8 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Domain.Stages;
+namespace ShelteredAPI.Scenarios.Application.Stages{
     internal sealed class ScenarioStageContext
     {
         public ScenarioStageDefinition Stage { get; set; }

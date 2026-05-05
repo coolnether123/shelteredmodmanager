@@ -5,6 +5,10 @@ using HarmonyLib;
 using ModAPI.Harmony;
 using UnityEngine;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Events
 {
     /// <summary>

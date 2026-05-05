@@ -4,6 +4,7 @@ using ShelteredAPI.UI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Core
 {
     internal sealed class LoadingTransitionRecoveryService : MonoBehaviour
@@ -32,6 +33,12 @@ namespace ShelteredAPI.Core
         {
             if (_instance != null)
                 _instance.BeginTransition(targetScene, "LoadingScreen.ShowLoadingScreen");
+        }
+
+        public static void NotifyMenuTransitionRequested(string targetLabel, string reason)
+        {
+            if (_instance != null)
+                _instance.BeginMenuTransition(targetLabel, reason);
         }
 
         public static void NotifyLoadingLevelAwake()
@@ -121,6 +128,17 @@ namespace ShelteredAPI.Core
             MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring transition to " + targetScene + ".");
         }
 
+        private void BeginMenuTransition(string targetLabel, string requestReason)
+        {
+            string sourceScene = LoadingTransitionRuntime.GetActiveSceneName();
+            _transition = LoadingTransitionState.StartMenuTransition(targetLabel, sourceScene, requestReason, Time.realtimeSinceStartup);
+
+            _diagnostics.ClearBreadcrumbs();
+            _diagnostics.MarkBreadcrumb("Menu transition requested target=" + LoadingTransitionText.Safe(targetLabel) + " source=" + sourceScene);
+
+            MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring menu transition for " + LoadingTransitionText.Safe(targetLabel) + ".");
+        }
+
         private void TickTransition()
         {
             if (_transition == null || _transition.Phase == LoadingTransitionPhase.Recovering)
@@ -200,7 +218,9 @@ namespace ShelteredAPI.Core
                 _nextDialogAttemptAt = Time.realtimeSinceStartup + 0.75f;
 
                 LoadingTransitionRuntime.ResetAfterFailedTransition();
-                SceneManager.LoadScene(LoadingTransitionRecoveryConstants.MenuSceneName);
+                bool returnedToMainMenu = LoadingTransitionRuntime.TryReturnToMainMenu();
+                if (!returnedToMainMenu)
+                    SceneManager.LoadScene(LoadingTransitionRecoveryConstants.MenuSceneName);
             }
             catch (Exception recoverEx)
             {

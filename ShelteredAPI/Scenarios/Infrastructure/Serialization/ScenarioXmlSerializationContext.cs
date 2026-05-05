@@ -3,9 +3,7 @@ using System.Xml;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios.Serialization
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     internal sealed class ScenarioXmlSerializationContext
     {
         public ScenarioXmlSerializationContext(XmlElement root)

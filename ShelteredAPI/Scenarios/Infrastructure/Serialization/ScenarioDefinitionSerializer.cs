@@ -2,12 +2,20 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Xml;
-using ShelteredAPI.Scenarios.Serialization;
-
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Assets;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Map;
+using ShelteredAPI.Scenarios.Domain.Objects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     /// <summary>
     /// XML serializer for persistent scenario definitions. It uses System.Xml only so it
     /// works under the .NET 3.5 runtime used by the Sheltered mod stack.
@@ -120,14 +128,14 @@ namespace ShelteredAPI.Scenarios
 
             XmlElement root = document.DocumentElement;
             ScenarioDefinition definition = new ScenarioDefinition();
-            FamilyScenarioSectionSerializer familySerializer = new FamilyScenarioSectionSerializer();
-            InventoryScenarioSectionSerializer inventorySerializer = new InventoryScenarioSectionSerializer();
-            BunkerEditsScenarioSectionSerializer bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
-            TriggerEventScenarioSectionSerializer triggerSerializer = new TriggerEventScenarioSectionSerializer();
+            IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
+            IScenarioSectionSerializer<StartingInventoryDefinition> inventorySerializer = new InventoryScenarioSectionSerializer();
+            IScenarioSectionSerializer<BunkerEditsDefinition> bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
+            IScenarioSectionSerializer<TriggersAndEventsDefinition> triggerSerializer = new TriggerEventScenarioSectionSerializer();
             QuestMapScenarioSectionSerializer questMapSerializer = new QuestMapScenarioSectionSerializer();
-            WinLossScenarioSectionSerializer winLossSerializer = new WinLossScenarioSectionSerializer();
-            AssetReferenceScenarioSectionSerializer assetSerializer = new AssetReferenceScenarioSectionSerializer();
-            BunkerGridScenarioSectionSerializer bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
+            IScenarioSectionSerializer<WinLossConditionsDefinition> winLossSerializer = new WinLossScenarioSectionSerializer();
+            IScenarioSectionSerializer<AssetReferencesDefinition> assetSerializer = new AssetReferenceScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
 
@@ -493,112 +501,6 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
-        internal static FamilySetupDefinition ReadFamilySetup(XmlElement element)
-        {
-            FamilySetupDefinition setup = new FamilySetupDefinition();
-            if (element == null)
-                return setup;
-
-            setup.OverrideVanillaFamily = ReadBool(element, "OverrideVanillaFamily", false);
-            XmlElement members = Child(element, "Members");
-            if (members != null)
-            {
-                XmlNodeList memberNodes = members.GetElementsByTagName("Member");
-                for (int i = 0; i < memberNodes.Count; i++)
-                {
-                    XmlElement memberElement = memberNodes[i] as XmlElement;
-                    if (memberElement != null)
-                        setup.Members.Add(ReadFamilyMember(memberElement));
-                }
-            }
-
-            XmlElement future = Child(element, "FutureSurvivors");
-            if (future != null)
-            {
-                XmlNodeList futureNodes = future.GetElementsByTagName("FutureSurvivor");
-                for (int i = 0; i < futureNodes.Count; i++)
-                {
-                    XmlElement futureElement = futureNodes[i] as XmlElement;
-                    if (futureElement == null)
-                        continue;
-
-                    FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
-                    survivor.Id = AttributeOrChild(futureElement, "id", "Id");
-                    survivor.AskToJoin = ReadBoolAttribute(futureElement, "askToJoin", true);
-                    survivor.Arrival = ReadScheduleTime(Child(futureElement, "Arrival"));
-                    XmlElement survivorElement = Child(futureElement, "Survivor");
-                    if (survivorElement != null)
-                    {
-                        XmlElement nestedMember = Child(survivorElement, "Member");
-                        survivor.Survivor = ReadFamilyMember(nestedMember ?? survivorElement);
-                    }
-                    setup.FutureSurvivors.Add(survivor);
-                }
-            }
-
-            return setup;
-        }
-
-        private static FamilyMemberConfig ReadFamilyMember(XmlElement memberElement)
-        {
-            FamilyMemberConfig member = new FamilyMemberConfig();
-            if (memberElement == null)
-                return member;
-
-            member.Name = ReadText(memberElement, "Name");
-            member.Gender = ReadEnum(memberElement, "Gender", ScenarioGender.Any);
-            XmlElement age = Child(memberElement, "Age");
-            if (age != null)
-            {
-                member.ExactAge = ReadNullableInt(age, "Exact");
-                member.MinAge = ReadNullableInt(age, "Min");
-                member.MaxAge = ReadNullableInt(age, "Max");
-            }
-
-            XmlElement stats = Child(memberElement, "Stats");
-            if (stats != null)
-            {
-                XmlNodeList statNodes = stats.GetElementsByTagName("Stat");
-                for (int j = 0; j < statNodes.Count; j++)
-                {
-                    XmlElement statElement = statNodes[j] as XmlElement;
-                    if (statElement != null)
-                    {
-                        member.Stats.Add(new StatOverride
-                        {
-                            StatId = AttributeOrChild(statElement, "id", "Id"),
-                            Value = ReadIntAttribute(statElement, "value", 0)
-                        });
-                    }
-                }
-            }
-
-            XmlElement traits = Child(memberElement, "Traits");
-            if (traits != null)
-                ReadStringList(traits, "Trait", member.Traits);
-
-            XmlElement skills = Child(memberElement, "Skills");
-            if (skills != null)
-            {
-                XmlNodeList skillNodes = skills.GetElementsByTagName("Skill");
-                for (int j = 0; j < skillNodes.Count; j++)
-                {
-                    XmlElement skillElement = skillNodes[j] as XmlElement;
-                    if (skillElement != null)
-                    {
-                        member.Skills.Add(new SkillOverride
-                        {
-                            SkillId = AttributeOrChild(skillElement, "id", "Id"),
-                            Level = ReadIntAttribute(skillElement, "level", 0)
-                        });
-                    }
-                }
-            }
-
-            member.Appearance = ReadFamilyAppearance(Child(memberElement, "Appearance"));
-            return member;
-        }
-
         internal static StartingInventoryDefinition ReadStartingInventory(XmlElement element)
         {
             StartingInventoryDefinition inventory = new StartingInventoryDefinition();
@@ -645,55 +547,6 @@ namespace ShelteredAPI.Scenarios
             }
 
             return inventory;
-        }
-
-        private static FamilyMemberAppearanceConfig ReadFamilyAppearance(XmlElement element)
-        {
-            FamilyMemberAppearanceConfig appearance = new FamilyMemberAppearanceConfig();
-            if (element == null)
-                return appearance;
-
-            appearance.MeshId = AttributeOrChild(element, "meshId", "MeshId");
-            if (element.HasAttribute("adult"))
-                appearance.IsAdult = ReadBoolAttribute(element, "adult", true);
-            else
-            {
-                string adultText = ReadText(element, "IsAdult");
-                bool adult;
-                if (!string.IsNullOrEmpty(adultText) && bool.TryParse(adultText, out adult))
-                    appearance.IsAdult = adult;
-            }
-            appearance.HairColorHex = AttributeOrChild(element, "hairColor", "HairColor");
-            appearance.SkinColorHex = AttributeOrChild(element, "skinColor", "SkinColor");
-            appearance.ShirtColorHex = AttributeOrChild(element, "shirtColor", "ShirtColor");
-            appearance.PantsColorHex = AttributeOrChild(element, "pantsColor", "PantsColor");
-
-            string textureId;
-            string texturePath;
-
-            ReadFamilyAppearancePart(Child(element, "Head"), out textureId, out texturePath);
-            appearance.HeadTextureId = textureId;
-            appearance.HeadTexturePath = texturePath;
-
-            ReadFamilyAppearancePart(Child(element, "Torso"), out textureId, out texturePath);
-            appearance.TorsoTextureId = textureId;
-            appearance.TorsoTexturePath = texturePath;
-
-            ReadFamilyAppearancePart(Child(element, "Legs"), out textureId, out texturePath);
-            appearance.LegTextureId = textureId;
-            appearance.LegTexturePath = texturePath;
-            return appearance;
-        }
-
-        private static void ReadFamilyAppearancePart(XmlElement element, out string textureId, out string texturePath)
-        {
-            textureId = null;
-            texturePath = null;
-            if (element == null)
-                return;
-
-            textureId = AttributeOrChild(element, "id", "Id");
-            texturePath = AttributeOrChild(element, "path", "Path");
         }
 
         internal static BunkerEditsDefinition ReadBunkerEdits(XmlElement element)
@@ -987,14 +840,14 @@ namespace ShelteredAPI.Scenarios
         {
             writer.WriteStartDocument();
             writer.WriteStartElement("Scenario");
-            FamilyScenarioSectionSerializer familySerializer = new FamilyScenarioSectionSerializer();
-            InventoryScenarioSectionSerializer inventorySerializer = new InventoryScenarioSectionSerializer();
-            BunkerEditsScenarioSectionSerializer bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
-            TriggerEventScenarioSectionSerializer triggerSerializer = new TriggerEventScenarioSectionSerializer();
+            IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
+            IScenarioSectionSerializer<StartingInventoryDefinition> inventorySerializer = new InventoryScenarioSectionSerializer();
+            IScenarioSectionSerializer<BunkerEditsDefinition> bunkerEditsSerializer = new BunkerEditsScenarioSectionSerializer();
+            IScenarioSectionSerializer<TriggersAndEventsDefinition> triggerSerializer = new TriggerEventScenarioSectionSerializer();
             QuestMapScenarioSectionSerializer questMapSerializer = new QuestMapScenarioSectionSerializer();
-            WinLossScenarioSectionSerializer winLossSerializer = new WinLossScenarioSectionSerializer();
-            AssetReferenceScenarioSectionSerializer assetSerializer = new AssetReferenceScenarioSectionSerializer();
-            BunkerGridScenarioSectionSerializer bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
+            IScenarioSectionSerializer<WinLossConditionsDefinition> winLossSerializer = new WinLossScenarioSectionSerializer();
+            IScenarioSectionSerializer<AssetReferencesDefinition> assetSerializer = new AssetReferenceScenarioSectionSerializer();
+            IScenarioSectionSerializer<ScenarioBunkerGridDefinition> bunkerGridSerializer = new BunkerGridScenarioSectionSerializer();
             GateConditionScenarioSectionSerializer gateSerializer = new GateConditionScenarioSectionSerializer();
             ScheduledActionScenarioSectionSerializer scheduledSerializer = new ScheduledActionScenarioSectionSerializer();
 
@@ -1344,80 +1197,6 @@ namespace ShelteredAPI.Scenarios
             writer.WriteEndElement();
         }
 
-        internal static void WriteFamilySetup(XmlWriter writer, FamilySetupDefinition setup)
-        {
-            if (setup == null)
-                setup = new FamilySetupDefinition();
-
-            writer.WriteStartElement("FamilySetup");
-            WriteElement(writer, "OverrideVanillaFamily", setup.OverrideVanillaFamily.ToString());
-            writer.WriteStartElement("Members");
-            for (int i = 0; i < setup.Members.Count; i++)
-            {
-                WriteFamilyMember(writer, "Member", setup.Members[i]);
-            }
-            writer.WriteEndElement();
-
-            writer.WriteStartElement("FutureSurvivors");
-            for (int i = 0; i < setup.FutureSurvivors.Count; i++)
-            {
-                FutureSurvivorDefinition survivor = setup.FutureSurvivors[i];
-                if (survivor == null)
-                    continue;
-
-                writer.WriteStartElement("FutureSurvivor");
-                WriteAttribute(writer, "id", survivor.Id);
-                writer.WriteAttributeString("askToJoin", survivor.AskToJoin.ToString());
-                WriteScheduleTime(writer, "Arrival", survivor.Arrival);
-                WriteFamilyMember(writer, "Survivor", survivor.Survivor);
-                writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
-            writer.WriteEndElement();
-        }
-
-        private static void WriteFamilyMember(XmlWriter writer, string elementName, FamilyMemberConfig member)
-        {
-            if (member == null)
-                member = new FamilyMemberConfig();
-
-            writer.WriteStartElement(elementName);
-            WriteElement(writer, "Name", member.Name);
-            WriteElement(writer, "Gender", member.Gender.ToString());
-            writer.WriteStartElement("Age");
-            WriteNullableElement(writer, "Exact", member.ExactAge);
-            WriteNullableElement(writer, "Min", member.MinAge);
-            WriteNullableElement(writer, "Max", member.MaxAge);
-            writer.WriteEndElement();
-
-            writer.WriteStartElement("Stats");
-            for (int j = 0; j < member.Stats.Count; j++)
-            {
-                writer.WriteStartElement("Stat");
-                WriteAttribute(writer, "id", member.Stats[j].StatId);
-                writer.WriteAttributeString("value", member.Stats[j].Value.ToString(CultureInfo.InvariantCulture));
-                writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
-
-            writer.WriteStartElement("Traits");
-            for (int j = 0; j < member.Traits.Count; j++)
-                WriteElement(writer, "Trait", member.Traits[j]);
-            writer.WriteEndElement();
-
-            writer.WriteStartElement("Skills");
-            for (int j = 0; j < member.Skills.Count; j++)
-            {
-                writer.WriteStartElement("Skill");
-                WriteAttribute(writer, "id", member.Skills[j].SkillId);
-                writer.WriteAttributeString("level", member.Skills[j].Level.ToString(CultureInfo.InvariantCulture));
-                writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
-            WriteFamilyAppearance(writer, member.Appearance);
-            writer.WriteEndElement();
-        }
-
         internal static void WriteStartingInventory(XmlWriter writer, StartingInventoryDefinition inventory)
         {
             if (inventory == null)
@@ -1450,33 +1229,6 @@ namespace ShelteredAPI.Scenarios
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
-            writer.WriteEndElement();
-        }
-
-        private static void WriteFamilyAppearance(XmlWriter writer, FamilyMemberAppearanceConfig appearance)
-        {
-            if (appearance == null)
-                appearance = new FamilyMemberAppearanceConfig();
-
-            writer.WriteStartElement("Appearance");
-            WriteAttribute(writer, "meshId", appearance.MeshId);
-            if (appearance.IsAdult.HasValue)
-                writer.WriteAttributeString("adult", appearance.IsAdult.Value.ToString());
-            WriteAttribute(writer, "hairColor", appearance.HairColorHex);
-            WriteAttribute(writer, "skinColor", appearance.SkinColorHex);
-            WriteAttribute(writer, "shirtColor", appearance.ShirtColorHex);
-            WriteAttribute(writer, "pantsColor", appearance.PantsColorHex);
-            WriteFamilyAppearancePart(writer, "Head", appearance.HeadTextureId, appearance.HeadTexturePath);
-            WriteFamilyAppearancePart(writer, "Torso", appearance.TorsoTextureId, appearance.TorsoTexturePath);
-            WriteFamilyAppearancePart(writer, "Legs", appearance.LegTextureId, appearance.LegTexturePath);
-            writer.WriteEndElement();
-        }
-
-        private static void WriteFamilyAppearancePart(XmlWriter writer, string name, string textureId, string texturePath)
-        {
-            writer.WriteStartElement(name);
-            WriteAttribute(writer, "id", textureId);
-            WriteAttribute(writer, "path", texturePath);
             writer.WriteEndElement();
         }
 

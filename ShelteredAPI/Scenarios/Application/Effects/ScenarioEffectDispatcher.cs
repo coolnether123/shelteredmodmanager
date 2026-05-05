@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Application.Effects{
     internal sealed class ScenarioEffectDispatcher
     {
         private readonly List<IScenarioEffectHandler> _handlers = new List<IScenarioEffectHandler>();

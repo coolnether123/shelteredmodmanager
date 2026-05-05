@@ -2,9 +2,8 @@ using System;
 using System.Reflection;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.UI.FieldManual.Textures;
+namespace ShelteredAPI.Scenarios.Public{
     /// <summary>
     /// Sheltered-specific factory delegate that builds a vanilla ScenarioDef from neutral ModAPI context.
     /// </summary>

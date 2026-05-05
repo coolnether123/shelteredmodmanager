@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Collections.ObjectModel;
 using UnityEngine;
 
+using ShelteredAPI.Content.Compatibility;
 namespace ShelteredAPI.Content
 {
     /// <summary>

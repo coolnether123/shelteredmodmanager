@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Domain.Stages;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal interface IScenarioAuthoringBackend
     {
         event Action<ScenarioAuthoringState> StateChanged;

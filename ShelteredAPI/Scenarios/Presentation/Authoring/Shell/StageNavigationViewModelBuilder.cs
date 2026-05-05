@@ -2,8 +2,12 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Stages;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class StageNavigationViewModelBuilder
     {
         private readonly ScenarioStageRegistry _stageRegistry;

@@ -1,8 +1,13 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Application.Scheduling{
     internal sealed class ScenarioLegacyScheduleActionProvider : IScenarioScheduledActionProvider
     {
         public void AddActions(ScenarioDefinition definition, IList<ScenarioScheduledActionDefinition> target)

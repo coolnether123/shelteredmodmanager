@@ -3,8 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.UI.Internal.Settings;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     /// <summary>
     /// Compatibility report for the reflection fields required by <see cref="ShelteredScenarioDefBuilder"/>.
     /// Use this before relying on builder APIs against an unknown Sheltered build.

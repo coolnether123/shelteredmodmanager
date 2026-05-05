@@ -1,8 +1,8 @@
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal enum ScenarioCatalogSource
     {
         Vanilla = 0,

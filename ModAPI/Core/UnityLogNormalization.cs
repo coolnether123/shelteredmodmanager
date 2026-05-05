@@ -23,6 +23,7 @@ namespace ModAPI.Core
         public string Source = "UnityLog";
         public string Message = string.Empty;
         public string OnceKey = string.Empty;
+        public bool Suppress;
     }
 
     /// <summary>

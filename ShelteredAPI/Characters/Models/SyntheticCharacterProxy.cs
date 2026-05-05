@@ -1,7 +1,7 @@
 using System;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Abstractions;
+namespace ShelteredAPI.Characters.Models{
     internal class SyntheticCharacterProxy : ICharacterProxy
     {
         public int UniqueId { get; private set; }

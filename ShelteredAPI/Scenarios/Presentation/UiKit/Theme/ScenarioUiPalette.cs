@@ -1,7 +1,5 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Theme
-{
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// <summary>
     /// Default palette for the scenario authoring shell. Values are derived from
     /// the existing IMGUI shell renderer so windows built on UiKit visually match

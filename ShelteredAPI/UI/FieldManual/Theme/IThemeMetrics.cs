@@ -1,3 +1,5 @@
+using ShelteredAPI.UI.FieldManual.Tooltips;
+
 namespace ShelteredAPI.UI.FieldManual.Theme
 {
     /// <summary>

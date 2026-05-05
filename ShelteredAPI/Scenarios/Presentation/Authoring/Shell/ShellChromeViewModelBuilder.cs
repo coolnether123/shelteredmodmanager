@@ -1,7 +1,8 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ShellChromeViewModelBuilder
     {
         public void ApplyShellChrome(

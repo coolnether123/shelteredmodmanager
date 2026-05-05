@@ -1,5 +1,6 @@
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Content;
+
+namespace ShelteredAPI.Characters.Models{
     /// <summary>
     /// Runtime handle for one attribute modifier applied to a character.
     /// Keep the handle if you need to remove that exact modifier later.

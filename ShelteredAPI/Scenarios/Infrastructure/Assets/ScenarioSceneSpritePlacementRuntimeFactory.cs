@@ -1,7 +1,8 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Objects;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSceneSpritePlacementRuntimeFactory
     {
         public GameObject Create(GameObject root, SceneSpritePlacement placement, Sprite sprite, int index)

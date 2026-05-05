@@ -3,8 +3,10 @@ using ModAPI.Scenarios;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class ScenarioSpriteRuntimeResolver
     {
         internal sealed class ResolvedTarget

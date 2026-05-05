@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class SpritePatchBuilder
     {
         public SpritePatchDefinition Build(

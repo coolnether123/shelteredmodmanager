@@ -1,6 +1,8 @@
 using UnityEngine;
 using ShelteredAPI.UI.FieldManual.Theme;
 
+
+using ShelteredAPI.UI.FieldManual.Textures;
 namespace ShelteredAPI.UI.FieldManual.Textures.Generators
 {
     /// <summary>

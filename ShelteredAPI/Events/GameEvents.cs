@@ -7,6 +7,8 @@ using ModAPI.Harmony;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 
+
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Events
 {
     /// <summary>

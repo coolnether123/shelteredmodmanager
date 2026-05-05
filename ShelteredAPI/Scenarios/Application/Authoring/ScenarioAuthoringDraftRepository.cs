@@ -6,8 +6,11 @@ using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringDraftRepository
     {
         internal sealed class DraftRecord
@@ -417,7 +420,7 @@ namespace ShelteredAPI.Scenarios
             string gameRoot;
             try
             {
-                gameRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                gameRoot = Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, ".."));
             }
             catch
             {

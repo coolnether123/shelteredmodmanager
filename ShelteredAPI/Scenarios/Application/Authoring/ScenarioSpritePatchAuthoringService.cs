@@ -1,8 +1,10 @@
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioSpritePatchAuthoringService
     {
         private readonly SpritePatchBuilder _spritePatchBuilder;

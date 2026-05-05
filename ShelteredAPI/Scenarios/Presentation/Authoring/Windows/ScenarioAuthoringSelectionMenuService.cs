@@ -1,6 +1,9 @@
 using System;
-namespace ShelteredAPI.Scenarios
-{
+
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
     internal sealed class ScenarioAuthoringSelectionMenuService
     {
         private static readonly ScenarioAuthoringSelectionMenuService _instance = new ScenarioAuthoringSelectionMenuService();

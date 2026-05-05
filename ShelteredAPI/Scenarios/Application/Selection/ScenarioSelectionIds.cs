@@ -1,8 +1,7 @@
 using System;
 using ShelteredAPI.Saves;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal static class ScenarioSelectionIds
     {
         public const string StandardStorageScenarioId = "Standard";

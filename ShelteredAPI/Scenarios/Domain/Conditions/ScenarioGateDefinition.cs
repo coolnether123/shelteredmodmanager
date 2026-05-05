@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Conditions{
     /// <summary>
     /// Named gate that unlocks scenario content when its conditions are satisfied.
     /// Gates can be referenced by placements, routes, effects, and scheduled actions.

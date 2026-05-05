@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Validation;
+namespace ShelteredAPI.Scenarios.Application.Validation{
     internal sealed class PublishValidationSummaryBuilder
     {
         public string Build(ValidationSummary summary)

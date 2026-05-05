@@ -2,8 +2,30 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 using ShelteredAPI.Core;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Application.Compatibility;
+using ShelteredAPI.Scenarios.Application.Conditions;
+using ShelteredAPI.Scenarios.Application.Effects;
+using ShelteredAPI.Scenarios.Application.Objects;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Scheduling;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Application.Stages;
+using ShelteredAPI.Scenarios.Application.Timeline;
+using ShelteredAPI.Scenarios.Application.Validation;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Diagnostics;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Inspector;
+using ShelteredAPI.Scenarios.Presentation.Timeline;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ServiceCollectionExtensions
     {
         public static void AddScenarioDomain(this ServiceCollection services)

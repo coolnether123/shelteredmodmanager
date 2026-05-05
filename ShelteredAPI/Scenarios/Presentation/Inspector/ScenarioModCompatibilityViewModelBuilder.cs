@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.UI.Internal.Settings;
+namespace ShelteredAPI.Scenarios.Presentation.Inspector{
     internal sealed class ScenarioModCompatibilityViewModelBuilder
     {
         public List<ScenarioAuthoringInspectorItem> BuildItems(ScenarioModCompatibilityReport report)

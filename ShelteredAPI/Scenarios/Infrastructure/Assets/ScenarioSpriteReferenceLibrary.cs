@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal static class ScenarioSpriteReferenceLibrary
     {
         private static readonly object GeneratedSync = new object();

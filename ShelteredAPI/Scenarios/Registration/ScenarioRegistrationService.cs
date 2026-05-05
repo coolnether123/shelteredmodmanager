@@ -1,8 +1,9 @@
 using System.Reflection;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.UI.FieldManual.Textures;
+namespace ShelteredAPI.Scenarios.Registration{
     internal sealed class ScenarioRegistrationService
     {
         private readonly ScenarioRegistrationValidator _validator;

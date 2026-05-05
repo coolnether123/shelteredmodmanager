@@ -8,6 +8,10 @@ using ModAPI.Reflection;
 using UnityEngine;
 using GameItemDefinition = global::ItemDefinition;
 
+
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Persistence;
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Content
 {
     /// <summary>

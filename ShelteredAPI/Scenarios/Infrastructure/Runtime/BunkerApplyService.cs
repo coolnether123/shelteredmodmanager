@@ -5,9 +5,12 @@ using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class BunkerApplyService
     {
         private static readonly FieldInfo ShelterRoomGridWiresSpritesField = typeof(ShelterRoomGrid).GetField("wiresSprites", BindingFlags.NonPublic | BindingFlags.Instance);

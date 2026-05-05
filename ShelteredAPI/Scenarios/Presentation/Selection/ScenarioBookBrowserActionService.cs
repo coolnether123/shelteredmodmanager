@@ -2,9 +2,10 @@ using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Saves;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserActionService
     {
         private readonly ScenarioBrowserPanelAdapter _adapter;

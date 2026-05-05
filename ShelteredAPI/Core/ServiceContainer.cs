@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 
+
+using ShelteredAPI.UI.FieldManual.Textures;
 namespace ShelteredAPI.Core
 {
     internal enum ServiceLifetime

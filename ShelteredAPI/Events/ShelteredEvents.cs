@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+using ShelteredAPI.Saves;
 namespace ShelteredAPI.Events
 {
     /// <summary>

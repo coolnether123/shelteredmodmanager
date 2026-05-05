@@ -4,8 +4,13 @@ using ShelteredAPI.Content;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content.Compatibility;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Scheduling;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class SchedulingValidationRule : IScenarioValidationRule
     {
         public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)

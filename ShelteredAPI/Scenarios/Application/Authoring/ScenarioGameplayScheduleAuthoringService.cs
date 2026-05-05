@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioGameplayScheduleAuthoringService
     {
         public bool TryHandleAction(ScenarioEditorSession session, string actionId, out string message)

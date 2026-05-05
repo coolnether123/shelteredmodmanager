@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Domain.Objects{
     /// <summary>
     /// Initial runtime state for an authored scenario object or scene sprite.
     /// </summary>

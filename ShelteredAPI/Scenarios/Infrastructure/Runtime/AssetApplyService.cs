@@ -1,7 +1,9 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class AssetApplyService
     {
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;

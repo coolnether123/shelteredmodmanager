@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ShelteredAPI.Events;
 
+using ShelteredAPI.Saves;
 namespace ShelteredAPI.Core
 {
     internal sealed class ShelteredGameLifecycleSource : IGameLifecycleSource

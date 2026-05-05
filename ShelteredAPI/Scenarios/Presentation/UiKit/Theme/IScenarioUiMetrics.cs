@@ -1,10 +1,11 @@
-namespace ShelteredAPI.Scenarios.UiKit.Theme
-{
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// <summary>
     /// Sizing, spacing, and typography metrics for a scenario authoring window
     /// theme. Values are in IMGUI virtual pixels (the same coordinate space the
     /// shell layout already uses). Defaults align with
-    /// <see cref="ShelteredAPI.Scenarios.ScenarioAuthoringShellLayout"/> so the kit
+    /// <see cref="ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioAuthoringShellLayout"/> so the kit
     /// does not redeclare shell-level constants.
     /// </summary>
     internal interface IScenarioUiMetrics

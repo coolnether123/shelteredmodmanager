@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Map;
+namespace ShelteredAPI.Scenarios.Application.Map{
     internal sealed class ScenarioMapDraftService
     {
         public MapAuthoringDefinition EnsureMap(ScenarioEditorSession session)

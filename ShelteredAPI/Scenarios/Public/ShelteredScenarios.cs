@@ -1,8 +1,9 @@
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Registration;
+using ShelteredAPI.UI.FieldManual.Textures;
+namespace ShelteredAPI.Scenarios.Public{
     /// <summary>
     /// Stable Sheltered scenario registration and catalog facade.
     /// </summary>

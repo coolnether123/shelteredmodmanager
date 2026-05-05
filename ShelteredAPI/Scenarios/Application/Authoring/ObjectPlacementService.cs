@@ -1,7 +1,8 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ObjectPlacementService
     {
         private readonly IScenarioDraftMutationService _draftMutationService;

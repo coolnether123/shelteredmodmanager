@@ -1,8 +1,9 @@
 using ModAPI.Core;
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringPresentationService
     {
         private readonly object _sync = new object();

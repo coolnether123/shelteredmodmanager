@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Shared{
     internal static class ScenarioPropertyBag
     {
         public static void Set(List<ScenarioProperty> properties, string key, string value)

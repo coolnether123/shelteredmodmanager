@@ -7,6 +7,8 @@ using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI;
 using UnityEngine;
 
+
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Harmony
 {
     /// <summary>

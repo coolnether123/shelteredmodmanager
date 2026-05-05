@@ -2,8 +2,11 @@ using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioPlaytestOrchestrator : IScenarioPlaytestOrchestrator
     {
         private readonly IScenarioApplier _applier;

@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using ShelteredAPI.Content;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioInventoryItemCatalogEntry
     {
         public string ItemId { get; set; }

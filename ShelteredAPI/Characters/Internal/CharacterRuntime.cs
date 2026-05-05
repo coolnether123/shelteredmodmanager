@@ -6,6 +6,12 @@ using System.Reflection;
 using UnityEngine;
 using ModAPI.Util;
 
+
+using ShelteredAPI.Characters;
+using ShelteredAPI.Characters.Abstractions;
+using ShelteredAPI.Characters.Models;
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Characters.Internal
 {
     internal sealed class LiveCharacterProxy : ICharacterProxy

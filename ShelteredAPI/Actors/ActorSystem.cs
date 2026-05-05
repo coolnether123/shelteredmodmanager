@@ -2,6 +2,7 @@ using ModAPI.Actors;
 using ShelteredAPI.Actors.Internal;
 using ShelteredAPI.Characters;
 
+using ShelteredAPI.Characters.Abstractions;
 namespace ShelteredAPI.Actors
 {
     /// <summary>

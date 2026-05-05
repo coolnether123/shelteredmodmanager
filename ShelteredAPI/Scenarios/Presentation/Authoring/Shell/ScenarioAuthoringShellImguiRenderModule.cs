@@ -2,14 +2,22 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-using ShelteredAPI.Scenarios.UiKit;
-using ShelteredAPI.Scenarios.UiKit.Frame;
-using ShelteredAPI.Scenarios.UiKit.Theme;
-using ShelteredAPI.Scenarios.UiKit.Widgets;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
+using ShelteredAPI.UI.FieldManual.Tooltips;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAuthoringShellImguiRenderModule : IScenarioAuthoringRenderModule
     {
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioAuthoring.ShellImgui";

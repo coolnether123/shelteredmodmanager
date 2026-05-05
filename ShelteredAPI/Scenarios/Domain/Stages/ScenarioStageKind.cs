@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+namespace ShelteredAPI.Scenarios.Domain.Stages{
     /// <summary>
     /// Authoring workflow stage used by scenario editor and validation UI.
     /// These values organize editor surfaces; they are not vanilla ScenarioDef stages.

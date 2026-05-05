@@ -2,8 +2,8 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Domain.Objects{
     /// <summary>
     /// Runtime identity and activation metadata for a scenario object.
     /// This is shared by object placements and runtime state tracking.

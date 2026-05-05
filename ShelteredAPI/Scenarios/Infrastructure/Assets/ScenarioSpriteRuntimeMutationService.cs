@@ -1,8 +1,8 @@
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal static class ScenarioSpriteRuntimeMutationService
     {
         public static bool TryApply(

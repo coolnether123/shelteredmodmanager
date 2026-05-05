@@ -1,7 +1,9 @@
 using ShelteredAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioRuntimeModule
     {
         public static void AddScenarioRuntimeModule(this ServiceCollection services)
@@ -44,7 +46,7 @@ namespace ShelteredAPI.Scenarios
                     resolver.Get<IScenarioDefinitionFactory>(),
                     resolver.Get<IScenarioDefinitionCatalogService>(),
                     resolver.Get<IScenarioRuntimeBindingService>(),
-                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<IScenarioRuntimeDefinitionOverrideProvider>(),
                     resolver.Get<IScenarioApplier>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),

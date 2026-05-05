@@ -4,8 +4,9 @@ using System.IO;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Diagnostics;
+namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
     internal sealed class ScenarioLoader
     {
         private readonly ScenarioCatalog _catalog;

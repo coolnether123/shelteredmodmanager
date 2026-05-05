@@ -1,5 +1,7 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Definitions;
+
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal interface IScenarioAuthoringSectionHub
     {
         ScenarioSpriteSwapAuthoringService SpriteSwap { get; }

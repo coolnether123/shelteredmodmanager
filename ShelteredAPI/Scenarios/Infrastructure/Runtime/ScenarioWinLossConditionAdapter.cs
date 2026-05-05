@@ -1,8 +1,14 @@
 using System;
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioWinLossConditionAdapter : IScenarioWinLossConditionAdapter
     {
         public bool TryCreateConditionRef(

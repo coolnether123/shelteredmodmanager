@@ -1,7 +1,7 @@
 using System;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Composition;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal static class ScenarioTriggerRuntime
     {
         public static bool Fire(string triggerId)

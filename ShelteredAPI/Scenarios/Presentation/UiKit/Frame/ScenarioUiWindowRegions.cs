@@ -1,7 +1,6 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Frame
-{
+using ShelteredAPI.UI.FieldManual.Tooltips;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
     /// <summary>
     /// Output of <see cref="IScenarioUiWindowFrame.Build"/>. Exposes the rects a
     /// caller needs to fill (header, body, footer) without leaking the frame's

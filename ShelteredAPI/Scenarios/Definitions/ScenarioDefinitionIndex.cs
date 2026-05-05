@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioDefinitionIndex
     {
         private readonly HashSet<string> _gates;

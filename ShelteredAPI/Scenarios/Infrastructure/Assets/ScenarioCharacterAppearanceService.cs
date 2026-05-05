@@ -5,8 +5,12 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal enum ScenarioCharacterTexturePart
     {
         Head = 0,

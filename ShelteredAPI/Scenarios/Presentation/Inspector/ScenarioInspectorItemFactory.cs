@@ -1,8 +1,7 @@
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+namespace ShelteredAPI.Scenarios.Presentation.Inspector{
     internal static class ScenarioInspectorItemFactory
     {
         public static ScenarioAuthoringInspectorAction Action(

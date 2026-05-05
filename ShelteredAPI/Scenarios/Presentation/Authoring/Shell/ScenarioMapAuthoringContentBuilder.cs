@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Globalization;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Map;
+using ShelteredAPI.Scenarios.Presentation.Inspector;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioMapAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
         public ScenarioAuthoringWindowContentKind ContentKind

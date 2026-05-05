@@ -1,8 +1,10 @@
-namespace ShelteredAPI.Scenarios.UiKit.Theme
-{
+using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.UiKit;
+
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// <summary>
     /// Default metrics for the scenario authoring shell. Window-chrome values
-    /// reuse <see cref="ShelteredAPI.Scenarios.ScenarioAuthoringShellLayout"/> so
+    /// reuse <see cref="ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioAuthoringShellLayout"/> so
     /// there is one source of truth for the shared shell spacing. Padding tokens
     /// are tuned to match the IMGUI shell's existing inner-padding choices so
     /// migrating renderer surfaces does not visibly shift their content.

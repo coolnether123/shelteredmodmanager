@@ -1,5 +1,7 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
+
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioAuthoringRuntimeGuards
     {
         private static ScenarioAuthoringState GetState()

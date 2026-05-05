@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI.Internal;
 using UnityEngine;
 
+
+using ShelteredAPI.Persistence;
+using ShelteredAPI.Saves;
+using ShelteredAPI.UI.Internal.ModManager;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

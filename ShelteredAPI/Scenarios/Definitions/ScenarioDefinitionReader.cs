@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioDefinitionReader : IScenarioDefinitionReader
     {
         private readonly IScenarioDefinitionSerializer _definitionSerializer;

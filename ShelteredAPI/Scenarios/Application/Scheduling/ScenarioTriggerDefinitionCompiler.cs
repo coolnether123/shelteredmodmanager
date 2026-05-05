@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Application.Scheduling{
     internal static class ScenarioTriggerDefinitionCompiler
     {
         public static bool TryCreateAction(TriggerDef trigger, int index, out ScenarioScheduledActionDefinition action, out string reason)

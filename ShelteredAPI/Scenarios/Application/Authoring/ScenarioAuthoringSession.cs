@@ -2,8 +2,8 @@ using System;
 using ModAPI.Scenarios;
 using SaveType = SaveManager.SaveType;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringSession
     {
         private ScenarioAuthoringSession()

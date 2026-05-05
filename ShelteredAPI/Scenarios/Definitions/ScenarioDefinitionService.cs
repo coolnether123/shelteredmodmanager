@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Registration;
+using ShelteredAPI.UI.FieldManual.Textures;
+namespace ShelteredAPI.Scenarios.Definitions{
     internal sealed class ScenarioDefinitionService : IScenarioDefinitionFactory
     {
         private readonly IScenarioRegistrationStore _store;

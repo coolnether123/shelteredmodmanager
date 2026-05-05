@@ -1,7 +1,10 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Diagnostics;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Shared{
     internal sealed class ScenarioDefinitionSerializerAdapter : IScenarioDefinitionSerializer
     {
         private readonly ScenarioDefinitionSerializer _inner;

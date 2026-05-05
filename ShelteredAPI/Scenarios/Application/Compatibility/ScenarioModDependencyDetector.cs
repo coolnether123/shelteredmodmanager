@@ -2,8 +2,12 @@ using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Persistence;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.UI.Internal.Settings;
+namespace ShelteredAPI.Scenarios.Application.Compatibility{
     internal sealed class ScenarioModDependencyDetector : IScenarioModContentResolver
     {
         public ScenarioModCompatibilityReport BuildReport(ScenarioDefinition definition)

@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Bunker{
     /// <summary>
     /// Rectangular bunker grid boundary, usually used to group cells under an expansion.
     /// </summary>

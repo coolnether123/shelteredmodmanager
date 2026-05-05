@@ -1,7 +1,6 @@
 using System.Globalization;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioSceneSpritePlacementIdentity
     {
         public static string ResolveScenarioObjectId(SceneSpritePlacement placement, int index)

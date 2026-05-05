@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Conditions;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioWinLossOutcomeService : IScenarioWinLossOutcomeService
     {
         private readonly IScenarioQuestInstanceResolver _questInstanceResolver;

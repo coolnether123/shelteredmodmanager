@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class PlacementPaletteService
     {
         internal sealed class PaletteEntry

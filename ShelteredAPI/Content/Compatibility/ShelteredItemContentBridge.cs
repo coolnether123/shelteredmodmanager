@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using ModAPI.Core;
-
-namespace ShelteredAPI.Content
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Content.Compatibility{
     /// <summary>
     /// Sheltered-owned typed adapter for compatibility APIs that still expose Sheltered item runtime types.
     /// New code should use <see cref="IContentResolutionService"/> and keep host runtime keys opaque.

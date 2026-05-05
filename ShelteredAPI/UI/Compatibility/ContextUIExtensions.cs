@@ -1,9 +1,10 @@
 using ModAPI.Core;
-using ShelteredAPI.UI.Compatibility;
 using System;
 using System.Collections;
 using UnityEngine;
 
+
+using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.UI.Compatibility
 {
     internal static class ContextUIExtensions

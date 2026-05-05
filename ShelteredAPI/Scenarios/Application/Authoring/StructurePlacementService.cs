@@ -1,8 +1,8 @@
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class StructurePlacementService
     {
         public ObjectPlacement CreateRoomPlacement(int gridX, int gridY, Vector3 position, string identity)

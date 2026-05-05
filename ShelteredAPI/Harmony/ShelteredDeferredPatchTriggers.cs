@@ -3,6 +3,8 @@ using ModAPI.Harmony;
 using ShelteredAPI.Core;
 using ShelteredAPI.Scenarios;
 
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Harmony
 {
     /// <summary>

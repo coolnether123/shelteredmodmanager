@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Characters
-{
+using ShelteredAPI.Characters.Abstractions;
+namespace ShelteredAPI.Characters.Models{
     [Serializable]
     internal class CharacterSaveData
     {

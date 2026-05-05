@@ -1,8 +1,9 @@
-using ShelteredAPI.UI.Compatibility;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+
+using ShelteredAPI.UI.FieldManual.Textures;
 namespace ShelteredAPI.UI.Compatibility
 {
     /// <summary>

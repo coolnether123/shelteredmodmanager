@@ -2,8 +2,8 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Domain.Runtime{
     internal class ScenarioRuntimeState
     {
         public ScenarioRuntimeState()

@@ -1,7 +1,12 @@
 using ShelteredAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Bunker;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioInfrastructureModule
     {
         public static void AddScenarioInfrastructureModule(this ServiceCollection services)
@@ -9,6 +14,14 @@ namespace ShelteredAPI.Scenarios
             services.AddSingleton<IScenarioStateManager>(delegate(IServiceResolver resolver) { return new ScenarioStateManager(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioEditorSessionStore(); });
             services.AddSingleton<IScenarioEditorSessionStore>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioEditorSessionStore>(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioRuntimeDefinitionOverrideProvider(resolver.Get<IScenarioEditorSessionStore>());
+            });
+            services.AddSingleton<IScenarioRuntimeDefinitionOverrideProvider>(delegate(IServiceResolver resolver)
+            {
+                return resolver.Get<ScenarioRuntimeDefinitionOverrideProvider>();
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringPauseService(); });
             services.AddSingleton<IScenarioPauseService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringPauseService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringDraftRepository(resolver.Get<IScenarioSaveLibrary>()); });

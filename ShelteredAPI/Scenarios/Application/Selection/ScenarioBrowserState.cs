@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Selection{
     /// <summary>
     /// The three top-level buckets the browser can show. Vanilla saves are
     /// scenario-keyed (Survival / Surrounded / Stasis each carry their own

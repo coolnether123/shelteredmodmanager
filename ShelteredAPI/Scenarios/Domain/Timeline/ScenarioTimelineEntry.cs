@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Domain.Timeline{
     /// <summary>
     /// One scheduled or derived entry shown in scenario timeline tools.
     /// </summary>

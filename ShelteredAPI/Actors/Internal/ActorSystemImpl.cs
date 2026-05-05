@@ -9,6 +9,9 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
+
+using ShelteredAPI.Actors;
+using ShelteredAPI.Saves;
 namespace ShelteredAPI.Actors.Internal
 {
     [PatchPolicy(PatchDomain.World, "ShelteredActorSystemTicks",

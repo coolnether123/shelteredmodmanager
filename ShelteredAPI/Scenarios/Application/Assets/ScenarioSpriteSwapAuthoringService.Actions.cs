@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Assets{
     internal sealed partial class ScenarioSpriteSwapAuthoringService
     {
         public bool TryHandleAction(ScenarioAuthoringState state, string actionId, out bool handled, out string message)

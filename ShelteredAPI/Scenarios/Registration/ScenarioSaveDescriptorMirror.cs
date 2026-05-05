@@ -2,9 +2,7 @@ using System;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Registration{
     internal sealed class ScenarioSaveDescriptorMirror
     {
         public void Mirror(CustomScenarioInfo info)

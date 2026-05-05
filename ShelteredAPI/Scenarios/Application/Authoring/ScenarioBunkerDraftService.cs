@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal static class ScenarioBunkerDraftService
     {
         private const float PlacementMatchTolerance = 0.15f;

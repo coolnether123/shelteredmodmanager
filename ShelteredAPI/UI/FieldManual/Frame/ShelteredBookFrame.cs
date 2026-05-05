@@ -4,6 +4,9 @@ using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.Internal;
 using UnityEngine;
 
+
+using ShelteredAPI.UI.FieldManual.Tooltips;
+using ShelteredAPI.UI.Internal.ModManager;
 namespace ShelteredAPI.UI.FieldManual.Frame
 {
     /// <summary>

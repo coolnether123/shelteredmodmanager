@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Public{
     /// <summary>
     /// Sheltered-specific scenario authoring contract for mods that prefer a class-based scenario definition.
     /// </summary>

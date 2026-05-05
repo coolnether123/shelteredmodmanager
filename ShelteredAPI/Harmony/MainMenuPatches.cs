@@ -5,11 +5,14 @@ using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
 using ShelteredAPI.UI.Compatibility;
+using ShelteredAPI.UI.Internal;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves.Paging;
 using UnityEngine;
 
+
+using ShelteredAPI.UI.Internal.ModManager;
 namespace ShelteredAPI.Harmony
 {
     internal static class AutoLoadFlow
@@ -75,6 +78,8 @@ namespace ShelteredAPI.Harmony
                 }
 
                 MMLog.WriteDebug("Postfix triggered.");
+                ModManagerPanelScaffolding.WarmScenarioBookVisualCache();
+
                 // One-time startup check for save slot gaps
                 SaveCondenseManager.CheckOnStartup();
                 if (SaveCondenseManager.NeedsPrompt())

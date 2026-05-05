@@ -1,5 +1,7 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+
+namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
     internal sealed class ScenarioRuntimeBindingPersistence : IScenarioRuntimeBindingPersistence
     {
         private const string SaveGroupName = "CustomScenarioBinding";

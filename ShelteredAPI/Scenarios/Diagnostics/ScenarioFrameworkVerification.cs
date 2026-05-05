@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Xml;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Diagnostics{
     /// <summary>
     /// Executable verification harness for the scenario framework. This follows the
     /// existing smoke-test style and avoids a test framework so it can run under the

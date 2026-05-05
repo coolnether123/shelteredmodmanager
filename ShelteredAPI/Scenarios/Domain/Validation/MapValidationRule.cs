@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Map;
+namespace ShelteredAPI.Scenarios.Domain.Validation{
     internal sealed class MapValidationRule : IScenarioValidationRule
     {
         public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)

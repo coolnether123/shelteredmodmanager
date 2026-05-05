@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal static class RoomVisualRuntimeApplyService
     {
         public static bool ApplyWallEdit(ShelterRoomGrid grid, RoomEdit room, out string message)

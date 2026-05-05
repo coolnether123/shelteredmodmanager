@@ -1,8 +1,6 @@
 using System;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioDraftMetadataUpdate
     {
         public string DisplayName { get; set; }

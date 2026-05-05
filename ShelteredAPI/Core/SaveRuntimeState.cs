@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 
+
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Core
 {
     /// <summary>

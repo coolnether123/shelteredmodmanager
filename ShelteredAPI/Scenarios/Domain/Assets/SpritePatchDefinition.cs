@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Assets{
     /// <summary>
     /// Pixel-level patch applied to a base sprite to produce a scenario-specific sprite.
     /// </summary>

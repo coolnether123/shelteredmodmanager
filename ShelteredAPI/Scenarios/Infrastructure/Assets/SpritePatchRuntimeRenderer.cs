@@ -1,8 +1,9 @@
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Domain.Assets;
+namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
     internal sealed class SpritePatchRuntimeRenderer
     {
         public Sprite Render(Sprite baseSprite, SpritePatchDefinition patch)

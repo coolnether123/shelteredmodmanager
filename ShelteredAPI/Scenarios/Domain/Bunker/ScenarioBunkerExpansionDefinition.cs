@@ -2,8 +2,8 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Domain.Bunker{
     /// <summary>
     /// Unlockable or scheduled group of bunker cells.
     /// Use this when a scenario wants sections of the shelter to appear or unlock over time.

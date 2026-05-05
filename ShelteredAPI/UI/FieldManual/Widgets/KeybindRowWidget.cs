@@ -9,6 +9,8 @@ using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 
+
+using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.UI.FieldManual.Widgets
 {
     /// <summary>

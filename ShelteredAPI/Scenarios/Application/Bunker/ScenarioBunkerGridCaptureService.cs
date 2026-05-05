@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+namespace ShelteredAPI.Scenarios.Application.Bunker{
     internal sealed class ScenarioBunkerGridCaptureService
     {
         private readonly ScenarioBunkerSupportResolver _supportResolver;

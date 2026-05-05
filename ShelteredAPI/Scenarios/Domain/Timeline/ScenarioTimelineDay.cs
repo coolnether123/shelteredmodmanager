@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Timeline{
     /// <summary>
     /// Timeline bucket for all scenario entries scheduled on one day.
     /// </summary>

@@ -1,8 +1,11 @@
 using ModAPI.Scenarios;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Scheduling;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioScheduledGameplayRuntime : MonoBehaviour
     {
         private const string RuntimeObjectName = "ShelteredAPI.ScenarioScheduledGameplayRuntime";

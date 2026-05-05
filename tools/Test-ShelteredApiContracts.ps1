@@ -46,7 +46,7 @@ function Assert-NotContains {
 }
 
 $contentRegistry = Read-RepoFile "ShelteredAPI\Content\ContentRegistry.cs"
-$scenarioSmoke = Read-RepoFile "ShelteredAPI\Scenarios\ScenarioPipelineSmokeTest.cs"
+$scenarioSmoke = Read-RepoFile "ShelteredAPI\Scenarios\Diagnostics\ScenarioPipelineSmokeTest.cs"
 $actorContracts = Read-RepoFile "ModAPI\Actors\Abstractions\IActorSystem.cs"
 $actorImpl = Read-RepoFile "ShelteredAPI\Actors\Internal\ActorSystemImpl.cs"
 $actorModels = Read-RepoFile "ModAPI\Actors\Models\ActorModels.cs"

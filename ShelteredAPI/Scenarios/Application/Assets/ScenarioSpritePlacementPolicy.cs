@@ -1,7 +1,7 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Assets{
     internal sealed class ScenarioSpritePlacementPolicy
     {
         public ScenarioPlaceableAssetClassification ClassifyRuntimeSprite(ScenarioSpriteReferenceLibrary.LoadedSpriteReference reference)

@@ -1,7 +1,5 @@
 using System;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal static class ScenarioTargetScopeTextMatcher
     {
         private static readonly string[] BackgroundTokens = new[]

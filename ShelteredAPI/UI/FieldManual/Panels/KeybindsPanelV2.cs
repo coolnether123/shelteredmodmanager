@@ -14,6 +14,11 @@ using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 using ShelteredAPI.UI.FieldManual.Widgets;
 
+
+using ShelteredAPI.Content;
+using ShelteredAPI.Persistence;
+using ShelteredAPI.UI;
+using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.UI.FieldManual.Panels
 {
     /// <summary>

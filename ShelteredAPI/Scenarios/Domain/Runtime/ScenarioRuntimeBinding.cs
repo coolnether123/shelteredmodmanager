@@ -1,7 +1,8 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Domain.Runtime{
     /// <summary>
     /// Per-save scenario binding metadata. This is separate from ScenarioDefinition on
     /// purpose: a scenario is reusable data, while a binding only records whether one

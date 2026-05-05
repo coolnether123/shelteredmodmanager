@@ -1,5 +1,7 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+
+namespace ShelteredAPI.Scenarios.Public{
     /// <summary>
     /// Stable runtime facade for scenario trigger interactions.
     /// </summary>

@@ -1,8 +1,11 @@
 using System;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
+namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioRuntimeStateService
     {
         private readonly ScenarioRuntimeExecutionJournalRepository _repository;

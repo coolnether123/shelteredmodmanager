@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Domain.Map{
     /// <summary>
     /// Top-level authored world-map data for a scenario.
     /// Locations, routes, loot, and encounter tables are neutral data until the game runtime projects them onto Sheltered's map.

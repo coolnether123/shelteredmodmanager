@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+namespace ShelteredAPI.Scenarios.Application.Compatibility{
     internal sealed class ScenarioModCompatibilityReport
     {
         public ScenarioModCompatibilityReport()

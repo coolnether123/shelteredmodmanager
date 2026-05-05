@@ -1,8 +1,8 @@
 using System;
 using ShelteredAPI.UI.Internal;
-
-namespace ShelteredAPI.UI
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.UI.Internal.Runtime;
+namespace ShelteredAPI.UI.Runtime{
     /// <summary>
     /// Public facade for mod-owned runtime UI. This API intentionally exposes
     /// DTOs and callbacks rather than NGUI objects.

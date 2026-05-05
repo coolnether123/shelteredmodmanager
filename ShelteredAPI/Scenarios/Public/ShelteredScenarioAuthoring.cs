@@ -1,7 +1,9 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Diagnostics;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Public{
     /// <summary>
     /// Stable XML scenario authoring facade for loading, saving, and validating Sheltered scenario definitions.
     /// </summary>

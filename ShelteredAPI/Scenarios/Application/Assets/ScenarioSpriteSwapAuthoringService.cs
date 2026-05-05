@@ -6,8 +6,13 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+namespace ShelteredAPI.Scenarios.Application.Assets{
     // Thin orchestrator for the sprite-swap authoring workflow. Catalog queries live
     // in ScenarioSpriteCatalogService; rule mutation in ScenarioSpriteSwapRuleEditor;
     // undo/redo in ScenarioAuthoringHistoryService; clipboard in

@@ -3,8 +3,9 @@ using System;
 using System.Reflection;
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioAuthoringPauseService : IScenarioPauseService
     {
         private static readonly FieldInfo PauseCountField = typeof(PauseManager).GetField("m_pauseCount", BindingFlags.Instance | BindingFlags.NonPublic);

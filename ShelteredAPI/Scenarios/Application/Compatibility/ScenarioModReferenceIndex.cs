@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+namespace ShelteredAPI.Scenarios.Application.Compatibility{
     internal sealed class ScenarioModReferenceIndex
     {
         private readonly List<ScenarioModDependencyDefinition> _dependencies = new List<ScenarioModDependencyDefinition>();

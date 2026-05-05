@@ -1,8 +1,8 @@
 using ModAPI.Scenarios;
 using ShelteredAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Registration;
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioRegistrationModule
     {
         public static void AddScenarioRegistrationModule(this ServiceCollection services)

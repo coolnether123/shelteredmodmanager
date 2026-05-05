@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Timeline;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Timeline;
+namespace ShelteredAPI.Scenarios.Application.Scheduling{
     internal sealed class ScenarioScheduleTimelineBuilder
     {
         private readonly ScenarioTimelineBuilder _timelineBuilder;

@@ -2,8 +2,12 @@ using System;
 using System.Reflection;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Effects;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScheduledWeatherRuntimeService : IScenarioEffectHandler
     {
         private static readonly MethodInfo ActivateWeatherMethod = typeof(WeatherManager).GetMethod("ActivateWeather", BindingFlags.NonPublic | BindingFlags.Instance);

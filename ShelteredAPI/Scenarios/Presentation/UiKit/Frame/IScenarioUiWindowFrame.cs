@@ -1,7 +1,6 @@
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios.UiKit.Frame
-{
+using ShelteredAPI.UI.FieldManual.Tooltips;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
     /// <summary>
     /// Builds the visual chrome for a scenario authoring window: background
     /// surface, header strip, optional footer strip. Implementations are

@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using ShelteredAPI.Content;
-
-namespace ShelteredAPI.UI
-{
+using ShelteredAPI.Hooks;
+namespace ShelteredAPI.UI.Runtime{
     /// <summary>
     /// Stable handle returned by runtime UI entry points. Mod authors should use
     /// this instead of holding Unity or NGUI objects.

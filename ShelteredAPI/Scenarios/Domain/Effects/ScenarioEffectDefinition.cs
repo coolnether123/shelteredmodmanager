@@ -2,8 +2,9 @@ using System.Collections.Generic;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Domain.Effects{
     /// <summary>
     /// One scenario effect and the fields needed by its selected effect kind.
     /// Effects are executed by scenario runtime handlers after schedule and gate checks pass.

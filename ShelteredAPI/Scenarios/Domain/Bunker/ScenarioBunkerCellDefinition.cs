@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+namespace ShelteredAPI.Scenarios.Domain.Bunker{
     /// <summary>
     /// Build or unlock phase for authored bunker cells, foundations, and expansions.
     /// </summary>

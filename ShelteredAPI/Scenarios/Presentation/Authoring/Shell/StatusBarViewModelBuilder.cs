@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Selection;
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class StatusBarViewModelBuilder
     {
         private readonly ScenarioSelectionScopeService _selectionScopeService;

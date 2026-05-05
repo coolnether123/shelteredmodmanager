@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioCharacterEditorAuthoringService
     {
         private static readonly string[] NamePresets = new[]

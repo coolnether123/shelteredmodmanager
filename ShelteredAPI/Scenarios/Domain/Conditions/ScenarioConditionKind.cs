@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Conditions{
     /// <summary>
     /// Built-in condition types understood by the scenario gate evaluator.
     /// Custom mods can add handlers for custom condition behavior.

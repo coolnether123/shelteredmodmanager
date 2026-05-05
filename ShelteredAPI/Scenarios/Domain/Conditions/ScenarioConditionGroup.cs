@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Conditions{
     /// <summary>
     /// Nested condition group used by scenario gates and scheduled actions.
     /// Groups can be combined with all/any semantics.

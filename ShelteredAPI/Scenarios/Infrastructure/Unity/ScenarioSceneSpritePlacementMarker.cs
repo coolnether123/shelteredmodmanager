@@ -1,7 +1,7 @@
 using UnityEngine;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Objects;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioSceneSpritePlacementMarker : MonoBehaviour
     {
         public string PlacementId;

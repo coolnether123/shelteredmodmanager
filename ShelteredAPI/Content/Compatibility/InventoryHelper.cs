@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using ShelteredAPI.Content;
 using UnityEngine;
-
-namespace ShelteredAPI.Content
-{
+namespace ShelteredAPI.Content.Compatibility{
     /// <summary>
     /// Safe item operations for mod developers.
     /// Provides high-level methods for creating, adding, and removing items without 

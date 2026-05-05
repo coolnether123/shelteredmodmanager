@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+namespace ShelteredAPI.Scenarios.Definitions{
     /// <summary>
     /// Special placement definitions that are interpreted by scenario authoring/runtime code instead of prefab lookup.
     /// </summary>

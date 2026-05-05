@@ -2,8 +2,15 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Scheduling;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Bunker;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Timeline;
+namespace ShelteredAPI.Scenarios.Application.Timeline{
     internal sealed class ScenarioTimelineBuilder
     {
         public List<ScenarioTimelineDay> BuildDays(ScenarioDefinition definition, ScenarioRuntimeState runtimeState)

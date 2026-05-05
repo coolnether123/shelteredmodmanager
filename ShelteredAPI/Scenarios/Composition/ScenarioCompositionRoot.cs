@@ -1,8 +1,6 @@
 using System;
 using ShelteredAPI.Core;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Composition{
     internal static class ScenarioCompositionRoot
     {
         private static readonly object Sync = new object();

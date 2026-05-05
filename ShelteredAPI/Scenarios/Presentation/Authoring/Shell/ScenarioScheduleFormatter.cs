@@ -1,5 +1,6 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+
+namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal static class ScenarioScheduleFormatter
     {
         public static string Format(ScenarioScheduleTime time)

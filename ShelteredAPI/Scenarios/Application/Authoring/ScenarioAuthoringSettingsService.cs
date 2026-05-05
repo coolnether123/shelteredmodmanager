@@ -6,8 +6,9 @@ using System.Security;
 using System.Text;
 using System.Xml;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringSettingsService
     {
         private readonly List<ScenarioAuthoringSettingDefinition> _definitions = new List<ScenarioAuthoringSettingDefinition>();

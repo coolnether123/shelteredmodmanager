@@ -6,8 +6,15 @@ using ModAPI.Core;
 
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Persistence;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Assets;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Domain.Validation;
+using ShelteredAPI.Scenarios.Shared;
+namespace ShelteredAPI.Scenarios.Diagnostics{
     internal interface IScenarioDependencyResolver
     {
         bool IsLoaded(string modId);

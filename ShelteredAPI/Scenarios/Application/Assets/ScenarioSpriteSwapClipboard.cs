@@ -1,7 +1,8 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Application.Assets{
     // Thread-confined clipboard (editor runs on main thread) holding the last rule the
     // user explicitly copied. Kept separate from history so paste survives undo/redo.
     internal static class ScenarioSpriteSwapClipboard

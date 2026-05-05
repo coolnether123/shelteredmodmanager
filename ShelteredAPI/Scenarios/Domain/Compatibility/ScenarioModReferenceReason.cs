@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Domain.Compatibility{
     /// <summary>
     /// Reason a scenario references or depends on a mod.
     /// Used by compatibility reports to show actionable dependency explanations.

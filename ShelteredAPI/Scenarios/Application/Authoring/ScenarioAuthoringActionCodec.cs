@@ -1,8 +1,6 @@
 using System;
 using System.Text;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal static class ScenarioAuthoringActionCodec
     {
         public static string EncodeToken(string token)

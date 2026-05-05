@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Registration{
     internal interface IScenarioRegistrationStore
     {
         bool TryGet(string id, out ScenarioRecord record);

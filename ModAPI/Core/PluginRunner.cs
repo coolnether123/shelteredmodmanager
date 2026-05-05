@@ -184,6 +184,9 @@ namespace ModAPI.Core
 
                 if (UnityLogNormalizationRegistry.TryNormalize(msg, stackTrace, type, out normalization))
                 {
+                    if (normalization.Suppress)
+                        return;
+
                     if (string.IsNullOrEmpty(normalization.OnceKey))
                     {
                         MMLog.WriteWithSource(

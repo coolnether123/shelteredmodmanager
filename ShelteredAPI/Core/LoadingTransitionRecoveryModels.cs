@@ -6,6 +6,7 @@ namespace ShelteredAPI.Core
     {
         public const string MenuSceneName = "MenuScene";
         public const string LoadingSceneName = "LoadingScene";
+        public const float MenuTransitionTimeoutSeconds = 6f;
         public const float PreLoadingSceneTimeoutSeconds = 12f;
         public const float LoadingSceneTimeoutSeconds = 25f;
         public const int MaxRecentEvents = 8;
@@ -32,6 +33,7 @@ namespace ShelteredAPI.Core
     internal sealed class LoadingTransitionState
     {
         public string TargetScene;
+        public string TargetLabel;
         public string SourceScene;
         public string LastScene;
         public string RequestReason;
@@ -53,8 +55,26 @@ namespace ShelteredAPI.Core
             };
         }
 
+        public static LoadingTransitionState StartMenuTransition(string targetLabel, string sourceScene, string requestReason, float now)
+        {
+            return new LoadingTransitionState
+            {
+                TargetScene = null,
+                TargetLabel = string.IsNullOrEmpty(targetLabel) ? "menu transition" : targetLabel,
+                SourceScene = sourceScene,
+                LastScene = sourceScene,
+                RequestReason = requestReason,
+                Phase = LoadingTransitionPhase.WaitingForLoadingScene,
+                StartedAt = now,
+                LoadingSceneEnteredAt = 0f
+            };
+        }
+
         public bool IsTargetScene(string sceneName)
         {
+            if (string.IsNullOrEmpty(TargetScene))
+                return false;
+
             return string.Equals(sceneName, TargetScene, StringComparison.Ordinal);
         }
 
@@ -67,6 +87,14 @@ namespace ShelteredAPI.Core
         public bool TryGetTimeoutReason(float now, out string reason)
         {
             reason = null;
+
+            if (string.IsNullOrEmpty(TargetScene) &&
+                Phase == LoadingTransitionPhase.WaitingForLoadingScene &&
+                now - StartedAt >= LoadingTransitionRecoveryConstants.MenuTransitionTimeoutSeconds)
+            {
+                reason = "Sheltered stayed in a menu transition after " + TargetLabel + " and no loading route started.";
+                return true;
+            }
 
             if (Phase == LoadingTransitionPhase.WaitingForLoadingScene &&
                 now - StartedAt >= LoadingTransitionRecoveryConstants.PreLoadingSceneTimeoutSeconds)

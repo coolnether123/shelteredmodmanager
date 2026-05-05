@@ -1,5 +1,6 @@
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Saves;
+
+namespace ShelteredAPI.Scenarios.Application.Selection{
     internal enum ScenarioTargetScope
     {
         Unknown = 0,

@@ -1,7 +1,10 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Scheduling;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class TriggerRuntimeAdapter
     {
         private readonly ScenarioScheduleRuntimeCoordinator _scheduleCoordinator;

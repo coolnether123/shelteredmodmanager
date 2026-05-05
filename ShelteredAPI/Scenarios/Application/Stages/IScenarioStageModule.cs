@@ -1,7 +1,7 @@
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Domain.Stages;
+namespace ShelteredAPI.Scenarios.Application.Stages{
     internal interface IScenarioStageModule
     {
         ScenarioStageKind StageKind { get; }

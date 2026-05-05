@@ -3,9 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.UI.Internal.Settings;
+namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal static class ScenarioFamilyMemberFactory
     {
         private static readonly FieldInfo NpcVisitPendingSpawnsField = typeof(NpcVisitManager).GetField("m_pendingSpawns", BindingFlags.NonPublic | BindingFlags.Instance);

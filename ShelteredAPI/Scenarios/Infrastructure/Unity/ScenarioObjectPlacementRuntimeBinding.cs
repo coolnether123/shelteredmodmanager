@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
+namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioObjectPlacementRuntimeBinding : MonoBehaviour
     {
         private static readonly List<ScenarioObjectPlacementRuntimeBinding> Bindings = new List<ScenarioObjectPlacementRuntimeBinding>();

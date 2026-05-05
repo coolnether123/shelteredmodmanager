@@ -1,9 +1,8 @@
 using UnityEngine;
-using ShelteredAPI.Scenarios.UiKit.Layout;
-using ShelteredAPI.Scenarios.UiKit.Theme;
-
-namespace ShelteredAPI.Scenarios.UiKit.Widgets
-{
+using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Layout;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
     /// <summary>
     /// Reusable IMGUI draw helpers for scenario authoring windows. Stateless
     /// static methods that take a <see cref="ScenarioUiStyleSheet"/> and a rect.

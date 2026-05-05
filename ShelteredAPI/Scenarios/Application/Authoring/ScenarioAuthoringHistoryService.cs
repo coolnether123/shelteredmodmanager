@@ -3,13 +3,15 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 
-namespace ShelteredAPI.Scenarios
-{
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     // Snapshot-based undo/redo for asset-reference edits. The authoring service
     // asks for a snapshot before any mutation; the history service records it and
     // exposes Undo/Redo that restore the SpriteSwaps list on the working definition.
     //
-    // Scope is intentionally limited to sprite swaps — extending to other dirty
+    // Scope is intentionally limited to sprite swaps Ã¢â‚¬â€ extending to other dirty
     // sections is a question of adding more SectionSnapshot kinds here.
     internal sealed class ScenarioAuthoringHistoryService
     {

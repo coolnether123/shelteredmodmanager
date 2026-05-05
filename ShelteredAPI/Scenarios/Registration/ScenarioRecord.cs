@@ -1,7 +1,5 @@
 using ModAPI.Scenarios;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Registration{
     internal sealed class ScenarioRecord
     {
         public CustomScenarioRegistration Registration;

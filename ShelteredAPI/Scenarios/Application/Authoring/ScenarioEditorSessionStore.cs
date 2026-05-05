@@ -1,7 +1,5 @@
 using System;
-
-namespace ShelteredAPI.Scenarios
-{
+namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal interface IScenarioEditorSessionStore
     {
         ScenarioEditorSession Current { get; }
