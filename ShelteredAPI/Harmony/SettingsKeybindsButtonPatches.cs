@@ -12,11 +12,12 @@ using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Harmony
 {
     /// <summary>
-    /// Takes over vanilla PC controls entry points and routes to ModAPI keybind UI.
+    /// Takes over the vanilla PC keyboard controls entry point and routes it to ModAPI keybind UI.
+    /// Controller controls stay on Sheltered's vanilla controller panel.
     /// </summary>
     [PatchPolicy(PatchDomain.Input, "ShelteredSettingsKeybindsTakeover",
-        TargetBehavior = "Vanilla controls-entry takeover into ModAPI keybind UI",
-        FailureMode = "Sheltered controls open the vanilla path instead of the managed ModAPI keybind UI.",
+        TargetBehavior = "Vanilla keyboard controls-entry takeover into ModAPI keybind UI while controller controls remain vanilla",
+        FailureMode = "Sheltered keyboard controls open the vanilla path, or controller controls incorrectly open keyboard bindings.",
         RollbackStrategy = "Disable the Input patch domain or remove the Sheltered settings takeover host.",
         StartupTiming = PatchStartupTiming.MenuCritical)]
     internal static class SettingsKeybindsButtonPatches
@@ -36,14 +37,14 @@ namespace ShelteredAPI.Harmony
         [HarmonyPrefix]
         private static bool ControlsPadPrefix(SettingsPCPanel __instance)
         {
-            return TryOpenKeybinds("OnControlsButtonPressed_PAD", __instance);
+            return AllowVanillaControllerKeybinds("OnControlsButtonPressed_PAD");
         }
 
         [HarmonyPatch(typeof(SettingsConsolePanel), "OnControlsButtonPressed")]
         [HarmonyPrefix]
         private static bool ConsoleControlsPrefix(SettingsConsolePanel __instance)
         {
-            return TryOpenKeybinds("SettingsConsolePanel.OnControlsButtonPressed", __instance);
+            return AllowVanillaControllerKeybinds("SettingsConsolePanel.OnControlsButtonPressed");
         }
 
         [HarmonyPatch(typeof(UIPanelManager), "PushPanel", new[] { typeof(BasePanel) })]
@@ -59,13 +60,16 @@ namespace ShelteredAPI.Harmony
                 MMLog.WriteDebug("[SettingsKeybindsButtonPatches] UIPanelManager.PushPanel saw panel type: " + typeName);
             }
 
-            if (!(panel is ControllerPanel)) return true;
+            if (panel is ControllerPanel)
+                AllowVanillaControllerKeybinds("UIPanelManager.PushPanel(ControllerPanel)");
 
-            BasePanel sourcePanel = null;
-            if (UIPanelManager.instance != null)
-                sourcePanel = UIPanelManager.instance.GetTopPanel();
+            return true;
+        }
 
-            return TryOpenKeybinds("UIPanelManager.PushPanel(ControllerPanel)", sourcePanel);
+        private static bool AllowVanillaControllerKeybinds(string source)
+        {
+            MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Allowing vanilla controller keybinds from " + source + ".");
+            return true;
         }
 
         private static bool TryOpenKeybinds(string source, BasePanel sourcePanel)
