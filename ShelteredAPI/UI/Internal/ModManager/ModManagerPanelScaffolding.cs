@@ -39,6 +39,13 @@ namespace ShelteredAPI.UI.Internal.ModManager{
 
         internal static bool TryCloneScenarioBookVisuals(GameObject parent, int visualDepth)
         {
+            int maxVisualDepth;
+            return TryCloneScenarioBookVisuals(parent, visualDepth, out maxVisualDepth);
+        }
+
+        internal static bool TryCloneScenarioBookVisuals(GameObject parent, int visualDepth, out int maxVisualDepth)
+        {
+            maxVisualDepth = visualDepth;
             if (parent == null)
                 return false;
 
@@ -58,20 +65,20 @@ namespace ShelteredAPI.UI.Internal.ModManager{
                             + GetObjectPath(parent) + ".");
                     }
 
-                    return CloneCachedScenarioBookVisuals(parent, visualDepth);
+                    return CloneCachedScenarioBookVisuals(parent, visualDepth, out maxVisualDepth);
                 }
 
                 MMLog.WriteInfo("[ScenarioBookVisuals] Live scenario book source found. source="
                     + GetObjectPath(visualSource) + " parent=" + GetObjectPath(parent) + ".");
                 CacheScenarioBookVisualTemplate(visualSource, "live clone request");
-                return CloneScenarioBookVisual(parent, visualSource, visualDepth);
+                return CloneScenarioBookVisual(parent, visualSource, visualDepth, out maxVisualDepth);
             }
             catch (System.Exception ex)
             {
                 MMLog.WriteError("[ScenarioBookVisuals] Book clone error: " + ex.Message);
             }
 
-            return CloneCachedScenarioBookVisuals(parent, visualDepth);
+            return CloneCachedScenarioBookVisuals(parent, visualDepth, out maxVisualDepth);
         }
 
         private static GameObject FindScenarioBookVisualSource()
@@ -101,8 +108,9 @@ namespace ShelteredAPI.UI.Internal.ModManager{
             return null;
         }
 
-        private static bool CloneScenarioBookVisual(GameObject parent, GameObject source, int visualDepth)
+        private static bool CloneScenarioBookVisual(GameObject parent, GameObject source, int visualDepth, out int maxVisualDepth)
         {
+            maxVisualDepth = visualDepth;
             if (parent == null || source == null)
                 return false;
 
@@ -114,19 +122,21 @@ namespace ShelteredAPI.UI.Internal.ModManager{
             clone.transform.localRotation = source.transform.localRotation;
 
             StripClonedScenarioBehaviors(clone);
-            ApplyClonedScenarioBookPresentation(clone, parent.layer, visualDepth);
+            maxVisualDepth = ApplyClonedScenarioBookPresentation(clone, parent.layer, visualDepth);
             clone.SetActive(true);
             MMLog.WriteInfo("[ScenarioBookVisuals] Activated live vanilla scenario book visuals. parent="
                 + GetObjectPath(parent)
                 + " source=" + GetObjectPath(source)
                 + " clone=" + GetObjectPath(clone)
                 + " visualDepth=" + visualDepth
+                + " maxVisualDepth=" + maxVisualDepth
                 + " widgets=" + CountWidgets(clone) + ".");
             return true;
         }
 
-        private static bool CloneCachedScenarioBookVisuals(GameObject parent, int visualDepth)
+        private static bool CloneCachedScenarioBookVisuals(GameObject parent, int visualDepth, out int maxVisualDepth)
         {
+            maxVisualDepth = visualDepth;
             if (parent == null || _scenarioBookVisualTemplate == null)
             {
                 MMLog.WriteWarning("[ScenarioBookVisuals] Cached vanilla book clone unavailable. parent="
@@ -144,13 +154,14 @@ namespace ShelteredAPI.UI.Internal.ModManager{
                 clone.transform.localScale = _scenarioBookVisualTemplate.transform.localScale;
                 clone.transform.localRotation = _scenarioBookVisualTemplate.transform.localRotation;
 
-                ApplyClonedScenarioBookPresentation(clone, parent.layer, visualDepth);
+                maxVisualDepth = ApplyClonedScenarioBookPresentation(clone, parent.layer, visualDepth);
                 clone.SetActive(true);
                 MMLog.WriteInfo("[ScenarioBookVisuals] Activated cached vanilla scenario book visuals. parent="
                     + GetObjectPath(parent)
                     + " template=" + GetObjectPath(_scenarioBookVisualTemplate)
                     + " clone=" + GetObjectPath(clone)
                     + " visualDepth=" + visualDepth
+                    + " maxVisualDepth=" + maxVisualDepth
                     + " widgets=" + CountWidgets(clone) + ".");
                 return true;
             }
@@ -215,10 +226,11 @@ namespace ShelteredAPI.UI.Internal.ModManager{
             return root;
         }
 
-        private static void ApplyClonedScenarioBookPresentation(GameObject clone, int layer, int visualDepth)
+        private static int ApplyClonedScenarioBookPresentation(GameObject clone, int layer, int visualDepth)
         {
+            int maxVisualDepth = visualDepth;
             if (clone == null)
-                return;
+                return maxVisualDepth;
 
             clone.layer = layer;
             NGUITools.SetLayer(clone, layer);
@@ -249,7 +261,11 @@ namespace ShelteredAPI.UI.Internal.ModManager{
 
                 widget.gameObject.layer = layer;
                 widget.depth = visualDepth + (widget.depth - minDepth);
+                if (widget.depth > maxVisualDepth)
+                    maxVisualDepth = widget.depth;
             }
+
+            return maxVisualDepth;
         }
 
         private static int FindMinimumWidgetDepth(UIWidget[] widgets)

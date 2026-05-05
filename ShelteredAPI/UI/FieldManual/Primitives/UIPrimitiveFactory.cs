@@ -25,6 +25,12 @@ namespace ShelteredAPI.UI.FieldManual.Primitives
 
         public int NextDepth() { return ++_depthCursor; }
 
+        public void EnsureNextDepthAbove(int depth)
+        {
+            if (_depthCursor < depth)
+                _depthCursor = depth;
+        }
+
         public GameObject CreateChild(GameObject parent, string name, Vector3 localPosition)
         {
             GameObject go = new GameObject(name);

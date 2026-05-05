@@ -40,7 +40,11 @@ namespace ShelteredAPI.UI.FieldManual.Frame
                 (int)ScreenSpan, (int)ScreenSpan, Color.white, _ui.NextDepth());
             _ui.AddClickCollider(vignette.gameObject, (int)ScreenSpan, (int)ScreenSpan, null);
 
-            if (!ModManagerPanelScaffolding.TryCloneScenarioBookVisuals(parent, _ui.NextDepth()))
+            int maxBookVisualDepth;
+            int bookVisualDepth = _ui.NextDepth();
+            if (ModManagerPanelScaffolding.TryCloneScenarioBookVisuals(parent, bookVisualDepth, out maxBookVisualDepth))
+                _ui.EnsureNextDepthAbove(maxBookVisualDepth);
+            else
                 BuildFallbackBook(parent);
 
             GameObject header = _ui.CreateChild(parent, "BookHeader", Vector3.zero);
