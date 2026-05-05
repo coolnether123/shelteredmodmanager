@@ -328,16 +328,29 @@ namespace ShelteredAPI.Saves
 
         public bool DeleteSave(string saveId)
         {
-            MMLog.Write($"DeleteSave called with ID: '{saveId}'");
-            
+            return DeleteSave(saveId, true);
+        }
+
+        internal bool TryDeleteSave(string saveId)
+        {
+            return DeleteSave(saveId, false);
+        }
+
+        private bool DeleteSave(string saveId, bool logMissingAsError)
+        {
+            MMLog.WriteDebug($"DeleteSave called with ID: '{saveId}'");
+
             var entry = GetSave(saveId);
             if (entry == null)
             {
-                MMLog.WriteError($"DeleteSave: Entry not found for ID '{saveId}'");
+                if (logMissingAsError)
+                    MMLog.WriteError($"DeleteSave: Entry not found for ID '{saveId}'");
+                else
+                    MMLog.WriteDebug($"DeleteSave: Entry not found for ID '{saveId}'");
                 return false;
             }
 
-            MMLog.Write($"DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
+            MMLog.WriteDebug($"DeleteSave: Found entry - Slot={entry.absoluteSlot}, Name='{entry.name}'");
 
             var deleted = DeleteSlotDirectory(entry.absoluteSlot, "DeleteSave", false);
             if (!deleted)
@@ -349,14 +362,14 @@ namespace ShelteredAPI.Saves
             try { File.Delete(DirectoryProvider.PreviewPath(_scenarioId, saveId)); } catch { }
 
             InvalidateCache();
-            MMLog.Write($"DeleteSave: Completed for slot {entry.absoluteSlot}");
+            MMLog.WriteDebug($"DeleteSave: Completed for slot {entry.absoluteSlot}");
             return true;
         }
 
         private bool DeleteSlotDirectory(int absoluteSlot, string operation, bool failIfMissing)
         {
             var slotRoot = DirectoryProvider.SlotRoot(_scenarioId, absoluteSlot, false);
-            MMLog.Write(string.Format("{0}: Slot directory = '{1}'", operation, slotRoot));
+            MMLog.WriteDebug(string.Format("{0}: Slot directory = '{1}'", operation, slotRoot));
 
             try
             {
@@ -374,9 +387,9 @@ namespace ShelteredAPI.Saves
                     deletedPath = Path.Combine(deletedRoot, deletedName + "_" + Path.GetRandomFileName().Replace(".", string.Empty));
                 }
 
-                MMLog.Write(string.Format("{0}: Moving directory '{1}' to '{2}'", operation, slotRoot, deletedPath));
+                MMLog.WriteDebug(string.Format("{0}: Moving directory '{1}' to '{2}'", operation, slotRoot, deletedPath));
                 Directory.Move(slotRoot, deletedPath);
-                MMLog.Write(string.Format("{0}: Directory quarantined successfully", operation));
+                MMLog.WriteDebug(string.Format("{0}: Directory quarantined successfully", operation));
                 return true;
             }
             catch (Exception ex)
@@ -1100,23 +1113,9 @@ namespace ShelteredAPI.Saves
         {
             try
             {
-                // Get the vanilla save path (same as PlatformSave_PC.GetSavePath)
-                string savesPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "saves");
-                string fileName;
-                
-                switch (slotNumber)
-                {
-                    case 1: fileName = "savedata_01.dat"; break;
-                    case 2: fileName = "savedata_02.dat"; break;
-                    case 3: fileName = "savedata_03.dat"; break;
-                    case 4: fileName = "savedata_surrounded.dat"; break;
-                    case 5: fileName = "savedata_stasis.dat"; break;
-                    default: return null;
-                }
-                
-                string fullPath = Path.Combine(savesPath, fileName);
-                
-                if (!File.Exists(fullPath))
+                string fullPath = GetVanillaSavePath(slotNumber);
+
+                if (string.IsNullOrEmpty(fullPath) || !File.Exists(fullPath))
                 {
                     return null;  // Return null for empty slots
                 }
@@ -1133,6 +1132,64 @@ namespace ShelteredAPI.Saves
             {
                 MMLog.WriteError($"Failed to read vanilla save info for slot {slotNumber}: {ex.Message}");
                 return null;  // Return null on error
+            }
+        }
+
+        internal static string GetVanillaSavePath(int slotNumber)
+        {
+            try
+            {
+                string savesPath = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "saves");
+                string fileName;
+
+                switch (slotNumber)
+                {
+                    case 1: fileName = "savedata_01.dat"; break;
+                    case 2: fileName = "savedata_02.dat"; break;
+                    case 3: fileName = "savedata_03.dat"; break;
+                    case 4: fileName = "savedata_surrounded.dat"; break;
+                    case 5: fileName = "savedata_stasis.dat"; break;
+                    default: return null;
+                }
+
+                return Path.Combine(savesPath, fileName);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        internal static SaveEntry ReadVanillaSaveEntry(int slotNumber, string scenarioId, string saveId, int displaySlot)
+        {
+            string path = GetVanillaSavePath(slotNumber);
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+                return null;
+
+            try
+            {
+                byte[] encryptedData = File.ReadAllBytes(path);
+                byte[] decryptedData = DecryptVanillaSave(encryptedData);
+                SaveInfo info = ReadSaveInfoFromXml(decryptedData);
+
+                return new SaveEntry
+                {
+                    id = saveId,
+                    absoluteSlot = displaySlot,
+                    name = info != null && !string.IsNullOrEmpty(info.familyName) ? info.familyName : "Vanilla Slot",
+                    createdAt = File.GetCreationTimeUtc(path).ToString("o"),
+                    updatedAt = File.GetLastWriteTimeUtc(path).ToString("o"),
+                    fileSize = encryptedData.Length,
+                    crc32 = CRC32.Compute(decryptedData),
+                    scenarioId = scenarioId,
+                    scenarioVersion = ScenarioRegistry.GetScenario(scenarioId)?.version ?? "1.0",
+                    saveInfo = info ?? new SaveInfo()
+                };
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError($"Failed to read vanilla save entry for slot {slotNumber}: {ex.Message}");
+                return null;
             }
         }
 

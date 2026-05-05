@@ -93,7 +93,7 @@ namespace ShelteredAPI.UI.FieldManual.Animations
             fallback.Direction = direction >= 0 ? 1 : -1;
             fallback.StartScaleX = 1f;
             fallback.MinimumScaleX = 0.12f;
-            MMLog.WriteInfo("[FieldManual] Using fallback page flip sweep " + sheetWidth + "x" + sheetHeight
+            MMLog.WriteDebug("[FieldManual] Using fallback page flip sweep " + sheetWidth + "x" + sheetHeight
                 + " in bounds " + bounds.Width + "x" + bounds.Height + " direction=" + DirectionName(direction) + ".");
             return sweep.gameObject;
         }

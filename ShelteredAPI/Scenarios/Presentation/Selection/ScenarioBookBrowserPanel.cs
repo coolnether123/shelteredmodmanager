@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using ModAPI.UI;
 using ModAPI.Core;
 using ShelteredAPI.UI.FieldManual.Animations;
 using ShelteredAPI.UI.FieldManual.Panels;
@@ -29,6 +31,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private int _pageIndex;
         private string _lastRenderScopeKey;
         private bool _isClosing;
+        private bool _deletePromptActive;
+        private List<Collider> _deletePromptDisabledColliders;
 
         private IScenarioSelectionCatalogService Catalog
         {
@@ -85,6 +89,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void Update()
         {
+            if (_deletePromptActive)
+                return;
+
             if (_renderer != null)
                 _renderer.HandleSearchInput(HandleSearchFilterChanged);
 
@@ -223,6 +230,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void HandleRowSelected(ScenarioBookRowModel row)
         {
+            if (_deletePromptActive)
+                return;
+
             if (row == null || row.IsLocked)
             {
                 SetStatus("Scenario is locked by missing or mismatched dependencies.");
@@ -255,25 +265,114 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void HandleDeleteSelected(ScenarioBookRowModel row)
         {
+            if (_deletePromptActive)
+                return;
+
             if (row == null || row.Scenario == null || row.Save == null)
                 return;
 
-            MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "Text.UI.DeleteSave", new MessageBoxResponse(delegate(int response)
+            _deletePromptActive = true;
+            DisableBrowserCollidersForDeletePrompt();
+            UIFlowGuard.BlockSlotClicksForFrames(2);
+            try
             {
-                if (response != 1)
-                    return;
-
-                string status;
-                if (!_actions.DeleteSave(row.Scenario, row.Save, out status))
+                MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "Text.UI.DeleteSave", new MessageBoxResponse(delegate(int response)
                 {
-                    SetStatus(status);
-                    return;
-                }
+                    StartCoroutine(ResolveDeletePromptAfterClickRelease(row, response));
+                }));
+            }
+            catch
+            {
+                ReleaseDeletePromptGuard();
+                throw;
+            }
+        }
 
-                _dataSource.Refresh();
-                SetStatus(status);
-                RenderCurrentView(true);
-            }));
+        private IEnumerator ResolveDeletePromptAfterClickRelease(ScenarioBookRowModel row, int response)
+        {
+            UIFlowGuard.BlockSlotClicksToggle(true);
+            UIFlowGuard.BlockSlotClicksForFrames(2);
+
+            yield return null;
+            while (UnityEngine.Input.GetMouseButton(0)
+                || UnityEngine.Input.GetMouseButton(1)
+                || UnityEngine.Input.GetMouseButton(2))
+            {
+                yield return null;
+            }
+
+            try
+            {
+                if (response == 1)
+                {
+                    string status = null;
+                    bool deleted = false;
+                    try
+                    {
+                        deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
+                    }
+                    catch (Exception ex)
+                    {
+                        status = "Delete failed: " + ex.Message;
+                        MMLog.WriteWarning("[ScenarioBookBrowser] Delete action threw: " + ex.Message);
+                    }
+
+                    SetStatus(status);
+                    if (deleted)
+                    {
+                        _dataSource.Refresh();
+                        RenderCurrentView(true);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Delete failed: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioBookBrowser] Delete prompt resolution failed: " + ex.Message);
+            }
+
+            yield return null;
+            UIFlowGuard.BlockSlotClicksForFrames(1);
+            ReleaseDeletePromptGuard();
+        }
+
+        private void ReleaseDeletePromptGuard()
+        {
+            RestoreBrowserCollidersAfterDeletePrompt();
+            UIFlowGuard.BlockSlotClicksToggle(false);
+            _deletePromptActive = false;
+        }
+
+        private void DisableBrowserCollidersForDeletePrompt()
+        {
+            RestoreBrowserCollidersAfterDeletePrompt();
+            _deletePromptDisabledColliders = new List<Collider>();
+
+            Collider[] colliders = GetComponentsInChildren<Collider>(true);
+            for (int i = 0; colliders != null && i < colliders.Length; i++)
+            {
+                Collider collider = colliders[i];
+                if (collider == null || !collider.enabled)
+                    continue;
+
+                collider.enabled = false;
+                _deletePromptDisabledColliders.Add(collider);
+            }
+        }
+
+        private void RestoreBrowserCollidersAfterDeletePrompt()
+        {
+            if (_deletePromptDisabledColliders == null)
+                return;
+
+            for (int i = 0; i < _deletePromptDisabledColliders.Count; i++)
+            {
+                Collider collider = _deletePromptDisabledColliders[i];
+                if (collider != null)
+                    collider.enabled = true;
+            }
+
+            _deletePromptDisabledColliders = null;
         }
 
         private void HandleSearchFilterChanged()
@@ -413,6 +512,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void OnDestroy()
         {
+            if (_deletePromptActive)
+                ReleaseDeletePromptGuard();
+
             RestoreUnderlyingPanel();
             if (_renderer != null)
             {

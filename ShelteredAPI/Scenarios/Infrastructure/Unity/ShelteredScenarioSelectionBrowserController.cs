@@ -210,7 +210,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 EnsurePagingUi(panel, state, sourceButton);
                 state.ButtonsCreated = true;
 
-                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Added custom scenario hub and paging UI. panel="
+                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Added custom scenario hub and paging UI. panel="
                     + panel.GetInstanceID() + " scenarios=" + scenarios.Length + " layout=" + DescribeLayoutMetrics(state.LayoutMetrics) + ".");
             }
             catch (Exception ex)
@@ -1092,7 +1092,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             state.PagingUi = pagingUi;
             LogUiElementLayout(panel, "PageLabel", pageObject, "page-indicator");
-            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Paging UI created. panel=" + panel.GetInstanceID()
+            MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Paging UI created. panel=" + panel.GetInstanceID()
                 + " layout=" + DescribeLayoutMetrics(metrics) + ".");
         }
 
@@ -1258,7 +1258,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 rootListener.onDrop = null;
                 rootListener.onKey = null;
             }
-            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Cloned button via UIUtil. source=" + sourceButton.name
+            MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Cloned button via UIUtil. source=" + sourceButton.name
                 + " clone=" + objectName + ".");
             return button;
         }
@@ -1618,7 +1618,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return;
 
             Bounds bounds = NGUIMath.CalculateRelativeWidgetBounds(gameObject.transform, true);
-            MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Layout. panel="
+            MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Layout. panel="
                 + (panel != null ? panel.GetInstanceID().ToString() : "<unknown>")
                 + " role=" + role
                 + " theme=" + theme

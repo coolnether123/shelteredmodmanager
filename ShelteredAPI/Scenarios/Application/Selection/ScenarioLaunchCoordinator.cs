@@ -345,6 +345,9 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             SaveManager.SaveType virtualSaveType = GetVirtualSaveType(entry);
+            if (ScenarioSaveLibrary.IsVanillaScenarioSaveEntry(save))
+                return LoadVanillaScenarioSave(adapter, save, virtualSaveType, out error);
+
             try
             {
                 _saveLibrary.QueueLoadTarget(entry.StorageScenarioId, save, virtualSaveType);
@@ -385,6 +388,50 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             MMLog.WriteInfo("[ScenarioLaunchCoordinator] Load queued. scenarioId="
                 + entry.StorageScenarioId + " saveId=" + save.id + " slot=" + save.absoluteSlot
                 + " virtualSaveType=" + virtualSaveType + ".");
+            return true;
+        }
+
+        private bool LoadVanillaScenarioSave(
+            ScenarioBrowserPanelAdapter adapter,
+            SaveEntry save,
+            SaveManager.SaveType virtualSaveType,
+            out string error)
+        {
+            error = null;
+
+            int slotNumber;
+            if (!ScenarioSaveLibrary.TryGetVanillaScenarioSlotNumber(save, out slotNumber))
+            {
+                error = "Could not resolve vanilla scenario slot.";
+                return false;
+            }
+
+            SaveManager saveManager = SaveManager.instance;
+            if (saveManager == null)
+            {
+                error = "SaveManager is unavailable.";
+                return false;
+            }
+
+            _saveLibrary.ClearQueuedLoad(virtualSaveType);
+            _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+
+            try
+            {
+                if (!saveManager.SetSlotToLoad(slotNumber))
+                {
+                    error = "SaveManager rejected the vanilla scenario load request.";
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                error = "Vanilla scenario load failed: " + ex.Message;
+                return false;
+            }
+
+            MMLog.WriteInfo("[ScenarioLaunchCoordinator] Vanilla scenario save load started. saveId="
+                + save.id + " slot=" + slotNumber + " virtualSaveType=" + virtualSaveType + ".");
             return true;
         }
 

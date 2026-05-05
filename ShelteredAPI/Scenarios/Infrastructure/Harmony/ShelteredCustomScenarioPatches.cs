@@ -47,7 +47,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             if (_lastLoggedBlockedUntilFrame != blockedUntilFrame)
             {
                 _lastLoggedBlockedUntilFrame = blockedUntilFrame;
-                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot clicks blocked until frame " + blockedUntilFrame
+                MMLog.WriteDebug("[ShelteredCustomScenarioSelection] Slot clicks blocked until frame " + blockedUntilFrame
                     + " (current=" + Time.frameCount + ").");
             }
         }

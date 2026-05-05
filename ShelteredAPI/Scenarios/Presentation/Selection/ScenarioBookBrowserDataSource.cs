@@ -172,22 +172,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (entry == null)
                 return rows;
 
-            rows.Add(new ScenarioBookRowModel
-            {
-                Kind = entry.Source == ScenarioCatalogSource.Draft
-                    ? ScenarioBookRowKind.OpenDraft
-                    : ScenarioBookRowKind.StartScenario,
-                Scenario = entry,
-                Title = entry.Source == ScenarioCatalogSource.Draft ? "Open Draft" : "Start New",
-                Detail = entry.Source == ScenarioCatalogSource.Draft
-                    ? "Load the draft's authoring save and reopen the scenario editor."
-                    : "Create a new scenario-owned save for this scenario.",
-                Badge = entry.Source == ScenarioCatalogSource.Draft ? "Authoring" : "New Game",
-                IsLocked = !entry.CanStart
-            });
-
             if (entry.Source == ScenarioCatalogSource.Draft)
+            {
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.OpenDraft,
+                    Scenario = entry,
+                    Title = "Open Draft",
+                    Detail = "Load the draft's authoring save and reopen the scenario editor.",
+                    Badge = "Authoring",
+                    IsLocked = !entry.CanStart
+                });
                 return rows;
+            }
 
             SaveEntry[] saves = new SaveEntry[0];
             try { saves = _saveLibrary.ListSaves(entry.StorageScenarioId); }
@@ -210,11 +207,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Save = save,
                     Title = BuildSaveSlotTitle(save),
                     Detail = BuildSaveDetail(save),
-                    Badge = "Load",
+                    Badge = ScenarioSaveLibrary.IsVanillaScenarioSaveEntry(save) ? "Vanilla" : "Load",
                     IsLocked = !entry.CanStart,
-                    CanDelete = true
+                    CanDelete = !ScenarioSaveLibrary.IsVanillaScenarioSaveEntry(save)
                 });
             }
+
+            rows.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.StartScenario,
+                Scenario = entry,
+                Title = "Start New",
+                Detail = "Create a new scenario-owned save for this scenario.",
+                Badge = "New Game",
+                IsLocked = !entry.CanStart
+            });
 
             return rows;
         }

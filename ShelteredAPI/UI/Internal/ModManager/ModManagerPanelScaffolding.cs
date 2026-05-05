@@ -68,7 +68,7 @@ namespace ShelteredAPI.UI.Internal.ModManager{
                     return CloneCachedScenarioBookVisuals(parent, visualDepth, out maxVisualDepth);
                 }
 
-                MMLog.WriteInfo("[ScenarioBookVisuals] Live scenario book source found. source="
+                MMLog.WriteDebug("[ScenarioBookVisuals] Live scenario book source found. source="
                     + GetObjectPath(visualSource) + " parent=" + GetObjectPath(parent) + ".");
                 CacheScenarioBookVisualTemplate(visualSource, "live clone request");
                 return CloneScenarioBookVisual(parent, visualSource, visualDepth, out maxVisualDepth);
@@ -124,7 +124,7 @@ namespace ShelteredAPI.UI.Internal.ModManager{
             StripClonedScenarioBehaviors(clone);
             maxVisualDepth = ApplyClonedScenarioBookPresentation(clone, parent.layer, visualDepth);
             clone.SetActive(true);
-            MMLog.WriteInfo("[ScenarioBookVisuals] Activated live vanilla scenario book visuals. parent="
+            MMLog.WriteDebug("[ScenarioBookVisuals] Activated live vanilla scenario book visuals. parent="
                 + GetObjectPath(parent)
                 + " source=" + GetObjectPath(source)
                 + " clone=" + GetObjectPath(clone)
@@ -156,7 +156,7 @@ namespace ShelteredAPI.UI.Internal.ModManager{
 
                 maxVisualDepth = ApplyClonedScenarioBookPresentation(clone, parent.layer, visualDepth);
                 clone.SetActive(true);
-                MMLog.WriteInfo("[ScenarioBookVisuals] Activated cached vanilla scenario book visuals. parent="
+                MMLog.WriteDebug("[ScenarioBookVisuals] Activated cached vanilla scenario book visuals. parent="
                     + GetObjectPath(parent)
                     + " template=" + GetObjectPath(_scenarioBookVisualTemplate)
                     + " clone=" + GetObjectPath(clone)
@@ -196,7 +196,7 @@ namespace ShelteredAPI.UI.Internal.ModManager{
                 template.SetActive(false);
 
                 _scenarioBookVisualTemplate = template;
-                MMLog.WriteInfo("[ScenarioBookVisuals] Cached vanilla scenario book visuals. reason="
+                MMLog.WriteDebug("[ScenarioBookVisuals] Cached vanilla scenario book visuals. reason="
                     + (reason ?? "unspecified")
                     + " source=" + GetObjectPath(source)
                     + " template=" + GetObjectPath(template)
