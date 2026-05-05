@@ -42,7 +42,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 + " baseMode=" + entry.BaseGameMode
                 + " virtualSaveType=" + _launchCoordinator.GetVirtualSaveType(entry) + ".");
 
-            if (entry.IsVanilla)
+            if (entry.IsVanilla && entry.BaseGameMode == ScenarioBaseGameMode.Survival)
             {
                 string vanillaError;
                 if (!_launchCoordinator.LaunchVanillaScenario(_adapter, entry, out vanillaError))

@@ -115,7 +115,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
             entries.Add(CreateVanillaEntry(
                 ScenarioSelectionIds.VanillaSurroundedScenarioId,
-                ScenarioSelectionIds.VanillaSurroundedScenarioId,
+                ScenarioSelectionIds.VanillaSurroundedStorageScenarioId,
                 ScenarioLaunchMode.Surrounded,
                 "Surrounded",
                 "Vanilla Surrounded scenario.",
@@ -123,7 +123,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
             entries.Add(CreateVanillaEntry(
                 ScenarioSelectionIds.VanillaStasisScenarioId,
-                ScenarioSelectionIds.VanillaStasisScenarioId,
+                ScenarioSelectionIds.VanillaStasisStorageScenarioId,
                 ScenarioLaunchMode.Stasis,
                 "Stasis",
                 "Vanilla Stasis scenario.",

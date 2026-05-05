@@ -79,13 +79,13 @@ namespace ShelteredAPI.Saves.Paging
             {
                 case 0:
                     return new SlotPagingScope(
-                        ScenarioSelectionIds.VanillaSurroundedScenarioId,
+                        ScenarioSelectionIds.VanillaSurroundedStorageScenarioId,
                         SaveManager.SaveType.SlotSurrounded,
                         1,
                         "ShelterScene_Surrounded");
                 case 1:
                     return new SlotPagingScope(
-                        ScenarioSelectionIds.VanillaStasisScenarioId,
+                        ScenarioSelectionIds.VanillaStasisStorageScenarioId,
                         SaveManager.SaveType.SlotStasis,
                         1,
                         "ShelterScene_Stasis");

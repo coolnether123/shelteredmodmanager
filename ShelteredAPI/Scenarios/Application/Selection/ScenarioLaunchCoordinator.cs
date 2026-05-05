@@ -506,7 +506,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry)
         {
             return entry != null
-                && !entry.IsVanilla
                 && entry.Source != ScenarioCatalogSource.Draft
                 && entry.BaseGameMode != ScenarioBaseGameMode.Survival;
         }

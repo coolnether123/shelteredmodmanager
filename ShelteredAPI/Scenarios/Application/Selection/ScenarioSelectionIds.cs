@@ -4,10 +4,12 @@ using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     internal static class ScenarioSelectionIds
     {
-        public const string StandardStorageScenarioId = "Standard";
-        public const string VanillaStandardScenarioId = "Vanilla.Standard";
-        public const string VanillaSurroundedScenarioId = "Vanilla.Surrounded";
-        public const string VanillaStasisScenarioId = "Vanilla.Stasis";
+        public const string StandardStorageScenarioId = ScenarioSaveIdGuards.StandardStorageScenarioId;
+        public const string VanillaStandardScenarioId = ScenarioSaveIdGuards.VanillaStandardScenarioId;
+        public const string VanillaSurroundedScenarioId = ScenarioSaveIdGuards.VanillaSurroundedScenarioId;
+        public const string VanillaStasisScenarioId = ScenarioSaveIdGuards.VanillaStasisScenarioId;
+        public const string VanillaSurroundedStorageScenarioId = ScenarioSaveIdGuards.VanillaSurroundedStorageScenarioId;
+        public const string VanillaStasisStorageScenarioId = ScenarioSaveIdGuards.VanillaStasisStorageScenarioId;
 
         public static bool IsReservedStorageId(string scenarioId)
         {
@@ -24,7 +26,9 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             return IsStandardScenario(scenarioId)
                 || string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase);
+                || string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, VanillaSurroundedStorageScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase);
         }
 
         public static string ToStorageScenarioId(string scenarioId)
@@ -32,7 +36,16 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             if (string.IsNullOrEmpty(scenarioId))
                 return StandardStorageScenarioId;
 
-            return IsStandardScenario(scenarioId) ? StandardStorageScenarioId : scenarioId;
+            if (IsStandardScenario(scenarioId))
+                return StandardStorageScenarioId;
+
+            if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase))
+                return VanillaSurroundedStorageScenarioId;
+
+            if (string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase))
+                return VanillaStasisStorageScenarioId;
+
+            return scenarioId;
         }
 
         public static string ToCatalogScenarioId(string scenarioId)
@@ -40,15 +53,23 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             if (IsStandardScenario(scenarioId))
                 return VanillaStandardScenarioId;
 
+            if (string.Equals(scenarioId, VanillaSurroundedStorageScenarioId, StringComparison.OrdinalIgnoreCase))
+                return VanillaSurroundedScenarioId;
+
+            if (string.Equals(scenarioId, VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase))
+                return VanillaStasisScenarioId;
+
             return string.IsNullOrEmpty(scenarioId) ? VanillaStandardScenarioId : scenarioId;
         }
 
         public static SaveManager.SaveType GetDefaultSaveType(string scenarioId)
         {
-            if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, VanillaSurroundedStorageScenarioId, StringComparison.OrdinalIgnoreCase))
                 return SaveManager.SaveType.SlotSurrounded;
 
-            if (string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase))
                 return SaveManager.SaveType.SlotStasis;
 
             return SaveManager.SaveType.Slot1;
@@ -72,10 +93,12 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
         public static ScenarioBaseGameMode GetBaseGameMode(string scenarioId)
         {
-            if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(scenarioId, VanillaSurroundedScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, VanillaSurroundedStorageScenarioId, StringComparison.OrdinalIgnoreCase))
                 return ScenarioBaseGameMode.Surrounded;
 
-            if (string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(scenarioId, VanillaStasisScenarioId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(scenarioId, VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase))
                 return ScenarioBaseGameMode.Stasis;
 
             return ScenarioBaseGameMode.Survival;
@@ -87,6 +110,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             RegisterDescriptor(VanillaStandardScenarioId, "Survival", "Standard Sheltered survival game.", "1.0");
             RegisterDescriptor(VanillaSurroundedScenarioId, "Surrounded", "Vanilla Surrounded scenario.", "1.0");
             RegisterDescriptor(VanillaStasisScenarioId, "Stasis", "Vanilla Stasis scenario.", "1.0");
+            RegisterDescriptor(VanillaSurroundedStorageScenarioId, "Surrounded", "Vanilla Surrounded scenario.", "1.0");
+            RegisterDescriptor(VanillaStasisStorageScenarioId, "Stasis", "Vanilla Stasis scenario.", "1.0");
         }
 
         private static void RegisterDescriptor(string id, string displayName, string description, string version)
