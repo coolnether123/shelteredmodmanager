@@ -103,10 +103,16 @@
     <Compile Include="Core\ShelteredApiRuntimeBootstrap.cs" />
     <Compile Include="Core\ShelteredUnityLogNormalizers.cs" />
     <Compile Include="Core\ShelteredKeybindPersistenceGuard.cs" />
+    <Compile Include="Core\LoadingTransitionDiagnostics.cs" />
+    <Compile Include="Core\LoadingTransitionRecoveryModels.cs" />
+    <Compile Include="Core\LoadingTransitionRecoveryReportBuilder.cs" />
+    <Compile Include="Core\LoadingTransitionRecoveryService.cs" />
+    <Compile Include="Core\LoadingTransitionRuntime.cs" />
     <Compile Include="Core\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
+    <Compile Include="Harmony\LoadingTransitionRecoveryPatches.cs" />
     <Compile Include="Harmony\ShelteredDeferredPatchTriggers.cs" />
     <Compile Include="Harmony\ModManagerKeybindsPatches.cs" />
     <Compile Include="Harmony\PlatformInputKeybindPatches.cs" />
@@ -462,6 +468,9 @@
     <Compile Include="UI\Runtime\RuntimeUiContracts.cs" />
     <Compile Include="UI\Runtime\ShelteredRuntimeUI.cs" />
     <Compile Include="UI\ShelteredKeybindConflictDialog.cs" />
+    <Compile Include="UI\NguiModalPrimitives.cs" />
+    <Compile Include="UI\LoadingTransitionFallbackDialog.cs" />
+    <Compile Include="UI\LoadingTransitionRecoveryDialog.cs" />
     <Compile Include="Input\ShelteredKeybindsProvider.cs" />
     <Compile Include="UI\ShelteredKeybindsUI.cs" />
     <Compile Include="UI\ShelteredKeybindsUIV2.cs" />

@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Reason a scenario references or depends on a mod.
+    /// Used by compatibility reports to show actionable dependency explanations.
+    /// </summary>
     public enum ScenarioModReferenceReason
     {
         ExplicitDependency = 0,

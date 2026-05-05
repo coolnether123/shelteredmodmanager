@@ -39,7 +39,7 @@ namespace ModAPI.Core
         private static readonly object _lock = new object();
 
         /// <summary>
-        /// Fired when the master seed changes (e.g. on save load).
+        /// Raised when the master seed changes, usually during new-game or save-load setup.
         /// </summary>
         public static event Action OnSeedChanged;
 
@@ -85,7 +85,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Get the current seed.
+        /// Current master seed used by the default random stream.
         /// </summary>
         public static int CurrentSeed { get { return _seed; } }
 
@@ -95,7 +95,7 @@ namespace ModAPI.Core
         public static ulong CurrentStep { get { return _stepCount; } }
 
         /// <summary>
-        /// Check if random system is ready.
+        /// True after the random system has been initialized for the current session.
         /// </summary>
         public static bool IsInitialized { get { return _initialized; } }
 
@@ -275,7 +275,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Get a deterministic named stream isolated from the global stream.
+        /// Returns a deterministic named stream isolated from the global stream.
         /// </summary>
         public static ModRandomStream GetStream(string streamName)
         {

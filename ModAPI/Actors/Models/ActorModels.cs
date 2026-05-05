@@ -3,6 +3,10 @@ using System.Collections.Generic;
 
 namespace ModAPI.Actors
 {
+    /// <summary>
+    /// Broad actor category used for identity, sorting, and cross-system filtering.
+    /// Game integrations may map several host object types into the same ModAPI actor kind.
+    /// </summary>
     public enum ActorKind
     {
         Player = 0,
@@ -14,6 +18,10 @@ namespace ModAPI.Actors
         Custom = 6
     }
 
+    /// <summary>
+    /// Lifetime state of an actor record in the current runtime.
+    /// Use this to distinguish active actors from unloaded or intentionally destroyed identities.
+    /// </summary>
     public enum ActorLifecycleState
     {
         Unknown = 0,
@@ -24,6 +32,10 @@ namespace ModAPI.Actors
         Destroyed = 5
     }
 
+    /// <summary>
+    /// Coarse location of an actor in the game flow.
+    /// This is intentionally host-neutral so mods can reason about shelter, expedition, and encounter state consistently.
+    /// </summary>
     public enum ActorPresenceState
     {
         Unknown = 0,
@@ -33,6 +45,10 @@ namespace ModAPI.Actors
         Offscreen = 4
     }
 
+    /// <summary>
+    /// Persistence and runtime-origin flags attached to an actor record.
+    /// Flags are additive; callers should test for the bits they need rather than comparing exact values.
+    /// </summary>
     [Flags]
     public enum ActorFlags
     {
@@ -43,6 +59,10 @@ namespace ModAPI.Actors
         Loaded = 8
     }
 
+    /// <summary>
+    /// Reason an actor identity was removed from the registry.
+    /// Event consumers can use this to decide whether to clean up save data or wait for a later reload.
+    /// </summary>
     public enum ActorDestroyReason
     {
         Unknown = 0,
@@ -52,6 +72,9 @@ namespace ModAPI.Actors
         Replaced = 4
     }
 
+    /// <summary>
+    /// Built-in sort orders supported by <see cref="ActorQuery"/>.
+    /// </summary>
     public enum ActorSortMode
     {
         ActorId = 0,
@@ -59,6 +82,10 @@ namespace ModAPI.Actors
         UpdatedTick = 2
     }
 
+    /// <summary>
+    /// Event categories emitted by the actor system.
+    /// These values are diagnostic and integration-facing; mods should not persist behavior-critical state from them alone.
+    /// </summary>
     public enum ActorEventType
     {
         ActorCreated = 0,
@@ -80,6 +107,10 @@ namespace ModAPI.Actors
         LiveSyncRecovered = 16
     }
 
+    /// <summary>
+    /// Stable actor identity composed from kind, local ID, and optional domain.
+    /// Use the domain to keep mod-created or integration-specific IDs from colliding with game-owned IDs.
+    /// </summary>
     [Serializable]
     public sealed class ActorId : IEquatable<ActorId>, IComparable<ActorId>
     {
@@ -152,6 +183,10 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Describes where an actor record came from.
+    /// Mods should set this when creating synthetic actors so diagnostics and save data can trace ownership.
+    /// </summary>
     [Serializable]
     public sealed class ActorOrigin
     {
@@ -170,6 +205,10 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Link from an external runtime identifier to an actor ID.
+    /// Bindings make it possible to resolve an actor from a host object key without exposing host types in ModAPI.
+    /// </summary>
     [Serializable]
     public sealed class ActorBinding
     {
@@ -195,6 +234,10 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Read-only view of actor identity, lifecycle, presence, and ownership metadata.
+    /// Query APIs return this interface so callers cannot mutate registry records accidentally.
+    /// </summary>
     public interface IActorRecord
     {
         ActorId Id { get; }
@@ -206,6 +249,10 @@ namespace ModAPI.Actors
         long UpdatedTick { get; }
     }
 
+    /// <summary>
+    /// Serializable actor record stored by the runtime.
+    /// Prefer registry methods for mutation so lifecycle events and version tracking stay consistent.
+    /// </summary>
     [Serializable]
     public sealed class ActorRecord : IActorRecord
     {
@@ -247,6 +294,10 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Request object for creating or ensuring an actor.
+    /// Leave <see cref="Id"/> null when the runtime should allocate an identity from kind and domain.
+    /// </summary>
     public sealed class ActorCreateRequest
     {
         public ActorId Id { get; set; }
@@ -260,6 +311,10 @@ namespace ModAPI.Actors
         public long? UpdatedTick { get; set; }
     }
 
+    /// <summary>
+    /// Partial actor update used by registry mutation APIs.
+    /// Null properties mean "do not change this field".
+    /// </summary>
     public sealed class ActorRecordMutation
     {
         public ActorLifecycleState? LifecycleState { get; set; }
@@ -269,6 +324,10 @@ namespace ModAPI.Actors
         public long? UpdatedTick { get; set; }
     }
 
+    /// <summary>
+    /// Filter object for actor enumeration.
+    /// Construct directly for serialization-friendly queries or use <see cref="ActorQueryBuilder"/> for fluent code.
+    /// </summary>
     public sealed class ActorQuery
     {
         public ActorKind? Kind { get; set; }
@@ -307,6 +366,10 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Fluent builder for common actor queries.
+    /// Each call refines the query; call <see cref="Build"/> before passing it to the registry.
+    /// </summary>
     public sealed class ActorQueryBuilder
     {
         private readonly ActorQuery _query = new ActorQuery();
@@ -373,6 +436,9 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Event payload published when actor state, components, or runtime integration status changes.
+    /// </summary>
     [Serializable]
     public sealed class ActorEventEnvelope
     {
@@ -384,6 +450,10 @@ namespace ModAPI.Actors
         public string Message;
     }
 
+    /// <summary>
+    /// Root save payload for actor registry persistence.
+    /// Component payloads remain serializer-owned JSON strings to keep ModAPI decoupled from component assemblies.
+    /// </summary>
     [Serializable]
     public sealed class ActorSaveEnvelope
     {
@@ -393,6 +463,9 @@ namespace ModAPI.Actors
         public List<ActorMetadataEntry> Metadata;
     }
 
+    /// <summary>
+    /// Serialized actor plus its component and binding records.
+    /// </summary>
     [Serializable]
     public sealed class ActorRecordSaveEntry
     {
@@ -401,6 +474,9 @@ namespace ModAPI.Actors
         public List<ActorBinding> Bindings;
     }
 
+    /// <summary>
+    /// Serialized component payload owned by a registered <see cref="IActorComponentSerializer"/>.
+    /// </summary>
     [Serializable]
     public sealed class ActorComponentSaveEntry
     {
@@ -410,6 +486,9 @@ namespace ModAPI.Actors
         public string PayloadJson;
     }
 
+    /// <summary>
+    /// Extensible key/value metadata stored beside actor save data.
+    /// </summary>
     [Serializable]
     public sealed class ActorMetadataEntry
     {

@@ -4,6 +4,10 @@ using UnityEngine;
 
 namespace ShelteredAPI.Saves
 {
+    /// <summary>
+    /// Vanilla save summary copied into custom save metadata.
+    /// Fields are public for Unity JSON serialization.
+    /// </summary>
     [Serializable]
     public class SaveInfo
     {
@@ -20,6 +24,10 @@ namespace ShelteredAPI.Saves
         public string saveTime = string.Empty; 
     }
 
+    /// <summary>
+    /// Catalog entry for one custom save slot.
+    /// This is the main read model shown by paging, verification, and load UI.
+    /// </summary>
     [Serializable]
     public class SaveEntry
     {
@@ -39,9 +47,10 @@ namespace ShelteredAPI.Saves
         public SaveInfo saveInfo = new SaveInfo();
     }
 
-    // OBSOLETE: SaveManifest was used for the global manifest.json file.
-    // The system now uses directory-based discovery - each slot is self-contained.
-    // Kept for backwards compatibility but should not be used.
+    /// <summary>
+    /// Legacy global manifest shape kept only for reading old saves.
+    /// New code should use directory-based slot discovery and <see cref="SlotManifest"/>.
+    /// </summary>
     [Serializable]
     [Obsolete("No longer used. Save discovery is now directory-based.")]
     public class SaveManifest
@@ -50,12 +59,19 @@ namespace ShelteredAPI.Saves
         public SaveEntry[] entries = new SaveEntry[0];
     }
 
+    /// <summary>
+    /// Declares whether a physical slot belongs to normal saves or a custom scenario run.
+    /// </summary>
     public enum SaveSlotUsage
     {
         Standard = 0,
         CustomScenario = 1
     }
 
+    /// <summary>
+    /// Reservation for one of the vanilla physical save slots.
+    /// Custom scenarios use reservations to avoid colliding with standard saves.
+    /// </summary>
     [Serializable]
     public class SlotReservation
     {
@@ -64,6 +80,9 @@ namespace ShelteredAPI.Saves
         public string scenarioId;                 // null when Standard
     }
 
+    /// <summary>
+    /// Persisted map of physical slot reservations.
+    /// </summary>
     [Serializable]
     public class SlotReservationMap
     {
@@ -71,6 +90,9 @@ namespace ShelteredAPI.Saves
         public SlotReservation[] reserved = new SlotReservation[0];
     }
 
+    /// <summary>
+    /// Lightweight scenario metadata stored alongside scenario-owned saves.
+    /// </summary>
     [Serializable]
     public class ScenarioDescriptor
     {
@@ -80,7 +102,9 @@ namespace ShelteredAPI.Saves
         public string version;
     }
 
-    // Options
+    /// <summary>
+    /// Options used when creating a new custom save entry.
+    /// </summary>
     public class SaveCreateOptions
     {
         public string name;
@@ -88,46 +112,69 @@ namespace ShelteredAPI.Saves
         public int absoluteSlot;
     }
 
+    /// <summary>
+    /// Options used when overwriting an existing custom save entry.
+    /// </summary>
     public class SaveOverwriteOptions
     {
         public string name;
         public string extraJson;
     }
 
+    /// <summary>
+    /// Options used when loading a custom save.
+    /// </summary>
     public class LoadOptions
     {
         public bool showLoadingScreen = true;
     }
 
+    /// <summary>
+    /// Options used when starting a new custom scenario run.
+    /// </summary>
     public class StartOptions
     {
         public string name;
     }
 
-    // Events
+    /// <summary>Raised for save-entry lifecycle notifications.</summary>
     public delegate void SaveEvent(SaveEntry entry);
+    /// <summary>Raised for load-entry lifecycle notifications.</summary>
     public delegate void LoadEvent(SaveEntry entry);
+    /// <summary>Raised when the custom save browser changes page.</summary>
     public delegate void PageChangedEvent(int page);
+    /// <summary>Raised when a physical slot reservation changes.</summary>
     public delegate void ReservationChangedEvent(int physicalSlot, SlotReservation reservation);
 
-    // Interfaces for mod authors
+    /// <summary>
+    /// Optional participant hook for mods that need to write or restore data beside a custom save.
+    /// </summary>
     public interface ICustomSaveParticipant
     {
         void OnSave(SaveData data, SaveEntry entry);
         void OnLoad(SaveData data, SaveEntry entry);
     }
 
+    /// <summary>
+    /// Optional provider for extra display metadata on the current custom save run.
+    /// </summary>
     public interface ICustomSaveMetaProvider
     {
         CustomMeta GetMetaForCurrentRun();
     }
 
+    /// <summary>
+    /// Custom save display metadata supplied by mods.
+    /// </summary>
     [Serializable]
     public class CustomMeta
     {
         public string highScoreLine; // optional extra line
     }
 
+    /// <summary>
+    /// Optional hooks for scenario-specific save and selection flow.
+    /// </summary>
     public interface ICustomScenarioHooks
     {
         void OnChosen();
@@ -136,6 +183,9 @@ namespace ShelteredAPI.Saves
         void OnAbort();
     }
 
+    /// <summary>
+    /// Mod compatibility record captured when a save was last loaded.
+    /// </summary>
     [Serializable]
     public class LoadedModInfo
     {
@@ -144,6 +194,9 @@ namespace ShelteredAPI.Saves
         public string[] warnings = new string[0];
     }
 
+    /// <summary>
+    /// Per-slot manifest stored inside a self-contained save directory.
+    /// </summary>
     [Serializable]
     public class SlotManifest
     {

@@ -2,10 +2,14 @@ using System;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Convenience extensions for <see cref="IModLogger"/>.
+    /// These keep common logging patterns available without exposing the global logger to plugin code.
+    /// </summary>
     public static class LoggerExtensions
     {
         /// <summary>
-        /// Returns a logger that prefixes messages with a scope tag, e.g., "[Radio]".
+        /// Returns a logger that prefixes messages with a scope tag, for example <c>[Radio]</c>.
         /// </summary>
         public static IModLogger WithScope(this IModLogger log, string scope)
         {
@@ -13,7 +17,8 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Logs a warning only once per unique key. Uses global MMLog.WarnOnce to suppress spam.
+        /// Logs a warning once for a unique key and also forwards the message through the plugin logger.
+        /// Use this for recoverable repeated failures that would otherwise flood support logs.
         /// </summary>
         public static void WarnOnce(this IModLogger log, string key, string message)
         {

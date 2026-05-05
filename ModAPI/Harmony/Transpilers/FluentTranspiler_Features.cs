@@ -8,6 +8,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Additional feature methods for <see cref="FluentTranspiler"/>.
+    /// This partial class keeps advanced operations separate from core matching/navigation.
+    /// </summary>
     public partial class FluentTranspiler
     {
         /// <summary>
@@ -287,6 +291,10 @@ namespace ModAPI.Harmony
             return report;
         }
 
+        /// <summary>
+        /// Dry-run summary of a transpiler operation.
+        /// Use this in tooling to preview instruction counts, label shifts, and stack impact.
+        /// </summary>
         public class TranspilerReport
         {
             public int InstructionCount { get; set; }

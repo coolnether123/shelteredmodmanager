@@ -4,6 +4,10 @@ using System.Linq;
 
 namespace ShelteredAPI.Characters
 {
+    /// <summary>
+    /// Fluent query builder over the current Sheltered character proxy set.
+    /// Queries are evaluated when <see cref="ToList"/>, <see cref="FirstOrDefault"/>, or <see cref="Count"/> is called.
+    /// </summary>
     public class CharacterQuery
     {
         private static readonly IReadOnlyList<ICharacterProxy> EmptySource =

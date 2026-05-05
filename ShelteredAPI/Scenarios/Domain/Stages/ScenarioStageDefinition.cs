@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Metadata for one scenario editor stage.
+    /// Used by authoring UI to group sections and by validation to report where issues belong.
+    /// </summary>
     public sealed class ScenarioStageDefinition
     {
         public ScenarioStageDefinition(

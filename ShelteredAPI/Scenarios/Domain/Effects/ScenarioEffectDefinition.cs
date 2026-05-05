@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// One scenario effect and the fields needed by its selected effect kind.
+    /// Effects are executed by scenario runtime handlers after schedule and gate checks pass.
+    /// </summary>
     public class ScenarioEffectDefinition
     {
         public ScenarioEffectDefinition()

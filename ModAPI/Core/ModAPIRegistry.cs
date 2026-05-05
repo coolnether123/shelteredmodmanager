@@ -5,20 +5,8 @@ using System.Linq;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Service discovery registry allowing mods to publish and consume shared APIs.
-    /// 
-    /// Example:
-    ///   Mod A publishes an API:
-    ///     ModAPIRegistry.RegisterAPI("com.modA.CraftingAPI", new MyCraftingAPI());
-    ///   
-    ///   Mod B consumes it:
-    ///     var api = ModAPIRegistry.GetAPI&lt;IMyCraftingAPI&gt;("com.modA.CraftingAPI");
-    ///     if (api != null) api.RegisterRecipe(myRecipe);
-    /// 
-    /// Best Practice: 
-    ///   - Use interfaces for API contracts
-    ///   - Use reverse-domain naming for API names
-    ///   - Document your API in your mod's About.json
+    /// Process-local service registry for APIs shared between mods and game runtime integrations.
+    /// Register interface-based contracts under reverse-domain IDs, and use <c>TryGetAPI</c> for optional dependencies.
     /// </summary>
     public static class ModAPIRegistry
     {
@@ -37,7 +25,7 @@ namespace ModAPI.Core
         private static readonly object _lock = new object();
         
         /// <summary>
-        /// Register an API implementation that other mods can consume.
+        /// Registers an API implementation that other mods can consume.
         /// </summary>
         /// <typeparam name="T">API interface or class type</typeparam>
         /// <param name="apiName">Unique API name (use reverse-domain notation)</param>
@@ -76,7 +64,7 @@ namespace ModAPI.Core
         }
         
         /// <summary>
-        /// Get a registered API implementation.
+        /// Returns a registered API implementation, or null when the API is missing or registered under another type.
         /// </summary>
         /// <typeparam name="T">API interface or class type</typeparam>
         /// <param name="apiName">API name to retrieve</param>
@@ -134,7 +122,7 @@ namespace ModAPI.Core
         }
         
         /// <summary>
-        /// Try to get a registered API implementation.
+        /// Attempts to get a registered API implementation without forcing callers to handle null directly.
         /// </summary>
         /// <typeparam name="T">API interface or class type</typeparam>
         /// <param name="apiName">API name to retrieve</param>
@@ -147,7 +135,7 @@ namespace ModAPI.Core
         }
         
         /// <summary>
-        /// Check if an API is registered.
+        /// Returns true when an API name is currently registered.
         /// </summary>
         /// <param name="apiName">API name to check</param>
         /// <returns>True if the API is registered</returns>
@@ -199,7 +187,7 @@ namespace ModAPI.Core
         }
         
         /// <summary>
-        /// Get all registered API names.
+        /// Returns all currently registered API names.
         /// </summary>
         /// <returns>List of registered API names</returns>
         public static List<string> GetRegisteredAPIs()
@@ -211,7 +199,7 @@ namespace ModAPI.Core
         }
         
         /// <summary>
-        /// Get diagnostic information about registered APIs.
+        /// Returns provider and implementation type information for registered APIs.
         /// </summary>
         /// <returns>Dictionary of API names to APIInfo objects</returns>
         public static Dictionary<string, APIInfo> GetAPIDiagnostics()

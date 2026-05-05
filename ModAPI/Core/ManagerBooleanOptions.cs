@@ -245,6 +245,10 @@ namespace ModAPI.Core
         }
     }
 
+    /// <summary>
+    /// Metadata for a manager-editable boolean runtime option.
+    /// Register definitions during startup so the desktop manager can display labels and restart requirements.
+    /// </summary>
     public sealed class ManagerBooleanOptionDefinition
     {
         public string Id;
@@ -256,6 +260,10 @@ namespace ModAPI.Core
         public int SortOrder;
     }
 
+    /// <summary>
+    /// JSON file shape for all manager-owned boolean option values.
+    /// Mods should use <see cref="ManagerBooleanOptions"/> instead of editing this directly.
+    /// </summary>
     [Serializable]
     public sealed class ManagerBooleanOptionsFile
     {
@@ -263,6 +271,9 @@ namespace ModAPI.Core
         public ManagerBooleanOptionRecord[] booleans = new ManagerBooleanOptionRecord[0];
     }
 
+    /// <summary>
+    /// Persisted value and display metadata for one boolean option.
+    /// </summary>
     [Serializable]
     public sealed class ManagerBooleanOptionRecord
     {

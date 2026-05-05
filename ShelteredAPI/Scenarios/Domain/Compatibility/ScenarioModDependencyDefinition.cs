@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Mod dependency or compatibility rule discovered or authored for a scenario.
+    /// Reasons and content references explain why the dependency exists for validation and UI.
+    /// </summary>
     public class ScenarioModDependencyDefinition
     {
         public ScenarioModDependencyDefinition()

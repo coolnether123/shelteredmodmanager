@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Unlockable or scheduled group of bunker cells.
+    /// Use this when a scenario wants sections of the shelter to appear or unlock over time.
+    /// </summary>
     public class ScenarioBunkerExpansionDefinition
     {
         public ScenarioBunkerExpansionDefinition()

@@ -35,6 +35,18 @@ namespace ShelteredAPI.Scenarios
             if (entry == null)
                 return false;
 
+            if (entry.IsVanilla)
+            {
+                string vanillaError;
+                if (!_launchCoordinator.LaunchVanillaScenario(_adapter, entry, out vanillaError))
+                {
+                    status = "Start failed: " + Safe(vanillaError, "unknown error");
+                    return false;
+                }
+
+                return true;
+            }
+
             ScenarioLaunchCoordinator.NewGamePreparation preparation;
             string prepareError;
             if (!_launchCoordinator.PrepareNewGame(entry, entry.DisplayName, out preparation, out prepareError))

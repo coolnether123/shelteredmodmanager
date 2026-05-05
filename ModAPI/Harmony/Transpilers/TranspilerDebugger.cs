@@ -10,8 +10,15 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Writes IL dumps, diffs, and history snapshots for transpiler development.
+    /// Enable this only for debugging because dumps can be large and method-specific.
+    /// </summary>
     public static class TranspilerDebugger
     {
+        /// <summary>
+        /// One edit recorded by <see cref="FluentTranspiler"/> for diff and history views.
+        /// </summary>
         public class PatchEdit
         {
             public string Kind;
@@ -393,6 +400,10 @@ namespace ModAPI.Harmony
             File.WriteAllText(path, sb.ToString());
         }
 
+        /// <summary>
+        /// Captured before/after IL state for a transpiler step.
+        /// Debug UIs use this to show instruction, stack, warning, and timing history.
+        /// </summary>
         public class Snapshot
         {
             public string ModId;

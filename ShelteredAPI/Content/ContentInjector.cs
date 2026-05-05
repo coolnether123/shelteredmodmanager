@@ -52,8 +52,8 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Get all cooking recipes registered by mods.
-        /// Use this when you need to enumerate all cooking transformations.
+        /// Returns the cooking recipes registered by mods.
+        /// Use this when a Sheltered-specific integration needs to enumerate all raw-to-cooked transformations.
         /// </summary>
         /// <returns>Dictionary of raw item types to cooking recipes (do not modify)</returns>
         public static Dictionary<ItemManager.ItemType, CookingRecipe> GetCookingRecipes()
@@ -62,7 +62,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Check if an item is marked as raw food (can be cooked).
+        /// Returns true when an item type is marked as raw food and can be cooked.
         /// </summary>
         /// <param name="itemType">The item type to check</param>
         /// <returns>True if the item is raw food</returns>
@@ -72,7 +72,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Get all item types marked as raw food.
+        /// Returns all item types marked as raw food.
         /// </summary>
         /// <returns>Enumerable of raw food item types</returns>
         public static IEnumerable<ItemManager.ItemType> GetRawFoodTypes()

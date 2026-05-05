@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Authoring workflow stage used by scenario editor and validation UI.
+    /// These values organize editor surfaces; they are not vanilla ScenarioDef stages.
+    /// </summary>
     public enum ScenarioStageKind
     {
         None = 0,

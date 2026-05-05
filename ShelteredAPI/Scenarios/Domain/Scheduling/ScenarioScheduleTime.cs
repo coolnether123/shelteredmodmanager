@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Scenario-local time expressed as day, hour, and minute.
+    /// Defaults to day 1 at 08:00 to match the typical start-of-run authoring baseline.
+    /// </summary>
     public class ScenarioScheduleTime
     {
         public ScenarioScheduleTime()

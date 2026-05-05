@@ -73,7 +73,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Get the total count of a specific item in the shelter inventory.
+        /// Returns the total count of an item in shelter inventory.
         /// </summary>
         public static int GetItemCount(string itemId, bool includeParties = false)
         {
@@ -86,7 +86,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Get a list of all item stacks currently in the shelter inventory.
+        /// Returns read-only item stacks currently in shelter inventory.
         /// </summary>
         public static ReadOnlyCollection<ItemStack> GetAllItems()
         {
@@ -95,7 +95,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Get the total storage capacity of the shelter (number of stacks).
+        /// Returns shelter storage capacity in stack slots.
         /// </summary>
         public static int GetStorageCapacity()
         {
@@ -103,7 +103,7 @@ namespace ShelteredAPI.Content
         }
 
         /// <summary>
-        /// Get the number of used storage slots (number of stacks).
+        /// Returns the number of occupied shelter storage stack slots.
         /// </summary>
         public static int GetUsedStorage()
         {

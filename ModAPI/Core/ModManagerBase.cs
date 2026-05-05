@@ -185,7 +185,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// v1.3 convenience wrapper: runs work on a background thread and forwards the result to Unity main thread.
+        /// Runs work on a background thread and forwards the result to Unity's main thread.
         /// </summary>
         /// <typeparam name="TResult">Result type produced by the background calculation.</typeparam>
         /// <param name="work">Background calculation. Do not access Unity objects here.</param>

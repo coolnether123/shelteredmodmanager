@@ -201,6 +201,10 @@ namespace ShelteredAPI.Content
             return Service.Inventory.GetUsedStorage();
         }
 
+        /// <summary>
+        /// Asset-loading helpers for mods that need explicit assembly or root-path control.
+        /// Most callers should use the higher-level content registration APIs first.
+        /// </summary>
         public static class AdvancedAssets
         {
             public static Texture2D LoadTexture(Assembly assembly, string relativePath)
@@ -249,6 +253,10 @@ namespace ShelteredAPI.Content
             }
         }
 
+        /// <summary>
+        /// Sheltered-specific runtime helpers that intentionally expose vanilla runtime types.
+        /// Use these only when writing Sheltered integration code; portable ModAPI code should stay on neutral IDs.
+        /// </summary>
         public static class Runtime
         {
             public static bool ResolveItemType(string itemId, out ItemManager.ItemType type)

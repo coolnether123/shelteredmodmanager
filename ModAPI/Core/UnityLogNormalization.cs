@@ -4,12 +4,19 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Delegate that can translate noisy Unity log entries into ModAPI log level, source, and once-key metadata.
+    /// Return false when the normalizer does not own the message.
+    /// </summary>
     public delegate bool UnityLogNormalizer(
         string condition,
         string stackTrace,
         LogType type,
         out UnityLogNormalization normalization);
 
+    /// <summary>
+    /// Normalized representation of a Unity log entry before it is written through ModAPI logging.
+    /// </summary>
     public sealed class UnityLogNormalization
     {
         public MMLog.LogLevel Level = MMLog.LogLevel.Info;
@@ -18,6 +25,10 @@ namespace ModAPI.Core
         public string OnceKey = string.Empty;
     }
 
+    /// <summary>
+    /// Registry for Unity log normalizers.
+    /// Game integrations register normalizers to downgrade expected engine noise or attach better sources.
+    /// </summary>
     public static class UnityLogNormalizationRegistry
     {
         private static readonly object Sync = new object();

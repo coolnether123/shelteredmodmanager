@@ -3,6 +3,9 @@ using System.Collections.Generic;
 
 namespace ShelteredAPI.Interactions
 {
+    /// <summary>
+    /// Placement strategy for inserting a custom interaction into a Sheltered object's interaction list.
+    /// </summary>
     public enum ObjectButtonInsertMode
     {
         Last,
@@ -14,6 +17,10 @@ namespace ShelteredAPI.Interactions
         CustomIndex
     }
 
+    /// <summary>
+    /// Context passed to custom interaction index resolvers.
+    /// Use it to inspect the target object and current vanilla interaction order before choosing an index.
+    /// </summary>
     public sealed class ObjectButtonInsertContext
     {
         private readonly Obj_Base _targetObject;
@@ -32,6 +39,10 @@ namespace ShelteredAPI.Interactions
         public string InteractionName { get { return _interactionName; } }
     }
 
+    /// <summary>
+    /// Fluent builder scoped to one Sheltered object type.
+    /// Use the Add methods to add one or more interaction buttons for that target type.
+    /// </summary>
     public sealed class ObjectButtonTargetBuilder
     {
         private readonly ObjectManager.ObjectType _targetType;
@@ -54,6 +65,10 @@ namespace ShelteredAPI.Interactions
         public ObjectManager.ObjectType TargetType { get { return _targetType; } }
     }
 
+    /// <summary>
+    /// Fluent builder for one custom object interaction.
+    /// Configure placement, predicates, diagnostics, and callbacks before calling <see cref="Register"/>.
+    /// </summary>
     public sealed class ObjectButtonBuilder
     {
         private readonly ObjectButtonTargetBuilder _parent;
@@ -213,6 +228,7 @@ namespace ShelteredAPI.Interactions
 
     /// <summary>
     /// Fluent helper for injecting interaction-menu buttons into Sheltered objects.
+    /// Prefer this over direct patching when adding a new object action from a mod.
     /// </summary>
     public static class ObjectButtonInjector
     {

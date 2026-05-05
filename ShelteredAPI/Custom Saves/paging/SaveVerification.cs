@@ -343,9 +343,18 @@ namespace ShelteredAPI.Saves.Paging
             }
         }
 
+        /// <summary>
+        /// Overall compatibility state for loading a save or starting a scenario with the current mod set.
+        /// </summary>
         public enum VerificationState { Match, VersionMismatch, Warning, Missing, Unknown }
+        /// <summary>
+        /// Per-mod comparison result between active mods and the save or scenario manifest.
+        /// </summary>
         public enum ModCompareStatus { Match, VersionDiff, Extra, Missing }
 
+        /// <summary>
+        /// One row in the active-mod versus saved-mod comparison.
+        /// </summary>
         public sealed class ModCompareEntry
         {
             public string activeId;

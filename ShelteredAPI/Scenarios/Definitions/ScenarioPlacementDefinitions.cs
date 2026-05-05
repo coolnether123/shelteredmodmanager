@@ -2,6 +2,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Special placement definitions that are interpreted by scenario authoring/runtime code instead of prefab lookup.
+    /// </summary>
     public enum ScenarioPlacementDefinitionKind
     {
         None = 0,
@@ -10,6 +13,10 @@ namespace ShelteredAPI.Scenarios
         RoomLight = 3
     }
 
+    /// <summary>
+    /// Constants and parsing helpers for special scenario placement definitions.
+    /// Use these names when a scenario places structural elements such as rooms, ladders, or lights.
+    /// </summary>
     public static class ScenarioPlacementDefinitions
     {
         public const string Room = "Room";

@@ -5,6 +5,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Built-in scenario authoring stage catalog.
+    /// Use this to drive editor navigation or map validation messages to user-facing sections.
+    /// </summary>
     public sealed class ScenarioStageRegistry
     {
         private readonly List<ScenarioStageDefinition> _definitions;

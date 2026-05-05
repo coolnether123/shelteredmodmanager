@@ -93,6 +93,10 @@ namespace ModAPI.Spine
         bool TrySaveSetting(string settingId, object value, SettingsWriteTarget target);
     }
 
+    /// <summary>
+    /// Convenience reads for settings providers.
+    /// These helpers intentionally fall back quietly so runtime feature flags can be optional.
+    /// </summary>
     public static class SettingsProviderExtensions
     {
         public static bool GetBool(this ISettingsProvider provider, string id, bool defaultValue = false)

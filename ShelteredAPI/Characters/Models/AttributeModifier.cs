@@ -1,5 +1,9 @@
 namespace ShelteredAPI.Characters
 {
+    /// <summary>
+    /// Runtime handle for one attribute modifier applied to a character.
+    /// Keep the handle if you need to remove that exact modifier later.
+    /// </summary>
     public class AttributeModifier
     {
         public string AttributeName { get; internal set; }

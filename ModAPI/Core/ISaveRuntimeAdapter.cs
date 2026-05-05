@@ -15,6 +15,10 @@ namespace ModAPI.Core
         object HostSaveDescriptor { get; }
     }
 
+    /// <summary>
+    /// Immutable implementation of <see cref="IModSaveContext"/> used by game runtimes.
+    /// Pass host-specific save details through <see cref="HostSaveDescriptor"/> only when a game-specific adapter understands them.
+    /// </summary>
     public sealed class ModSaveContext : IModSaveContext
     {
         public ModSaveContext(string slotPath, int slotIndex, string saveScopeId, string saveId, object hostSaveDescriptor)

@@ -2,12 +2,19 @@ using System.Collections.Generic;
 
 namespace ModAPI.Scenarios
 {
+    /// <summary>
+    /// Severity for a scenario validation issue.
+    /// Errors block publication or loading; warnings describe risky but allowed content.
+    /// </summary>
     public enum ScenarioIssueSeverity
     {
         Warning = 0,
         Error = 1
     }
 
+    /// <summary>
+    /// One validation message produced while checking a scenario definition.
+    /// </summary>
     public sealed class ScenarioValidationIssue
     {
         public ScenarioValidationIssue(ScenarioIssueSeverity severity, string message)
@@ -20,6 +27,10 @@ namespace ModAPI.Scenarios
         public string Message { get; private set; }
     }
 
+    /// <summary>
+    /// Mutable validation result used by validators to collect warnings and errors.
+    /// Callers should inspect <see cref="IsValid"/> before launching or publishing a scenario.
+    /// </summary>
     public sealed class ScenarioValidationResult
     {
         private readonly List<ScenarioValidationIssue> _issues = new List<ScenarioValidationIssue>();

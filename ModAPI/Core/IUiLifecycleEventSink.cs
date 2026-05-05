@@ -13,6 +13,10 @@ namespace ModAPI.Core
         void RaiseButtonClicked(object button, string buttonName);
     }
 
+    /// <summary>
+    /// Static forwarding helpers used by legacy UI patches.
+    /// Calls are no-ops until a game runtime registers <see cref="IUiLifecycleEventSink"/>.
+    /// </summary>
     public static class UiLifecycleEventSinks
     {
         private static readonly IUiLifecycleEventSink NullSink = new NullUiLifecycleEventSink();

@@ -2,6 +2,10 @@ using UnityEngine;
 
 namespace ShelteredAPI.Characters
 {
+    /// <summary>
+    /// Editable character data exposed through Sheltered character proxies.
+    /// Use this for mod-owned synthetic characters or carefully scoped edits to live characters.
+    /// </summary>
     public interface ICharacterData
     {
         int UniqueId { get; }

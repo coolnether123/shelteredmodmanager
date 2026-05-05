@@ -2,6 +2,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Initial runtime state for an authored scenario object or scene sprite.
+    /// </summary>
     public enum ScenarioObjectStartState
     {
         StartsEnabled = 0,

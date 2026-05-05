@@ -4,8 +4,8 @@ using ModAPI.Core;
 namespace ModAPI.Spine
 {
     /// <summary>
-    /// Interoperability Layer. Allows mods like "New Game Plus" to query settings
-    /// from other mods at runtime.
+    /// Runtime lookup for settings exposed by loaded mods.
+    /// Use this when one mod needs to read or, when explicitly allowed, write another mod's settings.
     /// </summary>
     public static class ModSettingsDatabase
     {

@@ -5,15 +5,8 @@ using ModAPI.Core;
 namespace ModAPI.Events
 {
     /// <summary>
-    /// Lightweight pub/sub event bus for inter-mod communication.
-    /// Allows mods to publish typed events that other mods can subscribe to.
-    /// 
-    /// Usage:
-    ///   Publishing: ModEventBus.Publish("com.mymod.ItemDiscovered", itemData);
-    ///   Subscribing: ModEventBus.Subscribe&lt;ItemData&gt;("com.mymod.ItemDiscovered", OnItemFound);
-    /// 
-    /// Best Practice: Use reverse-domain naming for event names:
-    ///   "com.authorname.modname.EventName"
+    /// In-process pub/sub event bus for inter-mod communication.
+    /// Use reverse-domain event names, such as <c>com.author.mod.ItemDiscovered</c>, so unrelated mods do not collide.
     /// </summary>
     public static class ModEventBus
     {
@@ -23,7 +16,8 @@ namespace ModAPI.Events
         private static readonly object _lock = new object();
         
         /// <summary>
-        /// Publish a typed event to all subscribers.
+        /// Publishes a typed event to all current subscribers.
+        /// Handlers run synchronously on the caller's thread, so publish from the Unity main thread when handlers may touch game objects.
         /// </summary>
         /// <typeparam name="T">Event data type</typeparam>
         /// <param name="eventName">Event name (use reverse-domain notation)</param>
@@ -68,7 +62,8 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Subscribe to a named event.
+        /// Subscribes a handler to a named typed event.
+        /// The handler type must match the type used by publishers for the same event name.
         /// </summary>
         /// <typeparam name="T">Event data type</typeparam>
         /// <param name="eventName">Event name to subscribe to</param>
@@ -103,7 +98,8 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Unsubscribe from an event.
+        /// Removes a previously subscribed handler from a named event.
+        /// Call this during mod shutdown when the subscriber owns runtime objects.
         /// </summary>
         /// <typeparam name="T">Event data type</typeparam>
         /// <param name="eventName">Event name to unsubscribe from</param>
@@ -134,7 +130,7 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Check if an event has any subscribers.
+        /// Returns true when an event currently has one or more subscribers.
         /// </summary>
         /// <param name="eventName">Event name to check</param>
         /// <returns>True if the event has at least one subscriber</returns>
@@ -150,7 +146,7 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Get count of subscribers for an event.
+        /// Returns the current subscriber count for an event.
         /// </summary>
         /// <param name="eventName">Event name</param>
         /// <returns>Number of subscribers</returns>
@@ -171,8 +167,8 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Clear all subscriptions for an event.
-        /// Use with caution - this will remove ALL subscribers.
+        /// Clears all subscriptions for one event name.
+        /// Use only for owner-controlled events, shutdown, or tests because this removes other mods' handlers too.
         /// </summary>
         /// <param name="eventName">Event name to clear</param>
         public static void ClearEvent(string eventName)
@@ -190,8 +186,8 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Clear ALL event subscriptions.
-        /// Only use during shutdown or testing.
+        /// Clears every event subscription in the process.
+        /// Only use during shutdown or tests.
         /// </summary>
         public static void ClearAll()
         {
@@ -204,7 +200,7 @@ namespace ModAPI.Events
         }
         
         /// <summary>
-        /// Get diagnostic information about registered events.
+        /// Returns event names and subscriber counts for diagnostics.
         /// </summary>
         /// <returns>Dictionary of event names and subscriber counts</returns>
         public static Dictionary<string, int> GetEventDiagnostics()

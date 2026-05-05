@@ -8,7 +8,8 @@ using UnityEngine;
 namespace ShelteredAPI.Characters
 {
     /// <summary>
-    /// Information about a family member.
+    /// Read-only snapshot of a family member at the time it was queried.
+    /// Values are copied from vanilla objects so mods can inspect status without holding live references.
     /// </summary>
     public struct CharacterInfo
     {
@@ -119,7 +120,8 @@ namespace ShelteredAPI.Characters
     }
 
     /// <summary>
-    /// Information about an active expedition party.
+    /// Read-only snapshot of an active expedition party.
+    /// Use this for UI and gameplay checks that do not need to mutate the party.
     /// </summary>
     public struct ExpeditionPartyInfo
     {
@@ -188,6 +190,9 @@ namespace ShelteredAPI.Characters
         }
     }
 
+    /// <summary>
+    /// Event payload raised when an expedition party's membership or existence changes.
+    /// </summary>
     public class PartyChangedEventArgs : EventArgs
     {
         public int PartyId { get; }

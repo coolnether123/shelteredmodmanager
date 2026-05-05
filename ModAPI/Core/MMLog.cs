@@ -10,8 +10,15 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Shared ModAPI logging sink used by the loader, runtime services, and plugin-scoped loggers.
+    /// Prefer <see cref="IModLogger"/> from plugin code when a message belongs to one mod.
+    /// </summary>
     public static class MMLog
     {
+        /// <summary>
+        /// Severity levels written to the ModAPI log.
+        /// </summary>
         public enum LogLevel
         {
             Debug = 0,
@@ -21,9 +28,9 @@ namespace ModAPI.Core
             Fatal = 4
         }
 
-        // TODO: LogCategory system needs to be reworked more directly into ModAPI
-        // For v1.0 release, categories are HARDCODED (no INI customization)
-        // Default categories: General, Loader, Plugin, Assembly
+        /// <summary>
+        /// Coarse logging categories used for filtering support logs.
+        /// </summary>
         public enum LogCategory
         {
             General,
@@ -40,6 +47,9 @@ namespace ModAPI.Core
             IO
         }
 
+        /// <summary>
+        /// One recent log entry kept in memory for diagnostics and debug UI.
+        /// </summary>
         public sealed class LogEntry
         {
             public DateTime Timestamp;
@@ -792,6 +802,10 @@ namespace ModAPI.Core
             WriteInternal(LogLevel.Error, LogCategory.Plugin, "PluginManager", message.ToString());
         }
 
+        /// <summary>
+        /// Disposable timing scope returned by <see cref="Measure"/>.
+        /// Use with a using block to log operation duration even when exceptions occur.
+        /// </summary>
         public sealed class MeasureScope : IDisposable
         {
             private readonly string _name; private readonly string _details; private bool _stopped;

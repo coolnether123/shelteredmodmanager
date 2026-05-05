@@ -10,8 +10,16 @@ using ModAPI.Spine;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Guarded Harmony patch helpers used by ModAPI and mods.
+    /// Use these wrappers when patch application should respect debug, dangerous, and struct-return safety settings.
+    /// </summary>
     public static class HarmonyUtil
     {
+        /// <summary>
+        /// Marks a Harmony patch class as debug-only.
+        /// The patch is skipped unless debug patches are explicitly enabled.
+        /// </summary>
         [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
         public sealed class DebugPatchAttribute : Attribute
         {
@@ -20,6 +28,10 @@ namespace ModAPI.Harmony
             public DebugPatchAttribute(string key) { Key = key; }
         }
 
+        /// <summary>
+        /// Marks a patch as intentionally high risk.
+        /// Dangerous patches require explicit opt-in before <see cref="PatchAll(HarmonyLib.Harmony, Assembly, PatchOptions)"/> applies them.
+        /// </summary>
         [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
         public sealed class DangerousAttribute : Attribute
         {
@@ -28,6 +40,9 @@ namespace ModAPI.Harmony
             public DangerousAttribute(string reason) { Reason = reason; }
         }
 
+        /// <summary>
+        /// Safety and ordering options used while applying Harmony patches.
+        /// </summary>
         public sealed class PatchOptions
         {
             public bool AllowDebugPatches;

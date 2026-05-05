@@ -4,6 +4,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Spine
 {
+    /// <summary>
+    /// Marks a field, property, or method as a configurable Spine setting.
+    /// The attribute supplies UI metadata while the member supplies the value or action.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Method)]
     public class ModSettingAttribute : Attribute
     {
@@ -129,6 +133,10 @@ namespace ModAPI.Spine
         public ModSettingAttribute() { }
     }
     
+    /// <summary>
+    /// Defines a named preset value for a setting.
+    /// Presets let the settings UI apply coherent groups of values without custom code.
+    /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
     public class ModSettingPresetAttribute : Attribute
     {

@@ -4,6 +4,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Pixel-level patch applied to a base sprite to produce a scenario-specific sprite.
+    /// </summary>
     public sealed class SpritePatchDefinition
     {
         public SpritePatchDefinition()

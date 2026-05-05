@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Full authored bunker grid model for a scenario.
+    /// Cells describe grid occupancy while foundations, expansions, and boundaries describe larger unlockable structures.
+    /// </summary>
     public class ScenarioBunkerGridDefinition
     {
         public ScenarioBunkerGridDefinition()

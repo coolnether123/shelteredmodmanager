@@ -7,7 +7,8 @@ using System.Collections.Generic;
 namespace System.Collections.Generic
 {
     /// <summary>
-    /// Compatibility polyfill for IReadOnlyCollection for .NET 3.5
+    /// Minimal .NET 3.5-compatible read-only collection contract.
+    /// This lives in the standard namespace so mod code can move to newer framework targets without API churn.
     /// </summary>
     public interface IReadOnlyCollection<T> : IEnumerable<T>, IEnumerable
     {
@@ -15,7 +16,8 @@ namespace System.Collections.Generic
     }
 
     /// <summary>
-    /// Compatibility polyfill for IReadOnlyList for .NET 3.5
+    /// Minimal .NET 3.5-compatible read-only list contract.
+    /// Use this for API returns that should be enumerable and indexable but not caller-mutated.
     /// </summary>
     public interface IReadOnlyList<T> : IReadOnlyCollection<T>, IEnumerable<T>, IEnumerable
     {
@@ -28,7 +30,8 @@ namespace ModAPI.Util
     using System.Collections.Generic;
 
     /// <summary>
-    /// A simple wrapper to provide IReadOnlyList functionality for an existing IList.
+    /// Read-only adapter over an existing <see cref="IList{T}"/>.
+    /// The wrapper does not copy the list, so changes by the owner are visible to readers.
     /// </summary>
     public class ReadOnlyListWrapper<T> : IReadOnlyList<T>
     {
@@ -60,6 +63,9 @@ namespace ModAPI.Util
         }
     }
 
+    /// <summary>
+    /// Helpers for exposing collections through the compatibility read-only interfaces.
+    /// </summary>
     public static class CollectionExtensions
     {
         public static IReadOnlyList<T> ToReadOnlyList<T>(this IList<T> list)

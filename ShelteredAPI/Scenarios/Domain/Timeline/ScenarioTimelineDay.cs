@@ -4,6 +4,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Timeline bucket for all scenario entries scheduled on one day.
+    /// </summary>
     public class ScenarioTimelineDay
     {
         public ScenarioTimelineDay()

@@ -4,8 +4,8 @@ using System.Collections.Generic;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// Wrapper for persisting multiple mod-specific data objects in a single JSON file.
-    /// Internal DTO for ModAPI persistence. (Renamed from ModSaveData to avoid collision with SaveProtection).
+    /// JSON root for the per-save mod persistence file.
+    /// Mod authors normally use <see cref="ISaveSystem"/> instead of constructing this DTO directly.
     /// </summary>
     [Serializable]
     public class ModPersistenceData
@@ -13,6 +13,9 @@ namespace ModAPI.Core
         public List<ModDataEntry> entries = new List<ModDataEntry>();
     }
 
+    /// <summary>
+    /// One named JSON payload inside the per-save mod persistence file.
+    /// </summary>
     [Serializable]
     public class ModDataEntry
     {

@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Runtime identity and activation metadata for a scenario object.
+    /// This is shared by object placements and runtime state tracking.
+    /// </summary>
     public class ScenarioObjectIdentity
     {
         public ScenarioObjectIdentity()

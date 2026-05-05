@@ -2,6 +2,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Category used to group scenario timeline entries in editor and diagnostics views.
+    /// </summary>
     public enum ScenarioTimelineEntryKind
     {
         Bunker = 0,
@@ -14,6 +17,9 @@ namespace ShelteredAPI.Scenarios
         CustomModded = 7
     }
 
+    /// <summary>
+    /// Runtime or validation status for a scenario timeline entry.
+    /// </summary>
     public enum ScenarioTimelineEntryStatus
     {
         Pending = 0,

@@ -7,8 +7,10 @@ using ModAPI.Core;
 
 namespace ShelteredAPI.GameState
 {
-    // --- Interfaces for Read-Only access ---
-
+    /// <summary>
+    /// Read-only inventory state facade over Sheltered's inventory manager.
+    /// Returned item stacks are vanilla objects, so treat them as live game references.
+    /// </summary>
     public interface IReadOnlyInventory
     {
         int StorageCapacity { get; }
@@ -18,6 +20,9 @@ namespace ShelteredAPI.GameState
         List<ItemStack> GetAllItems();
     }
 
+    /// <summary>
+    /// Read-only family roster facade over Sheltered's family manager.
+    /// </summary>
     public interface IReadOnlyFamilyRoster
     {
         int Count { get; }
@@ -27,6 +32,9 @@ namespace ShelteredAPI.GameState
         FamilyMember GetMemberById(int id);
     }
 
+    /// <summary>
+    /// Read-only exploration party state facade.
+    /// </summary>
     public interface IReadOnlyExplorationState
     {
         bool AnyPartiesExploring { get; }
@@ -34,6 +42,9 @@ namespace ShelteredAPI.GameState
         List<ExplorationParty> GetAllParties();
     }
 
+    /// <summary>
+    /// Read-only encounter state facade.
+    /// </summary>
     public interface IReadOnlyEncounterState
     {
         bool InProgress { get; }
@@ -42,12 +53,18 @@ namespace ShelteredAPI.GameState
         List<EncounterCharacter> NpcCharacters { get; }
     }
 
+    /// <summary>
+    /// Read-only weather state facade.
+    /// </summary>
     public interface IReadOnlyWeatherState
     {
         WeatherManager.WeatherState CurrentWeather { get; }
         int DaysSinceRain { get; }
     }
 
+    /// <summary>
+    /// Read-only game time facade.
+    /// </summary>
     public interface IReadOnlyGameTime
     {
         int Day { get; }

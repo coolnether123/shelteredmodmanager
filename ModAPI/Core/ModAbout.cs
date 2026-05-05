@@ -4,7 +4,8 @@ using UnityEngine;
 namespace ModAPI.Core
 {
     /// <summary>
-    /// DTO for About/About.json. Fields remain public for JsonUtility.
+    /// DTO for a mod's <c>About/About.json</c> manifest.
+    /// Fields remain public because Unity's JsonUtility serializes fields rather than properties.
     /// </summary>
     [Serializable]
     public class ModAbout

@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Repetition policy for a scheduled scenario action.
+    /// Non-repeatable actions fire once; repeatable actions respect cooldown before firing again.
+    /// </summary>
     public class ScenarioSchedulePolicy
     {
         public ScenarioSchedulePolicy()

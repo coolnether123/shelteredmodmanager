@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Base Sheltered mode a scenario is authored against.
+    /// The mode controls default availability and runtime assumptions for scenario selection.
+    /// </summary>
     public enum ScenarioBaseGameMode
     {
         Survival = 0,
@@ -11,6 +15,10 @@ namespace ShelteredAPI.Scenarios
         Stasis = 2
     }
 
+    /// <summary>
+    /// Gender selector for authored family members or NPCs.
+    /// Use <see cref="Any"/> when the runtime should keep or choose the default value.
+    /// </summary>
     public enum ScenarioGender
     {
         Any = 0,
@@ -71,6 +79,10 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
     }
 
+    /// <summary>
+    /// Selection availability flags by base game mode.
+    /// Use this to restrict a scenario to Survival, Surrounded, Stasis, or a combination.
+    /// </summary>
     public class ScenarioModeAvailabilityDefinition
     {
         public bool Survival { get; set; }
@@ -85,6 +97,10 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
+    /// <summary>
+    /// Rules that influence when and how often the scenario can appear in scenario selection.
+    /// These values are authoring metadata; the runtime still owns final spawn timing.
+    /// </summary>
     public class ScenarioSelectionRulesDefinition
     {
         public ScenarioSelectionRulesDefinition()
@@ -112,6 +128,10 @@ namespace ShelteredAPI.Scenarios
         }
     }
 
+    /// <summary>
+    /// Authored NPC or scenario character definition.
+    /// IDs in this object are scenario-local and are resolved when building vanilla scenario stages.
+    /// </summary>
     public class ScenarioNpcDefinition
     {
         public ScenarioNpcDefinition()
@@ -140,6 +160,10 @@ namespace ShelteredAPI.Scenarios
         public string AvatarOverrideSpriteId { get; set; }
     }
 
+    /// <summary>
+    /// Explicit stat levels for an authored NPC.
+    /// Leave values at zero when the selected preset or stat setting should decide them.
+    /// </summary>
     public class ScenarioNpcStatsDefinition
     {
         public int Strength { get; set; }
@@ -149,6 +173,10 @@ namespace ShelteredAPI.Scenarios
         public int Intelligence { get; set; }
     }
 
+    /// <summary>
+    /// Ordered scenario conversation and encounter flow.
+    /// Stages are authored as neutral data and later converted into Sheltered ScenarioDef stages.
+    /// </summary>
     public class ScenarioFlowDefinition
     {
         public ScenarioFlowDefinition()
@@ -159,6 +187,10 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioFlowStageDefinition> Stages { get; private set; }
     }
 
+    /// <summary>
+    /// One named stage in the scenario flow.
+    /// It groups participating characters, intercom stages, and fallback behavior for unanswered calls.
+    /// </summary>
     public class ScenarioFlowStageDefinition
     {
         public ScenarioFlowStageDefinition()
@@ -176,6 +208,10 @@ namespace ShelteredAPI.Scenarios
         public bool PunishOnUnanswered { get; set; }
     }
 
+    /// <summary>
+    /// One intercom or encounter conversation step.
+    /// Options, item rewards, milestones, and stage changes describe what happens when this step resolves.
+    /// </summary>
     public class ScenarioIntercomStageDefinition
     {
         public ScenarioIntercomStageDefinition()
@@ -215,24 +251,37 @@ namespace ShelteredAPI.Scenarios
         public bool RecruitAsFamily { get; set; }
     }
 
+    /// <summary>
+    /// One authored dialogue line identified by speaker and localization key.
+    /// </summary>
     public class ScenarioDialogueLineDefinition
     {
         public string Character { get; set; }
         public string TextKey { get; set; }
     }
 
+    /// <summary>
+    /// Player response option and the next flow stage it selects.
+    /// </summary>
     public class ScenarioDialogueOptionDefinition
     {
         public string TextKey { get; set; }
         public string NextId { get; set; }
     }
 
+    /// <summary>
+    /// Delayed transition to another scenario flow stage.
+    /// </summary>
     public class ScenarioStageChangeDefinition
     {
         public string Id { get; set; }
         public int DelayDays { get; set; }
     }
 
+    /// <summary>
+    /// Outcomes applied when an encounter or intercom stage ends.
+    /// This covers rewards, trade overrides, milestone changes, spawned scenarios, and quest completion.
+    /// </summary>
     public class ScenarioEncounterEndOptionsDefinition
     {
         public ScenarioEncounterEndOptionsDefinition()
@@ -266,6 +315,9 @@ namespace ShelteredAPI.Scenarios
         public bool CompleteParentScenario { get; set; }
     }
 
+    /// <summary>
+    /// Request to trigger a floating quest after a delay.
+    /// </summary>
     public class ScenarioFloatingQuestTriggerDefinition
     {
         public ScenarioFloatingQuestTriggerDefinition()
@@ -279,6 +331,9 @@ namespace ShelteredAPI.Scenarios
         public float DurationDays { get; set; }
     }
 
+    /// <summary>
+    /// Request to spawn another scenario after a delay and chance roll.
+    /// </summary>
     public class ScenarioSpawnTriggerDefinition
     {
         public ScenarioSpawnTriggerDefinition()
@@ -292,6 +347,9 @@ namespace ShelteredAPI.Scenarios
         public int DelayDays { get; set; }
     }
 
+    /// <summary>
+    /// Milestone mutation authored by a scenario stage.
+    /// </summary>
     public class ScenarioMilestoneDefinition
     {
         public string Name { get; set; }
@@ -299,12 +357,18 @@ namespace ShelteredAPI.Scenarios
         public string Action { get; set; }
     }
 
+    /// <summary>
+    /// Milestone prerequisite checked by a scenario stage.
+    /// </summary>
     public class ScenarioMilestoneCheckDefinition
     {
         public string Name { get; set; }
         public string Scope { get; set; }
     }
 
+    /// <summary>
+    /// Condition that checks the state of one or more subquests before continuing.
+    /// </summary>
     public class ScenarioSubquestCheckDefinition
     {
         public ScenarioSubquestCheckDefinition()
@@ -317,6 +381,10 @@ namespace ShelteredAPI.Scenarios
         public List<string> Subquests { get; private set; }
     }
 
+    /// <summary>
+    /// Authored family setup for a scenario.
+    /// Use this to replace the vanilla starting family or schedule future survivors.
+    /// </summary>
     public class FamilySetupDefinition
     {
         public FamilySetupDefinition()
@@ -330,6 +398,10 @@ namespace ShelteredAPI.Scenarios
         public List<FutureSurvivorDefinition> FutureSurvivors { get; private set; }
     }
 
+    /// <summary>
+    /// Authored family member configuration.
+    /// Age, stats, traits, skills, and appearance are optional so scenarios can override only what matters.
+    /// </summary>
     public class FamilyMemberConfig
     {
         public FamilyMemberConfig()
@@ -352,6 +424,10 @@ namespace ShelteredAPI.Scenarios
         public FamilyMemberAppearanceConfig Appearance { get; set; }
     }
 
+    /// <summary>
+    /// Optional visual overrides for an authored family member.
+    /// Texture IDs reference scenario assets; texture paths are mod-relative files.
+    /// </summary>
     public class FamilyMemberAppearanceConfig
     {
         public string MeshId { get; set; }
@@ -368,18 +444,28 @@ namespace ShelteredAPI.Scenarios
         public string PantsColorHex { get; set; }
     }
 
+    /// <summary>
+    /// Explicit stat override for an authored survivor.
+    /// </summary>
     public class StatOverride
     {
         public string StatId { get; set; }
         public int Value { get; set; }
     }
 
+    /// <summary>
+    /// Explicit skill override for an authored survivor.
+    /// </summary>
     public class SkillOverride
     {
         public string SkillId { get; set; }
         public int Level { get; set; }
     }
 
+    /// <summary>
+    /// Starting and scheduled inventory changes for a scenario.
+    /// Use <see cref="OverrideRandomStart"/> to replace vanilla random starting supplies.
+    /// </summary>
     public class StartingInventoryDefinition
     {
         public StartingInventoryDefinition()
@@ -393,18 +479,27 @@ namespace ShelteredAPI.Scenarios
         public List<TimedInventoryChangeDefinition> ScheduledChanges { get; private set; }
     }
 
+    /// <summary>
+    /// Item ID and quantity pair used by inventory, loot, rewards, and trade definitions.
+    /// </summary>
     public class ItemEntry
     {
         public string ItemId { get; set; }
         public int Quantity { get; set; }
     }
 
+    /// <summary>
+    /// Direction for a scheduled inventory change.
+    /// </summary>
     public enum ScenarioInventoryChangeKind
     {
         Add = 0,
         Remove = 1
     }
 
+    /// <summary>
+    /// Survivor that can join or appear later in a scenario timeline.
+    /// </summary>
     public class FutureSurvivorDefinition
     {
         public FutureSurvivorDefinition()
@@ -421,6 +516,9 @@ namespace ShelteredAPI.Scenarios
         public FamilyMemberConfig Survivor { get; set; }
     }
 
+    /// <summary>
+    /// Inventory mutation scheduled for a specific scenario time.
+    /// </summary>
     public class TimedInventoryChangeDefinition
     {
         public TimedInventoryChangeDefinition()
@@ -437,6 +535,9 @@ namespace ShelteredAPI.Scenarios
         public ScenarioScheduleTime When { get; set; }
     }
 
+    /// <summary>
+    /// Authored changes to the starting bunker layout and placed objects.
+    /// </summary>
     public class BunkerEditsDefinition
     {
         public BunkerEditsDefinition()
@@ -449,6 +550,10 @@ namespace ShelteredAPI.Scenarios
         public List<ObjectPlacement> ObjectPlacements { get; private set; }
     }
 
+    /// <summary>
+    /// Visual edit for one bunker grid cell.
+    /// Runtime sprite keys let scenario authoring reuse generated or imported sprite assets.
+    /// </summary>
     public class RoomEdit
     {
         public int GridX { get; set; }
@@ -459,6 +564,10 @@ namespace ShelteredAPI.Scenarios
         public string WireRuntimeSpriteKey { get; set; }
     }
 
+    /// <summary>
+    /// Authored object placed into the bunker or scene.
+    /// Gates, schedule IDs, and required foundation IDs let the runtime delay or unlock placement.
+    /// </summary>
     public class ObjectPlacement
     {
         public ObjectPlacement()
@@ -487,6 +596,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> CustomProperties { get; private set; }
     }
 
+    /// <summary>
+    /// Serializable vector used by scenario DTOs without depending on UnityEngine serialization.
+    /// </summary>
     public class ScenarioVector3
     {
         public float X { get; set; }
@@ -494,12 +606,18 @@ namespace ShelteredAPI.Scenarios
         public float Z { get; set; }
     }
 
+    /// <summary>
+    /// Extensible key/value pair for scenario features that need mod-specific metadata.
+    /// </summary>
     public class ScenarioProperty
     {
         public string Key { get; set; }
         public string Value { get; set; }
     }
 
+    /// <summary>
+    /// Scenario triggers, dialogue chains, and weather events authored outside the main encounter flow.
+    /// </summary>
     public class TriggersAndEventsDefinition
     {
         public TriggersAndEventsDefinition()
@@ -514,6 +632,10 @@ namespace ShelteredAPI.Scenarios
         public List<WeatherEventDefinition> WeatherEvents { get; private set; }
     }
 
+    /// <summary>
+    /// Named trigger definition with extensible properties.
+    /// Trigger IDs are referenced by gates, effects, and runtime calls.
+    /// </summary>
     public class TriggerDef
     {
         public TriggerDef()
@@ -526,6 +648,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Reusable dialogue line sequence identified by scenario-local ID.
+    /// </summary>
     public class DialogueChain
     {
         public DialogueChain()
@@ -537,6 +662,9 @@ namespace ShelteredAPI.Scenarios
         public List<string> Lines { get; private set; }
     }
 
+    /// <summary>
+    /// Authored win and loss condition groups for a scenario.
+    /// </summary>
     public class WinLossConditionsDefinition
     {
         public WinLossConditionsDefinition()
@@ -549,6 +677,9 @@ namespace ShelteredAPI.Scenarios
         public List<ConditionDef> LossConditions { get; private set; }
     }
 
+    /// <summary>
+    /// Collection of authored quest definitions attached to a scenario.
+    /// </summary>
     public class QuestAuthoringDefinition
     {
         public QuestAuthoringDefinition()
@@ -559,6 +690,10 @@ namespace ShelteredAPI.Scenarios
         public List<QuestDefinition> Quests { get; private set; }
     }
 
+    /// <summary>
+    /// Neutral quest definition authored by a scenario.
+    /// Game-specific runtime code translates this into Sheltered quest objects.
+    /// </summary>
     public class QuestDefinition
     {
         public QuestDefinition()
@@ -576,6 +711,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Weather override scheduled by a scenario timeline.
+    /// </summary>
     public class WeatherEventDefinition
     {
         public WeatherEventDefinition()
@@ -591,6 +729,10 @@ namespace ShelteredAPI.Scenarios
         public int DurationHours { get; set; }
     }
 
+    /// <summary>
+    /// Legacy/extensible condition definition used by win/loss and quest authoring.
+    /// Newer scenario gates should prefer <see cref="ScenarioConditionRef"/>.
+    /// </summary>
     public class ConditionDef
     {
         public ConditionDef()
@@ -603,6 +745,10 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Custom sprite, icon, patch, swap, and scene-sprite references used by a scenario.
+    /// Paths are mod-relative unless a runtime sprite key is supplied.
+    /// </summary>
     public class AssetReferencesDefinition
     {
         public AssetReferencesDefinition()
@@ -621,6 +767,10 @@ namespace ShelteredAPI.Scenarios
         public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
     }
 
+    /// <summary>
+    /// Runtime component type targeted by a sprite swap or scene sprite operation.
+    /// Use <see cref="Auto"/> when the resolver should choose the best available component.
+    /// </summary>
     public enum ScenarioSpriteTargetComponentKind
     {
         Auto = 0,
@@ -628,6 +778,9 @@ namespace ShelteredAPI.Scenarios
         UI2DSprite = 2
     }
 
+    /// <summary>
+    /// Rule that replaces a runtime sprite when the target path and optional timing match.
+    /// </summary>
     public class SpriteSwapRule
     {
         public string Id { get; set; }
@@ -639,6 +792,10 @@ namespace ShelteredAPI.Scenarios
         public ScenarioSpriteTargetComponentKind TargetComponent { get; set; }
     }
 
+    /// <summary>
+    /// Named custom sprite asset reference.
+    /// Use either a mod-relative path, a patch ID, or a runtime-generated sprite key depending on source.
+    /// </summary>
     public class SpriteRef
     {
         public string Id { get; set; }
@@ -647,6 +804,10 @@ namespace ShelteredAPI.Scenarios
         public bool UserOwned { get; set; }
     }
 
+    /// <summary>
+    /// Authored standalone sprite placement in a scene.
+    /// This is for visual scenario decorations or stateful scene assets, not inventory items.
+    /// </summary>
     public class SceneSpritePlacement
     {
         public SceneSpritePlacement()
@@ -678,6 +839,9 @@ namespace ShelteredAPI.Scenarios
         public int SortingOrder { get; set; }
     }
 
+    /// <summary>
+    /// Named custom icon asset reference.
+    /// </summary>
     public class IconRef
     {
         public string Id { get; set; }

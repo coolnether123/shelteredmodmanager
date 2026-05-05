@@ -8,6 +8,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Starting point for the next fluent IL search.
+    /// Use <see cref="Current"/> or <see cref="Next"/> for sequential matching inside one patch.
+    /// </summary>
     public enum SearchMode
     {
         Start,   // Resets to beginning before searching
@@ -16,7 +20,8 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Professional-grade Fluent API for Harmony Transpilers.
+    /// Fluent API for writing Harmony transpilers with safer matching, diagnostics, and label handling.
+    /// Build patches from intent-based operations instead of raw index edits whenever possible.
     /// </summary>
     /// <remarks>
     /// <b>Why use FluentTranspiler?</b>
@@ -1019,13 +1024,13 @@ namespace ModAPI.Harmony
 
         #region Navigation & Debugging
 
-        /// <summary>Check if current position is valid.</summary>
+        /// <summary>True when the current matcher position is valid.</summary>
         public bool HasMatch => _matcher.IsValid;
 
-        /// <summary>Get current instruction (or null).</summary>
+        /// <summary>Current instruction, or null when the matcher is invalid.</summary>
         public CodeInstruction Current => _matcher.IsValid ? _matcher.Instruction : null;
 
-        /// <summary>Get current index.</summary>
+        /// <summary>Current instruction index.</summary>
         public int CurrentIndex => _matcher.Pos;
 
         /// <summary>Move to next instruction.</summary>
@@ -1042,7 +1047,7 @@ namespace ModAPI.Harmony
             return this;
         }
 
-        /// <summary>Get all warnings that occurred.</summary>
+        /// <summary>Warnings recorded by previous matching or editing operations.</summary>
         public IList<string> Warnings { get { return _warnings.AsReadOnly(); } }
 
         /// <summary>Add a warning to the transpiler state.</summary>
@@ -1088,7 +1093,7 @@ namespace ModAPI.Harmony
             return this;
         }
 
-        /// <summary>Get copy of current instructions.</summary>
+        /// <summary>Returns the current instruction list.</summary>
         public IEnumerable<CodeInstruction> Instructions()
         {
             return _matcher.Instructions();

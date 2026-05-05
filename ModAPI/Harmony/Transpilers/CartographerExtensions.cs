@@ -9,6 +9,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Candidate IL anchor found by transpiler cartography.
+    /// Higher uniqueness scores indicate safer patch positions.
+    /// </summary>
     public class Anchor
     {
         public int Index;
@@ -23,6 +27,9 @@ namespace ModAPI.Harmony
         }
     }
 
+    /// <summary>
+    /// Anchor analysis result with safe-anchor candidates and suggestions.
+    /// </summary>
     public class AnchorReport
     {
         public List<Anchor> SafeAnchors = new List<Anchor>();
@@ -49,6 +56,10 @@ namespace ModAPI.Harmony
         }
     }
 
+    /// <summary>
+    /// Diagnostic extensions for finding stable IL anchors before editing a transpiler.
+    /// Use these during patch development to avoid brittle instruction offsets.
+    /// </summary>
     public static class CartographerExtensions 
     {
         /// <summary>

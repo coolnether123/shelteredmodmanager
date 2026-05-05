@@ -7,6 +7,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Ordering level for cooperative transpilers that target the same method.
+    /// Lower values run earlier.
+    /// </summary>
     public enum PatchPriority
     {
         First = 0,
@@ -19,8 +23,8 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Orchestrates multiple transpilers on the same method to ensure compatibility.
-    /// Replaces the "wild west" of conflicting Harmony patches with a managed pipeline.
+    /// Orchestrates multiple transpilers on the same method through a managed pipeline.
+    /// Use this when mods need explicit ordering, dependencies, or conflict declarations around shared IL anchors.
     /// </summary>
     public static class CooperativePatcher
     {
@@ -41,8 +45,8 @@ namespace ModAPI.Harmony
         private static readonly HashSet<string> _quarantinedOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Registers a cooperative transpiler. 
-        /// NOTE: This does not apply the patch immediately. You must call Apply() or ensure ModAPI's master patcher is running.
+        /// Registers a cooperative transpiler for a target method.
+        /// Registration does not apply the patch immediately; call Apply() or rely on ModAPI's master patcher.
         /// </summary>
         public static void RegisterTranspiler(
             MethodBase target,

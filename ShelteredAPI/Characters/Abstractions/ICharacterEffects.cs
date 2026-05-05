@@ -2,6 +2,10 @@ using System.Collections.Generic;
 
 namespace ShelteredAPI.Characters
 {
+    /// <summary>
+    /// Manages active effects on one character proxy.
+    /// Apply and remove effects through this API so lifecycle events, serialization, and stacking stay consistent.
+    /// </summary>
     public interface ICharacterEffects
     {
         EffectInstance Apply<T>(float? duration = null, string sourceModId = null) where T : ICharacterEffect, new();

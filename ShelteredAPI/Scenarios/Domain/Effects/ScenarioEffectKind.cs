@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Built-in effect types that scenario actions can execute.
+    /// Custom effect dispatchers can extend behavior without changing the neutral DTO.
+    /// </summary>
     public enum ScenarioEffectKind
     {
         UnlockBunkerExpansion = 0,

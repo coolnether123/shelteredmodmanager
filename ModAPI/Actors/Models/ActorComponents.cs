@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace ModAPI.Actors
 {
+    /// <summary>
+    /// Conflict behavior requested by a component when another component with the same ID already exists.
+    /// </summary>
     public enum ActorConflictPolicy
     {
         Replace = 0,
@@ -11,6 +14,10 @@ namespace ModAPI.Actors
         Reject = 2
     }
 
+    /// <summary>
+    /// Result of writing a component to an actor.
+    /// Use this to distinguish successful writes from missing actors or rejected conflicts.
+    /// </summary>
     public enum ActorComponentWriteResult
     {
         Added = 0,
@@ -21,6 +28,10 @@ namespace ModAPI.Actors
         MissingActor = 5
     }
 
+    /// <summary>
+    /// Small, serializable state packet attached to an actor.
+    /// Component IDs should be stable and namespaced, for example <c>my_mod.reputation</c>.
+    /// </summary>
     public interface IActorComponent
     {
         string ComponentId { get; }
@@ -28,11 +39,19 @@ namespace ModAPI.Actors
         ActorConflictPolicy ConflictPolicy { get; }
     }
 
+    /// <summary>
+    /// Component that can merge incoming state with the existing component value.
+    /// Implement this when multiple mods or multiple writes should contribute to one logical component.
+    /// </summary>
     public interface IMergeableActorComponent : IActorComponent
     {
         IActorComponent Merge(IActorComponent existing);
     }
 
+    /// <summary>
+    /// Serializes and restores one actor component type.
+    /// Register serializers before importing actor save data so custom components do not get dropped.
+    /// </summary>
     public interface IActorComponentSerializer
     {
         string ComponentId { get; }
@@ -43,6 +62,10 @@ namespace ModAPI.Actors
         IActorComponent Deserialize(string payload, int storedVersion);
     }
 
+    /// <summary>
+    /// JsonUtility-backed serializer for simple Unity-serializable actor components.
+    /// Use a custom serializer when component data needs migration or non-Unity JSON behavior.
+    /// </summary>
     public sealed class ActorJsonComponentSerializer<TComponent> : IActorComponentSerializer
         where TComponent : class, IActorComponent, new()
     {
@@ -77,6 +100,9 @@ namespace ModAPI.Actors
         }
     }
 
+    /// <summary>
+    /// Built-in profile component for Sheltered character identity and visible character stats.
+    /// </summary>
     [Serializable]
     public sealed class ActorProfileComponent : IActorComponent
     {
@@ -101,6 +127,9 @@ namespace ModAPI.Actors
         public ActorConflictPolicy ConflictPolicy { get { return ActorConflictPolicy.Replace; } }
     }
 
+    /// <summary>
+    /// One named numeric actor attribute contributed by a mod or runtime system.
+    /// </summary>
     [Serializable]
     public sealed class ActorAttributeEntry
     {
@@ -109,6 +138,10 @@ namespace ModAPI.Actors
         public string SourceModId;
     }
 
+    /// <summary>
+    /// Mergeable component that stores additive named attributes for an actor.
+    /// Entries are scoped by source mod so one mod can update or remove only its own contribution.
+    /// </summary>
     [Serializable]
     public sealed class ActorAttributeSetComponent : IMergeableActorComponent
     {

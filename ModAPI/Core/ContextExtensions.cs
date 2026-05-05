@@ -4,11 +4,15 @@ using UnityEngine;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Scheduling helpers for common plugin-context timing needs.
+    /// Use these when code must wait for a scene or a few Unity frames before touching scene objects.
+    /// </summary>
     public static class ContextExtensions
     {
         /// <summary>
-        /// Runs the action after the named scene is loaded. If already loaded and active, runs next frame.
-        /// Uses ctx.LoaderRoot to host a small helper MonoBehaviour.
+        /// Runs the action after the named scene is loaded, or next frame when that scene is already active.
+        /// The helper is hosted under <see cref="IPluginContext.LoaderRoot"/> so callers do not need their own MonoBehaviour.
         /// </summary>
         public static void RunWhenSceneReady(this IPluginContext ctx, string sceneName, Action action)
         {
@@ -18,7 +22,8 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Runs the action after n frames (on main thread) via coroutine.
+        /// Runs an action on the Unity main thread after the requested number of frames.
+        /// Use this to wait for legacy UI or scene objects to finish one-frame initialization.
         /// </summary>
         public static void RunAfterFrames(this IPluginContext ctx, int frames, Action action)
         {

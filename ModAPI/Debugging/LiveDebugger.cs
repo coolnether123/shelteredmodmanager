@@ -263,6 +263,9 @@ namespace ModAPI.Debugging
         }
     }
 
+    /// <summary>
+    /// Aggregate timing data captured for one instrumented method.
+    /// </summary>
     public class MethodTrace
     {
         public MethodBase Method;
@@ -278,6 +281,9 @@ namespace ModAPI.Debugging
         }
     }
 
+    /// <summary>
+    /// Temporary state carried from debugger prefix to postfix while a method call is active.
+    /// </summary>
     public class ActiveCallState
     {
         public float StartTime;
@@ -287,6 +293,10 @@ namespace ModAPI.Debugging
         public ExecutionFrame Frame;
     }
 
+    /// <summary>
+    /// Captured call frame used by live debugger views.
+    /// Contains parameters, fields, statics, and IL progress when that data is available.
+    /// </summary>
     public class ExecutionFrame
     {
         public DateTime Timestamp;

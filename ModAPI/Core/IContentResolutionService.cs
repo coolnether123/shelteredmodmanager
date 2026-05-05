@@ -9,8 +9,16 @@ namespace ModAPI.Core
     /// </summary>
     public interface IContentResolutionService
     {
+        /// <summary>
+        /// Resolves a mod-facing item ID to the host runtime key used by the active game.
+        /// The returned key is opaque; pass it back to game-specific services rather than casting it in ModAPI code.
+        /// </summary>
         bool TryResolveRuntimeItemKey(string itemId, out object runtimeItemKey);
 
+        /// <summary>
+        /// Enumerates runtime item keys registered by the host integration.
+        /// Use this for diagnostics or compatibility scans, not as a stable persistence format.
+        /// </summary>
         IEnumerable<object> GetRegisteredRuntimeItemKeys();
     }
 

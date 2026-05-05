@@ -4,6 +4,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Actors
 {
+    /// <summary>
+    /// Creates, updates, queries, and destroys actor records in the shared actor graph.
+    /// Use this when a mod needs a stable identity for a family member, visitor, scenario actor, or synthetic actor.
+    /// </summary>
     public interface IActorRegistry
     {
         IActorRecord Get(ActorId id);
@@ -20,6 +24,10 @@ namespace ModAPI.Actors
         event Action<IActorRecord> ActorStateChanged;
     }
 
+    /// <summary>
+    /// Stores mod-owned components on actors without requiring mods to share concrete runtime types.
+    /// Components should be small, serializable state packets identified by <see cref="IActorComponent.ComponentId"/>.
+    /// </summary>
     public interface IActorComponentStore
     {
         ActorComponentWriteResult Set(ActorId actorId, IActorComponent component, string sourceModId);
@@ -35,6 +43,10 @@ namespace ModAPI.Actors
         IReadOnlyList<string> GetComponentIds(ActorId actorId);
     }
 
+    /// <summary>
+    /// Maps host objects or external identifiers to actor IDs.
+    /// Use bindings when the actor must be found again from a game object, save key, or integration-specific handle.
+    /// </summary>
     public interface IActorBindingStore
     {
         bool Bind(ActorId actorId, ActorBinding binding, bool replaceExisting);
@@ -44,6 +56,10 @@ namespace ModAPI.Actors
         IReadOnlyList<ActorId> GetBoundActors(string bindingType);
     }
 
+    /// <summary>
+    /// Publishes actor-system events and exposes a short recent-event buffer for diagnostics.
+    /// Subscribe here for actor lifecycle and component changes instead of polling the registry every frame.
+    /// </summary>
     public interface IActorEvents
     {
         event Action<ActorEventEnvelope> EventPublished;
@@ -53,6 +69,10 @@ namespace ModAPI.Actors
         IReadOnlyList<ActorEventEnvelope> GetRecentEvents();
     }
 
+    /// <summary>
+    /// Deterministic actor simulation hook run by the actor scheduler.
+    /// Implement this for systems that advance actor-owned state on ModAPI ticks.
+    /// </summary>
     public interface IActorSimulationSystem
     {
         string SystemId { get; }
@@ -60,6 +80,10 @@ namespace ModAPI.Actors
         void Tick(ActorSimulationContext context, int tickStep);
     }
 
+    /// <summary>
+    /// Synchronizes external game state into the actor graph.
+    /// Adapters are the bridge between host runtime objects and ModAPI's neutral actor records.
+    /// </summary>
     public interface IActorAdapter
     {
         string AdapterId { get; }
@@ -67,11 +91,19 @@ namespace ModAPI.Actors
         void Synchronize(IActorSystem actors, long currentTick);
     }
 
+    /// <summary>
+    /// Adapter variant that can skip work when ticks, registry versions, or live bindings have not changed.
+    /// Use this for expensive host scans.
+    /// </summary>
     public interface IConditionalActorAdapter : IActorAdapter
     {
         bool ShouldSynchronize(ActorAdapterContext context);
     }
 
+    /// <summary>
+    /// Registers live-sync adapters with the actor runtime.
+    /// Game integrations usually register adapters during bootstrap; mods may register their own bridges when needed.
+    /// </summary>
     public interface IActorAdapterRegistry
     {
         void RegisterAdapter(IActorAdapter adapter);
@@ -79,12 +111,20 @@ namespace ModAPI.Actors
         IReadOnlyList<IActorAdapter> GetAdapters();
     }
 
+    /// <summary>
+    /// Read-only diagnostics for actor runtime health.
+    /// Use this for debug panels, health checks, and support logs without mutating actor state.
+    /// </summary>
     public interface IActorDiagnostics
     {
         ActorRuntimeSnapshot GetRuntimeSnapshot();
         IReadOnlyList<ActorFailureRecord> GetFailureRecords();
     }
 
+    /// <summary>
+    /// Orders and runs actor simulation systems.
+    /// Manual callers should tick this only from the main runtime loop unless they own the full actor lifecycle.
+    /// </summary>
     public interface IActorSimulationScheduler
     {
         long CurrentTick { get; }
@@ -95,6 +135,10 @@ namespace ModAPI.Actors
         void Tick(int tickStep, string streamName);
     }
 
+    /// <summary>
+    /// Serializes actor records, bindings, and components through registered component serializers.
+    /// Register serializers before importing saved actors so custom components can be restored.
+    /// </summary>
     public interface IActorSerializationService
     {
         int CurrentSchemaVersion { get; }
@@ -105,6 +149,10 @@ namespace ModAPI.Actors
         bool ImportJson(string json);
     }
 
+    /// <summary>
+    /// Complete actor API surface exposed by a game runtime.
+    /// Prefer this aggregate when a caller needs registry, components, bindings, events, simulation, and diagnostics together.
+    /// </summary>
     public interface IActorSystem :
         IActorRegistry,
         IActorComponentStore,
@@ -117,6 +165,10 @@ namespace ModAPI.Actors
     {
     }
 
+    /// <summary>
+    /// Runtime services passed to an <see cref="IActorSimulationSystem"/> for one scheduler tick.
+    /// The context keeps simulation code focused on actor state and deterministic random streams.
+    /// </summary>
     public sealed class ActorSimulationContext
     {
         public ActorSimulationContext(

@@ -6,12 +6,13 @@ using ModAPI.Core;
 namespace ShelteredAPI.Adapters
 {
     /// <summary>
-    /// Strongly-typed gameplay adapters on top of IGameHelper.
+    /// Sheltered-specific helpers layered on top of <see cref="IGameHelper"/>.
+    /// Use these when mod code intentionally works with Sheltered runtime types.
     /// </summary>
     public static class GameHelperExtensions
     {
         /// <summary>
-        /// Get total owned items by strongly-typed item enum.
+        /// Returns the total owned count for a vanilla Sheltered item type across storage managers.
         /// </summary>
         public static int GetTotalOwned(this IGameHelper helper, ItemManager.ItemType itemType)
         {

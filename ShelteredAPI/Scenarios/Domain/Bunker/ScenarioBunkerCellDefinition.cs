@@ -2,6 +2,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Build or unlock phase for authored bunker cells, foundations, and expansions.
+    /// </summary>
     public enum ScenarioBunkerBuildPhase
     {
         Start = 0,
@@ -10,6 +13,9 @@ namespace ShelteredAPI.Scenarios
         GateUnlocked = 3
     }
 
+    /// <summary>
+    /// Authored bunker grid cell and its unlock/build requirements.
+    /// </summary>
     public class ScenarioBunkerCellDefinition
     {
         public ScenarioBunkerCellDefinition()

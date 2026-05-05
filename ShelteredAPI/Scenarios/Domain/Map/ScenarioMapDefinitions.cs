@@ -2,6 +2,10 @@ using System.Collections.Generic;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Top-level authored world-map data for a scenario.
+    /// Locations, routes, loot, and encounter tables are neutral data until the game runtime projects them onto Sheltered's map.
+    /// </summary>
     public class MapAuthoringDefinition
     {
         public MapAuthoringDefinition()
@@ -28,6 +32,9 @@ namespace ShelteredAPI.Scenarios
         public List<ExpeditionRouteDefinition> Routes { get; private set; }
     }
 
+    /// <summary>
+    /// Authored point of interest or route endpoint on the scenario map.
+    /// </summary>
     public class MapLocationDefinition
     {
         public MapLocationDefinition()
@@ -55,6 +62,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Visual and semantic category for a scenario map marker.
+    /// </summary>
     public enum MapMarkerKind
     {
         PointOfInterest = 0,
@@ -68,6 +78,10 @@ namespace ShelteredAPI.Scenarios
         Custom = 8
     }
 
+    /// <summary>
+    /// Visual marker shown on the scenario map.
+    /// Markers can be linked to locations or boundaries and gated through runtime visibility.
+    /// </summary>
     public class MapMarkerDefinition
     {
         public MapMarkerDefinition()
@@ -91,6 +105,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Semantic role for a polygon or rectangular map boundary.
+    /// </summary>
     public enum MapBoundaryKind
     {
         Region = 0,
@@ -102,6 +119,9 @@ namespace ShelteredAPI.Scenarios
         Custom = 6
     }
 
+    /// <summary>
+    /// Region, blocked area, loot zone, encounter zone, or terrain area on the map.
+    /// </summary>
     public class MapBoundaryDefinition
     {
         public MapBoundaryDefinition()
@@ -126,12 +146,18 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Serializable two-dimensional map point.
+    /// </summary>
     public class MapPointDefinition
     {
         public float X { get; set; }
         public float Y { get; set; }
     }
 
+    /// <summary>
+    /// Shape used by a terrain patch brush.
+    /// </summary>
     public enum MapTerrainBrushShape
     {
         Rectangle = 0,
@@ -139,6 +165,10 @@ namespace ShelteredAPI.Scenarios
         Polygon = 2
     }
 
+    /// <summary>
+    /// Authored terrain override on the scenario map.
+    /// Priority controls which patch wins when patches overlap.
+    /// </summary>
     public class MapTerrainPatchDefinition
     {
         public MapTerrainPatchDefinition()
@@ -162,6 +192,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Named loot table that map locations or boundaries can reference.
+    /// </summary>
     public class MapLootTableDefinition
     {
         public MapLootTableDefinition()
@@ -176,6 +209,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Weighted item entry in a map loot table.
+    /// </summary>
     public class MapLootEntryDefinition
     {
         public MapLootEntryDefinition()
@@ -193,6 +229,9 @@ namespace ShelteredAPI.Scenarios
         public float Chance { get; set; }
     }
 
+    /// <summary>
+    /// Named encounter table that map locations or boundaries can reference.
+    /// </summary>
     public class MapEncounterTableDefinition
     {
         public MapEncounterTableDefinition()
@@ -207,6 +246,9 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Weighted encounter entry used when the scenario map rolls an encounter.
+    /// </summary>
     public class MapEncounterEntryDefinition
     {
         public MapEncounterEntryDefinition()
@@ -231,6 +273,10 @@ namespace ShelteredAPI.Scenarios
         public List<ScenarioProperty> Properties { get; private set; }
     }
 
+    /// <summary>
+    /// Authored route between map locations.
+    /// Use gates to lock routes until scenario conditions are met.
+    /// </summary>
     public class ExpeditionRouteDefinition
     {
         public ExpeditionRouteDefinition()

@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Action scheduled on the scenario timeline.
+    /// Conditions and gate checks run before effects are dispatched.
+    /// </summary>
     public class ScenarioScheduledActionDefinition
     {
         public ScenarioScheduledActionDefinition()

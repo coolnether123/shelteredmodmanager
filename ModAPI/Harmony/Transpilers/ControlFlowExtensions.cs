@@ -8,6 +8,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Loop shape to search for while navigating IL.
+    /// This is a hint for diagnostics; loop detection still operates on branch structure.
+    /// </summary>
     public enum LoopType
     {
         For,
@@ -16,8 +20,8 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Semantic navigation extensions for FluentTranspiler.
-    /// Allows finding high-level code structures like loops and if-statements.
+    /// Semantic navigation extensions for <see cref="FluentTranspiler"/>.
+    /// Use these when a patch should move by control-flow intent instead of raw instruction offsets.
     /// </summary>
     public static class ControlFlowExtensions
     {

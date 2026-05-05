@@ -139,9 +139,11 @@ namespace ShelteredAPI.Scenarios
         }
 
         /// <summary>
-        /// Queue the prepared save target and push the customisation panel. On
+        /// Queue the prepared save target and start the scenario. On
         /// failure rolls back both the queued target and the allocated save, and
-        /// clears the pending custom scenario state.
+        /// clears the pending custom scenario state. Draft authoring and survival
+        /// starts still use the customisation panel; published scenario modes start
+        /// their Sheltered scenario scene directly.
         /// </summary>
         public bool CommitNewGame(
             ScenarioBrowserPanelAdapter adapter,
@@ -172,7 +174,21 @@ namespace ShelteredAPI.Scenarios
                 return false;
             }
 
-            if (!BeginCustomisationTransition(adapter, BuildLaunchTargetLabel(preparation), virtualSaveType))
+            string launchTargetLabel = BuildLaunchTargetLabel(preparation);
+            if (ShouldLaunchWithoutStartup(preparation.Entry))
+            {
+                if (!BeginDirectScenarioTransition(adapter, launchTargetLabel, virtualSaveType, preparation.Entry.BaseGameMode))
+                {
+                    error = "Could not launch the scenario scene.";
+                    _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                    DiscardPreparation(preparation, false);
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (!BeginCustomisationTransition(adapter, launchTargetLabel, virtualSaveType))
             {
                 error = "Could not push the customisation panel.";
                 _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
@@ -239,6 +255,48 @@ namespace ShelteredAPI.Scenarios
             }
 
             return true;
+        }
+
+        public bool LaunchVanillaScenario(
+            ScenarioBrowserPanelAdapter adapter,
+            ScenarioCatalogEntry entry,
+            out string error)
+        {
+            error = null;
+
+            if (adapter == null) { error = "adapter is null"; return false; }
+            if (entry == null) { error = "scenario entry is null"; return false; }
+            if (!entry.IsVanilla) { error = "entry is not a vanilla scenario"; return false; }
+            if (!entry.CanStart)
+            {
+                error = "Scenario is locked by missing or mismatched dependencies.";
+                return false;
+            }
+
+            int selectedScenario;
+            if (!TryGetVanillaScenarioSelectionIndex(entry, out selectedScenario))
+            {
+                error = "Vanilla scenario cannot be launched from the scenario panel: " + entry.ScenarioId + ".";
+                return false;
+            }
+
+            try
+            {
+                _scenarioLifecycle.ClearState();
+                adapter.SetInputEnabled(true);
+                adapter.SetSelectedScenario(selectedScenario);
+                adapter.Panel.OnScenarioChosen();
+
+                MMLog.WriteInfo("[ScenarioLaunchCoordinator] Vanilla scenario launch routed through stock selection flow. scenarioId="
+                    + entry.ScenarioId + " selectedIndex=" + selectedScenario + ".");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "Vanilla scenario launch failed: " + ex.Message;
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] " + error);
+                return false;
+            }
         }
 
         public bool LoadSave(
@@ -320,6 +378,55 @@ namespace ShelteredAPI.Scenarios
             _saveLibrary.ClearQueuedLoad(virtualSaveType);
         }
 
+        public bool BeginDirectScenarioTransition(
+            ScenarioBrowserPanelAdapter adapter,
+            string launchTargetLabel,
+            SaveManager.SaveType virtualSaveType,
+            ScenarioBaseGameMode baseGameMode)
+        {
+            if (adapter == null)
+                return false;
+
+            string sceneName;
+            if (!TryGetDirectLaunchScene(baseGameMode, out sceneName))
+                return false;
+
+            try
+            {
+                if (!adapter.GetInputEnabled())
+                    adapter.SetInputEnabled(true);
+
+                SaveManager saveManager = SaveManager.instance;
+                if (saveManager == null)
+                {
+                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] SaveManager unavailable for direct scenario launch. target="
+                        + (launchTargetLabel ?? "<unknown>") + ".");
+                    return false;
+                }
+
+                if (LoadingScreen.Instance == null)
+                {
+                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] LoadingScreen unavailable for direct scenario launch. target="
+                        + (launchTargetLabel ?? "<unknown>") + ".");
+                    return false;
+                }
+
+                saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
+                DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
+                LoadingScreen.Instance.ShowLoadingScreen(sceneName);
+                MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scenario scene launch started. target="
+                    + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
+                    + " virtualSaveType=" + virtualSaveType + ".");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] Direct scenario launch failed for "
+                    + (launchTargetLabel ?? "<unknown>") + ": " + ex);
+                return false;
+            }
+        }
+
         public bool BeginCustomisationTransition(
             ScenarioBrowserPanelAdapter adapter,
             string launchTargetLabel,
@@ -369,6 +476,30 @@ namespace ShelteredAPI.Scenarios
             }
         }
 
+        private static bool ShouldLaunchWithoutStartup(ScenarioCatalogEntry entry)
+        {
+            return entry != null
+                && !entry.IsVanilla
+                && entry.Source != ScenarioCatalogSource.Draft
+                && entry.BaseGameMode != ScenarioBaseGameMode.Survival;
+        }
+
+        private static bool TryGetDirectLaunchScene(ScenarioBaseGameMode baseGameMode, out string sceneName)
+        {
+            switch (baseGameMode)
+            {
+                case ScenarioBaseGameMode.Surrounded:
+                    sceneName = "ShelterScene_Surrounded";
+                    return true;
+                case ScenarioBaseGameMode.Stasis:
+                    sceneName = "ShelterScene_Stasis";
+                    return true;
+                default:
+                    sceneName = null;
+                    return false;
+            }
+        }
+
         private static int GetSlotNumber(SaveManager.SaveType saveType)
         {
             switch (saveType)
@@ -379,6 +510,25 @@ namespace ShelteredAPI.Scenarios
                 case SaveManager.SaveType.SlotSurrounded: return 4;
                 case SaveManager.SaveType.SlotStasis: return 5;
                 default: return 1;
+            }
+        }
+
+        private static bool TryGetVanillaScenarioSelectionIndex(ScenarioCatalogEntry entry, out int selectedScenario)
+        {
+            selectedScenario = -1;
+            if (entry == null)
+                return false;
+
+            switch (entry.LaunchMode)
+            {
+                case ScenarioLaunchMode.Surrounded:
+                    selectedScenario = 0;
+                    return true;
+                case ScenarioLaunchMode.Stasis:
+                    selectedScenario = 1;
+                    return true;
+                default:
+                    return false;
             }
         }
 

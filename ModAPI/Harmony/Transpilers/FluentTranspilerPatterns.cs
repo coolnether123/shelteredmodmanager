@@ -15,11 +15,11 @@ namespace ModAPI.Harmony
     {
         #region Instruction Predicates (CodeInstruction Extensions)
 
-        /// <summary>Check if instruction loads a constant float.</summary>
+        /// <summary>Returns true when the instruction loads the requested float constant.</summary>
         public static bool IsLdcR4(this CodeInstruction instr, float value)
             => instr.opcode == OpCodes.Ldc_R4 && instr.operand is float f && Math.Abs(f - value) < 0.0001f;
 
-        /// <summary>Check if instruction loads a constant int (handles all short forms).</summary>
+        /// <summary>Returns true when the instruction loads the requested integer constant, including short opcode forms.</summary>
         public static bool IsLdcI4(this CodeInstruction instr, int value)
         {
             if (instr.opcode == OpCodes.Ldc_I4) 
@@ -39,11 +39,11 @@ namespace ModAPI.Harmony
             return false;
         }
 
-        /// <summary>Check if instruction is a newobj for a specific type.</summary>
+        /// <summary>Returns true when the instruction constructs the requested type.</summary>
         public static bool IsNewobj(this CodeInstruction instr, Type type)
             => instr.opcode == OpCodes.Newobj && instr.operand is ConstructorInfo ci && ci.DeclaringType == type;
 
-        /// <summary>Check if instruction calls a specific method (handles Call and Callvirt).</summary>
+        /// <summary>Returns true when the instruction calls the requested method with either call opcode.</summary>
         public static bool IsCall(this CodeInstruction instr, Type type, string methodName)
         {
             if (instr.opcode != OpCodes.Call && instr.opcode != OpCodes.Callvirt) return false;
@@ -54,19 +54,19 @@ namespace ModAPI.Harmony
 
         #region FluentTranspiler Wrappers for Predicates
 
-        /// <summary>Check if current instruction loads a constant float.</summary>
+        /// <summary>Returns true when the current instruction loads the requested float constant.</summary>
         public static bool IsLdcR4(this FluentTranspiler t, float value)
             => t.HasMatch && t.Current.IsLdcR4(value);
 
-        /// <summary>Check if current instruction loads a constant int.</summary>
+        /// <summary>Returns true when the current instruction loads the requested integer constant.</summary>
         public static bool IsLdcI4(this FluentTranspiler t, int value)
             => t.HasMatch && t.Current.IsLdcI4(value);
 
-        /// <summary>Check if current instruction is a newobj for a specific type.</summary>
+        /// <summary>Returns true when the current instruction constructs the requested type.</summary>
         public static bool IsNewobj(this FluentTranspiler t, Type type)
             => t.HasMatch && t.Current.IsNewobj(type);
 
-        /// <summary>Check if current instruction calls a specific method.</summary>
+        /// <summary>Returns true when the current instruction calls the requested method.</summary>
         public static bool IsCall(this FluentTranspiler t, Type type, string methodName)
             => t.HasMatch && t.Current.IsCall(type, methodName);
 
@@ -75,7 +75,7 @@ namespace ModAPI.Harmony
         #region Context Inspection
 
         /// <summary>
-        /// Check if a pattern exists backward from current position.
+        /// Returns true when a predicate pattern exists backward from the current position.
         /// </summary>
         public static bool CheckBackward(this FluentTranspiler t, int steps, params Func<CodeInstruction, bool>[] predicates)
         {

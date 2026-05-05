@@ -4,13 +4,18 @@ using System.Threading;
 
 namespace ModAPI.Core
 {
+    /// <summary>
+    /// Background work helpers that marshal results back to Unity's main thread.
+    /// Never touch Unity objects from the background delegate; apply game changes in the main-thread callback.
+    /// </summary>
     public static class ModThreads
     {
         private static readonly object _pendingMainThreadLock = new object();
         private static readonly Queue<Action> _pendingMainThread = new Queue<Action>();
 
         /// <summary>
-        /// Runs a fire-and-forget action on a background ThreadPool thread.
+        /// Runs fire-and-forget work on a background ThreadPool thread.
+        /// Exceptions are caught and written to the ModAPI log.
         /// </summary>
         /// <param name="action">Background work. Must not touch UnityEngine objects.</param>
         public static void RunAsync(Action action)
@@ -26,7 +31,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// v1.3: Runs a background calculation and marshals its result back to Unity's main thread.
+        /// Runs a background calculation and marshals its result back to Unity's main thread.
         /// </summary>
         /// <typeparam name="TResult">Result type produced by the background work.</typeparam>
         /// <param name="work">Background calculation. Must be Unity-object free.</param>
@@ -40,7 +45,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// v1.3: Runs a background calculation and marshals result/error back to Unity's main thread.
+        /// Runs a background calculation and marshals result or error handling back to Unity's main thread.
         /// </summary>
         /// <typeparam name="TResult">Result type produced by the background work.</typeparam>
         /// <param name="work">Background calculation. Must be Unity-object free.</param>
@@ -101,8 +106,8 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// v1.3: Flushes callbacks completed before PluginRunner became available.
-        /// Must be called on Unity main thread.
+        /// Flushes callbacks completed before <see cref="PluginRunner"/> became available.
+        /// Must be called on Unity's main thread.
         /// </summary>
         internal static void FlushPendingMainThreadCallbacks()
         {

@@ -19,6 +19,10 @@ namespace ShelteredAPI.Saves.Paging
         private static GameObject _instance;
         private static Texture2D _whiteTexture;
 
+        /// <summary>
+        /// Text and policy settings for the save or scenario verification dialog.
+        /// Scenario verification reuses the same dialog with stricter load/start rules.
+        /// </summary>
         public sealed class VerificationWindowOptions
         {
             public string Title = "MOD VERIFICATION";

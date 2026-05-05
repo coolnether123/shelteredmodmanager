@@ -6,7 +6,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Inspector
 {
-    // Lightweight GL-based bounds highlighter for the currently selected object
+    /// <summary>
+    /// Lightweight GL-based bounds highlighter for inspector-selected Unity objects.
+    /// Used by debug tools to show selected, hovered, and secondary transforms in the scene.
+    /// </summary>
     public class BoundsHighlighter : MonoBehaviour
     {
         public static Transform Target;

@@ -17,6 +17,10 @@ namespace ShelteredAPI.Debugging
         }
     }
 
+    /// <summary>
+    /// Fluent session for conditionally setting fields or properties and optionally restoring originals.
+    /// A session is meant to be short-lived around a single debug or patch operation.
+    /// </summary>
     public sealed class DebugValueTakeoverSession
     {
         private readonly object _target;

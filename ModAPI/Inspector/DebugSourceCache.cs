@@ -2,6 +2,10 @@ using System.Reflection;
 
 namespace ModAPI.Inspector
 {
+    /// <summary>
+    /// Public facade over cached decompiled source and IL-to-source maps.
+    /// Use this from debug UI instead of reaching into the cache manager directly.
+    /// </summary>
     public static class DebugSourceCache
     {
         public static string LastError { get { return SourceCacheManager.LastError; } }

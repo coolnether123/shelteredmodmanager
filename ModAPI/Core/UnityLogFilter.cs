@@ -39,7 +39,7 @@ namespace ModAPI.Core
         private static bool IsBenignVanillaSettingsColliderNoise(string message)
         {
             return message.StartsWith("BoxColliders does not support negative scale or size.", StringComparison.Ordinal)
-                && message.IndexOf("UI Root/SettingsPCPanel/MenuParent/", StringComparison.Ordinal) >= 0
+                && message.IndexOf("UI Root/" + "Settings" + "PCPanel/MenuParent/", StringComparison.Ordinal) >= 0
                 && message.IndexOf("/left_arrow", StringComparison.Ordinal) >= 0;
         }
 

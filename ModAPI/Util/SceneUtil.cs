@@ -6,6 +6,10 @@ using ModAPI.Core;
 
 namespace ModAPI
 {
+    /// <summary>
+    /// Unity scene search helpers that work across the supported Sheltered Unity versions.
+    /// Use these for debug tooling and UI discovery; cache results only for the current scene lifetime.
+    /// </summary>
     public static class SceneUtil
     {
         public static GameObject FindByName(string name)

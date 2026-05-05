@@ -2,6 +2,10 @@ using ModAPI.Core;
 
 namespace ModAPI.Persistence
 {
+    /// <summary>
+    /// Optional lifecycle hook for mod objects that mirror save data into runtime managers.
+    /// Use this when simple JSON registration is not enough and load/save needs explicit coordination.
+    /// </summary>
     public interface IModPersistenceLogic
     {
         /// <summary>

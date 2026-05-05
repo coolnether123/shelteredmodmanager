@@ -12,6 +12,9 @@ namespace ModAPI.Util
     [Serializable]
     public class SaveLoadDictionary<TKey, TValue> : ISerializationCallbackReceiver, IDictionary<TKey, TValue>
     {
+        /// <summary>
+        /// Serializable key/value pair used by Unity serialization.
+        /// </summary>
         [Serializable]
         public struct Pair
         {

@@ -5,6 +5,10 @@ using System.Reflection;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Compatibility report for the reflection fields required by <see cref="ShelteredScenarioDefBuilder"/>.
+    /// Use this before relying on builder APIs against an unknown Sheltered build.
+    /// </summary>
     public sealed class ShelteredScenarioDefBuilderCompatibility
     {
         public bool HasQuestIdField { get; set; }
@@ -41,6 +45,7 @@ namespace ShelteredAPI.Scenarios
 
     /// <summary>
     /// Helper for constructing Sheltered ScenarioDef and ScenarioStage objects whose serialized fields are private.
+    /// Use this when a class-based scenario needs to produce vanilla runtime objects without duplicating reflection code.
     /// </summary>
     public sealed class ShelteredScenarioDefBuilder
     {

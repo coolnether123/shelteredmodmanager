@@ -6,6 +6,9 @@ using HarmonyLib;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Severity for warnings produced by transpiler tests or diagnostics.
+    /// </summary>
     public enum TranspilerWarningLevel
     {
         Info,       // DeclareLocal, position logging
@@ -13,6 +16,9 @@ namespace ModAPI.Harmony
         Error       // No match found, invalid operation
     }
 
+    /// <summary>
+    /// Diagnostic warning tied to a transpiler operation and optional instruction index.
+    /// </summary>
     public class TranspilerWarning
     {
         public TranspilerWarningLevel Level;

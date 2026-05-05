@@ -16,7 +16,7 @@ namespace ModAPI.Core
         /// </summary>
         public static bool IsModernUnity { get; private set; }
         /// <summary>
-        /// Set during quit flow so systems can avoid risky late-stage work.
+        /// True during quit flow so systems can avoid risky late-stage work.
         /// </summary>
         public static bool IsQuitting { get; set; }
         /// <summary>

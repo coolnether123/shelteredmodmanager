@@ -2,6 +2,10 @@ using System.Collections.Generic;
 
 namespace ShelteredAPI.Characters
 {
+    /// <summary>
+    /// Runtime state for one active character effect.
+    /// The instance tracks timing, stack count, source mod, and custom effect data.
+    /// </summary>
     public class EffectInstance
     {
         public ICharacterEffect Effect { get; internal set; }

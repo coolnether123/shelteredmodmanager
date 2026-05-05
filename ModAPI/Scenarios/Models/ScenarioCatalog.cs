@@ -3,6 +3,9 @@ using ModAPI.Core;
 
 namespace ModAPI.Scenarios
 {
+    /// <summary>
+    /// Read-only catalog entry for an XML scenario definition discovered from a mod folder.
+    /// </summary>
     public sealed class ScenarioInfo
     {
         public ScenarioInfo(string id, string displayName, string author, string version, string filePath, string ownerModId)
@@ -23,6 +26,9 @@ namespace ModAPI.Scenarios
         public string OwnerModId { get; private set; }
     }
 
+    /// <summary>
+    /// Mod folder that can contain scenario definition files.
+    /// </summary>
     public sealed class ScenarioModFolder
     {
         public ScenarioModFolder(string modId, string rootPath)
@@ -35,11 +41,18 @@ namespace ModAPI.Scenarios
         public string RootPath { get; private set; }
     }
 
+    /// <summary>
+    /// Supplies mod roots for scenario catalog discovery.
+    /// Implement this to scan a custom mod source outside the default ModRegistry.
+    /// </summary>
     public interface IScenarioModFolderSource
     {
         ScenarioModFolder[] GetLoadedModFolders();
     }
 
+    /// <summary>
+    /// Scenario folder source backed by loaded ModAPI registry entries.
+    /// </summary>
     public sealed class ModRegistryScenarioModFolderSource : IScenarioModFolderSource
     {
         public ScenarioModFolder[] GetLoadedModFolders()

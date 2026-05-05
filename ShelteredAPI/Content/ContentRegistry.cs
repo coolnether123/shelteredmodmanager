@@ -157,6 +157,9 @@ namespace ShelteredAPI.Content
         public string UnlockFlag { get; private set; }
     }
 
+    /// <summary>
+    /// Read-only ingredient entry copied from a registered recipe definition.
+    /// </summary>
     public sealed class RecipeIngredientSnapshot
     {
         internal RecipeIngredientSnapshot(string itemId, int count)
@@ -291,8 +294,7 @@ namespace ShelteredAPI.Content
 
         /// <summary>
         /// Register a new crafting recipe.
-        /// 
-        /// IMPORTANT: Output quantity is set on the ItemDefinition.CraftStackSize, NOT here.
+        /// The output quantity comes from <see cref="ItemDefinition.CraftStackSize"/> on the result item, not from the recipe.
         /// 
         /// Example:
         /// <code>
@@ -531,8 +533,8 @@ namespace ShelteredAPI.Content
     /// - Laboratory: Science-based recipes (explosives, medicine)
     /// - AmmoPress: Ammunition pressing
     /// 
-    /// NOTE: Stove is NOT a crafting station. Cooking food is handled via
-    /// FamilyAI interactions (Int_CookFood) and does not use CraftingManager.
+    /// The stove is intentionally absent; cooking food is handled through FamilyAI interactions
+    /// and does not use CraftingManager recipes.
     /// </summary>
     public enum CraftStation { Workbench, Laboratory, AmmoPress }
 

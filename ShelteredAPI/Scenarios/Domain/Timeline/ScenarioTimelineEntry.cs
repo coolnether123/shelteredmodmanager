@@ -2,6 +2,9 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// One scheduled or derived entry shown in scenario timeline tools.
+    /// </summary>
     public class ScenarioTimelineEntry
     {
         public ScenarioTimelineEntry()

@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Nested condition group used by scenario gates and scheduled actions.
+    /// Groups can be combined with all/any semantics.
+    /// </summary>
     public class ScenarioConditionGroup
     {
         public ScenarioConditionGroup()

@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Built-in condition types understood by the scenario gate evaluator.
+    /// Custom mods can add handlers for custom condition behavior.
+    /// </summary>
     public enum ScenarioConditionKind
     {
         TimeReached = 0,
@@ -18,6 +22,9 @@ namespace ShelteredAPI.Scenarios
         ScenarioFlagSet = 11
     }
 
+    /// <summary>
+    /// Evaluation mode for grouped scenario conditions.
+    /// </summary>
     public enum ScenarioConditionGroupMode
     {
         All = 0,

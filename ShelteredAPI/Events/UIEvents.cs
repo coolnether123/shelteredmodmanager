@@ -113,7 +113,7 @@ namespace ShelteredAPI.Events
         // Helper methods for mods
 
         /// <summary>
-        /// Check if a specific panel type is currently open.
+        /// Returns true when a panel of the requested type is currently on the panel stack.
         /// </summary>
         /// <typeparam name="T">Panel type to check</typeparam>
         /// <returns>True if a panel of that type is on the stack</returns>
@@ -135,7 +135,7 @@ namespace ShelteredAPI.Events
         }
 
         /// <summary>
-        /// Get diagnostic information about UI event subscriptions.
+        /// Returns subscription counts for UI event diagnostics.
         /// </summary>
         /// <returns>String with subscription counts</returns>
         public static string GetDiagnostics()

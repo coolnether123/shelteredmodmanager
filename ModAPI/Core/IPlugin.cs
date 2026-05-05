@@ -8,6 +8,7 @@ namespace ModAPI.Core
 {
     /// <summary>
     /// Required plugin contract for mods loaded by ModAPI.
+    /// Keep setup that only needs ModAPI services in <see cref="Initialize"/> and defer Unity scene work to <see cref="Start"/>.
     /// </summary>
     public interface IModPlugin
     {
@@ -23,7 +24,8 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Optional per-frame update callback.
+    /// Optional per-frame update callback for mods that need Unity main-thread polling.
+    /// Prefer events or explicit scheduling when work does not need to run every frame.
     /// </summary>
     public interface IModUpdate
     {
@@ -45,7 +47,8 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Optional scene lifecycle callbacks.
+    /// Optional scene lifecycle callbacks raised through ModAPI's Unity compatibility layer.
+    /// Use these for scene object discovery instead of assuming one Unity version's event API.
     /// </summary>
     public interface IModSceneEvents
     {
@@ -56,7 +59,8 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Optional game session lifecycle callbacks.
+    /// Optional game session lifecycle callbacks for save/world-level transitions.
+    /// These run after plugin bootstrap and before mods should assume a long-lived world session is stable.
     /// </summary>
     public interface IModSessionEvents
     {
@@ -67,26 +71,42 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Context object provided to each plugin containing runtime services and paths.
+    /// Runtime services, paths, and plugin metadata provided to each loaded mod.
+    /// Treat Unity objects exposed here as main-thread only, and prefer the typed services over global lookups.
     /// </summary>
     public interface IPluginContext
     {
+        /// <summary>Persistent ModAPI root GameObject that hosts shared runtime components.</summary>
         GameObject LoaderRoot { get; }
+        /// <summary>Per-plugin root GameObject for components owned by this mod.</summary>
         GameObject PluginRoot { get; }
+        /// <summary>Descriptor for the loaded mod that owns this context.</summary>
         ModEntry Mod { get; }
+        /// <summary>Settings provider registered by this mod, or null when the mod has none.</summary>
         ISettingsProvider Settings { get; }
+        /// <summary>Plugin-scoped logger that prefixes messages with the owning mod.</summary>
         IModLogger Log { get; }
+        /// <summary>Host-neutral helper for common game-state reads.</summary>
         IGameHelper Game { get; }
+        /// <summary>Shared actor system for identity, components, and actor events.</summary>
         IActorSystem Actors { get; }
+        /// <summary>Absolute path to the game installation root.</summary>
         string GameRoot { get; }
+        /// <summary>Absolute path to the root mods directory.</summary>
         string ModsRoot { get; }
+        /// <summary>True when the runtime is using the newer Unity scene APIs.</summary>
         bool IsModernUnity { get; }
+        /// <summary>Per-mod save data API for the active save slot.</summary>
         ISaveSystem SaveSystem { get; }
 
         /// <summary>
         /// Queues an action for next frame on the main Unity thread.
         /// </summary>
         void RunNextFrame(Action action);
+        /// <summary>
+        /// Starts a coroutine on the persistent plugin runner.
+        /// Use this when a mod needs Unity main-thread waits without adding its own host component.
+        /// </summary>
         Coroutine StartCoroutine(IEnumerator routine);
 
         /// <summary>
@@ -101,7 +121,8 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Per-mod save data persistence (v1.2.1).
+    /// Per-mod save data persistence for the active save slot.
+    /// Register data during plugin initialization so it can be loaded when saves become active.
     /// </summary>
     public interface ISaveSystem
     {
@@ -126,14 +147,20 @@ namespace ModAPI.Core
     }
 
     /// <summary>
-    /// Logger abstraction so plugins do not depend on MMLog static calls directly.
+    /// Plugin-scoped logger abstraction.
+    /// Use this instead of direct <see cref="MMLog"/> calls when the message belongs to a specific mod.
     /// </summary>
     public interface IModLogger
     {
+        /// <summary>True when debug messages for this mod should be emitted.</summary>
         bool IsDebugEnabled { get; }
+        /// <summary>Writes diagnostic detail intended for development and troubleshooting.</summary>
         void Debug(string message);
+        /// <summary>Writes normal informational output.</summary>
         void Info(string message);
+        /// <summary>Writes a recoverable problem or degraded behavior.</summary>
         void Warn(string message);
+        /// <summary>Writes a failure that prevented the requested operation from completing.</summary>
         void Error(string message);
     }
 }

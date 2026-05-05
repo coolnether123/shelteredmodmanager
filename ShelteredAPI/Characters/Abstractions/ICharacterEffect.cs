@@ -2,6 +2,10 @@ using System;
 
 namespace ShelteredAPI.Characters
 {
+    /// <summary>
+    /// Custom behavior attached to a Sheltered character for a duration.
+    /// Implement this when a mod needs ticking, stackable, or serialized character effects.
+    /// </summary>
     public interface ICharacterEffect
     {
         string EffectId { get; }
@@ -18,6 +22,9 @@ namespace ShelteredAPI.Characters
         void DeserializeData(string data);
     }
 
+    /// <summary>
+    /// How a character effect should behave when applied while the same effect is already active.
+    /// </summary>
     public enum StackBehavior
     {
         Replace,
@@ -27,6 +34,10 @@ namespace ShelteredAPI.Characters
         Custom
     }
 
+    /// <summary>
+    /// Reason an active character effect was removed.
+    /// Effect implementations can use this to decide whether to clean up, cure, or persist state.
+    /// </summary>
     public enum RemovalReason
     {
         Expired,
@@ -36,6 +47,10 @@ namespace ShelteredAPI.Characters
         Custom
     }
 
+    /// <summary>
+    /// Runtime context passed to character effect callbacks.
+    /// Store temporary effect state through <c>GetData</c> and <c>SetData</c>.
+    /// </summary>
     public interface ICharacterEffectContext
     {
         ICharacterProxy Character { get; }

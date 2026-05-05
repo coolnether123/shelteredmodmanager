@@ -73,6 +73,8 @@ namespace ShelteredAPI.Core
             if (runtimeRoot.GetComponent<ShelteredKeybindPersistenceGuard>() == null)
                 runtimeRoot.AddComponent<ShelteredKeybindPersistenceGuard>();
 
+            LoadingTransitionRecoveryService.EnsureInstalled(runtimeRoot);
+
             if (runtimeRoot.GetComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>() == null)
                 runtimeRoot.AddComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>();
         }

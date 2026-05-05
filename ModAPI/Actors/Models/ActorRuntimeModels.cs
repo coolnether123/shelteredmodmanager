@@ -2,6 +2,9 @@ using System;
 
 namespace ModAPI.Actors
 {
+    /// <summary>
+    /// Runtime area that produced an actor-system failure record.
+    /// </summary>
     public enum ActorFailureKind
     {
         Unknown = 0,
@@ -11,6 +14,10 @@ namespace ModAPI.Actors
         Serialization = 4
     }
 
+    /// <summary>
+    /// State passed to conditional actor adapters before synchronization.
+    /// Use this to skip expensive live scans when the relevant runtime counters have not changed.
+    /// </summary>
     [Serializable]
     public sealed class ActorAdapterContext
     {
@@ -28,6 +35,10 @@ namespace ModAPI.Actors
         public int ConsecutiveFailureCount { get; set; }
     }
 
+    /// <summary>
+    /// Point-in-time actor runtime counters for diagnostics and health displays.
+    /// This snapshot is read-only telemetry, not a save contract.
+    /// </summary>
     [Serializable]
     public sealed class ActorRuntimeSnapshot
     {
@@ -48,6 +59,10 @@ namespace ModAPI.Actors
         public int ActiveFailureCount { get; set; }
     }
 
+    /// <summary>
+    /// Aggregated failure information for actor adapters, simulation systems, live sync, or serialization.
+    /// Repeated failures are counted so logs can stay readable while diagnostics remain actionable.
+    /// </summary>
     [Serializable]
     public sealed class ActorFailureRecord
     {

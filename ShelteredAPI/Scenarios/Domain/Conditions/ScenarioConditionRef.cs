@@ -4,6 +4,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// One typed condition reference with properties needed by the selected condition kind.
+    /// Target IDs point at scenario-local objects such as items, quests, survivors, gates, or flags.
+    /// </summary>
     public class ScenarioConditionRef
     {
         public ScenarioConditionRef()

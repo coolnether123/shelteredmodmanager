@@ -7,8 +7,8 @@ using ModAPI.Harmony;
 namespace ShelteredAPI.Events
 {
     /// <summary>
-    /// Events related to the game's Faction system.
-    /// Allows mods to react to faction behavior without individual Harmony patches.
+    /// Sheltered faction event bridge.
+    /// Subscribe here when a mod needs faction spawn or territory changes without adding its own Harmony patches.
     /// </summary>
     [PatchPolicy(PatchDomain.Events, "FactionEvents",
         TargetBehavior = "Faction spawn and territory growth event bridge",

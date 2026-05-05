@@ -8,6 +8,9 @@ namespace ModAPI.Scenarios
     /// </summary>
     public delegate object CustomScenarioDefinitionFactory(CustomScenarioBuildContext context);
 
+    /// <summary>
+    /// Current lifecycle state for the active custom scenario, if any.
+    /// </summary>
     public enum CustomScenarioLifecycleState
     {
         None = 0,
@@ -15,6 +18,9 @@ namespace ModAPI.Scenarios
         Active = 2
     }
 
+    /// <summary>
+    /// Event categories raised by <see cref="ICustomScenarioService"/>.
+    /// </summary>
     public enum CustomScenarioEventType
     {
         Registered = 0,
@@ -26,6 +32,7 @@ namespace ModAPI.Scenarios
 
     /// <summary>
     /// Mod-authored custom scenario registration data.
+    /// Provide either a ready definition or a factory when definition construction needs runtime context.
     /// </summary>
     public class CustomScenarioRegistration
     {
@@ -46,6 +53,7 @@ namespace ModAPI.Scenarios
 
     /// <summary>
     /// Public read model for a registered custom scenario.
+    /// This is safe to expose to other mods because it omits callbacks and mutable registration internals.
     /// </summary>
     public class CustomScenarioInfo
     {
@@ -84,6 +92,7 @@ namespace ModAPI.Scenarios
 
     /// <summary>
     /// Context passed to a scenario definition factory.
+    /// Use this to tailor the game-specific definition to the requesting mod and current scenario state.
     /// </summary>
     public class CustomScenarioBuildContext
     {
@@ -95,7 +104,8 @@ namespace ModAPI.Scenarios
     }
 
     /// <summary>
-    /// Current custom scenario state. This intentionally tracks custom scenarios only.
+    /// Current custom scenario state.
+    /// This intentionally tracks custom scenarios only; base-game scenario state remains owned by the game runtime.
     /// </summary>
     public class CustomScenarioState
     {
@@ -126,6 +136,10 @@ namespace ModAPI.Scenarios
         }
     }
 
+    /// <summary>
+    /// Event arguments raised for custom scenario registration, selection, spawn, and state changes.
+    /// The state is copied so handlers cannot mutate the service's current state.
+    /// </summary>
     public class CustomScenarioEventArgs : EventArgs
     {
         public CustomScenarioEventArgs(CustomScenarioEventType eventType, CustomScenarioInfo scenario, CustomScenarioState state)
@@ -140,6 +154,10 @@ namespace ModAPI.Scenarios
         public CustomScenarioState State { get; private set; }
     }
 
+    /// <summary>
+    /// Result returned when a mod attempts to register a custom scenario.
+    /// Read <see cref="Success"/> before using the registered scenario ID.
+    /// </summary>
     public class CustomScenarioRegistrationResult
     {
         public bool Success { get; private set; }

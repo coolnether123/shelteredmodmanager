@@ -106,7 +106,7 @@ namespace ModAPI.Core
         }
 
         /// <summary>
-        /// Get a registered API of type T. Returns null if not found.
+        /// Returns a registered API of type T, or null when it is not available.
         /// </summary>
         public static T GetAPI<T>(string apiId) where T : class
         {

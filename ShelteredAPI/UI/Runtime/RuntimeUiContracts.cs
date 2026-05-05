@@ -115,12 +115,19 @@ namespace ShelteredAPI.UI
         public object Tag { get; set; }
     }
 
+    /// <summary>
+    /// Direction requested by a runtime container transfer action.
+    /// </summary>
     public enum ContainerUiTransferDirection
     {
         IntoContainer,
         OutOfContainer
     }
 
+    /// <summary>
+    /// Transfer request passed to container UI callbacks.
+    /// The UI has not applied inventory changes; handlers own the actual transfer behavior.
+    /// </summary>
     public sealed class ContainerUiTransferContext
     {
         internal ContainerUiTransferContext(ContainerUiItem item, int quantity, ContainerUiTransferDirection direction)
@@ -154,6 +161,10 @@ namespace ShelteredAPI.UI
         public Func<ObjectPanelContext, RuntimeUiHandle> Open { get; set; }
     }
 
+    /// <summary>
+    /// Runtime context passed when a registered object panel is opened.
+    /// Use the target object and selected family member immediately; do not cache them across scene changes.
+    /// </summary>
     public sealed class ObjectPanelContext
     {
         internal ObjectPanelContext(string objectId, Obj_Base targetObject, FamilyMember selectedMember)
@@ -182,6 +193,10 @@ namespace ShelteredAPI.UI
         public Action OnClosed { get; set; }
     }
 
+    /// <summary>
+    /// Recipe row shown by a custom crafting UI.
+    /// Item IDs are mod-facing content IDs, not raw game item enum names.
+    /// </summary>
     public sealed class CraftingUiRecipe
     {
         public string RecipeId { get; set; }
@@ -192,6 +207,9 @@ namespace ShelteredAPI.UI
         public object Tag { get; set; }
     }
 
+    /// <summary>
+    /// Required item and quantity for a custom crafting recipe.
+    /// </summary>
     public sealed class CraftingUiIngredient
     {
         public string ItemId { get; set; }

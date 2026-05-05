@@ -5,10 +5,14 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Sheltered-specific factory delegate that builds a vanilla ScenarioDef from neutral ModAPI context.
+    /// </summary>
     public delegate ScenarioDef ShelteredScenarioDefinitionFactory(CustomScenarioBuildContext context);
 
     /// <summary>
     /// Typed Sheltered helpers for creating neutral ModAPI custom scenario registrations.
+    /// Use these helpers to keep registration ownership, callbacks, and dependency metadata consistent.
     /// </summary>
     public static class ShelteredScenarioRegistration
     {

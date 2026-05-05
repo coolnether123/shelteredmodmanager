@@ -7,8 +7,15 @@ using ModAPI.Inspector;
 
 namespace ModAPI.Harmony
 {
+    /// <summary>
+    /// Generates starter transpiler code from visual IL patch selections.
+    /// This is a developer tool surface; review generated code before shipping a patch.
+    /// </summary>
     public class VisualTranspilerBuilder 
     {
+        /// <summary>
+        /// Operation to generate around the selected IL anchor.
+        /// </summary>
         public enum PatchAction 
         {
             InsertBefore,
@@ -19,6 +26,9 @@ namespace ModAPI.Harmony
             ConditionalWrap
         }
         
+        /// <summary>
+        /// Inputs captured by the visual transpiler editor for code generation.
+        /// </summary>
         public class PatchConfiguration
         {
             public Type TargetType;

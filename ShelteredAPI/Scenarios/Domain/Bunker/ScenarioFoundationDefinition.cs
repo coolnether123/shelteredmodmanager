@@ -2,6 +2,10 @@ using ModAPI.Scenarios;
 
 namespace ShelteredAPI.Scenarios
 {
+    /// <summary>
+    /// Authored foundation footprint on the bunker grid.
+    /// Object placements can depend on foundation IDs so runtime placement respects structural progression.
+    /// </summary>
     public class ScenarioFoundationDefinition
     {
         public ScenarioFoundationDefinition()
