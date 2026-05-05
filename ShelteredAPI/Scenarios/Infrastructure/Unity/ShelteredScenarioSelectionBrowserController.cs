@@ -232,6 +232,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             {
                 int baseCount = state.BaseButtonCount > 0 ? state.BaseButtonCount : 2;
                 bool selectionChanged = state.LastLoggedVanillaSelectedScenario != selectedScenario;
+                SlotPagingScopeResolver.RememberScenarioSelection(panel != null ? panel.selectionPanel : null, selectedScenario);
                 if (selectionChanged)
                 {
                     state.LastLoggedVanillaSelectedScenario = selectedScenario;
@@ -368,6 +369,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] OnScenarioChosen passed through to vanilla scenario flow. panel="
                     + panel.GetInstanceID() + " selectedIndex=" + selectedScenario + ".");
+                SlotPagingScopeResolver.RememberScenarioSelection(panel.selectionPanel, selectedScenario);
                 ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
                 return true;
             }

@@ -25,7 +25,8 @@ namespace ShelteredAPI.Hooks
             var active = SaveRuntimeState.ActiveCustomSave;
             if (!SaveRuntimeState.HasActiveCustomSessionFor(requestedType) ||
                 active == null ||
-                active.absoluteSlot <= 3)
+                active.absoluteSlot <= 0 ||
+                (ExpandedVanillaSaves.IsStandardScenario(active.scenarioId) && active.absoluteSlot <= 3))
             {
                 return false;
             }
@@ -36,7 +37,10 @@ namespace ShelteredAPI.Hooks
                 active.absoluteSlot,
                 active.id ?? "unknown"));
 
-            result = DeleteAbsoluteSlot(active.absoluteSlot, "PlatformDelete.RedirectFromActiveCustom");
+            string scenarioId = active != null && !string.IsNullOrEmpty(active.scenarioId)
+                ? active.scenarioId
+                : "Standard";
+            result = DeleteAbsoluteSlot(scenarioId, active.absoluteSlot, "PlatformDelete.RedirectFromActiveCustom");
             if (result)
             {
                 ClearProxyStateAfterDelete(requestedType, active.id);
@@ -46,6 +50,11 @@ namespace ShelteredAPI.Hooks
 
         internal static bool DeleteAbsoluteSlot(int absoluteSlot, string reason)
         {
+            return DeleteAbsoluteSlot("Standard", absoluteSlot, reason);
+        }
+
+        internal static bool DeleteAbsoluteSlot(string scenarioId, int absoluteSlot, string reason)
+        {
             if (absoluteSlot <= 0)
             {
                 MMLog.WriteWarning(string.Format("[SaveDeleteRouter] Refusing delete for invalid absolute slot: {0}. Reason={1}", absoluteSlot, reason ?? "unknown"));
@@ -54,13 +63,18 @@ namespace ShelteredAPI.Hooks
 
             try
             {
-                bool deleted = ExpandedVanillaSaves.DeleteBySlot(absoluteSlot);
-                MMLog.WriteInfo(string.Format("[SaveDeleteRouter] Delete slot {0} result={1}. Reason={2}", absoluteSlot, deleted, reason ?? "unknown"));
+                string storageScenarioId = string.IsNullOrEmpty(scenarioId) ? "Standard" : scenarioId;
+                bool deleted = ExpandedVanillaSaves.IsStandardScenario(storageScenarioId)
+                    ? ExpandedVanillaSaves.DeleteBySlot(absoluteSlot)
+                    : ScenarioSaves.GetTrustedRegistry(storageScenarioId).DeleteBySlot(absoluteSlot);
+                MMLog.WriteInfo(string.Format("[SaveDeleteRouter] Delete scenario={0} slot {1} result={2}. Reason={3}",
+                    storageScenarioId, absoluteSlot, deleted, reason ?? "unknown"));
                 return deleted;
             }
             catch (Exception ex)
             {
-                MMLog.WriteError(string.Format("[SaveDeleteRouter] DeleteAbsoluteSlot failed for slot {0}. Reason={1}. Error={2}", absoluteSlot, reason ?? "unknown", ex));
+                MMLog.WriteError(string.Format("[SaveDeleteRouter] DeleteAbsoluteSlot failed for scenario={0} slot {1}. Reason={2}. Error={3}",
+                    scenarioId ?? "Standard", absoluteSlot, reason ?? "unknown", ex));
                 return false;
             }
         }
@@ -79,7 +93,9 @@ namespace ShelteredAPI.Hooks
         {
             return type == SaveManager.SaveType.Slot1 ||
                    type == SaveManager.SaveType.Slot2 ||
-                   type == SaveManager.SaveType.Slot3;
+                   type == SaveManager.SaveType.Slot3 ||
+                   type == SaveManager.SaveType.SlotSurrounded ||
+                   type == SaveManager.SaveType.SlotStasis;
         }
     }
 }

@@ -648,7 +648,8 @@ namespace ShelteredAPI.Saves.Paging
                 var manifest = SaveRegistryCore.CreateCurrentManifestSnapshot(entry != null ? entry.saveInfo : null);
                 string manifestPath;
                 string error;
-                if (!SaveRegistryCore.TryWriteSlotManifest("Standard", slotNumber, manifest, out manifestPath, out error))
+                string scenarioId = ResolveManifestScenarioId(entry);
+                if (!SaveRegistryCore.TryWriteSlotManifest(scenarioId, slotNumber, manifest, out manifestPath, out error))
                 {
                     MMLog.WriteError("[SaveDetailsWindow] Failed to recover manifest from current mods: " + error);
                     return false;
@@ -691,11 +692,8 @@ namespace ShelteredAPI.Saves.Paging
                     // But usually mod tools are in root.
                 }
                 
-                // Construct path to manifest
-                // Determine path to the slot manifest: mods/ModAPI/Saves/Standard/Slot_X/manifest.json
-                var modsRoot = Path.Combine(gameRoot, "mods");
-                var slotDir = Path.Combine(Path.Combine(Path.Combine(modsRoot, "ModAPI"), "Saves"), Path.Combine("Standard", $"Slot_{slotNumber}"));
-                var manifestPath = Path.Combine(slotDir, "manifest.json");
+                string scenarioId = ResolveManifestScenarioId(entry);
+                var manifestPath = Path.Combine(DirectoryProvider.SlotRoot(scenarioId, slotNumber, false), "manifest.json");
 
                 MMLog.WriteDebug($"[SaveDetailsWindow] Checking for manifest at: {manifestPath}");
                 
@@ -712,7 +710,7 @@ namespace ShelteredAPI.Saves.Paging
                         manifest.family_name = entry != null && entry.saveInfo != null ? entry.saveInfo.familyName : "Unknown";
 
                     string writeError;
-                    if (!SaveRegistryCore.TryWriteSlotManifest("Standard", slotNumber, manifest, out manifestPath, out writeError))
+                    if (!SaveRegistryCore.TryWriteSlotManifest(scenarioId, slotNumber, manifest, out manifestPath, out writeError))
                     {
                         MMLog.WriteError("[SaveDetailsWindow] Failed to persist trusted manifest for restart: " + writeError);
                         return;
@@ -751,6 +749,14 @@ namespace ShelteredAPI.Saves.Paging
                 MMLog.WriteError("Failed to create restart request: " + ex);
                 // Show error to user? For now just log.
             }
+        }
+
+        private static string ResolveManifestScenarioId(SaveEntry entry)
+        {
+            if (entry != null && !string.IsNullOrEmpty(entry.scenarioId))
+                return entry.scenarioId;
+
+            return "Standard";
         }
 
     }

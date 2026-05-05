@@ -79,12 +79,12 @@ namespace ShelteredAPI.Saves.Paging
             if (!_ui.TryGetValue(panel, out ui)) return;
 
             int p = GetPage(panel);
-            int totalExpanded = ExpandedVanillaSaves.Count();
+            SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
 
             bool canPrev = p > 0;
 
-            int maxSlot = ExpandedVanillaSaves.GetMaxSlot();
-            int lastSavePage = (maxSlot < 4) ? 0 : (maxSlot - 4) / 3 + 1;
+            int maxSlot = scope.GetMaxSlot();
+            int lastSavePage = (maxSlot < scope.FirstExpandedSlot) ? 0 : (maxSlot - scope.FirstExpandedSlot) / 3 + 1;
             
             // Allow navigation if we are on the vanilla page (to go to first custom page)
             // or if we hasn't reached the page after the last save yet.

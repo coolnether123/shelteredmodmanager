@@ -36,6 +36,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (entry == null)
                 return false;
 
+            MMLog.WriteInfo("[ScenarioBookBrowser] Start requested. scenarioId=" + entry.ScenarioId
+                + " storageScenarioId=" + entry.StorageScenarioId
+                + " source=" + entry.Source
+                + " baseMode=" + entry.BaseGameMode
+                + " virtualSaveType=" + _launchCoordinator.GetVirtualSaveType(entry) + ".");
+
             if (entry.IsVanilla)
             {
                 string vanillaError;

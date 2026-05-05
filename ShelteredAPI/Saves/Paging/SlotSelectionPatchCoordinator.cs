@@ -4,7 +4,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
-using UnityEngine;
+using UnityEngine;
 using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Saves.Paging{
     internal static class SlotSelectionPatchCoordinator
@@ -33,7 +33,8 @@ namespace ShelteredAPI.Saves.Paging{
             try
             {
                 int apiPage = page - 1;
-                var allSaves = ExpandedVanillaSaves.List();
+                SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
+                var allSaves = scope.ListSaves();
                 var savesOnPage = new SaveEntry[3];
 
                 foreach (var save in allSaves)
@@ -42,11 +43,14 @@ namespace ShelteredAPI.Saves.Paging{
                     if (saveSlot <= 0)
                         continue;
 
-                    int saveApiPage = (saveSlot - 4) / 3;
+                    if (saveSlot < scope.FirstExpandedSlot)
+                        continue;
+
+                    int saveApiPage = (saveSlot - scope.FirstExpandedSlot) / 3;
                     if (saveApiPage != apiPage)
                         continue;
 
-                    int slotIndexOnPage = (saveSlot - 4) % 3;
+                    int slotIndexOnPage = (saveSlot - scope.FirstExpandedSlot) % 3;
                     if (slotIndexOnPage >= 0 && slotIndexOnPage < 3)
                         savesOnPage[slotIndexOnPage] = save;
                 }
@@ -153,6 +157,7 @@ namespace ShelteredAPI.Saves.Paging{
             try
             {
                 int offset = (page - 1) * 3;
+                SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
                 var t = Traverse.Create(panel);
                 var labels = t.Field("m_slotButtonLabels").GetValue<System.Collections.IList>();
                 if (labels == null)
@@ -164,7 +169,7 @@ namespace ShelteredAPI.Saves.Paging{
                     if (lab == null || string.IsNullOrEmpty(lab.text))
                         continue;
 
-                    string updated = ReplaceFirstNumber(lab.text, (i + 4 + offset).ToString());
+                    string updated = ReplaceFirstNumber(lab.text, (scope.FirstExpandedSlot + offset + i).ToString());
                     if (updated != lab.text)
                         lab.text = updated;
                 }
@@ -216,11 +221,13 @@ namespace ShelteredAPI.Saves.Paging{
                 if (selectedSlotIndex > 2)
                     return true;
 
-                var entry = ExpandedVanillaSaves.FindByUIPosition(selectedSlotIndex + 1, page, 3, false);
+                SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
+                var entry = scope.FindByUIPosition(selectedSlotIndex + 1, page, 3, false);
                 if (entry != null)
                 {
-                    MMLog.WriteDebug("[OnDeleteMessageBox] Deleting custom slot " + entry.absoluteSlot + "...");
-                    SaveDeleteRouter.DeleteAbsoluteSlot(entry.absoluteSlot, "OnDeleteMessageBox.CustomDelete");
+                    MMLog.WriteDebug("[OnDeleteMessageBox] Deleting custom slot " + entry.absoluteSlot
+                        + " scenario=" + scope.StorageScenarioId + "...");
+                    SaveDeleteRouter.DeleteAbsoluteSlot(scope.StorageScenarioId, entry.absoluteSlot, "OnDeleteMessageBox.CustomDelete");
                     t.Field("m_infoNeedsRefresh").SetValue(true);
                 }
                 else
@@ -315,36 +322,42 @@ namespace ShelteredAPI.Saves.Paging{
                 if (chosenSlotIndex > 2)
                     return true;
 
-                var entry = ExpandedVanillaSaves.FindByUIPosition(chosenSlotIndex + 1, page, 3);
-                var virtualSaveType = (SaveManager.SaveType)(chosenSlotIndex + 1);
+                SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
+                var entry = scope.FindByUIPosition(chosenSlotIndex + 1, page, 3, true);
+                var virtualSaveType = scope.GetTransportSaveType(chosenSlotIndex);
 
                 if (entry == null)
                 {
-                    int absoluteSlot = (page - 1) * 3 + chosenSlotIndex + 4;
-                    MMLog.WriteDebug("--- Player clicked slot " + absoluteSlot + " to start a new game ---");
+                    int absoluteSlot = scope.GetAbsoluteSlot(page, chosenSlotIndex, 3);
+                    MMLog.WriteDebug("--- Player clicked slot " + absoluteSlot + " to start a new game for scenario "
+                        + scope.StorageScenarioId + " ---");
 
-                    var created = ExpandedVanillaSaves.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
+                    var created = scope.Create(new SaveCreateOptions { name = "New Game", absoluteSlot = absoluteSlot });
                     if (created != null)
                     {
-                        PlatformSaveProxy.SetNextSave(virtualSaveType, "Standard", created.id);
-                        SaveManager.instance.SetCurrentSlot(chosenSlotIndex + 1);
+                        PlatformSaveProxy.SetNextSave(virtualSaveType, scope.StorageScenarioId, created.id);
+                        SaveManager.instance.SetCurrentSlot(scope.GetTransportSlotNumber(chosenSlotIndex));
                     }
 
-                    return true;
+                    if (scope.IsStandard)
+                        return true;
+
+                    BeginDirectScenarioNewGame(scope);
+                    return false;
                 }
 
-                SlotManifest manifest = ReadManifest(Path.Combine(DirectoryProvider.SlotRoot("Standard", entry.absoluteSlot, false), "manifest.json"));
+                SlotManifest manifest = scope.ReadManifest(entry.absoluteSlot);
                 var state = SaveVerification.Verify(manifest);
                 if (state != SaveVerification.VerificationState.Match)
                 {
                     SaveDetailsWindow.Show(entry, manifest, state, true, delegate
                     {
-                        QueueCustomLoad(t, chosenSlotIndex, virtualSaveType, entry);
+                        QueueCustomLoad(t, chosenSlotIndex, scope, virtualSaveType, entry);
                     });
                     return false;
                 }
 
-                QueueCustomLoad(t, chosenSlotIndex, virtualSaveType, entry);
+                QueueCustomLoad(t, chosenSlotIndex, scope, virtualSaveType, entry);
                 return false;
             }
             catch (Exception ex)
@@ -354,16 +367,32 @@ namespace ShelteredAPI.Saves.Paging{
             }
         }
 
-        private static void QueueCustomLoad(Traverse panelTraverse, int chosenSlotIndex, SaveManager.SaveType virtualSaveType, SaveEntry entry)
+        private static void QueueCustomLoad(Traverse panelTraverse, int chosenSlotIndex, SlotPagingScope scope, SaveManager.SaveType virtualSaveType, SaveEntry entry)
         {
-            PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", entry.id);
+            PlatformSaveProxy.SetNextLoad(virtualSaveType, scope.StorageScenarioId, entry.id);
             ApplyDifficultySettings(entry.saveInfo);
 
             var loadingGraphic = panelTraverse.Field("m_loadingGraphic").GetValue<GameObject>();
             if (loadingGraphic != null)
                 loadingGraphic.SetActive(true);
 
-            SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
+            SaveManager.instance.SetSlotToLoad(scope.GetTransportSlotNumber(chosenSlotIndex));
+        }
+
+        private static void BeginDirectScenarioNewGame(SlotPagingScope scope)
+        {
+            DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
+            if (!string.IsNullOrEmpty(scope.DirectLaunchScene) && LoadingScreen.Instance != null)
+            {
+                LoadingScreen.Instance.ShowLoadingScreen(scope.DirectLaunchScene);
+                MMLog.WriteInfo("[SlotSelectionPatchCoordinator] Direct scenario new game launched. scenarioId="
+                    + scope.StorageScenarioId + " scene=" + scope.DirectLaunchScene + ".");
+            }
+            else
+            {
+                MMLog.WriteWarning("[SlotSelectionPatchCoordinator] Could not launch direct scenario new game. scenarioId="
+                    + scope.StorageScenarioId + " scene=" + (scope.DirectLaunchScene ?? "<none>") + ".");
+            }
         }
 
         private static void ApplyDifficultySettings(SaveInfo saveInfo)

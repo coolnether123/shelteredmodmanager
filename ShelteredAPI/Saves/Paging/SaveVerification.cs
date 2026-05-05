@@ -36,6 +36,7 @@ namespace ShelteredAPI.Saves.Paging
 
             var buttons = panel.GetComponentsInChildren<SaveSlotButton>(true);
             int page = PagingManager.GetPage(panel);
+            SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
 
             // Reset all icons for known buttons
             foreach(var kv in _slotIcons) 
@@ -77,19 +78,19 @@ namespace ShelteredAPI.Saves.Paging
                 // Calculate absolute slot
                 int absoluteSlot;
                 if (page == 0) absoluteSlot = uiSlotIndex + 1;
-                else absoluteSlot = 4 + (page - 1) * 3 + uiSlotIndex;
+                else absoluteSlot = scope.GetAbsoluteSlot(page, uiSlotIndex, 3);
 
                 // Find save entry
-                var all = ExpandedVanillaSaves.List();
+                var all = page == 0 ? new SaveEntry[0] : scope.ListSaves();
                 SaveEntry target = null;
                 foreach(var e in all) 
                 {
                     if (e.absoluteSlot == absoluteSlot) { target = e; break; }
                 }
 
-                if (target == null && absoluteSlot <= 3)
+                if (target == null && page == 0 && absoluteSlot <= 5)
                 {
-                    // For vanilla slots 1-3, try to read save info
+                    // For vanilla slots 1-5, try to read save info
                     var saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(absoluteSlot);
                     
                     // Only create entry if save file actually exists
@@ -192,7 +193,8 @@ namespace ShelteredAPI.Saves.Paging
                 var bgTexture = iconGO.GetComponent<UITexture>();
                 
                 // Get Manifest and State
-                var slotRoot = DirectoryProvider.SlotRoot("Standard", absoluteSlot, false); 
+                string manifestScenarioId = page == 0 ? "Standard" : scope.StorageScenarioId;
+                var slotRoot = DirectoryProvider.SlotRoot(manifestScenarioId, absoluteSlot, false);
                 var manPath = Path.Combine(slotRoot, "manifest.json");
                 
                 VerificationState state = VerificationState.Match;
@@ -209,10 +211,10 @@ namespace ShelteredAPI.Saves.Paging
                     catch (Exception ex)
                     {
                         state = VerificationState.Unknown;
-                        MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for slot {absoluteSlot}: {ex.Message}");
+                        MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for {manifestScenarioId}/slot {absoluteSlot}: {ex.Message}");
                     }
                 }
-                else if (absoluteSlot > 3)
+                else if (page > 0 || absoluteSlot > 3)
                 {
                     state = VerificationState.Unknown;
                 }
@@ -300,22 +302,27 @@ namespace ShelteredAPI.Saves.Paging
                 var capManifest = manifest;
                 var capState = state;
                 int capSlot = absoluteSlot;
-                
+                int capUiSlotIndex = uiSlotIndex;
+                int capPage = page;
+                SlotPagingScope capScope = scope;
+
                 EventDelegate.Set(iconButton.onClick, () => {
                     SaveDetailsWindow.Show(capTarget, capManifest, capState, false, () => {
-                        int virtualSlot = (capSlot <= 3) ? capSlot : ((capSlot - 4) % 3) + 1;
-                        var virtualSaveType = (SaveManager.SaveType)virtualSlot;
+                        int slotToLoad;
 
-                        if (capSlot <= 3)
+                        if (capPage == 0)
                         {
                             // For vanilla saves, ensure we bypass the anti-mod-mismatch loading block
                             SaveProtectionPatches.LoadGamePatch._forceLoad = true;
+                            slotToLoad = capSlot;
                         }
                         else
                         {
+                            var virtualSaveType = capScope.GetTransportSaveType(capUiSlotIndex);
                             // For custom saves, set the redirect target
-                            PlatformSaveProxy.SetNextLoad(virtualSaveType, "Standard", capTarget.id);
-                            
+                            PlatformSaveProxy.SetNextLoad(virtualSaveType, capScope.StorageScenarioId, capTarget.id);
+                            slotToLoad = capScope.GetTransportSlotNumber(capUiSlotIndex);
+
                             // Transfer difficulty settings from the manifest/save info
                             if (capTarget.saveInfo != null)
                             {
@@ -338,7 +345,7 @@ namespace ShelteredAPI.Saves.Paging
                         } catch { }
 
                         // Start the actual load
-                        SaveManager.instance.SetSlotToLoad(virtualSlot);
+                        SaveManager.instance.SetSlotToLoad(slotToLoad);
                     });
                 });
             }

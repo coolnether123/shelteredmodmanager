@@ -38,10 +38,13 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             if (entry != null)
             {
-                if (!entry.IsVanilla)
-                    return ScenarioSelectionIds.GetCustomScenarioTransportSaveType();
+                if (entry.BaseGameMode == ScenarioBaseGameMode.Surrounded
+                    || entry.BaseGameMode == ScenarioBaseGameMode.Stasis)
+                {
+                    return ScenarioSelectionIds.GetDefaultSaveType(entry.BaseGameMode);
+                }
 
-                return entry.DefaultSaveType;
+                return entry.IsVanilla ? entry.DefaultSaveType : ScenarioSelectionIds.GetCustomScenarioTransportSaveType();
             }
 
             return ScenarioSelectionIds.GetCustomScenarioTransportSaveType();

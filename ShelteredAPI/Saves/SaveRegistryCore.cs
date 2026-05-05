@@ -1093,7 +1093,7 @@ namespace ShelteredAPI.Saves
         }
 
         /// <summary>
-        /// Reads SaveInfo from a vanilla save slot (1-3).
+        /// Reads SaveInfo from a vanilla save slot (1-5).
         /// Handles the XOR decryption used by the game's PlatformSave_PC.
         /// </summary>
         public static SaveInfo ReadVanillaSaveInfo(int slotNumber)
@@ -1109,6 +1109,8 @@ namespace ShelteredAPI.Saves
                     case 1: fileName = "savedata_01.dat"; break;
                     case 2: fileName = "savedata_02.dat"; break;
                     case 3: fileName = "savedata_03.dat"; break;
+                    case 4: fileName = "savedata_surrounded.dat"; break;
+                    case 5: fileName = "savedata_stasis.dat"; break;
                     default: return null;
                 }
                 
