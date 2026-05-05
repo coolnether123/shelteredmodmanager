@@ -2,7 +2,7 @@
 
 This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 1.3 breaking clean API line.
 
-Canonical signatures: `documentation/API_Signatures_Reference.md`.
+Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ## Assembly Rule
 

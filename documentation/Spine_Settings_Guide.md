@@ -9,7 +9,7 @@
 | `[ModConfiguration]` marker | Optional metadata only | Supported, not required for scanning |
 | Old examples importing `[ModSetting]` from `ModAPI.Attributes` | Older docs/snippets | Deprecated |
 
-Canonical signatures: `documentation/API_Signatures_Reference.md`.
+Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ## 1. Canonical Namespaces and Attributes
 

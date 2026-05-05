@@ -2,7 +2,7 @@
 
 This document summarizes the current loader/runtime architecture. The 1.3 Beta.3 line is a breaking clean API line.
 
-For exact signatures, use `documentation/API_Signatures_Reference.md`.
+For exact signatures, use [API Signatures Reference](API_Signatures_Reference.md).
 
 ## Assembly Rule
 

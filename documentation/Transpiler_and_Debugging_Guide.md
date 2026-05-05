@@ -2,7 +2,7 @@
 
 This guide focuses on the current transpiler stack under `ModAPI.Harmony.Transpilers`.
 
-Canonical signatures: `documentation/API_Signatures_Reference.md`.
+Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ## Compatibility Matrix
 

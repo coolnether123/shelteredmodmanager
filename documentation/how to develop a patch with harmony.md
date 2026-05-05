@@ -2,7 +2,7 @@
 
 This guide covers practical Harmony usage with the current ModAPI stack.
 
-Exact API signatures: `documentation/API_Signatures_Reference.md`.
+Exact API signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ## Compatibility Matrix
 

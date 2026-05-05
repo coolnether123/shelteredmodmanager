@@ -2,6 +2,8 @@
 
 The 1.3 Beta.3 line is a breaking clean API line. Custom scenarios are experimental in Beta.3 and should be tested with disposable saves before being used in long-running playthroughs.
 
+Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior.
+
 ## Assembly Rule
 
 - Always reference `ModAPI.dll`.

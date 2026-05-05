@@ -2,7 +2,7 @@
 
 This document is the current high-level map of the codebase. It is intentionally module-oriented rather than a stale file-by-file dump.
 
-For exact callable signatures, use `documentation/API_Signatures_Reference.md`.
+For exact callable signatures, use [API Signatures Reference](API_Signatures_Reference.md).
 
 The 1.3 Beta.3 line is a breaking clean API line.
 

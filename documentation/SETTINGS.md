@@ -24,7 +24,7 @@ The 1.3 Beta.3 line is a breaking clean API line.
 | `ShelteredSaves` / `ShelteredSaveEvents` | `ShelteredAPI.dll` | Sheltered save-slot APIs |
 | Older settings accessor snippets | Older API style | Historical |
 
-Canonical signatures: `documentation/API_Signatures_Reference.md`.
+Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ## 1. Settings Pattern A: `ModManagerBase<T>` (Recommended)
 

@@ -2,13 +2,13 @@
 
 `ShelteredAPI` supplies Sheltered-specific product APIs and runtime implementations while `ModAPI` stays host-neutral. The 1.3 Beta.3 line is a breaking clean API line.
 
-Canonical signatures: `documentation/API_Signatures_Reference.md`.
+Reference points:
 
-Content-specific guidance: `documentation/ShelteredAPI_Content_Guide.md`.
-
-Input/keybinding guidance: `documentation/Input_Keybindings_Guide.md`.
-
-Custom scenario authoring guidance: `documentation/Custom_Scenarios_Guide.md`.
+- Exact signatures: [API Signatures Reference](API_Signatures_Reference.md)
+- Full docs map: [Documentation Index](README.md)
+- Content: [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md)
+- Input/keybindings: [Input Keybindings Guide](Input_Keybindings_Guide.md)
+- Custom scenarios: [Custom Scenarios Guide](Custom_Scenarios_Guide.md)
 
 ## 1. What ShelteredAPI Adds
 

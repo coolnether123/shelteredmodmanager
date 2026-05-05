@@ -6,7 +6,7 @@ using Manager.Core.Models;
 namespace Manager.Core.Services
 {
     /// <summary>
-    /// Evaluates mod API references against installed API assemblies and known migration rules.
+    /// Evaluates mod API references against installed API assemblies.
     /// </summary>
     public class ApiCompatibilityService
     {
@@ -14,14 +14,11 @@ namespace Manager.Core.Services
         private const string ShelteredApiName = "ShelteredAPI";
 
         private readonly Dictionary<string, string> _installedVersions;
-        private readonly List<ApiTransitionRule> _transitionRules;
-
         public ApiCompatibilityService(Dictionary<string, string> installedVersions)
         {
             _installedVersions = installedVersions != null
                 ? new Dictionary<string, string>(installedVersions, StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            _transitionRules = CreateDefaultTransitionRules();
         }
 
         public ApiCompatibilityReport Evaluate(IEnumerable<AssemblyVersionChecker.ModAssemblyVersion> assemblyReferences, string declaredModApiVersion, string declaredShelteredApiVersion)
@@ -41,7 +38,6 @@ namespace Manager.Core.Services
                         continue;
 
                     var requirement = EvaluateRequirement(reference.ApiName, reference.ApiVersion, reference.DllName);
-                    ApplyTransitionRules(requirement);
                     distinct[key] = requirement;
                     report.Requirements.Add(requirement);
                     if (!string.IsNullOrEmpty(requirement.Message))
@@ -73,7 +69,6 @@ namespace Manager.Core.Services
             }
 
             var requirement = EvaluateRequirement(apiName, declaredVersion, "About.json");
-            ApplyTransitionRules(requirement);
             report.Requirements.Add(requirement);
             if (!string.IsNullOrEmpty(requirement.Message))
                 report.AddMessage(requirement.Severity, requirement.Message);
@@ -106,7 +101,7 @@ namespace Manager.Core.Services
             if (!AssemblyVersionChecker.IsCompatible(installed, requirement.RequiredVersion))
             {
                 requirement.Severity = ApiCompatibilitySeverity.Error;
-                requirement.Message = "This mod was made for a different SMM version. Check Nexus or the mod page for an updated version.";
+                requirement.Message = "This mod requires a newer SMM API version. Update SMM before using this mod.";
                 return requirement;
             }
 
@@ -120,28 +115,6 @@ namespace Manager.Core.Services
             requirement.Severity = ApiCompatibilitySeverity.None;
             requirement.Message = string.Empty;
             return requirement;
-        }
-
-        private void ApplyTransitionRules(ApiRequirement requirement)
-        {
-            if (requirement == null)
-                return;
-
-            for (int i = 0; i < _transitionRules.Count; i++)
-            {
-                ApiTransitionRule rule = _transitionRules[i];
-                string installedVersion = GetInstalledVersion(requirement.ApiName);
-                if (!rule.AppliesTo(requirement, installedVersion))
-                    continue;
-
-                if (rule.Severity > requirement.Severity)
-                    requirement.Severity = rule.Severity;
-
-                if (string.IsNullOrEmpty(requirement.Message))
-                    requirement.Message = rule.Message;
-                else if (requirement.Message.IndexOf(rule.Message, StringComparison.OrdinalIgnoreCase) < 0)
-                    requirement.Message = requirement.Message + " " + rule.Message;
-            }
         }
 
         private void PopulateSummaries(ApiCompatibilityReport report)
@@ -213,17 +186,6 @@ namespace Manager.Core.Services
             return sb.ToString();
         }
 
-        private static List<ApiTransitionRule> CreateDefaultTransitionRules()
-        {
-            var rules = new List<ApiTransitionRule>();
-            rules.Add(new ApiTransitionRule(
-                ModApiName,
-                "1.3.0.0",
-                ApiCompatibilitySeverity.Error,
-                "This mod was made for an older SMM version. Update the mod before using it with SMM 1.3."));
-            return rules;
-        }
-
         private static string NormalizeVersion(string version)
         {
             return (version ?? string.Empty).Trim();
@@ -238,46 +200,6 @@ namespace Manager.Core.Services
             catch
             {
                 return string.Compare(left, right, StringComparison.OrdinalIgnoreCase) < 0;
-            }
-        }
-
-        private sealed class ApiTransitionRule
-        {
-            private readonly string _apiName;
-            private readonly string _beforeVersion;
-            private readonly ApiCompatibilitySeverity _severity;
-            private readonly string _message;
-
-            public ApiTransitionRule(string apiName, string beforeVersion, ApiCompatibilitySeverity severity, string message)
-            {
-                _apiName = apiName;
-                _beforeVersion = beforeVersion;
-                _severity = severity;
-                _message = message;
-            }
-
-            public ApiCompatibilitySeverity Severity
-            {
-                get { return _severity; }
-            }
-
-            public string Message
-            {
-                get { return _message; }
-            }
-
-            public bool AppliesTo(ApiRequirement requirement, string installedVersion)
-            {
-                if (requirement == null)
-                    return false;
-
-                if (!string.Equals(requirement.ApiName, _apiName, StringComparison.OrdinalIgnoreCase))
-                    return false;
-
-                if (string.IsNullOrEmpty(installedVersion) || IsOlderThan(installedVersion, _beforeVersion))
-                    return false;
-
-                return IsOlderThan(requirement.RequiredVersion, _beforeVersion);
             }
         }
     }

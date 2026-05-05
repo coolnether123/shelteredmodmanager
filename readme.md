@@ -244,11 +244,12 @@ Currently available:
 
 ## Documentation
 
-Use this table to choose the shortest useful path.
+Use [Documentation Index](documentation/README.md) for the full map. This table covers the most common author tasks.
 
 | Task | Start Here |
 |------|------------|
 | Make your first mod | [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) |
+| Understand ModAPI/ShelteredAPI split | [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) |
 | Add items, recipes, loot, or assets | [ShelteredAPI Content Guide](documentation/ShelteredAPI_Content_Guide.md) |
 | Add settings or persisted mod data | [Settings and Persistence](documentation/SETTINGS.md) |
 | Subscribe to game, UI, save, or time events | [Events Guide](documentation/Events_Guide.md) |

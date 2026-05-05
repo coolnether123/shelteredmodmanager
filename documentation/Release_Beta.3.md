@@ -29,6 +29,39 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 - API signature and architecture docs keep the v1.3 breaking-line warning visible.
 - Release-critical guides are linked from the README documentation table.
 
+## Current All-Mod Launch Timing
+
+Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with the Epic x64 build, ModAPI `1.3.0`, ShelteredAPI `1.3.0.0`, and every mod currently discovered by Sheltered enabled.
+
+- Discovered mods: 17.
+- Loaded plugins: 17.
+- Startup errors: 0.
+- Doorstop process start to ModAPI handoff: 6,493ms.
+- Loader launch start to ModAPI handoff: 6,221ms.
+- PluginManager startup complete: 4,015ms.
+- PrepareModLoads total: 116ms foreground, 2,013ms background.
+- Sliced activation window: about 1,363ms from schedule to complete.
+
+| Load order | Mod id | Activation time |
+| --- | --- | ---: |
+| 1 | `coolnether123.shelteredvanillafixes` | 89ms |
+| 2 | `coolnether123.sheltereddisplayfixes` | 15ms |
+| 3 | `coolnether123.bunkerrandomlocation` | 186ms |
+| 4 | `coolnether123.lifespan` | 173ms |
+| 5 | `coolnether123.familyexpansion` | 53ms |
+| 6 | `coolnether123.deepexpansion` | 29ms |
+| 7 | `coolnether123.shelteredsystemsexpansion` | 70ms |
+| 8 | `coolnether123.fourpersonexpeditions` | 187ms |
+| 9 | `factionoverhaul` | 272ms |
+| 10 | `coolnether123.betteraiqueue` | 52ms |
+| 11 | `coolnether123.tradingamount` | 10ms |
+| 12 | `volodya14.familypresets.v2` | 9ms |
+| 13 | `volodya14.worldtimecontrol` | 78ms |
+| 14 | `volodya14.earthquake` | 14ms |
+| 15 | `volodya14.autoneedsmod` | 14ms |
+| 16 | `volodya14.characterstatseditor` | 18ms |
+| 17 | `volodya14.colorfulappearance` | 11ms |
+
 ## Pre-Publish Checklist
 
 - Build `ShelteredModManager.sln` in Release.

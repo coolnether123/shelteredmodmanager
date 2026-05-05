@@ -3,7 +3,7 @@
 
 The 1.3 Beta.3 line is a breaking clean API line.
 
-Use `documentation/API_Signatures_Reference.md` for exact current signatures.
+Use [API Signatures Reference](API_Signatures_Reference.md) for exact current signatures.
 
 ## Assembly Rule
 

@@ -1,5 +1,7 @@
 # ModAPI Developer Guide (v1.3 Beta.3)
 
+Start here for the current authoring model. For exact signatures, use [API Signatures Reference](API_Signatures_Reference.md); for the full doc map, use [Documentation Index](README.md).
+
 ## Compatibility Matrix
 
 | Area | Assembly | Status |
@@ -9,9 +11,7 @@
 | Sheltered content, saves, UI, input, events, actors, and scenarios | `ShelteredAPI.dll` | Current |
 | Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Internal unless exposed by a facade |
 
-Exact signatures: `documentation/API_Signatures_Reference.md`.
-
-The 1.3 Beta.3 line is a breaking clean API line. `ModAPI.dll` is the neutral framework assembly and no longer references Sheltered `Assembly-CSharp` or the manager application. Sheltered runtime behavior is provided by `ShelteredAPI.dll` through public facades and neutral `GameRuntime.*` services.
+The 1.3 Beta.3 line is a breaking clean API line: `ModAPI.dll` is host-neutral, and Sheltered behavior comes from `ShelteredAPI.dll` facades plus neutral `GameRuntime.*` services.
 
 ## Assembly Rule
 
@@ -27,7 +27,7 @@ The 1.3 Beta.3 line is a breaking clean API line. `ModAPI.dll` is the neutral fr
 
 ## 1. Start Here
 
-For a guided reading path, start with the root [README documentation section](../readme.md#documentation). For specific tasks:
+For specific tasks:
 
 - Plugin lifecycle and context usage: [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md)
 - Harmony + transpilers: [How to Develop a Harmony Patch](how%20to%20develop%20a%20patch%20with%20harmony.md)

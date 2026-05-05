@@ -2,8 +2,22 @@
 
 This is the source-of-truth signature sheet for the current code in this repo. The 1.3 Beta.3 line is a breaking clean API line.
 
-Related usage guide:
-- `documentation/ShelteredAPI_Characters_Guide.md`
+Use this file for copy/paste signatures and type names. For workflow guidance, start with [Documentation Index](README.md).
+
+## Signature Map
+
+| Area | Section |
+|------|---------|
+| Plugin lifecycle and context | [Plugin Lifecycle](#plugin-lifecycle-modapicore), [Plugin Context](#plugin-context-modapicore) |
+| Save and game runtime services | [Save + Game Helpers](#save--game-helpers-modapicore), [Persistence And Sheltered Saves](#persistence-and-sheltered-saves-modapicore-shelteredapisaves) |
+| Input actions and Sheltered controls | [Input Actions](#input-actions-modapiinputactions), [Sheltered Input Facade](#sheltered-input-facade-shelteredapiinput) |
+| Actors and characters | [Actor System](#actor-system-modapiactors-shelteredapi), [Sheltered Actors And Characters](#sheltered-actors-and-characters-shelteredapiactors-shelteredapicharacters) |
+| Settings UI | [Spine Settings](#spine-settings-modapispine-modapiattributes) |
+| Harmony and transpilers | [Transpiler Core](#transpiler-core-modapiharmony), [Intent API](#intent-api-modapiharmony), [Cooperative Patching](#cooperative-patching-modapiharmony) |
+| Content and assets | [Content + Assets](#content--assets-shelteredapicontent) |
+| Events and registries | [Event + Registry APIs](#event--registry-apis), [ShelteredAPI Trigger Scheduler](#shelteredapi-trigger-scheduler-shelteredapievents), [Mod Registry](#mod-registry-modapicore) |
+| Custom scenarios | [Custom Scenarios](#custom-scenarios-modapiscenarios-shelteredapiscenarios) |
+| Background work | [Background Processing](#background-processing-v13) |
 
 ## Assembly Rule
 
@@ -758,7 +772,11 @@ public interface ISaveRuntimeAdapter
     void ResetRuntimeState();
     string GetQuitHeartbeatDetail();
 }
+```
 
+## Custom Scenarios (`ModAPI.Scenarios`, `ShelteredAPI.Scenarios`)
+
+```csharp
 // ModAPI.Scenarios neutral scenario registration/lifecycle contracts
 public static class GameRuntimeApiIds
 {
@@ -911,7 +929,11 @@ public class ScenarioDefinition
     public BunkerEditsDefinition BunkerEdits { get; set; }
     public AssetReferencesDefinition AssetReferences { get; set; }
 }
+```
 
+## Mod Registry (`ModAPI.Core`)
+
+```csharp
 // ModAPI.Core.ModRegistry
 public static bool Find(string modId);
 public static ModEntry GetMod(string modId);

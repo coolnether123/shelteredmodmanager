@@ -2,7 +2,7 @@
 
 This guide is for writing a mod plugin that runs under the current `IModPlugin` lifecycle.
 
-Exact API signatures: `documentation/API_Signatures_Reference.md`.
+Exact API signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ## Compatibility Matrix
 
@@ -67,7 +67,7 @@ Example:
 }
 ```
 
-Optional fields supported by `ModAbout` include `entryType`, `dependsOn`, `loadBefore`, `loadAfter`, `tags`, `website`, `requiredModApiVersion`, `requiredShelteredApiVersion`, `missingModWarning`, and `debugLogging`. Runtime activation checks the required API version fields when present and blocks incompatible mods with an early compatibility message.
+Optional fields supported by `ModAbout` include `entryType`, `dependsOn`, `loadBefore`, `loadAfter`, `tags`, `website`, `missingModWarning`, and `debugLogging`. Use `dependsOn`, `loadBefore`, and `loadAfter` only for other mods; ModAPI and ShelteredAPI are supplied by SMM and should not be listed as mod dependencies.
 
 ## 4. Lifecycle Contract
 

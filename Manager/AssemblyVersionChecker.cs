@@ -6,7 +6,7 @@ using System.Collections.Generic;
 namespace Manager
 {
     /// <summary>
-    /// Checks ModAPI version compatibility between installed ModAPI.dll and mod assemblies.
+    /// Reads ModAPI/ShelteredAPI assembly references used by installed mods.
     /// </summary>
     public static class AssemblyVersionChecker
     {
@@ -131,7 +131,7 @@ namespace Manager
         /// </summary>
         /// <param name="installedVersion">Installed ModAPI version (e.g., "1.0.0.0")</param>
         /// <param name="requiredVersion">Version the mod was compiled against</param>
-        /// <returns>True if compatible (exact match), false otherwise</returns>
+        /// <returns>True if the installed API is the same version or newer, false otherwise</returns>
         public static bool IsCompatible(string installedVersion, string requiredVersion)
         {
             if (string.IsNullOrEmpty(installedVersion) || string.IsNullOrEmpty(requiredVersion))
@@ -144,12 +144,11 @@ namespace Manager
                 var installed = new Version(installedVersion);
                 var required = new Version(requiredVersion);
 
-                // For now, require exact major.minor match (1.0.x.x compatible with 1.0.y.z)
-                return installed.Major == required.Major && installed.Minor == required.Minor;
+                return installed.CompareTo(required) >= 0;
             }
             catch
             {
-                return false;
+                return true;
             }
         }
 
