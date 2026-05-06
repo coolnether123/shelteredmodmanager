@@ -36,8 +36,18 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AddressingTests.cs" />
+    <Compile Include="CoreNetworkingExpansionTests.cs" />
+    <Compile Include="DiagnosticsTests.cs" />
+    <Compile Include="DiscoveryTests.cs" />
+    <Compile Include="NetworkTestUtilities.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ReliabilityTests.cs" />
+    <Compile Include="SaveResumeHookTests.cs" />
+    <Compile Include="SnapshotTransferTests.cs" />
     <Compile Include="TestAssert.cs" />
+    <Compile Include="TestCase.cs" />
+    <Compile Include="TestRunner.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ModAPI.Networking\ModAPI.Networking.csproj">
