@@ -25,8 +25,11 @@ namespace ModAPI.Networking.Sessions
             _hostPeer = new NetworkPeer(NetworkDefaults.HostPeerId, hostEndPoint, true, NetworkConnectionState.Connecting);
             _hostPeer.ApplicationId = options.ApplicationId;
             _hostPeer.SessionId = options.SessionId;
+            _hostPeer.SessionNonce = options.SessionNonce;
             _hostPeer.ContentSchemaHash = options.ContentSchemaHash;
             _hostPeer.ModContentHash = options.ModContentHash;
+            _hostPeer.StablePeerId = options.StablePeerId;
+            _hostPeer.ReconnectToken = options.ReconnectToken;
             _session.Peers.Add(_hostPeer);
             _startedUtc = DateTime.UtcNow;
             _lastHandshakeUtc = DateTime.MinValue;
@@ -42,7 +45,9 @@ namespace ModAPI.Networking.Sessions
             {
                 if ((utcNow - _startedUtc).TotalMilliseconds >= _session.Config.HandshakeTimeoutMilliseconds)
                 {
-                    Fail(HandshakeRejectReason.Unknown, "Handshake timed out.", null);
+                    Fail(HandshakeRejectReason.Unknown,
+                        "Handshake timed out while connecting to " + _hostPeer.EndPoint + ". Check the manual endpoint address, port, host firewall, and VPN/LAN reachability.",
+                        null);
                     return;
                 }
 
@@ -55,6 +60,7 @@ namespace ModAPI.Networking.Sessions
                 if (_hostPeer.Connection.IsTimedOut(utcNow, _session.Config.ConnectionTimeoutMilliseconds))
                 {
                     _hostPeer.SetState(NetworkConnectionState.TimedOut, utcNow);
+                    _session.RaiseTransportDisconnected(_hostPeer, NetworkDisconnectReason.Timeout, "Host timed out.");
                     _session.RaisePeerDisconnected(_hostPeer, NetworkDisconnectReason.Timeout, "Host timed out.");
                     Fail(HandshakeRejectReason.Unknown, "Host timed out.", null);
                     return;
@@ -88,11 +94,16 @@ namespace ModAPI.Networking.Sessions
             }
 
             _session.LocalPeerId = accept.AssignedPeerId;
+            if (_session.Options.SessionNonce.Length == 0)
+                _session.Options.SessionNonce = accept.SessionNonce ?? string.Empty;
             _hostPeer.DisplayName = accept.HostDisplayName ?? string.Empty;
             _hostPeer.ApplicationId = accept.ApplicationId ?? string.Empty;
             _hostPeer.SessionId = accept.SessionId ?? string.Empty;
+            _hostPeer.SessionNonce = accept.SessionNonce ?? string.Empty;
             _hostPeer.ContentSchemaHash = accept.ContentSchemaHash ?? string.Empty;
             _hostPeer.ModContentHash = accept.ModContentHash ?? string.Empty;
+            _hostPeer.StablePeerId = accept.HostStablePeerId ?? string.Empty;
+            _hostPeer.ReconnectToken = accept.ReconnectToken ?? string.Empty;
             _hostPeer.SetState(NetworkConnectionState.Connected, DateTime.UtcNow);
             _session.ChangeState(NetworkSessionState.Connected);
             NetworkDiagnostics.Info("Connected to host " + _hostPeer.EndPoint + " as peer " + _session.LocalPeerId + ".");
@@ -132,9 +143,11 @@ namespace ModAPI.Networking.Sessions
             NetworkHandshakeRequest request = new NetworkHandshakeRequest();
             request.ApplicationId = options.ApplicationId;
             request.SessionId = options.SessionId;
+            request.SessionNonce = options.SessionNonce;
             request.ContentSchemaHash = options.ContentSchemaHash;
             request.ModContentHash = options.ModContentHash;
             request.DisplayName = options.DisplayName;
+            request.StablePeerId = options.StablePeerId;
             request.ReconnectToken = options.ReconnectToken;
             _session.SendBuiltIn(_hostPeer, SessionMessageTypes.HandshakeRequest,
                 _session.CreatePayload(request.WriteTo), PacketFlags.IsHandshake);
@@ -168,6 +181,13 @@ namespace ModAPI.Networking.Sessions
             {
                 reason = HandshakeRejectReason.SessionMismatch;
                 message = "Session id mismatch.";
+                return false;
+            }
+
+            if (!MatchesOptional(_session.Options.SessionNonce, accept.SessionNonce, true))
+            {
+                reason = HandshakeRejectReason.SessionMismatch;
+                message = "Session nonce mismatch.";
                 return false;
             }
 

@@ -17,6 +17,9 @@ namespace ModAPI.Networking
         public int HandshakeRetryMilliseconds = NetworkDefaults.DefaultHandshakeRetryMilliseconds;
         public int HandshakeTimeoutMilliseconds = NetworkDefaults.DefaultHandshakeTimeoutMilliseconds;
         public int HeartbeatIntervalMilliseconds = NetworkDefaults.DefaultHeartbeatIntervalMilliseconds;
+        public int DiscoveryTimeoutMilliseconds = NetworkDefaults.DefaultDiscoveryTimeoutMilliseconds;
+        public int DiagnosticsEventCapacity = NetworkDefaults.DefaultDiagnosticsEventCapacity;
+        public bool EnableBroadcastDiscovery = true;
         public bool AllowBroadcast;
 
         public void Validate()
@@ -43,6 +46,10 @@ namespace ModAPI.Networking
                 throw new ArgumentOutOfRangeException("HandshakeTimeoutMilliseconds");
             if (HeartbeatIntervalMilliseconds <= 0)
                 throw new ArgumentOutOfRangeException("HeartbeatIntervalMilliseconds");
+            if (DiscoveryTimeoutMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException("DiscoveryTimeoutMilliseconds");
+            if (DiagnosticsEventCapacity < 0)
+                throw new ArgumentOutOfRangeException("DiagnosticsEventCapacity");
         }
 
         public static NetworkConfig CreateDefault()

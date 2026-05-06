@@ -18,11 +18,14 @@ namespace ModAPI.Networking
         public const int DefaultConnectionTimeoutMilliseconds = 3000;
         public const int DefaultHandshakeRetryMilliseconds = 500;
         public const int DefaultHandshakeTimeoutMilliseconds = 5000;
+        public const int DefaultDiscoveryTimeoutMilliseconds = 750;
         public const int DefaultHeartbeatIntervalMilliseconds = 1000;
+        public const int DefaultDiagnosticsEventCapacity = 64;
         public const int DefaultMaxPeers = 4;
         public const byte HostPeerId = 0;
         public const byte UnassignedPeerId = 255;
         public const int MaxHandshakeStringLength = 128;
+        public const int MaxDiscoveryStringLength = 128;
         public const string DefaultApplicationId = "ModAPI.Networking";
     }
 }

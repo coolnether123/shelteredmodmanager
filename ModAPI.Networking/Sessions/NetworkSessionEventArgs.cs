@@ -73,4 +73,16 @@ namespace ModAPI.Networking.Sessions
         public Exception Exception { get; private set; }
         public bool IsFatal { get; private set; }
     }
+
+    public sealed class NetworkTransportReconnectEventArgs : EventArgs
+    {
+        public NetworkTransportReconnectEventArgs(NetworkPeer peer, byte previousPeerId)
+        {
+            Peer = peer;
+            PreviousPeerId = previousPeerId;
+        }
+
+        public NetworkPeer Peer { get; private set; }
+        public byte PreviousPeerId { get; private set; }
+    }
 }

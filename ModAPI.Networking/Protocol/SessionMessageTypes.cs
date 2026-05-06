@@ -7,6 +7,8 @@ namespace ModAPI.Networking.Protocol
         public const ushort HandshakeReject = 0x0003;
         public const ushort Heartbeat = 0x0004;
         public const ushort Disconnect = 0x0005;
+        public const ushort DiscoveryRequest = 0x0006;
+        public const ushort DiscoveryResponse = 0x0007;
         public const ushort FirstApplicationMessageType = 0x0100;
 
         public static bool IsReserved(ushort messageType)

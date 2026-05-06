@@ -9,9 +9,11 @@ namespace ModAPI.Networking.Protocol
         public byte ProtocolVersion = NetworkDefaults.ProtocolVersion;
         public string ApplicationId = NetworkDefaults.DefaultApplicationId;
         public string SessionId = string.Empty;
+        public string SessionNonce = string.Empty;
         public string ContentSchemaHash = string.Empty;
         public string ModContentHash = string.Empty;
         public string DisplayName = string.Empty;
+        public string StablePeerId = string.Empty;
         public string ReconnectToken = string.Empty;
 
         public void WriteTo(ref BitWriter writer)
@@ -19,9 +21,11 @@ namespace ModAPI.Networking.Protocol
             writer.WriteByte(ProtocolVersion);
             writer.WriteString(ApplicationId);
             writer.WriteString(SessionId);
+            writer.WriteString(SessionNonce);
             writer.WriteString(ContentSchemaHash);
             writer.WriteString(ModContentHash);
             writer.WriteString(DisplayName);
+            writer.WriteString(StablePeerId);
             writer.WriteString(ReconnectToken);
         }
 
@@ -31,12 +35,15 @@ namespace ModAPI.Networking.Protocol
             request.ProtocolVersion = reader.ReadByte();
             request.ApplicationId = reader.ReadString();
             request.SessionId = reader.ReadString();
+            request.SessionNonce = reader.ReadString();
             request.ContentSchemaHash = reader.ReadString();
             request.ModContentHash = reader.ReadString();
             request.DisplayName = reader.ReadString();
+            request.StablePeerId = reader.ReadString();
             request.ReconnectToken = reader.ReadString();
-            ValidateStringLengths(request.ApplicationId, request.SessionId, request.ContentSchemaHash,
-                request.ModContentHash, request.DisplayName, request.ReconnectToken);
+            ValidateStringLengths(request.ApplicationId, request.SessionId, request.SessionNonce,
+                request.ContentSchemaHash, request.ModContentHash, request.DisplayName,
+                request.StablePeerId, request.ReconnectToken);
             return request;
         }
 
@@ -59,9 +66,12 @@ namespace ModAPI.Networking.Protocol
         public int CurrentPeerCount;
         public string ApplicationId = NetworkDefaults.DefaultApplicationId;
         public string SessionId = string.Empty;
+        public string SessionNonce = string.Empty;
         public string ContentSchemaHash = string.Empty;
         public string ModContentHash = string.Empty;
         public string HostDisplayName = string.Empty;
+        public string HostStablePeerId = string.Empty;
+        public string ReconnectToken = string.Empty;
 
         public void WriteTo(ref BitWriter writer)
         {
@@ -71,9 +81,12 @@ namespace ModAPI.Networking.Protocol
             writer.WriteUInt16((ushort)CurrentPeerCount);
             writer.WriteString(ApplicationId);
             writer.WriteString(SessionId);
+            writer.WriteString(SessionNonce);
             writer.WriteString(ContentSchemaHash);
             writer.WriteString(ModContentHash);
             writer.WriteString(HostDisplayName);
+            writer.WriteString(HostStablePeerId);
+            writer.WriteString(ReconnectToken);
         }
 
         public static NetworkHandshakeAccept ReadFrom(ref BitReader reader)
@@ -85,9 +98,12 @@ namespace ModAPI.Networking.Protocol
             accept.CurrentPeerCount = reader.ReadUInt16();
             accept.ApplicationId = reader.ReadString();
             accept.SessionId = reader.ReadString();
+            accept.SessionNonce = reader.ReadString();
             accept.ContentSchemaHash = reader.ReadString();
             accept.ModContentHash = reader.ReadString();
             accept.HostDisplayName = reader.ReadString();
+            accept.HostStablePeerId = reader.ReadString();
+            accept.ReconnectToken = reader.ReadString();
             return accept;
         }
     }

@@ -10,6 +10,8 @@ namespace ModAPI.Networking.Sessions
     internal sealed class NetworkHost
     {
         private readonly NetworkSession _session;
+        private readonly System.Collections.Generic.List<DisconnectedPeerRecord> _disconnectedPeers =
+            new System.Collections.Generic.List<DisconnectedPeerRecord>();
 
         public NetworkHost(NetworkSession session)
         {
@@ -19,7 +21,39 @@ namespace ModAPI.Networking.Sessions
         public void Start(NetworkSessionOptions options)
         {
             _session.Peers.Clear();
+            _disconnectedPeers.Clear();
             NetworkDiagnostics.Info("Host session listening for application '" + options.ApplicationId + "'.");
+        }
+
+        public void RememberDisconnectedPeer(NetworkPeer peer)
+        {
+            if (peer == null)
+                return;
+
+            string stablePeerId = Normalize(peer.StablePeerId);
+            string reconnectToken = Normalize(peer.ReconnectToken);
+            if (stablePeerId.Length == 0 && reconnectToken.Length == 0)
+                return;
+
+            for (int i = _disconnectedPeers.Count - 1; i >= 0; i--)
+            {
+                if (_disconnectedPeers[i].PeerId == peer.PeerId
+                    || MatchesResumeField(_disconnectedPeers[i].StablePeerId, stablePeerId)
+                    || MatchesResumeField(_disconnectedPeers[i].ReconnectToken, reconnectToken))
+                {
+                    _disconnectedPeers.RemoveAt(i);
+                }
+            }
+
+            DisconnectedPeerRecord record = new DisconnectedPeerRecord();
+            record.PeerId = peer.PeerId;
+            record.StablePeerId = stablePeerId;
+            record.ReconnectToken = reconnectToken;
+            record.SessionNonce = Normalize(peer.SessionNonce);
+            _disconnectedPeers.Add(record);
+
+            while (_disconnectedPeers.Count > NetworkDefaults.DefaultMaxPeers * 4)
+                _disconnectedPeers.RemoveAt(0);
         }
 
         public void Pump(DateTime utcNow)
@@ -68,12 +102,22 @@ namespace ModAPI.Networking.Sessions
 
             NetworkPeer peer = _session.Peers.FindByEndPoint(remoteEndPoint);
             bool isNewPeer = false;
+            bool isResume = false;
+            byte previousPeerId = NetworkDefaults.UnassignedPeerId;
             DateTime utcNow = DateTime.UtcNow;
             if (peer == null)
             {
                 byte peerId;
                 byte maxPeerId = (byte)(_session.Options.MaxPeers - 1);
-                if (_session.RemotePeerCount + 1 >= _session.Options.MaxPeers
+                DisconnectedPeerRecord resumeRecord;
+                if (TryTakeResumeRecord(request, out resumeRecord)
+                    && _session.Peers.FindByPeerId(resumeRecord.PeerId) == null)
+                {
+                    peerId = resumeRecord.PeerId;
+                    previousPeerId = resumeRecord.PeerId;
+                    isResume = true;
+                }
+                else if (_session.RemotePeerCount + 1 >= _session.Options.MaxPeers
                     || !_session.Peers.TryAllocatePeerId(1, maxPeerId, out peerId))
                 {
                     SendReject(remoteEndPoint, HandshakeRejectReason.ServerFull, "Host is full.");
@@ -90,7 +134,37 @@ namespace ModAPI.Networking.Sessions
             SendAccept(peer);
 
             if (isNewPeer)
+            {
+                if (isResume)
+                    _session.RaiseTransportReconnected(peer, previousPeerId);
                 _session.RaisePeerConnected(peer);
+            }
+        }
+
+        public void HandleDiscoveryRequest(IPEndPoint remoteEndPoint, NetworkMessage message)
+        {
+            if (!_session.Config.EnableBroadcastDiscovery)
+                return;
+
+            NetworkDiscoveryRequest request;
+            try
+            {
+                BitReader reader = new BitReader(message.Payload, message.Offset, message.Length);
+                request = NetworkDiscoveryRequest.ReadFrom(ref reader);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (request.ProtocolVersion != NetworkDefaults.ProtocolVersion)
+                return;
+            if (!string.Equals(Normalize(request.ApplicationId), _session.Options.ApplicationId, StringComparison.Ordinal))
+                return;
+            if (!MatchesOptional(request.SessionId, _session.Options.SessionId, false))
+                return;
+
+            SendDiscoveryResponse(remoteEndPoint);
         }
 
         private bool ValidateRequest(NetworkHandshakeRequest request, out HandshakeRejectReason reason, out string message)
@@ -117,6 +191,13 @@ namespace ModAPI.Networking.Sessions
                 return false;
             }
 
+            if (!MatchesOptional(options.SessionNonce, request.SessionNonce, true))
+            {
+                reason = HandshakeRejectReason.SessionMismatch;
+                message = "Session nonce mismatch.";
+                return false;
+            }
+
             if (!MatchesOptional(options.ContentSchemaHash, request.ContentSchemaHash, false))
             {
                 reason = HandshakeRejectReason.ContentSchemaMismatch;
@@ -140,9 +221,11 @@ namespace ModAPI.Networking.Sessions
         {
             peer.ApplicationId = Normalize(request.ApplicationId);
             peer.SessionId = Normalize(request.SessionId);
+            peer.SessionNonce = Normalize(_session.Options.SessionNonce);
             peer.ContentSchemaHash = Normalize(request.ContentSchemaHash);
             peer.ModContentHash = Normalize(request.ModContentHash);
             peer.DisplayName = Normalize(request.DisplayName);
+            peer.StablePeerId = Normalize(request.StablePeerId);
             peer.ReconnectToken = Normalize(request.ReconnectToken);
             peer.LastError = string.Empty;
         }
@@ -155,12 +238,41 @@ namespace ModAPI.Networking.Sessions
             accept.CurrentPeerCount = _session.RemotePeerCount + 1;
             accept.ApplicationId = _session.Options.ApplicationId;
             accept.SessionId = _session.Options.SessionId;
+            accept.SessionNonce = _session.Options.SessionNonce;
             accept.ContentSchemaHash = _session.Options.ContentSchemaHash;
             accept.ModContentHash = _session.Options.ModContentHash;
             accept.HostDisplayName = _session.Options.DisplayName;
+            accept.HostStablePeerId = _session.Options.StablePeerId;
+            accept.ReconnectToken = _session.Options.ReconnectToken;
 
             _session.SendBuiltIn(peer, SessionMessageTypes.HandshakeAccept,
                 _session.CreatePayload(accept.WriteTo), PacketFlags.IsHandshake);
+        }
+
+        private bool TryTakeResumeRecord(NetworkHandshakeRequest request, out DisconnectedPeerRecord record)
+        {
+            string stablePeerId = Normalize(request.StablePeerId);
+            string reconnectToken = Normalize(request.ReconnectToken);
+            string sessionNonce = Normalize(request.SessionNonce);
+
+            for (int i = _disconnectedPeers.Count - 1; i >= 0; i--)
+            {
+                DisconnectedPeerRecord candidate = _disconnectedPeers[i];
+                if (sessionNonce.Length > 0 && candidate.SessionNonce.Length > 0
+                    && !string.Equals(sessionNonce, candidate.SessionNonce, StringComparison.Ordinal))
+                    continue;
+
+                if (MatchesResumeField(candidate.StablePeerId, stablePeerId)
+                    || MatchesResumeField(candidate.ReconnectToken, reconnectToken))
+                {
+                    _disconnectedPeers.RemoveAt(i);
+                    record = candidate;
+                    return true;
+                }
+            }
+
+            record = null;
+            return false;
         }
 
         private void SendReject(IPEndPoint remoteEndPoint, HandshakeRejectReason reason, string message)
@@ -171,6 +283,19 @@ namespace ModAPI.Networking.Sessions
             _session.SendBuiltIn(remoteEndPoint, SessionMessageTypes.HandshakeReject,
                 _session.CreatePayload(reject.WriteTo), PacketFlags.IsHandshake);
             NetworkDiagnostics.Warn("Rejected handshake from " + remoteEndPoint + ": " + reason + " " + reject.Message);
+        }
+
+        private void SendDiscoveryResponse(IPEndPoint remoteEndPoint)
+        {
+            NetworkDiscoveryResponse response = new NetworkDiscoveryResponse();
+            response.ApplicationId = _session.Options.ApplicationId;
+            response.SessionId = _session.Options.SessionId;
+            response.PeerCount = _session.RemotePeerCount + 1;
+            response.MaxPeers = _session.Options.MaxPeers;
+            response.DisplayName = _session.Options.DisplayName;
+
+            _session.SendBuiltIn(remoteEndPoint, SessionMessageTypes.DiscoveryResponse,
+                _session.CreatePayload(response.WriteTo), PacketFlags.None);
         }
 
         private static bool MatchesOptional(string expected, string actual, bool allowEmptyActual)
@@ -187,6 +312,23 @@ namespace ModAPI.Networking.Sessions
         private static string Normalize(string value)
         {
             return value ?? string.Empty;
+        }
+
+        private static bool MatchesResumeField(string expected, string actual)
+        {
+            return expected != null
+                && expected.Length > 0
+                && actual != null
+                && actual.Length > 0
+                && string.Equals(expected, actual, StringComparison.Ordinal);
+        }
+
+        private sealed class DisconnectedPeerRecord
+        {
+            public byte PeerId;
+            public string StablePeerId;
+            public string ReconnectToken;
+            public string SessionNonce;
         }
     }
 }
