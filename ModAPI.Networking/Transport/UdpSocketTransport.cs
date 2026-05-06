@@ -43,11 +43,26 @@ namespace ModAPI.Networking.Transport
                 return;
             ValidatePort(port);
 
-            _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _socket.Bind(new IPEndPoint(IPAddress.Any, port));
-            if (_config.AllowBroadcast)
-                _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+            try
+            {
+                _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                _socket.Bind(new IPEndPoint(IPAddress.Any, port));
+                if (_config.AllowBroadcast)
+                    _socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Broadcast, true);
+            }
+            catch (SocketException ex)
+            {
+                CloseFailedStartSocket();
+                NetworkBindException bindException = new NetworkBindException(port, ex);
+                NetworkDiagnostics.Exception(bindException, "UDP bind failure");
+                throw bindException;
+            }
+            catch
+            {
+                CloseFailedStartSocket();
+                throw;
+            }
 
             LocalEndPoint = (IPEndPoint)_socket.LocalEndPoint;
             _running = true;
@@ -128,7 +143,7 @@ namespace ModAPI.Networking.Transport
                 }
                 catch (SocketException ex)
                 {
-                    if (_running)
+                    if (_running && ex.SocketErrorCode != SocketError.ConnectionReset)
                         RaiseError(ex);
                 }
                 catch (ObjectDisposedException)
@@ -177,6 +192,20 @@ namespace ModAPI.Networking.Transport
             {
                 try { handler(exception); } catch { }
             }
+        }
+
+        private void CloseFailedStartSocket()
+        {
+            try
+            {
+                if (_socket != null)
+                    _socket.Close();
+            }
+            catch { }
+
+            _socket = null;
+            LocalEndPoint = null;
+            _running = false;
         }
 
         private static void ValidatePort(int port)
