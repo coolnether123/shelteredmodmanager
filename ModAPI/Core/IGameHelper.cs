@@ -71,6 +71,8 @@ namespace ModAPI.Core
         public const string ShelteredLocalization = "GameRuntime.ShelteredLocalization";
         /// <summary>Sheltered recipe and loot mutation service.</summary>
         public const string ShelteredRecipeLootMutation = "GameRuntime.ShelteredRecipeLootMutation";
+        /// <summary>Sheltered dialogue queue and channel service.</summary>
+        public const string ShelteredDialogue = "GameRuntime.ShelteredDialogue";
         /// <summary>Custom scenario registration and catalog service.</summary>
         public const string CustomScenarios = "GameRuntime.CustomScenarios";
         /// <summary>Scenario authoring service.</summary>

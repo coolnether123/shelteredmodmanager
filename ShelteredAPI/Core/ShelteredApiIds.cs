@@ -1,5 +1,6 @@
 using ModAPI.Core;
 using ShelteredAPI.Content;
+using ShelteredAPI.Dialogue;
 
 namespace ShelteredAPI.Core
 {
@@ -16,6 +17,7 @@ namespace ShelteredAPI.Core
         public const string ShelteredAssetLoading = "ShelteredAPI.AssetLoading";
         public const string ShelteredLocalization = "ShelteredAPI.Localization";
         public const string ShelteredRecipeLootMutation = "ShelteredAPI.RecipeLootMutation";
+        public const string ShelteredDialogue = "ShelteredAPI.Dialogue";
         public const string GameLifecycle = "ShelteredAPI.GameLifecycle";
         public const string SaveRuntime = "ShelteredAPI.SaveRuntime";
         public const string UiLifecycleEvents = "ShelteredAPI.UiLifecycleEvents";
@@ -83,6 +85,14 @@ namespace ShelteredAPI.Core
                 return true;
 
             return ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.ShelteredRecipeLootMutation, out service);
+        }
+
+        public static bool TryGetDialogue(out IShelteredDialogueService service)
+        {
+            if (GameRuntimeApis.TryGet(GameRuntimeApiIds.ShelteredDialogue, out service))
+                return true;
+
+            return ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.ShelteredDialogue, out service);
         }
     }
 }

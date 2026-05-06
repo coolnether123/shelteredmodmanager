@@ -8,6 +8,8 @@ using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
+using ShelteredAPI.Dialogue;
+using ShelteredAPI.Dialogue.Runtime;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 using ShelteredAPI.Scenarios;
@@ -109,6 +111,10 @@ namespace ShelteredAPI.Core
             RegisterApi(ShelteredApiAliasIds.ShelteredLocalization, content.Localization);
             RegisterApi(GameRuntimeApiIds.ShelteredRecipeLootMutation, content.RecipeLootMutation);
             RegisterApi(ShelteredApiAliasIds.ShelteredRecipeLootMutation, content.RecipeLootMutation);
+
+            IShelteredDialogueService dialogue = ShelteredDialogueRuntime.Service;
+            RegisterApi(GameRuntimeApiIds.ShelteredDialogue, dialogue);
+            RegisterApi(ShelteredApiAliasIds.ShelteredDialogue, dialogue);
 
             IGameLifecycleSource lifecycleSource = new ShelteredGameLifecycleSource();
             RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);
