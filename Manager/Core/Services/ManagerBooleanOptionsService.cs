@@ -24,7 +24,7 @@ namespace Manager.Core.Services
                 owner = "ShelteredAPI",
                 label = "Custom Scenario Editor",
                 description = "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.",
-                defaultValue = false,
+                defaultValue = true,
                 requiresRestart = true,
                 sortOrder = 100
             },

@@ -34,6 +34,14 @@ namespace ShelteredAPI.Harmony
                 return;
 
             HarmonyBootstrap.ApplyDeferredPatchGroup(PatchStartupTiming.EditorDeferred, trigger);
+            EnsureEditorRuntime(trigger);
+        }
+
+        public static void EnsureEditorRuntime(string trigger)
+        {
+            if (!ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
+                return;
+
             ScenarioAuthoringInputActions.EnsureRegistered();
             ScenarioAuthoringRuntimeDriver.EnsureCreated();
         }

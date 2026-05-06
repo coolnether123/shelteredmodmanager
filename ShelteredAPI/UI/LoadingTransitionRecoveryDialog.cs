@@ -9,6 +9,9 @@ namespace ShelteredAPI.UI
     {
         private const int WindowWidth = 760;
         private const int WindowHeight = 500;
+        private const int WindowPaddingX = 45;
+        private const int MessageTop = 156;
+        private const int MessageHeight = 300;
         private const int OverlayDepth = 60000;
 
         private static readonly Color HeaderColor = new Color(0.9f, 0.85f, 0.7f);
@@ -68,7 +71,7 @@ namespace ShelteredAPI.UI
                 transform,
                 "Message",
                 message ?? string.Empty,
-                new Vector3(-WindowWidth / 2f + 45f, WindowHeight / 2f - 120f, 0f),
+                new Vector3(-WindowWidth / 2f + WindowPaddingX, MessageTop, 0f),
                 16,
                 TextColor,
                 fonts.Bitmap,
@@ -76,8 +79,8 @@ namespace ShelteredAPI.UI
                 100);
             messageLabel.alignment = NGUIText.Alignment.Left;
             messageLabel.pivot = UIWidget.Pivot.TopLeft;
-            messageLabel.width = WindowWidth - 90;
-            messageLabel.height = WindowHeight - 150;
+            messageLabel.width = WindowWidth - (WindowPaddingX * 2);
+            messageLabel.height = MessageHeight;
             messageLabel.multiLine = true;
             messageLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
 

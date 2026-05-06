@@ -19,10 +19,14 @@ namespace ShelteredAPI.Saves.Paging
         private static Dictionary<SaveSlotButton, GameObject> _slotIcons = new Dictionary<SaveSlotButton, GameObject>();
         
         // Colors for status indicators (brighter for dark brown background)
-        private static readonly Color COLOR_MATCH = new Color(0.3f, 1.0f, 0.3f);
+        private static readonly Color COLOR_MATCH = new Color(0.15f, 1.0f, 0.05f);
         private static readonly Color COLOR_VERSION_DIFF = new Color(1.0f, 1.0f, 0.2f);
         private static readonly Color COLOR_MISSING = new Color(1.0f, 0.3f, 0.3f);
         private static readonly Color COLOR_UNKNOWN = new Color(1.0f, 0.6f, 0.2f);
+        private const string TEXT_MATCH = "OK";
+        private const string TEXT_VERSION_DIFF = "~";
+        private const string TEXT_MISSING = "X";
+        private const string TEXT_UNKNOWN = "?";
 
         private static UIFont _cachedUIFont;
         private static Font _cachedTTFFont;
@@ -219,13 +223,12 @@ namespace ShelteredAPI.Saves.Paging
                     state = VerificationState.Unknown;
                 }
 
-                // Sprite selection - ensure we have a label for the character icons
+                // Sprite selection - ensure we have a label fallback for icons the atlas does not provide.
                 UILabel childLabel = iconChildObj != null ? iconChildObj.GetComponent<UILabel>() : null;
                 if (childLabel == null && iconChildObj != null)
                 {
                     childLabel = iconChildObj.gameObject.AddComponent<UILabel>();
-                    if (childSprite != null) childSprite.enabled = false;
-                    
+
                     childLabel.bitmapFont = _cachedUIFont;
                     childLabel.trueTypeFont = _cachedTTFFont;
                     childLabel.fontSize = 48; // Larger font for better visibility
@@ -251,44 +254,52 @@ namespace ShelteredAPI.Saves.Paging
                 }
 
                 // Determine icon and color based on state
-                string iconPrefix = "âœ“";
+                string iconText = TEXT_MATCH;
+                string spriteName = SelectVerificationSpriteName(sampleAtlas, "Checkmark", "Tick");
                 Color iconColor = COLOR_MATCH;
                 float yOffset = 0f;
-                
+
                 switch (state)
                 {
                     case VerificationState.Match:
-                        iconPrefix = "âœ“";
+                        iconText = TEXT_MATCH;
+                        spriteName = SelectVerificationSpriteName(sampleAtlas, "Checkmark", "Tick");
                         iconColor = COLOR_MATCH;
                         yOffset = 0f;
                         break;
                     case VerificationState.VersionMismatch:
-                        iconPrefix = "~";
+                        iconText = TEXT_VERSION_DIFF;
+                        spriteName = null;
                         iconColor = COLOR_VERSION_DIFF;
                         yOffset = -20f;
                         break;
                     case VerificationState.Warning:
-                        iconPrefix = "~";
+                        iconText = TEXT_VERSION_DIFF;
+                        spriteName = null;
                         iconColor = COLOR_VERSION_DIFF;
                         yOffset = -20f;
                         break;
                     case VerificationState.Missing:
-                        iconPrefix = "âœ—";
+                        iconText = TEXT_MISSING;
+                        spriteName = SelectVerificationSpriteName(sampleAtlas, "Cancel", "Close");
                         iconColor = COLOR_MISSING;
                         yOffset = 0f;
                         break;
                 }
-                
+
                 if (state == VerificationState.Unknown)
                 {
-                    iconPrefix = "?";
+                    iconText = TEXT_UNKNOWN;
+                    spriteName = null;
                     iconColor = COLOR_UNKNOWN;
                     yOffset = 0f;
                 }
 
+                bool usedSprite = TryApplyVerificationSprite(childSprite, spriteName, iconColor);
                 if (childLabel != null)
                 {
-                    childLabel.text = iconPrefix;
+                    childLabel.enabled = !usedSprite;
+                    childLabel.text = iconText;
                     childLabel.color = iconColor;
                 }
                 
@@ -349,6 +360,37 @@ namespace ShelteredAPI.Saves.Paging
                     });
                 });
             }
+        }
+
+        private static string SelectVerificationSpriteName(UIAtlas atlas, params string[] spriteNames)
+        {
+            if (atlas == null || spriteNames == null)
+                return null;
+
+            for (int i = 0; i < spriteNames.Length; i++)
+            {
+                string spriteName = spriteNames[i];
+                if (!string.IsNullOrEmpty(spriteName) && atlas.GetSprite(spriteName) != null)
+                    return spriteName;
+            }
+
+            return null;
+        }
+
+        private static bool TryApplyVerificationSprite(UISprite sprite, string spriteName, Color color)
+        {
+            if (sprite == null || string.IsNullOrEmpty(spriteName))
+            {
+                if (sprite != null)
+                    sprite.enabled = false;
+
+                return false;
+            }
+
+            sprite.spriteName = spriteName;
+            sprite.color = color;
+            sprite.enabled = true;
+            return true;
         }
 
         /// <summary>
