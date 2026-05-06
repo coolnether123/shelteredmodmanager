@@ -12,6 +12,7 @@ using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
@@ -271,7 +272,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 string windowId = actionId.Substring(ScenarioAuthoringActionIds.ActionWindowTogglePrefix.Length);
                 bool toggled = _layoutService.ToggleWindowVisibility(state, windowId);
                 if (toggled)
-                    state.StatusMessage = "Toggled panel '" + windowId + "'.";
+                    state.StatusMessage = BuildWindowStatus(state, windowId);
                 return toggled;
             }
 
@@ -282,7 +283,12 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 if (!TryParseStageKind(token, out stageKind))
                     return false;
 
-                return _layoutService.SelectStage(state, stageKind);
+                ScenarioStageKind previousStage = state.ActiveStage;
+                ScenarioAuthoringTool previousTool = state.ActiveTool;
+                bool changed = _layoutService.SelectStage(state, stageKind);
+                if (changed)
+                    state.StatusMessage = BuildStageStatus(state, previousStage, previousTool);
+                return changed;
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal))
@@ -290,7 +296,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 string windowId = actionId.Substring(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix.Length);
                 bool toggled = _layoutService.ToggleWindowCollapsed(state, windowId);
                 if (toggled)
-                    state.StatusMessage = "Updated panel '" + windowId + "'.";
+                    state.StatusMessage = "Panel " + FormatWindowLabel(windowId) + " collapsed.";
                 return toggled;
             }
 
@@ -299,7 +305,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 string windowId = actionId.Substring(ScenarioAuthoringActionIds.ActionWindowRestorePrefix.Length);
                 bool restored = _layoutService.RestoreWindow(state, windowId);
                 if (restored)
-                    state.StatusMessage = "Restored panel '" + windowId + "'.";
+                    state.StatusMessage = "Panel " + FormatWindowLabel(windowId) + " restored.";
                 return restored;
             }
 
@@ -328,6 +334,45 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (changed)
                 message = statusMessage;
             return changed;
+        }
+
+        private static string BuildStageStatus(
+            ScenarioAuthoringState state,
+            ScenarioStageKind previousStage,
+            ScenarioAuthoringTool previousTool)
+        {
+            string stageLabel = ScenarioAuthoringWorkflowLabels.GetStageLabel(state.ActiveStage, false);
+            string toolLabel = ScenarioAuthoringWorkflowLabels.GetToolLabel(state.ActiveTool);
+            if (state.ActiveTool != previousTool)
+                return stageLabel + " workspace active. Tool changed to " + toolLabel + ".";
+            if (state.ActiveStage == previousStage)
+                return stageLabel + " workspace already active.";
+            return stageLabel + " workspace active.";
+        }
+
+        private static string BuildWindowStatus(ScenarioAuthoringState state, string windowId)
+        {
+            string label = FormatWindowLabel(windowId);
+            bool open = false;
+            for (int i = 0; state != null && state.WindowStates != null && i < state.WindowStates.Count; i++)
+            {
+                ScenarioAuthoringWindowState window = state.WindowStates[i];
+                if (window != null && string.Equals(window.Id, windowId, StringComparison.OrdinalIgnoreCase))
+                {
+                    open = window.Visible && !window.Collapsed;
+                    break;
+                }
+            }
+
+            return "Panel " + label + (open ? " opened." : " hidden.");
+        }
+
+        private static string FormatWindowLabel(string windowId)
+        {
+            if (string.IsNullOrEmpty(windowId))
+                return "window";
+
+            return "'" + windowId.Replace('_', ' ') + "'";
         }
 
         private static bool TryParseStageKind(string token, out ScenarioStageKind stageKind)
@@ -1089,71 +1134,62 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             switch (actionId)
             {
                 case ScenarioAuthoringActionIds.ActionToolSelect:
-                    return SetTool(state, ScenarioAuthoringTool.Select, out message, "Selection tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Select, out message);
                 case ScenarioAuthoringActionIds.ActionToolFamily:
-                    return SetTool(state, ScenarioAuthoringTool.Family, out message, "Family capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Family, out message);
                 case ScenarioAuthoringActionIds.ActionToolInventory:
-                    return SetTool(state, ScenarioAuthoringTool.Inventory, out message, "Inventory capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Inventory, out message);
                 case ScenarioAuthoringActionIds.ActionToolShelter:
-                    return SetTool(state, ScenarioAuthoringTool.Shelter, out message, "Structure placement tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Shelter, out message);
                 case ScenarioAuthoringActionIds.ActionToolAssets:
                     bool modeChanged = state.AssetMode != ScenarioAssetAuthoringMode.PlaceNew;
                     state.AssetMode = ScenarioAssetAuthoringMode.PlaceNew;
-                    bool toolChanged = SetTool(state, ScenarioAuthoringTool.Assets, out message, "Asset placement browser active.");
+                    bool toolChanged = SetTool(state, ScenarioAuthoringTool.Assets, out message);
                     if (!toolChanged && modeChanged)
-                        message = "Asset placement browser active.";
+                        message = BuildToolStatus(state, ScenarioAuthoringTool.Assets, true);
                     return toolChanged || modeChanged;
                 case ScenarioAuthoringActionIds.ActionToolObjects:
-                    return SetTool(state, ScenarioAuthoringTool.Objects, out message, "Shelter object placement tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Objects, out message);
                 case ScenarioAuthoringActionIds.ActionToolWiring:
-                    return SetTool(state, ScenarioAuthoringTool.Wiring, out message, "Wall and wiring tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Wiring, out message);
                 case ScenarioAuthoringActionIds.ActionToolPeople:
-                    return SetTool(state, ScenarioAuthoringTool.Family, out message, "Family capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Family, out message);
                 case ScenarioAuthoringActionIds.ActionToolVehicle:
-                    return SetTool(state, ScenarioAuthoringTool.Shelter, out message, "Shelter object capture tool active.");
+                    return SetTool(state, ScenarioAuthoringTool.Shelter, out message);
                 case ScenarioAuthoringActionIds.ActionToolWinLoss:
-                    return SetTool(state, ScenarioAuthoringTool.WinLoss, out message, "Win/Loss authoring active.");
+                    return SetTool(state, ScenarioAuthoringTool.WinLoss, out message);
                 default:
                     handled = false;
                     return false;
             }
         }
 
-        private bool SetTool(ScenarioAuthoringState state, ScenarioAuthoringTool tool, out string message, string statusMessage)
+        private bool SetTool(ScenarioAuthoringState state, ScenarioAuthoringTool tool, out string message)
         {
             message = null;
-            if (state.ActiveTool == tool)
+            if (state == null)
                 return false;
 
-            state.ActiveTool = tool;
-            if (tool == ScenarioAuthoringTool.Wiring)
-                _layoutService.SelectStage(state, ScenarioStageKind.BunkerBackground);
-            else if (tool == ScenarioAuthoringTool.Objects)
-                _layoutService.SelectStage(state, ScenarioStageKind.BunkerInside);
-            else if (tool == ScenarioAuthoringTool.Assets)
-                _layoutService.SelectStage(state, IsBunkerStage(state.ActiveStage) ? state.ActiveStage : ScenarioStageKind.BunkerInside);
-            else if (tool == ScenarioAuthoringTool.Shelter || tool == ScenarioAuthoringTool.Select)
-                _layoutService.SelectStage(state, ScenarioStageKind.BunkerSurface);
-            else if (tool == ScenarioAuthoringTool.Family)
-                _layoutService.SelectStage(state, ScenarioStageKind.People);
-            else if (tool == ScenarioAuthoringTool.Inventory)
-                _layoutService.SelectStage(state, ScenarioStageKind.InventoryStorage);
-            else if (tool == ScenarioAuthoringTool.WinLoss)
-            {
-                _layoutService.SelectStage(state, ScenarioStageKind.Events);
-                state.ActiveTool = ScenarioAuthoringTool.WinLoss;
-            }
+            ScenarioAuthoringWorkflowTransition transition = _layoutService.SelectTool(state, tool);
+            if (!transition.Changed)
+                return false;
 
-            message = statusMessage;
+            message = BuildToolStatus(state, tool, transition.StageChanged);
             return true;
         }
 
-        private static bool IsBunkerStage(ScenarioStageKind stage)
+        private static string BuildToolStatus(ScenarioAuthoringState state, ScenarioAuthoringTool requestedTool, bool stageChanged)
         {
-            return stage == ScenarioStageKind.BunkerBackground
-                || stage == ScenarioStageKind.BunkerSurface
-                || stage == ScenarioStageKind.BunkerInside
-                || stage == ScenarioStageKind.Bunker;
+            string toolLabel = ScenarioAuthoringWorkflowLabels.GetToolLabel(state != null ? state.ActiveTool : requestedTool);
+            string stageLabel = ScenarioAuthoringWorkflowLabels.GetStageLabel(state != null ? state.ActiveStage : ScenarioStageKind.None, false);
+            string workspace = ScenarioAuthoringWorkflowRules.ShouldShowToolWorkspace(state)
+                ? " Tool workspace opened."
+                : string.Empty;
+
+            if (stageChanged)
+                return toolLabel + " tool active in " + stageLabel + "." + workspace;
+
+            return toolLabel + " tool active." + workspace;
         }
     }
 }

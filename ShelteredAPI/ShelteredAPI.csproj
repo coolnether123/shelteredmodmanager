@@ -259,6 +259,7 @@
     <Compile Include="Scenarios\Application\Stages\IScenarioStageModule.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageContext.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageCoordinator.cs" />
+    <Compile Include="Scenarios\Application\Stages\ScenarioAuthoringWorkflowRules.cs" />
     <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineBuilder.cs" />
     <Compile Include="Scenarios\Application\Timeline\ScenarioTimelineNavigationService.cs" />
     <Compile Include="Scenarios\Application\Objects\ScenarioObjectIdentityAssignmentService.cs" />

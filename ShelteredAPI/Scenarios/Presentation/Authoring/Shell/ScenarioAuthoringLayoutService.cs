@@ -260,20 +260,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return true;
         }
 
+        public ScenarioAuthoringWorkflowTransition SelectTool(ScenarioAuthoringState state, ScenarioAuthoringTool tool)
+        {
+            if (state == null)
+                return new ScenarioAuthoringWorkflowTransition();
+
+            ScenarioAuthoringWorkflowTransition transition = _stageCoordinator.SelectTool(state, tool);
+            state.MinimalMode = false;
+            state.FocusSelectionMode = false;
+            ApplyStageWorkspace(state);
+            PersistIfEnabled(state);
+            return transition;
+        }
+
         public void ApplyStageWorkspace(ScenarioAuthoringState state)
         {
             if (state == null || state.WindowStates == null)
                 return;
 
-            ScenarioStageKind activeStage = state.ActiveStage != ScenarioStageKind.None
-                ? state.ActiveStage
-                : _stageCoordinator.Resolve(state) != null ? _stageCoordinator.Resolve(state).Kind : ScenarioStageKind.None;
-
-            bool bunkerStage = activeStage == ScenarioStageKind.BunkerBackground
-                || activeStage == ScenarioStageKind.BunkerSurface
-                || activeStage == ScenarioStageKind.BunkerInside;
-            bool showBuild = bunkerStage
-                && state.ActiveTool == ScenarioAuthoringTool.Assets;
+            ScenarioStageKind activeStage = ResolveActiveStage(state);
+            bool showBuild = ScenarioAuthoringWorkflowRules.ShouldShowToolWorkspace(state);
 
             for (int i = 0; i < state.WindowStates.Count; i++)
             {
@@ -291,12 +297,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
                     window.Visible = showBuild && !window.Collapsed;
-                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.TilesPalette, StringComparison.OrdinalIgnoreCase))
-                    window.Visible = false;
-                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Layers, StringComparison.OrdinalIgnoreCase))
-                    window.Visible = false;
-                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
-                    window.Visible = false;
 
                 if (window.Visible)
                     window.Collapsed = false;
@@ -560,19 +560,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 state.Height = 1f;
         }
 
-        private static bool IsWindowOpen(ScenarioAuthoringState state, string windowId)
+        private ScenarioStageKind ResolveActiveStage(ScenarioAuthoringState state)
         {
-            if (state == null || state.WindowStates == null || string.IsNullOrEmpty(windowId))
-                return false;
+            if (state == null)
+                return ScenarioStageKind.None;
 
-            for (int i = 0; i < state.WindowStates.Count; i++)
-            {
-                ScenarioAuthoringWindowState window = state.WindowStates[i];
-                if (window != null && string.Equals(window.Id, windowId, StringComparison.OrdinalIgnoreCase))
-                    return window.Visible && !window.Collapsed;
-            }
+            if (state.ActiveStage != ScenarioStageKind.None)
+                return state.ActiveStage;
 
-            return false;
+            ScenarioStageDefinition activeStage = _stageCoordinator.Resolve(state);
+            return activeStage != null ? activeStage.Kind : ScenarioStageKind.None;
         }
 
         private static bool BringWindowToFrontInternal(ScenarioAuthoringState state, ScenarioAuthoringWindowState window)
