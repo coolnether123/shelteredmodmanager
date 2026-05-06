@@ -391,6 +391,15 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSession.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSettingsService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellImguiRenderModule.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellActionImguiSupport.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellCommandDockImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellPopupMenuImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStatusBarImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellToolRailImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTooltipImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTopBarImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorkspaceTabsImguiRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioAuthoringStoragePaths.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringUiDebugService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringWindowRegistry.cs" />
