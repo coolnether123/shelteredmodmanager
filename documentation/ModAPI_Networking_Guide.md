@@ -38,7 +38,8 @@ Any Harmony patches for networked gameplay belong in `ShelteredAPI` or another S
 | `Protocol` | Packet headers, message channels, message frames, batch writer/reader. |
 | `Reliability` | Sequence comparison and ACK bitfield tracking. |
 | `Transport` | UDP socket transport with pooled receive buffers and error events. |
-| `Connections` | Neutral connection state record. |
+| `Connections` | Neutral connection state record and peer registry. |
+| `Sessions` | Host/client session facade, handshake, peer lifecycle, heartbeats, disconnects, and raw message APIs. |
 | `Diagnostics` | `MMLog` bridge using the `Network` category. |
 
 ## First Implementation Scope
@@ -51,16 +52,16 @@ The first slice intentionally provides reusable primitives rather than a complet
 - cumulative ACK bitfield helper,
 - pooled UDP receive buffers,
 - send/receive transport events,
-- ModAPI network diagnostics.
+- ModAPI network diagnostics,
+- host/client session startup,
+- versioned handshake accept/reject flow,
+- peer connected/disconnected/message/error events,
+- heartbeat and timeout handling,
+- raw send-to-host, send-to-peer, and broadcast APIs.
 
-The next slice should add the session layer:
+The next slice should add delivery and diagnostics depth:
 
-- handshake request/response messages,
-- protocol/content hash fields,
-- peer registry,
-- heartbeat scheduling,
 - reliable resend queue,
-- disconnect timeout handling,
 - packet-loss simulation hooks for diagnostics.
 
 Sheltered-specific systems such as host ticks, expedition route sync, deterministic encounter patches, save snapshots, and desync recovery stay outside this assembly.

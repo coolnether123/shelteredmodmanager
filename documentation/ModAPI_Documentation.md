@@ -187,6 +187,10 @@ Responsibilities:
 - bit-level serialization helpers
 - packet headers and message batching
 - sequence and ACK bitfield helpers
+- host/client session facade
+- versioned handshake and peer registry
+- heartbeat, timeout, and graceful disconnect handling
+- raw send-to-host, send-to-peer, and broadcast APIs
 - network diagnostics through `MMLog`
 
 Ownership note:
