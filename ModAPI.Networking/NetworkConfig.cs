@@ -14,6 +14,9 @@ namespace ModAPI.Networking
         public int SendBufferPoolSize = NetworkDefaults.DefaultSendBufferPoolSize;
         public int ReliableResendMilliseconds = NetworkDefaults.DefaultReliableResendMilliseconds;
         public int ConnectionTimeoutMilliseconds = NetworkDefaults.DefaultConnectionTimeoutMilliseconds;
+        public int HandshakeRetryMilliseconds = NetworkDefaults.DefaultHandshakeRetryMilliseconds;
+        public int HandshakeTimeoutMilliseconds = NetworkDefaults.DefaultHandshakeTimeoutMilliseconds;
+        public int HeartbeatIntervalMilliseconds = NetworkDefaults.DefaultHeartbeatIntervalMilliseconds;
         public bool AllowBroadcast;
 
         public void Validate()
@@ -34,6 +37,12 @@ namespace ModAPI.Networking
                 throw new ArgumentOutOfRangeException("ReliableResendMilliseconds");
             if (ConnectionTimeoutMilliseconds <= 0)
                 throw new ArgumentOutOfRangeException("ConnectionTimeoutMilliseconds");
+            if (HandshakeRetryMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException("HandshakeRetryMilliseconds");
+            if (HandshakeTimeoutMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException("HandshakeTimeoutMilliseconds");
+            if (HeartbeatIntervalMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException("HeartbeatIntervalMilliseconds");
         }
 
         public static NetworkConfig CreateDefault()

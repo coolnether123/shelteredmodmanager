@@ -27,6 +27,11 @@ namespace ModAPI.Networking.Protocol
         public PacketFlags Flags { get { return _flags; } }
         public bool HasMessages { get { return _messageCount > 0; } }
 
+        public void AddFlags(PacketFlags flags)
+        {
+            _flags |= flags;
+        }
+
         public void Reset()
         {
             _position = NetworkDefaults.HeaderSize;
