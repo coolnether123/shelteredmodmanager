@@ -24,6 +24,8 @@ namespace ShelteredAPI.Harmony
         {
             try
             {
+                EnsureShortcutHandler(__instance);
+
                 UITablePivot table = GetButtonTable(__instance);
                 if (table == null)
                 {
@@ -142,6 +144,68 @@ namespace ShelteredAPI.Harmony
         private static void OpenMultiplayerWindow()
         {
             MultiplayerMenuController.ShowWindow();
+        }
+
+        private static void EnsureShortcutHandler(MainMenu menu)
+        {
+            if (menu == null || menu.gameObject == null)
+                return;
+
+            if (menu.gameObject.GetComponent<MainMenuMultiplayerShortcutHandler>() == null)
+                menu.gameObject.AddComponent<MainMenuMultiplayerShortcutHandler>();
+        }
+    }
+
+    internal sealed class MainMenuMultiplayerShortcutHandler : MonoBehaviour
+    {
+        private const KeyCode ShortcutKey = KeyCode.F4;
+        private static readonly FieldInfo InputEnabledField =
+            typeof(MainMenu).GetField("m_inputEnabled", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo UserSignedOutField =
+            typeof(MainMenu).GetField("m_userSignedOut", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        private MainMenu _menu;
+
+        private void Awake()
+        {
+            _menu = GetComponent<MainMenu>();
+        }
+
+        private void Update()
+        {
+            if (!UnityEngine.Input.GetKeyDown(ShortcutKey))
+                return;
+
+            if (!IsMainMenuInputAvailable())
+                return;
+
+            MultiplayerMenuController.ShowWindow();
+        }
+
+        private bool IsMainMenuInputAvailable()
+        {
+            if (_menu == null)
+                _menu = GetComponent<MainMenu>();
+
+            if (_menu == null)
+                return false;
+
+            bool inputEnabled = InputEnabledField == null || GetBooleanField(InputEnabledField, _menu, true);
+            bool userSignedOut = UserSignedOutField != null && GetBooleanField(UserSignedOutField, _menu, false);
+            return inputEnabled && !userSignedOut;
+        }
+
+        private static bool GetBooleanField(FieldInfo field, object instance, bool fallback)
+        {
+            try
+            {
+                object value = field.GetValue(instance);
+                return value is bool ? (bool)value : fallback;
+            }
+            catch
+            {
+                return fallback;
+            }
         }
     }
 }
