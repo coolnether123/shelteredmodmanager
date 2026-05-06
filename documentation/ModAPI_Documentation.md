@@ -176,7 +176,27 @@ Related guides:
 - `documentation/how to develop a patch with harmony.md`
 - `documentation/Transpiler_and_Debugging_Guide.md`
 
-## 8. UI Runtime
+## 8. Networking
+
+Primary area:
+- `ModAPI.Networking`
+
+Responsibilities:
+- host-neutral UDP transport primitives
+- pooled packet buffers
+- bit-level serialization helpers
+- packet headers and message batching
+- sequence and ACK bitfield helpers
+- network diagnostics through `MMLog`
+
+Ownership note:
+- `ModAPI.Networking` may reference `ModAPI`, but must not reference Unity, Harmony, ShelteredAPI, Assembly-CSharp, or Sheltered gameplay types.
+- Any Harmony patches for networked gameplay belong in `ShelteredAPI` or another Sheltered-owned runtime assembly.
+
+Related guide:
+- `documentation/ModAPI_Networking_Guide.md`
+
+## 9. UI Runtime
 
 Primary areas:
 - `ModAPI/UI`
@@ -195,7 +215,7 @@ Representative files:
 - `ShelteredAPI/UI/Compatibility/UIPatches.cs`
 - `ShelteredAPI/UI/Compatibility/Runtime/*`
 
-## 9. Save Expansion
+## 10. Save Expansion
 
 Primary area:
 - `ShelteredAPI/Custom Saves`
@@ -209,7 +229,7 @@ Responsibilities:
 
 Treat this as a Sheltered-owned subsystem layered under the loader rather than a neutral ModAPI helper.
 
-## 10. Inspector and Debugging
+## 11. Inspector and Debugging
 
 Primary areas:
 - `ModAPI/Inspector`
@@ -222,7 +242,7 @@ Responsibilities:
 - source snapshotting
 - debugger UI
 
-## 11. ShelteredAPI Layer
+## 12. ShelteredAPI Layer
 
 Primary area:
 - `ShelteredAPI`
@@ -240,7 +260,7 @@ Important distinction:
 Related guide:
 - `documentation/Custom_Scenarios_Guide.md`
 
-## 12. Recommended Reading Order
+## 13. Recommended Reading Order
 
 1. Root [README documentation section](../readme.md#documentation)
 2. [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md)

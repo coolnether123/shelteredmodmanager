@@ -58,6 +58,7 @@ namespace Manager
             var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             AddInstalledApiVersion(versions, smmPath, "ModAPI");
             AddInstalledApiVersion(versions, smmPath, "ShelteredAPI");
+            AddInstalledApiVersion(versions, smmPath, "ModAPI.Networking");
             return versions;
         }
 
@@ -179,7 +180,8 @@ namespace Manager
                     string fileName = Path.GetFileName(dllPath);
                     if (fileName.Equals("0Harmony.dll", StringComparison.OrdinalIgnoreCase) ||
                         fileName.Equals("ModAPI.dll", StringComparison.OrdinalIgnoreCase) ||
-                        fileName.Equals("ShelteredAPI.dll", StringComparison.OrdinalIgnoreCase))
+                        fileName.Equals("ShelteredAPI.dll", StringComparison.OrdinalIgnoreCase) ||
+                        fileName.Equals("ModAPI.Networking.dll", StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
@@ -237,7 +239,8 @@ namespace Manager
         private static bool IsKnownApiAssembly(string assemblyName)
         {
             return string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(assemblyName, "ShelteredAPI", StringComparison.OrdinalIgnoreCase);
+                string.Equals(assemblyName, "ShelteredAPI", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(assemblyName, "ModAPI.Networking", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

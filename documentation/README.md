@@ -12,6 +12,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Loader and boundary details | [ModAPI Architecture Guide](ModAPI_Architecture_guide.md) |
 | Exact API signatures | [API Signatures Reference](API_Signatures_Reference.md) |
 | Common failures and log patterns | [API Troubleshooting](API_Troubleshooting.md) |
+| Host-neutral networking primitives | [ModAPI Networking Guide](ModAPI_Networking_Guide.md) |
 
 ## Task Guides
 
@@ -32,6 +33,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Topic | Document |
 |-------|----------|
 | Patch metadata and cooperative patching rules | [Patch Governance](Patch_Governance.md) |
+| Host-neutral networking assembly boundaries | [ModAPI Networking Guide](ModAPI_Networking_Guide.md) |
 | Transpiler safety flags | [Transpiler Safety Settings](Transpiler_Safety_Settings.md) |
 | Public API boundary decisions | [ModAPI Sheltered Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
 | Developer comment style | [Developer Commenting Standard](Developer_Commenting_Standard.md) |

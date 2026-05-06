@@ -996,6 +996,9 @@ namespace Manager
                 string shelteredApiDllBin = Path.Combine(Path.Combine(smmDir, "bin"), "ShelteredAPI.dll");
                 if (!File.Exists(shelteredApiDllRoot) && !File.Exists(shelteredApiDllBin)) missing.Add("SMM/bin/ShelteredAPI.dll");
 
+                string networkingDll = Path.Combine(Path.Combine(smmDir, "bin"), "ModAPI.Networking.dll");
+                if (!File.Exists(networkingDll)) missing.Add("SMM/bin/ModAPI.Networking.dll");
+
                 if (missing.Count == 0) return true;
 
                 string msg = "Some required files for mod injection are missing:\n\n  - "
