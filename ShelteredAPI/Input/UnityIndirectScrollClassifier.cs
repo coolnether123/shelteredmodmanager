@@ -54,12 +54,7 @@ namespace ShelteredAPI.Input
 
         public static bool IsMapPanGesture(UnityScrollGestureSample sample)
         {
-            if (sample.Kind == UnityScrollGestureKind.Indirect)
-                return true;
-
-            return sample.Kind == UnityScrollGestureKind.MouseWheel
-                && sample.HasScroll
-                && !IsPinchModifierHeld();
+            return sample.Kind == UnityScrollGestureKind.Indirect;
         }
 
         private static void UpdateState()
