@@ -18,6 +18,7 @@ namespace ShelteredAPI.Core
         private LoadingTransitionRecoveryNotice _pendingRecovery;
         private float _nextDialogAttemptAt;
         private bool _recoveryInProgress;
+        private bool _sceneLoadedAttached;
 
         public static void EnsureInstalled(GameObject host)
         {
@@ -86,7 +87,7 @@ namespace ShelteredAPI.Core
             _instance = this;
             DontDestroyOnLoad(gameObject);
             Application.logMessageReceived += OnUnityLog;
-            SceneManager.sceneLoaded += OnSceneLoaded;
+            TryAttachSceneLoaded();
         }
 
         private void OnDestroy()
@@ -95,7 +96,7 @@ namespace ShelteredAPI.Core
                 _instance = null;
 
             Application.logMessageReceived -= OnUnityLog;
-            SceneManager.sceneLoaded -= OnSceneLoaded;
+            TryDetachSceneLoaded();
         }
 
         private void Update()
@@ -124,7 +125,10 @@ namespace ShelteredAPI.Core
             _diagnostics.ClearBreadcrumbs();
             _diagnostics.MarkBreadcrumb("Transition requested target=" + targetScene + " source=" + sourceScene);
 
-            MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring transition to " + targetScene + ".");
+            MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring transition. source=" + sourceScene
+                + ", target=" + targetScene
+                + ", request=" + LoadingTransitionText.Safe(requestReason)
+                + ", sceneHook=" + (_sceneLoadedAttached ? "SceneManager.sceneLoaded" : "OnLevelWasLoaded") + ".");
         }
 
         private void BeginMenuTransition(string targetLabel, string requestReason)
@@ -135,7 +139,10 @@ namespace ShelteredAPI.Core
             _diagnostics.ClearBreadcrumbs();
             _diagnostics.MarkBreadcrumb("Menu transition requested target=" + LoadingTransitionText.Safe(targetLabel) + " source=" + sourceScene);
 
-            MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring menu transition for " + LoadingTransitionText.Safe(targetLabel) + ".");
+            MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring menu transition. source=" + sourceScene
+                + ", targetLabel=" + LoadingTransitionText.Safe(targetLabel)
+                + ", request=" + LoadingTransitionText.Safe(requestReason)
+                + ", sceneHook=" + (_sceneLoadedAttached ? "SceneManager.sceneLoaded" : "OnLevelWasLoaded") + ".");
         }
 
         private void TrackSceneChange(string activeScene)
@@ -145,6 +152,7 @@ namespace ShelteredAPI.Core
 
             _transition.LastScene = activeScene;
             _diagnostics.MarkBreadcrumb("Active scene changed to " + activeScene);
+            MMLog.WriteInfo("[LoadingTransitionRecovery] Active scene changed. " + BuildTransitionSnapshot(_transition, activeScene, Time.realtimeSinceStartup) + ".");
         }
 
         private void CompleteTransition(string activeScene)
@@ -164,6 +172,8 @@ namespace ShelteredAPI.Core
 
             _transition.MarkLoadingSceneEntered();
             _diagnostics.MarkBreadcrumb("LoadingScene entered via " + reason);
+            MMLog.WriteInfo("[LoadingTransitionRecovery] LoadingScene entered. reason=" + LoadingTransitionText.Safe(reason)
+                + ", " + BuildTransitionSnapshot(_transition, LoadingTransitionRecoveryConstants.LoadingSceneName, Time.realtimeSinceStartup) + ".");
         }
 
         private void Recover(string reason, Exception exception)
@@ -230,7 +240,25 @@ namespace ShelteredAPI.Core
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             string sceneName = string.IsNullOrEmpty(scene.name) ? "<empty>" : scene.name;
-            _diagnostics.MarkBreadcrumb("Scene loaded: " + sceneName);
+            HandleSceneLoaded(sceneName, "SceneManager.sceneLoaded");
+        }
+
+        private void OnLevelWasLoaded(int level)
+        {
+            if (_sceneLoadedAttached)
+                return;
+
+            string sceneName = LoadingTransitionRuntime.GetActiveSceneName();
+            HandleSceneLoaded(sceneName, "OnLevelWasLoaded:" + level);
+        }
+
+        private void HandleSceneLoaded(string sceneName, string source)
+        {
+            sceneName = string.IsNullOrEmpty(sceneName) ? "<empty>" : sceneName;
+            _diagnostics.MarkBreadcrumb("Scene loaded: " + sceneName + " via " + source);
+            MMLog.WriteInfo("[LoadingTransitionRecovery] Scene loaded callback. scene=" + sceneName
+                + ", source=" + LoadingTransitionText.Safe(source)
+                + ", activeTransition=" + (_transition != null) + ".");
 
             if (_transition == null)
                 return;
@@ -239,7 +267,7 @@ namespace ShelteredAPI.Core
 
             if (LoadingTransitionRecoveryConstants.IsLoadingScene(sceneName))
             {
-                EnterLoadingSceneIfActive("SceneManager.sceneLoaded");
+                EnterLoadingSceneIfActive(source);
                 return;
             }
 
@@ -247,9 +275,64 @@ namespace ShelteredAPI.Core
                 CompleteTransition(sceneName);
         }
 
+        private void TryAttachSceneLoaded()
+        {
+            if (!RuntimeCompat.IsModernSceneApi)
+                return;
+
+            try
+            {
+                SceneManager.sceneLoaded += OnSceneLoaded;
+                _sceneLoadedAttached = true;
+                MMLog.WriteInfo("[LoadingTransitionRecovery] Attached SceneManager.sceneLoaded callback.");
+            }
+            catch (MissingMethodException)
+            {
+                _sceneLoadedAttached = false;
+                MMLog.WriteWarning("[LoadingTransitionRecovery] SceneManager.sceneLoaded exists but is unavailable at runtime; using OnLevelWasLoaded fallback.");
+            }
+        }
+
+        private void TryDetachSceneLoaded()
+        {
+            if (!_sceneLoadedAttached)
+                return;
+
+            try
+            {
+                SceneManager.sceneLoaded -= OnSceneLoaded;
+            }
+            catch (MissingMethodException)
+            {
+            }
+            finally
+            {
+                _sceneLoadedAttached = false;
+            }
+        }
+
         private void OnUnityLog(string condition, string stackTrace, LogType type)
         {
             _diagnostics.RecordUnityLog(condition, stackTrace, type);
+            if (_transition == null || (type != LogType.Error && type != LogType.Exception && type != LogType.Assert))
+                return;
+
+            MMLog.WriteWarning("[LoadingTransitionRecovery] Captured Unity " + type
+                + " during transition. " + BuildTransitionSnapshot(_transition, LoadingTransitionRuntime.GetActiveSceneName(), Time.realtimeSinceStartup)
+                + ", message=" + LoadingTransitionText.Compact(condition) + ".");
+        }
+
+        private static string BuildTransitionSnapshot(LoadingTransitionState transition, string activeScene, float now)
+        {
+            if (transition == null)
+                return "transition=<none>, activeScene=" + LoadingTransitionText.Safe(activeScene);
+
+            return "phase=" + transition.Phase
+                + ", source=" + LoadingTransitionText.Safe(transition.SourceScene)
+                + ", target=" + LoadingTransitionText.Safe(transition.TargetScene)
+                + ", targetLabel=" + LoadingTransitionText.Safe(transition.TargetLabel)
+                + ", activeScene=" + LoadingTransitionText.Safe(activeScene)
+                + ", request=" + LoadingTransitionText.Safe(transition.RequestReason);
         }
     }
 }

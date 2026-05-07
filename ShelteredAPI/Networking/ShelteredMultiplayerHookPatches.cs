@@ -91,4 +91,33 @@ namespace ShelteredAPI.Networking
             }
         }
     }
+
+    [PatchPolicy(PatchDomain.SaveFlow, "ShelteredMultiplayerDifficultySync",
+        TargetBehavior = "Host new-game difficulty selections are mirrored into the active multiplayer setup payload.",
+        FailureMode = "Clients can enter startup with default difficulty while the host starts with different settings.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the multiplayer difficulty sync patch host.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(DifficultyManager), "StoreMenuDifficultySettings")]
+    internal static class ShelteredMultiplayerDifficultySyncPatch
+    {
+        private static void Postfix(int __0, int __1, int __2, int __3, int __4, int __5, bool __6)
+        {
+            try
+            {
+                MultiplayerConnectionTestService.NotifyHostDifficultySettingsChanged(
+                    __0,
+                    __1,
+                    __2,
+                    __3,
+                    __4,
+                    __5,
+                    __6);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ShelteredMultiplayerDifficultySync.Postfix",
+                    "Difficulty multiplayer sync hook failed: " + ex.Message);
+            }
+        }
+    }
 }

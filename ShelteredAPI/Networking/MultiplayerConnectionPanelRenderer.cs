@@ -105,6 +105,10 @@ namespace ShelteredAPI.Networking
             if (GUILayout.Button("Begin Game Setup", GUILayout.Width(150f)))
                 model.Service.BeginSetup();
 
+            GUI.enabled = model.CanReleaseSetup;
+            if (GUILayout.Button("Everyone Loaded", GUILayout.Width(140f)))
+                model.Service.ReleaseSetupStart();
+
             GUI.enabled = true;
             if (GUILayout.Button(model.IsDiscovering ? "Searching LAN..." : "Find LAN", GUILayout.Width(120f)))
                 model.Service.StartLanDiscovery(ParsePort(state.PortText));

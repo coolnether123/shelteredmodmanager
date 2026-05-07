@@ -11,6 +11,7 @@ using ModAPI.Networking.Diagnostics;
 using ModAPI.Networking.Discovery;
 using ModAPI.Networking.Protocol;
 using ModAPI.Networking.Sessions;
+using ShelteredAPI.Harmony;
 
 namespace ShelteredAPI.Networking
 {
@@ -21,7 +22,7 @@ namespace ShelteredAPI.Networking
 
         private const int MaxLogLines = 32;
         private const int MaxReceivedMessages = 32;
-        private const int TestConnectionTimeoutMilliseconds = 15000;
+        private const int TestConnectionTimeoutMilliseconds = 120000;
         private const int TestHandshakeTimeoutMilliseconds = 10000;
         private const int TestDiscoveryTimeoutMilliseconds = 1500;
         private const string ApplicationId = "ShelteredAPI.MultiplayerTest";
@@ -121,6 +122,11 @@ namespace ShelteredAPI.Networking
         public string SetupLastError
         {
             get { return _setup != null ? _setup.LastError : string.Empty; }
+        }
+
+        public bool CanReleaseSetup
+        {
+            get { return _setup != null && _setup.CanHostReleaseStart; }
         }
 
         public bool IsDiscovering
@@ -242,7 +248,24 @@ namespace ShelteredAPI.Networking
             }
 
             EnsureSetupService(_session);
-            _setup.BeginHostSetup(0);
+            ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("Multiplayer host auto-new-save");
+            ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("Multiplayer host auto-new-save");
+            AutoLoadFlow.BeginNewSave(0);
+            AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer host setup");
+            AddInfo("Setup", "Host setup will begin when the host new-save slot is chosen.");
+        }
+
+        public void ReleaseSetupStart()
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Host)
+            {
+                SetLastError("Only the host can release setup.");
+                AddWarning("Setup", "Release requested without an active host session.");
+                return;
+            }
+
+            EnsureSetupService(_session);
+            _setup.ReleaseStartFromHost();
         }
 
         public static void NotifyHostNewGameSlotChosen(int absoluteSlot)
@@ -252,6 +275,22 @@ namespace ShelteredAPI.Networking
                 return;
 
             active.BeginSetupFromSaveFlow(absoluteSlot);
+        }
+
+        public static void NotifyHostDifficultySettingsChanged(
+            int rain,
+            int resources,
+            int breach,
+            int faction,
+            int mood,
+            int map,
+            bool fog)
+        {
+            MultiplayerConnectionTestService active = _active;
+            if (active == null)
+                return;
+
+            active.UpdateHostSetupDifficulty(rain, resources, breach, faction, mood, map, fog);
         }
 
         public void Update()
@@ -534,6 +573,7 @@ namespace ShelteredAPI.Networking
             }
             if (_setup != null)
             {
+                _setup.HandleLocalSessionEnding(reason);
                 _setup.Dispose();
                 _setup = null;
             }
@@ -682,7 +722,11 @@ namespace ShelteredAPI.Networking
             if (_saveSync != null)
                 _saveSync.HandlePeerDisconnected(e != null ? e.Peer : null);
             if (_setup != null)
+            {
                 _setup.HandlePeerDisconnected(e != null ? e.Peer : null);
+                if (_session != null && _session.Mode == NetworkSessionMode.Client)
+                    _setup.HandleLocalSessionEnding(string.IsNullOrEmpty(message) ? "peer-disconnected" : message);
+            }
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
                 ShelteredMultiplayer.Deactivate(string.IsNullOrEmpty(message) ? "peer-disconnected" : message);
             AddWarning(GetComponentName(), "Peer disconnected: " + FormatPeerDetails(e != null ? e.Peer : null)
@@ -701,6 +745,8 @@ namespace ShelteredAPI.Networking
                 message = e.Reason.ToString();
 
             SetLastError(message);
+            if (_setup != null)
+                _setup.HandleLocalSessionEnding(string.IsNullOrEmpty(message) ? "connection-failed" : message);
             AddError("Client", "Connection failed: " + message);
             if (e != null && e.Exception != null)
                 LogException("Client", e.Exception, "Connection failed.");
@@ -878,6 +924,29 @@ namespace ShelteredAPI.Networking
 
             EnsureSetupService(_session);
             _setup.BeginHostSetup(absoluteSlot);
+        }
+
+        private void UpdateHostSetupDifficulty(
+            int rain,
+            int resources,
+            int breach,
+            int faction,
+            int mood,
+            int map,
+            bool fog)
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Host || _setup == null)
+                return;
+
+            _setup.UpdateHostDifficultySettings(
+                rain,
+                resources,
+                breach,
+                faction,
+                mood,
+                map,
+                fog,
+                "setup-difficulty-store");
         }
 
         private void ClearLastError()

@@ -39,6 +39,7 @@ namespace ShelteredAPI.Networking
             model.HasActiveSession = service.HasActiveSession;
             model.CanSendTestMessage = service.CanSendTestMessage;
             model.CanBeginSetup = service.Mode == NetworkSessionMode.Host && service.HasActiveSession;
+            model.CanReleaseSetup = service.CanReleaseSetup;
             model.EventCount = snapshot != null ? snapshot.RecentEvents.Length : 0;
             model.SnapshotAgeText = snapshot != null
                 ? MultiplayerDiagnosticsFormatter.FormatAge(snapshot.CapturedUtc)

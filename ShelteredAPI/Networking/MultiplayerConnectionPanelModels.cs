@@ -51,6 +51,7 @@ namespace ShelteredAPI.Networking
         public bool HasActiveSession;
         public bool CanSendTestMessage;
         public bool CanBeginSetup;
+        public bool CanReleaseSetup;
         public NetworkSessionMode Mode;
     }
 }

@@ -53,6 +53,11 @@ namespace ShelteredAPI.Networking
             get { return _lastError; }
         }
 
+        public bool CanHostReleaseStart
+        {
+            get { return IsHostReadyForRelease(); }
+        }
+
         public static bool IsSetupMessage(ushort messageType)
         {
             return messageType == BeginSetupMessageType
@@ -103,6 +108,7 @@ namespace ShelteredAPI.Networking
             ShelteredMultiplayerSessionCoordinator.Instance.UpdateRoster(_session, "setup-peer-connected");
             PrepareHostSetup("setup-peer-connected");
             BroadcastBeginSetup();
+            WriteLog(MMLog.LogLevel.Info, "Peer " + peer.PeerId + " joined active setup. " + BuildSetupProgress() + ".");
         }
 
         public void HandlePeerDisconnected(NetworkPeer peer)
@@ -125,8 +131,58 @@ namespace ShelteredAPI.Networking
                 ShelteredMultiplayerSessionCoordinator.Instance.UpdateRoster(_session, "setup-peer-disconnected");
                 PrepareHostSetup("setup-peer-disconnected");
                 BroadcastBeginSetup();
-                TryReleaseIfReady();
+                UpdateHostReadyStatus();
             }
+        }
+
+        public void UpdateHostDifficultySettings(
+            int rain,
+            int resources,
+            int breach,
+            int faction,
+            int mood,
+            int map,
+            bool fog,
+            string reason)
+        {
+            if (_disposed || _session == null || _session.Mode != NetworkSessionMode.Host || _currentSetup == null || _released)
+                return;
+
+            _currentSetup.ApplySetupSettings(new ShelteredMultiplayerSetupSettings(
+                _currentSetup.HostAbsoluteSlot,
+                _currentSetup.ClientSuggestedSlot,
+                rain,
+                resources,
+                breach,
+                faction,
+                mood,
+                map,
+                fog));
+
+            PrepareHostSetup(string.IsNullOrEmpty(reason) ? "setup-difficulty-updated" : reason);
+            BroadcastBeginSetup();
+            WriteLog(MMLog.LogLevel.Info, "Host setup difficulty updated and broadcast. Rain=" + rain
+                + ", Resources=" + resources + ", Breach=" + breach + ", Faction=" + faction
+                + ", Mood=" + mood + ", Map=" + map + ", Fog=" + fog + ".");
+        }
+
+        public void ReleaseStartFromHost()
+        {
+            if (_disposed || _session == null || _session.Mode != NetworkSessionMode.Host)
+            {
+                SetError("Only the host can release multiplayer start.");
+                return;
+            }
+
+            if (!IsHostReadyForRelease())
+            {
+                SetStatus("not ready for host release; " + BuildWaitingReason());
+                WriteLog(MMLog.LogLevel.Warning, "Host release requested before setup was ready. " + BuildSetupProgress()
+                    + ", reason=" + BuildWaitingReason() + ".");
+                return;
+            }
+
+            ReleaseStart("setup-release-host-confirmed");
         }
 
         public bool TryHandleMessage(NetworkPeer peer, ushort messageType, byte[] payload)
@@ -156,10 +212,22 @@ namespace ShelteredAPI.Networking
             if (_disposed)
                 return;
 
+            ClearSetupState();
             GameEvents.OnSessionStarted -= OnSessionStarted;
-            _loadedPeers.Clear();
-            _expectedPeers.Clear();
             _disposed = true;
+        }
+
+        public void HandleLocalSessionEnding(string reason)
+        {
+            if (_disposed)
+                return;
+
+            if (_currentSetup == null && _loadedPeers.Count == 0 && _expectedPeers.Count == 0)
+                return;
+
+            ClearSetupState();
+            SetStatus("cancelled");
+            WriteLog(MMLog.LogLevel.Info, "Setup cancelled. Reason=" + (reason ?? string.Empty) + ".");
         }
 
         public void Update()
@@ -203,8 +271,13 @@ namespace ShelteredAPI.Networking
             if (_session == null || _session.Mode != NetworkSessionMode.Client)
                 return;
 
-            _currentSetup = MultiplayerSetupMessage.FromPayload(payload);
-            _localLoaded = false;
+            MultiplayerSetupMessage received = MultiplayerSetupMessage.FromPayload(payload);
+            bool shouldStartNewSave = _currentSetup == null
+                || !string.Equals(_currentSetup.SessionId, received.SessionId, StringComparison.Ordinal);
+
+            _currentSetup = received;
+            if (shouldStartNewSave)
+                _localLoaded = false;
             _released = false;
 
             ShelteredMultiplayerSessionContext context =
@@ -217,13 +290,26 @@ namespace ShelteredAPI.Networking
                     _currentSetup.ToBunkerAssignments(),
                     "setup-begin-client");
 
-            ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("Multiplayer setup client auto-new-save");
-            ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("Multiplayer setup client auto-new-save");
-            AutoLoadFlow.BeginNewSave(context.SetupSettings.ClientSuggestedSlot);
-            AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer setup begin");
-            SetStatus("setup received; starting client new-save flow");
+            if (shouldStartNewSave)
+            {
+                ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("Multiplayer setup client auto-new-save");
+                ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("Multiplayer setup client auto-new-save");
+                AutoLoadFlow.BeginNewSave(context.SetupSettings.ClientSuggestedSlot);
+                AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer setup begin");
+                SetStatus("setup received; starting client new-save flow");
+            }
+            else
+            {
+                SetStatus(_localLoaded ? "loaded; waiting for host release" : "setup settings updated; waiting for startup");
+            }
+
             WriteLog(MMLog.LogLevel.Info, "Received setup begin. SuggestedSlot="
-                + context.SetupSettings.ClientSuggestedSlot + ".");
+                + context.SetupSettings.ClientSuggestedSlot
+                + ", restart=" + shouldStartNewSave
+                + ", session='" + LoadingText(_currentSetup.SessionId) + "'"
+                + ", localPlayer=" + _currentSetup.LocalPlayerId
+                + ", hostSlot=" + _currentSetup.HostAbsoluteSlot
+                + ", bunkers=" + _currentSetup.Bunkers.Count + ".");
         }
 
         private void HandleSetupLoaded(NetworkPeer peer, byte[] payload)
@@ -232,15 +318,29 @@ namespace ShelteredAPI.Networking
                 return;
 
             SetupLoadedMessage loaded = SetupLoadedMessage.FromPayload(payload);
+            if (!string.Equals(loaded.SessionId, _currentSetup.SessionId, StringComparison.Ordinal))
+            {
+                WriteLog(MMLog.LogLevel.Warning, "Ignoring setup-loaded from peer " + peer.PeerId
+                    + " for stale session '" + loaded.SessionId + "'.");
+                return;
+            }
+
             _loadedPeers.Add(peer.PeerId);
             WriteLog(MMLog.LogLevel.Info, "Peer " + peer.PeerId + " loaded setup slot "
-                + loaded.AbsoluteSlot + ".");
-            TryReleaseIfReady();
+                + loaded.AbsoluteSlot + ". " + BuildSetupProgress() + ".");
+            UpdateHostReadyStatus();
         }
 
         private void HandleReleaseStart(byte[] payload)
         {
             ReleaseStartMessage release = ReleaseStartMessage.FromPayload(payload);
+            if (_currentSetup != null
+                && !string.Equals(release.SessionId, _currentSetup.SessionId, StringComparison.Ordinal))
+            {
+                WriteLog(MMLog.LogLevel.Warning, "Ignoring release for stale session '" + release.SessionId + "'.");
+                return;
+            }
+
             _released = true;
             ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart("setup-release-" + release.WorldTick);
             SetStatus("released");
@@ -273,41 +373,84 @@ namespace ShelteredAPI.Networking
 
             if (_session.Mode == NetworkSessionMode.Host)
             {
-                SetStatus("host loaded; waiting for peers");
-                TryReleaseIfReady();
+                WriteLog(MMLog.LogLevel.Info, "Host world loaded for setup. Slot=" + slot + ". " + BuildSetupProgress() + ".");
+                UpdateHostReadyStatus();
             }
         }
 
-        private void TryReleaseIfReady()
+        private void UpdateHostReadyStatus()
         {
             if (_session == null || _session.Mode != NetworkSessionMode.Host || _currentSetup == null || _released)
                 return;
             if (!_localLoaded)
+            {
+                SetStatus("waiting for host startup to finish");
+                WriteLog(MMLog.LogLevel.Info, "Setup waiting for host startup. " + BuildSetupProgress() + ".");
                 return;
+            }
 
             if (_expectedPeers.Count == 0)
             {
                 SetStatus("host loaded; waiting for peers");
+                WriteLog(MMLog.LogLevel.Info, "Setup waiting for peers after host loaded. " + BuildSetupProgress() + ".");
                 return;
             }
 
-            NetworkPeer[] peers = _session.GetPeers();
-            for (int i = 0; i < peers.Length; i++)
-            {
-                NetworkPeer peer = peers[i];
-                if (peer != null && peer.State == NetworkConnectionState.Connected)
-                    _expectedPeers.Add(peer.PeerId);
-            }
+            RememberConnectedPeers();
 
             foreach (byte peerId in _expectedPeers)
             {
                 if (!_loadedPeers.Contains(peerId))
                 {
                     SetStatus("waiting for " + (_expectedPeers.Count - _loadedPeers.Count) + " peer(s)");
+                    WriteLog(MMLog.LogLevel.Info, "Setup waiting for peer " + peerId + " to report loaded. " + BuildSetupProgress() + ".");
                     return;
                 }
             }
 
+            SetStatus("all players loaded; waiting for host release");
+            WriteLog(MMLog.LogLevel.Info, "All setup participants loaded; waiting for host to press Everyone Loaded. " + BuildSetupProgress() + ".");
+        }
+
+        private bool IsHostReadyForRelease()
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Host || _currentSetup == null || _released || !_localLoaded)
+                return false;
+
+            if (_expectedPeers.Count == 0)
+                return false;
+
+            RememberConnectedPeers();
+
+            foreach (byte peerId in _expectedPeers)
+            {
+                if (!_loadedPeers.Contains(peerId))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private string BuildWaitingReason()
+        {
+            if (_currentSetup == null)
+                return "setup has not started";
+            if (_released)
+                return "start was already released";
+            if (!_localLoaded)
+                return "host is not loaded";
+            if (_expectedPeers.Count == 0)
+                return "no clients are connected";
+
+            int remaining = _expectedPeers.Count - _loadedPeers.Count;
+            if (remaining > 0)
+                return "waiting for " + remaining + " peer(s)";
+
+            return "setup is not ready";
+        }
+
+        private void ReleaseStart(string reason)
+        {
             ReleaseStartMessage release = new ReleaseStartMessage();
             release.SessionId = ShelteredMultiplayerSessionCoordinator.Instance.Context.SessionId;
             long worldTick = ShelteredMultiplayer.Hooks.CurrentWorldTick;
@@ -319,9 +462,9 @@ namespace ShelteredAPI.Networking
             byte[] payload = release.ToPayload();
             _session.Broadcast(ReleaseStartMessageType, NetworkChannel.Reliable, payload);
             _released = true;
-            ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart("setup-release-host");
+            ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart(reason);
             SetStatus("released");
-            WriteLog(MMLog.LogLevel.Info, "All players loaded. Released multiplayer start.");
+            WriteLog(MMLog.LogLevel.Info, "Host released multiplayer start after all players loaded.");
         }
 
         private void PrepareHostSetup(string reason)
@@ -336,7 +479,8 @@ namespace ShelteredAPI.Networking
             _currentSetup.SessionId = context.SessionId;
             _currentSetup.LocalPlayerId = context.LocalPlayerId;
             WriteLog(MMLog.LogLevel.Info, "Prepared " + context.BunkerAssignments.Length
-                + " bunker assignment(s) for multiplayer setup.");
+                + " bunker assignment(s) for multiplayer setup. session='" + LoadingText(_currentSetup.SessionId)
+                + "', reason=" + LoadingText(reason) + ".");
         }
 
         private void RememberConnectedPeers()
@@ -348,6 +492,42 @@ namespace ShelteredAPI.Networking
                 if (peer != null && peer.State == NetworkConnectionState.Connected)
                     _expectedPeers.Add(peer.PeerId);
             }
+        }
+
+        private void ClearSetupState()
+        {
+            _currentSetup = null;
+            _loadedPeers.Clear();
+            _expectedPeers.Clear();
+            _localLoaded = false;
+            _released = false;
+        }
+
+        private string BuildSetupProgress()
+        {
+            return "session='" + (_currentSetup != null ? LoadingText(_currentSetup.SessionId) : string.Empty) + "'"
+                + ", localLoaded=" + _localLoaded
+                + ", expectedPeers=" + FormatPeers(_expectedPeers)
+                + ", loadedPeers=" + FormatPeers(_loadedPeers)
+                + ", released=" + _released;
+        }
+
+        private static string FormatPeers(HashSet<byte> peers)
+        {
+            if (peers == null || peers.Count == 0)
+                return "[]";
+
+            string[] values = new string[peers.Count];
+            int index = 0;
+            foreach (byte peer in peers)
+                values[index++] = peer.ToString();
+
+            return "[" + string.Join(",", values) + "]";
+        }
+
+        private static string LoadingText(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "<empty>" : value;
         }
 
         private static int ResolveCurrentSlot()
@@ -416,8 +596,25 @@ namespace ShelteredAPI.Networking
                 MultiplayerSetupMessage message = new MultiplayerSetupMessage();
                 message.SessionId = sessionId ?? string.Empty;
                 message.HostAbsoluteSlot = hostAbsoluteSlot;
-                message.ClientSuggestedSlot = hostAbsoluteSlot > 0 ? hostAbsoluteSlot : GetNextAvailableStandardSlot();
+                message.ClientSuggestedSlot = 0;
+                message.ApplySetupSettings(CaptureCurrentSetupSettings(hostAbsoluteSlot, message.ClientSuggestedSlot));
                 return message;
+            }
+
+            public void ApplySetupSettings(ShelteredMultiplayerSetupSettings setup)
+            {
+                if (setup == null)
+                    return;
+
+                HostAbsoluteSlot = setup.HostAbsoluteSlot;
+                ClientSuggestedSlot = setup.ClientSuggestedSlot;
+                RainDifficulty = setup.RainDifficulty;
+                ResourceDifficulty = setup.ResourceDifficulty;
+                BreachDifficulty = setup.BreachDifficulty;
+                FactionDifficulty = setup.FactionDifficulty;
+                MoodDifficulty = setup.MoodDifficulty;
+                MapSize = setup.MapSize;
+                Fog = setup.Fog;
             }
 
             public ShelteredMultiplayerSetupSettings ToSetupSettings()
@@ -544,6 +741,27 @@ namespace ShelteredAPI.Networking
                 return value >= 0 && value <= byte.MaxValue
                     ? (byte)value
                     : NetworkDefaults.UnassignedPeerId;
+            }
+        }
+
+        private static ShelteredMultiplayerSetupSettings CaptureCurrentSetupSettings(int hostAbsoluteSlot, int clientSuggestedSlot)
+        {
+            try
+            {
+                return new ShelteredMultiplayerSetupSettings(
+                    hostAbsoluteSlot,
+                    clientSuggestedSlot,
+                    DifficultyManager.RainChanceSetting,
+                    DifficultyManager.MapResourcesSetting,
+                    DifficultyManager.BreachFrequencySetting,
+                    DifficultyManager.FactionDensitySetting,
+                    DifficultyManager.PopulaceMoodSetting,
+                    DifficultyManager.MapSizeSetting,
+                    DifficultyManager.FogOfWarSetting);
+            }
+            catch
+            {
+                return new ShelteredMultiplayerSetupSettings(hostAbsoluteSlot, clientSuggestedSlot, 1, 1, 1, 1, 1, 0, false);
             }
         }
 
