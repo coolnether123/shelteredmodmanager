@@ -248,8 +248,12 @@ namespace ShelteredAPI.Bunkers
             for (int i = 0; i < bunkers.Count; i++)
             {
                 BunkerDefinition bunker = bunkers[i];
-                if (bunker != null)
-                    _bunkers[bunker.Id] = bunker.Clone();
+                if (bunker == null)
+                    continue;
+
+                BunkerDefinition clone = bunker.Clone();
+                _bunkers[clone.Id] = clone;
+                NotifyChanged(clone);
             }
         }
 

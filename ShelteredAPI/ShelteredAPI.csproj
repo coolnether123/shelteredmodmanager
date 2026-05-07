@@ -142,7 +142,11 @@
     <Compile Include="Networking\ShelteredMultiplayerHookPatches.cs" />
     <Compile Include="Networking\ShelteredMultiplayerHookService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerRuntimeDriver.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerSessionCoordinator.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSessionSeed.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerSessionSeedApplicator.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerSetupSettingsApplicator.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerBunkerAssignments.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSetupService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerEventSyncService.cs" />

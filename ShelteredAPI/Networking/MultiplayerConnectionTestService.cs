@@ -172,7 +172,13 @@ namespace ShelteredAPI.Networking
                 EnsureSetupService(_session);
                 EnsureEventSyncService(_session);
                 _session.StartHost(CreateOptions("Host"));
-                ShelteredMultiplayer.ActivateHost(NetworkDefaults.HostPeerId, _session.SessionId, 20);
+                ShelteredMultiplayerSessionCoordinator.Instance.ActivateHost(
+                    _session.SessionId,
+                    1,
+                    _session.LocalPeerId,
+                    _session.StablePeerId,
+                    20,
+                    "connection-test-host-start");
                 RefreshLocalEndpoint();
                 AddInfo("Host", "Host listening on UDP " + port + ". Local endpoint: " + _localEndpointText + ".");
                 ClearLastError();
@@ -442,6 +448,8 @@ namespace ShelteredAPI.Networking
             NetworkSessionOptions options = NetworkSessionOptions.CreateDefault();
             options.ApplicationId = ApplicationId;
             options.DisplayName = CreateDisplayName(role);
+            options.StablePeerId = CreateStablePeerId(role);
+            options.ReconnectToken = options.StablePeerId;
             options.MaxPeers = NetworkDefaults.DefaultMaxPeers;
             return options;
         }
@@ -459,6 +467,21 @@ namespace ShelteredAPI.Networking
             }
 
             return "Sheltered " + role + " - " + machineName;
+        }
+
+        private static string CreateStablePeerId(string role)
+        {
+            string machineName = "PC";
+            try
+            {
+                if (!string.IsNullOrEmpty(Environment.MachineName))
+                    machineName = Environment.MachineName;
+            }
+            catch
+            {
+            }
+
+            return "Sheltered:" + role + ":" + machineName;
         }
 
         private void AttachEvents(NetworkSession session)
@@ -649,10 +672,7 @@ namespace ShelteredAPI.Networking
             if (_setup != null)
                 _setup.HandlePeerConnected(peer);
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
-            {
-                ShelteredMultiplayer.ActivateClient(_session.LocalPeerId, _session.SessionId, 20);
                 EnsureSetupService(_session);
-            }
             AddInfo(GetComponentName(), "Peer connected: " + FormatPeerDetails(peer));
         }
 

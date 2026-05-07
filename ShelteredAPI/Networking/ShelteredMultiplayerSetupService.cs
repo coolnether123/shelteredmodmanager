@@ -9,6 +9,7 @@ using ModAPI.Networking.Sessions;
 using ShelteredAPI.Events;
 using ShelteredAPI.Harmony;
 using ShelteredAPI.Saves;
+using UnityEngine;
 
 namespace ShelteredAPI.Networking
 {
@@ -36,6 +37,7 @@ namespace ShelteredAPI.Networking
         {
             _session = session;
             _log = log;
+            ShelteredMultiplayerHookService.Instance.EnsureInstalled();
             GameEvents.OnSessionStarted += OnSessionStarted;
         }
 
@@ -66,14 +68,24 @@ namespace ShelteredAPI.Networking
             if (hostAbsoluteSlot <= 0)
                 hostAbsoluteSlot = GetNextAvailableStandardSlot();
 
-            _currentSetup = MultiplayerSetupMessage.CreateDefault(_session.SessionId, hostAbsoluteSlot);
+            ShelteredMultiplayerSessionCoordinator coordinator = ShelteredMultiplayerSessionCoordinator.Instance;
+            coordinator.ActivateHost(
+                _session.SessionId,
+                1,
+                _session.LocalPeerId,
+                _session.StablePeerId,
+                20,
+                "setup-begin-host");
+            coordinator.UpdateRoster(_session, "setup-begin-host");
+
+            _currentSetup = MultiplayerSetupMessage.CreateDefault(coordinator.Context.SessionId, hostAbsoluteSlot);
             _loadedPeers.Clear();
             _expectedPeers.Clear();
             _localLoaded = false;
             _released = false;
-            ShelteredMultiplayerHookService.Instance.SetWorldStartBlocked(true, "setup-begin-host");
 
             RememberConnectedPeers();
+            PrepareHostSetup("setup-begin-host");
             BroadcastBeginSetup();
             SetStatus("setup started; waiting for players to load");
             WriteLog(MMLog.LogLevel.Info, "Host setup started. Slot=" + hostAbsoluteSlot + ".");
@@ -88,7 +100,9 @@ namespace ShelteredAPI.Networking
                 return;
 
             _expectedPeers.Add(peer.PeerId);
-            SendBeginSetup(peer.PeerId);
+            ShelteredMultiplayerSessionCoordinator.Instance.UpdateRoster(_session, "setup-peer-connected");
+            PrepareHostSetup("setup-peer-connected");
+            BroadcastBeginSetup();
         }
 
         public void HandlePeerDisconnected(NetworkPeer peer)
@@ -97,11 +111,20 @@ namespace ShelteredAPI.Networking
                 return;
 
             _loadedPeers.Remove(peer.PeerId);
+            _expectedPeers.Remove(peer.PeerId);
+
             if (_currentSetup != null && !_released && _expectedPeers.Contains(peer.PeerId))
             {
                 SetStatus("waiting for peer " + peer.PeerId + " to reconnect and load");
                 WriteLog(MMLog.LogLevel.Warning, "Peer " + peer.PeerId
                     + " disconnected during setup; keeping world start blocked.");
+            }
+            else if (_session != null && _session.Mode == NetworkSessionMode.Host && _currentSetup != null && !_released)
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.UpdateRoster(_session, "setup-peer-disconnected");
+                PrepareHostSetup("setup-peer-disconnected");
+                BroadcastBeginSetup();
+                TryReleaseIfReady();
             }
         }
 
@@ -167,8 +190,11 @@ namespace ShelteredAPI.Networking
             if (_currentSetup == null)
                 return;
 
-            _session.SendToPeer(peerId, BeginSetupMessageType, NetworkChannel.Reliable, _currentSetup.ToPayload());
-            WriteLog(MMLog.LogLevel.Info, "Sent setup begin to peer " + peerId + ".");
+            ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            int localPlayerId = context.GetPlayerIdForNetworkPeer(peerId);
+            _session.SendToPeer(peerId, BeginSetupMessageType, NetworkChannel.Reliable, _currentSetup.ToPayload(context, localPlayerId));
+            WriteLog(MMLog.LogLevel.Info, "Sent setup begin to peer " + peerId
+                + " as player " + localPlayerId + ".");
         }
 
         private void HandleBeginSetup(byte[] payload)
@@ -180,19 +206,23 @@ namespace ShelteredAPI.Networking
             _localLoaded = false;
             _released = false;
 
-            int ignoredSeed;
-            string ignoredError;
-            ShelteredMultiplayerSessionSeed.TryApply(_currentSetup.SessionId, out ignoredSeed, out ignoredError);
-            ApplyDifficulty(_currentSetup);
-            ShelteredMultiplayerHookService.Instance.SetWorldStartBlocked(true, "setup-begin-client");
+            ShelteredMultiplayerSessionContext context =
+                ShelteredMultiplayerSessionCoordinator.Instance.ApplyReceivedSetup(
+                    _currentSetup.SessionId,
+                    _currentSetup.LocalPlayerId,
+                    _session.LocalPeerId,
+                    _session.StablePeerId,
+                    _currentSetup.ToSetupSettings(),
+                    _currentSetup.ToBunkerAssignments(),
+                    "setup-begin-client");
 
             ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("Multiplayer setup client auto-new-save");
             ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("Multiplayer setup client auto-new-save");
-            AutoLoadFlow.BeginNewSave(_currentSetup.ClientSuggestedSlot);
+            AutoLoadFlow.BeginNewSave(context.SetupSettings.ClientSuggestedSlot);
             AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer setup begin");
             SetStatus("setup received; starting client new-save flow");
             WriteLog(MMLog.LogLevel.Info, "Received setup begin. SuggestedSlot="
-                + _currentSetup.ClientSuggestedSlot + ".");
+                + context.SetupSettings.ClientSuggestedSlot + ".");
         }
 
         private void HandleSetupLoaded(NetworkPeer peer, byte[] payload)
@@ -211,7 +241,7 @@ namespace ShelteredAPI.Networking
         {
             ReleaseStartMessage release = ReleaseStartMessage.FromPayload(payload);
             _released = true;
-            ShelteredMultiplayerHookService.Instance.SetWorldStartBlocked(false, "setup-release-" + release.WorldTick);
+            ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart("setup-release-" + release.WorldTick);
             SetStatus("released");
             WriteLog(MMLog.LogLevel.Info, "Setup released by host at tick " + release.WorldTick + ".");
         }
@@ -222,7 +252,8 @@ namespace ShelteredAPI.Networking
                 return;
 
             _localLoaded = true;
-            ShelteredMultiplayerHookService.Instance.SetWorldStartBlocked(true, "setup-local-loaded");
+            ShelteredMultiplayerSessionContext context =
+                ShelteredMultiplayerSessionCoordinator.Instance.MarkLocalWorldLoaded("setup-local-loaded");
 
             if (_session == null)
                 return;
@@ -231,7 +262,7 @@ namespace ShelteredAPI.Networking
             if (_session.Mode == NetworkSessionMode.Client)
             {
                 SetupLoadedMessage loaded = new SetupLoadedMessage();
-                loaded.SessionId = _session.SessionId;
+                loaded.SessionId = context.SessionId;
                 loaded.AbsoluteSlot = slot;
                 _session.SendToHost(SetupLoadedMessageType, NetworkChannel.Reliable, loaded.ToPayload());
                 SetStatus("loaded; waiting for host release");
@@ -277,7 +308,7 @@ namespace ShelteredAPI.Networking
             }
 
             ReleaseStartMessage release = new ReleaseStartMessage();
-            release.SessionId = _session.SessionId;
+            release.SessionId = ShelteredMultiplayerSessionCoordinator.Instance.Context.SessionId;
             long worldTick = ShelteredMultiplayer.Hooks.CurrentWorldTick;
             if (worldTick > int.MaxValue)
                 worldTick = int.MaxValue;
@@ -287,9 +318,24 @@ namespace ShelteredAPI.Networking
             byte[] payload = release.ToPayload();
             _session.Broadcast(ReleaseStartMessageType, NetworkChannel.Reliable, payload);
             _released = true;
-            ShelteredMultiplayerHookService.Instance.SetWorldStartBlocked(false, "setup-release-host");
+            ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart("setup-release-host");
             SetStatus("released");
             WriteLog(MMLog.LogLevel.Info, "All players loaded. Released multiplayer start.");
+        }
+
+        private void PrepareHostSetup(string reason)
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Host || _currentSetup == null)
+                return;
+
+            ShelteredMultiplayerSessionContext context =
+                ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                    _currentSetup.ToSetupSettings(),
+                    reason);
+            _currentSetup.SessionId = context.SessionId;
+            _currentSetup.LocalPlayerId = context.LocalPlayerId;
+            WriteLog(MMLog.LogLevel.Info, "Prepared " + context.BunkerAssignments.Length
+                + " bunker assignment(s) for multiplayer setup.");
         }
 
         private void RememberConnectedPeers()
@@ -301,18 +347,6 @@ namespace ShelteredAPI.Networking
                 if (peer != null && peer.State == NetworkConnectionState.Connected)
                     _expectedPeers.Add(peer.PeerId);
             }
-        }
-
-        private static void ApplyDifficulty(MultiplayerSetupMessage setup)
-        {
-            DifficultyManager.StoreMenuDifficultySettings(
-                setup.RainDifficulty,
-                setup.ResourceDifficulty,
-                setup.BreachDifficulty,
-                setup.FactionDifficulty,
-                setup.MoodDifficulty,
-                setup.MapSize,
-                setup.Fog);
         }
 
         private static int ResolveCurrentSlot()
@@ -366,6 +400,7 @@ namespace ShelteredAPI.Networking
             public string SessionId = string.Empty;
             public int HostAbsoluteSlot;
             public int ClientSuggestedSlot;
+            public int LocalPlayerId = 1;
             public int RainDifficulty = 1;
             public int ResourceDifficulty = 1;
             public int BreachDifficulty = 1;
@@ -373,6 +408,7 @@ namespace ShelteredAPI.Networking
             public int MoodDifficulty = 1;
             public int MapSize;
             public bool Fog;
+            public readonly List<BunkerSetupRecord> Bunkers = new List<BunkerSetupRecord>();
 
             public static MultiplayerSetupMessage CreateDefault(string sessionId, int hostAbsoluteSlot)
             {
@@ -383,20 +419,72 @@ namespace ShelteredAPI.Networking
                 return message;
             }
 
-            public byte[] ToPayload()
+            public ShelteredMultiplayerSetupSettings ToSetupSettings()
             {
-                byte[] buffer = new byte[512];
+                return new ShelteredMultiplayerSetupSettings(
+                    HostAbsoluteSlot,
+                    ClientSuggestedSlot,
+                    RainDifficulty,
+                    ResourceDifficulty,
+                    BreachDifficulty,
+                    FactionDifficulty,
+                    MoodDifficulty,
+                    MapSize,
+                    Fog);
+            }
+
+            public ShelteredMultiplayerBunkerAssignmentRecord[] ToBunkerAssignments()
+            {
+                List<ShelteredMultiplayerBunkerAssignmentRecord> assignments =
+                    new List<ShelteredMultiplayerBunkerAssignmentRecord>();
+
+                for (int i = 0; i < Bunkers.Count; i++)
+                {
+                    BunkerSetupRecord bunker = Bunkers[i];
+                    if (bunker == null)
+                        continue;
+
+                    assignments.Add(new ShelteredMultiplayerBunkerAssignmentRecord(
+                        NetworkDefaults.UnassignedPeerId,
+                        bunker.PlayerId,
+                        new Vector2(bunker.X, bunker.Y),
+                        bunker.DisplayName,
+                        bunker.IsOnline));
+                }
+
+                return assignments.ToArray();
+            }
+
+            public byte[] ToPayload(ShelteredMultiplayerSessionContext context, int localPlayerId)
+            {
+                byte[] buffer = new byte[1024];
                 BitWriter writer = new BitWriter(buffer);
-                writer.WriteString(SessionId ?? string.Empty);
-                writer.WriteInt32(HostAbsoluteSlot);
-                writer.WriteInt32(ClientSuggestedSlot);
-                writer.WriteInt32(RainDifficulty);
-                writer.WriteInt32(ResourceDifficulty);
-                writer.WriteInt32(BreachDifficulty);
-                writer.WriteInt32(FactionDifficulty);
-                writer.WriteInt32(MoodDifficulty);
-                writer.WriteInt32(MapSize);
-                writer.WriteBool(Fog);
+                ShelteredMultiplayerSetupSettings setup = context != null ? context.SetupSettings : ToSetupSettings();
+                writer.WriteString(context != null ? context.SessionId : (SessionId ?? string.Empty));
+                writer.WriteInt32(setup.HostAbsoluteSlot);
+                writer.WriteInt32(setup.ClientSuggestedSlot);
+                writer.WriteInt32(localPlayerId);
+                writer.WriteInt32(setup.RainDifficulty);
+                writer.WriteInt32(setup.ResourceDifficulty);
+                writer.WriteInt32(setup.BreachDifficulty);
+                writer.WriteInt32(setup.FactionDifficulty);
+                writer.WriteInt32(setup.MoodDifficulty);
+                writer.WriteInt32(setup.MapSize);
+                writer.WriteBool(setup.Fog);
+                ShelteredMultiplayerBunkerAssignmentRecord[] bunkers =
+                    context != null ? context.BunkerAssignments : ToBunkerAssignments();
+                writer.WriteInt32(bunkers.Length);
+                for (int i = 0; i < bunkers.Length; i++)
+                {
+                    ShelteredMultiplayerBunkerAssignmentRecord bunker = bunkers[i];
+                    writer.WriteInt32(bunker != null ? bunker.PlayerId : 0);
+                    writer.WriteInt32(bunker != null ? ToNetworkCoordinate(bunker.Position.x) : 0);
+                    writer.WriteInt32(bunker != null ? ToNetworkCoordinate(bunker.Position.y) : 0);
+                    writer.WriteString(bunker != null ? bunker.DisplayName : string.Empty);
+                    writer.WriteBool(true);
+                    writer.WriteBool(bunker == null || bunker.IsOnline);
+                }
+
                 byte[] payload = new byte[writer.Position];
                 Buffer.BlockCopy(buffer, 0, payload, 0, payload.Length);
                 return payload;
@@ -409,6 +497,7 @@ namespace ShelteredAPI.Networking
                 message.SessionId = reader.ReadString();
                 message.HostAbsoluteSlot = reader.ReadInt32();
                 message.ClientSuggestedSlot = reader.ReadInt32();
+                message.LocalPlayerId = reader.ReadInt32();
                 message.RainDifficulty = reader.ReadInt32();
                 message.ResourceDifficulty = reader.ReadInt32();
                 message.BreachDifficulty = reader.ReadInt32();
@@ -416,8 +505,53 @@ namespace ShelteredAPI.Networking
                 message.MoodDifficulty = reader.ReadInt32();
                 message.MapSize = reader.ReadInt32();
                 message.Fog = reader.ReadBool();
+                int bunkerCount = reader.Remaining > 0 ? reader.ReadInt32() : 0;
+                if (bunkerCount < 0 || bunkerCount > NetworkDefaults.DefaultMaxPeers)
+                    throw new InvalidOperationException("Setup bunker assignment count is invalid.");
+
+                for (int i = 0; i < bunkerCount; i++)
+                {
+                    int id = reader.ReadInt32();
+                    float x = FromNetworkCoordinate(reader.ReadInt32());
+                    float y = FromNetworkCoordinate(reader.ReadInt32());
+                    string displayName = reader.ReadString();
+                    bool starterHouses = reader.ReadBool();
+                    bool isOnline = reader.ReadBool();
+                    message.Bunkers.Add(new BunkerSetupRecord(id, x, y, displayName, starterHouses, isOnline));
+                }
+
                 return message;
             }
+
+            private static int ToNetworkCoordinate(float value)
+            {
+                return (int)Math.Round(value * 1000f);
+            }
+
+            private static float FromNetworkCoordinate(int value)
+            {
+                return value / 1000f;
+            }
+        }
+
+        private sealed class BunkerSetupRecord
+        {
+            public BunkerSetupRecord(int playerId, float x, float y, string displayName, bool enableStarterHouses, bool isOnline)
+            {
+                PlayerId = playerId;
+                X = x;
+                Y = y;
+                DisplayName = displayName ?? string.Empty;
+                EnableStarterHouses = enableStarterHouses;
+                IsOnline = isOnline;
+            }
+
+            public readonly int PlayerId;
+            public readonly float X;
+            public readonly float Y;
+            public readonly string DisplayName;
+            public readonly bool EnableStarterHouses;
+            public readonly bool IsOnline;
         }
 
         private sealed class SetupLoadedMessage
