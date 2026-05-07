@@ -175,7 +175,7 @@ Generated keys use the pattern:
 2. Register the item in `Start(...)`.
 3. Register any recipe that produces it.
 4. Add icon and other supporting assets under `Assets/...`.
-5. Use `ShelteredContent.ResolveItemType(...)` or `ctx.Game` helpers when interacting with the item at runtime.
+5. Use `ShelteredContent.ResolveItemType(...)`, `ctx.Game`, or the store APIs in [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md) when interacting with the item at runtime.
 6. Test these flows:
    - new family
    - return to main menu

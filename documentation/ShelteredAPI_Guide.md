@@ -8,6 +8,7 @@ Reference points:
 - Full docs map: [Documentation Index](README.md)
 - Content: [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md)
 - Input/keybindings: [Input Keybindings Guide](Input_Keybindings_Guide.md)
+- Runtime UI, stores, and cooking stations: [Runtime UI Stores Guide](ShelteredAPI_Runtime_UI_Stores_Guide.md)
 - Custom scenarios: [Custom Scenarios Guide](Custom_Scenarios_Guide.md)
 
 ## 1. What ShelteredAPI Adds
@@ -57,7 +58,7 @@ using ShelteredAPI.Events;
 using ShelteredAPI.Input;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios;
-using ShelteredAPI.UI;
+using ShelteredAPI.UI.Runtime;
 ```
 
 ## 3. Usage Example
@@ -146,7 +147,7 @@ Container example:
 
 ```csharp
 using ShelteredAPI.Content;
-using ShelteredAPI.UI;
+using ShelteredAPI.UI.Runtime;
 
 RuntimeUiHandle handle = ShelteredRuntimeUI.OpenContainer(new ContainerUiRequest
 {

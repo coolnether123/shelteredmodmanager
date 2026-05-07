@@ -14,7 +14,7 @@ Use this file for copy/paste signatures and type names. For workflow guidance, s
 | Actors and characters | [Actor System](#actor-system-modapiactors-shelteredapi), [Sheltered Actors And Characters](#sheltered-actors-and-characters-shelteredapiactors-shelteredapicharacters) |
 | Settings UI | [Spine Settings](#spine-settings-modapispine-modapiattributes) |
 | Harmony and transpilers | [Transpiler Core](#transpiler-core-modapiharmony), [Intent API](#intent-api-modapiharmony), [Cooperative Patching](#cooperative-patching-modapiharmony) |
-| Content and assets | [Content + Assets](#content--assets-shelteredapicontent) |
+| Content and assets | [Content + Assets](#content--assets-shelteredapicontent), [Runtime UI + Stores](#runtime-ui--stores-shelteredapiuiruntime-shelteredapistorage-shelteredapiworkstations) |
 | Events and registries | [Event + Registry APIs](#event--registry-apis), [ShelteredAPI Trigger Scheduler](#shelteredapi-trigger-scheduler-shelteredapievents), [Mod Registry](#mod-registry-modapicore) |
 | Custom scenarios | [Custom Scenarios](#custom-scenarios-modapiscenarios-shelteredapiscenarios) |
 | Background work | [Background Processing](#background-processing-v13) |
@@ -591,6 +591,7 @@ public sealed class ContainerUiRequest
     public string PanelId { get; set; }
     public string Title { get; set; }
     public string OwnerId { get; set; }
+    public RuntimePanelOptions PanelOptions { get; set; }
     public IList<ContainerUiItem> Items { get; set; }
     public Func<IList<ContainerUiItem>> ItemSource { get; set; }
     public ItemCategory[] Categories { get; set; }
@@ -643,6 +644,261 @@ public sealed class ObjectPanelRegistration
     public int Priority { get; set; }
     public Func<ObjectPanelContext, bool> CanOpen { get; set; }
     public Func<ObjectPanelContext, RuntimeUiHandle> Open { get; set; }
+}
+
+public sealed class ObjectPanelContext
+{
+    public string ObjectId { get; }
+    public ObjectManager.ObjectType ObjectType { get; }
+    public Obj_Base TargetObject { get; }
+    public FamilyMember SelectedMember { get; }
+}
+
+public sealed class CraftingUiRequest
+{
+    public string PanelId { get; set; }
+    public string Title { get; set; }
+    public string OwnerId { get; set; }
+    public RuntimePanelOptions PanelOptions { get; set; }
+    public IList<CraftingUiRecipe> Recipes { get; set; }
+    public Func<IList<CraftingUiRecipe>> RecipeSource { get; set; }
+    public string EmptyText { get; set; }
+    public string CraftButtonText { get; set; }
+    public bool RefreshEveryFrame { get; set; }
+    public Func<CraftingUiRecipe, bool> IsAvailable { get; set; }
+    public Action<CraftingUiRecipe> OnCraft { get; set; }
+    public Action<CraftingUiCraftContext> OnCraftRequested { get; set; }
+    public Func<CraftingUiRecipe, string> GetUnavailableReason { get; set; }
+    public Action<RuntimeUiHandle> OnRefreshed { get; set; }
+    public Action OnClosed { get; set; }
+}
+
+public sealed class CraftingUiRecipe
+{
+    public string RecipeId { get; set; }
+    public string DisplayName { get; set; }
+    public string Subtitle { get; set; }
+    public string OutputItemId { get; set; }
+    public int OutputCount { get; set; }
+    public string OutputCountText { get; set; }
+    public Sprite Icon { get; set; }
+    public string CraftButtonText { get; set; }
+    public string UnavailableText { get; set; }
+    public IList<CraftingUiIngredient> Ingredients { get; set; }
+    public object Tag { get; set; }
+}
+
+public sealed class CraftingUiIngredient
+{
+    public string ItemId { get; set; }
+    public int Count { get; set; }
+}
+
+public sealed class CraftingUiCraftContext
+{
+    public CraftingUiRecipe Recipe { get; }
+    public RuntimeUiHandle Panel { get; }
+}
+
+public sealed class RuntimePanelOptions
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int HeaderHeight { get; set; }
+    public int TitleFontSize { get; set; }
+    public string CloseText { get; set; }
+    public bool ShowCloseButton { get; set; }
+    public Sprite Icon { get; set; }
+    public RuntimePanelStyle Style { get; set; }
+}
+
+public sealed class RuntimePanelStyle
+{
+    public Color? FrameColor { get; set; }
+    public Color? HeaderColor { get; set; }
+    public Color? AccentColor { get; set; }
+    public Color? TextColor { get; set; }
+    public Color? ButtonColor { get; set; }
+    public Color? DisabledButtonColor { get; set; }
+}
+```
+
+## Runtime UI + Stores (`ShelteredAPI.UI.Runtime`, `ShelteredAPI.Storage`, `ShelteredAPI.Workstations`)
+
+Task guide: [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md).
+
+```csharp
+public enum ItemStoreKind { Unknown, Inventory, Freezer, Mod }
+
+public interface IItemStore
+{
+    string StoreId { get; }
+    string DisplayName { get; }
+    ItemStoreKind Kind { get; }
+    int Capacity { get; }
+    int Used { get; }
+    bool IsReadOnly { get; }
+
+    ItemStoreSnapshot Snapshot();
+    int GetCount(string itemId);
+    bool CanAdd(string itemId, int quantity);
+    bool CanRemove(string itemId, int quantity);
+    ItemTransferResult Add(string itemId, int quantity);
+    ItemTransferResult Remove(string itemId, int quantity);
+}
+
+public sealed class ItemStoreItem
+{
+    public string ItemId { get; set; }
+    public string DisplayName { get; set; }
+    public string Subtitle { get; set; }
+    public ItemCategory Category { get; set; }
+    public int Count { get; set; }
+    public object Tag { get; set; }
+}
+
+public sealed class ItemStoreSnapshot
+{
+    public string StoreId { get; set; }
+    public string DisplayName { get; set; }
+    public ItemStoreKind Kind { get; set; }
+    public int Capacity { get; set; }
+    public int Used { get; set; }
+    public bool IsReadOnly { get; set; }
+    public IList<ItemStoreItem> Items { get; set; }
+}
+
+public sealed class ItemTransferResult
+{
+    public bool Success { get; }
+    public string ItemId { get; }
+    public int Requested { get; }
+    public int Moved { get; }
+    public string ErrorMessage { get; }
+}
+
+public static class ShelteredStores
+{
+    public static IItemStore ForInventory();
+    public static IItemStore ForFreezer(Obj_Freezer freezer);
+    public static IItemStore ForMod(string ownerId, string storeId, string displayName);
+    public static IItemStore ForMod(string ownerId, string storeId, string displayName, int capacity);
+    public static IItemStore ForObject(string ownerId, Obj_Base targetObject, string displayName);
+    public static IItemStore ForObject(string ownerId, Obj_Base targetObject, string displayName, int capacity);
+    public static IItemStore FindNearestObjectStore(string ownerId, ObjectManager.ObjectType objectType, Vector3 position, string displayName);
+    public static IItemStore FindNearestObjectStore(string ownerId, ObjectManager.ObjectType objectType, Vector3 position, string displayName, int capacity);
+    public static Obj_Base FindNearestObject(ObjectManager.ObjectType objectType, Vector3 position);
+    public static IItemStore FindNearestFreezer(Vector3 position);
+    public static Obj_Freezer FindNearestFreezerObject(Vector3 position);
+    public static IList<IItemStore> GetFreezers();
+    public static ItemTransferResult Transfer(IItemStore source, IItemStore target, string itemId, int quantity);
+    public static IList<ContainerUiItem> ToContainerItems(IItemStore store);
+    public static ContainerUiRequest CreateContainerRequest(IItemStore store, string ownerId, string panelId, string title);
+    public static ContainerUiRequest CreateContainerRequest(IItemStore store, IItemStore transferStore, string ownerId, string panelId, string title);
+    public static string BuildObjectStoreId(Obj_Base targetObject);
+}
+
+public sealed class CookingStationRecipe
+{
+    public string RecipeId { get; set; }
+    public string DisplayName { get; set; }
+    public string Subtitle { get; set; }
+    public IList<RecipeIngredient> Ingredients { get; set; }
+    public string OutputItemId { get; set; }
+    public int OutputCount { get; set; }
+    public string OutputCountText { get; set; }
+    public float DurationSeconds { get; set; }
+    public Sprite Icon { get; set; }
+    public object Tag { get; set; }
+}
+
+public sealed class CookingStationRequest
+{
+    public string OwnerId { get; set; }
+    public string PanelId { get; set; }
+    public string Title { get; set; }
+    public RuntimePanelOptions PanelOptions { get; set; }
+    public IItemStore IngredientStore { get; set; }
+    public IItemStore OutputStore { get; set; }
+    public FamilyMember Worker { get; set; }
+    public Obj_Base WorkstationObject { get; set; }
+    public CookingStationJobOptions JobOptions { get; set; }
+    public IList<CookingStationRecipe> Recipes { get; set; }
+    public Func<IList<CookingStationRecipe>> RecipeSource { get; set; }
+    public bool ConsumeIngredients { get; set; }
+    public bool RefreshEveryFrame { get; set; }
+    public Func<CookingStationRecipe, string> GetUnavailableReason { get; set; }
+    public Action<CookingCraftContext> OnCraftQueued { get; set; }
+    public Action<CookingCraftContext> OnCrafted { get; set; }
+    public Action<CookingCraftContext> OnCraftFailed { get; set; }
+    public Action OnClosed { get; set; }
+}
+
+public sealed class CookingStationJobOptions
+{
+    public bool Enabled { get; set; }
+    public float DurationSeconds { get; set; }
+    public string JobType { get; set; }
+    public string AnimationTrigger { get; set; }
+    public string CompleteAnimationTrigger { get; set; }
+    public bool QueueAsPlayerJob { get; set; }
+    public bool ClosePanelOnQueue { get; set; }
+    public int TargetIntegrityCost { get; set; }
+}
+
+public sealed class CookingStationRegistration
+{
+    public string OwnerId { get; set; }
+    public string ObjectId { get; set; }
+    public ObjectManager.ObjectType ObjectType { get; set; }
+    public string InteractionId { get; set; }
+    public string InteractionText { get; set; }
+    public int Priority { get; set; }
+    public string PanelId { get; set; }
+    public string Title { get; set; }
+    public RuntimePanelOptions PanelOptions { get; set; }
+    public bool ConsumeIngredients { get; set; }
+    public bool RefreshEveryFrame { get; set; }
+    public Func<CookingStationContext, bool> CanOpen { get; set; }
+    public Func<CookingStationContext, IItemStore> IngredientStore { get; set; }
+    public Func<CookingStationContext, IItemStore> OutputStore { get; set; }
+    public Func<CookingStationContext, FamilyMember> Worker { get; set; }
+    public Func<CookingStationContext, Obj_Base> WorkstationObject { get; set; }
+    public CookingStationJobOptions JobOptions { get; set; }
+    public IList<CookingStationRecipe> Recipes { get; set; }
+    public Func<CookingStationContext, IList<CookingStationRecipe>> RecipeSource { get; set; }
+    public Func<CookingStationRecipe, string> GetUnavailableReason { get; set; }
+    public Action<CookingCraftContext> OnCraftQueued { get; set; }
+    public Action<CookingCraftContext> OnCrafted { get; set; }
+    public Action<CookingCraftContext> OnCraftFailed { get; set; }
+    public Action OnClosed { get; set; }
+}
+
+public sealed class CookingStationContext
+{
+    public string ObjectId { get; }
+    public ObjectManager.ObjectType ObjectType { get; }
+    public Obj_Base TargetObject { get; }
+    public FamilyMember SelectedMember { get; }
+}
+
+public sealed class CookingCraftContext
+{
+    public CookingStationRecipe Recipe { get; }
+    public IItemStore IngredientStore { get; }
+    public IItemStore OutputStore { get; }
+    public RuntimeUiHandle Panel { get; }
+    public FamilyMember Worker { get; }
+    public Obj_Base WorkstationObject { get; }
+    public bool Queued { get; }
+    public ItemTransferResult Result { get; }
+}
+
+public static class ShelteredCooking
+{
+    public static RuntimeUiHandle Open(CookingStationRequest request);
+    public static IDisposable RegisterStation(CookingStationRegistration registration);
+    public static FamilyMember FindIdleWorker();
 }
 ```
 

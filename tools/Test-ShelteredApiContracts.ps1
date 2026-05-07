@@ -72,6 +72,12 @@ $pluginManager = Read-RepoFile "ModAPI\Core\PluginManager.cs"
 $runtimeApiCompatibility = Read-RepoFile "ModAPI\Core\RuntimeApiCompatibility.cs"
 $modAbout = Read-RepoFile "ModAPI\Core\ModAbout.cs"
 $shelteredSaves = Read-RepoFile "ShelteredAPI\Saves\ShelteredSaves.cs"
+$runtimeUiContracts = Read-RepoFile "ShelteredAPI\UI\Runtime\RuntimeUiContracts.cs"
+$runtimeObjectPanels = Read-RepoFile "ShelteredAPI\UI\Internal\Runtime\RuntimeObjectPanelRegistry.cs"
+$shelteredStores = Read-RepoFile "ShelteredAPI\Storage\ShelteredStores.cs"
+$shelteredCooking = Read-RepoFile "ShelteredAPI\Workstations\ShelteredCooking.cs"
+$cookingContracts = Read-RepoFile "ShelteredAPI\Workstations\CookingWorkstationContracts.cs"
+$runtimeTimedWorkJob = Read-RepoFile "ShelteredAPI\Workstations\RuntimeTimedWorkJob.cs"
 
 Assert-Contains "content ID stability" $contentRegistry "StableContentIdHash" "custom content IDs must use an explicit deterministic hash helper."
 Assert-NotContains "content ID stability" $contentRegistry "seed\.GetHashCode\(" "custom content IDs must not use string.GetHashCode because it is not a stable public contract."
@@ -160,6 +166,26 @@ Assert-Contains "runtime API compatibility gate" $runtimeApiCompatibility "runti
 Assert-Contains "runtime API compatibility gate" $runtimeApiCompatibility "runtime version '.*malformed" "malformed runtime API versions must block declared requirements."
 Assert-Contains "runtime API compatibility gate" $runtimeApiCompatibility "currentVersion\.CompareTo\(requiredVersion\) < 0" "too-old runtime API versions must block declared requirements."
 Assert-Contains "runtime API compatibility gate" $pluginManager "FindLoadedRuntimeAssembly\(apiName\)" "ShelteredAPI requirements must fail when ShelteredAPI is not already loaded."
+
+Assert-Contains "runtime object panels" $runtimeObjectPanels "CreateContext\(registration,\s*target,\s*member\)" "object panel callbacks must receive a context built from the clicked target object."
+Assert-Contains "runtime object panels" $runtimeObjectPanels "target\.objectId\.ToString\(\)" "object panel context ObjectId must resolve to the clicked object's stable objectId when available."
+Assert-Contains "runtime object panels" $runtimeUiContracts "public ObjectManager\.ObjectType ObjectType" "object panel context must expose the clicked object's ObjectType for store and workstation routing."
+
+Assert-Contains "runtime stores" $shelteredStores "public static IItemStore ForObject\(string ownerId,\s*Obj_Base targetObject" "stores must expose object-scoped mod storage for object-attached containers like fridges."
+Assert-Contains "runtime stores" $shelteredStores "BuildObjectStoreId\(targetObject\)" "object-scoped stores must use a centralized object store id helper."
+Assert-Contains "runtime stores" $shelteredStores "public static IItemStore FindNearestObjectStore" "stores must expose nearest object-store lookup for stove-to-fridge ingredient routing."
+Assert-Contains "runtime stores" $shelteredStores "Transfer\(store,\s*transferStore" "container request helper must move items out of the container into the paired transfer store."
+Assert-Contains "runtime stores" $shelteredStores "Transfer\(transferStore,\s*store" "container request helper must move items from the paired transfer store into the container."
+
+Assert-Contains "runtime cooking station" $shelteredCooking "ResolveObjectId\(registration,\s*context\)" "cooking station context must preserve object panel ObjectId instead of falling back to registration metadata."
+Assert-Contains "runtime cooking station" $shelteredCooking "RollbackIngredients\(ingredientStore,\s*consumed\)" "cooking crafts must roll back consumed ingredients when output insertion fails."
+Assert-Contains "runtime cooking station" $cookingContracts "public CookingStationJobOptions JobOptions" "cooking station requests and registrations must expose timed job options."
+Assert-Contains "runtime cooking station" $cookingContracts "public Action<CookingCraftContext> OnCraftQueued" "cooking station API must let mods react when a timed job is queued."
+Assert-Contains "runtime cooking station" $shelteredCooking "QueueCraftJob\(recipe,\s*request,\s*ingredientStore,\s*outputStore,\s*context\)" "cooking station crafts with job options must queue a timed work job before applying output."
+Assert-Contains "runtime cooking station" $shelteredCooking "CompleteQueuedCraft" "queued cooking jobs must apply recipes only on job completion."
+Assert-Contains "runtime cooking station" $shelteredCooking "FindIdleWorker" "cooking stations must provide default idle worker selection for automatic jobs."
+Assert-Contains "runtime timed work job" $runtimeTimedWorkJob "class RuntimeTimedWorkJob\s*:\s*Job" "timed workstation work must run through the vanilla Job queue."
+Assert-Contains "runtime timed work job" $runtimeTimedWorkJob "InteractionManager\.Instance\.SetInteractionProgress" "timed workstation jobs must surface progress through the vanilla interaction progress UI."
 
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
