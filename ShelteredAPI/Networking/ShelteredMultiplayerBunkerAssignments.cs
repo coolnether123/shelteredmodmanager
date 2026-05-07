@@ -371,13 +371,14 @@ namespace ShelteredAPI.Networking
             List<BunkerDefinition> definitions = ToBunkers(assignments);
             ShelteredBunkers.Service.LoadDefinitions(definitions);
             ShelteredBunkers.SetActivePlayerId(ResolveBunkerOwnerId(assignments, localPlayerId));
+            ShelteredMultiplayerMapSeedRuntime.CacheActiveBunkerPosition(reason);
 
             MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
                 "Applied " + definitions.Count + " multiplayer bunker assignment(s). LocalPlayerId="
                 + localPlayerId + ", Reason=" + (reason ?? string.Empty) + ".");
         }
 
-        private static int ResolveBunkerOwnerId(ShelteredMultiplayerBunkerAssignmentRecord[] assignments, int localPlayerId)
+        internal static int ResolveBunkerOwnerId(ShelteredMultiplayerBunkerAssignmentRecord[] assignments, int localPlayerId)
         {
             if (assignments != null)
             {
@@ -536,7 +537,9 @@ namespace ShelteredAPI.Networking
             if (key.Length == 0)
                 key = "peer-" + peer.NetworkPeerId;
 
-            int sortKey = ModRandom.DeriveStableSeed(PlayerIdSeedScope + Normalize(sessionId) + ":" + key);
+            int sortKey = ShelteredMultiplayerSessionSeed.DeriveScopedSeed(
+                sessionId,
+                PlayerIdSeedScope + key);
             return new Participant(peer.NetworkPeerId, false, sortKey, key + ":" + peer.NetworkPeerId, peer.DisplayName);
         }
 
@@ -568,8 +571,9 @@ namespace ShelteredAPI.Networking
 
             float marginX = width * PlacementMarginScale;
             float marginY = height * PlacementMarginScale;
-            ModRandomStream stream = new ModRandomStream(ModRandom.DeriveStableSeed(
-                BunkerSeedScope + Normalize(sessionId) + ":" + playerCount));
+            ModRandomStream stream = new ModRandomStream(ShelteredMultiplayerSessionSeed.DeriveScopedSeed(
+                sessionId,
+                BunkerSeedScope + playerCount));
 
             List<Vector2> candidates = new List<Vector2>
             {

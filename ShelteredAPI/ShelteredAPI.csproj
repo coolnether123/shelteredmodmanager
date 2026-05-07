@@ -150,6 +150,7 @@
     <Compile Include="Networking\ShelteredMultiplayerSessionSeedApplicator.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSetupSettingsApplicator.cs" />
     <Compile Include="Networking\ShelteredMultiplayerBunkerAssignments.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerMapSeedPatches.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSetupService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerEventSyncService.cs" />

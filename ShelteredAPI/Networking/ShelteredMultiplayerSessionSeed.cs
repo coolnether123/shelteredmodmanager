@@ -51,6 +51,16 @@ namespace ShelteredAPI.Networking
             return ModRandom.DeriveStableSeed(SeedScope + normalized);
         }
 
+        public static int DeriveScopedSeed(string sessionId, string scope)
+        {
+            int masterSeed = DeriveMasterSeed(sessionId);
+            string normalizedScope = NormalizeSessionId(scope);
+            if (normalizedScope.Length == 0)
+                normalizedScope = "default";
+
+            return ModRandom.DeriveStableSeed(SeedScope + masterSeed + ":" + normalizedScope);
+        }
+
         public static bool TryApply(string sessionId, out int masterSeed, out string error)
         {
             masterSeed = 0;
