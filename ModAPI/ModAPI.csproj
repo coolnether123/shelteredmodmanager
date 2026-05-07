@@ -143,11 +143,14 @@
     <Compile Include="Core\ModEntry.cs" />
     <Compile Include="Core\ModAboutReader.cs" />
     <Compile Include="Core\ModDiscovery.cs" />
+    <Compile Include="Loading\ModLoadOrderReader.cs" />
     <Compile Include="Core\ModPrefs.cs" />
     <Compile Include="Core\RuntimeApiCompatibility.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
-    <Compile Include="Core\CollectionCompatibility.cs" />
-    <Compile Include="Core\SaveSystemImpl.cs" />
+    <Compile Include="Util\CollectionCompatibility.cs" />
+    <Compile Include="Loading\ModLoadPlanBuilder.cs" />
+    <Compile Include="Persistence\ModPersistenceStore.cs" />
+    <Compile Include="Persistence\SaveSystemImpl.cs" />
     <Compile Include="Core\ModPersistenceData.cs" />
     <Compile Include="Persistence\IModPersistenceLogic.cs" />
     <Compile Include="Core\ModAttributes.cs" />

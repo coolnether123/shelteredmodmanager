@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Diagnostics;
 using ModAPI.Harmony;
+using ModAPI.Loading;
+using ModAPI.Persistence;
 using ModAPI.Spine;
 using ModAPI.Actors;
 using UnityEngine;
@@ -109,7 +110,7 @@ namespace ModAPI.Core
             MeasureStartupPhase("LogSceneApiDetection", LogSceneApiDetection);
 
             List<string> orderedModIds = null;
-            MeasureStartupPhase("ReadLoadOrder", delegate { orderedModIds = ReadLoadOrderFromFile(_modsRoot); });
+            MeasureStartupPhase("ReadLoadOrder", delegate { orderedModIds = ModLoadOrderReader.Read(_modsRoot); });
 
             if (orderedModIds != null && orderedModIds.Count == 0)
             {
@@ -341,105 +342,6 @@ namespace ModAPI.Core
             MMLog.WriteDebug($"Scene API Detection: ModernAvailable={modernAvailable}, UsingModern={usingModern}");
         }
 
-        /// <summary>
-        /// Reads and normalizes <c>loadorder.json</c> into a unique lowercase ID list.
-        /// </summary>
-        private List<string> ReadLoadOrderFromFile(string modsRoot)
-        {
-            var orderedIds = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                var path = Path.Combine(modsRoot ?? string.Empty, "loadorder.json");
-                if (!File.Exists(path)) return null;
-
-                var json = File.ReadAllText(path);
-                var obj = JsonUtility.FromJson<SimpleLoadOrder>(json);
-                string[] order = null;
-                if (obj != null && obj.order != null)
-                {
-                    order = obj.order;
-                }
-                else
-                {
-                    // Robust fallback parser for loadorder.json formats that JsonUtility can fail on.
-                    order = TryExtractOrderArray(json);
-                }
-
-                if (order == null)
-                {
-                    MMLog.Write("loadorder.json exists but no readable 'order' array was found. Treating as explicit empty load order.");
-                    return new List<string>();
-                }
-
-                foreach (var raw in order)
-                {
-                    if (string.IsNullOrEmpty(raw)) continue;
-                    var id = raw.Trim().ToLowerInvariant();
-                    if (seen.Add(id)) orderedIds.Add(id);
-                }
-            }
-            catch (Exception ex)
-            {
-                MMLog.Write("Failed to read loadorder.json: " + ex.Message);
-                return null;
-            }
-            return orderedIds;
-        }
-
-        private static string[] TryExtractOrderArray(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return null;
-            try
-            {
-                int keyPos = json.IndexOf("\"order\"", StringComparison.OrdinalIgnoreCase);
-                if (keyPos < 0) return null;
-
-                int arrayStart = json.IndexOf('[', keyPos);
-                if (arrayStart < 0) return null;
-
-                int depth = 0;
-                int arrayEnd = -1;
-                for (int i = arrayStart; i < json.Length; i++)
-                {
-                    char c = json[i];
-                    if (c == '[') depth++;
-                    else if (c == ']')
-                    {
-                        depth--;
-                        if (depth == 0)
-                        {
-                            arrayEnd = i;
-                            break;
-                        }
-                    }
-                }
-                if (arrayEnd < 0) return null;
-
-                string arrayBody = json.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
-                var matches = System.Text.RegularExpressions.Regex.Matches(
-                    arrayBody,
-                    "\"((?:\\\\.|[^\"\\\\])*)\"",
-                    System.Text.RegularExpressions.RegexOptions.Singleline);
-
-                var result = new List<string>();
-                for (int i = 0; i < matches.Count; i++)
-                {
-                    var raw = matches[i].Groups[1].Value;
-                    if (!string.IsNullOrEmpty(raw))
-                        result.Add(raw.Replace("\\\"", "\"").Replace("\\\\", "\\"));
-                }
-                return result.ToArray();
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        [Serializable]
-        private class SimpleLoadOrder { public string[] order; }
-
         private List<PreparedModLoad> PrepareModLoads(List<ModEntry> orderedMods)
         {
             var timer = Stopwatch.StartNew();
@@ -535,54 +437,9 @@ namespace ModAPI.Core
             return assemblies;
         }
 
-        /// <summary>
-        /// Discovers mods on disk and applies load order if present.
-        /// </summary>
         private void DiscoverAndOrderMods(List<string> orderedModIds)
         {
-            var discovered = ModDiscovery.DiscoverAllMods();
-            MMLog.WriteDebug($"DiscoverAndOrderMods: {discovered.Count} mods found on disk.");
-            foreach (var m in discovered) MMLog.WriteDebug($"  - On Disk: '{m.Id}' at '{m.RootPath}'");
-
-            if (orderedModIds == null)
-            {
-                MMLog.WriteDebug("No load order provided (loadorder.json missing). Enabling ALL discovered mods.");
-                LoadedMods = discovered;
-                return;
-            }
-
-            if (orderedModIds.Count == 0)
-            {
-                MMLog.Write("Explicit empty load order found. Enabling NO mods (core runtime remains active).");
-                LoadedMods = new List<ModEntry>();
-                return;
-            }
-
-            MMLog.WriteDebug($"Applying load order (contains {orderedModIds.Count} IDs).");
-            var ordered = new List<ModEntry>();
-            var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (var id in orderedModIds)
-            {
-                MMLog.WriteDebug($"  Looking for ordered ID: '{id}'");
-                var mod = discovered.FirstOrDefault(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase));
-                if (mod != null)
-                {
-                    if (seenIds.Add(mod.Id))
-                    {
-                        ordered.Add(mod);
-                        MMLog.WriteDebug($"    FOUND and enabled: {mod.Id}");
-                    }
-                }
-                else
-                {
-                    MMLog.WriteDebug($"    NOT FOUND on disk: {id}");
-                }
-            }
-
-            // Ensure LoadedMods only contains the successfully discovered and enabled mods.
-            LoadedMods = ordered;
-            MMLog.WriteDebug($"Final LoadedMods count: {LoadedMods.Count}");
+            LoadedMods = ModLoadPlanBuilder.DiscoverAndOrder(orderedModIds);
         }
 
         /// <summary>

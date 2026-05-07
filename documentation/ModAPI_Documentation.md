@@ -30,6 +30,8 @@ The 1.3 Beta.3 line is a breaking clean API line.
 
 Primary areas:
 - `ModAPI/Core`
+- `ModAPI/Loading`
+- `ModAPI/Persistence`
 
 Responsibilities:
 - mod discovery and load ordering
@@ -38,7 +40,6 @@ Responsibilities:
 - plugin context creation
 - logging
 - deterministic random streams
-- per-mod save registration
 
 Key files:
 - `PluginManager.cs`
@@ -47,9 +48,25 @@ Key files:
 - `IPlugin.cs`
 - `ModRegistry.cs`
 - `ModDiscovery.cs`
+- `ModLoadOrderReader.cs`
+- `ModLoadPlanBuilder.cs`
 - `PrefixedLogger.cs`
 - `ModRandom.cs`
+
+## 1.1 Persistence
+
+Primary areas:
+- `ModAPI/Persistence`
+
+Responsibilities:
+- per-mod save data registration implementation
+- persistence storage and lifecycle hooks
+- JSON file layout and legacy persistence-file migration
+
+Key files:
 - `SaveSystemImpl.cs`
+- `ModPersistenceStore.cs`
+- `IModPersistenceLogic.cs`
 
 ## 2. Actor System
 
