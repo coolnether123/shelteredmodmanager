@@ -1,8 +1,8 @@
 using System;
 using System.Reflection;
 using ModAPI.Core;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Core
 {
@@ -99,10 +99,8 @@ namespace ShelteredAPI.Core
             if (target == null || string.IsNullOrEmpty(target.saveId))
                 return null;
 
-            string scopeId = string.IsNullOrEmpty(target.scenarioId) ? "Standard" : target.scenarioId;
-            return ExpandedVanillaSaves.IsStandardScenario(scopeId)
-                ? ExpandedVanillaSaves.Get(target.saveId)
-                : ScenarioSaves.GetTrustedRegistry(scopeId).GetSave(target.saveId);
+            string scopeId = SaveStorageRouter.NormalizeScenarioId(target.scenarioId);
+            return SaveStorageRouter.Get(scopeId, target.saveId);
         }
 
         private static SaveManager.SaveType ResolveCurrentSaveType()

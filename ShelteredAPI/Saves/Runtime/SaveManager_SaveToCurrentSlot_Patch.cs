@@ -1,13 +1,11 @@
 using HarmonyLib;
 using ShelteredAPI.Saves;
 using System;
-using System.Linq;
 using ModAPI.Core;
 using ModAPI.Harmony;
 using ShelteredAPI.Core;
 
-using ShelteredAPI.Scenarios.Application.Authoring;
-namespace ShelteredAPI.Hooks
+namespace ShelteredAPI.Saves.Runtime
 {
     [PatchPolicy(PatchDomain.SaveFlow, "SaveToCurrentSlotRedirect",
         TargetBehavior = "Pending custom-slot save redirect before vanilla SaveToCurrentSlot execution",

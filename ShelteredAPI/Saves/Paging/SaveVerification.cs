@@ -6,8 +6,8 @@ using UnityEngine;
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.UI.Compatibility;
-using ShelteredAPI.Hooks;
 using HarmonyLib;
 
 using ShelteredAPI.Persistence;

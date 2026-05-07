@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ModAPI.Core;
 using ShelteredAPI.Core;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.GameState
 {

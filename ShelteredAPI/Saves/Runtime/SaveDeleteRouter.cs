@@ -4,8 +4,7 @@ using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
 
-using ShelteredAPI.Scenarios.Application.Authoring;
-namespace ShelteredAPI.Hooks
+namespace ShelteredAPI.Saves.Runtime
 {
     /// <summary>
     /// Centralized delete routing for save slots.
@@ -63,10 +62,8 @@ namespace ShelteredAPI.Hooks
 
             try
             {
-                string storageScenarioId = string.IsNullOrEmpty(scenarioId) ? "Standard" : scenarioId;
-                bool deleted = ExpandedVanillaSaves.IsStandardScenario(storageScenarioId)
-                    ? ExpandedVanillaSaves.DeleteBySlot(absoluteSlot)
-                    : ScenarioSaves.GetTrustedRegistry(storageScenarioId).DeleteBySlot(absoluteSlot);
+                string storageScenarioId = SaveStorageRouter.NormalizeScenarioId(scenarioId);
+                bool deleted = SaveStorageRouter.DeleteBySlot(storageScenarioId, absoluteSlot);
                 MMLog.WriteInfo(string.Format("[SaveDeleteRouter] Delete scenario={0} slot {1} result={2}. Reason={3}",
                     storageScenarioId, absoluteSlot, deleted, reason ?? "unknown"));
                 return deleted;

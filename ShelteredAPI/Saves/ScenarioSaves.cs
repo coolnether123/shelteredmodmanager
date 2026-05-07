@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 
-using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Saves
 {
     internal static class ScenarioSaves

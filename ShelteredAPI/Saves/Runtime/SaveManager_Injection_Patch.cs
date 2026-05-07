@@ -4,7 +4,7 @@ using ModAPI.Harmony;
 using ShelteredAPI.Saves;
 using System;
 
-namespace ShelteredAPI.Hooks
+namespace ShelteredAPI.Saves.Runtime
 {
     [PatchPolicy(PatchDomain.SaveFlow, "PlatformSaveProxyInjection",
         TargetBehavior = "SaveManager save-script replacement with PlatformSaveProxy",
