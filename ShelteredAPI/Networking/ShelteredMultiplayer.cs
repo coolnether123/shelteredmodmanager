@@ -53,5 +53,20 @@ namespace ShelteredAPI.Networking
         {
             Hooks.EnqueueMainThread(action);
         }
+
+        public static bool PublishEventIntent(string eventKind, string actorId, string targetId, string details)
+        {
+            return ShelteredMultiplayerNetworkEvents.PublishIntent(eventKind, actorId, targetId, details);
+        }
+
+        public static bool PublishEventIntent(ShelteredNetworkGameplayEvent gameplayEvent)
+        {
+            return ShelteredMultiplayerNetworkEvents.PublishIntent(gameplayEvent);
+        }
+
+        public static bool BroadcastAuthoritativeEvent(ShelteredNetworkGameplayEvent gameplayEvent)
+        {
+            return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(gameplayEvent);
+        }
     }
 }

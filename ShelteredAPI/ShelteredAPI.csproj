@@ -145,6 +145,11 @@
     <Compile Include="Networking\ShelteredMultiplayerSessionSeed.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSetupService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerEventSyncService.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerNetworkEvents.cs" />
+    <Compile Include="Networking\ShelteredNetworkEventContext.cs" />
+    <Compile Include="Networking\ShelteredNetworkEventKinds.cs" />
+    <Compile Include="Networking\ShelteredNetworkGameplayEvent.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestWindow.cs" />
     <Compile Include="Networking\MultiplayerMenuController.cs" />

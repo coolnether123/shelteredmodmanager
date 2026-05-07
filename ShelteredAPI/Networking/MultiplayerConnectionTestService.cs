@@ -35,6 +35,7 @@ namespace ShelteredAPI.Networking
         private NetworkSession _session;
         private ShelteredMultiplayerSaveSyncService _saveSync;
         private ShelteredMultiplayerSetupService _setup;
+        private ShelteredMultiplayerEventSyncService _eventSync;
         private string _lastError = string.Empty;
         private string _localEndpointText = "Not bound";
         private string _lastLocalEndpointKey = string.Empty;
@@ -169,6 +170,7 @@ namespace ShelteredAPI.Networking
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
                 EnsureSetupService(_session);
+                EnsureEventSyncService(_session);
                 _session.StartHost(CreateOptions("Host"));
                 ShelteredMultiplayer.ActivateHost(NetworkDefaults.HostPeerId, _session.SessionId, 20);
                 RefreshLocalEndpoint();
@@ -202,6 +204,7 @@ namespace ShelteredAPI.Networking
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
                 EnsureSetupService(_session);
+                EnsureEventSyncService(_session);
                 _session.Join(endpoint, CreateOptions("Client"));
                 RefreshLocalEndpoint();
                 AddInfo("Client", "Connecting to " + endpoint + ". Local endpoint: " + _localEndpointText + ".");
@@ -477,6 +480,14 @@ namespace ShelteredAPI.Networking
             _setup = new ShelteredMultiplayerSetupService(session, AddLog);
         }
 
+        private void EnsureEventSyncService(NetworkSession session)
+        {
+            if (_eventSync != null)
+                return;
+
+            _eventSync = new ShelteredMultiplayerEventSyncService(session, AddLog);
+        }
+
         private void DetachEvents(NetworkSession session)
         {
             session.PeerConnected -= OnPeerConnected;
@@ -502,6 +513,11 @@ namespace ShelteredAPI.Networking
             {
                 _setup.Dispose();
                 _setup = null;
+            }
+            if (_eventSync != null)
+            {
+                _eventSync.Dispose();
+                _eventSync = null;
             }
             _localEndpointText = "Not bound";
             _lastLocalEndpointKey = string.Empty;
@@ -704,6 +720,8 @@ namespace ShelteredAPI.Networking
             if (e == null)
                 return;
 
+            if (_eventSync != null && _eventSync.TryHandleMessage(e))
+                return;
             if (_saveSync != null && _saveSync.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
                 return;
             if (_setup != null && _setup.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
