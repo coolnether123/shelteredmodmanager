@@ -1,6 +1,7 @@
 using ModAPI.Core;
 using ShelteredAPI.Content;
 using ShelteredAPI.Dialogue;
+using ShelteredAPI.Networking;
 
 namespace ShelteredAPI.Core
 {
@@ -21,6 +22,7 @@ namespace ShelteredAPI.Core
         public const string GameLifecycle = "ShelteredAPI.GameLifecycle";
         public const string SaveRuntime = "ShelteredAPI.SaveRuntime";
         public const string UiLifecycleEvents = "ShelteredAPI.UiLifecycleEvents";
+        public const string ShelteredMultiplayerHooks = "ShelteredAPI.MultiplayerHooks";
         public const string Actors = "ShelteredAPI.Actors";
         public const string ActorRegistry = "ShelteredAPI.ActorRegistry";
         public const string ActorComponents = "ShelteredAPI.ActorComponents";
@@ -93,6 +95,19 @@ namespace ShelteredAPI.Core
                 return true;
 
             return ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.ShelteredDialogue, out service);
+        }
+
+        public static bool TryGetMultiplayerHooks(out IShelteredMultiplayerHooks service)
+        {
+            return ShelteredMultiplayer.TryGetHooks(out service);
+        }
+
+        public static bool TryGetBunkers(out IShelteredBunkerService service)
+        {
+            if (ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.GameRuntimeShelteredBunkers, out service))
+                return true;
+
+            return ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.ShelteredBunkers, out service);
         }
     }
 }

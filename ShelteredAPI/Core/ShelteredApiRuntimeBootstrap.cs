@@ -12,6 +12,7 @@ using ShelteredAPI.Dialogue;
 using ShelteredAPI.Dialogue.Runtime;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
+using ShelteredAPI.Networking;
 using ShelteredAPI.Scenarios;
 using UnityEngine;
 
@@ -83,6 +84,7 @@ namespace ShelteredAPI.Core
                 runtimeRoot.AddComponent<ShelteredKeybindPersistenceGuard>();
 
             LoadingTransitionRecoveryService.EnsureInstalled(runtimeRoot);
+            ShelteredMultiplayerRuntimeDriver.EnsureInstalled(runtimeRoot);
 
             if (runtimeRoot.GetComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>() == null)
                 runtimeRoot.AddComponent<ShelteredAPI.UI.Compatibility.UIDebugInspector>();
@@ -116,6 +118,8 @@ namespace ShelteredAPI.Core
             RegisterApi(GameRuntimeApiIds.ShelteredDialogue, dialogue);
             RegisterApi(ShelteredApiAliasIds.ShelteredDialogue, dialogue);
 
+
+
             IGameLifecycleSource lifecycleSource = new ShelteredGameLifecycleSource();
             RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);
             RegisterApi(ShelteredApiAliasIds.GameLifecycle, lifecycleSource);
@@ -128,6 +132,9 @@ namespace ShelteredAPI.Core
             IUiLifecycleEventSink uiLifecycleEvents = new ShelteredUiLifecycleEventSink();
             RegisterApi(GameRuntimeApiIds.UiLifecycleEvents, uiLifecycleEvents);
             RegisterApi(ShelteredApiAliasIds.UiLifecycleEvents, uiLifecycleEvents);
+
+            IShelteredMultiplayerHooks multiplayerHooks = ShelteredMultiplayer.Hooks;
+            RegisterApi(ShelteredApiAliasIds.ShelteredMultiplayerHooks, multiplayerHooks);
 
             IActorSystem actors = ShelteredActors.Instance;
             RegisterApi(GameRuntimeApiIds.Actors, actors);

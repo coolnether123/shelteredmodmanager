@@ -134,6 +134,11 @@
     <Compile Include="Persistence\ModPersistence.cs" />
     <Compile Include="Persistence\ModList.cs" />
     <Compile Include="Persistence\ModDictionary.cs" />
+    <Compile Include="Networking\ShelteredMultiplayer.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerContracts.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerHookPatches.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerHookService.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerRuntimeDriver.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestWindow.cs" />
     <Compile Include="Networking\MultiplayerMenuController.cs" />
