@@ -154,6 +154,8 @@
     <Compile Include="Networking\ShelteredNetworkEventContext.cs" />
     <Compile Include="Networking\ShelteredNetworkEventKinds.cs" />
     <Compile Include="Networking\ShelteredNetworkGameplayEvent.cs" />
+    <Compile Include="Networking\Trade\ShelteredMultiplayerTradeContracts.cs" />
+    <Compile Include="Networking\Trade\ShelteredMultiplayerTradeService.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelModels.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelPresenter.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelRenderer.cs" />

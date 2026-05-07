@@ -33,3 +33,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyFileVersion("1.3.0.3")]
 [assembly: AssemblyInformationalVersion("1.3.0-beta.3")]
 [assembly: InternalsVisibleTo("ModAPI")]
+[assembly: InternalsVisibleTo("ShelteredAPI.Networking.Tests")]

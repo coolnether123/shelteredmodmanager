@@ -14,5 +14,12 @@ namespace ShelteredAPI.Networking
         public const string ExpeditionReturned = "Expedition.Returned";
         public const string LocationSearched = "Location.Searched";
         public const string ResourceClaimed = "Resource.Claimed";
+        public const string TradeOfferIntent = "Trade.OfferIntent";
+        public const string TradeOfferAccepted = "Trade.OfferAccepted";
+        public const string TradeOfferRejected = "Trade.OfferRejected";
+        public const string TradeCaravanLaunched = "Trade.CaravanLaunched";
+        public const string TradeCaravanArrived = "Trade.CaravanArrived";
+        public const string TradeCompleted = "Trade.Completed";
+        public const string TradeCancelled = "Trade.Cancelled";
     }
 }

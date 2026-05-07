@@ -30,6 +30,7 @@ namespace ShelteredAPI.Networking
             _dispatcher = new NetworkEventDispatcher(session);
             _dispatcher.EventReceived += OnEventReceived;
             _dispatcher.ParseFailed += OnParseFailed;
+            _dispatcher.Start();
             ShelteredMultiplayerNetworkEvents.Attach(this);
         }
 
@@ -83,18 +84,28 @@ namespace ShelteredAPI.Networking
 
         private NetworkEventEnvelope CreateEnvelope(ShelteredNetworkGameplayEvent gameplayEvent, NetworkEventPhase phase)
         {
-            byte[] payload = _registry.SerializePayload(
-                ShelteredNetworkGameplayEvent.EnvelopeEventName,
-                ShelteredNetworkGameplayEvent.CurrentVersion,
-                gameplayEvent);
-
-            return NetworkEventEnvelope.Create(
+            uint worldTick = ResolveWorldTick();
+            NetworkEventEnvelope envelope = NetworkEventEnvelope.Create(
                 ShelteredNetworkGameplayEvent.EnvelopeEventName,
                 ShelteredNetworkGameplayEvent.CurrentVersion,
                 phase,
                 _session.LocalPeerId,
-                ResolveWorldTick(),
-                payload);
+                worldTick,
+                new byte[0]);
+
+            ShelteredNetworkGameplayEvent payloadEvent = StampEventMetadata(
+                gameplayEvent,
+                envelope.EventId,
+                envelope.CorrelationId,
+                worldTick);
+
+            byte[] payload = _registry.SerializePayload(
+                ShelteredNetworkGameplayEvent.EnvelopeEventName,
+                ShelteredNetworkGameplayEvent.CurrentVersion,
+                payloadEvent);
+
+            envelope.Payload = payload;
+            return envelope;
         }
 
         private void OnEventReceived(object sender, NetworkEventReceivedEventArgs e)
@@ -122,6 +133,7 @@ namespace ShelteredAPI.Networking
                 return;
             }
 
+            ApplyEnvelopeMetadata(gameplayEvent, envelope);
             ShelteredNetworkEventContext context = new ShelteredNetworkEventContext(peer, envelope, gameplayEvent);
             ShelteredMultiplayerNetworkEvents.RaiseAny(context);
 
@@ -147,22 +159,55 @@ namespace ShelteredAPI.Networking
             if (acceptedEvent == null)
                 return;
 
-            byte[] payload = _registry.SerializePayload(
-                ShelteredNetworkGameplayEvent.EnvelopeEventName,
-                ShelteredNetworkGameplayEvent.CurrentVersion,
-                acceptedEvent);
-
             NetworkEventEnvelope authoritative = NetworkEventEnvelope.Create(
                 intent.EventName,
-                intent.EventVersion,
+                ShelteredNetworkGameplayEvent.CurrentVersion,
                 NetworkEventPhase.Authoritative,
                 _session.LocalPeerId,
                 ResolveWorldTick(),
-                payload);
+                new byte[0]);
             authoritative.CorrelationId = intent.EventId;
+
+            ShelteredNetworkGameplayEvent payloadEvent = StampEventMetadata(
+                acceptedEvent,
+                authoritative.EventId,
+                authoritative.CorrelationId,
+                authoritative.WorldTick);
+
+            byte[] payload = _registry.SerializePayload(
+                ShelteredNetworkGameplayEvent.EnvelopeEventName,
+                ShelteredNetworkGameplayEvent.CurrentVersion,
+                payloadEvent);
+
+            authoritative.Payload = payload;
 
             _dispatcher.Broadcast(authoritative, NetworkChannel.Reliable);
             HandleEnvelope(null, authoritative);
+        }
+
+        private static ShelteredNetworkGameplayEvent StampEventMetadata(
+            ShelteredNetworkGameplayEvent source,
+            string eventId,
+            string correlationId,
+            uint worldTick)
+        {
+            ShelteredNetworkGameplayEvent copy = source != null
+                ? source.Copy()
+                : new ShelteredNetworkGameplayEvent();
+            copy.EventId = eventId ?? string.Empty;
+            copy.CorrelationId = correlationId ?? string.Empty;
+            copy.WorldTick = worldTick;
+            return copy;
+        }
+
+        private static void ApplyEnvelopeMetadata(ShelteredNetworkGameplayEvent gameplayEvent, NetworkEventEnvelope envelope)
+        {
+            if (gameplayEvent == null || envelope == null)
+                return;
+
+            gameplayEvent.EventId = envelope.EventId ?? string.Empty;
+            gameplayEvent.CorrelationId = envelope.CorrelationId ?? string.Empty;
+            gameplayEvent.WorldTick = envelope.WorldTick;
         }
 
         private void OnParseFailed(object sender, NetworkEventParseFailedEventArgs e)

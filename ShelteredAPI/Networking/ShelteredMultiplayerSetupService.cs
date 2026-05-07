@@ -110,10 +110,10 @@ namespace ShelteredAPI.Networking
             if (_disposed || peer == null)
                 return;
 
+            bool wasExpected = _expectedPeers.Contains(peer.PeerId);
             _loadedPeers.Remove(peer.PeerId);
-            _expectedPeers.Remove(peer.PeerId);
 
-            if (_currentSetup != null && !_released && _expectedPeers.Contains(peer.PeerId))
+            if (_currentSetup != null && !_released && wasExpected)
             {
                 SetStatus("waiting for peer " + peer.PeerId + " to reconnect and load");
                 WriteLog(MMLog.LogLevel.Warning, "Peer " + peer.PeerId
@@ -121,6 +121,7 @@ namespace ShelteredAPI.Networking
             }
             else if (_session != null && _session.Mode == NetworkSessionMode.Host && _currentSetup != null && !_released)
             {
+                _expectedPeers.Remove(peer.PeerId);
                 ShelteredMultiplayerSessionCoordinator.Instance.UpdateRoster(_session, "setup-peer-disconnected");
                 PrepareHostSetup("setup-peer-disconnected");
                 BroadcastBeginSetup();

@@ -16,6 +16,8 @@ namespace ShelteredAPI.Networking
 
         public ShelteredNetworkGameplayEvent()
         {
+            EventId = string.Empty;
+            CorrelationId = string.Empty;
             EventKind = string.Empty;
             ActorId = string.Empty;
             TargetId = string.Empty;
@@ -30,6 +32,9 @@ namespace ShelteredAPI.Networking
             IsOnline = true;
         }
 
+        public string EventId { get; set; }
+        public string CorrelationId { get; set; }
+        public uint WorldTick { get; set; }
         public string EventKind { get; set; }
         public string ActorId { get; set; }
         public string TargetId { get; set; }
@@ -42,22 +47,43 @@ namespace ShelteredAPI.Networking
         public int GridX { get; set; }
         public int GridY { get; set; }
         public bool IsOnline { get; set; }
+
+        public ShelteredNetworkGameplayEvent Copy()
+        {
+            ShelteredNetworkGameplayEvent copy = new ShelteredNetworkGameplayEvent();
+            copy.EventId = EventId;
+            copy.CorrelationId = CorrelationId;
+            copy.WorldTick = WorldTick;
+            copy.EventKind = EventKind;
+            copy.ActorId = ActorId;
+            copy.TargetId = TargetId;
+            copy.Details = Details;
+            copy.PeerId = PeerId;
+            copy.BunkerOwnerId = BunkerOwnerId;
+            copy.DisplayName = DisplayName;
+            copy.WorldPosition = WorldPosition;
+            copy.MapPixels = MapPixels;
+            copy.GridX = GridX;
+            copy.GridY = GridY;
+            copy.IsOnline = IsOnline;
+            return copy;
+        }
     }
 
     internal sealed class ShelteredNetworkGameplayEventSerializer
         : NetworkEventPayloadSerializer<ShelteredNetworkGameplayEvent>
     {
-        private readonly bool _includeBunkerData;
+        private readonly bool _includeEnvelopeMetadata;
 
         public ShelteredNetworkGameplayEventSerializer()
             : this(ShelteredNetworkGameplayEvent.CurrentVersion, true)
         {
         }
 
-        private ShelteredNetworkGameplayEventSerializer(ushort version, bool includeBunkerData)
+        private ShelteredNetworkGameplayEventSerializer(ushort version, bool includeEnvelopeMetadata)
             : base(ShelteredNetworkGameplayEvent.EnvelopeEventName, version)
         {
-            _includeBunkerData = includeBunkerData;
+            _includeEnvelopeMetadata = includeEnvelopeMetadata;
         }
 
         public static ShelteredNetworkGameplayEventSerializer CreateLegacy()
@@ -70,12 +96,19 @@ namespace ShelteredAPI.Networking
             if (value == null)
                 value = new ShelteredNetworkGameplayEvent();
 
+            if (_includeEnvelopeMetadata)
+            {
+                writer.WriteString(value.EventId ?? string.Empty);
+                writer.WriteString(value.CorrelationId ?? string.Empty);
+                writer.WriteUInt32(value.WorldTick);
+            }
+
             writer.WriteString(value.EventKind ?? string.Empty);
             writer.WriteString(value.ActorId ?? string.Empty);
             writer.WriteString(value.TargetId ?? string.Empty);
             writer.WriteString(value.Details ?? string.Empty);
 
-            if (_includeBunkerData)
+            if (_includeEnvelopeMetadata)
             {
                 writer.WriteInt32(value.PeerId);
                 writer.WriteInt32(value.BunkerOwnerId);
@@ -94,12 +127,19 @@ namespace ShelteredAPI.Networking
         protected override ShelteredNetworkGameplayEvent Read(ref BitReader reader)
         {
             ShelteredNetworkGameplayEvent value = new ShelteredNetworkGameplayEvent();
+            if (_includeEnvelopeMetadata)
+            {
+                value.EventId = reader.ReadString();
+                value.CorrelationId = reader.ReadString();
+                value.WorldTick = reader.ReadUInt32();
+            }
+
             value.EventKind = reader.ReadString();
             value.ActorId = reader.ReadString();
             value.TargetId = reader.ReadString();
             value.Details = reader.ReadString();
 
-            if (_includeBunkerData && reader.Remaining > 0)
+            if (_includeEnvelopeMetadata && reader.Remaining > 0)
             {
                 value.PeerId = reader.ReadInt32();
                 value.BunkerOwnerId = reader.ReadInt32();

@@ -740,8 +740,6 @@ namespace ShelteredAPI.Networking
             if (e == null)
                 return;
 
-            if (_eventSync != null && _eventSync.TryHandleMessage(e))
-                return;
             if (_saveSync != null && _saveSync.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
                 return;
             if (_setup != null && _setup.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
