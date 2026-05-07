@@ -61,16 +61,16 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
             UIPanel panel = root.GetComponent<UIPanel>();
             int depth = panel != null ? panel.depth + 1 : RuntimeUiPanelService.AssignDepth();
-            RuntimePanelChrome.Create(root, string.IsNullOrEmpty(state.Request.Title) ? "Container" : state.Request.Title, depth, delegate
+            state.Layout = RuntimePanelChrome.Create(root, string.IsNullOrEmpty(state.Request.Title) ? "Container" : state.Request.Title, depth, delegate
             {
                 RuntimeUiRegistry.Close(record.PanelId);
-            });
+            }, state.Request.PanelOptions);
 
             RuntimeFilterTabs.Build(root, state.Request.Categories, state.SelectedCategory, delegate(ItemCategory? category)
             {
                 state.SelectedCategory = category;
                 RenderItems(state, depth + 10);
-            }, depth + 4);
+            }, depth + 4, state.Layout, GetStyle(state.Request));
 
             state.ListRoot = RuntimeWidgetUtil.CreateChild(root, "ItemList", Vector3.zero);
             state.ActionsRoot = RuntimeWidgetUtil.CreateChild(root, "Actions", Vector3.zero);
@@ -127,6 +127,8 @@ namespace ShelteredAPI.UI.Internal.Runtime{
                     CanSelect = state.Request.CanSelect,
                     CanTransfer = state.Request.CanTransfer,
                     FormatCount = state.Request.FormatCount,
+                    Layout = state.Layout,
+                    Style = GetStyle(state.Request),
                     OnSelected = state.Request.OnItemSelected,
                     OnTransfer = delegate(ContainerUiTransferContext context)
                     {
@@ -163,12 +165,18 @@ namespace ShelteredAPI.UI.Internal.Runtime{
                 int x = startX + i * 130;
                 bool enabled = action.IsEnabled == null || action.IsEnabled();
                 ContainerUiAction captured = action;
-                RuntimeButton.Create(state.ActionsRoot, "Action_" + (!string.IsNullOrEmpty(action.Id) ? action.Id : i.ToString()), action.Text, 120, 32, new Vector3(x, -226f, 0f), depth, enabled, delegate
+                float y = state.Layout != null ? state.Layout.FooterY : -226f;
+                RuntimeButton.Create(state.ActionsRoot, "Action_" + (!string.IsNullOrEmpty(action.Id) ? action.Id : i.ToString()), action.Text, 120, 32, new Vector3(x, y, 0f), depth, enabled, delegate
                 {
                     if (captured.Execute != null)
                         captured.Execute(state.Handle);
-                });
+                }, GetStyle(state.Request));
             }
+        }
+
+        private static RuntimePanelStyle GetStyle(ContainerUiRequest request)
+        {
+            return request != null && request.PanelOptions != null ? request.PanelOptions.Style : null;
         }
 
         private static IList<ContainerUiItem> ResolveItems(ContainerUiRequest request)
@@ -232,6 +240,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
             public ItemCategory? SelectedCategory;
             public GameObject ListRoot;
             public GameObject ActionsRoot;
+            public RuntimePanelChromeLayout Layout;
 
             public ContainerUiPanelState(ContainerUiRequest request, RuntimeUiHandle handle)
             {

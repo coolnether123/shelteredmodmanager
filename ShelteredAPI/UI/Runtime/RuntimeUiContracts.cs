@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
+using UnityEngine;
 namespace ShelteredAPI.UI.Runtime{
     /// <summary>
     /// Stable handle returned by runtime UI entry points. Mod authors should use
@@ -53,6 +54,7 @@ namespace ShelteredAPI.UI.Runtime{
         public string PanelId { get; set; }
         public string Title { get; set; }
         public string OwnerId { get; set; }
+        public RuntimePanelOptions PanelOptions { get; set; }
         public IList<ContainerUiItem> Items { get; set; }
         public Func<IList<ContainerUiItem>> ItemSource { get; set; }
         public ItemCategory[] Categories { get; set; }
@@ -171,11 +173,28 @@ namespace ShelteredAPI.UI.Runtime{
             ObjectId = objectId;
             TargetObject = targetObject;
             SelectedMember = selectedMember;
+            ObjectType = ResolveObjectType(targetObject);
         }
 
         public string ObjectId { get; private set; }
+        public ObjectManager.ObjectType ObjectType { get; private set; }
         public Obj_Base TargetObject { get; private set; }
         public FamilyMember SelectedMember { get; private set; }
+
+        private static ObjectManager.ObjectType ResolveObjectType(Obj_Base targetObject)
+        {
+            if (targetObject == null)
+                return ObjectManager.ObjectType.Undefined;
+
+            try
+            {
+                return targetObject.GetObjectType();
+            }
+            catch
+            {
+                return ObjectManager.ObjectType.Undefined;
+            }
+        }
     }
 
     /// <summary>
@@ -183,12 +202,25 @@ namespace ShelteredAPI.UI.Runtime{
     /// </summary>
     public sealed class CraftingUiRequest
     {
+        public CraftingUiRequest()
+        {
+            RefreshEveryFrame = false;
+        }
+
         public string PanelId { get; set; }
         public string Title { get; set; }
         public string OwnerId { get; set; }
+        public RuntimePanelOptions PanelOptions { get; set; }
         public IList<CraftingUiRecipe> Recipes { get; set; }
+        public Func<IList<CraftingUiRecipe>> RecipeSource { get; set; }
+        public string EmptyText { get; set; }
+        public string CraftButtonText { get; set; }
+        public bool RefreshEveryFrame { get; set; }
         public Func<CraftingUiRecipe, bool> IsAvailable { get; set; }
         public Action<CraftingUiRecipe> OnCraft { get; set; }
+        public Action<CraftingUiCraftContext> OnCraftRequested { get; set; }
+        public Func<CraftingUiRecipe, string> GetUnavailableReason { get; set; }
+        public Action<RuntimeUiHandle> OnRefreshed { get; set; }
         public Action OnClosed { get; set; }
     }
 
@@ -200,8 +232,13 @@ namespace ShelteredAPI.UI.Runtime{
     {
         public string RecipeId { get; set; }
         public string DisplayName { get; set; }
+        public string Subtitle { get; set; }
         public string OutputItemId { get; set; }
         public int OutputCount { get; set; }
+        public string OutputCountText { get; set; }
+        public Sprite Icon { get; set; }
+        public string CraftButtonText { get; set; }
+        public string UnavailableText { get; set; }
         public IList<CraftingUiIngredient> Ingredients { get; set; }
         public object Tag { get; set; }
     }
@@ -213,5 +250,55 @@ namespace ShelteredAPI.UI.Runtime{
     {
         public string ItemId { get; set; }
         public int Count { get; set; }
+    }
+
+    /// <summary>
+    /// Craft command context passed by runtime crafting panels.
+    /// The panel has not mutated inventories; handlers own the actual craft behavior.
+    /// </summary>
+    public sealed class CraftingUiCraftContext
+    {
+        internal CraftingUiCraftContext(CraftingUiRecipe recipe, RuntimeUiHandle panel)
+        {
+            Recipe = recipe;
+            Panel = panel;
+        }
+
+        public CraftingUiRecipe Recipe { get; private set; }
+        public RuntimeUiHandle Panel { get; private set; }
+    }
+
+    /// <summary>
+    /// Public options for mod-owned runtime panel chrome.
+    /// Values left unset use ShelteredAPI defaults.
+    /// </summary>
+    public sealed class RuntimePanelOptions
+    {
+        public RuntimePanelOptions()
+        {
+            ShowCloseButton = true;
+        }
+
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public int HeaderHeight { get; set; }
+        public int TitleFontSize { get; set; }
+        public string CloseText { get; set; }
+        public bool ShowCloseButton { get; set; }
+        public Sprite Icon { get; set; }
+        public RuntimePanelStyle Style { get; set; }
+    }
+
+    /// <summary>
+    /// Optional visual roles for runtime panel chrome and common widgets.
+    /// </summary>
+    public sealed class RuntimePanelStyle
+    {
+        public Color? FrameColor { get; set; }
+        public Color? HeaderColor { get; set; }
+        public Color? AccentColor { get; set; }
+        public Color? TextColor { get; set; }
+        public Color? ButtonColor { get; set; }
+        public Color? DisabledButtonColor { get; set; }
     }
 }

@@ -1,6 +1,7 @@
 using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 using ShelteredAPI.Content;
+using ShelteredAPI.UI.Runtime;
 namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
     internal static class RuntimeWidgetUtil
     {
@@ -37,6 +38,11 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
 
         public static UILabel CreateLabel(GameObject parent, string text, int width, int height, int fontSize, Vector3 localPosition, NGUIText.Alignment alignment, int depth)
         {
+            return CreateLabel(parent, text, width, height, fontSize, localPosition, alignment, depth, null);
+        }
+
+        public static UILabel CreateLabel(GameObject parent, string text, int width, int height, int fontSize, Vector3 localPosition, NGUIText.Alignment alignment, int depth, Color? color)
+        {
             UIPanel usedPanel;
             UILabel label = UIUtil.CreateLabel(parent, new UIUtil.UILabelOptions
             {
@@ -54,9 +60,31 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
                 label.width = width;
                 label.height = height;
                 label.overflowMethod = UILabel.Overflow.ShrinkContent;
+                if (color.HasValue)
+                    label.color = color.Value;
             }
 
             return label;
+        }
+
+        public static UI2DSprite CreateSprite(GameObject parent, string name, Sprite sprite, int width, int height, Vector3 localPosition, int depth)
+        {
+            if (sprite == null)
+                return null;
+
+            GameObject child = CreateChild(parent, name, localPosition);
+            if (child == null)
+                return null;
+
+            UI2DSprite uiSprite = child.AddComponent<UI2DSprite>();
+            uiSprite.sprite2D = sprite;
+            uiSprite.width = width;
+            uiSprite.height = height;
+            uiSprite.depth = depth;
+            uiSprite.MakePixelPerfect();
+            uiSprite.width = width;
+            uiSprite.height = height;
+            return uiSprite;
         }
 
         public static void EnsureCollider(GameObject go, int width, int height)
