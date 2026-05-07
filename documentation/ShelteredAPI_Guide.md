@@ -206,3 +206,53 @@ ShelteredRuntimeUI.RegisterObjectPanel(new ObjectPanelRegistration
 ```
 
 `InteractionText` is display text; ShelteredAPI maps it into the vanilla context menu localization path for you. `InteractionId` is optional, but using a stable id keeps menu entries deterministic across text changes.
+
+## 6. Runtime Stores And Cooking
+
+Use `ShelteredAPI.Storage` for store-backed workflows instead of putting custom item IDs into vanilla objects. `ShelteredStores.ForInventory()` adapts shelter inventory, `ForFreezer(...)` adapts vanilla freezer meat/desperate-meat only, and `ForMod(...)` or `ForObject(...)` creates a mod-owned persisted store for arbitrary mod item IDs.
+
+Minimal meat-to-ration cooking flow:
+
+```csharp
+using ShelteredAPI.Content;
+using ShelteredAPI.Storage;
+using ShelteredAPI.Workstations;
+
+ShelteredCooking.RegisterStation(new CookingStationRegistration
+{
+    OwnerId = "com.example.cooking",
+    ObjectType = ObjectManager.ObjectType.Stove,
+    InteractionId = "com.example.cooking.stove.cook",
+    InteractionText = "Cook",
+    IngredientStore = context =>
+        ShelteredStores.FindNearestObjectStore(
+            "com.example.cooking",
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position,
+            "Fridge Storage",
+            24),
+    OutputStore = context => ShelteredStores.ForInventory(),
+    JobOptions = new CookingStationJobOptions
+    {
+        JobType = "cook_food",
+        AnimationTrigger = "Rummage",
+        DurationSeconds = 3f
+    },
+    Recipes = new[]
+    {
+        new CookingStationRecipe
+        {
+            RecipeId = "com.example.cooking.meat_to_ration",
+            DisplayName = "Cook Ration",
+            OutputItemId = VanillaItems.Ration,
+            OutputCount = 1,
+            Ingredients = new[]
+            {
+                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
+            }
+        }
+    }
+});
+```
+
+Timed cooking jobs check ingredients before queueing and again on completion. Output add failures roll consumed ingredients back.

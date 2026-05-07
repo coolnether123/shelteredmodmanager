@@ -151,6 +151,7 @@ ShelteredCooking.RegisterStation(new CookingStationRegistration
 ```
 
 In that flow, the freezer/fridge world object is only the anchor. Meat is consumed from the mod-owned object store, and rations are added through the global shelter inventory adapter. The full copy/paste flow is in [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md#minimal-fridge-backed-cooking-flow).
+
 ## 4. Item Registration Checklist
 
 Before calling `ShelteredContent.RegisterItem(...)`, make sure the item has:
