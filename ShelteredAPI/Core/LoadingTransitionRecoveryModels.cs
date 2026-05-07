@@ -6,9 +6,6 @@ namespace ShelteredAPI.Core
     {
         public const string MenuSceneName = "MenuScene";
         public const string LoadingSceneName = "LoadingScene";
-        public const float MenuTransitionTimeoutSeconds = 6f;
-        public const float PreLoadingSceneTimeoutSeconds = 12f;
-        public const float LoadingSceneTimeoutSeconds = 25f;
         public const int MaxRecentEvents = 8;
         public const string DialogTitle = "ShelteredAPI Recovered A Failed Load";
 
@@ -38,10 +35,8 @@ namespace ShelteredAPI.Core
         public string LastScene;
         public string RequestReason;
         public LoadingTransitionPhase Phase;
-        public float StartedAt;
-        public float LoadingSceneEnteredAt;
 
-        public static LoadingTransitionState Start(string targetScene, string sourceScene, string requestReason, float now)
+        public static LoadingTransitionState Start(string targetScene, string sourceScene, string requestReason)
         {
             return new LoadingTransitionState
             {
@@ -49,13 +44,11 @@ namespace ShelteredAPI.Core
                 SourceScene = sourceScene,
                 LastScene = sourceScene,
                 RequestReason = requestReason,
-                Phase = LoadingTransitionPhase.WaitingForLoadingScene,
-                StartedAt = now,
-                LoadingSceneEnteredAt = 0f
+                Phase = LoadingTransitionPhase.WaitingForLoadingScene
             };
         }
 
-        public static LoadingTransitionState StartMenuTransition(string targetLabel, string sourceScene, string requestReason, float now)
+        public static LoadingTransitionState StartMenuTransition(string targetLabel, string sourceScene, string requestReason)
         {
             return new LoadingTransitionState
             {
@@ -64,9 +57,7 @@ namespace ShelteredAPI.Core
                 SourceScene = sourceScene,
                 LastScene = sourceScene,
                 RequestReason = requestReason,
-                Phase = LoadingTransitionPhase.WaitingForLoadingScene,
-                StartedAt = now,
-                LoadingSceneEnteredAt = 0f
+                Phase = LoadingTransitionPhase.WaitingForLoadingScene
             };
         }
 
@@ -78,39 +69,9 @@ namespace ShelteredAPI.Core
             return string.Equals(sceneName, TargetScene, StringComparison.Ordinal);
         }
 
-        public void MarkLoadingSceneEntered(float now)
+        public void MarkLoadingSceneEntered()
         {
             Phase = LoadingTransitionPhase.LoadingScene;
-            LoadingSceneEnteredAt = now;
-        }
-
-        public bool TryGetTimeoutReason(float now, out string reason)
-        {
-            reason = null;
-
-            if (string.IsNullOrEmpty(TargetScene) &&
-                Phase == LoadingTransitionPhase.WaitingForLoadingScene &&
-                now - StartedAt >= LoadingTransitionRecoveryConstants.MenuTransitionTimeoutSeconds)
-            {
-                reason = "Sheltered stayed in a menu transition after " + TargetLabel + " and no loading route started.";
-                return true;
-            }
-
-            if (Phase == LoadingTransitionPhase.WaitingForLoadingScene &&
-                now - StartedAt >= LoadingTransitionRecoveryConstants.PreLoadingSceneTimeoutSeconds)
-            {
-                reason = "Sheltered stayed on the transition screen before LoadingScene could start.";
-                return true;
-            }
-
-            if (Phase == LoadingTransitionPhase.LoadingScene &&
-                now - LoadingSceneEnteredAt >= LoadingTransitionRecoveryConstants.LoadingSceneTimeoutSeconds)
-            {
-                reason = "Sheltered stayed in LoadingScene and never reached the requested scene.";
-                return true;
-            }
-
-            return false;
         }
     }
 

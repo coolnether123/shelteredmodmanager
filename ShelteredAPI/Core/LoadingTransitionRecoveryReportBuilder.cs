@@ -45,7 +45,7 @@ namespace ShelteredAPI.Core
             if (problems.Length > 0)
                 text += "\n\nRecent errors:\n" + LoadingTransitionText.JoinBullets(problems);
             else
-                text += "\n\nNo Unity exception was reported before the transition stalled.";
+                text += "\n\nNo Unity error details were retained for this transition exception.";
 
             text += "\n\nDetails were written to SMM/mod_manager.log.";
             return text;
