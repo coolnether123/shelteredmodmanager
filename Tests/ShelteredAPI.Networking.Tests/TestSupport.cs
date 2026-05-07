@@ -59,6 +59,12 @@ namespace ShelteredAPI.Networking.Tests
             if (!object.Equals(expected, actual))
                 throw new InvalidOperationException(message + " Expected: " + expected + " Actual: " + actual);
         }
+
+        public static void Near(float expected, float actual, float tolerance, string message)
+        {
+            if (Math.Abs(expected - actual) > tolerance)
+                throw new InvalidOperationException(message + " Expected: " + expected + " Actual: " + actual);
+        }
     }
 
     internal static class NetworkTestHarness

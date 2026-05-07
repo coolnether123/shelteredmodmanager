@@ -141,6 +141,9 @@
     <Compile Include="Networking\ShelteredMultiplayerContracts.cs" />
     <Compile Include="Networking\ShelteredMultiplayerHookPatches.cs" />
     <Compile Include="Networking\ShelteredMultiplayerHookService.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerTimePatches.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerTimePolicy.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerTimeSettings.cs" />
     <Compile Include="Networking\ShelteredMultiplayerRuntimeDriver.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSessionCoordinator.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSessionSeed.cs" />

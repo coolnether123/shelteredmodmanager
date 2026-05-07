@@ -202,6 +202,7 @@ namespace ShelteredAPI.Networking
         internal bool BeginGameTimeUpdate(GameTime gameTime)
         {
             ShelteredMultiplayerSessionState state = SessionState;
+            ShelteredMultiplayerTimePolicy.ApplyGameTimePolicy(gameTime);
             if (state.IsMultiplayerActive)
                 ApplyTimescalePolicy();
 
@@ -414,22 +415,9 @@ namespace ShelteredAPI.Networking
             return tickRate > 0 ? tickRate : DefaultTickRate;
         }
 
-        private static void ForceRealtimeTimescale()
-        {
-            if (Math.Abs(Time.timeScale - 1f) > 0.001f)
-                Time.timeScale = 1f;
-        }
-
         private void ApplyTimescalePolicy()
         {
-            if (IsWorldStartBlocked)
-            {
-                if (Math.Abs(Time.timeScale) > 0.001f)
-                    Time.timeScale = 0f;
-                return;
-            }
-
-            ForceRealtimeTimescale();
+            ShelteredMultiplayerTimePolicy.ForceRealtimeTimescale();
         }
 
         private static void SafeRaise(Action<ShelteredMultiplayerHookContext> handler, ShelteredMultiplayerHookContext context, string name)

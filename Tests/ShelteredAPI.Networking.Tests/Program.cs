@@ -8,6 +8,7 @@ namespace ShelteredAPI.Networking.Tests
         {
             List<TestCase> tests = new List<TestCase>();
             ShelteredTradeEventTests.Register(tests);
+            ShelteredMultiplayerTimePolicyTests.Register(tests);
             return TestRunner.Run("ShelteredAPI networking tests", tests);
         }
     }
