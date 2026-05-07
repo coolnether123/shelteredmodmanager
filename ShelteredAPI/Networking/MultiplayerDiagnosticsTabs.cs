@@ -1,0 +1,242 @@
+using ModAPI.Networking.Connections;
+using ModAPI.Networking.Diagnostics;
+using UnityEngine;
+
+namespace ShelteredAPI.Networking
+{
+    internal interface IMultiplayerDiagnosticsTab
+    {
+        string Title { get; }
+        void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state);
+    }
+
+    internal sealed class MultiplayerSummaryDiagnosticsTab : IMultiplayerDiagnosticsTab
+    {
+        public string Title
+        {
+            get { return "Summary"; }
+        }
+
+        public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Session");
+            MultiplayerDiagnosticsWidgets.DrawValue("Role", model.RoleText);
+            MultiplayerDiagnosticsWidgets.DrawValue("State", model.StateText);
+            MultiplayerDiagnosticsWidgets.DrawValue("Local endpoint", model.LocalEndpointText);
+            MultiplayerDiagnosticsWidgets.DrawValue("Local peer ID", model.LocalPeerIdText);
+            MultiplayerDiagnosticsWidgets.DrawValue("Config", model.ConfigurationSummary);
+            MultiplayerDiagnosticsWidgets.DrawValue("Snapshot age", model.SnapshotAgeText);
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Systems");
+            MultiplayerDiagnosticsWidgets.DrawValue("Save sync", model.SaveSyncStatus);
+            MultiplayerDiagnosticsWidgets.DrawValue("Setup", model.SetupStatus);
+            MultiplayerDiagnosticsWidgets.DrawOptionalError("Sync error", model.SaveSyncLastError);
+            MultiplayerDiagnosticsWidgets.DrawOptionalError("Setup error", model.SetupLastError);
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Counters");
+            GUILayout.BeginHorizontal();
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Peers", model.ConnectedPeerCount + "/" + model.TotalPeerCount);
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Events", model.EventCount.ToString());
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Sent", model.TotalPacketsSent + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesSent));
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Received", model.TotalPacketsReceived + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
+            GUILayout.EndHorizontal();
+
+            DrawDiscovery(model, state);
+
+            if (!model.CanSendTestMessage)
+                MultiplayerDiagnosticsWidgets.DrawHint("Test messages unlock after a client connects or a host has at least one peer.");
+        }
+
+        private static void DrawDiscovery(
+            MultiplayerConnectionPanelViewModel model,
+            MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader(model.IsDiscovering ? "LAN Discovery: Searching" : "LAN Discovery");
+
+            if (model.DiscoveryResults.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint("Use Find LAN, or enter an endpoint manually.");
+                return;
+            }
+
+            for (int i = 0; i < model.DiscoveryResults.Length; i++)
+            {
+                string result = model.DiscoveryResults[i] ?? string.Empty;
+                string endpoint = MultiplayerDiagnosticsFormatter.ExtractEndpoint(result);
+                bool canUse = MultiplayerDiagnosticsFormatter.HasUsableDiscoveryEndpoint(endpoint);
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(result);
+
+                bool previousEnabled = GUI.enabled;
+                GUI.enabled = canUse;
+                if (GUILayout.Button("Use", GUILayout.Width(52f)))
+                    state.EndpointText = endpoint;
+                if (GUILayout.Button("Join", GUILayout.Width(56f)))
+                    model.Service.Join(endpoint);
+                GUI.enabled = previousEnabled;
+                GUILayout.EndHorizontal();
+            }
+        }
+    }
+
+    internal sealed class MultiplayerPeerDiagnosticsTab : IMultiplayerDiagnosticsTab
+    {
+        public string Title
+        {
+            get { return "Peers"; }
+        }
+
+        public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Peer Health");
+
+            if (model.Snapshot != null && model.Snapshot.Peers.Length > 0)
+            {
+                for (int i = 0; i < model.Snapshot.Peers.Length; i++)
+                    DrawPeerDiagnostics(model.Snapshot.Peers[i]);
+                return;
+            }
+
+            if (model.Peers.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint("No peers.");
+                return;
+            }
+
+            for (int i = 0; i < model.Peers.Length; i++)
+            {
+                NetworkPeer peer = model.Peers[i];
+                if (peer == null)
+                    continue;
+
+                string endpoint = peer.EndPoint != null ? peer.EndPoint.ToString() : "unknown endpoint";
+                GUILayout.Label("#" + peer.PeerId + " " + peer.State + " " + endpoint);
+            }
+        }
+
+        private static void DrawPeerDiagnostics(NetworkPeerDiagnosticsSnapshot peer)
+        {
+            if (peer == null)
+                return;
+
+            string displayName = string.IsNullOrEmpty(peer.DisplayName) ? "unknown" : peer.DisplayName;
+
+            GUILayout.Space(6f);
+            GUILayout.Label("#" + peer.PeerId + " " + peer.State + " " + MultiplayerDiagnosticsFormatter.FormatEndpoint(peer));
+            MultiplayerDiagnosticsWidgets.DrawValue("Name", displayName);
+            MultiplayerDiagnosticsWidgets.DrawValue("Latency", MultiplayerDiagnosticsFormatter.FormatLatency(peer));
+            MultiplayerDiagnosticsWidgets.DrawValue("Last send", MultiplayerDiagnosticsFormatter.FormatAge(peer.LastSendUtc));
+            MultiplayerDiagnosticsWidgets.DrawValue("Last receive", MultiplayerDiagnosticsFormatter.FormatAge(peer.LastReceiveUtc));
+            MultiplayerDiagnosticsWidgets.DrawValue("Sent", peer.PacketsSent + " packets / " + MultiplayerDiagnosticsFormatter.FormatBytes(peer.BytesSent));
+            MultiplayerDiagnosticsWidgets.DrawValue("Received", peer.PacketsReceived + " packets / " + MultiplayerDiagnosticsFormatter.FormatBytes(peer.BytesReceived));
+            MultiplayerDiagnosticsWidgets.DrawOptionalError("Peer error", peer.LastError);
+        }
+    }
+
+    internal sealed class MultiplayerTrafficDiagnosticsTab : IMultiplayerDiagnosticsTab
+    {
+        public string Title
+        {
+            get { return "Traffic"; }
+        }
+
+        public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Traffic Totals");
+            GUILayout.BeginHorizontal();
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Packets out", model.TotalPacketsSent.ToString());
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Packets in", model.TotalPacketsReceived.ToString());
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Bytes out", MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesSent));
+            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Bytes in", MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
+            GUILayout.EndHorizontal();
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Event Filters");
+            GUILayout.BeginHorizontal();
+            state.ShowSentEvents = GUILayout.Toggle(state.ShowSentEvents, "Sent", GUILayout.Width(70f));
+            state.ShowReceivedEvents = GUILayout.Toggle(state.ShowReceivedEvents, "Received", GUILayout.Width(95f));
+            state.ShowPeerEvents = GUILayout.Toggle(state.ShowPeerEvents, "Peers", GUILayout.Width(75f));
+            state.ShowSessionEvents = GUILayout.Toggle(state.ShowSessionEvents, "Session", GUILayout.Width(90f));
+            GUILayout.EndHorizontal();
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Recent Events");
+            if (model.Snapshot == null || model.Snapshot.RecentEvents.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint("No packet events yet.");
+                return;
+            }
+
+            int shown = 0;
+            for (int i = 0; i < model.Snapshot.RecentEvents.Length; i++)
+            {
+                NetworkDiagnosticsEvent item = model.Snapshot.RecentEvents[i];
+                if (item == null || !ShouldShowEvent(item, state))
+                    continue;
+
+                shown++;
+                DrawEvent(item);
+            }
+
+            if (shown == 0)
+                MultiplayerDiagnosticsWidgets.DrawHint("No events match the current filters.");
+        }
+
+        private static bool ShouldShowEvent(NetworkDiagnosticsEvent item, MultiplayerConnectionPanelState state)
+        {
+            if (item.Kind == NetworkDiagnosticsEventKind.PacketSent)
+                return state.ShowSentEvents;
+            if (item.Kind == NetworkDiagnosticsEventKind.PacketReceived)
+                return state.ShowReceivedEvents;
+            if (item.Kind == NetworkDiagnosticsEventKind.PeerConnected
+                || item.Kind == NetworkDiagnosticsEventKind.PeerDisconnected)
+                return state.ShowPeerEvents;
+
+            return state.ShowSessionEvents;
+        }
+
+        private static void DrawEvent(NetworkDiagnosticsEvent item)
+        {
+            string endpoint = item.EndPoint != null ? item.EndPoint.ToString() : "no endpoint";
+            GUILayout.Label(MultiplayerDiagnosticsFormatter.FormatLocalTime(item.TimestampUtc)
+                + " " + item.Kind
+                + " peer=" + item.PeerId
+                + " seq=" + item.Sequence
+                + " messages=" + item.MessageCount
+                + " bytes=" + item.Bytes
+                + " " + endpoint
+                + " " + item.Summary);
+        }
+    }
+
+    internal sealed class MultiplayerLogDiagnosticsTab : IMultiplayerDiagnosticsTab
+    {
+        public string Title
+        {
+            get { return "Logs"; }
+        }
+
+        public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Received Messages");
+            if (model.ReceivedMessages.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint("No test messages received.");
+            }
+            else
+            {
+                for (int i = 0; i < model.ReceivedMessages.Length; i++)
+                    GUILayout.Label(model.ReceivedMessages[i] ?? string.Empty);
+            }
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Service Log");
+            if (model.LogLines.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint("No service log entries yet.");
+                return;
+            }
+
+            for (int i = 0; i < model.LogLines.Length; i++)
+                GUILayout.Label(model.LogLines[i] ?? string.Empty);
+        }
+    }
+}

@@ -150,6 +150,12 @@
     <Compile Include="Networking\ShelteredNetworkEventContext.cs" />
     <Compile Include="Networking\ShelteredNetworkEventKinds.cs" />
     <Compile Include="Networking\ShelteredNetworkGameplayEvent.cs" />
+    <Compile Include="Networking\MultiplayerConnectionPanelModels.cs" />
+    <Compile Include="Networking\MultiplayerConnectionPanelPresenter.cs" />
+    <Compile Include="Networking\MultiplayerConnectionPanelRenderer.cs" />
+    <Compile Include="Networking\MultiplayerDiagnosticsTabs.cs" />
+    <Compile Include="Networking\MultiplayerDiagnosticsFormatter.cs" />
+    <Compile Include="Networking\MultiplayerDiagnosticsWidgets.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestWindow.cs" />
     <Compile Include="Networking\MultiplayerMenuController.cs" />
