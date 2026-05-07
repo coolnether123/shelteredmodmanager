@@ -14,6 +14,8 @@ Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
 ```csharp
 using ShelteredAPI.Content;
+using ModAPI.Actors;
+using ShelteredAPI.Actors;
 using ShelteredAPI.Storage;
 using ShelteredAPI.UI.Runtime;
 using ShelteredAPI.Workstations;
@@ -117,6 +119,8 @@ Important: vanilla `Obj_Freezer` only supports `Meat` and `DesperateMeat`. The f
 
 Use `ShelteredCharacterItems` when a mod needs to tag existing stored items as associated with a survivor. This is an assignment/classification layer over `IItemStore`; it is not a separate physical inventory and does not move, delete, duplicate, or apply equipment effects.
 
+Character identity is actor-backed. The `FamilyMember` overloads are convenience helpers that resolve `ShelteredActors.FamilyMemberActorId(member.GetId())`; assignment records persist the resulting `ActorId`. Use the `ActorId` overloads when your code already works from the actor system.
+
 ```csharp
 FamilyMember survivor = InteractionManager.Instance.GetSelectedFamilyMember();
 IItemStore inventory = ShelteredStores.ForInventory();
@@ -128,6 +132,8 @@ CharacterItemAssignment meds = ShelteredCharacterItems.Assign(
     quantity: 2,
     kind: CharacterItemAssignmentKind.Medical,
     slot: CharacterItemSlot.Medicine);
+
+ActorId actorId = meds.ActorId;
 ```
 
 The item count remains backed by `inventory`. `Assign(...)` validates that the source store currently has enough unassigned quantity. If the source also implements `IReservableItemStore`, assignment checks respect its available count so queued reservations are not treated as free stock.
@@ -135,14 +141,14 @@ The item count remains backed by `inventory`. `Assign(...)` validates that the s
 Query or release the metadata without mutating storage:
 
 ```csharp
-IList<CharacterItemAssignment> all = ShelteredCharacterItems.GetAssignments(survivor);
-IList<CharacterItemAssignment> available = ShelteredCharacterItems.GetAvailableAssignments(survivor);
-int assignedMeds = ShelteredCharacterItems.GetAssignedCount(survivor, "AntiRad");
+IList<CharacterItemAssignment> all = ShelteredCharacterItems.GetAssignments(actorId);
+IList<CharacterItemAssignment> available = ShelteredCharacterItems.GetAvailableAssignments(actorId);
+int assignedMeds = ShelteredCharacterItems.GetAssignedCount(actorId, "AntiRad");
 
 ShelteredCharacterItems.Unassign(meds.AssignmentId);
 ```
 
-Assignment metadata persists with ShelteredAPI save data. `Unassign(...)` and `ReleaseAssignmentsForMember(...)` only remove assignment records; they do not remove items from the backing store. Use this for "reserved for Alice", "carried by Bob", "equipped in main hand", or quest/medical/food classifications, while keeping global shelter storage as the source of truth.
+Assignment metadata persists with ShelteredAPI save data. `Unassign(...)`, `ReleaseAssignmentsForActor(...)`, and `ReleaseAssignmentsForMember(...)` only remove assignment records; they do not remove items from the backing store. Use this for "reserved for Alice", "carried by Bob", "equipped in main hand", or quest/medical/food classifications, while keeping global shelter storage as the source of truth.
 
 ## Container Panel
 

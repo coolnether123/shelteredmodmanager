@@ -70,7 +70,9 @@ namespace ShelteredAPI.Workstations
                         WorkstationObject = registration.WorkstationObject != null ? registration.WorkstationObject(stationContext) : stationContext.TargetObject,
                         JobOptions = registration.JobOptions,
                         Recipes = registration.Recipes,
-                        RecipeSource = registration.RecipeSource != null ? delegate { return registration.RecipeSource(stationContext); } : null,
+                        RecipeSource = registration.RecipeSource != null
+                            ? (Func<IList<CookingStationRecipe>>)delegate { return registration.RecipeSource(stationContext); }
+                            : null,
                         ConsumeIngredients = registration.ConsumeIngredients,
                         RefreshEveryFrame = registration.RefreshEveryFrame,
                         GetUnavailableReason = registration.GetUnavailableReason,

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ModAPI.Actors;
 
 namespace ShelteredAPI.Storage
 {
@@ -41,7 +42,6 @@ namespace ShelteredAPI.Storage
         public CharacterItemAssignment()
         {
             AssignmentId = string.Empty;
-            MemberKey = string.Empty;
             MemberDisplayName = string.Empty;
             SourceStoreId = string.Empty;
             SourceStoreName = string.Empty;
@@ -52,7 +52,7 @@ namespace ShelteredAPI.Storage
         }
 
         public string AssignmentId { get; set; }
-        public string MemberKey { get; set; }
+        public ActorId ActorId { get; set; }
         public string MemberDisplayName { get; set; }
         public string SourceStoreId { get; set; }
         public string SourceStoreName { get; set; }
@@ -67,7 +67,7 @@ namespace ShelteredAPI.Storage
             return new CharacterItemAssignment
             {
                 AssignmentId = AssignmentId,
-                MemberKey = MemberKey,
+                ActorId = ActorId == null ? null : new ActorId(ActorId.Kind, ActorId.LocalId, ActorId.Domain),
                 MemberDisplayName = MemberDisplayName,
                 SourceStoreId = SourceStoreId,
                 SourceStoreName = SourceStoreName,
@@ -86,6 +86,14 @@ namespace ShelteredAPI.Storage
     public interface ICharacterItemAssignmentService
     {
         CharacterItemAssignment Assign(
+            ActorId actorId,
+            IItemStore source,
+            string itemId,
+            int quantity,
+            CharacterItemAssignmentKind kind,
+            CharacterItemSlot slot);
+
+        CharacterItemAssignment Assign(
             FamilyMember member,
             IItemStore source,
             string itemId,
@@ -94,9 +102,13 @@ namespace ShelteredAPI.Storage
             CharacterItemSlot slot);
 
         bool Unassign(string assignmentId);
+        IList<CharacterItemAssignment> GetAssignments(ActorId actorId);
         IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+        IList<CharacterItemAssignment> GetAvailableAssignments(ActorId actorId);
         IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+        int GetAssignedCount(ActorId actorId, string itemId);
         int GetAssignedCount(FamilyMember member, string itemId);
+        int ReleaseAssignmentsForActor(ActorId actorId);
         int ReleaseAssignmentsForMember(FamilyMember member);
     }
 }

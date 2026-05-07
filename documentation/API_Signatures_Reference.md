@@ -807,7 +807,7 @@ public interface IReservableItemStore
 public sealed class CharacterItemAssignment
 {
     public string AssignmentId { get; set; }
-    public string MemberKey { get; set; }
+    public ActorId ActorId { get; set; }
     public string MemberDisplayName { get; set; }
     public string SourceStoreId { get; set; }
     public string SourceStoreName { get; set; }
@@ -820,22 +820,32 @@ public sealed class CharacterItemAssignment
 
 public interface ICharacterItemAssignmentService
 {
+    CharacterItemAssignment Assign(ActorId actorId, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
     CharacterItemAssignment Assign(FamilyMember member, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
     bool Unassign(string assignmentId);
+    IList<CharacterItemAssignment> GetAssignments(ActorId actorId);
     IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+    IList<CharacterItemAssignment> GetAvailableAssignments(ActorId actorId);
     IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+    int GetAssignedCount(ActorId actorId, string itemId);
     int GetAssignedCount(FamilyMember member, string itemId);
+    int ReleaseAssignmentsForActor(ActorId actorId);
     int ReleaseAssignmentsForMember(FamilyMember member);
 }
 
 public static class ShelteredCharacterItems
 {
     public static ICharacterItemAssignmentService Service { get; }
+    public static CharacterItemAssignment Assign(ActorId actorId, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
     public static CharacterItemAssignment Assign(FamilyMember member, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
     public static bool Unassign(string assignmentId);
+    public static IList<CharacterItemAssignment> GetAssignments(ActorId actorId);
     public static IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+    public static IList<CharacterItemAssignment> GetAvailableAssignments(ActorId actorId);
     public static IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+    public static int GetAssignedCount(ActorId actorId, string itemId);
     public static int GetAssignedCount(FamilyMember member, string itemId);
+    public static int ReleaseAssignmentsForActor(ActorId actorId);
     public static int ReleaseAssignmentsForMember(FamilyMember member);
 }
 
