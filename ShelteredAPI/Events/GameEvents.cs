@@ -6,6 +6,7 @@ using UnityEngine;
 using ModAPI.Harmony;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 
 
 using ShelteredAPI.Scenarios.Application.Authoring;

@@ -11,6 +11,7 @@ using ModAPI.Networking.Snapshots;
 using ShelteredAPI.Core;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Networking
 {

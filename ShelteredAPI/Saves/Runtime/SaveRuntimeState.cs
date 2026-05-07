@@ -1,10 +1,7 @@
 using System.Collections.Generic;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 
-
-using ShelteredAPI.Scenarios.Application.Authoring;
-namespace ShelteredAPI.Core
+namespace ShelteredAPI.Saves.Runtime
 {
     /// <summary>
     /// Internal coordinator for custom-save session state.

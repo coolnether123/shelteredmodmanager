@@ -4,6 +4,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 using UnityEngine;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Networking;

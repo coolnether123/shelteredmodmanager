@@ -3,6 +3,7 @@ using ModAPI.Core;
 using ModAPI.Harmony;
 using System;
 using UnityEngine;
+using ShelteredAPI.Saves.Runtime;
 
 using ShelteredAPI.UI.FieldManual.Tooltips;
 using ShelteredAPI.Scenarios.Application.Authoring;

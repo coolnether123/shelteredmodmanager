@@ -3,8 +3,9 @@ using System;
 using ModAPI.Core;
 using ModAPI.Harmony;
 using ShelteredAPI.Core;
-using ShelteredAPI.Scenarios.Application.Authoring;
-namespace ShelteredAPI.Saves{
+
+namespace ShelteredAPI.Saves.Runtime
+{
     [PatchPolicy(PatchDomain.SaveFlow, "SaveGlobalDataCustomSession",
         TargetBehavior = "Global-data save propagation into the active custom session",
         FailureMode = "Custom save sessions miss global-data updates or drift from manifest state.",
@@ -39,13 +40,10 @@ namespace ShelteredAPI.Saves{
 
                     // Overwrite the active custom save with the new data
                     SaveEntry active = SaveRuntimeState.ActiveCustomSave;
-                    string scenarioId = active != null && !string.IsNullOrEmpty(active.scenarioId)
-                        ? active.scenarioId
+                    string scenarioId = active != null
+                        ? SaveStorageRouter.NormalizeScenarioId(active.scenarioId)
                         : "Standard";
-                    ISaveApi saveApi = ExpandedVanillaSaves.IsStandardScenario(scenarioId)
-                        ? (ISaveApi)ExpandedVanillaSaves.Instance
-                        : ScenarioSaves.GetTrustedRegistry(scenarioId);
-                    var updatedEntry = saveApi.Overwrite(active.id, null, bytes);
+                    var updatedEntry = SaveStorageRouter.Overwrite(scenarioId, active.id, null, bytes);
                     if (updatedEntry != null)
                     {
                         SaveRuntimeState.ActiveCustomSave = updatedEntry;

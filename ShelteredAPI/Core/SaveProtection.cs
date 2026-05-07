@@ -10,6 +10,7 @@ using ModAPI.Harmony;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Paging;
+using ShelteredAPI.Saves.Runtime;
 
 
 using ShelteredAPI.Persistence;
