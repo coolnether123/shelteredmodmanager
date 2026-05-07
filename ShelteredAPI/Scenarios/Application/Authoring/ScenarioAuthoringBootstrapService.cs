@@ -194,6 +194,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             CloseActiveSession(reason ?? "Closed from authoring shell.", resumeGame);
         }
 
+        public void PrepareActiveSessionForVanillaShutdown(string reason)
+        {
+            ScenarioAuthoringSession active = GetActiveSession();
+            if (!IsEditingDraftSession(active))
+                return;
+
+            try
+            {
+                ScenarioValidationResult validation = _editorService.CommitChanges(active.ScenarioFilePath);
+                if (validation != null && validation.IsValid)
+                {
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Saved active draft before vanilla shutdown. draftId="
+                        + active.DraftId + ".");
+                }
+                else
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Active draft save before vanilla shutdown was blocked by validation.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Active draft save before vanilla shutdown failed: " + ex.Message);
+            }
+
+            CloseActiveSession(reason ?? "Vanilla Save & Exit confirmed.", true);
+        }
+
         public bool HasPendingDraftLaunch()
         {
             lock (_sync)

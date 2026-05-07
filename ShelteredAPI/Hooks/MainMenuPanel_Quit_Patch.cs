@@ -1,9 +1,11 @@
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
+using System;
 using UnityEngine;
 
 using ShelteredAPI.UI.FieldManual.Tooltips;
+using ShelteredAPI.Scenarios.Application.Authoring;
 namespace ShelteredAPI.Hooks
 {
     // =========================================================================================
@@ -42,12 +44,25 @@ namespace ShelteredAPI.Hooks
 
                 // Reset save-completion flag for new quit sequence
                 PlatformSaveProxy.ResetStatus();
+                PrepareScenarioAuthoringForShutdown();
                 ModRuntime.MarkSaveExit("IsQuitting set true");
 
                 // We no longer block vanilla logic, as requested.
                 // return false; 
             }
             return true;
+        }
+
+        private static void PrepareScenarioAuthoringForShutdown()
+        {
+            try
+            {
+                ScenarioAuthoringBootstrapService.Instance.PrepareActiveSessionForVanillaShutdown("Vanilla Save & Exit confirmed.");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ManagedShutdown] Scenario authoring shutdown preparation failed: " + ex.Message);
+            }
         }
 
         /// <summary>
