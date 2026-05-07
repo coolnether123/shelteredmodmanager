@@ -4,6 +4,8 @@ This guide covers the current `ShelteredAPI.Content` surface for item, recipe, l
 
 Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
+> Dev/API-preview warning: runtime stores and cooking stations are preview behavior in the current 1.3 line. Use them for mod-author testing, but expect small signature or behavior changes before this surface is declared stable.
+
 ## Assembly Rule
 
 - Always reference `ModAPI.dll`.
@@ -91,6 +93,64 @@ public class MyPlugin : IModPlugin
 }
 ```
 
+## 3.1 Storage And Cooking Preview Pattern
+
+Registering custom food content does not mean the item should be forced into vanilla freezer internals. `Obj_Freezer` is a vanilla object with fixed freezer fields, and ShelteredAPI intentionally avoids patching it to accept arbitrary custom item types.
+
+Use the runtime store and cooking APIs when custom food participates in object-backed storage or station workflows:
+
+```csharp
+using ShelteredAPI.Storage;
+using ShelteredAPI.Workstations;
+
+IItemStore fridgeStore = ShelteredStores.ForObject(
+    ownerId: "com.example.cooking",
+    targetObject: fridgeObject,
+    displayName: "Fridge Storage",
+    capacity: 24);
+
+ShelteredCooking.RegisterStation(new CookingStationRegistration
+{
+    OwnerId = "com.example.cooking",
+    ObjectType = ObjectManager.ObjectType.Stove,
+    InteractionId = "com.example.cooking.stove.cook",
+    InteractionText = "Cook",
+    CanOpen = context =>
+        ShelteredStores.FindNearestObject(
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position) != null,
+    IngredientStore = context =>
+        ShelteredStores.FindNearestObjectStore(
+            "com.example.cooking",
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position,
+            "Fridge Storage",
+            24),
+    OutputStore = context => ShelteredStores.ForInventory(),
+    JobOptions = new CookingStationJobOptions
+    {
+        JobType = "cook_food",
+        AnimationTrigger = "Rummage",
+        DurationSeconds = 3f
+    },
+    Recipes = new[]
+    {
+        new CookingStationRecipe
+        {
+            RecipeId = "com.example.cooking.meat_to_ration",
+            DisplayName = "Cook Ration",
+            OutputItemId = VanillaItems.Ration,
+            OutputCount = 1,
+            Ingredients = new[]
+            {
+                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
+            }
+        }
+    }
+});
+```
+
+In that flow, the freezer/fridge world object is only the anchor. Meat is consumed from the mod-owned object store, and rations are added through the global shelter inventory adapter. The full copy/paste flow is in [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md#minimal-fridge-backed-cooking-flow).
 ## 4. Item Registration Checklist
 
 Before calling `ShelteredContent.RegisterItem(...)`, make sure the item has:
@@ -182,6 +242,8 @@ Generated keys use the pattern:
    - second new family in the same game launch
    - save/load
    - storage UI
+   - object-attached storage UI
+   - cooking station UI and timed job completion
    - crafting UI
    - trading UI
 

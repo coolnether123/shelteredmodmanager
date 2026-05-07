@@ -1,4 +1,4 @@
-# ShelteredAPI Runtime UI, Stores, and Cooking Stations
+﻿# ShelteredAPI Runtime UI, Stores, and Cooking Stations
 
 This guide covers the supported path for mod-owned panels and object-linked item flows. Use these APIs when a mod needs a fridge, container, cooking UI, quest inventory, event inventory, or any workflow where cloning vanilla NGUI would otherwise be required.
 
@@ -104,6 +104,37 @@ IItemStore nearestFreezer = ShelteredStores.FindNearestFreezer(stove.transform.p
 ```
 
 Important: vanilla `Obj_Freezer` only supports `Meat` and `DesperateMeat`. The freezer adapter intentionally preserves that rule. Use a mod-owned store for a fridge with arbitrary item IDs.
+
+## Character Item Assignments
+
+Use `ShelteredCharacterItems` when a mod needs to tag existing stored items as associated with a survivor. This is an assignment/classification layer over `IItemStore`; it is not a separate physical inventory and does not move, delete, duplicate, or apply equipment effects.
+
+```csharp
+FamilyMember survivor = InteractionManager.Instance.GetSelectedFamilyMember();
+IItemStore inventory = ShelteredStores.ForInventory();
+
+CharacterItemAssignment meds = ShelteredCharacterItems.Assign(
+    member: survivor,
+    source: inventory,
+    itemId: "AntiRad",
+    quantity: 2,
+    kind: CharacterItemAssignmentKind.Medical,
+    slot: CharacterItemSlot.Medicine);
+```
+
+The item count remains backed by `inventory`. `Assign(...)` validates that the source store currently has enough unassigned quantity. If a compatible source exposes `GetAvailableCount(string itemId)`, assignment checks use that value so queued reservations are not treated as free stock.
+
+Query or release the metadata without mutating storage:
+
+```csharp
+IList<CharacterItemAssignment> all = ShelteredCharacterItems.GetAssignments(survivor);
+IList<CharacterItemAssignment> available = ShelteredCharacterItems.GetAvailableAssignments(survivor);
+int assignedMeds = ShelteredCharacterItems.GetAssignedCount(survivor, "AntiRad");
+
+ShelteredCharacterItems.Unassign(meds.AssignmentId);
+```
+
+Assignment metadata persists with ShelteredAPI save data. `Unassign(...)` and `ReleaseAssignmentsForMember(...)` only remove assignment records; they do not remove items from the backing store. Use this for "reserved for Alice", "carried by Bob", "equipped in main hand", or quest/medical/food classifications, while keeping global shelter storage as the source of truth.
 
 ## Container Panel
 

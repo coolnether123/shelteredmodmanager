@@ -1,4 +1,4 @@
-# ModAPI + ShelteredAPI v1.3 Beta.3 API Signatures Reference
+﻿# ModAPI + ShelteredAPI v1.3 Beta.3 API Signatures Reference
 
 This is the source-of-truth signature sheet for the current code in this repo. The 1.3 Beta.3 line is a breaking clean API line.
 
@@ -734,6 +734,8 @@ Task guide: [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_S
 
 ```csharp
 public enum ItemStoreKind { Unknown, Inventory, Freezer, Mod }
+public enum CharacterItemAssignmentKind { Assigned, Reserved, Equipped, Carried, Medical, Food, Tool, Quest }
+public enum CharacterItemSlot { None, MainHand, OffHand, Backpack, Medicine, Food, Tool }
 
 public interface IItemStore
 {
@@ -780,6 +782,41 @@ public sealed class ItemTransferResult
     public int Requested { get; }
     public int Moved { get; }
     public string ErrorMessage { get; }
+}
+
+public sealed class CharacterItemAssignment
+{
+    public string AssignmentId { get; set; }
+    public string MemberKey { get; set; }
+    public string MemberDisplayName { get; set; }
+    public string SourceStoreId { get; set; }
+    public string SourceStoreName { get; set; }
+    public ItemStoreKind SourceStoreKind { get; set; }
+    public string ItemId { get; set; }
+    public int Quantity { get; set; }
+    public CharacterItemAssignmentKind Kind { get; set; }
+    public CharacterItemSlot Slot { get; set; }
+}
+
+public interface ICharacterItemAssignmentService
+{
+    CharacterItemAssignment Assign(FamilyMember member, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
+    bool Unassign(string assignmentId);
+    IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+    IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+    int GetAssignedCount(FamilyMember member, string itemId);
+    int ReleaseAssignmentsForMember(FamilyMember member);
+}
+
+public static class ShelteredCharacterItems
+{
+    public static ICharacterItemAssignmentService Service { get; }
+    public static CharacterItemAssignment Assign(FamilyMember member, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
+    public static bool Unassign(string assignmentId);
+    public static IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+    public static IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+    public static int GetAssignedCount(FamilyMember member, string itemId);
+    public static int ReleaseAssignmentsForMember(FamilyMember member);
 }
 
 public static class ShelteredStores

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
@@ -10,6 +10,7 @@ using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
 using ShelteredAPI.Events;
 using ShelteredAPI.Input;
+using ShelteredAPI.Storage;
 using ShelteredAPI.Scenarios;
 using UnityEngine;
 
@@ -109,6 +110,8 @@ namespace ShelteredAPI.Core
             RegisterApi(ShelteredApiAliasIds.ShelteredLocalization, content.Localization);
             RegisterApi(GameRuntimeApiIds.ShelteredRecipeLootMutation, content.RecipeLootMutation);
             RegisterApi(ShelteredApiAliasIds.ShelteredRecipeLootMutation, content.RecipeLootMutation);
+            ShelteredCharacterItems.EnsureRegistered();
+            RegisterApi(ShelteredApiAliasIds.CharacterItems, ShelteredCharacterItems.Service);
 
             IGameLifecycleSource lifecycleSource = new ShelteredGameLifecycleSource();
             RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);

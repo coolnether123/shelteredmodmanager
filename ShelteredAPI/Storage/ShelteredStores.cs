@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using ModAPI.Core;
@@ -110,6 +110,39 @@ namespace ShelteredAPI.Storage
         {
             Obj_Base target = FindNearestObject(ObjectManager.ObjectType.Freezer, position);
             return target as Obj_Freezer;
+        }
+
+        internal static bool TryResolveStore(string storeId, ItemStoreKind kind, out IItemStore store)
+        {
+            store = null;
+            if (string.IsNullOrEmpty(storeId))
+                return false;
+
+            if (string.Equals(storeId, "sheltered.inventory", StringComparison.OrdinalIgnoreCase))
+            {
+                store = ForInventory();
+                return true;
+            }
+
+            if (kind == ItemStoreKind.Freezer && storeId.StartsWith("sheltered.freezer.", StringComparison.OrdinalIgnoreCase))
+            {
+                int objectId;
+                string idText = storeId.Substring("sheltered.freezer.".Length);
+                if (int.TryParse(idText, out objectId) && ObjectManager.Instance != null)
+                {
+                    Obj_Freezer freezer = ObjectManager.Instance.GetObjectWithId(objectId) as Obj_Freezer;
+                    if (freezer != null)
+                    {
+                        store = ForFreezer(freezer);
+                        return true;
+                    }
+                }
+            }
+
+            if (kind == ItemStoreKind.Mod)
+                return ModItemStoreRegistry.TryGet(storeId, out store);
+
+            return false;
         }
 
         public static ItemTransferResult Transfer(IItemStore source, IItemStore target, string itemId, int quantity)
@@ -675,6 +708,23 @@ namespace ShelteredAPI.Storage
                     if (state != null && !string.IsNullOrEmpty(state.StoreId))
                         Stores[state.StoreId] = state;
                 }
+            }
+        }
+
+        internal static bool TryGet(string storeId, out IItemStore store)
+        {
+            store = null;
+            if (string.IsNullOrEmpty(storeId))
+                return false;
+
+            lock (Sync)
+            {
+                ModItemStoreState state;
+                if (!Stores.TryGetValue(storeId, out state))
+                    return false;
+
+                store = new ModItemStore(state);
+                return true;
             }
         }
 

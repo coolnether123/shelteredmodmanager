@@ -494,6 +494,9 @@
     <Compile Include="UI\Runtime\RuntimeUiContracts.cs" />
     <Compile Include="UI\Runtime\ShelteredRuntimeUI.cs" />
     <Compile Include="Storage\ItemStoreContracts.cs" />
+    <Compile Include="Storage\CharacterItemAssignmentContracts.cs" />
+    <Compile Include="Storage\CharacterItemAssignments.cs" />
+    <Compile Include="Storage\ShelteredCharacterItems.cs" />
     <Compile Include="Storage\ShelteredStores.cs" />
     <Compile Include="Workstations\CookingWorkstationContracts.cs" />
     <Compile Include="Workstations\RuntimeTimedWorkJob.cs" />
