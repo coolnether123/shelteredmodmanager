@@ -9,6 +9,7 @@ namespace ModAPI.Networking.Tests
             List<TestCase> tests = new List<TestCase>();
             SaveResumeHookTests.Register(tests);
             CoreNetworkingExpansionTests.Register(tests);
+            EventSyncTests.Register(tests);
             SnapshotTransferTests.Register(tests);
             ReliabilityTests.Register(tests);
             AddressingTests.Register(tests);

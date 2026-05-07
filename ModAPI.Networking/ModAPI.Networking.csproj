@@ -70,6 +70,13 @@
     <Compile Include="Diagnostics\NetworkDiagnosticsSnapshot.cs" />
     <Compile Include="Diagnostics\NetworkPeerDiagnostics.cs" />
     <Compile Include="Diagnostics\NetworkPeerDiagnosticsSnapshot.cs" />
+    <Compile Include="Events\INetworkEventPayloadSerializer.cs" />
+    <Compile Include="Events\NetworkEventDispatcher.cs" />
+    <Compile Include="Events\NetworkEventEnvelope.cs" />
+    <Compile Include="Events\NetworkEventMessageTypes.cs" />
+    <Compile Include="Events\NetworkEventPhase.cs" />
+    <Compile Include="Events\NetworkEventReceivedEventArgs.cs" />
+    <Compile Include="Events\NetworkEventRegistry.cs" />
     <Compile Include="NetworkConfig.cs" />
     <Compile Include="NetworkDefaults.cs" />
     <Compile Include="Protocol\NetworkDiscoveryMessages.cs" />
