@@ -26,6 +26,7 @@ namespace ShelteredAPI.Networking
             _log = log;
             _registry = new NetworkEventRegistry();
             _registry.Register(new ShelteredNetworkGameplayEventSerializer());
+            _registry.Register(ShelteredNetworkGameplayEventSerializer.CreateLegacy());
             _dispatcher = new NetworkEventDispatcher(session);
             _dispatcher.EventReceived += OnEventReceived;
             _dispatcher.ParseFailed += OnParseFailed;

@@ -54,9 +54,23 @@ namespace ShelteredAPI.Bunkers
     public class BunkerDefinition
     {
         /// <summary>
-        /// Unique logical owner identifier. ID 0 is reserved for the primary local shelter.
+        /// Unique bunker owner identifier. ID 0 is reserved for the host/local shelter.
         /// </summary>
         public int Id;
+
+        /// <summary>
+        /// Alias for Id, used by multiplayer code where player IDs and bunker IDs are separate concerns.
+        /// </summary>
+        public int BunkerOwnerId
+        {
+            get { return Id; }
+            set { Id = value; }
+        }
+
+        /// <summary>
+        /// Network peer that owns this bunker during the active session.
+        /// </summary>
+        public byte PeerId;
 
         /// <summary>
         /// Geographical world position of the bunker entrance.
@@ -80,26 +94,33 @@ namespace ShelteredAPI.Bunkers
 
         /// <summary>Creates a bunker definition with default display and starter-house settings.</summary>
         public BunkerDefinition(int id, Vector2 position)
-            : this(id, position, string.Empty, true, true)
+            : this(id, position, string.Empty, true, true, 255)
         {
         }
 
         /// <summary>Creates a bunker definition with a display name.</summary>
         public BunkerDefinition(int id, Vector2 position, string displayName)
-            : this(id, position, displayName, true, true)
+            : this(id, position, displayName, true, true, 255)
         {
         }
 
         /// <summary>Creates a bunker definition with display and starter-house settings.</summary>
         public BunkerDefinition(int id, Vector2 position, string displayName, bool enableStarterHouses)
-            : this(id, position, displayName, enableStarterHouses, true)
+            : this(id, position, displayName, enableStarterHouses, true, 255)
         {
         }
 
         /// <summary>Creates a bunker definition with all public state supplied explicitly.</summary>
         public BunkerDefinition(int id, Vector2 position, string displayName, bool enableStarterHouses, bool isOnline)
+            : this(id, position, displayName, enableStarterHouses, isOnline, 255)
+        {
+        }
+
+        /// <summary>Creates a bunker definition with all public state supplied explicitly.</summary>
+        public BunkerDefinition(int id, Vector2 position, string displayName, bool enableStarterHouses, bool isOnline, byte peerId)
         {
             Id = id;
+            PeerId = peerId;
             Position = position;
             DisplayName = displayName;
             EnableStarterHouses = enableStarterHouses;
@@ -109,8 +130,41 @@ namespace ShelteredAPI.Bunkers
         /// <summary>Creates a detached copy suitable for persistence snapshots.</summary>
         public BunkerDefinition Clone()
         {
-            return new BunkerDefinition(Id, Position, DisplayName, EnableStarterHouses, IsOnline);
+            return new BunkerDefinition(Id, Position, DisplayName, EnableStarterHouses, IsOnline, PeerId);
         }
+    }
+
+    /// <summary>
+    /// Map-facing bunker snapshot for UI and expedition-map consumers.
+    /// </summary>
+    [Serializable]
+    public sealed class BunkerMapRecord
+    {
+        public BunkerMapRecord(
+            byte peerId,
+            int bunkerOwnerId,
+            string displayName,
+            Vector2 worldPosition,
+            Vector3 mapPixels,
+            ExpeditionMap.GridRef gridRef,
+            bool isOnline)
+        {
+            PeerId = peerId;
+            BunkerOwnerId = bunkerOwnerId;
+            DisplayName = displayName ?? string.Empty;
+            WorldPosition = worldPosition;
+            MapPixels = mapPixels;
+            GridRef = gridRef;
+            IsOnline = isOnline;
+        }
+
+        public readonly byte PeerId;
+        public readonly int BunkerOwnerId;
+        public readonly string DisplayName;
+        public readonly Vector2 WorldPosition;
+        public readonly Vector3 MapPixels;
+        public readonly ExpeditionMap.GridRef GridRef;
+        public readonly bool IsOnline;
     }
 
     /// <summary>
@@ -142,11 +196,20 @@ namespace ShelteredAPI.Bunkers
         /// <summary>Gets all registered bunker definitions.</summary>
         IEnumerable<BunkerDefinition> GetAllBunkers();
 
+        /// <summary>Gets a map-facing bunker snapshot by owner ID, or null if none is registered.</summary>
+        BunkerMapRecord GetBunkerMapRecord(int id);
+
+        /// <summary>Gets map-facing snapshots for all registered bunkers.</summary>
+        IEnumerable<BunkerMapRecord> GetAllBunkerMapRecords();
+
         /// <summary>
         /// Creates or refreshes the bunker for the supplied logical owner ID.
         /// Placement strategy and safety spacing are handled by the service.
         /// </summary>
         BunkerDefinition RequestNewBunker(int userId, string displayName = "", bool enableStarterHouses = true, bool force = false);
+
+        /// <summary>Creates or refreshes a bunker from an authoritative definition.</summary>
+        void RegisterBunker(BunkerDefinition bunker);
 
         /// <summary>Creates or moves a bunker to the supplied world position.</summary>
         void SetBunkerPosition(int id, Vector2 position);

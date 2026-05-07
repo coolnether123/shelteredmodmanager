@@ -445,8 +445,9 @@ namespace ShelteredAPI.Networking
                         continue;
 
                     assignments.Add(new ShelteredMultiplayerBunkerAssignmentRecord(
-                        NetworkDefaults.UnassignedPeerId,
+                        ToNetworkPeerId(bunker.PeerId),
                         bunker.PlayerId,
+                        bunker.BunkerOwnerId,
                         new Vector2(bunker.X, bunker.Y),
                         bunker.DisplayName,
                         bunker.IsOnline));
@@ -477,7 +478,9 @@ namespace ShelteredAPI.Networking
                 for (int i = 0; i < bunkers.Length; i++)
                 {
                     ShelteredMultiplayerBunkerAssignmentRecord bunker = bunkers[i];
+                    writer.WriteInt32(bunker != null ? bunker.NetworkPeerId : NetworkDefaults.UnassignedPeerId);
                     writer.WriteInt32(bunker != null ? bunker.PlayerId : 0);
+                    writer.WriteInt32(bunker != null ? bunker.BunkerOwnerId : 0);
                     writer.WriteInt32(bunker != null ? ToNetworkCoordinate(bunker.Position.x) : 0);
                     writer.WriteInt32(bunker != null ? ToNetworkCoordinate(bunker.Position.y) : 0);
                     writer.WriteString(bunker != null ? bunker.DisplayName : string.Empty);
@@ -511,13 +514,15 @@ namespace ShelteredAPI.Networking
 
                 for (int i = 0; i < bunkerCount; i++)
                 {
-                    int id = reader.ReadInt32();
+                    int peerId = reader.ReadInt32();
+                    int playerId = reader.ReadInt32();
+                    int bunkerOwnerId = reader.ReadInt32();
                     float x = FromNetworkCoordinate(reader.ReadInt32());
                     float y = FromNetworkCoordinate(reader.ReadInt32());
                     string displayName = reader.ReadString();
                     bool starterHouses = reader.ReadBool();
                     bool isOnline = reader.ReadBool();
-                    message.Bunkers.Add(new BunkerSetupRecord(id, x, y, displayName, starterHouses, isOnline));
+                    message.Bunkers.Add(new BunkerSetupRecord(peerId, playerId, bunkerOwnerId, x, y, displayName, starterHouses, isOnline));
                 }
 
                 return message;
@@ -532,13 +537,22 @@ namespace ShelteredAPI.Networking
             {
                 return value / 1000f;
             }
+
+            private static byte ToNetworkPeerId(int value)
+            {
+                return value >= 0 && value <= byte.MaxValue
+                    ? (byte)value
+                    : NetworkDefaults.UnassignedPeerId;
+            }
         }
 
         private sealed class BunkerSetupRecord
         {
-            public BunkerSetupRecord(int playerId, float x, float y, string displayName, bool enableStarterHouses, bool isOnline)
+            public BunkerSetupRecord(int peerId, int playerId, int bunkerOwnerId, float x, float y, string displayName, bool enableStarterHouses, bool isOnline)
             {
+                PeerId = peerId;
                 PlayerId = playerId;
+                BunkerOwnerId = bunkerOwnerId;
                 X = x;
                 Y = y;
                 DisplayName = displayName ?? string.Empty;
@@ -546,7 +560,9 @@ namespace ShelteredAPI.Networking
                 IsOnline = isOnline;
             }
 
+            public readonly int PeerId;
             public readonly int PlayerId;
+            public readonly int BunkerOwnerId;
             public readonly float X;
             public readonly float Y;
             public readonly string DisplayName;

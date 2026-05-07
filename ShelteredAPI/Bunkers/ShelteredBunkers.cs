@@ -44,6 +44,18 @@ namespace ShelteredAPI.Bunkers
             return Service.GetAllBunkers();
         }
 
+        /// <inheritdoc cref="IShelteredBunkerService.GetBunkerMapRecord" />
+        public static BunkerMapRecord GetBunkerMapRecord(int id)
+        {
+            return Service.GetBunkerMapRecord(id);
+        }
+
+        /// <inheritdoc cref="IShelteredBunkerService.GetAllBunkerMapRecords" />
+        public static IEnumerable<BunkerMapRecord> GetAllBunkerMapRecords()
+        {
+            return Service.GetAllBunkerMapRecords();
+        }
+
         /// <summary>Creates or returns a bunker for the supplied owner ID.</summary>
         public static BunkerDefinition RequestNewBunker(int userId)
         {
@@ -66,6 +78,12 @@ namespace ShelteredAPI.Bunkers
         public static BunkerDefinition RequestNewBunker(int userId, string displayName, bool enableStarterHouses, bool force)
         {
             return Service.RequestNewBunker(userId, displayName, enableStarterHouses, force);
+        }
+
+        /// <inheritdoc cref="IShelteredBunkerService.RegisterBunker" />
+        public static void RegisterBunker(BunkerDefinition bunker)
+        {
+            Service.RegisterBunker(bunker);
         }
 
         /// <inheritdoc cref="IShelteredBunkerService.SetBunkerPosition" />

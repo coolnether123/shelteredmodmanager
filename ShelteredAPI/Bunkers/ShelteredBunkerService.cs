@@ -59,6 +59,24 @@ namespace ShelteredAPI.Bunkers
             return _bunkers.Values;
         }
 
+        public BunkerMapRecord GetBunkerMapRecord(int id)
+        {
+            BunkerDefinition bunker = GetBunker(id);
+            return bunker != null ? CreateMapRecord(bunker) : null;
+        }
+
+        public IEnumerable<BunkerMapRecord> GetAllBunkerMapRecords()
+        {
+            List<BunkerMapRecord> records = new List<BunkerMapRecord>();
+            foreach (BunkerDefinition bunker in _bunkers.Values)
+            {
+                if (bunker != null)
+                    records.Add(CreateMapRecord(bunker));
+            }
+
+            return records;
+        }
+
         public BunkerDefinition RequestNewBunker(int userId, string displayName, bool enableStarterHouses, bool force)
         {
             BunkerDefinition existing;
@@ -76,6 +94,19 @@ namespace ShelteredAPI.Bunkers
             LogPosition(userId, newPosition);
             NotifyChanged(bunker);
             return bunker;
+        }
+
+        public void RegisterBunker(BunkerDefinition bunker)
+        {
+            if (bunker == null)
+                return;
+
+            BunkerDefinition clone = bunker.Clone();
+            clone.DisplayName = ResolveDisplayName(clone.Id, clone.DisplayName);
+            _bunkers[clone.Id] = clone;
+
+            LogPosition(clone.Id, clone.Position);
+            NotifyChanged(clone);
         }
 
         public void SetBunkerPosition(int id, Vector2 position)
@@ -291,6 +322,20 @@ namespace ShelteredAPI.Bunkers
                 return bunker;
 
             return null;
+        }
+
+        private static BunkerMapRecord CreateMapRecord(BunkerDefinition bunker)
+        {
+            Vector3 mapPixels = WorldToMapPixels(bunker.Position);
+            ExpeditionMap.GridRef gridRef = WorldToGridRef(bunker.Position);
+            return new BunkerMapRecord(
+                bunker.PeerId,
+                bunker.Id,
+                bunker.DisplayName,
+                bunker.Position,
+                mapPixels,
+                gridRef,
+                bunker.IsOnline);
         }
 
         private static Vector3 WorldToMapPixels(Vector2 worldPosition)
