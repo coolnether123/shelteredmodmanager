@@ -35,15 +35,23 @@ var panelOptions = new RuntimePanelOptions
 {
     Width = 700,
     Height = 540,
-    Icon = ShelteredContent.AdvancedAssets.LoadSprite(
+    HeaderIcon = ShelteredContent.AdvancedAssets.LoadSprite(
         typeof(MyPlugin).Assembly,
         "Assets/Icons/fridge.png"),
+    ShowHeaderIcon = true,
+    Subtitle = "Shared cold storage",
     Style = new RuntimePanelStyle
     {
         HeaderColor = new Color(0.10f, 0.16f, 0.18f, 1f),
         ButtonColor = new Color(0.18f, 0.24f, 0.26f, 1f)
     }
 };
+```
+
+For a lightweight text icon, opt in without loading a sprite:
+
+```csharp
+new RuntimePanelOptions { HeaderIconText = "🍳", ShowHeaderIcon = true }
 ```
 
 Unset values use ShelteredAPI defaults.
