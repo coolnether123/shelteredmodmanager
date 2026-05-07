@@ -85,6 +85,43 @@ namespace ModAPI.Core
         }
 
         /// <summary>
+        /// Initialize the master seed and notify seed-scoped systems that their streams should refresh.
+        /// </summary>
+        public static void InitializeAndNotify(int seed, RandomnessMode mode = RandomnessMode.XorShift)
+        {
+            Initialize(seed, mode);
+            NotifySeedChanged();
+        }
+
+        /// <summary>
+        /// Derives a stable non-zero master seed from text supplied by a higher-level runtime.
+        /// </summary>
+        public static int DeriveStableSeed(string seedText)
+        {
+            unchecked
+            {
+                string value = string.IsNullOrEmpty(seedText) ? "default" : seedText;
+                uint hash = 2166136261u;
+                for (int i = 0; i < value.Length; i++)
+                {
+                    hash ^= value[i];
+                    hash *= 16777619u;
+                }
+
+                int seed = (int)hash;
+                return seed == 0 ? 1 : seed;
+            }
+        }
+
+        /// <summary>
+        /// Initializes and notifies using a deterministic seed derived from stable text.
+        /// </summary>
+        public static void InitializeStableAndNotify(string seedText, RandomnessMode mode = RandomnessMode.XorShift)
+        {
+            InitializeAndNotify(DeriveStableSeed(seedText), mode);
+        }
+
+        /// <summary>
         /// Current master seed used by the default random stream.
         /// </summary>
         public static int CurrentSeed { get { return _seed; } }

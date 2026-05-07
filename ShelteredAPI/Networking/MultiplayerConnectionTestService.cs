@@ -25,7 +25,6 @@ namespace ShelteredAPI.Networking
         private const int TestHandshakeTimeoutMilliseconds = 10000;
         private const int TestDiscoveryTimeoutMilliseconds = 1500;
         private const string ApplicationId = "ShelteredAPI.MultiplayerTest";
-        private const string SessionId = "sheltered-direct-ip-test";
         private const string LogSourcePrefix = "ShelteredAPI.MultiplayerTest";
 
         private readonly object _sync = new object();
@@ -35,6 +34,7 @@ namespace ShelteredAPI.Networking
 
         private NetworkSession _session;
         private ShelteredMultiplayerSaveSyncService _saveSync;
+        private ShelteredMultiplayerSetupService _setup;
         private string _lastError = string.Empty;
         private string _localEndpointText = "Not bound";
         private string _lastLocalEndpointKey = string.Empty;
@@ -42,6 +42,12 @@ namespace ShelteredAPI.Networking
         private int _cachedLanPort = -1;
         private bool _discovering;
         private bool _disposed;
+        private static MultiplayerConnectionTestService _active;
+
+        public MultiplayerConnectionTestService()
+        {
+            _active = this;
+        }
 
         public string Status
         {
@@ -106,6 +112,16 @@ namespace ShelteredAPI.Networking
             get { return _saveSync != null ? _saveSync.LastError : string.Empty; }
         }
 
+        public string SetupStatus
+        {
+            get { return _setup != null ? _setup.Status : "inactive"; }
+        }
+
+        public string SetupLastError
+        {
+            get { return _setup != null ? _setup.LastError : string.Empty; }
+        }
+
         public bool IsDiscovering
         {
             get
@@ -152,7 +168,7 @@ namespace ShelteredAPI.Networking
                 NetworkConfig config = CreateConfig(port);
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
-                AttachSaveSync(_session);
+                EnsureSetupService(_session);
                 _session.StartHost(CreateOptions("Host"));
                 ShelteredMultiplayer.ActivateHost(NetworkDefaults.HostPeerId, _session.SessionId, 20);
                 RefreshLocalEndpoint();
@@ -185,7 +201,7 @@ namespace ShelteredAPI.Networking
                 NetworkConfig config = CreateConfig(DefaultPort);
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
-                AttachSaveSync(_session);
+                EnsureSetupService(_session);
                 _session.Join(endpoint, CreateOptions("Client"));
                 RefreshLocalEndpoint();
                 AddInfo("Client", "Connecting to " + endpoint + ". Local endpoint: " + _localEndpointText + ".");
@@ -207,6 +223,28 @@ namespace ShelteredAPI.Networking
             ClearLastError();
         }
 
+        public void BeginSetup()
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Host)
+            {
+                SetLastError("Only the host can begin setup.");
+                AddWarning("Setup", "Begin setup requested without an active host session.");
+                return;
+            }
+
+            EnsureSetupService(_session);
+            _setup.BeginHostSetup(0);
+        }
+
+        public static void NotifyHostNewGameSlotChosen(int absoluteSlot)
+        {
+            MultiplayerConnectionTestService active = _active;
+            if (active == null)
+                return;
+
+            active.BeginSetupFromSaveFlow(absoluteSlot);
+        }
+
         public void Update()
         {
             if (_disposed)
@@ -221,6 +259,8 @@ namespace ShelteredAPI.Networking
                 session.Update();
                 if (_saveSync != null)
                     _saveSync.Update();
+                if (_setup != null)
+                    _setup.Update();
                 RefreshLocalEndpoint();
             }
             catch (Exception ex)
@@ -377,6 +417,8 @@ namespace ShelteredAPI.Networking
                 return;
 
             StopSessionOnly("Runtime disposed.");
+            if (ReferenceEquals(_active, this))
+                _active = null;
             _disposed = true;
         }
 
@@ -396,7 +438,6 @@ namespace ShelteredAPI.Networking
         {
             NetworkSessionOptions options = NetworkSessionOptions.CreateDefault();
             options.ApplicationId = ApplicationId;
-            options.SessionId = SessionId;
             options.DisplayName = CreateDisplayName(role);
             options.MaxPeers = NetworkDefaults.DefaultMaxPeers;
             return options;
@@ -428,12 +469,12 @@ namespace ShelteredAPI.Networking
             session.TransportReconnected += OnTransportReconnected;
         }
 
-        private void AttachSaveSync(NetworkSession session)
+        private void EnsureSetupService(NetworkSession session)
         {
-            if (_saveSync != null)
-                _saveSync.Dispose();
+            if (_setup != null)
+                return;
 
-            _saveSync = new ShelteredMultiplayerSaveSyncService(session, AddLog);
+            _setup = new ShelteredMultiplayerSetupService(session, AddLog);
         }
 
         private void DetachEvents(NetworkSession session)
@@ -456,6 +497,11 @@ namespace ShelteredAPI.Networking
                 _saveSync.HandleLocalSessionEnding(reason);
                 _saveSync.Dispose();
                 _saveSync = null;
+            }
+            if (_setup != null)
+            {
+                _setup.Dispose();
+                _setup = null;
             }
             _localEndpointText = "Not bound";
             _lastLocalEndpointKey = string.Empty;
@@ -488,7 +534,6 @@ namespace ShelteredAPI.Networking
                 NetworkDiscoveryClient client = new NetworkDiscoveryClient(config);
                 NetworkDiscoveryOptions options = NetworkDiscoveryOptions.CreateDefault();
                 options.ApplicationId = ApplicationId;
-                options.SessionId = SessionId;
                 options.Port = port;
                 options.TimeoutMilliseconds = config.DiscoveryTimeoutMilliseconds;
 
@@ -585,8 +630,13 @@ namespace ShelteredAPI.Networking
             NetworkPeer peer = e != null ? e.Peer : null;
             if (_saveSync != null)
                 _saveSync.HandlePeerConnected(peer);
+            if (_setup != null)
+                _setup.HandlePeerConnected(peer);
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
+            {
                 ShelteredMultiplayer.ActivateClient(_session.LocalPeerId, _session.SessionId, 20);
+                EnsureSetupService(_session);
+            }
             AddInfo(GetComponentName(), "Peer connected: " + FormatPeerDetails(peer));
         }
 
@@ -595,6 +645,8 @@ namespace ShelteredAPI.Networking
             string message = e != null ? e.Message : string.Empty;
             if (_saveSync != null)
                 _saveSync.HandlePeerDisconnected(e != null ? e.Peer : null);
+            if (_setup != null)
+                _setup.HandlePeerDisconnected(e != null ? e.Peer : null);
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
                 ShelteredMultiplayer.Deactivate(string.IsNullOrEmpty(message) ? "peer-disconnected" : message);
             AddWarning(GetComponentName(), "Peer disconnected: " + FormatPeerDetails(e != null ? e.Peer : null)
@@ -653,6 +705,8 @@ namespace ShelteredAPI.Networking
                 return;
 
             if (_saveSync != null && _saveSync.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
+                return;
+            if (_setup != null && _setup.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
                 return;
 
             if (e.MessageType != TestMessageType)
@@ -779,6 +833,15 @@ namespace ShelteredAPI.Networking
             {
                 _lastError = message ?? string.Empty;
             }
+        }
+
+        private void BeginSetupFromSaveFlow(int absoluteSlot)
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Host)
+                return;
+
+            EnsureSetupService(_session);
+            _setup.BeginHostSetup(absoluteSlot);
         }
 
         private void ClearLastError()

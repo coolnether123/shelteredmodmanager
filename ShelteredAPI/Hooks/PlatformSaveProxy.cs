@@ -149,7 +149,7 @@ namespace ShelteredAPI.Hooks
 
                     // Regular log: Save complete
                     MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"}, scenario: {entry?.scenarioId ?? target.scenarioId ?? "unknown"})");
-                    Events.RaiseAfterSave(entry);
+                    ShelteredAPI.Saves.Events.RaiseAfterSave(entry);
                     return true; // We handled it
                 }
 
@@ -181,7 +181,7 @@ namespace ShelteredAPI.Hooks
                     
                     // Regular log: Save complete
                     MMLog.WriteInfo($"Save finished {slotName} (custom slot: {result.id}, scenario: {result.scenarioId}, absoluteSlot: {result.absoluteSlot})");
-                    Events.RaiseAfterSave(result);
+                    ShelteredAPI.Saves.Events.RaiseAfterSave(result);
                     return true; // We handled it
                 }
 
@@ -230,7 +230,7 @@ namespace ShelteredAPI.Hooks
                 };
             }
 
-            Events.RaiseAfterSave(entry);
+            ShelteredAPI.Saves.Events.RaiseAfterSave(entry);
         }
 
         private static int SaveTypeToVanillaSlot(SaveManager.SaveType type)

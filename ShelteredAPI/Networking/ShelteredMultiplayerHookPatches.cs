@@ -81,8 +81,9 @@ namespace ShelteredAPI.Networking
         {
             try
             {
-                if (ShelteredMultiplayerHookService.Instance.IsMultiplayerActive)
-                    __result = false;
+                ShelteredMultiplayerHookService hooks = ShelteredMultiplayerHookService.Instance;
+                if (hooks.IsMultiplayerActive)
+                    __result = hooks.IsWorldStartBlocked;
             }
             catch (Exception ex)
             {

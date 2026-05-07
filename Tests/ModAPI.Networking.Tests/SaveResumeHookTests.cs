@@ -10,9 +10,52 @@ namespace ModAPI.Networking.Tests
     {
         public static void Register(List<TestCase> tests)
         {
+            tests.Add(new TestCase("Host-authored session id is adopted by clients", HostAuthoredSessionIdIsAdoptedByClients));
             tests.Add(new TestCase("Reconnect tokens and stable peer ids propagate", ReconnectTokensPropagate));
             tests.Add(new TestCase("Session nonce is host-authored and validated", SessionNonceIsHostAuthoredAndValidated));
             tests.Add(new TestCase("Transport disconnect and reconnect hooks fire", TransportLifecycleHooksFire));
+        }
+
+        private static void HostAuthoredSessionIdIsAdoptedByClients()
+        {
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                host = new NetworkSession(NetworkTestUtilities.CreateLoopbackConfig());
+                client = new NetworkSession(NetworkTestUtilities.CreateLoopbackConfig());
+
+                NetworkSessionOptions hostOptions = NetworkTestUtilities.CreateOptions("ModAPI.Networking.Tests");
+                hostOptions.SessionId = string.Empty;
+                NetworkSessionOptions clientOptions = NetworkTestUtilities.CreateOptions("ModAPI.Networking.Tests");
+                clientOptions.SessionId = string.Empty;
+
+                host.StartHost(hostOptions);
+                TestAssert.True(host.SessionId.Length > 0, "Host should create a non-empty session id.");
+
+                client.Join(new IPEndPoint(IPAddress.Loopback, host.LocalEndPoint.Port), clientOptions);
+                NetworkTestUtilities.PumpUntil(host, client, delegate
+                {
+                    return client.State == NetworkSessionState.Connected && host.GetPeers().Length == 1;
+                }, "Client did not connect to host-authored session id.");
+
+                TestAssert.Equal(host.SessionId, client.SessionId, "Client should adopt host session id when it joined without one.");
+                TestAssert.Equal(host.SessionId, client.GetPeers()[0].SessionId, "Client should store the host session id on the host peer.");
+                TestAssert.Equal(host.SessionId, host.GetPeers()[0].SessionId, "Host should store its session id on connected peers.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
+
+            NetworkSessionOptions mismatchHostOptions = NetworkTestUtilities.CreateOptions("ModAPI.Networking.Tests");
+            mismatchHostOptions.SessionId = "expected-session";
+            NetworkSessionOptions mismatchClientOptions = NetworkTestUtilities.CreateOptions("ModAPI.Networking.Tests");
+            mismatchClientOptions.SessionId = "wrong-session";
+            RunRejectedJoin(mismatchHostOptions, mismatchClientOptions, HandshakeRejectReason.SessionMismatch);
         }
 
         private static void ReconnectTokensPropagate()

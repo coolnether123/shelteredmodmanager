@@ -85,6 +85,14 @@ namespace ShelteredAPI.Networking
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
+            GUILayout.Label("Setup", GUILayout.Width(LabelWidth));
+            GUI.enabled = service.Mode == ModAPI.Networking.Sessions.NetworkSessionMode.Host && service.HasActiveSession;
+            if (GUILayout.Button("Begin Game Setup", GUILayout.Width(150f)))
+                service.BeginSetup();
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Message", GUILayout.Width(LabelWidth));
             _messageText = GUILayout.TextField(_messageText, GUILayout.MinWidth(260f));
             GUI.enabled = service.CanSendTestMessage;
@@ -105,12 +113,16 @@ namespace ShelteredAPI.Networking
             DrawValue("Peer ID", snapshot != null ? snapshot.LocalPeerId.ToString() : "unassigned");
             DrawValue("Config", service.ConfigurationSummary);
             DrawValue("Save sync", service.SaveSyncStatus);
+            DrawValue("Setup", service.SetupStatus);
 
             string lastError = service.LastError;
             DrawValue("Last error", string.IsNullOrEmpty(lastError) ? "none" : lastError);
             string saveSyncError = service.SaveSyncLastError;
             if (!string.IsNullOrEmpty(saveSyncError))
                 DrawValue("Sync error", saveSyncError);
+            string setupError = service.SetupLastError;
+            if (!string.IsNullOrEmpty(setupError))
+                DrawValue("Setup error", setupError);
 
             if (!service.CanSendTestMessage)
                 DrawHint("Send is disabled until a client is connected, or until a host has at least one connected peer.");

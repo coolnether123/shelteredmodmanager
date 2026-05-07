@@ -94,6 +94,8 @@ namespace ModAPI.Networking.Sessions
             }
 
             _session.LocalPeerId = accept.AssignedPeerId;
+            if (_session.Options.SessionId.Length == 0)
+                _session.Options.SessionId = accept.SessionId ?? string.Empty;
             if (_session.Options.SessionNonce.Length == 0)
                 _session.Options.SessionNonce = accept.SessionNonce ?? string.Empty;
             _hostPeer.DisplayName = accept.HostDisplayName ?? string.Empty;

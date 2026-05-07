@@ -88,6 +88,8 @@ namespace ModAPI.Networking.Sessions
             EnsureStopped();
             Options = options ?? NetworkSessionOptions.CreateDefault();
             Options.Validate();
+            if (Options.SessionId.Length == 0)
+                Options.SessionId = GenerateSessionId();
             if (Options.SessionNonce.Length == 0)
                 Options.SessionNonce = GenerateSessionNonce();
             ChangeState(NetworkSessionState.Starting);
@@ -934,6 +936,11 @@ namespace ModAPI.Networking.Sessions
         private static string GenerateSessionNonce()
         {
             return Guid.NewGuid().ToString("N");
+        }
+
+        private static string GenerateSessionId()
+        {
+            return "session-" + Guid.NewGuid().ToString("N");
         }
 
         private sealed class PendingOutboundMessage

@@ -24,13 +24,45 @@ namespace ShelteredAPI.Harmony
         public static bool ModeChosen = false;
         public static bool SlotChosen = false;
         public static bool MainMenuAdvanceIssued = false;
+        public static int PreferredNewSaveSlot = 0;
 
         public static void BeginNewSave()
+        {
+            BeginNewSave(0);
+        }
+
+        public static void BeginNewSave(int preferredAbsoluteSlot)
         {
             PendingNewSave = true;
             ModeChosen = false;
             SlotChosen = false;
             MainMenuAdvanceIssued = false;
+            PreferredNewSaveSlot = preferredAbsoluteSlot > 0 ? preferredAbsoluteSlot : 0;
+        }
+
+        public static bool TryAdvanceFromActiveMainMenu(string reason)
+        {
+            MainMenu mainMenu = UnityEngine.Object.FindObjectOfType<MainMenu>();
+            return TryAdvanceFromMainMenu(mainMenu, reason);
+        }
+
+        public static bool TryAdvanceFromMainMenu(MainMenu mainMenu, string reason)
+        {
+            if (!PendingNewSave || MainMenuAdvanceIssued || mainMenu == null)
+                return false;
+
+            var tweenField = typeof(MainMenu).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
+            var tween = (TweenAlpha)tweenField?.GetValue(mainMenu);
+            if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse)
+                return false;
+
+            if (!IsMainMenuInputEnabled(mainMenu))
+                return false;
+
+            MainMenuAdvanceIssued = true;
+            MMLog.WriteDebug("[AutoLoad] Main menu ready. Triggering Play for auto-new-save. Reason=" + (reason ?? string.Empty) + ".");
+            mainMenu.OnPlayButtonPressed();
+            return true;
         }
 
         public static void Reset()
@@ -39,6 +71,17 @@ namespace ShelteredAPI.Harmony
             ModeChosen = false;
             SlotChosen = false;
             MainMenuAdvanceIssued = false;
+            PreferredNewSaveSlot = 0;
+        }
+
+        private static bool IsMainMenuInputEnabled(MainMenu instance)
+        {
+            if (instance == null)
+                return false;
+
+            bool inputEnabled = Traverse.Create(instance).Field("m_inputEnabled").GetValue<bool>();
+            bool userSignedOut = Traverse.Create(instance).Field("m_userSignedOut").GetValue<bool>();
+            return inputEnabled && !userSignedOut;
         }
     }
 
@@ -273,30 +316,7 @@ namespace ShelteredAPI.Harmony
 
         public static void Postfix(MainMenu __instance)
         {
-            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.MainMenuAdvanceIssued)
-                return;
-
-            var tweenField = typeof(MainMenu).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
-            var tween = (TweenAlpha)tweenField?.GetValue(__instance);
-            if (tween == null || tween.direction == AnimationOrTween.Direction.Reverse)
-                return;
-
-            if (!IsMainMenuInputEnabled(__instance))
-                return;
-
-            AutoLoadFlow.MainMenuAdvanceIssued = true;
-            MMLog.WriteDebug("[AutoLoad] Main menu ready. Triggering Play for auto-new-save.");
-            __instance.OnPlayButtonPressed();
-        }
-
-        private static bool IsMainMenuInputEnabled(MainMenu instance)
-        {
-            if (instance == null)
-                return false;
-
-            bool inputEnabled = Traverse.Create(instance).Field("m_inputEnabled").GetValue<bool>();
-            bool userSignedOut = Traverse.Create(instance).Field("m_userSignedOut").GetValue<bool>();
-            return inputEnabled && !userSignedOut;
+            AutoLoadFlow.TryAdvanceFromMainMenu(__instance, "MainMenu.OnTweenFinished");
         }
     }
 
@@ -351,7 +371,7 @@ namespace ShelteredAPI.Harmony
 
                 AutoLoadFlow.SlotChosen = true;
 
-                int lowestSlot = FindLowestAvailableSurvivalSlot();
+                int lowestSlot = ResolveTargetSurvivalSlot();
                 int targetPage;
                 int targetIndex;
 
@@ -395,6 +415,26 @@ namespace ShelteredAPI.Harmony
                 AutoLoadFlow.Reset();
                 MMLog.WriteError("[AutoLoad] Failed choosing New Save slot: " + ex.Message);
             }
+        }
+
+        private static int ResolveTargetSurvivalSlot()
+        {
+            int preferred = AutoLoadFlow.PreferredNewSaveSlot;
+            if (preferred > 0 && IsSurvivalSlotAvailable(preferred))
+                return preferred;
+
+            return FindLowestAvailableSurvivalSlot();
+        }
+
+        private static bool IsSurvivalSlotAvailable(int slot)
+        {
+            if (slot <= 0)
+                return false;
+
+            if (slot <= 3)
+                return SaveRegistryCore.ReadVanillaSaveInfo(slot) == null;
+
+            return ExpandedVanillaSaves.GetBySlot(slot) == null;
         }
 
         private static int FindLowestAvailableSurvivalSlot()

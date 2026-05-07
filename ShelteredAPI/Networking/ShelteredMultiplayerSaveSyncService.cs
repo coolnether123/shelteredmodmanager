@@ -40,7 +40,7 @@ namespace ShelteredAPI.Networking
         {
             _session = session;
             _log = log;
-            Events.OnAfterSave += OnAfterSave;
+            ShelteredAPI.Saves.Events.OnAfterSave += OnAfterSave;
         }
 
         internal delegate void SaveSyncLogSink(MMLog.LogLevel level, string component, string message);
@@ -150,7 +150,7 @@ namespace ShelteredAPI.Networking
             if (_disposed)
                 return;
 
-            Events.OnAfterSave -= OnAfterSave;
+            ShelteredAPI.Saves.Events.OnAfterSave -= OnAfterSave;
             _assemblers.Clear();
             _outboundChunks.Clear();
             _disposed = true;

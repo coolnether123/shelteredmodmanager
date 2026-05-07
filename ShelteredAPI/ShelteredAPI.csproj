@@ -142,6 +142,8 @@
     <Compile Include="Networking\ShelteredMultiplayerHookPatches.cs" />
     <Compile Include="Networking\ShelteredMultiplayerHookService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerRuntimeDriver.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerSessionSeed.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerSetupService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestWindow.cs" />

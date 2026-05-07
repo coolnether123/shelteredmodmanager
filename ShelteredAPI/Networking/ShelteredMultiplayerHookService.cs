@@ -16,6 +16,8 @@ namespace ShelteredAPI.Networking
         private readonly object _sync = new object();
         private readonly Queue<Action> _mainThreadQueue = new Queue<Action>();
         private ShelteredMultiplayerSessionState _sessionState;
+        private string _appliedSeedSessionId = string.Empty;
+        private bool _worldStartBlocked;
         private int _mainThreadId;
         private bool _gameEventsAttached;
         private int _queueWarningCount;
@@ -107,6 +109,7 @@ namespace ShelteredAPI.Networking
 
         public void Deactivate(string reason)
         {
+            SetWorldStartBlocked(false, string.IsNullOrEmpty(reason) ? "deactivate" : reason);
             SetSessionState(CreateInactiveState(string.IsNullOrEmpty(reason) ? "inactive" : reason));
         }
 
@@ -168,6 +171,20 @@ namespace ShelteredAPI.Networking
             }
         }
 
+        internal void SetWorldStartBlocked(bool blocked, string reason)
+        {
+            lock (_sync)
+            {
+                if (_worldStartBlocked == blocked)
+                    return;
+
+                _worldStartBlocked = blocked;
+            }
+
+            MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                "World start block " + (blocked ? "enabled" : "disabled") + ". Reason=" + (reason ?? string.Empty) + ".");
+        }
+
         public string CaptureWorldSnapshot(string reason, object hostContext)
         {
             ShelteredMultiplayerSnapshotContext context = new ShelteredMultiplayerSnapshotContext(reason, hostContext);
@@ -195,7 +212,7 @@ namespace ShelteredAPI.Networking
         {
             ShelteredMultiplayerSessionState state = SessionState;
             if (state.IsMultiplayerActive)
-                ForceRealtimeTimescale();
+                ApplyTimescalePolicy();
 
             ShelteredMultiplayerHookContext context = CreateContext(
                 ShelteredMultiplayerHookKind.BeforeGameTimeUpdate,
@@ -203,6 +220,8 @@ namespace ShelteredAPI.Networking
                 gameTime);
 
             if (state.GameTimeMode == ShelteredMultiplayerGameTimeMode.RemoteAuthoritative)
+                context.CancelVanilla = true;
+            if (IsWorldStartBlocked)
                 context.CancelVanilla = true;
 
             SafeRaise(BeforeGameTimeUpdate, context, "BeforeGameTimeUpdate");
@@ -212,7 +231,7 @@ namespace ShelteredAPI.Networking
         internal void EndGameTimeUpdate(GameTime gameTime)
         {
             if (IsMultiplayerActive)
-                ForceRealtimeTimescale();
+                ApplyTimescalePolicy();
 
             SafeRaise(
                 AfterGameTimeUpdate,
@@ -234,7 +253,7 @@ namespace ShelteredAPI.Networking
             SafeRaise(PauseRequested, context, "PauseRequested");
 
             if (context.CancelVanilla)
-                ForceRealtimeTimescale();
+                ApplyTimescalePolicy();
 
             return !context.CancelVanilla;
         }
@@ -242,7 +261,7 @@ namespace ShelteredAPI.Networking
         internal void HandleResumeRequest(string source, object hostContext)
         {
             if (IsMultiplayerActive)
-                ForceRealtimeTimescale();
+                ApplyTimescalePolicy();
 
             SafeRaise(
                 ResumeRequested,
@@ -274,21 +293,25 @@ namespace ShelteredAPI.Networking
 
         private void OnBeforeLoadSceneContents(SaveData data)
         {
+            ApplySessionSeedForCurrentState("BeforeLoadSceneContents", true);
             SafeRaise(BeforeLoadSceneContents, CreateContext(ShelteredMultiplayerHookKind.BeforeLoadSceneContents, "SaveManager.BeforeLoadSceneContents", data), "BeforeLoadSceneContents");
         }
 
         private void OnAfterLoad(SaveData data)
         {
+            ApplySessionSeedForCurrentState("AfterLoad", true);
             SafeRaise(AfterLoad, CreateContext(ShelteredMultiplayerHookKind.AfterLoad, "SaveManager.AfterLoad", data), "AfterLoad");
         }
 
         private void OnSessionStarted()
         {
+            ApplySessionSeedForCurrentState("SessionStarted", true);
             SafeRaise(SessionStarted, CreateContext(ShelteredMultiplayerHookKind.SessionStarted, "GameTime.Awake", null), "SessionStarted");
         }
 
         private void OnNewGame()
         {
+            ApplySessionSeedForCurrentState("NewGame", true);
             SafeRaise(NewGame, CreateContext(ShelteredMultiplayerHookKind.NewGame, "GameTime.Awake", null), "NewGame");
         }
 
@@ -335,6 +358,39 @@ namespace ShelteredAPI.Networking
                 "Session state changed: mode=" + state.Mode + ", player=" + state.LocalPlayerId
                 + ", session='" + state.SessionId + "', tickRate=" + state.TickRate
                 + ", timeMode=" + state.GameTimeMode + ", status=" + state.Status + ".");
+
+            if (!state.IsMultiplayerActive)
+                _appliedSeedSessionId = string.Empty;
+
+            ApplySessionSeed(state, "SessionState", false);
+        }
+
+        private void ApplySessionSeedForCurrentState(string reason, bool force)
+        {
+            ApplySessionSeed(SessionState, reason, force);
+        }
+
+        private void ApplySessionSeed(ShelteredMultiplayerSessionState state, string reason, bool force)
+        {
+            if (state == null || !state.IsMultiplayerActive || string.IsNullOrEmpty(state.SessionId))
+                return;
+
+            if (!force && string.Equals(_appliedSeedSessionId, state.SessionId, StringComparison.Ordinal))
+                return;
+
+            int seed;
+            string error;
+            if (ShelteredMultiplayerSessionSeed.TryApply(state.SessionId, out seed, out error))
+            {
+                _appliedSeedSessionId = state.SessionId;
+                MMLog.WriteWithSource(MMLog.LogLevel.Debug, MMLog.LogCategory.Network, LogSource,
+                    "Session seed applied for " + reason + ". Seed=" + seed + ".");
+            }
+            else
+            {
+                MMLog.WarnOnce("ShelteredMultiplayerHooks.SessionSeed." + reason,
+                    "Failed to apply multiplayer session seed: " + error);
+            }
         }
 
         private bool IsMainThread
@@ -343,6 +399,17 @@ namespace ShelteredAPI.Networking
             {
                 int id = _mainThreadId;
                 return id == 0 || Thread.CurrentThread.ManagedThreadId == id;
+            }
+        }
+
+        internal bool IsWorldStartBlocked
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _worldStartBlocked;
+                }
             }
         }
 
@@ -369,6 +436,18 @@ namespace ShelteredAPI.Networking
         {
             if (Math.Abs(Time.timeScale - 1f) > 0.001f)
                 Time.timeScale = 1f;
+        }
+
+        private void ApplyTimescalePolicy()
+        {
+            if (IsWorldStartBlocked)
+            {
+                if (Math.Abs(Time.timeScale) > 0.001f)
+                    Time.timeScale = 0f;
+                return;
+            }
+
+            ForceRealtimeTimescale();
         }
 
         private static void SafeRaise(Action<ShelteredMultiplayerHookContext> handler, ShelteredMultiplayerHookContext context, string name)

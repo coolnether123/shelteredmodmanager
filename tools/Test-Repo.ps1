@@ -91,7 +91,7 @@ Invoke-Step "Build ModAPI.Networking tests" {
 }
 
 Invoke-Step "Run ModAPI.Networking tests" {
-    & "Dist\Tests\ModAPI.Networking.Tests\ModAPI.Networking.Tests.exe"
+    & "Dist\SMM\bin\Tests\ModAPI.Networking.Tests\ModAPI.Networking.Tests.exe"
     if ($LASTEXITCODE -ne 0) {
         throw "Networking test executable failed."
     }

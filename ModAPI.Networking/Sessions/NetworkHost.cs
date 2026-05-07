@@ -184,7 +184,7 @@ namespace ModAPI.Networking.Sessions
                 return false;
             }
 
-            if (!MatchesOptional(options.SessionId, request.SessionId, false))
+            if (!MatchesOptional(options.SessionId, request.SessionId, true))
             {
                 reason = HandshakeRejectReason.SessionMismatch;
                 message = "Session id mismatch.";
@@ -220,7 +220,7 @@ namespace ModAPI.Networking.Sessions
         private void ApplyRequest(NetworkPeer peer, NetworkHandshakeRequest request)
         {
             peer.ApplicationId = Normalize(request.ApplicationId);
-            peer.SessionId = Normalize(request.SessionId);
+            peer.SessionId = Normalize(_session.Options.SessionId);
             peer.SessionNonce = Normalize(_session.Options.SessionNonce);
             peer.ContentSchemaHash = Normalize(request.ContentSchemaHash);
             peer.ModContentHash = Normalize(request.ModContentHash);
