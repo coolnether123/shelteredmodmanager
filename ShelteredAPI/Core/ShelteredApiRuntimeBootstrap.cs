@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
@@ -55,6 +55,7 @@ namespace ShelteredAPI.Core
                 ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplyDebugDeferred("ShelteredAPI runtime diagnostics enabled");
                 MeasureStartupPhase("ShelteredAPI ShelteredVanillaInputActions.EnsureRegistered", ShelteredVanillaInputActions.EnsureRegistered);
                 MeasureStartupPhase("ShelteredAPI ShelteredKeybindsProvider.EnsureLoaded", ShelteredKeybindsProvider.Instance.EnsureLoaded);
+                MeasureStartupPhase("ShelteredAPI ShelteredStores.EnsurePersistenceRegistered", ShelteredStores.EnsurePersistenceRegistered);
                 MeasureStartupPhase("ShelteredAPI ScrollInputService.RegisterSource", delegate
                 {
                     ScrollInputService.RegisterSource(UnityScrollInputSource.Instance);

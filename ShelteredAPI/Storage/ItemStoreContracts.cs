@@ -36,7 +36,6 @@ namespace ShelteredAPI.Storage
         public string Subtitle { get; set; }
         public ItemCategory Category { get; set; }
         public int Count { get; set; }
-        public object Tag { get; set; }
     }
 
     /// <summary>
@@ -94,6 +93,46 @@ namespace ShelteredAPI.Storage
     }
 
     /// <summary>
+    /// Result from reserving store contents for a later commit or cancellation.
+    /// </summary>
+    public sealed class ItemReservationResult
+    {
+        public bool Success { get; private set; }
+        public string ReservationId { get; private set; }
+        public string ItemId { get; private set; }
+        public int Requested { get; private set; }
+        public int Reserved { get; private set; }
+        public string OwnerToken { get; private set; }
+        public string ErrorMessage { get; private set; }
+
+        public static ItemReservationResult Ok(string reservationId, string itemId, int requested, int reserved, string ownerToken)
+        {
+            return new ItemReservationResult
+            {
+                Success = true,
+                ReservationId = reservationId,
+                ItemId = itemId,
+                Requested = requested,
+                Reserved = reserved,
+                OwnerToken = ownerToken
+            };
+        }
+
+        public static ItemReservationResult Failed(string itemId, int requested, string ownerToken, string error)
+        {
+            return new ItemReservationResult
+            {
+                Success = false,
+                ItemId = itemId,
+                Requested = requested,
+                Reserved = 0,
+                OwnerToken = ownerToken,
+                ErrorMessage = error
+            };
+        }
+    }
+
+    /// <summary>
     /// Minimal store interface for moving mod-facing item IDs without depending on vanilla manager internals.
     /// </summary>
     public interface IItemStore
@@ -111,5 +150,16 @@ namespace ShelteredAPI.Storage
         bool CanRemove(string itemId, int quantity);
         ItemTransferResult Add(string itemId, int quantity);
         ItemTransferResult Remove(string itemId, int quantity);
+    }
+
+    /// <summary>
+    /// Optional extension for stores that can hold items for a queued job before final consumption.
+    /// </summary>
+    public interface IReservableItemStore
+    {
+        ItemReservationResult Reserve(string itemId, int quantity, string ownerToken);
+        ItemTransferResult CommitReservation(string reservationId);
+        ItemTransferResult CancelReservation(string reservationId);
+        int GetAvailableCount(string itemId);
     }
 }

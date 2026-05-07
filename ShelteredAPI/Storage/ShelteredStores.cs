@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using ModAPI.Core;
@@ -15,6 +15,16 @@ namespace ShelteredAPI.Storage
     /// </summary>
     public static class ShelteredStores
     {
+        static ShelteredStores()
+        {
+            EnsurePersistenceRegistered();
+        }
+
+        internal static void EnsurePersistenceRegistered()
+        {
+            ModItemStorePersistence.EnsureRegistered();
+        }
+
         public static IItemStore ForInventory()
         {
             return new InventoryItemStore();
@@ -158,7 +168,7 @@ namespace ShelteredAPI.Storage
             if (!source.CanRemove(itemId, quantity))
                 return ItemTransferResult.Failed(itemId, quantity, "Source store does not contain enough items");
             if (!target.CanAdd(itemId, quantity))
-                return ItemTransferResult.Failed(itemId, quantity, "Target store cannot accept the requested items");
+                return ItemTransferResult.Failed(itemId, quantity, GetCannotAddMessage(target, itemId));
 
             ItemTransferResult removed = source.Remove(itemId, quantity);
             if (!removed.Success)
@@ -168,12 +178,8 @@ namespace ShelteredAPI.Storage
             if (added.Success && added.Moved == removed.Moved)
                 return ItemTransferResult.Ok(itemId, quantity, added.Moved);
 
-            if (added.Moved > 0 && added.Moved < removed.Moved)
-                source.Add(itemId, removed.Moved - added.Moved);
-            else if (added.Moved <= 0)
-                source.Add(itemId, removed.Moved);
-
-            return ItemTransferResult.Failed(itemId, quantity, added.ErrorMessage ?? "Target store rejected transfer");
+            RollbackTransfer(source, target, itemId, removed.Moved, added);
+            return ItemTransferResult.Failed(itemId, quantity, added.ErrorMessage ?? "Target store rejected transfer and the transfer was rolled back");
         }
 
         public static IList<ContainerUiItem> ToContainerItems(IItemStore store)
@@ -194,8 +200,7 @@ namespace ShelteredAPI.Storage
 
                 items.Add(new ContainerUiItem(item.ItemId, item.DisplayName, item.Category, item.Count)
                 {
-                    Subtitle = item.Subtitle,
-                    Tag = item.Tag
+                    Subtitle = item.Subtitle
                 });
             }
 
@@ -265,6 +270,33 @@ namespace ShelteredAPI.Storage
                 return Transfer(transferStore, store, transfer.Item.ItemId, quantity);
 
             return Transfer(store, transferStore, transfer.Item.ItemId, quantity);
+        }
+
+        private static string GetCannotAddMessage(IItemStore target, string itemId)
+        {
+            FreezerItemStore freezer = target as FreezerItemStore;
+            if (freezer != null && !FreezerItemStore.IsFreezerItem(itemId))
+                return "Vanilla freezers only accept Meat and DesperateMeat. Use ShelteredStores.ForMod or ShelteredStores.ForObject for custom item IDs.";
+
+            return "Target store cannot accept the requested items";
+        }
+
+        private static void RollbackTransfer(IItemStore source, IItemStore target, string itemId, int removedCount, ItemTransferResult addResult)
+        {
+            if (source == null || target == null || string.IsNullOrEmpty(itemId) || removedCount <= 0)
+                return;
+
+            int targetMoved = addResult != null ? Math.Max(0, addResult.Moved) : 0;
+            if (targetMoved > 0)
+            {
+                ItemTransferResult targetRollback = target.Remove(itemId, targetMoved);
+                if (targetRollback.Success && targetRollback.Moved > 0)
+                    source.Add(itemId, targetRollback.Moved);
+            }
+
+            int notAdded = Math.Max(0, removedCount - targetMoved);
+            if (notAdded > 0)
+                source.Add(itemId, notAdded);
         }
     }
 
@@ -503,7 +535,7 @@ namespace ShelteredAPI.Storage
         {
             return _freezer != null
                 && quantity > 0
-                && (InventoryItemStore.IsMeat(itemId) || InventoryItemStore.IsDesperateMeat(itemId))
+                && IsFreezerItem(itemId)
                 && _freezer.TotalSpaceAvailable() >= quantity;
         }
 
@@ -526,7 +558,7 @@ namespace ShelteredAPI.Storage
             else if (InventoryItemStore.IsDesperateMeat(itemId))
                 moved = _freezer.AddDesperateMeat(quantity);
             else
-                return ItemTransferResult.Failed(itemId, quantity, "Freezers only accept meat and desperate meat");
+                return ItemTransferResult.Failed(itemId, quantity, "Vanilla freezers only accept Meat and DesperateMeat. Use a mod-owned store for custom item IDs.");
 
             return moved > 0 ? ItemTransferResult.Ok(itemId, quantity, moved) : ItemTransferResult.Failed(itemId, quantity, "Freezer has no available capacity");
         }
@@ -546,9 +578,14 @@ namespace ShelteredAPI.Storage
                 : _freezer.RemoveDesperateMeat(quantity);
             return ItemTransferResult.Ok(itemId, quantity, moved);
         }
+
+        internal static bool IsFreezerItem(string itemId)
+        {
+            return InventoryItemStore.IsMeat(itemId) || InventoryItemStore.IsDesperateMeat(itemId);
+        }
     }
 
-    internal sealed class ModItemStore : ItemStoreBase
+    internal sealed class ModItemStore : ItemStoreBase, IReservableItemStore
     {
         private readonly ModItemStoreState _state;
 
@@ -574,10 +611,14 @@ namespace ShelteredAPI.Storage
                 Used = Used
             };
 
-            foreach (KeyValuePair<string, int> pair in _state.Items)
+            lock (_state)
             {
-                if (pair.Value > 0)
-                    snapshot.Items.Add(CreateItem(pair.Key, pair.Value));
+                foreach (KeyValuePair<string, int> pair in _state.Items)
+                {
+                    int available = GetAvailableCount(pair.Key);
+                    if (available > 0)
+                        snapshot.Items.Add(CreateItem(pair.Key, available));
+                }
             }
 
             return snapshot;
@@ -585,20 +626,26 @@ namespace ShelteredAPI.Storage
 
         public override int GetCount(string itemId)
         {
-            int count;
-            return !string.IsNullOrEmpty(itemId) && _state.Items.TryGetValue(itemId, out count) ? count : 0;
+            lock (_state)
+            {
+                int count;
+                return !string.IsNullOrEmpty(itemId) && _state.Items.TryGetValue(itemId, out count) ? count : 0;
+            }
         }
 
         public override bool CanAdd(string itemId, int quantity)
         {
-            return !string.IsNullOrEmpty(itemId)
-                && quantity > 0
-                && (_state.Capacity <= 0 || _state.Used + quantity <= _state.Capacity);
+            lock (_state)
+            {
+                return !string.IsNullOrEmpty(itemId)
+                    && quantity > 0
+                    && (_state.Capacity <= 0 || _state.Used + quantity <= _state.Capacity);
+            }
         }
 
         public override bool CanRemove(string itemId, int quantity)
         {
-            return quantity > 0 && GetCount(itemId) >= quantity;
+            return quantity > 0 && GetAvailableCount(itemId) >= quantity;
         }
 
         public override ItemTransferResult Add(string itemId, int quantity)
@@ -606,12 +653,16 @@ namespace ShelteredAPI.Storage
             ItemTransferResult validation;
             if (!IsValidQuantity(itemId, quantity, out validation))
                 return validation;
-            if (!CanAdd(itemId, quantity))
-                return ItemTransferResult.Failed(itemId, quantity, "Store capacity would be exceeded");
 
-            int count = GetCount(itemId);
-            _state.Items[itemId] = count + quantity;
-            return ItemTransferResult.Ok(itemId, quantity, quantity);
+            lock (_state)
+            {
+                if (!CanAdd(itemId, quantity))
+                    return ItemTransferResult.Failed(itemId, quantity, "Store capacity would be exceeded");
+
+                int count = GetCount(itemId);
+                _state.Items[itemId] = count + quantity;
+                return ItemTransferResult.Ok(itemId, quantity, quantity);
+            }
         }
 
         public override ItemTransferResult Remove(string itemId, int quantity)
@@ -619,16 +670,104 @@ namespace ShelteredAPI.Storage
             ItemTransferResult validation;
             if (!IsValidQuantity(itemId, quantity, out validation))
                 return validation;
-            if (!CanRemove(itemId, quantity))
-                return ItemTransferResult.Failed(itemId, quantity, "Store does not contain enough items");
 
+            lock (_state)
+            {
+                if (!CanRemove(itemId, quantity))
+                    return ItemTransferResult.Failed(itemId, quantity, "Store does not contain enough unreserved items");
+
+                RemoveFromState(itemId, quantity);
+                return ItemTransferResult.Ok(itemId, quantity, quantity);
+            }
+        }
+
+        public ItemReservationResult Reserve(string itemId, int quantity, string ownerToken)
+        {
+            if (string.IsNullOrEmpty(ownerToken))
+                ownerToken = "anonymous";
+            if (string.IsNullOrEmpty(itemId))
+                return ItemReservationResult.Failed(itemId, quantity, ownerToken, "Item ID is required");
+            if (quantity <= 0)
+                return ItemReservationResult.Failed(itemId, quantity, ownerToken, "Quantity must be greater than zero");
+
+            lock (_state)
+            {
+                if (GetAvailableCount(itemId) < quantity)
+                    return ItemReservationResult.Failed(itemId, quantity, ownerToken, "Store does not contain enough unreserved items");
+
+                string reservationId = StoreId + ".reservation." + Guid.NewGuid().ToString("N");
+                _state.Reservations[reservationId] = new ModItemReservation
+                {
+                    ReservationId = reservationId,
+                    ItemId = itemId,
+                    Quantity = quantity,
+                    OwnerToken = ownerToken
+                };
+
+                return ItemReservationResult.Ok(reservationId, itemId, quantity, quantity, ownerToken);
+            }
+        }
+
+        public ItemTransferResult CommitReservation(string reservationId)
+        {
+            if (string.IsNullOrEmpty(reservationId))
+                return ItemTransferResult.Failed(null, 0, "Reservation ID is required");
+
+            lock (_state)
+            {
+                ModItemReservation reservation;
+                if (!_state.Reservations.TryGetValue(reservationId, out reservation))
+                    return ItemTransferResult.Failed(null, 0, "Reservation was not found");
+
+                if (GetCount(reservation.ItemId) < reservation.Quantity)
+                    return ItemTransferResult.Failed(reservation.ItemId, reservation.Quantity, "Reserved items are no longer available");
+
+                _state.Reservations.Remove(reservationId);
+                RemoveFromState(reservation.ItemId, reservation.Quantity);
+                return ItemTransferResult.Ok(reservation.ItemId, reservation.Quantity, reservation.Quantity);
+            }
+        }
+
+        public ItemTransferResult CancelReservation(string reservationId)
+        {
+            if (string.IsNullOrEmpty(reservationId))
+                return ItemTransferResult.Failed(null, 0, "Reservation ID is required");
+
+            lock (_state)
+            {
+                ModItemReservation reservation;
+                if (!_state.Reservations.TryGetValue(reservationId, out reservation))
+                    return ItemTransferResult.Failed(null, 0, "Reservation was not found");
+
+                _state.Reservations.Remove(reservationId);
+                return ItemTransferResult.Ok(reservation.ItemId, reservation.Quantity, 0);
+            }
+        }
+
+        public int GetAvailableCount(string itemId)
+        {
+            lock (_state)
+            {
+                return Math.Max(0, GetCount(itemId) - _state.GetReservedCount(itemId));
+            }
+        }
+
+        private void RemoveFromState(string itemId, int quantity)
+        {
             int count = GetCount(itemId) - quantity;
             if (count > 0)
                 _state.Items[itemId] = count;
             else
                 _state.Items.Remove(itemId);
-            return ItemTransferResult.Ok(itemId, quantity, quantity);
         }
+    }
+
+    internal sealed class ModItemReservation
+    {
+        public string ReservationId;
+        public string ItemId;
+        public int Quantity;
+        public string OwnerToken;
     }
 
     internal sealed class ModItemStoreState
@@ -638,6 +777,7 @@ namespace ShelteredAPI.Storage
         public string DisplayName;
         public int Capacity;
         public readonly Dictionary<string, int> Items = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        public readonly Dictionary<string, ModItemReservation> Reservations = new Dictionary<string, ModItemReservation>(StringComparer.OrdinalIgnoreCase);
 
         public int Used
         {
@@ -648,6 +788,21 @@ namespace ShelteredAPI.Storage
                     total += Math.Max(0, pair.Value);
                 return total;
             }
+        }
+
+        public int GetReservedCount(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId))
+                return 0;
+
+            int total = 0;
+            foreach (KeyValuePair<string, ModItemReservation> pair in Reservations)
+            {
+                ModItemReservation reservation = pair.Value;
+                if (reservation != null && string.Equals(reservation.ItemId, itemId, StringComparison.OrdinalIgnoreCase))
+                    total += Math.Max(0, reservation.Quantity);
+            }
+            return total;
         }
     }
 
