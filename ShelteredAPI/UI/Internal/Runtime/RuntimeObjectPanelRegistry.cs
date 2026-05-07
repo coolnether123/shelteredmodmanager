@@ -60,7 +60,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
             try
             {
-                return registration.CanOpen(new ObjectPanelContext(registration.ObjectId, target, member));
+                return registration.CanOpen(CreateContext(registration, target, member));
             }
             catch (Exception ex)
             {
@@ -80,7 +80,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
             try
             {
-                registration.Open(new ObjectPanelContext(registration.ObjectId, target, member));
+                registration.Open(CreateContext(registration, target, member));
                 return true;
             }
             catch (Exception ex)
@@ -98,6 +98,17 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
             lock (Sync)
                 return Registrations.TryGetValue(registrationId, out registration);
+        }
+
+        private static ObjectPanelContext CreateContext(ObjectPanelRegistration registration, Obj_Base target, FamilyMember member)
+        {
+            string objectId = null;
+            if (target != null && target.objectId >= 0)
+                objectId = target.objectId.ToString();
+            else if (registration != null)
+                objectId = registration.ObjectId;
+
+            return new ObjectPanelContext(objectId, target, member);
         }
 
         private static void Unregister(string registrationId)

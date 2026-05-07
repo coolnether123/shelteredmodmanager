@@ -12,5 +12,7 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
         public Func<ContainerUiItem, string> FormatCount;
         public Action<ContainerUiItem> OnSelected;
         public Action<ContainerUiTransferContext> OnTransfer;
+        public RuntimePanelChromeLayout Layout;
+        public RuntimePanelStyle Style;
     }
 }

@@ -20,7 +20,9 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
             if (items == null || items.Count == 0)
             {
                 string emptyText = options != null && !string.IsNullOrEmpty(options.EmptyText) ? options.EmptyText : "No items";
-                RuntimeWidgetUtil.CreateLabel(parent, emptyText, 540, 32, 20, new Vector3(0f, 76f, 0f), NGUIText.Alignment.Center, depth);
+                RuntimePanelChromeLayout emptyLayout = options != null && options.Layout != null ? options.Layout : RuntimePanelChromeLayout.Default;
+                Color? textColor = options != null && options.Style != null ? options.Style.TextColor : null;
+                RuntimeWidgetUtil.CreateLabel(parent, emptyText, emptyLayout.ContentWidth, 32, 20, new Vector3(0f, emptyLayout.ContentTopY - 52f, 0f), NGUIText.Alignment.Center, depth, textColor);
                 return;
             }
 
@@ -32,7 +34,8 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
                     rows.Add(row);
             }
 
-            RuntimeScrollView.Attach(parent, rows, 128f, 42f, -150f, 128f, -300f, 300f);
+            RuntimePanelChromeLayout layout = options != null && options.Layout != null ? options.Layout : RuntimePanelChromeLayout.Default;
+            RuntimeScrollView.Attach(parent, rows, layout.ContentTopY, 42f, layout.Bottom + 110f, layout.ContentTopY, layout.Left + 20f, layout.Right - 20f);
         }
     }
 }

@@ -493,6 +493,11 @@
     <Compile Include="UI\ShelteredUI.cs" />
     <Compile Include="UI\Runtime\RuntimeUiContracts.cs" />
     <Compile Include="UI\Runtime\ShelteredRuntimeUI.cs" />
+    <Compile Include="Storage\ItemStoreContracts.cs" />
+    <Compile Include="Storage\ShelteredStores.cs" />
+    <Compile Include="Workstations\CookingWorkstationContracts.cs" />
+    <Compile Include="Workstations\RuntimeTimedWorkJob.cs" />
+    <Compile Include="Workstations\ShelteredCooking.cs" />
     <Compile Include="UI\ShelteredKeybindConflictDialog.cs" />
     <Compile Include="UI\NguiModalPrimitives.cs" />
     <Compile Include="UI\LoadingTransitionFallbackDialog.cs" />
