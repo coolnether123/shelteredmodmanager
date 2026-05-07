@@ -546,8 +546,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
         private void DrawContextMenu(ScenarioAuthoringContextMenuModel menu, Rect hudReserveRect)
         {
-            Rect rect = new Rect(menu.AnchorX, menu.AnchorY, 260f, Math.Min(340f, 72f + Count(menu.Actions) * 30f));
-            rect = ScenarioAuthoringShellLayout.ClampAwayFromHud(rect, _scaledWidth, _scaledHeight, hudReserveRect);
+            float rectWidth = 260f;
+            float rectHeight = Math.Min(340f, 72f + Count(menu.Actions) * 30f);
+            Rect rect = menu.CenterOnScreen
+                ? ScenarioAuthoringShellLayout.BuildCenteredPopupRect(_scaledWidth, _scaledHeight, rectWidth, rectHeight, hudReserveRect)
+                : ScenarioAuthoringShellLayout.ClampAwayFromHud(new Rect(menu.AnchorX, menu.AnchorY, rectWidth, rectHeight), _scaledWidth, _scaledHeight, hudReserveRect);
             DrawPanel("ContextMenu", rect, _panelAltColor, true, BaseDepth + 100);
             DrawLabel("ContextTitle", rect, new Rect(12f, 8f, rect.width - 24f, 22f), menu.Title ?? "Selection", 16, _titleColor, NGUIText.Alignment.Left, BaseDepth + 104);
             DrawLabel("ContextDetail", rect, new Rect(12f, 30f, rect.width - 24f, 18f), menu.Detail ?? string.Empty, 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 104);

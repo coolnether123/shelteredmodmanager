@@ -44,6 +44,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             float rectWidth = 220f;
             float rectHeight = 54f + ((menu.Actions != null ? menu.Actions.Length : 0) * 28f);
+            if (menu.CenterOnScreen)
+                return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(width, height, rectWidth, rectHeight, hudReserveRect);
+
             Rect rect = new Rect(
                 Mathf.Clamp(menu.AnchorX + 16f, Margin, width - rectWidth - Margin),
                 Mathf.Clamp(menu.AnchorY + 16f, Margin, height - rectHeight - Margin),

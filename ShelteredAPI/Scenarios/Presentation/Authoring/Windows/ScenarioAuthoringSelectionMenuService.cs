@@ -44,7 +44,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
                 return;
 
             CloseMenu();
-            ScenarioAuthoringBackendService.Instance.OpenContextMenu(state, target);
+            ScenarioAuthoringBackendService.Instance.OpenContextMenu(state, target, true);
             _openMenuTargetId = target.Id;
         }
 

@@ -233,5 +233,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return clamped;
         }
 
+        public static Rect BuildCenteredPopupRect(float width, float height, float popupWidth, float popupHeight, Rect hudReserveRect)
+        {
+            Rect rect = new Rect(
+                (width - popupWidth) * 0.5f,
+                (height - popupHeight) * 0.5f,
+                popupWidth,
+                popupHeight);
+
+            return ClampAwayFromHud(rect, width, height, hudReserveRect);
+        }
+
     }
 }

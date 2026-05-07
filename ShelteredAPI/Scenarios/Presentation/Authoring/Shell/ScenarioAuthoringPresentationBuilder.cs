@@ -853,6 +853,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringTarget target,
             ScenarioAuthoringContextMenuService contextMenuService)
         {
+            OpenContextMenu(state, target, contextMenuService, false);
+        }
+
+        public void OpenContextMenu(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringTarget target,
+            ScenarioAuthoringContextMenuService contextMenuService,
+            bool centerOnScreen)
+        {
             if (contextMenuService == null)
                 return;
 
@@ -881,6 +890,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     : Safe(target.Description),
                 anchorX,
                 anchorY,
+                centerOnScreen,
                 actions);
         }
 
