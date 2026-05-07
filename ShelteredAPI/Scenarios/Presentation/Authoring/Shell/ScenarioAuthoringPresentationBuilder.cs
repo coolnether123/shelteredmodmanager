@@ -44,15 +44,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly StageNavigationViewModelBuilder _stageNavigationBuilder;
         private readonly InspectorViewModelBuilder _inspectorViewModelBuilder;
         private readonly StatusBarViewModelBuilder _statusBarViewModelBuilder;
-        private readonly ScenarioTimelineBuilder _timelineBuilder;
-        private readonly ScenarioTimelineViewModelBuilder _timelineViewModelBuilder;
-        private readonly ScenarioModDependencyDetector _modDependencyDetector;
-        private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
         private readonly ScenarioSelectionScopeService _selectionScopeService;
         private readonly ScenarioTargetClassifier _targetClassifier;
         private readonly ScenarioAssetAuthoringContentBuilder _assetAuthoringContentBuilder;
         private readonly ScenarioMapAuthoringContentBuilder _mapAuthoringContentBuilder;
         private readonly ScenarioQuestAuthoringContentBuilder _questAuthoringContentBuilder;
+        private readonly ScenarioWorkflowAuthoringContentBuilder _workflowAuthoringContentBuilder;
+        private readonly ScenarioOverviewAuthoringContentBuilder _scenarioOverviewAuthoringContentBuilder;
+        private readonly ScenarioRuntimeTestAuthoringContentBuilder _runtimeTestAuthoringContentBuilder;
+        private readonly ScenarioLayerAuthoringContentBuilder _layerAuthoringContentBuilder;
+        private readonly ScenarioHierarchyAuthoringContentBuilder _hierarchyAuthoringContentBuilder;
+        private readonly ScenarioSelectionStackAuthoringContentBuilder _selectionStackAuthoringContentBuilder;
+        private readonly ScenarioPublishAuthoringContentBuilder _publishAuthoringContentBuilder;
+        private readonly ScenarioCalendarAuthoringContentBuilder _calendarAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
 
         public ScenarioAuthoringPresentationBuilder(
@@ -86,15 +90,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _stageNavigationBuilder = stageNavigationBuilder;
             _inspectorViewModelBuilder = inspectorViewModelBuilder;
             _statusBarViewModelBuilder = statusBarViewModelBuilder;
-            _timelineBuilder = timelineBuilder;
-            _timelineViewModelBuilder = timelineViewModelBuilder;
-            _modDependencyDetector = modDependencyDetector;
-            _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
             _selectionScopeService = selectionScopeService;
             _targetClassifier = targetClassifier;
             _assetAuthoringContentBuilder = assetAuthoringContentBuilder;
             _mapAuthoringContentBuilder = mapAuthoringContentBuilder;
             _questAuthoringContentBuilder = questAuthoringContentBuilder;
+            _workflowAuthoringContentBuilder = new ScenarioWorkflowAuthoringContentBuilder(sectionHub, selectionScopeService);
+            _scenarioOverviewAuthoringContentBuilder = new ScenarioOverviewAuthoringContentBuilder();
+            _runtimeTestAuthoringContentBuilder = new ScenarioRuntimeTestAuthoringContentBuilder(timelineBuilder, modDependencyDetector, modCompatibilityViewModelBuilder);
+            _layerAuthoringContentBuilder = new ScenarioLayerAuthoringContentBuilder();
+            _hierarchyAuthoringContentBuilder = new ScenarioHierarchyAuthoringContentBuilder();
+            _selectionStackAuthoringContentBuilder = new ScenarioSelectionStackAuthoringContentBuilder();
+            _publishAuthoringContentBuilder = new ScenarioPublishAuthoringContentBuilder(timelineBuilder, modDependencyDetector, modCompatibilityViewModelBuilder);
+            _calendarAuthoringContentBuilder = new ScenarioCalendarAuthoringContentBuilder(timelineBuilder, timelineViewModelBuilder);
             _windowSectionBuilders = CreateWindowSectionBuilders();
         }
 
@@ -140,10 +148,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             sections.Add(_inspectorViewModelBuilder.BuildSessionSection(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state)));
 
-            sections.Add(BuildWorkflowSection(editorSession));
-            sections.Add(BuildHistorySection());
-            sections.Add(BuildToolPickerSection(state.ActiveTool));
-            sections.Add(BuildToolSection(
+            sections.Add(_workflowAuthoringContentBuilder.BuildWorkflowSection(editorSession));
+            sections.Add(_workflowAuthoringContentBuilder.BuildHistorySection());
+            sections.Add(_workflowAuthoringContentBuilder.BuildToolPickerSection(state.ActiveTool));
+            sections.Add(_workflowAuthoringContentBuilder.BuildToolSection(
                 state,
                 editorSession,
                 state.ActiveTool,
@@ -152,7 +160,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 canCaptureSelectedObject,
                 hasCapturedSelectedObject,
                 selectedObjectStatus));
-            sections.Add(BuildSelectionSection(state));
+            sections.Add(_workflowAuthoringContentBuilder.BuildSelectionSection(state));
 
             if (!string.IsNullOrEmpty(state.StatusMessage))
             {
@@ -942,12 +950,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Scenario, delegate(ScenarioAuthoringWindowContentContext context)
             {
                 return context.State != null && context.State.ActiveStage == ScenarioStageKind.Test
-                    ? BuildTestWindowSections(context.Definition)
-                    : BuildScenarioWindowSections(context.State, context.EditorSession, context.Session);
+                    ? _runtimeTestAuthoringContentBuilder.Build(context)
+                    : _scenarioOverviewAuthoringContentBuilder.Build(context);
             });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Layers, delegate { return BuildLayerWindowSections(); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Hierarchy, delegate(ScenarioAuthoringWindowContentContext context) { return BuildHierarchyWindowSections(context.State, context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.SelectionStack, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSelectionStackWindowSections(context.State); });
+            builders[ScenarioAuthoringWindowContentKind.Layers] = _layerAuthoringContentBuilder;
+            builders[ScenarioAuthoringWindowContentKind.Hierarchy] = _hierarchyAuthoringContentBuilder;
+            builders[ScenarioAuthoringWindowContentKind.SelectionStack] = _selectionStackAuthoringContentBuilder;
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.TilesPalette, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPaletteWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Inspector, delegate(ScenarioAuthoringWindowContentContext context) { return BuildInspectorShellSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
@@ -956,8 +964,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
             builders[ScenarioAuthoringWindowContentKind.Quests] = _questAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Map] = _mapAuthoringContentBuilder;
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Publish, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPublishWindowSections(context.State, context.EditorSession, context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Calendar, delegate(ScenarioAuthoringWindowContentContext context) { return BuildCalendarWindowSections(context.State, context.Definition); });
+            builders[ScenarioAuthoringWindowContentKind.Publish] = _publishAuthoringContentBuilder;
+            builders[ScenarioAuthoringWindowContentKind.Calendar] = _calendarAuthoringContentBuilder;
             return builders;
         }
 
@@ -984,328 +992,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private ScenarioAuthoringInspectorSection[] BuildScenarioWindowSections(
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
-            ScenarioAuthoringSession session)
-        {
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "scenario_summary",
-                    Title = "Scenario",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = new[]
-                    {
-                        Property("Draft", Safe(state.ActiveDraftId)),
-                        Property("Base Mode", editorSession != null && editorSession.WorkingDefinition != null ? editorSession.WorkingDefinition.BaseGameMode.ToString() : "Unknown"),
-                        Property("Simulation", ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Running (test)" : "Paused for workshop"),
-                        Property("Playtest", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"),
-                        Property("Applied To World", editorSession != null && editorSession.HasAppliedToCurrentWorld ? "Yes" : "No"),
-                        Property("Dirty Sections", CountDirtyFlags(editorSession).ToString())
-                    }
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "scenario_actions",
-                    Title = "Actions",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                    Items = new[]
-                    {
-                        ActionItem(Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "Mode -", "Switch to the previous scenario base mode.", true, false, "M-")),
-                        ActionItem(Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, "Mode +", "Switch to the next scenario base mode.", true, false, "M+")),
-                        ActionItem(Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "Persist the current scenario draft XML.", true, false, "SV")),
-                        ActionItem(Action(ScenarioAuthoringActionIds.ActionPlaytest, editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Test" : "Start Test Scenario", "Toggle scenario playtest mode.", true, false, "TS"))
-                    }
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection[] BuildLayerWindowSections()
-        {
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "layers",
-                    Title = "Layers",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = new[]
-                    {
-                        Property("Shelter Tiles", "Visible Ã‚Â· Locked"),
-                        Property("Shelter Objects", "Visible Ã‚Â· Locked"),
-                        Property("Scene Art", "Visible"),
-                        Property("Triggers", "Visible"),
-                        Property("Pathing", "Visible"),
-                        Property("Regions", "Visible")
-                    }
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection[] BuildHierarchyWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildHierarchySummarySection(state, definition));
-            sections.Add(BuildHierarchyBunkerSection(definition));
-            sections.Add(BuildHierarchyLiveObjectsSection());
-            sections.Add(BuildHierarchyCharactersSection(definition));
-            sections.Add(BuildHierarchyEventSection(definition));
-            sections.Add(BuildHierarchyAssetSection(definition));
-            return sections.ToArray();
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHierarchySummarySection(ScenarioAuthoringState state, ScenarioDefinition definition)
-        {
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "hierarchy_summary",
-                Title = "Scene Hierarchy",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = new[]
-                {
-                    Property("Stage", state != null ? state.ActiveStage.ToString() : "Unknown"),
-                    Property("Tool", state != null ? state.ActiveTool.ToString() : "Unknown"),
-                    Property("Scenario", Safe(definition != null ? definition.DisplayName : null)),
-                    Property("Selection", FormatTarget(state != null ? state.SelectedTarget : null))
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHierarchyBunkerSection(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            int roomChanges = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.RoomChanges != null ? definition.BunkerEdits.RoomChanges.Count : 0;
-            int placements = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null ? definition.BunkerEdits.ObjectPlacements.Count : 0;
-            items.Add(Property("Authored Room Edits", roomChanges.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Authored Object Placements", placements.ToString(CultureInfo.InvariantCulture)));
-            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count && i < 8; i++)
-            {
-                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
-                if (placement == null)
-                    continue;
-
-                string label = !string.IsNullOrEmpty(placement.DefinitionReference) ? placement.DefinitionReference : (!string.IsNullOrEmpty(placement.PrefabReference) ? placement.PrefabReference : placement.ScenarioObjectId);
-                items.Add(Property(Safe(label), FormatVector(placement.Position) + " / " + placement.StartState));
-            }
-
-            if (items.Count == 2)
-                items.Add(Text("No authored bunker placements are in this draft yet."));
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "hierarchy_bunker",
-                Title = "Bunker / Rooms / Props",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHierarchyLiveObjectsSection()
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            Obj_Base[] objects = UnityEngine.Object.FindObjectsOfType<Obj_Base>();
-            int count = 0;
-            for (int i = 0; objects != null && i < objects.Length; i++)
-            {
-                Obj_Base obj = objects[i];
-                if (obj == null || obj.gameObject == null)
-                    continue;
-
-                count++;
-                if (items.Count < 10)
-                    items.Add(ActionItem(BuildHierarchyTargetAction(obj.gameObject, ScenarioAuthoringTargetKind.PlaceableObject, "OB")));
-            }
-
-            items.Insert(0, Property("Live Shelter Objects", count.ToString(CultureInfo.InvariantCulture)));
-            if (items.Count == 1)
-                items.Add(Text("No live shelter objects are currently discoverable."));
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "hierarchy_live_objects",
-                Title = "Live Objects",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHierarchyCharactersSection(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            int authored = definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null ? definition.FamilySetup.Members.Count : 0;
-            int future = definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null ? definition.FamilySetup.FutureSurvivors.Count : 0;
-            items.Add(Property("Authored Starting Survivors", authored.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Future Survivors", future.ToString(CultureInfo.InvariantCulture)));
-
-            FamilyManager manager = FamilyManager.Instance;
-            List<FamilyMember> members = manager != null ? manager.GetAllFamilyMembers() : null;
-            for (int i = 0; members != null && i < members.Count && i < 8; i++)
-            {
-                FamilyMember member = members[i];
-                if (member != null && member.gameObject != null)
-                    items.Add(ActionItem(BuildHierarchyTargetAction(member.gameObject, ScenarioAuthoringTargetKind.Character, "PP")));
-            }
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "hierarchy_characters",
-                Title = "Characters",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHierarchyEventSection(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Property("Triggers", definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null ? definition.TriggersAndEvents.Triggers.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            items.Add(Property("Weather Events", definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.WeatherEvents != null ? definition.TriggersAndEvents.WeatherEvents.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            items.Add(Property("Scheduled Actions", definition != null && definition.ScheduledActions != null ? definition.ScheduledActions.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            items.Add(Property("Gates", definition != null && definition.Gates != null ? definition.Gates.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            items.Add(Property("Quests", definition != null && definition.Quests != null && definition.Quests.Quests != null ? definition.Quests.Quests.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "hierarchy_events",
-                Title = "Triggers / Events / Quests",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHierarchyAssetSection(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Property("Sprite Swaps", CountSpriteSwaps(definition).ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Scene Sprite Placements", CountSceneSpritePlacements(definition).ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Custom Sprites", definition != null && definition.AssetReferences != null && definition.AssetReferences.CustomSprites != null ? definition.AssetReferences.CustomSprites.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            items.Add(Property("Sprite Patches", definition != null && definition.AssetReferences != null && definition.AssetReferences.SpritePatches != null ? definition.AssetReferences.SpritePatches.Count.ToString(CultureInfo.InvariantCulture) : "0"));
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "hierarchy_assets",
-                Title = "Surface / Background / FX",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = items.ToArray()
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection[] BuildSelectionStackWindowSections(ScenarioAuthoringState state)
-        {
-            List<ScenarioAuthoringInspectorItem> summary = new List<ScenarioAuthoringInspectorItem>();
-            int count = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
-            summary.Add(Property("Candidates", count.ToString(CultureInfo.InvariantCulture)));
-            summary.Add(Property("Active Row", count > 0 ? (Mathf.Clamp(state.ActiveSelectionStackIndex, 0, count - 1) + 1).ToString(CultureInfo.InvariantCulture) : "<none>"));
-            summary.Add(Property("Hovered", FormatTarget(state != null ? state.HoveredTarget : null)));
-            summary.Add(Property("Selected", FormatTarget(state != null ? state.SelectedTarget : null)));
-
-            List<ScenarioAuthoringInspectorItem> rows = new List<ScenarioAuthoringInspectorItem>();
-            if (count == 0)
-            {
-                rows.Add(Text("Hold Ctrl and hover the bunker view to collect every selectable object under the cursor."));
-            }
-            else
-            {
-                for (int i = 0; i < state.SelectionStack.Count; i++)
-                {
-                    ScenarioAuthoringTarget target = state.SelectionStack[i];
-                    if (target == null)
-                        continue;
-
-                    bool active = i == state.ActiveSelectionStackIndex;
-                    rows.Add(ActionItem(Action(
-                        ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
-                        (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(target.DisplayName),
-                        target.Kind + " / " + Safe(target.TransformPath),
-                        true,
-                        active,
-                        active ? "ON" : "ST",
-                        FormatGrid(target))));
-                }
-            }
-
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "selection_stack_summary",
-                    Title = "Selection Stack",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = summary.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "selection_stack_rows",
-                    Title = "Candidates Under Cursor",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = rows.ToArray()
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorAction BuildHierarchyTargetAction(GameObject gameObject, ScenarioAuthoringTargetKind kind, string badge)
-        {
-            string label = gameObject != null && !string.IsNullOrEmpty(gameObject.name) ? gameObject.name : kind.ToString();
-            string id = kind + ":" + (gameObject != null && gameObject.transform != null ? gameObject.transform.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
-            return Action(
-                ScenarioAuthoringActionIds.ActionHierarchySelectPrefix + id,
-                label,
-                gameObject != null ? BuildHierarchyPath(gameObject.transform) : "Missing runtime object",
-                gameObject != null,
-                false,
-                badge);
-        }
-
-        private static string BuildHierarchyPath(Transform transform)
-        {
-            if (transform == null)
-                return string.Empty;
-
-            List<string> names = new List<string>();
-            Transform current = transform;
-            while (current != null)
-            {
-                names.Add(current.name);
-                current = current.parent;
-            }
-
-            names.Reverse();
-            return string.Join("/", names.ToArray());
-        }
-
-        private static string FormatVector(ScenarioVector3 value)
-        {
-            if (value == null)
-                return "<none>";
-
-            return value.X.ToString("0.##", CultureInfo.InvariantCulture)
-                + ","
-                + value.Y.ToString("0.##", CultureInfo.InvariantCulture)
-                + ","
-                + value.Z.ToString("0.##", CultureInfo.InvariantCulture);
-        }
-
-        private static string FormatGrid(ScenarioAuthoringTarget target)
-        {
-            if (target == null || !target.GridX.HasValue || !target.GridY.HasValue)
-                return target != null ? target.Kind.ToString() : string.Empty;
-
-            return "Grid " + target.GridX.Value.ToString(CultureInfo.InvariantCulture)
-                + ","
-                + target.GridY.Value.ToString(CultureInfo.InvariantCulture);
-        }
-
         private ScenarioAuthoringInspectorSection[] BuildPaletteWindowSections(
             ScenarioAuthoringState state,
             ScenarioEditorSession editorSession,
@@ -1313,7 +999,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (state.ActiveStage == ScenarioStageKind.BunkerInside && state.ActiveTool == ScenarioAuthoringTool.Assets)
             {
-                ScenarioAuthoringInspectorSection section = BuildToolSection(
+                ScenarioAuthoringInspectorSection section = _workflowAuthoringContentBuilder.BuildToolSection(
                     state,
                     editorSession,
                     ScenarioAuthoringTool.Assets,
@@ -1360,217 +1046,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     }
                 }
             };
-        }
-
-        private ScenarioAuthoringInspectorSection[] BuildPublishWindowSections(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> dependencyItems = BuildPublishDependencyItems(definition);
-            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
-            List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
-            List<ScenarioAuthoringInspectorItem> validationItems = BuildPublishValidationItems(state, definition);
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "publish_stage",
-                    Title = "Publish",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = new[]
-                    {
-                        Property("Scenario", Safe(definition != null ? definition.DisplayName : null)),
-                        Property("Dirty Sections", CountDirtyFlags(editorSession).ToString()),
-                        Property("Version", Safe(definition != null ? definition.Version : null))
-                    }
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "publish_validation",
-                    Title = "Validation Summary",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = validationItems.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "publish_dependencies",
-                    Title = "Dependency Summary",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = dependencyItems.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "publish_mod_compatibility",
-                    Title = "Mod Compatibility",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = compatibilityItems.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "publish_timeline",
-                    Title = "Schedule Timeline",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = timelineItems.ToArray()
-                }
-            };
-        }
-
-        private ScenarioAuthoringInspectorSection[] BuildTestWindowSections(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
-            List<ScenarioAuthoringInspectorItem> pendingItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
-            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
-            return new[]
-            {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "runtime_journal",
-                    Title = "Runtime Journal",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = journalItems.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "runtime_pending",
-                    Title = "Pending / Blocked Actions",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = pendingItems.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "runtime_mod_compatibility",
-                    Title = "Mod Compatibility",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = compatibilityItems.ToArray()
-                }
-            };
-        }
-
-        private static List<ScenarioAuthoringInspectorItem> BuildPublishValidationItems(ScenarioAuthoringState state, ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            if (definition == null)
-            {
-                items.Add(Property("Status", "No active scenario definition."));
-                return items;
-            }
-
-            ScenarioValidationResult validation = null;
-            try
-            {
-                IScenarioDefinitionValidator validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
-                validation = validator != null ? validator.Validate(definition, state != null ? state.ActiveScenarioFilePath : null) : null;
-            }
-            catch (Exception ex)
-            {
-                items.Add(Property("Validation", "Unavailable"));
-                items.Add(Text("Validation could not run: " + ex.Message));
-                return items;
-            }
-
-            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : new ScenarioValidationIssue[0];
-            int errors = 0;
-            int warnings = 0;
-            for (int i = 0; i < issues.Length; i++)
-            {
-                if (issues[i] == null)
-                    continue;
-                if (issues[i].Severity == ScenarioIssueSeverity.Error)
-                    errors++;
-                else
-                    warnings++;
-            }
-
-            items.Add(Property("Status", validation != null && validation.IsValid ? "Ready to publish" : "Blocked"));
-            items.Add(Property("Errors", errors.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Property("Warnings", warnings.ToString(CultureInfo.InvariantCulture)));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if the draft has no blocking errors.", true, errors == 0, "SV")));
-
-            if (issues.Length == 0)
-            {
-                items.Add(Text("Validation passed with no issues."));
-                return items;
-            }
-
-            for (int i = 0; i < issues.Length && i < 16; i++)
-            {
-                ScenarioValidationIssue issue = issues[i];
-                if (issue != null)
-                    items.Add(Property(issue.Severity.ToString(), issue.Message));
-            }
-
-            return items;
-        }
-
-        private ScenarioAuthoringInspectorSection[] BuildCalendarWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
-        {
-            ScenarioRuntimeState runtimeState = GetRuntimeState();
-            ScenarioTimelineViewModel model = _timelineViewModelBuilder.Build(_timelineBuilder.BuildDays(definition, runtimeState));
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-
-            List<ScenarioAuthoringInspectorItem> dayItems = new List<ScenarioAuthoringInspectorItem>();
-            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
-            {
-                ScenarioTimelineDayViewModel day = model.Days[i];
-                dayItems.Add(ActionItem(Action(
-                    ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.Day.ToString(CultureInfo.InvariantCulture),
-                    "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
-                    day.Count.ToString(CultureInfo.InvariantCulture) + " scheduled item(s).",
-                    true,
-                    false,
-                    day.Badge,
-                    day.Categories)));
-            }
-            if (dayItems.Count == 0)
-                dayItems.Add(Text("No scheduled scenario events are currently authored."));
-
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "calendar_days",
-                Title = "Calendar",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = dayItems.ToArray()
-            });
-
-            string selected = state != null ? state.TimelineSelectionId : null;
-            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
-            {
-                ScenarioTimelineDayViewModel day = model.Days[i];
-                if (selected != null && !string.Equals(selected, day.Day.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                List<ScenarioAuthoringInspectorItem> entries = new List<ScenarioAuthoringInspectorItem>();
-                for (int e = 0; day.Entries != null && e < day.Entries.Length; e++)
-                {
-                    ScenarioTimelineEntryViewModel entry = day.Entries[e];
-                    entries.Add(ActionItem(Action(
-                        entry.ActionId,
-                        entry.Time + " " + entry.Title,
-                        entry.Type + " / " + entry.OwnerStage + " / " + entry.Status,
-                        true,
-                        entry.Status == "Blocked" || entry.Status == "Failed",
-                        StatusBadge(entry.Status),
-                        string.IsNullOrEmpty(entry.Warning) ? entry.OwnerStage : entry.Warning)));
-                }
-
-                sections.Add(new ScenarioAuthoringInspectorSection
-                {
-                    Id = "calendar_day_" + day.Day.ToString(CultureInfo.InvariantCulture),
-                    Title = "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = entries.ToArray()
-                });
-            }
-
-            return sections.ToArray();
         }
 
         private static ScenarioAuthoringInspectorSection BuildPlacementStatusSection(ScenarioBuildPlacementAuthoringService.StatusModel model)
@@ -1691,7 +1166,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
             {
-                sections.Add(BuildToolSection(
+                sections.Add(_workflowAuthoringContentBuilder.BuildToolSection(
                     state,
                     editorSession,
                     state.ActiveTool,
@@ -1709,8 +1184,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return sections.ToArray();
             }
 
-            sections.Add(BuildToolPickerSection(state.ActiveTool));
-            sections.Add(BuildToolSection(
+            sections.Add(_workflowAuthoringContentBuilder.BuildToolPickerSection(state.ActiveTool));
+            sections.Add(_workflowAuthoringContentBuilder.BuildToolSection(
                 state,
                 editorSession,
                 state.ActiveTool,
@@ -2502,79 +1977,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        private static List<ScenarioAuthoringInspectorItem> BuildRuntimeJournalItems()
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            ScenarioRuntimeState state = GetRuntimeState();
-
-            items.Add(Property("Scenario", Safe(state != null ? state.ScenarioId : null)));
-            items.Add(Property("Binding", Safe(state != null ? state.RuntimeBindingId : null)));
-            items.Add(Property("Last Processed", state != null ? "day " + state.LastProcessedDay + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2") : "None"));
-            int count = state != null && state.ExecutedActions != null ? state.ExecutedActions.Count : 0;
-            items.Add(Property("Executed Actions", count.ToString()));
-            for (int i = 0; state != null && state.ExecutedActions != null && i < state.ExecutedActions.Count && i < 8; i++)
-            {
-                ScenarioExecutedActionRecord record = state.ExecutedActions[i];
-                if (record != null)
-                    items.Add(Property(Safe(record.ActionKey), record.Status + " / day " + record.FiredDay + " " + record.FiredHour.ToString("D2") + ":" + record.FiredMinute.ToString("D2")));
-            }
-            return items;
-        }
-
-        private static ScenarioRuntimeState GetRuntimeState()
-        {
-            try
-            {
-                ScenarioRuntimeStateService service = ScenarioCompositionRoot.Resolve<ScenarioRuntimeStateService>();
-                return service != null ? service.State : null;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static List<ScenarioAuthoringInspectorItem> BuildPublishDependencyItems(ScenarioDefinition definition)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            int objectCount = definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null ? definition.BunkerEdits.ObjectPlacements.Count : 0;
-            int foundationCount = definition != null && definition.BunkerGrid != null && definition.BunkerGrid.Foundations != null ? definition.BunkerGrid.Foundations.Count : 0;
-            int expansionCount = definition != null && definition.BunkerGrid != null && definition.BunkerGrid.Expansions != null ? definition.BunkerGrid.Expansions.Count : 0;
-            int gateCount = definition != null && definition.Gates != null ? definition.Gates.Count : 0;
-            items.Add(Property("Objects", objectCount.ToString()));
-            items.Add(Property("Foundations", foundationCount.ToString()));
-            items.Add(Property("Expansions", expansionCount.ToString()));
-            items.Add(Property("Gates", gateCount.ToString()));
-            items.Add(Property("Runtime Compatibility", "Shared schedule journal required"));
-            return items;
-        }
-
-        private static List<ScenarioAuthoringInspectorItem> BuildTimelineItems(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, ScenarioTimelineBuilder timelineBuilder)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            List<ScenarioTimelineEntry> entries = timelineBuilder != null ? timelineBuilder.BuildEntries(definition, runtimeState) : new List<ScenarioTimelineEntry>();
-            for (int i = 0; entries != null && i < entries.Count && i < 12; i++)
-            {
-                ScenarioTimelineEntry entry = entries[i];
-                if (entry != null)
-                    items.Add(Property("Day " + entry.When.Day + " " + Safe(entry.Title), FormatSchedule(entry.When) + " / " + entry.Kind + " / " + entry.Status));
-            }
-            if (items.Count == 0)
-                items.Add(Text("No scheduled timeline entries are authored yet."));
-            return items;
-        }
-
-        private static string StatusBadge(string status)
-        {
-            if (string.Equals(status, "Fired", StringComparison.OrdinalIgnoreCase))
-                return "OK";
-            if (string.Equals(status, "Blocked", StringComparison.OrdinalIgnoreCase))
-                return "BL";
-            if (string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
-                return "ER";
-            return "PN";
-        }
-
         private static int CountConditions(ScenarioConditionGroup group)
         {
             int count = 0;
@@ -3076,138 +2478,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return null;
         }
 
-        private static int CountSpriteSwaps(ScenarioEditorSession editorSession)
-        {
-            return editorSession != null && editorSession.WorkingDefinition != null
-                ? CountSpriteSwaps(editorSession.WorkingDefinition)
-                : 0;
-        }
-
-        private static int CountSpriteSwaps(ScenarioDefinition definition)
-        {
-            if (definition == null || definition.AssetReferences == null)
-                return 0;
-
-            return definition.AssetReferences.SpriteSwaps != null
-                ? definition.AssetReferences.SpriteSwaps.Count
-                : 0;
-        }
-
-        private static int CountSceneSpritePlacements(ScenarioEditorSession editorSession)
-        {
-            return editorSession != null && editorSession.WorkingDefinition != null
-                ? CountSceneSpritePlacements(editorSession.WorkingDefinition)
-                : 0;
-        }
-
-        private static int CountSceneSpritePlacements(ScenarioDefinition definition)
-        {
-            return definition != null && definition.AssetReferences != null && definition.AssetReferences.SceneSpritePlacements != null
-                ? definition.AssetReferences.SceneSpritePlacements.Count
-                : 0;
-        }
-
-        private static int CountDirtyFlags(ScenarioEditorSession editorSession)
-        {
-            return editorSession != null && editorSession.DirtyFlags != null
-                ? editorSession.DirtyFlags.Count
-                : 0;
-        }
-
-        private static int CountFamilyMembers(ScenarioDefinition definition)
-        {
-            return definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null
-                ? definition.FamilySetup.Members.Count
-                : 0;
-        }
-
-        private static int CountInventoryStacks(ScenarioDefinition definition)
-        {
-            return definition != null && definition.StartingInventory != null && definition.StartingInventory.Items != null
-                ? definition.StartingInventory.Items.Count
-                : 0;
-        }
-
-        private static int CountInventoryTotal(ScenarioDefinition definition)
-        {
-            if (definition == null || definition.StartingInventory == null || definition.StartingInventory.Items == null)
-                return 0;
-
-            int total = 0;
-            for (int i = 0; i < definition.StartingInventory.Items.Count; i++)
-            {
-                ItemEntry entry = definition.StartingInventory.Items[i];
-                if (entry != null && entry.Quantity > 0)
-                    total += entry.Quantity;
-            }
-
-            return total;
-        }
-
-        private static int CountObjectPlacements(ScenarioDefinition definition)
-        {
-            return definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null
-                ? definition.BunkerEdits.ObjectPlacements.Count
-                : 0;
-        }
-
-        private static string SummarizeFamily(ScenarioDefinition definition)
-        {
-            if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null || definition.FamilySetup.Members.Count == 0)
-                return "No family snapshot captured yet.";
-
-            List<string> names = new List<string>();
-            for (int i = 0; i < definition.FamilySetup.Members.Count && names.Count < 4; i++)
-            {
-                FamilyMemberConfig member = definition.FamilySetup.Members[i];
-                if (member != null && !string.IsNullOrEmpty(member.Name))
-                    names.Add(member.Name);
-            }
-
-            string preview = names.Count > 0 ? string.Join(", ", names.ToArray()) : "Unnamed members";
-            if (definition.FamilySetup.Members.Count > names.Count)
-                preview += " +" + (definition.FamilySetup.Members.Count - names.Count);
-            return preview;
-        }
-
-        private static string SummarizeInventory(ScenarioDefinition definition)
-        {
-            if (definition == null || definition.StartingInventory == null || definition.StartingInventory.Items == null || definition.StartingInventory.Items.Count == 0)
-                return "No inventory snapshot captured yet.";
-
-            List<string> parts = new List<string>();
-            for (int i = 0; i < definition.StartingInventory.Items.Count && parts.Count < 4; i++)
-            {
-                ItemEntry entry = definition.StartingInventory.Items[i];
-                if (entry != null && !string.IsNullOrEmpty(entry.ItemId) && entry.Quantity > 0)
-                    parts.Add(entry.ItemId + " x" + entry.Quantity);
-            }
-
-            string preview = parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "Inventory captured";
-            if (definition.StartingInventory.Items.Count > parts.Count)
-                preview += " +" + (definition.StartingInventory.Items.Count - parts.Count);
-            return preview;
-        }
-
-        private static string SummarizeObjectPlacements(ScenarioDefinition definition)
-        {
-            if (definition == null || definition.BunkerEdits == null || definition.BunkerEdits.ObjectPlacements == null || definition.BunkerEdits.ObjectPlacements.Count == 0)
-                return "No spawned shelter objects captured yet.";
-
-            List<string> parts = new List<string>();
-            for (int i = 0; i < definition.BunkerEdits.ObjectPlacements.Count && parts.Count < 4; i++)
-            {
-                ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
-                if (placement != null && !string.IsNullOrEmpty(placement.DefinitionReference))
-                    parts.Add(placement.DefinitionReference);
-            }
-
-            string preview = parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "Object placements captured";
-            if (definition.BunkerEdits.ObjectPlacements.Count > parts.Count)
-                preview += " +" + (definition.BunkerEdits.ObjectPlacements.Count - parts.Count);
-            return preview;
-        }
-
         private static ScenarioAuthoringInspectorSection BuildSpriteCandidateSection(
             string id,
             string title,
@@ -3260,249 +2530,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return candidates != null ? candidates.Count : 0;
         }
 
-        private ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
-        {
-            ScenarioTargetScope activeScope = _selectionScopeService.ResolveActiveScope(state);
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "selection",
-                Title = "Selection",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.MetricGrid,
-                Items = new[]
-                {
-                    Property("Scope", ScenarioTargetClassifier.FormatScopeLabel(activeScope)),
-                    Property("Selection Mode", state.SelectionModeActive ? "Active" : "Inactive"),
-                    Property("Hovered", FormatTarget(state.HoveredTarget)),
-                    Property("Selected", FormatTarget(state.SelectedTarget))
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildHistorySection()
-        {
-            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
-            bool canUndo = history.CanUndo;
-            bool canRedo = history.CanRedo;
-            bool clipboardHasRule = ScenarioSpriteSwapClipboard.HasRule;
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "history",
-                Title = "History & Clipboard",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = new[]
-                {
-                    Property("Undo Depth", history.UndoDepth.ToString()),
-                    Property("Redo Depth", history.RedoDepth.ToString()),
-                    Property("Clipboard", ScenarioSpriteSwapClipboard.Describe()),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo (Ctrl+Z)", "Undo the last sprite swap change.", canUndo, false, "UN", "Rewind the last authored sprite change.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryRedo, "Redo (Ctrl+Y)", "Redo the last undone change.", canRedo, false, "RE", "Re-apply the last undone change.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Swap (Ctrl+C)", "Copy the selected target's active sprite swap to the clipboard.", true, false, "CP", "Copy the selected sprite rule.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionSpriteSwapPaste, "Paste Swap (Ctrl+V)", "Paste the clipboard sprite swap onto the selected target.", clipboardHasRule, clipboardHasRule, "PA", clipboardHasRule ? "Apply the copied rule to the current target." : "Clipboard is empty.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionSpriteSwapRevert, "Revert Sprite (Ctrl+R)", "Remove the selected target's sprite swap and restore its original sprite.", true, false, "RV", "Clear the authored swap."))
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildWorkflowSection(ScenarioEditorSession editorSession)
-        {
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "workflow",
-                Title = "Workflow",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = new[]
-                {
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "Persist the current scenario XML.", true, false, "SV", "Write scenario.xml to the active draft.")),
-                    ActionItem(Action(
-                        ScenarioAuthoringActionIds.ActionPlaytest,
-                        editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Playtest" : "Start Playtest",
-                        "Toggle simulation while keeping the live shelter editor session intact.",
-                        true,
-                        true,
-                        "PL",
-                        editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting
-                            ? "Return to frozen authoring mode."
-                            : "Run the live shelter with the current draft.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionCloseEditor, "Exit Editor", "Close the authoring shell and return the save to normal live play.", true, false, "EX", "Release the current authoring session."))
-                }
-            };
-        }
-
-        private static ScenarioAuthoringInspectorSection BuildToolPickerSection(ScenarioAuthoringTool activeTool)
-        {
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "tools",
-                Title = "Tools",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.TabStrip,
-                Items = new[]
-                {
-                    Text("Tools are split between gameplay data capture, shelter build placement, and visual asset authoring."),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolFamily, "Family", "Capture the current live family roster, stats, and traits.", true, activeTool == ScenarioAuthoringTool.Family, "FM", "Family roster and stats.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolInventory, "Inventory", "Capture the current live shelter inventory.", true, activeTool == ScenarioAuthoringTool.Inventory, "IV", "Shelter inventory snapshot.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolShelter, "Structure", "Place new shelter rooms, ladders, and lights with vanilla build ghosts.", true, activeTool == ScenarioAuthoringTool.Shelter, "ST", "Shelter layout editing.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "Place workbenches, shelter systems, and furniture or capture live spawned objects.", true, activeTool == ScenarioAuthoringTool.Objects, "OB", "Interactive shelter objects.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolWiring, "Walls & Wiring", "Apply room wall and wiring sprites to the selected shelter tile.", true, activeTool == ScenarioAuthoringTool.Wiring, "WW", "Room finish editing.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolAssets, "Assets", "Swap existing visuals or place new snapped scene sprites.", true, activeTool == ScenarioAuthoringTool.Assets, "AS", "Sprite replacements and scene art.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolWinLoss, "Win/Loss", "Author scenario outcome conditions.", true, activeTool == ScenarioAuthoringTool.WinLoss, "WL", "Scenario outcome rules.")),
-                    ActionItem(Action(ScenarioAuthoringActionIds.ActionToolSelect, "Select", "Stay in world selection mode while using the current workflow.", true, activeTool == ScenarioAuthoringTool.Select, "SL", "Selection-only mode."))
-                }
-            };
-        }
-
-        private ScenarioAuthoringInspectorSection BuildToolSection(
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
-            ScenarioAuthoringTool activeTool,
-            ScenarioDefinition definition,
-            ScenarioAuthoringTarget selectedTarget,
-            bool canCaptureSelectedObject,
-            bool hasCapturedSelectedObject,
-            string selectedObjectStatus)
-        {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            ScenarioBuildPlacementAuthoringService.StatusModel buildStatus =
-                activeTool == ScenarioAuthoringTool.Shelter
-                || activeTool == ScenarioAuthoringTool.Objects
-                || activeTool == ScenarioAuthoringTool.Wiring
-                || activeTool == ScenarioAuthoringTool.Select
-                    ? _sectionHub.BuildPlacement.GetStatusModel(state, editorSession)
-                    : null;
-            string title;
-            switch (activeTool)
-            {
-                case ScenarioAuthoringTool.Family:
-                    title = "Family";
-                    items.Add(Property("Captured Members", CountFamilyMembers(definition).ToString()));
-                    items.Add(Text(SummarizeFamily(definition)));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Capture Current Family", "Snapshot the live family roster, stats, and traits into the scenario.", true, true, "FM", "Capture live family state.")));
-                    break;
-
-                case ScenarioAuthoringTool.Inventory:
-                    title = "Inventory";
-                    items.Add(Property("Captured Stacks", CountInventoryStacks(definition).ToString()));
-                    items.Add(Property("Total Items", CountInventoryTotal(definition).ToString()));
-                    items.Add(Text(SummarizeInventory(definition)));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureInventory, "Capture Current Inventory", "Snapshot the live shelter inventory into the scenario.", true, true, "IV", "Capture live inventory.")));
-                    break;
-
-                case ScenarioAuthoringTool.Assets:
-                    title = "Assets";
-                    items.Add(Property("Sprite Swaps", CountSpriteSwaps(definition).ToString()));
-                    items.Add(Property("Placed Sprites", CountSceneSpritePlacements(definition).ToString()));
-                    items.Add(Property("Selected Target", FormatTarget(selectedTarget)));
-                    items.Add(Property("Pack Layout", "Scenarios/<ScenarioName>/scenario.xml"));
-                    items.Add(Property("Custom Sprite XML", "AssetReferences > CustomSprites > Sprite"));
-                    items.Add(Property("Swap XML", "AssetReferences > SpriteSwaps > Swap"));
-                    items.Add(Property("Placement XML", "AssetReferences > SceneSpritePlacements > Placement"));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen, "Edit Selected Asset", "Open the selected target in the dedicated asset editor.", selectedTarget != null && selectedTarget.SupportsReplace, false, "ED", "Change the selected asset in its own editor window.")));
-                    items.Add(Text("Asset authoring now fails closed: verified in-game runtime art only, no silent size-based fallback."));
-                    items.Add(Text("Use the Inspector to edit an existing selected asset. Use this browser only for snapped visual-only scene dressing that stores Placement entries in the scenario XML."));
-                    items.Add(Text("These labels mirror the serializer and Custom Scenarios guide so authored changes match how other scenario packs are structured."));
-                    break;
-
-                case ScenarioAuthoringTool.Shelter:
-                    title = "Structure";
-                    items.Add(Property("Recorded Placements", CountObjectPlacements(definition).ToString()));
-                    items.Add(Property("Selected Room", FormatTarget(selectedTarget)));
-                    if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Guidance))
-                        items.Add(Text(buildStatus.Guidance));
-                    if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Detail))
-                        items.Add(Text(buildStatus.Detail));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionBuildStructureRoom, "Place Room Tile", "Start vanilla-style room placement for the scenario draft.", true, false, "RM", "Extend the shelter layout.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionBuildStructureLadder, "Place Ladder", "Start vanilla-style ladder placement for the scenario draft.", true, false, "LD", "Connect shelter levels.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionBuildStructureLight, "Place Room Light", "Start vanilla-style room-light placement for the scenario draft.", true, false, "LG", "Light a room tile.")));
-                    if (buildStatus != null && buildStatus.CanCancel)
-                    {
-                        items.Add(ActionItem(Action(
-                            ScenarioAuthoringActionIds.ActionBuildPlacementCancel,
-                            "Cancel Placement",
-                            "Stop the active structure preview without committing it.",
-                            true,
-                            false,
-                            "CX",
-                            "Clear the active ghost preview.")));
-                    }
-                    break;
-
-                case ScenarioAuthoringTool.Objects:
-                    title = "Objects";
-                    items.Add(Property("Recorded Placements", CountObjectPlacements(definition).ToString()));
-                    items.Add(Property("Selected Object", FormatTarget(selectedTarget)));
-                    if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Guidance))
-                        items.Add(Text(buildStatus.Guidance));
-                    if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Detail))
-                        items.Add(Text(buildStatus.Detail));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture All Spawned Objects", "Replace the scenario placement list with the current live spawned shelter objects.", true, true, "OB", "Capture every current shelter placement.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Selected Object", "Store the selected live shelter object as a scenario placement.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Selected Capture", "Remove the selected object's captured placement from the scenario.", hasCapturedSelectedObject, false, "RM", "Delete the stored selected capture.")));
-                    if (buildStatus != null && buildStatus.CanCancel)
-                    {
-                        items.Add(ActionItem(Action(
-                            ScenarioAuthoringActionIds.ActionBuildPlacementCancel,
-                            "Cancel Placement",
-                            "Stop the active object preview without committing it.",
-                            true,
-                            false,
-                            "CX",
-                            "Clear the active ghost preview.")));
-                    }
-                    if (!string.IsNullOrEmpty(selectedObjectStatus))
-                        items.Add(Text(selectedObjectStatus));
-                    break;
-
-                case ScenarioAuthoringTool.Wiring:
-                    title = "Walls & Wiring";
-                    items.Add(Property("Selected Room", FormatTarget(selectedTarget)));
-                    items.Add(Property("Recorded Room Edits", definition != null && definition.BunkerEdits != null ? definition.BunkerEdits.RoomChanges.Count.ToString() : "0"));
-                    if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Guidance))
-                        items.Add(Text(buildStatus.Guidance));
-                    if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Detail))
-                        items.Add(Text(buildStatus.Detail));
-                    items.Add(Text("Pick the room tile first, then choose wall or wiring variants from the palette window."));
-                    break;
-
-                case ScenarioAuthoringTool.WinLoss:
-                    title = "Win/Loss";
-                    items.Add(Property("Win Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.WinConditions.Count.ToString() : "0"));
-                    items.Add(Property("Loss Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.LossConditions.Count.ToString() : "0"));
-                    items.Add(Text("Win and loss conditions are evaluated against the active scenario QuestInstance during playtest and runtime."));
-                    break;
-
-                case ScenarioAuthoringTool.Select:
-                    title = "Selection";
-                    items.Add(Property("Selected Target", FormatTarget(selectedTarget)));
-                    items.Add(Text("Selection mode is active. Use it to inspect world objects, rooms, or authored sprites before switching into a build tool."));
-                    items.Add(Text("Structure, Objects, and Walls & Wiring all expose their interactive palettes in the Tiles Palette window."));
-                    break;
-
-                default:
-                    title = "Shelter";
-                    items.Add(Property("Captured Placements", CountObjectPlacements(definition).ToString()));
-                    items.Add(Text(SummarizeObjectPlacements(definition)));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture All Spawned Objects", "Replace the scenario placement list with the current live spawned shelter objects.", true, true, "OB", "Capture every current shelter placement.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Selected Object", "Store the selected live shelter object as a scenario placement.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
-                    items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Selected Capture", "Remove the selected object's captured placement from the scenario.", hasCapturedSelectedObject, false, "RM", "Delete the stored selected capture.")));
-                    items.Add(Property("Selected Object", FormatTarget(selectedTarget)));
-                    if (!string.IsNullOrEmpty(selectedObjectStatus))
-                        items.Add(Text(selectedObjectStatus));
-                    break;
-            }
-
-            return new ScenarioAuthoringInspectorSection
-            {
-                Id = "tool",
-                Title = title,
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
-                Items = items.ToArray()
-            };
-        }
     }
 }
 

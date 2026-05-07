@@ -775,7 +775,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return;
             }
 
-            ShelteredDeferredPatchTriggers.ApplyEditorDeferred("ScenarioSelectionPanel Add New");
+            ShelteredDeferredPatchTriggers.EnsureEditorRuntime("ScenarioSelectionPanel Add New");
 
             UILabel nameLabel = null;
             UILabel descriptionLabel = null;

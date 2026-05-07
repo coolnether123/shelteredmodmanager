@@ -293,7 +293,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
+        StartupTiming = PatchStartupTiming.BootCritical)]
     internal static class ScenarioAuthoringGlobalUiIsolationPatches
     {
         [HarmonyPatch(typeof(UI_InputListener), "UpdateManager")]
@@ -317,7 +317,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
+        StartupTiming = PatchStartupTiming.BootCritical)]
     internal static class ScenarioAuthoringPauseOwnershipPatches
     {
         [HarmonyPatch(typeof(PauseManager), "Pause")]
@@ -370,7 +370,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         ManagerToggleDefault = true,
         ManagerToggleRequiresRestart = true,
         ManagerToggleSortOrder = 100,
-        StartupTiming = PatchStartupTiming.EditorDeferred)]
+        StartupTiming = PatchStartupTiming.BootCritical)]
     internal static class ScenarioAuthoringSimulationFreezePatches
     {
         [HarmonyPatch(typeof(UIPanelManager), nameof(UIPanelManager.timePaused), MethodType.Getter)]

@@ -2,6 +2,7 @@ using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Harmony;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
@@ -86,6 +87,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             SaveManager.SaveType launchSaveType = _launchCoordinator.GetVirtualSaveType(entry);
+            EnsureEditorRuntime("ScenarioBookBrowser OpenDraft");
             ScenarioAuthoringSession session = ScenarioAuthoringBootstrapService.Instance.QueueExistingDraft(entry.ScenarioId, launchSaveType);
             if (session == null)
             {
@@ -116,6 +118,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             try
             {
                 SaveManager.SaveType launchSaveType = SaveManager.SaveType.Slot1;
+                EnsureEditorRuntime("ScenarioBookBrowser CreateDraft");
                 ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType);
                 if (draft == null || string.IsNullOrEmpty(draft.StartupSaveId))
                     throw new InvalidOperationException("The draft session did not provide a startup save.");
@@ -206,6 +209,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private static string Safe(string value, string fallback)
         {
             return string.IsNullOrEmpty(value) ? (fallback ?? string.Empty) : value;
+        }
+
+        private static void EnsureEditorRuntime(string trigger)
+        {
+            ShelteredDeferredPatchTriggers.EnsureEditorRuntime(trigger);
         }
     }
 }

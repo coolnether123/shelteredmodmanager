@@ -46,12 +46,16 @@ namespace ShelteredAPI.Saves.Paging
         }
         
         // Colors for status indicators
-        private static readonly Color COLOR_MATCH = new Color(0.3f, 0.9f, 0.3f);
+        private static readonly Color COLOR_MATCH = new Color(0.15f, 1.0f, 0.05f);
         private static readonly Color COLOR_VERSION_DIFF = new Color(0.9f, 0.9f, 0.2f);
         private static readonly Color COLOR_MISSING = new Color(0.9f, 0.3f, 0.3f);
         private static readonly Color COLOR_HEADER = new Color(0.9f, 0.85f, 0.7f);
         private static readonly Color COLOR_TEXT = Color.white;
         private static readonly Color COLOR_SUBTEXT = new Color(0.7f, 0.7f, 0.7f);
+        private const string STATUS_MATCH = "[OK]";
+        private const string STATUS_MISSING = "[X]";
+        private const string STATUS_WARNING = "[!]";
+        private const string STATUS_VERSION_DIFF = "~";
         
         // Layout constants for the modal window
         private const int WINDOW_WIDTH = 900;
@@ -238,13 +242,13 @@ namespace ShelteredAPI.Saves.Paging
                 SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
                 Color color = GetStatusColor(compareStatus);
                 
-                string iconPrefix = "✓";
+                string iconPrefix = STATUS_MATCH;
                 string suffix = "";
                 
                 switch (compareStatus)
                 {
-                    case SaveVerification.ModCompareStatus.Extra: iconPrefix = "~"; suffix = " [NEW]"; break;
-                    case SaveVerification.ModCompareStatus.VersionDiff: iconPrefix = "~"; break;
+                    case SaveVerification.ModCompareStatus.Extra: iconPrefix = STATUS_VERSION_DIFF; suffix = " [NEW]"; break;
+                    case SaveVerification.ModCompareStatus.VersionDiff: iconPrefix = STATUS_VERSION_DIFF; break;
                 }
                 
                 // Create a row container to group name and version labels
@@ -277,16 +281,16 @@ namespace ShelteredAPI.Saves.Paging
                 SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
                 Color color = GetStatusColor(compareStatus);
                 
-                string icon = "✓";
+                string icon = STATUS_MATCH;
                 string suffix = "";
                 
                 switch (compareStatus)
                 {
                     case SaveVerification.ModCompareStatus.Missing:
-                        icon = "✗"; 
+                        icon = STATUS_MISSING;
                         suffix = " [MISSING]";
                         break;
-                    case SaveVerification.ModCompareStatus.VersionDiff: icon = "~"; suffix = " [VER DIFF]"; break;
+                    case SaveVerification.ModCompareStatus.VersionDiff: icon = STATUS_VERSION_DIFF; suffix = " [VER DIFF]"; break;
                 }
                 
                 var diskMod = discovered.Find(d => d.Id.Equals(saved.modId, StringComparison.OrdinalIgnoreCase));
@@ -336,7 +340,7 @@ namespace ShelteredAPI.Saves.Paging
             
             if (warnings.Count > 0)
             {
-                var warnHeader = CreateLabel(root, "WarningHeader", "⚠️ WARNINGS FROM MISSING MODS:",
+                var warnHeader = CreateLabel(root, "WarningHeader", STATUS_WARNING + " WARNINGS FROM MISSING MODS:",
                     new Vector3(0, warningY, 0), 18, COLOR_MISSING, uiFont, ttfFont, 100);
                 warnHeader.alignment = NGUIText.Alignment.Center;
                 
@@ -475,11 +479,11 @@ namespace ShelteredAPI.Saves.Paging
                 .alignment = NGUIText.Alignment.Center;
             
             // === STATUS LINE ===
-            string statusText = allMatch ? "✓ Mods match - safe to play" :
-                               hasMissing && hasVersionDiff ? $"⚠ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version diff" :
-                               hasMissing ? $"⚠ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} mod(s) missing" :
-                               hasExtra && !hasMissing ? $"⚠ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Extra)} extra mod(s) active" :
-                               $"~ {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version difference(s)";
+            string statusText = allMatch ? STATUS_MATCH + " Mods match - safe to play" :
+                               hasMissing && hasVersionDiff ? $"{STATUS_WARNING} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} missing, {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version diff" :
+                               hasMissing ? $"{STATUS_WARNING} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Missing)} mod(s) missing" :
+                               hasExtra && !hasMissing ? $"{STATUS_WARNING} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.Extra)} extra mod(s) active" :
+                               $"{STATUS_VERSION_DIFF} {comparison.Count(c => c.status == SaveVerification.ModCompareStatus.VersionDiff)} version difference(s)";
             
             if (hasUnknownState)
             {

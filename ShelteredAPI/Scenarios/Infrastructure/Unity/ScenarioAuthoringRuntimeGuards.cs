@@ -14,6 +14,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return ScenarioAuthoringBootstrapService.Instance.IsEditingDraftActive();
         }
 
+        public static bool IsAuthoringPending()
+        {
+            return ScenarioAuthoringBootstrapService.Instance.HasPendingDraftLaunch();
+        }
+
+        public static bool ShouldSuspendCameraUpdateForAuthoring()
+        {
+            if (!ScenarioWorldReady.IsShelterSceneActive())
+                return false;
+
+            return IsAuthoringPending() && !IsAuthoringActive();
+        }
+
         public static bool IsPlaytesting()
         {
             if (!IsAuthoringActive())
