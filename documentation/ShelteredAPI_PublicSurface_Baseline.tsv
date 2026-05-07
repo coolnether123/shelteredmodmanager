@@ -1,4 +1,4 @@
-﻿# Kind	Namespace	Name	Path	Justification
+# Kind	Namespace	Name	Path	Justification
 class	ShelteredAPI.Actors	ShelteredActors	ShelteredAPI/Actors/ActorSystem.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Adapters	GameHelperExtensions	ShelteredAPI/Adapters/GameHelperExtensions.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters	PartyChangedEventArgs	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -165,6 +165,7 @@ class	ShelteredAPI.UI.Runtime	ShelteredRuntimeUI	ShelteredAPI/UI/Runtime/Shelter
 class	ShelteredAPI.Storage	CharacterItemAssignment	ShelteredAPI/Storage/CharacterItemAssignmentContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Storage	ItemStoreItem	ShelteredAPI/Storage/ItemStoreContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Storage	ItemStoreSnapshot	ShelteredAPI/Storage/ItemStoreContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Storage	ItemReservationResult	ShelteredAPI/Storage/ItemStoreContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Storage	ItemTransferResult	ShelteredAPI/Storage/ItemStoreContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Storage	ShelteredCharacterItems	ShelteredAPI/Storage/ShelteredCharacterItems.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Storage	ShelteredStores	ShelteredAPI/Storage/ShelteredStores.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -239,5 +240,6 @@ interface	ShelteredAPI.Scenarios.Public	IShelteredCustomScenario	ShelteredAPI/Sc
 interface	ShelteredAPI.Scenarios.Public	IShelteredCustomScenarioDependencies	ShelteredAPI/Scenarios/Public/IShelteredCustomScenario.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Storage	ICharacterItemAssignmentService	ShelteredAPI/Storage/CharacterItemAssignmentContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Storage	IItemStore	ShelteredAPI/Storage/ItemStoreContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+interface	ShelteredAPI.Storage	IReservableItemStore	ShelteredAPI/Storage/ItemStoreContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 struct	ShelteredAPI.Characters	CharacterInfo	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 struct	ShelteredAPI.Characters	ExpeditionPartyInfo	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.

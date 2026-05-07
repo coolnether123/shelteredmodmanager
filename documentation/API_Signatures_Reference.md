@@ -1,4 +1,4 @@
-﻿# ModAPI + ShelteredAPI v1.3 Beta.3 API Signatures Reference
+# ModAPI + ShelteredAPI v1.3 Beta.3 API Signatures Reference
 
 This is the source-of-truth signature sheet for the current code in this repo. The 1.3 Beta.3 line is a breaking clean API line.
 
@@ -23,6 +23,8 @@ Use this file for copy/paste signatures and type names. For workflow guidance, s
 
 - Always reference `ModAPI.dll`.
 - Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
+
+> Dev/API-preview warning: the runtime UI store and cooking station contracts are preview APIs in this 1.3 line. Treat the signatures below as the current copy/paste reference, but allow for small changes before this surface is declared stable.
 
 ## API Stability Rules
 
@@ -761,7 +763,6 @@ public sealed class ItemStoreItem
     public string Subtitle { get; set; }
     public ItemCategory Category { get; set; }
     public int Count { get; set; }
-    public object Tag { get; set; }
 }
 
 public sealed class ItemStoreSnapshot
@@ -782,6 +783,25 @@ public sealed class ItemTransferResult
     public int Requested { get; }
     public int Moved { get; }
     public string ErrorMessage { get; }
+}
+
+public sealed class ItemReservationResult
+{
+    public bool Success { get; }
+    public string ReservationId { get; }
+    public string ItemId { get; }
+    public int Requested { get; }
+    public int Reserved { get; }
+    public string OwnerToken { get; }
+    public string ErrorMessage { get; }
+}
+
+public interface IReservableItemStore
+{
+    ItemReservationResult Reserve(string itemId, int quantity, string ownerToken);
+    ItemTransferResult CommitReservation(string reservationId);
+    ItemTransferResult CancelReservation(string reservationId);
+    int GetAvailableCount(string itemId);
 }
 
 public sealed class CharacterItemAssignment
@@ -851,7 +871,6 @@ public sealed class CookingStationRecipe
     public string OutputCountText { get; set; }
     public float DurationSeconds { get; set; }
     public Sprite Icon { get; set; }
-    public object Tag { get; set; }
 }
 
 public sealed class CookingStationRequest
@@ -943,6 +962,71 @@ public static class ShelteredCooking
     public static FamilyMember FindIdleWorker();
 }
 ```
+
+Minimal fridge-backed cooking station flow:
+
+```csharp
+Obj_Base fridgeObject = ShelteredStores.FindNearestObject(
+    ObjectManager.ObjectType.Freezer,
+    stove.transform.position);
+if (fridgeObject == null)
+    return;
+
+IItemStore fridgeStore = ShelteredStores.ForObject(
+    ownerId: "com.example.cooking",
+    targetObject: fridgeObject,
+    displayName: "Fridge Storage",
+    capacity: 24);
+
+ShelteredRuntimeUI.OpenContainer(
+    ShelteredStores.CreateContainerRequest(
+        store: fridgeStore,
+        ownerId: "com.example.cooking",
+        panelId: "com.example.cooking.fridge." + fridgeObject.objectId,
+        title: "Fridge Storage"));
+
+ShelteredCooking.RegisterStation(new CookingStationRegistration
+{
+    OwnerId = "com.example.cooking",
+    ObjectType = ObjectManager.ObjectType.Stove,
+    InteractionId = "com.example.cooking.stove.cook",
+    InteractionText = "Cook",
+    CanOpen = context =>
+        ShelteredStores.FindNearestObject(
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position) != null,
+    IngredientStore = context =>
+        ShelteredStores.FindNearestObjectStore(
+            "com.example.cooking",
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position,
+            "Fridge Storage",
+            24),
+    OutputStore = context => ShelteredStores.ForInventory(),
+    JobOptions = new CookingStationJobOptions
+    {
+        JobType = "cook_food",
+        AnimationTrigger = "Rummage",
+        DurationSeconds = 3f
+    },
+    Recipes = new[]
+    {
+        new CookingStationRecipe
+        {
+            RecipeId = "com.example.cooking.meat_to_ration",
+            DisplayName = "Cook Ration",
+            OutputItemId = VanillaItems.Ration,
+            OutputCount = 1,
+            Ingredients = new[]
+            {
+                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
+            }
+        }
+    }
+});
+```
+
+`ForFreezer(...)` and `FindNearestFreezer(...)` are adapters over vanilla `Obj_Freezer` data and preserve vanilla limits: meat and desperate meat only. `ForObject(...)` and `FindNearestObjectStore(...)` create mod-owned stores keyed to world objects, which is the supported path for fridge-like custom storage. ShelteredAPI avoids patching `Obj_Freezer` to accept custom item types.
 
 `ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
 
