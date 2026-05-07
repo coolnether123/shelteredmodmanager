@@ -9,7 +9,7 @@ using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Harmony
 {
     [PatchPolicy(PatchDomain.SaveFlow, "LoadingTransitionRecovery",
-        TargetBehavior = "Detect stalled Sheltered loading transitions, return to main menu, and surface captured error details.",
+        TargetBehavior = "Recover from managed Sheltered loading transition exceptions and surface captured error details.",
         FailureMode = "A failed loading transition can leave the player on a transition/loading screen without actionable feedback.",
         RollbackStrategy = "Disable the SaveFlow patch domain or remove the loading transition recovery patch.",
         StartupTiming = PatchStartupTiming.SaveFlowCritical)]

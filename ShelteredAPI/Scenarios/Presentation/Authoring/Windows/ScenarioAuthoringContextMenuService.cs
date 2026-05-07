@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
             }
         }
 
-        public void Open(string title, string detail, float anchorX, float anchorY, ScenarioAuthoringInspectorAction[] actions)
+        public void Open(string title, string detail, float anchorX, float anchorY, bool centerOnScreen, ScenarioAuthoringInspectorAction[] actions)
         {
             lock (_sync)
             {
@@ -30,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
                     Detail = detail,
                     AnchorX = anchorX,
                     AnchorY = anchorY,
+                    CenterOnScreen = centerOnScreen,
                     Actions = actions ?? new ScenarioAuthoringInspectorAction[0]
                 };
             }

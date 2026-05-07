@@ -543,8 +543,17 @@
     <Compile Include="Storage\ItemStoreContracts.cs" />
     <Compile Include="Storage\CharacterItemAssignmentContracts.cs" />
     <Compile Include="Storage\CharacterItemAssignments.cs" />
+    <Compile Include="Storage\FreezerItemStore.cs" />
+    <Compile Include="Storage\InventoryItemStore.cs" />
+    <Compile Include="Storage\ItemStoreBase.cs" />
     <Compile Include="Storage\ShelteredCharacterItems.cs" />
     <Compile Include="Storage\ShelteredStores.cs" />
+    <Compile Include="Storage\ModItemReservation.cs" />
+    <Compile Include="Storage\ModItemStore.cs" />
+    <Compile Include="Storage\ModItemStorePersistence.cs" />
+    <Compile Include="Storage\ModItemStoreRegistry.cs" />
+    <Compile Include="Storage\ModItemStoreState.cs" />
+    <Compile Include="Storage\StoreItemMetadata.cs" />
     <Compile Include="Workstations\CookingWorkstationContracts.cs" />
     <Compile Include="Workstations\RuntimeTimedWorkJob.cs" />
     <Compile Include="Workstations\ShelteredCooking.cs" />

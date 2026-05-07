@@ -100,7 +100,6 @@ namespace ShelteredAPI.Core
 
         private void Update()
         {
-            TickTransition();
             TryShowPendingRecoveryDialog();
         }
 
@@ -120,7 +119,7 @@ namespace ShelteredAPI.Core
                 return;
 
             string sourceScene = LoadingTransitionRuntime.GetActiveSceneName();
-            _transition = LoadingTransitionState.Start(targetScene, sourceScene, requestReason, Time.realtimeSinceStartup);
+            _transition = LoadingTransitionState.Start(targetScene, sourceScene, requestReason);
 
             _diagnostics.ClearBreadcrumbs();
             _diagnostics.MarkBreadcrumb("Transition requested target=" + targetScene + " source=" + sourceScene);
@@ -131,34 +130,12 @@ namespace ShelteredAPI.Core
         private void BeginMenuTransition(string targetLabel, string requestReason)
         {
             string sourceScene = LoadingTransitionRuntime.GetActiveSceneName();
-            _transition = LoadingTransitionState.StartMenuTransition(targetLabel, sourceScene, requestReason, Time.realtimeSinceStartup);
+            _transition = LoadingTransitionState.StartMenuTransition(targetLabel, sourceScene, requestReason);
 
             _diagnostics.ClearBreadcrumbs();
             _diagnostics.MarkBreadcrumb("Menu transition requested target=" + LoadingTransitionText.Safe(targetLabel) + " source=" + sourceScene);
 
             MMLog.WriteInfo("[LoadingTransitionRecovery] Monitoring menu transition for " + LoadingTransitionText.Safe(targetLabel) + ".");
-        }
-
-        private void TickTransition()
-        {
-            if (_transition == null || _transition.Phase == LoadingTransitionPhase.Recovering)
-                return;
-
-            string activeScene = LoadingTransitionRuntime.GetActiveSceneName();
-            TrackSceneChange(activeScene);
-
-            if (_transition.IsTargetScene(activeScene))
-            {
-                CompleteTransition(activeScene);
-                return;
-            }
-
-            if (LoadingTransitionRecoveryConstants.IsLoadingScene(activeScene))
-                EnterLoadingSceneIfActive("Update");
-
-            string timeoutReason;
-            if (_transition.TryGetTimeoutReason(Time.realtimeSinceStartup, out timeoutReason))
-                Recover(timeoutReason, null);
         }
 
         private void TrackSceneChange(string activeScene)
@@ -185,7 +162,7 @@ namespace ShelteredAPI.Core
             if (!LoadingTransitionRecoveryConstants.IsLoadingScene(LoadingTransitionRuntime.GetActiveSceneName()))
                 return;
 
-            _transition.MarkLoadingSceneEntered(Time.realtimeSinceStartup);
+            _transition.MarkLoadingSceneEntered();
             _diagnostics.MarkBreadcrumb("LoadingScene entered via " + reason);
         }
 
@@ -257,6 +234,8 @@ namespace ShelteredAPI.Core
 
             if (_transition == null)
                 return;
+
+            TrackSceneChange(sceneName);
 
             if (LoadingTransitionRecoveryConstants.IsLoadingScene(sceneName))
             {

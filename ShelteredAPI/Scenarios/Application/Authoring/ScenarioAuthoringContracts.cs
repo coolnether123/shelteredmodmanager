@@ -758,6 +758,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Detail { get; set; }
         public float AnchorX { get; set; }
         public float AnchorY { get; set; }
+        public bool CenterOnScreen { get; set; }
         public ScenarioAuthoringInspectorAction[] Actions { get; set; }
 
         public ScenarioAuthoringContextMenuModel Copy()
@@ -768,7 +769,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Title = Title,
                 Detail = Detail,
                 AnchorX = AnchorX,
-                AnchorY = AnchorY
+                AnchorY = AnchorY,
+                CenterOnScreen = CenterOnScreen
             };
 
             if (Actions != null)

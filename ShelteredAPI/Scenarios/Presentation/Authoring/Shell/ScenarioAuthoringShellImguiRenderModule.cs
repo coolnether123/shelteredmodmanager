@@ -68,6 +68,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _spritePickerSearchText = string.Empty;
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
+        private float _activeContentWidth;
 
         public string ModuleId
         {

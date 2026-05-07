@@ -285,7 +285,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         internal void OpenContextMenu(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
-            _presentationBuilder.OpenContextMenu(state, target, _contextMenuService);
+            OpenContextMenu(state, target, false);
+        }
+
+        internal void OpenContextMenu(ScenarioAuthoringState state, ScenarioAuthoringTarget target, bool centerOnScreen)
+        {
+            _presentationBuilder.OpenContextMenu(state, target, _contextMenuService, centerOnScreen);
         }
 
         public ScenarioAuthoringShellViewModel GetShellViewModel()
