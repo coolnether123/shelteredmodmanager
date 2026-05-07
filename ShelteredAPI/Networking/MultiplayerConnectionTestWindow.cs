@@ -104,9 +104,13 @@ namespace ShelteredAPI.Networking
             DrawValue("Local", service.LocalEndpointText);
             DrawValue("Peer ID", snapshot != null ? snapshot.LocalPeerId.ToString() : "unassigned");
             DrawValue("Config", service.ConfigurationSummary);
+            DrawValue("Save sync", service.SaveSyncStatus);
 
             string lastError = service.LastError;
             DrawValue("Last error", string.IsNullOrEmpty(lastError) ? "none" : lastError);
+            string saveSyncError = service.SaveSyncLastError;
+            if (!string.IsNullOrEmpty(saveSyncError))
+                DrawValue("Sync error", saveSyncError);
 
             if (!service.CanSendTestMessage)
                 DrawHint("Send is disabled until a client is connected, or until a host has at least one connected peer.");

@@ -149,6 +149,7 @@ namespace ShelteredAPI.Hooks
 
                     // Regular log: Save complete
                     MMLog.WriteInfo($"Save finished {slotName} (custom slot: {entry?.id ?? "unknown"}, scenario: {entry?.scenarioId ?? target.scenarioId ?? "unknown"})");
+                    Events.RaiseAfterSave(entry);
                     return true; // We handled it
                 }
 
@@ -180,6 +181,7 @@ namespace ShelteredAPI.Hooks
                     
                     // Regular log: Save complete
                     MMLog.WriteInfo($"Save finished {slotName} (custom slot: {result.id}, scenario: {result.scenarioId}, absoluteSlot: {result.absoluteSlot})");
+                    Events.RaiseAfterSave(result);
                     return true; // We handled it
                 }
 
@@ -193,6 +195,7 @@ namespace ShelteredAPI.Hooks
                 if (success)
                 {
                     MMLog.WriteInfo($"Save finished {slotName} (vanilla)");
+                    TryRaiseAfterSaveForVanilla(type);
                 }
                 return success;
             }
@@ -206,6 +209,38 @@ namespace ShelteredAPI.Hooks
                 MMLog.Flush();
                 throw;
             }
+        }
+
+        private static void TryRaiseAfterSaveForVanilla(SaveManager.SaveType type)
+        {
+            int slot = SaveTypeToVanillaSlot(type);
+            if (slot <= 0)
+                return;
+
+            SaveEntry entry = SaveRegistryCore.ReadVanillaSaveEntry(slot, "Standard", "Standard_" + slot, slot);
+            if (entry == null)
+            {
+                entry = new SaveEntry
+                {
+                    id = "Standard_" + slot,
+                    absoluteSlot = slot,
+                    name = "Slot " + slot,
+                    scenarioId = "Standard",
+                    saveInfo = new SaveInfo()
+                };
+            }
+
+            Events.RaiseAfterSave(entry);
+        }
+
+        private static int SaveTypeToVanillaSlot(SaveManager.SaveType type)
+        {
+            if (type == SaveManager.SaveType.Slot1) return 1;
+            if (type == SaveManager.SaveType.Slot2) return 2;
+            if (type == SaveManager.SaveType.Slot3) return 3;
+            if (type == SaveManager.SaveType.SlotSurrounded) return 4;
+            if (type == SaveManager.SaveType.SlotStasis) return 5;
+            return -1;
         }
 
         public override bool PlatformLoad(SaveManager.SaveType type)

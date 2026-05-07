@@ -34,6 +34,7 @@ namespace ShelteredAPI.Networking
         private readonly List<string> _discoveryResults = new List<string>();
 
         private NetworkSession _session;
+        private ShelteredMultiplayerSaveSyncService _saveSync;
         private string _lastError = string.Empty;
         private string _localEndpointText = "Not bound";
         private string _lastLocalEndpointKey = string.Empty;
@@ -95,6 +96,16 @@ namespace ShelteredAPI.Networking
             get { return _localEndpointText; }
         }
 
+        public string SaveSyncStatus
+        {
+            get { return _saveSync != null ? _saveSync.Status : "inactive"; }
+        }
+
+        public string SaveSyncLastError
+        {
+            get { return _saveSync != null ? _saveSync.LastError : string.Empty; }
+        }
+
         public bool IsDiscovering
         {
             get
@@ -141,7 +152,9 @@ namespace ShelteredAPI.Networking
                 NetworkConfig config = CreateConfig(port);
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
+                AttachSaveSync(_session);
                 _session.StartHost(CreateOptions("Host"));
+                ShelteredMultiplayer.ActivateHost(NetworkDefaults.HostPeerId, _session.SessionId, 20);
                 RefreshLocalEndpoint();
                 AddInfo("Host", "Host listening on UDP " + port + ". Local endpoint: " + _localEndpointText + ".");
                 ClearLastError();
@@ -172,6 +185,7 @@ namespace ShelteredAPI.Networking
                 NetworkConfig config = CreateConfig(DefaultPort);
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
+                AttachSaveSync(_session);
                 _session.Join(endpoint, CreateOptions("Client"));
                 RefreshLocalEndpoint();
                 AddInfo("Client", "Connecting to " + endpoint + ". Local endpoint: " + _localEndpointText + ".");
@@ -205,6 +219,8 @@ namespace ShelteredAPI.Networking
             try
             {
                 session.Update();
+                if (_saveSync != null)
+                    _saveSync.Update();
                 RefreshLocalEndpoint();
             }
             catch (Exception ex)
@@ -412,6 +428,14 @@ namespace ShelteredAPI.Networking
             session.TransportReconnected += OnTransportReconnected;
         }
 
+        private void AttachSaveSync(NetworkSession session)
+        {
+            if (_saveSync != null)
+                _saveSync.Dispose();
+
+            _saveSync = new ShelteredMultiplayerSaveSyncService(session, AddLog);
+        }
+
         private void DetachEvents(NetworkSession session)
         {
             session.PeerConnected -= OnPeerConnected;
@@ -427,6 +451,12 @@ namespace ShelteredAPI.Networking
         {
             NetworkSession session = _session;
             _session = null;
+            if (_saveSync != null)
+            {
+                _saveSync.HandleLocalSessionEnding(reason);
+                _saveSync.Dispose();
+                _saveSync = null;
+            }
             _localEndpointText = "Not bound";
             _lastLocalEndpointKey = string.Empty;
             _cachedLanEndpoint = string.Empty;
@@ -439,6 +469,7 @@ namespace ShelteredAPI.Networking
             {
                 DetachEvents(session);
                 session.Dispose();
+                ShelteredMultiplayer.Deactivate(reason);
                 AddInfo("Service", reason);
             }
             catch (Exception ex)
@@ -552,12 +583,20 @@ namespace ShelteredAPI.Networking
         private void OnPeerConnected(object sender, NetworkPeerEventArgs e)
         {
             NetworkPeer peer = e != null ? e.Peer : null;
+            if (_saveSync != null)
+                _saveSync.HandlePeerConnected(peer);
+            if (_session != null && _session.Mode == NetworkSessionMode.Client)
+                ShelteredMultiplayer.ActivateClient(_session.LocalPeerId, _session.SessionId, 20);
             AddInfo(GetComponentName(), "Peer connected: " + FormatPeerDetails(peer));
         }
 
         private void OnPeerDisconnected(object sender, NetworkPeerDisconnectedEventArgs e)
         {
             string message = e != null ? e.Message : string.Empty;
+            if (_saveSync != null)
+                _saveSync.HandlePeerDisconnected(e != null ? e.Peer : null);
+            if (_session != null && _session.Mode == NetworkSessionMode.Client)
+                ShelteredMultiplayer.Deactivate(string.IsNullOrEmpty(message) ? "peer-disconnected" : message);
             AddWarning(GetComponentName(), "Peer disconnected: " + FormatPeerDetails(e != null ? e.Peer : null)
                 + " Reason=" + (e != null ? e.Reason.ToString() : "Unknown") + " Message=" + message);
             if (!string.IsNullOrEmpty(message))
@@ -610,7 +649,13 @@ namespace ShelteredAPI.Networking
 
         private void OnMessageReceived(object sender, NetworkMessageReceivedEventArgs e)
         {
-            if (e == null || e.MessageType != TestMessageType)
+            if (e == null)
+                return;
+
+            if (_saveSync != null && _saveSync.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
+                return;
+
+            if (e.MessageType != TestMessageType)
                 return;
 
             string text = DecodeUtf8(e.Payload);

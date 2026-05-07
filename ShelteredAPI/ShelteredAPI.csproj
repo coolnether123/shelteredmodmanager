@@ -58,6 +58,9 @@
     <Compile Include="Actors\Internal\ActorSystemImpl.Diagnostics.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.Execution.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.LiveSync.cs" />
+    <Compile Include="Bunkers\BunkerContracts.cs" />
+    <Compile Include="Bunkers\ShelteredBunkers.cs" />
+    <Compile Include="Bunkers\ShelteredBunkerService.cs" />
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Content\ContentRegistry.cs" />
@@ -139,6 +142,7 @@
     <Compile Include="Networking\ShelteredMultiplayerHookPatches.cs" />
     <Compile Include="Networking\ShelteredMultiplayerHookService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerRuntimeDriver.cs" />
+    <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestService.cs" />
     <Compile Include="Networking\MultiplayerConnectionTestWindow.cs" />
     <Compile Include="Networking\MultiplayerMenuController.cs" />

@@ -1,6 +1,8 @@
 # Kind	Namespace	Name	Path	Justification
 class	ShelteredAPI.Actors	ShelteredActors	ShelteredAPI/Actors/ActorSystem.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Adapters	GameHelperExtensions	ShelteredAPI/Adapters/GameHelperExtensions.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Bunkers	BunkerDefinition	ShelteredAPI/Bunkers/BunkerContracts.cs	Public ShelteredAPI bunker placement DTO intentionally exposed to mods and multiplayer integrations.
+class	ShelteredAPI.Bunkers	ShelteredBunkers	ShelteredAPI/Bunkers/ShelteredBunkers.cs	Public ShelteredAPI bunker placement facade intentionally exposed to mods and multiplayer integrations.
 class	ShelteredAPI.Characters	PartyChangedEventArgs	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters	ShelteredCharacters	ShelteredAPI/Characters/ShelteredCharacters.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters.Models	AttributeModifier	ShelteredAPI/Characters/Models/AttributeModifier.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -163,6 +165,7 @@ class	ShelteredAPI.UI.Runtime	ObjectPanelContext	ShelteredAPI/UI/Runtime/Runtime
 class	ShelteredAPI.UI.Runtime	ObjectPanelRegistration	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI.Runtime	RuntimeUiHandle	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI.Runtime	ShelteredRuntimeUI	ShelteredAPI/UI/Runtime/ShelteredRuntimeUI.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+enum	ShelteredAPI.Bunkers	BunkerLocationMode	ShelteredAPI/Bunkers/BunkerContracts.cs	Public ShelteredAPI bunker placement mode intentionally exposed to mods and multiplayer integrations.
 enum	ShelteredAPI.Characters.Abstractions	CharacterLocation	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Characters.Abstractions	CharacterSource	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Characters.Abstractions	CharacterState	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -201,6 +204,7 @@ enum	ShelteredAPI.Scenarios.Domain.Stages	ScenarioStageKind	ShelteredAPI/Scenari
 enum	ShelteredAPI.Scenarios.Domain.Timeline	ScenarioTimelineEntryKind	ShelteredAPI/Scenarios/Domain/Timeline/ScenarioTimelineEntryKind.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Scenarios.Domain.Timeline	ScenarioTimelineEntryStatus	ShelteredAPI/Scenarios/Domain/Timeline/ScenarioTimelineEntryKind.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.UI.Runtime	ContainerUiTransferDirection	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+interface	ShelteredAPI.Bunkers	IShelteredBunkerService	ShelteredAPI/Bunkers/BunkerContracts.cs	Public ShelteredAPI bunker placement service contract intentionally exposed to mods and multiplayer integrations.
 interface	ShelteredAPI.Characters.Abstractions	ICharacterAttributes	ShelteredAPI/Characters/Abstractions/ICharacterAttributes.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Characters.Abstractions	ICharacterData	ShelteredAPI/Characters/Abstractions/ICharacterData.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Characters.Abstractions	ICharacterDefinition	ShelteredAPI/Characters/Abstractions/ICharacterProxy.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -226,5 +230,6 @@ interface	ShelteredAPI.Saves	ICustomSaveParticipant	ShelteredAPI/Saves/Models.cs
 interface	ShelteredAPI.Saves	ICustomScenarioHooks	ShelteredAPI/Saves/Models.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Scenarios.Public	IShelteredCustomScenario	ShelteredAPI/Scenarios/Public/IShelteredCustomScenario.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Scenarios.Public	IShelteredCustomScenarioDependencies	ShelteredAPI/Scenarios/Public/IShelteredCustomScenario.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+struct	ShelteredAPI.Bunkers	BunkerSessionSettings	ShelteredAPI/Bunkers/BunkerContracts.cs	Public ShelteredAPI bunker generation settings snapshot intentionally exposed to mods and multiplayer integrations.
 struct	ShelteredAPI.Characters	CharacterInfo	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 struct	ShelteredAPI.Characters	ExpeditionPartyInfo	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.

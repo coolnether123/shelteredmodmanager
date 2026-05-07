@@ -7,6 +7,7 @@ using ModAPI.Actors;
 using ModAPI.InputServices;
 using ModAPI.Scenarios;
 using ShelteredAPI.Actors;
+using ShelteredAPI.Bunkers;
 using ShelteredAPI.Content;
 using ShelteredAPI.Dialogue;
 using ShelteredAPI.Dialogue.Runtime;
@@ -118,7 +119,9 @@ namespace ShelteredAPI.Core
             RegisterApi(GameRuntimeApiIds.ShelteredDialogue, dialogue);
             RegisterApi(ShelteredApiAliasIds.ShelteredDialogue, dialogue);
 
-
+            IShelteredBunkerService bunkers = ShelteredBunkers.Service;
+            RegisterApi(ShelteredApiAliasIds.GameRuntimeShelteredBunkers, bunkers);
+            RegisterApi(ShelteredApiAliasIds.ShelteredBunkers, bunkers);
 
             IGameLifecycleSource lifecycleSource = new ShelteredGameLifecycleSource();
             RegisterApi(GameRuntimeApiIds.GameLifecycle, lifecycleSource);
