@@ -7,7 +7,6 @@ using HarmonyLib;
 using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves.Runtime;

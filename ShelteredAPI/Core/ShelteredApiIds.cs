@@ -3,6 +3,7 @@ using ShelteredAPI.Bunkers;
 using ShelteredAPI.Content;
 using ShelteredAPI.Dialogue;
 using ShelteredAPI.Networking;
+using ShelteredAPI.Storage;
 
 namespace ShelteredAPI.Core
 {
@@ -22,6 +23,7 @@ namespace ShelteredAPI.Core
         public const string ShelteredDialogue = "ShelteredAPI.Dialogue";
         public const string ShelteredBunkers = "ShelteredAPI.Bunkers";
         public const string GameRuntimeShelteredBunkers = "GameRuntime.ShelteredBunkers";
+        public const string CharacterItems = "ShelteredAPI.CharacterItems";
         public const string GameLifecycle = "ShelteredAPI.GameLifecycle";
         public const string SaveRuntime = "ShelteredAPI.SaveRuntime";
         public const string UiLifecycleEvents = "ShelteredAPI.UiLifecycleEvents";
@@ -111,6 +113,11 @@ namespace ShelteredAPI.Core
                 return true;
 
             return ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.ShelteredBunkers, out service);
+        }
+
+        public static bool TryGetCharacterItems(out ICharacterItemAssignmentService service)
+        {
+            return ModAPIRegistry.TryGetAPI(ShelteredApiAliasIds.CharacterItems, out service);
         }
     }
 }

@@ -161,7 +161,7 @@ Boundary baseline shrink from Prompt 4:
 Prompt 5 split generic mod persistence from Sheltered save-system integration:
 
 - `ModAPI.Core.ISaveRuntimeAdapter` and `IModSaveContext` were added as narrow neutral save ports. `ModAPI` uses them for per-mod JSON persistence, deterministic RNG seed storage, startup readiness, and quit heartbeat diagnostics without naming `SaveManager`, `SaveData`, custom save slots, or `SaveEntry`.
-- `ModAPI.Core.SaveSystemImpl` remains in `ModAPI` because it now owns only generic per-mod JSON persistence under the host-provided slot path.
+- `ModAPI.Persistence.SaveSystemImpl` remains in `ModAPI` because it now owns only generic per-mod JSON persistence under the host-provided slot path.
 - `ShelteredAPI.Core.ShelteredSaveRuntimeAdapter` owns Sheltered slot-path resolution, active custom-save descriptors, proxy injection readiness, and SaveManager heartbeat details.
 - `SaveProtectionPatches`, `SaveRuntimeState`, `Custom Saves/**`, Sheltered game-state helpers, Sheltered persistence collections, and `MainMenuPatches` are hosted by `ShelteredAPI.dll`. Public save-slot and persistence usage goes through `ShelteredSaves`, `ShelteredSaveEvents`, `ShelteredPersistence`, `ShelteredPersistentList<T>`, and `ShelteredPersistentDictionary<TValue>`.
 - `ModAPI.Scenarios` no longer depends on custom-save manifest DTOs. Scenario dependency declarations now use `ScenarioModDependency` and `ScenarioDependencyManifestData`; `ShelteredAPI` converts those to Sheltered `SlotManifest` data for locked scenario/save verification.

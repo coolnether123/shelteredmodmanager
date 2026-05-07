@@ -31,7 +31,7 @@ Entry path:
 
 High-level flow:
 1. `InitializeLoader(...)`
-2. `ReadLoadOrderFromFile(...)`
+2. `ModLoadOrderReader.Read(...)`
 3. `DiscoverAndOrderMods(...)`
 4. `AttachInspectorTools()`
 5. `LoadAndInitializePlugins(...)`

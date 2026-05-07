@@ -1,7 +1,6 @@
 using System;
 using System.Reflection;
 using ModAPI.Core;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Runtime;
 

@@ -6,7 +6,6 @@ using System.Text.RegularExpressions;
 using UnityEngine;
 using ModAPI.Core;
 
-using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Saves
 {
     /// <summary>

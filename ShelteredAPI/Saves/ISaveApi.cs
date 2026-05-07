@@ -1,5 +1,3 @@
-using ShelteredAPI.Hooks;
-
 namespace ShelteredAPI.Saves
 {
     /// <summary>

@@ -1,14 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using ModAPI.Persistence;
+using ModAPI.Core;
 using UnityEngine;
 
-namespace ModAPI.Core
+namespace ModAPI.Persistence
 {
     /// <summary>
     /// Implementation of the per-mod save data persistence.
-    /// Manages 'mods_data.json' within each save slot directory.
+    /// Manages 'mods/{ModId}/data.json' within each save slot directory.
     /// </summary>
     internal class SaveSystemImpl : ISaveSystem
     {
@@ -21,10 +20,12 @@ namespace ModAPI.Core
         private readonly Dictionary<string, object> _registeredData = new Dictionary<string, object>();
         private readonly Dictionary<string, Delegate> _migrationCallbacks = new Dictionary<string, Delegate>();
         private readonly string _modId;
+        private readonly ModPersistenceStore _store;
 
         public SaveSystemImpl(string modId)
         {
             _modId = modId;
+            _store = new ModPersistenceStore(modId);
             // Save blobs need to be available before scene saveables start deserializing.
             GameLifecycleSources.AddBeforeSave(HandleBeforeSave);
             GameLifecycleSources.AddBeforeLoadSceneContents(HandleBeforeLoadSceneContents);
@@ -62,13 +63,7 @@ namespace ModAPI.Core
         {
             try
             {
-                var containerObj = new ModPersistenceData();
-                foreach (var kv in _registeredData)
-                {
-                    // Safe to serialize here as we are not yet quitting
-                    containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
-                }
-                _shutdownCache = JsonUtility.ToJson(containerObj, true);
+                _shutdownCache = _store.Serialize(_registeredData);
                 MMLog.WriteDebug($"[SaveSystem] Buffered data for {_modId}");
             }
             catch (Exception ex)
@@ -94,11 +89,7 @@ namespace ModAPI.Core
                 if (saveContext == null)
                     saveContext = new ModSaveContext(rootPath, ActiveSlotIndex, null, null, null);
 
-                // Path: {SlotRoot}/mods/{ModId}/data.json
-                var modDataFolder = Path.Combine(Path.Combine(rootPath, "mods"), _modId);
-                if (!Directory.Exists(modDataFolder)) Directory.CreateDirectory(modDataFolder);
-                
-                var modFilePath = Path.Combine(modDataFolder, "data.json");
+                var modFilePath = _store.GetCurrentFilePath(rootPath);
                 string jsonToWrite;
 
                 // CHECK FOR PRE-CALCULATED CACHE (Safety for Shutdown)
@@ -111,39 +102,12 @@ namespace ModAPI.Core
                 {
                     MMLog.WriteDebug($"[SaveSystem] Serializing live mod data for {_modId} to {modFilePath}");
                     
-                    var containerObj = new ModPersistenceData();
-                    foreach (var kv in _registeredData)
-                    {
-                        if (kv.Value is IModPersistenceLogic)
-                        {
-                            try 
-                            { 
-                                MMLog.WriteDebug($"[SaveSystem] Invoking OnSaving hook for {kv.Key} in {_modId}");
-                                (kv.Value as IModPersistenceLogic).OnSaving(saveContext);
-                            }
-                            catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {kv.Key}.OnSaving failed: {logicEx.Message}"); }
-                        }
-                        
-                        containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
-                    }
-                    jsonToWrite = JsonUtility.ToJson(containerObj, true);
+                    InvokeBeforeSaveHooks(saveContext);
+                    jsonToWrite = _store.Serialize(_registeredData);
                 }
 
                 MMLog.WriteDebug($"[SaveSystem] Writing {jsonToWrite.Length} bytes to {modFilePath}");
-                File.WriteAllText(modFilePath, jsonToWrite);
-
-                // Cleanup legacy file from root if it exists
-                var legacyFileName = string.Format("mod_{0}_data.json", _modId.Replace('.', '_'));
-                var legacyFilePath = Path.Combine(rootPath, legacyFileName);
-                if (File.Exists(legacyFilePath))
-                {
-                    try 
-                    { 
-                        File.Delete(legacyFilePath); 
-                        MMLog.WriteInfo($"[SaveSystem] Migration complete for {_modId}: Cleaned up legacy file {legacyFileName}");
-                    } 
-                    catch (Exception ex) { MMLog.WriteWarning(string.Format("[SaveSystem] Failed to clean up legacy file for {0}: {1}", _modId, ex.Message)); }
-                }
+                _store.Write(rootPath, jsonToWrite);
 
                 MMLog.WriteDebug($"[SaveSystem] Successfully saved mod data for {_modId}");
             }
@@ -177,27 +141,17 @@ namespace ModAPI.Core
             _afterLoadCallbacksApplied = false;
             _loadedKeysForPreparedData.Clear();
 
-            // Priority: 1. mods/{ModId}/data.json, 2. mod_{ModId}_data.json (Legacy root)
-            var newFilePath = Path.Combine(Path.Combine(Path.Combine(rootPath, "mods"), _modId), "data.json");
-            var legacyFileName = $"mod_{_modId.Replace('.', '_')}_data.json";
-            var legacyFilePath = Path.Combine(rootPath, legacyFileName);
-
-            string modFilePath = null;
-            if (File.Exists(newFilePath)) modFilePath = newFilePath;
-            else if (File.Exists(legacyFilePath))
-            {
-                modFilePath = legacyFilePath;
-                MMLog.WriteInfo($"[SaveSystem] Found legacy mod data for {_modId} in root folder. It will be moved to the nested 'mods' directory on next save.");
-            }
-
             var loadedKeys = new HashSet<string>();
 
-            if (modFilePath != null)
+            try
             {
-                try
+                ModPersistenceLoadResult loadResult = _store.Load(rootPath);
+                if (loadResult != null)
                 {
-                    var json = File.ReadAllText(modFilePath);
-                    var container = JsonUtility.FromJson<ModPersistenceData>(json);
+                    if (loadResult.IsLegacy)
+                        MMLog.WriteInfo($"[SaveSystem] Found legacy mod data for {_modId} in root folder. It will be moved to the nested 'mods' directory on next save.");
+
+                    var container = loadResult.Data;
                     if (container != null && container.entries != null)
                     {
                         foreach (var entry in container.entries)
@@ -209,13 +163,13 @@ namespace ModAPI.Core
                                 _loadedKeysForPreparedData.Add(entry.key);
                             }
                         }
-                        MMLog.WriteDebug(string.Format("[SaveSystem] Prepared mod data for {0} from {1}", _modId, Path.GetFileName(modFilePath)));
+                        MMLog.WriteDebug(string.Format("[SaveSystem] Prepared mod data for {0} from {1}", _modId, loadResult.FileName));
                     }
                 }
-                catch (Exception ex)
-                {
-                    MMLog.WriteError(string.Format("[SaveSystem] Failed to prepare mod data for {0}: {1}", _modId, ex.Message));
-                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError(string.Format("[SaveSystem] Failed to prepare mod data for {0}: {1}", _modId, ex.Message));
             }
 
             // Migration check: If key registered but not loaded, try migration
@@ -238,6 +192,22 @@ namespace ModAPI.Core
                     {
                         MMLog.WriteWarning($"[SaveSystem] Migration failed for {kv.Key}: {ex.Message}");
                     }
+                }
+            }
+        }
+
+        private void InvokeBeforeSaveHooks(IModSaveContext saveContext)
+        {
+            foreach (var kv in _registeredData)
+            {
+                if (kv.Value is IModPersistenceLogic)
+                {
+                    try
+                    {
+                        MMLog.WriteDebug($"[SaveSystem] Invoking OnSaving hook for {kv.Key} in {_modId}");
+                        (kv.Value as IModPersistenceLogic).OnSaving(saveContext);
+                    }
+                    catch (Exception logicEx) { MMLog.WriteError($"[SaveSystem] {kv.Key}.OnSaving failed: {logicEx.Message}"); }
                 }
             }
         }

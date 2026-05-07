@@ -24,6 +24,8 @@ Use this file for copy/paste signatures and type names. For workflow guidance, s
 - Always reference `ModAPI.dll`.
 - Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
 
+> Dev/API-preview warning: the runtime UI store and cooking station contracts are preview APIs in this 1.3 line. Treat the signatures below as the current copy/paste reference, but allow for small changes before this surface is declared stable.
+
 ## API Stability Rules
 
 - Public facades are stable mod-author entry points.
@@ -591,6 +593,7 @@ public sealed class ContainerUiRequest
     public string PanelId { get; set; }
     public string Title { get; set; }
     public string OwnerId { get; set; }
+    public RuntimePanelOptions PanelOptions { get; set; }
     public IList<ContainerUiItem> Items { get; set; }
     public Func<IList<ContainerUiItem>> ItemSource { get; set; }
     public ItemCategory[] Categories { get; set; }
@@ -644,6 +647,87 @@ public sealed class ObjectPanelRegistration
     public Func<ObjectPanelContext, bool> CanOpen { get; set; }
     public Func<ObjectPanelContext, RuntimeUiHandle> Open { get; set; }
 }
+
+public sealed class ObjectPanelContext
+{
+    public string ObjectId { get; }
+    public ObjectManager.ObjectType ObjectType { get; }
+    public Obj_Base TargetObject { get; }
+    public FamilyMember SelectedMember { get; }
+}
+
+public sealed class CraftingUiRequest
+{
+    public string PanelId { get; set; }
+    public string Title { get; set; }
+    public string OwnerId { get; set; }
+    public RuntimePanelOptions PanelOptions { get; set; }
+    public IList<CraftingUiRecipe> Recipes { get; set; }
+    public Func<IList<CraftingUiRecipe>> RecipeSource { get; set; }
+    public string EmptyText { get; set; }
+    public string CraftButtonText { get; set; }
+    public bool RefreshEveryFrame { get; set; }
+    public Func<CraftingUiRecipe, bool> IsAvailable { get; set; }
+    public Action<CraftingUiRecipe> OnCraft { get; set; }
+    public Action<CraftingUiCraftContext> OnCraftRequested { get; set; }
+    public Func<CraftingUiRecipe, string> GetUnavailableReason { get; set; }
+    public Action<RuntimeUiHandle> OnRefreshed { get; set; }
+    public Action OnClosed { get; set; }
+}
+
+public sealed class CraftingUiRecipe
+{
+    public string RecipeId { get; set; }
+    public string DisplayName { get; set; }
+    public string Subtitle { get; set; }
+    public string OutputItemId { get; set; }
+    public int OutputCount { get; set; }
+    public string OutputCountText { get; set; }
+    public Sprite Icon { get; set; }
+    public string CraftButtonText { get; set; }
+    public string UnavailableText { get; set; }
+    public IList<CraftingUiIngredient> Ingredients { get; set; }
+    public object Tag { get; set; }
+}
+
+public sealed class CraftingUiIngredient
+{
+    public string ItemId { get; set; }
+    public int Count { get; set; }
+}
+
+public sealed class CraftingUiCraftContext
+{
+    public CraftingUiRecipe Recipe { get; }
+    public RuntimeUiHandle Panel { get; }
+}
+
+public sealed class RuntimePanelOptions
+{
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int HeaderHeight { get; set; }
+    public int TitleFontSize { get; set; }
+    public string CloseText { get; set; }
+    public bool ShowCloseButton { get; set; }
+    public Sprite Icon { get; set; }
+    public Sprite HeaderIcon { get; set; }
+    public string HeaderIconText { get; set; }
+    public int HeaderIconSize { get; set; }
+    public bool ShowHeaderIcon { get; set; }
+    public string Subtitle { get; set; }
+    public RuntimePanelStyle Style { get; set; }
+}
+
+public sealed class RuntimePanelStyle
+{
+    public Color? FrameColor { get; set; }
+    public Color? HeaderColor { get; set; }
+    public Color? AccentColor { get; set; }
+    public Color? TextColor { get; set; }
+    public Color? ButtonColor { get; set; }
+    public Color? DisabledButtonColor { get; set; }
+}
 ```
 
 ## Runtime UI + Stores (`ShelteredAPI.UI.Runtime`, `ShelteredAPI.Storage`, `ShelteredAPI.Workstations`)
@@ -652,6 +736,8 @@ Task guide: [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_S
 
 ```csharp
 public enum ItemStoreKind { Unknown, Inventory, Freezer, Mod }
+public enum CharacterItemAssignmentKind { Assigned, Reserved, Equipped, Carried, Medical, Food, Tool, Quest }
+public enum CharacterItemSlot { None, MainHand, OffHand, Backpack, Medicine, Food, Tool }
 
 public interface IItemStore
 {
@@ -698,6 +784,70 @@ public sealed class ItemTransferResult
     public int Requested { get; }
     public int Moved { get; }
     public string ErrorMessage { get; }
+}
+
+public sealed class ItemReservationResult
+{
+    public bool Success { get; }
+    public string ReservationId { get; }
+    public string ItemId { get; }
+    public int Requested { get; }
+    public int Reserved { get; }
+    public string OwnerToken { get; }
+    public string ErrorMessage { get; }
+}
+
+public interface IReservableItemStore
+{
+    ItemReservationResult Reserve(string itemId, int quantity, string ownerToken);
+    ItemTransferResult CommitReservation(string reservationId);
+    ItemTransferResult CancelReservation(string reservationId);
+    int GetAvailableCount(string itemId);
+}
+
+public sealed class CharacterItemAssignment
+{
+    public string AssignmentId { get; set; }
+    public ActorId ActorId { get; set; }
+    public string MemberDisplayName { get; set; }
+    public string SourceStoreId { get; set; }
+    public string SourceStoreName { get; set; }
+    public ItemStoreKind SourceStoreKind { get; set; }
+    public string ItemId { get; set; }
+    public int Quantity { get; set; }
+    public CharacterItemAssignmentKind Kind { get; set; }
+    public CharacterItemSlot Slot { get; set; }
+}
+
+public interface ICharacterItemAssignmentService
+{
+    CharacterItemAssignment Assign(ActorId actorId, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
+    CharacterItemAssignment Assign(FamilyMember member, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
+    bool Unassign(string assignmentId);
+    IList<CharacterItemAssignment> GetAssignments(ActorId actorId);
+    IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+    IList<CharacterItemAssignment> GetAvailableAssignments(ActorId actorId);
+    IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+    int GetAssignedCount(ActorId actorId, string itemId);
+    int GetAssignedCount(FamilyMember member, string itemId);
+    int ReleaseAssignmentsForActor(ActorId actorId);
+    int ReleaseAssignmentsForMember(FamilyMember member);
+}
+
+public static class ShelteredCharacterItems
+{
+    public static ICharacterItemAssignmentService Service { get; }
+    public static CharacterItemAssignment Assign(ActorId actorId, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
+    public static CharacterItemAssignment Assign(FamilyMember member, IItemStore source, string itemId, int quantity, CharacterItemAssignmentKind kind, CharacterItemSlot slot);
+    public static bool Unassign(string assignmentId);
+    public static IList<CharacterItemAssignment> GetAssignments(ActorId actorId);
+    public static IList<CharacterItemAssignment> GetAssignments(FamilyMember member);
+    public static IList<CharacterItemAssignment> GetAvailableAssignments(ActorId actorId);
+    public static IList<CharacterItemAssignment> GetAvailableAssignments(FamilyMember member);
+    public static int GetAssignedCount(ActorId actorId, string itemId);
+    public static int GetAssignedCount(FamilyMember member, string itemId);
+    public static int ReleaseAssignmentsForActor(ActorId actorId);
+    public static int ReleaseAssignmentsForMember(FamilyMember member);
 }
 
 public static class ShelteredStores
@@ -824,6 +974,71 @@ public static class ShelteredCooking
     public static FamilyMember FindIdleWorker();
 }
 ```
+
+Minimal fridge-backed cooking station flow:
+
+```csharp
+Obj_Base fridgeObject = ShelteredStores.FindNearestObject(
+    ObjectManager.ObjectType.Freezer,
+    stove.transform.position);
+if (fridgeObject == null)
+    return;
+
+IItemStore fridgeStore = ShelteredStores.ForObject(
+    ownerId: "com.example.cooking",
+    targetObject: fridgeObject,
+    displayName: "Fridge Storage",
+    capacity: 24);
+
+ShelteredRuntimeUI.OpenContainer(
+    ShelteredStores.CreateContainerRequest(
+        store: fridgeStore,
+        ownerId: "com.example.cooking",
+        panelId: "com.example.cooking.fridge." + fridgeObject.objectId,
+        title: "Fridge Storage"));
+
+ShelteredCooking.RegisterStation(new CookingStationRegistration
+{
+    OwnerId = "com.example.cooking",
+    ObjectType = ObjectManager.ObjectType.Stove,
+    InteractionId = "com.example.cooking.stove.cook",
+    InteractionText = "Cook",
+    CanOpen = context =>
+        ShelteredStores.FindNearestObject(
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position) != null,
+    IngredientStore = context =>
+        ShelteredStores.FindNearestObjectStore(
+            "com.example.cooking",
+            ObjectManager.ObjectType.Freezer,
+            context.TargetObject.transform.position,
+            "Fridge Storage",
+            24),
+    OutputStore = context => ShelteredStores.ForInventory(),
+    JobOptions = new CookingStationJobOptions
+    {
+        JobType = "cook_food",
+        AnimationTrigger = "Rummage",
+        DurationSeconds = 3f
+    },
+    Recipes = new[]
+    {
+        new CookingStationRecipe
+        {
+            RecipeId = "com.example.cooking.meat_to_ration",
+            DisplayName = "Cook Ration",
+            OutputItemId = VanillaItems.Ration,
+            OutputCount = 1,
+            Ingredients = new[]
+            {
+                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
+            }
+        }
+    }
+});
+```
+
+`ForFreezer(...)` and `FindNearestFreezer(...)` are adapters over vanilla `Obj_Freezer` data and preserve vanilla limits: meat and desperate meat only. `ForObject(...)` and `FindNearestObjectStore(...)` create mod-owned stores keyed to world objects, which is the supported path for fridge-like custom storage. ShelteredAPI avoids patching `Obj_Freezer` to accept custom item types.
 
 `ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
 

@@ -286,6 +286,11 @@ namespace ShelteredAPI.UI.Runtime{
         public string CloseText { get; set; }
         public bool ShowCloseButton { get; set; }
         public Sprite Icon { get; set; }
+        public Sprite HeaderIcon { get; set; }
+        public string HeaderIconText { get; set; }
+        public int HeaderIconSize { get; set; }
+        public bool ShowHeaderIcon { get; set; }
+        public string Subtitle { get; set; }
         public RuntimePanelStyle Style { get; set; }
     }
 

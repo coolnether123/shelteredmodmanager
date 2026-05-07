@@ -30,17 +30,37 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
             RuntimeWidgetUtil.CreateBox(panel, "Frame", layout.Width, layout.Height, frameColor, Vector3.zero, depth);
             RuntimeWidgetUtil.CreateBox(panel, "Header", layout.Width, layout.HeaderHeight, headerColor, new Vector3(0f, layout.HeaderY, 0f), depth + 1);
 
+            RuntimePanelHeaderIcon headerIcon = RuntimePanelHeaderIcon.FromOptions(options);
             int titleWidth = layout.Width - 140;
             float titleX = -42f;
-            if (options != null && options.Icon != null)
+            if (headerIcon.Visible)
             {
-                RuntimeWidgetUtil.CreateSprite(panel, "Icon", options.Icon, 32, 32, new Vector3(layout.Left + 36f, layout.HeaderY, 0f), depth + 2);
-                titleWidth -= 44;
-                titleX = layout.Left + 72f + (titleWidth / 2f);
+                if (headerIcon.Sprite != null)
+                {
+                    RuntimeWidgetUtil.CreateSprite(panel, "Icon", headerIcon.Sprite, headerIcon.Size, headerIcon.Size, new Vector3(layout.Left + 36f, layout.HeaderY, 0f), depth + 2);
+                }
+                else
+                {
+                    RuntimeWidgetUtil.CreateLabel(panel, headerIcon.Text, headerIcon.Size, headerIcon.Size, headerIcon.Size, new Vector3(layout.Left + 36f, layout.HeaderY - 1f, 0f), NGUIText.Alignment.Center, depth + 2, textColor);
+                }
+
+                int iconSpace = headerIcon.Size + 12;
+                titleWidth -= iconSpace;
+                titleX = layout.Left + 36f + (headerIcon.Size / 2f) + 20f + (titleWidth / 2f);
             }
 
             int titleSize = options != null && options.TitleFontSize > 0 ? options.TitleFontSize : 24;
-            RuntimeWidgetUtil.CreateLabel(panel, title, titleWidth, 38, titleSize, new Vector3(titleX, layout.HeaderY - 1f, 0f), NGUIText.Alignment.Left, depth + 2, textColor);
+            string subtitle = options != null ? options.Subtitle : null;
+            if (string.IsNullOrEmpty(subtitle))
+            {
+                RuntimeWidgetUtil.CreateLabel(panel, title, titleWidth, 38, titleSize, new Vector3(titleX, layout.HeaderY - 1f, 0f), NGUIText.Alignment.Left, depth + 2, textColor);
+            }
+            else
+            {
+                int subtitleSize = Math.Max(12, Math.Min(16, titleSize - 6));
+                RuntimeWidgetUtil.CreateLabel(panel, title, titleWidth, 24, titleSize, new Vector3(titleX, layout.HeaderY + 8f, 0f), NGUIText.Alignment.Left, depth + 2, textColor);
+                RuntimeWidgetUtil.CreateLabel(panel, subtitle, titleWidth, 16, subtitleSize, new Vector3(titleX, layout.HeaderY - 15f, 0f), NGUIText.Alignment.Left, depth + 2, textColor);
+            }
             if (options == null || options.ShowCloseButton)
             {
                 string closeText = options != null && !string.IsNullOrEmpty(options.CloseText) ? options.CloseText : "X";
@@ -49,6 +69,37 @@ namespace ShelteredAPI.UI.Internal.Runtime.Widgets{
 
             layout.Root = panel;
             return layout;
+        }
+    }
+
+    internal sealed class RuntimePanelHeaderIcon
+    {
+        public bool Visible;
+        public Sprite Sprite;
+        public string Text;
+        public int Size;
+
+        public static RuntimePanelHeaderIcon FromOptions(RuntimePanelOptions options)
+        {
+            RuntimePanelHeaderIcon icon = new RuntimePanelHeaderIcon();
+            icon.Size = 32;
+            if (options == null)
+                return icon;
+
+            Sprite sprite = options.HeaderIcon != null ? options.HeaderIcon : options.Icon;
+            bool hasText = !string.IsNullOrEmpty(options.HeaderIconText);
+            bool usesLegacyIcon = options.Icon != null && options.HeaderIcon == null && !options.ShowHeaderIcon && !hasText;
+            if (!options.ShowHeaderIcon && !usesLegacyIcon)
+                return icon;
+
+            if (sprite == null && !hasText)
+                return icon;
+
+            icon.Visible = true;
+            icon.Sprite = sprite;
+            icon.Text = sprite == null ? options.HeaderIconText : null;
+            icon.Size = options.HeaderIconSize > 0 ? Math.Max(16, Math.Min(48, options.HeaderIconSize)) : 32;
+            return icon;
         }
     }
 

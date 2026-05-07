@@ -139,7 +139,7 @@ namespace ModAPI.Core
 
         /// <summary>
         /// Registers a data object to be automatically saved/loaded in the active slot's folder.
-        /// The data is saved as JSON in 'mods_data.json' within the slot folder.
+        /// The data is saved as JSON in 'mods/{ModId}/data.json' within the slot folder.
         /// Call this during Initialize().
         /// </summary>
         /// <param name="migrationCallback">Optional callback invoked if no data is found for this key (e.g., to load from legacy path).</param>

@@ -25,7 +25,7 @@ namespace ShelteredAPI.Workstations
             Action onCancelled)
             : base(
                 string.IsNullOrEmpty(jobType) ? "shelteredapi_timed_work" : jobType,
-                targetObject != null ? targetObject.GetInteractionPosition() : Vector3.zero,
+                ResolveInteractionPosition(targetObject),
                 worker,
                 targetObject)
         {
@@ -39,6 +39,19 @@ namespace ShelteredAPI.Workstations
         public override string GetJobType()
         {
             return "ShelteredAPI_RuntimeTimedWork";
+        }
+
+        public override void Activate()
+        {
+            if (character == null || obj == null)
+            {
+                Finish(false);
+                return;
+            }
+
+            character.ClearPath();
+            character.WalkToPosition(location);
+            state = Job.JobState.InTransit;
         }
 
         public override bool BeginJob()
@@ -78,8 +91,10 @@ namespace ShelteredAPI.Workstations
 
         public override void Cancel(bool forced)
         {
+            bool wasActive = GetCancelState() == JobCancelState.Active;
             base.Cancel(forced);
-            Finish(false);
+            if (wasActive)
+                Finish(false);
         }
 
         private void Finish(bool completed)
@@ -92,18 +107,24 @@ namespace ShelteredAPI.Workstations
             if (character != null && !string.IsNullOrEmpty(_completeAnimationTrigger))
                 character.TriggerAnim(_completeAnimationTrigger);
 
-            if (completed)
-            {
-                if (_onComplete != null)
-                    _onComplete();
-            }
-            else if (_onCancelled != null)
-            {
-                _onCancelled();
-            }
-
             state = Job.JobState.Finished;
-            OnFinishedJob();
+            try
+            {
+                if (completed)
+                {
+                    if (_onComplete != null)
+                        _onComplete();
+                }
+                else if (_onCancelled != null)
+                {
+                    _onCancelled();
+                }
+            }
+            finally
+            {
+                if (character != null)
+                    OnFinishedJob();
+            }
         }
 
         private void SetProgress(float progress)
@@ -112,6 +133,21 @@ namespace ShelteredAPI.Workstations
                 return;
 
             InteractionManager.Instance.SetInteractionProgress(character, progress);
+        }
+
+        private static Vector3 ResolveInteractionPosition(Obj_Base targetObject)
+        {
+            if (targetObject == null)
+                return Vector3.zero;
+
+            try
+            {
+                return targetObject.GetInteractionPosition();
+            }
+            catch
+            {
+                return targetObject.transform != null ? targetObject.transform.position : Vector3.zero;
+            }
         }
     }
 }

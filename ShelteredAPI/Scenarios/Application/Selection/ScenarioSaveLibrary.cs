@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Core;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Runtime;
 namespace ShelteredAPI.Scenarios.Application.Selection{

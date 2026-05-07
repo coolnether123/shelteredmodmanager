@@ -4,7 +4,6 @@ using HarmonyLib;
 using System.Reflection;
 using UnityEngine;
 using ModAPI.Harmony;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Runtime;
 

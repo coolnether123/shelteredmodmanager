@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
-using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves.Paging;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Runtime;

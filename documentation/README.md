@@ -21,6 +21,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Add settings or per-save state | [Settings and Persistence](SETTINGS.md) |
 | Build Spine settings UI | [Spine Settings Guide](Spine_Settings_Guide.md) |
 | Register items, recipes, loot, or assets | [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md) |
+| Build runtime UI, stores, or cooking stations | [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md) |
 | Work with actors and characters | [ShelteredAPI Actors Guide](ShelteredAPI_Characters_Guide.md) |
 | Subscribe to events or scheduled ticks | [Events Guide](Events_Guide.md) |
 | Add rebindable controls | [Input Keybindings Guide](Input_Keybindings_Guide.md) |
