@@ -27,7 +27,6 @@ namespace ShelteredAPI.Workstations
         public string OutputCountText { get; set; }
         public float DurationSeconds { get; set; }
         public Sprite Icon { get; set; }
-        public object Tag { get; set; }
     }
 
     /// <summary>
@@ -71,8 +70,6 @@ namespace ShelteredAPI.Workstations
             Enabled = true;
             DurationSeconds = 2f;
             JobType = "cook_food";
-            AnimationTrigger = "Rummage";
-            CompleteAnimationTrigger = "Idle";
             ClosePanelOnQueue = true;
         }
 
