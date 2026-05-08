@@ -49,8 +49,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="ShelteredMultiplayerMapAnchorDiagnosticsTests.cs" />
+    <Compile Include="ShelteredMultiplayerMapMarkerTests.cs" />
     <Compile Include="ShelteredMultiplayerTimePolicyTests.cs" />
+    <Compile Include="ShelteredMapEntityRegistryTests.cs" />
+    <Compile Include="ShelteredTradeCargoValidationTests.cs" />
     <Compile Include="ShelteredTradeEventTests.cs" />
+    <Compile Include="ShelteredTravelPredictionTests.cs" />
+    <Compile Include="ShelteredWorldClockTests.cs" />
+    <Compile Include="ShelteredWorldEventJournalTests.cs" />
     <Compile Include="TestSupport.cs" />
   </ItemGroup>
   <ItemGroup>

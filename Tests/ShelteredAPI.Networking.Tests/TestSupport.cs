@@ -54,6 +54,12 @@ namespace ShelteredAPI.Networking.Tests
                 throw new InvalidOperationException(message);
         }
 
+        public static void False(bool condition, string message)
+        {
+            if (condition)
+                throw new InvalidOperationException(message);
+        }
+
         public static void Equal<T>(T expected, T actual, string message)
         {
             if (!object.Equals(expected, actual))

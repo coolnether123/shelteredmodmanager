@@ -8,7 +8,14 @@ namespace ShelteredAPI.Networking.Tests
         {
             List<TestCase> tests = new List<TestCase>();
             ShelteredTradeEventTests.Register(tests);
+            ShelteredTradeCargoValidationTests.Register(tests);
             ShelteredMultiplayerTimePolicyTests.Register(tests);
+            ShelteredWorldEventJournalTests.Register(tests);
+            ShelteredWorldClockTests.Register(tests);
+            ShelteredMapEntityRegistryTests.Register(tests);
+            ShelteredMultiplayerMapMarkerTests.Register(tests);
+            ShelteredMultiplayerMapAnchorDiagnosticsTests.Register(tests);
+            ShelteredTravelPredictionTests.Register(tests);
             return TestRunner.Run("ShelteredAPI networking tests", tests);
         }
     }
