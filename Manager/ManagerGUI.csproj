@@ -96,6 +96,23 @@
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <!-- Game Profiles -->
+    <Compile Include="Core\Games\GameProfileRegistry.cs" />
+    <Compile Include="Core\Games\Detection\GamePathDetector.cs" />
+    <Compile Include="Core\Games\Models\GameAboutContent.cs" />
+    <Compile Include="Core\Games\Models\GameApiAssembly.cs" />
+    <Compile Include="Core\Games\Models\GameProfile.cs" />
+    <Compile Include="Core\Games\Models\GameRuntimeLayout.cs" />
+    <Compile Include="Core\Games\Models\RuntimeFileRequirement.cs" />
+    <Compile Include="Core\Games\Profiles\GenericUnityGameProfileFactory.cs" />
+    <Compile Include="Core\Games\Profiles\ShelteredGameProfileFactory.cs" />
+    <Compile Include="Core\Games\Saves\ISaveDiscoveryStrategy.cs" />
+    <Compile Include="Core\Games\Saves\NoOpSaveDiscoveryStrategy.cs" />
+    <Compile Include="Core\Games\Saves\ShelteredSaveDiscoveryStrategy.cs" />
+    <Compile Include="Core\Games\Services\DoorstopConfigurationService.cs" />
+    <Compile Include="Core\Games\Services\GameLaunchConfigurationService.cs" />
+    <Compile Include="Core\Games\Services\GamePreflightService.cs" />
+    <Compile Include="Core\Games\Services\GameProcessLauncher.cs" />
     <!-- Core Models -->
     <Compile Include="Core\Models\ModItem.cs" />
     <Compile Include="Core\Models\AppSettings.cs" />

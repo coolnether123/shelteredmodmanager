@@ -21,9 +21,11 @@ namespace Manager.Core.Models
         private string _gameBitness;
         private string _installedModApiVersion;
         private string _installedShelteredApiVersion;
+        private Dictionary<string, string> _installedApiVersions;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
         private bool _enableNexusIntegration = true;
         private string _nexusGameDomain = "sheltered";
+        private string _selectedGameId = "sheltered";
         private string _nexusApiKey = string.Empty;
         private int _managerNexusModId = 1;
         private int _windowX = int.MinValue;
@@ -39,6 +41,7 @@ namespace Manager.Core.Models
             _logCategories.Add("Loader");
             _logCategories.Add("Plugin");
             _logCategories.Add("Assembly");
+            _installedApiVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
         public string GamePath 
@@ -112,6 +115,12 @@ namespace Manager.Core.Models
             get { return _installedShelteredApiVersion; }
             set { _installedShelteredApiVersion = value; }
         }
+
+        public Dictionary<string, string> InstalledApiVersions
+        {
+            get { return _installedApiVersions; }
+            set { _installedApiVersions = value ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+        }
         
         public string AutoCondenseSaves 
         { 
@@ -129,6 +138,12 @@ namespace Manager.Core.Models
         {
             get { return _nexusGameDomain; }
             set { _nexusGameDomain = value; }
+        }
+
+        public string SelectedGameId
+        {
+            get { return _selectedGameId; }
+            set { _selectedGameId = value; }
         }
 
         public string NexusApiKey
