@@ -149,6 +149,7 @@ if ($newEntries.Count -gt 0) {
     foreach ($entry in $newEntries) {
         Write-Host ("NEW`t" + (ConvertTo-TsvLine $entry))
     }
+    Write-Host "Make accidental API additions internal. If the public API is intentional, add it to the baseline with a justification and update the relevant documentation."
     exit 1
 }
 

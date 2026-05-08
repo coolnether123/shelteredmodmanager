@@ -38,6 +38,12 @@ namespace ShelteredAPI.Networking
         public const string TravelStarted = "Travel.Started";
         public const string TravelCorrected = "Travel.Corrected";
         public const string TravelArrived = "Travel.Arrived";
+        public const string EncounterInteractionIntent = "Encounter.InteractionIntent";
+        public const string EncounterNegotiationProposed = "Encounter.NegotiationProposed";
+        public const string EncounterNegotiationAccepted = "Encounter.NegotiationAccepted";
+        public const string EncounterNegotiationDeclined = "Encounter.NegotiationDeclined";
+        public const string EncounterNegotiationResolved = "Encounter.NegotiationResolved";
+        public const string EncounterNegotiationExpired = "Encounter.NegotiationExpired";
         public const string RaidIntent = "Raid.Intent";
         public const string RaidAccepted = "Raid.Accepted";
         public const string RaidRejected = "Raid.Rejected";

@@ -48,9 +48,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ArchitectureGuardrailTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="RuntimeEnvironmentInfoTests.cs" />
+    <Compile Include="MultiplayerConnectionPanelHelperTests.cs" />
     <Compile Include="ShelteredMultiplayerMapAnchorDiagnosticsTests.cs" />
     <Compile Include="ShelteredMultiplayerMapMarkerTests.cs" />
+    <Compile Include="ShelteredMultiplayerSetupServiceTests.cs" />
     <Compile Include="ShelteredMultiplayerTimePolicyTests.cs" />
     <Compile Include="ShelteredMapEntityRegistryTests.cs" />
     <Compile Include="ShelteredMapKnowledgeTests.cs" />

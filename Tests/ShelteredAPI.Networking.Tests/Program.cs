@@ -7,12 +7,14 @@ namespace ShelteredAPI.Networking.Tests
         public static int Main(string[] args)
         {
             List<TestCase> tests = new List<TestCase>();
+            RuntimeEnvironmentInfoTests.Register(tests);
             ShelteredTradeEventTests.Register(tests);
             ShelteredTradeCargoValidationTests.Register(tests);
             ShelteredTradeCargoReservationTests.Register(tests);
             ShelteredTradeStateTests.Register(tests);
             ShelteredTradeCaravanTests.Register(tests);
             ShelteredMultiplayerTimePolicyTests.Register(tests);
+            ShelteredMultiplayerSetupServiceTests.Register(tests);
             ShelteredWorldEventJournalTests.Register(tests);
             ShelteredWorldClockTests.Register(tests);
             ShelteredCompatibilityHashTests.Register(tests);
@@ -33,6 +35,8 @@ namespace ShelteredAPI.Networking.Tests
             ShelteredMultiplayerCatchupTests.Register(tests);
             RngDiagnosticsTests.Register(tests);
             DesyncDigestTests.Register(tests);
+            MultiplayerConnectionPanelHelperTests.Register(tests);
+            ArchitectureGuardrailTests.Register(tests);
             return TestRunner.Run("ShelteredAPI networking tests", tests);
         }
     }

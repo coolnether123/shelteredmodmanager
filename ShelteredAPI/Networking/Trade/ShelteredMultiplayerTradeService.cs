@@ -70,6 +70,12 @@ namespace ShelteredAPI.Networking.Trade
             return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(gameplayEvent);
         }
 
+        internal ShelteredTradeCargoValidationResult ValidateOfferIntentForHost(
+            ShelteredMultiplayerTradeEvent tradeEvent)
+        {
+            return ShelteredMultiplayerTradeValidation.ValidateOfferIntent(tradeEvent, _resolveOwnerStore);
+        }
+
         public void Dispose()
         {
             if (_disposed)

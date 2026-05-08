@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Networking.Events;
 using ModAPI.Networking.Protocol;
 using ModAPI.Networking.Sessions;
+using ShelteredAPI.Networking.Encounters;
 using ShelteredAPI.Networking.Trade;
 
 namespace ShelteredAPI.Networking.Tests
@@ -15,6 +16,7 @@ namespace ShelteredAPI.Networking.Tests
         {
             tests.Add(new TestCase("Trade gameplay envelope round-trips metadata and cargo", TradeEnvelopeRoundTripsMetadataAndCargo));
             tests.Add(new TestCase("Trade offer intent is accepted by the host authoritatively", HostAcceptsTradeOfferIntentAuthoritatively));
+            tests.Add(new TestCase("Encounter negotiation accepts trade fight and flee intents authoritatively", HostAcceptsEncounterNegotiationActionsAuthoritatively));
         }
 
         private static void TradeEnvelopeRoundTripsMetadataAndCargo()
@@ -144,6 +146,105 @@ namespace ShelteredAPI.Networking.Tests
             tradeEvent.Cargo.Add(cargo);
 
             return tradeEvent;
+        }
+
+        private static void HostAcceptsEncounterNegotiationActionsAuthoritatively()
+        {
+            NetworkSession host = null;
+            NetworkSession client = null;
+            ShelteredMultiplayerEventSyncService hostEvents = null;
+            ShelteredMultiplayerEventSyncService clientEvents = null;
+            ShelteredEncounterNegotiationService encounterService = null;
+            Action<ShelteredNetworkEventContext> authoritativeHandler = null;
+
+            try
+            {
+                host = new NetworkSession(NetworkTestHarness.CreateLoopbackConfig());
+                client = new NetworkSession(NetworkTestHarness.CreateLoopbackConfig());
+                hostEvents = new ShelteredMultiplayerEventSyncService(host, null);
+                clientEvents = new ShelteredMultiplayerEventSyncService(client, null);
+                encounterService = new ShelteredEncounterNegotiationService();
+
+                Dictionary<string, ShelteredEncounterNegotiationEvent> accepted =
+                    new Dictionary<string, ShelteredEncounterNegotiationEvent>();
+                authoritativeHandler = delegate(ShelteredNetworkEventContext context)
+                {
+                    if (context == null || context.GameplayEvent == null)
+                        return;
+                    if (!string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.EncounterNegotiationAccepted, StringComparison.Ordinal))
+                        return;
+
+                    ShelteredEncounterNegotiationEvent encounterEvent =
+                        ShelteredEncounterNegotiationContractCodec.FromGameplayEvent(context.GameplayEvent);
+                    if (!accepted.ContainsKey(encounterEvent.EncounterId))
+                        accepted.Add(encounterEvent.EncounterId, encounterEvent);
+                };
+                ShelteredMultiplayerNetworkEvents.AuthoritativeReceived += authoritativeHandler;
+
+                NetworkTestHarness.Connect(host, client, TestApplicationId + ".Encounter");
+
+                PublishEncounterIntent(clientEvents, ShelteredEncounterActionKind.Trade, "encounter-trade");
+                PublishEncounterIntent(clientEvents, ShelteredEncounterActionKind.Fight, "encounter-fight");
+                PublishEncounterIntent(clientEvents, ShelteredEncounterActionKind.Flee, "encounter-flee");
+
+                NetworkTestHarness.PumpUntil(host, client, delegate { return accepted.Count == 3; },
+                    "Client did not receive all host-authoritative encounter negotiation acceptances.");
+
+                AssertAcceptedEncounter(accepted, "encounter-trade", ShelteredEncounterActionKind.Trade);
+                AssertAcceptedEncounter(accepted, "encounter-fight", ShelteredEncounterActionKind.Fight);
+                AssertAcceptedEncounter(accepted, "encounter-flee", ShelteredEncounterActionKind.Flee);
+            }
+            finally
+            {
+                if (authoritativeHandler != null)
+                    ShelteredMultiplayerNetworkEvents.AuthoritativeReceived -= authoritativeHandler;
+                if (encounterService != null)
+                    encounterService.Dispose();
+                if (clientEvents != null)
+                    clientEvents.Dispose();
+                if (hostEvents != null)
+                    hostEvents.Dispose();
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
+        }
+
+        private static void PublishEncounterIntent(
+            ShelteredMultiplayerEventSyncService clientEvents,
+            ShelteredEncounterActionKind action,
+            string encounterId)
+        {
+            ShelteredEncounterNegotiationEvent encounterEvent = new ShelteredEncounterNegotiationEvent();
+            encounterEvent.EventKind = ShelteredNetworkEventKinds.EncounterInteractionIntent;
+            encounterEvent.EncounterId = encounterId;
+            encounterEvent.InitiatorPlayerId = 1;
+            encounterEvent.InitiatorPeerId = 1;
+            encounterEvent.InitiatorTravelId = encounterId + ":travel-a";
+            encounterEvent.ResponderPlayerId = 2;
+            encounterEvent.ResponderPeerId = 2;
+            encounterEvent.ResponderTravelId = encounterId + ":travel-b";
+            encounterEvent.OfferedAction = action;
+            encounterEvent.State = ShelteredEncounterNegotiationStateKind.Proposed;
+
+            TestAssert.True(
+                clientEvents.PublishIntent(ShelteredEncounterNegotiationContractCodec.ToGameplayEvent(encounterEvent)),
+                "Client encounter intent should queue.");
+        }
+
+        private static void AssertAcceptedEncounter(
+            Dictionary<string, ShelteredEncounterNegotiationEvent> accepted,
+            string encounterId,
+            ShelteredEncounterActionKind action)
+        {
+            TestAssert.True(accepted.ContainsKey(encounterId), "Expected accepted encounter id is missing: " + encounterId);
+            ShelteredEncounterNegotiationEvent encounterEvent = accepted[encounterId];
+            TestAssert.Equal(ShelteredNetworkEventKinds.EncounterNegotiationAccepted, encounterEvent.EventKind, "Encounter event kind should be accepted.");
+            TestAssert.Equal(ShelteredEncounterNegotiationStateKind.Accepted, encounterEvent.State, "Encounter state should be accepted.");
+            TestAssert.Equal(action, encounterEvent.OfferedAction, "Accepted encounter action should match the intent.");
+            TestAssert.True(!string.IsNullOrEmpty(encounterEvent.EventId), "Authoritative encounter event id should be assigned.");
+            TestAssert.True(!string.IsNullOrEmpty(encounterEvent.CorrelationId), "Authoritative encounter event should correlate to the intent.");
         }
     }
 }

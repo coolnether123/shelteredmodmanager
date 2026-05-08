@@ -195,6 +195,10 @@
     <Compile Include="Networking\Knowledge\ShelteredMapDiscoveryEvents.cs" />
     <Compile Include="Networking\Knowledge\ShelteredMapKnowledgeContracts.cs" />
     <Compile Include="Networking\Knowledge\ShelteredMapKnowledgeService.cs" />
+    <Compile Include="Networking\Encounters\ShelteredEncounterNegotiationContracts.cs" />
+    <Compile Include="Networking\Encounters\ShelteredEncounterNegotiationService.cs" />
+    <Compile Include="Networking\Encounters\ShelteredEncounterNegotiationState.cs" />
+    <Compile Include="Networking\Encounters\ShelteredEncounterNegotiationStateRegistry.cs" />
     <Compile Include="Networking\Trade\ShelteredMultiplayerTradeContracts.cs" />
     <Compile Include="Networking\Trade\ShelteredMultiplayerTradeCargoResolver.cs" />
     <Compile Include="Networking\Trade\ShelteredMultiplayerTradeCargoReservationService.cs" />
@@ -219,7 +223,7 @@
     <Compile Include="Networking\World\ShelteredMapEntities.cs" />
     <Compile Include="Networking\World\ShelteredMultiplayerWorldClockContracts.cs" />
     <Compile Include="Networking\World\ShelteredMultiplayerWorldClock.cs" />
-    <Compile Include="Networking\World\ShelteredMultiplayerWorldClockSyncService.cs" />
+    <Compile Include="Networking\World\ShelteredMultiplayerWorldClockCorrectionService.cs" />
     <Compile Include="Networking\World\ShelteredWorldEventContracts.cs" />
     <Compile Include="Networking\World\ShelteredWorldEventJournal.cs" />
     <Compile Include="Networking\World\ShelteredWorldEventReplayCursor.cs" />
@@ -227,6 +231,7 @@
     <Compile Include="Networking\Travel\ShelteredTravelContracts.cs" />
     <Compile Include="Networking\Travel\ShelteredTravelStateContracts.cs" />
     <Compile Include="Networking\Travel\ShelteredTravelPrediction.cs" />
+    <Compile Include="Networking\Travel\ShelteredTravelCrossingDetector.cs" />
     <Compile Include="Networking\Travel\ShelteredTravelStateRegistry.cs" />
     <Compile Include="Networking\Travel\ShelteredTravelReplayService.cs" />
     <Compile Include="Networking\Travel\ShelteredExpeditionTravelReader.cs" />
@@ -234,6 +239,8 @@
     <Compile Include="Networking\Travel\ShelteredExpeditionTravelPatches.cs" />
     <Compile Include="Networking\Travel\ShelteredTravelSyncService.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelModels.cs" />
+    <Compile Include="Networking\MultiplayerConnectionInputValidation.cs" />
+    <Compile Include="Networking\MultiplayerConnectionStatusText.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelPresenter.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelRenderer.cs" />
     <Compile Include="Networking\MultiplayerDiagnosticsTabs.cs" />

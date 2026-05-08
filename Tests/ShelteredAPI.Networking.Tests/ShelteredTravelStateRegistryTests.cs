@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using ShelteredAPI.Networking.Knowledge;
+using ShelteredAPI.Networking.Map;
 using ShelteredAPI.Networking.Travel;
+using ShelteredAPI.Networking.World;
 
 namespace ShelteredAPI.Networking.Tests
 {
@@ -11,6 +14,10 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("Travel registry ignores duplicate event ids", DuplicateEventIdIgnored));
             tests.Add(new TestCase("Travel registry ignores out-of-order corrections", OlderCorrectionIgnored));
             tests.Add(new TestCase("Travel replay rewinds only corrected travel entity", ReplayCorrectionOnlyUpdatesTargetTravel));
+            tests.Add(new TestCase("Travel registry map entity remains knowledge filtered", TravelMapEntityRequiresKnowledgeToDisplay));
+            tests.Add(new TestCase("Travel crossing detects two active crossing expeditions", CrossingDetectorCreatesCandidate));
+            tests.Add(new TestCase("Travel crossing ignores same player expeditions", CrossingDetectorIgnoresSamePlayer));
+            tests.Add(new TestCase("Travel crossing candidate id is stable regardless of order", CrossingCandidateIdStableRegardlessOfOrder));
         }
 
         private static void StartedEventPredictsActiveLocation()
@@ -72,12 +79,95 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.Equal(10, untouched.GridY, "Uncorrected travel should keep original Y.");
         }
 
+        private static void TravelMapEntityRequiresKnowledgeToDisplay()
+        {
+            ShelteredNetworkingTestContext.ResetClientContext(true);
+            ShelteredTravelStateRegistry registry = new ShelteredTravelStateRegistry(ShelteredMapEntities.Registry);
+            ShelteredTravelStartedEvent started = CreateStarted("travel-remote", 2, 0, 0, 10, 0);
+            started.OwnerPeerId = 5;
+            started.PartyId = 4;
+
+            registry.ApplyTravelStarted(started, "travel-remote-started");
+            string entityId = ShelteredTravelStateRegistry.CreateMapEntityId("travel-remote");
+            ShelteredMapEntity entity = ShelteredMapEntities.Get(entityId);
+            IList<ShelteredMapEntity> hidden =
+                ShelteredMapKnowledgeService.Instance.GetVisibleEntities(1, ShelteredMapEntities.Registry);
+
+            TestAssert.True(entity != null, "Travel registry should upsert an expedition map entity.");
+            TestAssert.Equal(ShelteredMapEntityKind.Expedition, entity.Kind,
+                "Travel map entity should be an expedition entity.");
+            TestAssert.Equal(0, hidden.Count,
+                "Fog-on remote expedition entities should not display without knowledge.");
+            TestAssert.True(ShelteredMapKnowledgeService.Instance.BuildDisplayMarker(1, entity) == null,
+                "Remote expedition marker should be filtered until knowledge reveals it.");
+
+            ShelteredMapKnowledgeService.Instance.Reveal(1, entityId, MapKnowledgeLevel.Scouted, "travel-scouted");
+            IList<ShelteredMapEntity> visible =
+                ShelteredMapKnowledgeService.Instance.GetVisibleEntities(1, ShelteredMapEntities.Registry);
+            ShelteredMultiplayerMapMarker marker =
+                ShelteredMapKnowledgeService.Instance.BuildDisplayMarker(1, entity);
+
+            TestAssert.Equal(1, visible.Count,
+                "Scouted remote expedition should display through the knowledge-filtered query.");
+            TestAssert.Equal(ShelteredMultiplayerMapMarkerVisualKind.Expedition, marker.VisualKind,
+                "Scouted remote expedition should reveal the concrete expedition marker kind.");
+            TestAssert.Equal("?", marker.Label,
+                "Scouted remote expedition should not reveal identity.");
+        }
+
+        private static void CrossingDetectorCreatesCandidate()
+        {
+            ShelteredTravelStateRegistry registry = new ShelteredTravelStateRegistry(null);
+            registry.ApplyTravelStarted(CreateStarted("travel-1", 1, 0, 0, 10, 0), "event-1");
+            registry.ApplyTravelStarted(CreateStarted("travel-2", 2, 10, 0, 0, 0), "event-2");
+
+            ShelteredTravelCrossingDetector detector = new ShelteredTravelCrossingDetector(registry, null);
+            IList<ShelteredTravelCrossingCandidate> candidates = detector.Detect(5);
+
+            TestAssert.Equal(1, candidates.Count, "Crossing active travels should create one candidate.");
+            TestAssert.Equal("travel-1", candidates[0].FirstTravelId, "First travel id should be retained.");
+            TestAssert.Equal("travel-2", candidates[0].SecondTravelId, "Second travel id should be retained.");
+            TestAssert.Equal(0, candidates[0].CellDistance, "Crossing at the same cell should have zero cell distance.");
+            TestAssert.Equal(ShelteredTravelCrossingDetector.CreateEncounterId("travel-1", "travel-2"), candidates[0].EncounterId, "Candidate encounter id should be stable.");
+        }
+
+        private static void CrossingDetectorIgnoresSamePlayer()
+        {
+            ShelteredTravelStateRegistry registry = new ShelteredTravelStateRegistry(null);
+            registry.ApplyTravelStarted(CreateStarted("travel-1", 1, 0, 0, 10, 0), "event-1");
+            registry.ApplyTravelStarted(CreateStarted("travel-2", 1, 10, 0, 0, 0), "event-2");
+
+            ShelteredTravelCrossingDetector detector = new ShelteredTravelCrossingDetector(registry, null);
+            IList<ShelteredTravelCrossingCandidate> candidates = detector.Detect(5);
+
+            TestAssert.Equal(0, candidates.Count, "Same-player active travels should not create a negotiation candidate.");
+        }
+
+        private static void CrossingCandidateIdStableRegardlessOfOrder()
+        {
+            string first = ShelteredTravelCrossingDetector.CreateEncounterId("travel-a", "travel-b");
+            string second = ShelteredTravelCrossingDetector.CreateEncounterId("travel-b", "travel-a");
+
+            TestAssert.Equal(first, second, "Crossing encounter id should not depend on travel order.");
+        }
+
         private static ShelteredTravelStartedEvent CreateStarted(string travelId, int startX, int startY, int destinationX, int destinationY)
+        {
+            return CreateStarted(travelId, 1, startX, startY, destinationX, destinationY);
+        }
+
+        private static ShelteredTravelStartedEvent CreateStarted(
+            string travelId,
+            int ownerPlayerId,
+            int startX,
+            int startY,
+            int destinationX,
+            int destinationY)
         {
             return new ShelteredTravelStartedEvent
             {
                 TravelId = travelId,
-                OwnerPlayerId = 1,
+                OwnerPlayerId = ownerPlayerId,
                 OwnerPeerId = 0,
                 PartyId = travelId == "travel-1" ? 1 : 2,
                 StartTick = 0,
