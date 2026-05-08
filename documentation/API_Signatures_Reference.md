@@ -16,6 +16,7 @@ Use this file for copy/paste signatures and type names. For workflow guidance, s
 | Harmony and transpilers | [Transpiler Core](#transpiler-core-modapiharmony), [Intent API](#intent-api-modapiharmony), [Cooperative Patching](#cooperative-patching-modapiharmony) |
 | Content and assets | [Content + Assets](#content--assets-shelteredapicontent), [Runtime UI + Stores](#runtime-ui--stores-shelteredapiuiruntime-shelteredapistorage-shelteredapiworkstations) |
 | Events and registries | [Event + Registry APIs](#event--registry-apis), [ShelteredAPI Trigger Scheduler](#shelteredapi-trigger-scheduler-shelteredapievents), [Mod Registry](#mod-registry-modapicore) |
+| Experimental multiplayer shared world | [Multiplayer Shared-World Primitives](#multiplayer-shared-world-primitives-shelteredapinetworking) |
 | Custom scenarios | [Custom Scenarios](#custom-scenarios-modapiscenarios-shelteredapiscenarios) |
 | Background work | [Background Processing](#background-processing-v13) |
 
@@ -1165,6 +1166,168 @@ public interface ISaveRuntimeAdapter
     void EnsureRuntimeReady();
     void ResetRuntimeState();
     string GetQuitHeartbeatDetail();
+}
+```
+
+## Multiplayer Shared-World Primitives (`ShelteredAPI.Networking`)
+
+These APIs are experimental shared-world building blocks. Private shelters remain local; host-authoritative events own shared map, travel, raid, faction, settlement, and trade outcomes. Local prediction is allowed for deterministic presentation, but network traffic should carry authoritative events, corrections, and non-deterministic outcomes.
+
+```csharp
+// Optional faction integration boundary.
+public interface IShelteredMultiplayerFactionBridge
+{
+    bool IsAvailable { get; }
+    IList<ShelteredFactionInfo> GetKnownFactions();
+    ShelteredFactionTerritorySnapshot GetFactionTerritorySnapshot();
+    void OnPlayerJoinedFaction(int playerId, string factionId);
+    void OnSettlementFounded(ShelteredSettlementState settlement);
+    void OnRaidResolved(ShelteredRaidState raid);
+    void OnTradeCompleted(ShelteredMultiplayerTradeEvent tradeEvent);
+    ShelteredFactionWorldTick BuildFactionWorldTick(long worldTick);
+}
+
+public static class ShelteredFactionBridgeRegistry
+{
+    public static IShelteredMultiplayerFactionBridge Current { get; }
+    public static void Register(IShelteredMultiplayerFactionBridge bridge);
+    public static void Reset();
+}
+
+public sealed class NullShelteredFactionBridge : IShelteredMultiplayerFactionBridge {}
+
+public sealed class ShelteredFactionInfo
+{
+    public string FactionId { get; set; }
+    public string DisplayName { get; set; }
+    public string PayloadJson { get; set; }
+}
+
+public sealed class ShelteredFactionTerritoryCell
+{
+    public string FactionId { get; set; }
+    public int GridX { get; set; }
+    public int GridY { get; set; }
+    public int Influence { get; set; }
+}
+
+public sealed class ShelteredFactionTerritorySnapshot
+{
+    public IList<ShelteredFactionTerritoryCell> Cells { get; }
+}
+
+public sealed class ShelteredFactionWorldTick
+{
+    public long WorldTick { get; set; }
+    public IList<ShelteredFactionWorldEvent> Events { get; }
+}
+
+public sealed class ShelteredFactionWorldEvent
+{
+    public string EventId { get; set; }
+    public string EventKind { get; set; }
+    public long WorldTick { get; set; }
+    public string FactionId { get; set; }
+    public int GridX { get; set; }
+    public int GridY { get; set; }
+    public string PayloadJson { get; set; }
+}
+
+public static class ShelteredFactionWorldEvents
+{
+    public static ShelteredFactionWorldEvent CreateMarkerEvent(
+        string eventKind,
+        string factionId,
+        int gridX,
+        int gridY,
+        long worldTick,
+        string payloadJson);
+}
+
+// Raid and settlement shared-world DTOs.
+public enum ShelteredRaidLifecycleState
+{
+    Intent, Accepted, Rejected, Launched, Warning, Arrived, Resolved, Cancelled
+}
+
+public sealed class ShelteredRaidState
+{
+    public string RaidId;
+    public int AttackerPlayerId;
+    public int DefenderPlayerId;
+    public int TargetBunkerOwnerId;
+    public long StartTick;
+    public long ArrivalTick;
+    public int RaidStrength;
+    public long WarningTick;
+    public int DefenseScore;
+    public string ResultPayloadJson;
+    public ShelteredRaidLifecycleState State;
+    public string LastEventId;
+    public ShelteredRaidState Copy();
+}
+
+public sealed class ShelteredSettlementState
+{
+    public string SettlementId;
+    public int OwnerPlayerId;
+    public string OwnerFactionId;
+    public int GridX;
+    public int GridY;
+    public int Population;
+    public int Defense;
+    public IList<string> ProductionTags;
+    public string StorageStoreId;
+    public long LastProductionTick;
+    public string State;
+    public string LastEventId;
+    public ShelteredSettlementState Copy();
+}
+
+// Shelter defense is pure scoring over supplied contributors and item assignments.
+public enum ShelterDefenseContributorKind
+{
+    ArmedSurvivor, Door, Trap, GuardPost, Alarm, Pet, SettlementSupport, ModdedDefense
+}
+
+public sealed class ShelterDefenseContributor
+{
+    public string ContributorId { get; set; }
+    public string DisplayName { get; set; }
+    public ShelterDefenseContributorKind Kind { get; set; }
+    public int BaseScore { get; set; }
+    public int Quantity { get; set; }
+    public float Condition01 { get; set; }
+    public ShelterDefenseContributor Copy();
+}
+
+public sealed class ShelterDefenseInput
+{
+    public IList<ShelterDefenseContributor> Contributors { get; }
+    public IList<CharacterItemAssignment> CharacterItemAssignments { get; }
+}
+
+public sealed class ShelterDefenseRating
+{
+    public int TotalScore { get; set; }
+    public int ArmedSurvivorScore { get; set; }
+    public int StructureScore { get; set; }
+    public int TrapScore { get; set; }
+    public int SupportScore { get; set; }
+    public int ModdedScore { get; set; }
+    public IList<ShelterDefenseContributor> Contributors { get; }
+}
+
+public sealed class ShelterDefenseRatingCalculator
+{
+    public ShelterDefenseRating Calculate(ShelterDefenseInput input);
+}
+
+public sealed class ShelterDefenseService
+{
+    public ShelterDefenseService();
+    public ShelterDefenseService(ShelterDefenseRatingCalculator calculator);
+    public ShelterDefenseRating Calculate(ShelterDefenseInput input);
 }
 ```
 
