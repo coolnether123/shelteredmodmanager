@@ -9,6 +9,7 @@ namespace ShelteredAPI.Networking
         public const string BunkerRegistered = "Bunker.Registered";
         public const string BunkerMoved = "Bunker.Moved";
         public const string BunkerOnlineStateChanged = "Bunker.OnlineStateChanged";
+        public const string WorldClockSample = "World.ClockSample";
         public const string ExpeditionStarted = "Expedition.Started";
         public const string ExpeditionRouteChanged = "Expedition.RouteChanged";
         public const string ExpeditionReturned = "Expedition.Returned";
@@ -21,5 +22,8 @@ namespace ShelteredAPI.Networking
         public const string TradeCaravanArrived = "Trade.CaravanArrived";
         public const string TradeCompleted = "Trade.Completed";
         public const string TradeCancelled = "Trade.Cancelled";
+        public const string TravelStarted = "Travel.Started";
+        public const string TravelCorrected = "Travel.Corrected";
+        public const string TravelArrived = "Travel.Arrived";
     }
 }
