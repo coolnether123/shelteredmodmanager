@@ -1,4 +1,5 @@
 using System;
+using ShelteredAPI.Storage;
 
 namespace ShelteredAPI.Networking.Trade
 {
@@ -8,10 +9,17 @@ namespace ShelteredAPI.Networking.Trade
     /// </summary>
     public sealed class ShelteredMultiplayerTradeService : IDisposable
     {
+        private readonly Func<string, IItemStore> _resolveOwnerStore;
         private bool _disposed;
 
         public ShelteredMultiplayerTradeService()
+            : this(null)
         {
+        }
+
+        public ShelteredMultiplayerTradeService(Func<string, IItemStore> resolveOwnerStore)
+        {
+            _resolveOwnerStore = resolveOwnerStore;
             ShelteredMultiplayerNetworkEvents.IntentReceived += OnIntentReceived;
             ShelteredMultiplayerNetworkEvents.AuthoritativeReceived += OnAuthoritativeReceived;
         }
@@ -70,10 +78,12 @@ namespace ShelteredAPI.Networking.Trade
             if (!string.Equals(tradeEvent.EventKind, ShelteredNetworkEventKinds.TradeOfferIntent, StringComparison.Ordinal))
                 return;
 
-            string validationError;
-            ShelteredMultiplayerTradeEvent authoritative = ValidateTradeOfferIntent(tradeEvent, out validationError)
+            ShelteredTradeCargoValidationResult validation =
+                ShelteredMultiplayerTradeValidation.ValidateOfferIntent(tradeEvent, _resolveOwnerStore);
+
+            ShelteredMultiplayerTradeEvent authoritative = validation.Success
                 ? CreateAuthoritativeTradeEvent(tradeEvent, ShelteredNetworkEventKinds.TradeOfferAccepted, string.Empty)
-                : CreateAuthoritativeTradeEvent(tradeEvent, ShelteredNetworkEventKinds.TradeOfferRejected, validationError);
+                : CreateAuthoritativeTradeEvent(tradeEvent, ShelteredNetworkEventKinds.TradeOfferRejected, validation.ErrorMessage);
 
             context.Accept(ShelteredMultiplayerTradeContractCodec.ToGameplayEvent(authoritative));
         }
@@ -86,70 +96,6 @@ namespace ShelteredAPI.Networking.Trade
                 return;
 
             Raise(AuthoritativeReceived, ShelteredMultiplayerTradeContractCodec.FromGameplayEvent(context.GameplayEvent));
-        }
-
-        private static bool ValidateTradeOfferIntent(ShelteredMultiplayerTradeEvent tradeEvent, out string error)
-        {
-            if (tradeEvent == null)
-            {
-                error = "Trade event is required.";
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(tradeEvent.SourceOwnerId))
-            {
-                error = "Source owner is required.";
-                return false;
-            }
-
-            if (string.IsNullOrEmpty(tradeEvent.TargetOwnerId))
-            {
-                error = "Target owner is required.";
-                return false;
-            }
-
-            if (tradeEvent.Cargo.Count == 0)
-            {
-                error = "Cargo is required.";
-                return false;
-            }
-
-            for (int i = 0; i < tradeEvent.Cargo.Count; i++)
-            {
-                ShelteredTradeCargoDto cargo = tradeEvent.Cargo[i];
-                if (cargo == null)
-                {
-                    error = "Cargo line is required.";
-                    return false;
-                }
-
-                if (string.IsNullOrEmpty(cargo.ItemId))
-                {
-                    error = "Cargo item id is required.";
-                    return false;
-                }
-
-                if (cargo.Count <= 0)
-                {
-                    error = "Cargo count must be positive.";
-                    return false;
-                }
-
-                if (string.IsNullOrEmpty(cargo.SourceOwnerId))
-                {
-                    error = "Cargo source owner is required.";
-                    return false;
-                }
-
-                if (string.IsNullOrEmpty(cargo.TargetOwnerId))
-                {
-                    error = "Cargo target owner is required.";
-                    return false;
-                }
-            }
-
-            error = string.Empty;
-            return true;
         }
 
         private static ShelteredMultiplayerTradeEvent CreateAuthoritativeTradeEvent(
