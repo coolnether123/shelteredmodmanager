@@ -16,6 +16,8 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("WorldEvents_FacadeUsesCoordinatorWorldTick", FacadeUsesCoordinatorWorldTick));
             tests.Add(new TestCase("WorldEvents_FacadeDeduplicatesByCorrelation", FacadeDeduplicatesByCorrelation));
             tests.Add(new TestCase("WorldEventJournal_ClearRemovesRecords", ClearRemovesRecords));
+            tests.Add(new TestCase("WorldEventJournal_TrimsOldestRecords", TrimsOldestRecords));
+            tests.Add(new TestCase("WorldEventReplayCursor_AdvancesAfterApply", ReplayCursorAdvancesAfterApply));
         }
 
         private static void GeneratesEventIdWhenMissing()
@@ -190,6 +192,41 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.Equal(0, journal.Count, "Clear should remove all records.");
             TestAssert.Equal((long)0, journal.LatestTick, "Clear should reset latest tick.");
             TestAssert.True(!journal.Contains("event-1"), "Clear should remove event id indexes.");
+        }
+
+        private static void TrimsOldestRecords()
+        {
+            ShelteredWorldEventJournal journal = new ShelteredWorldEventJournal(2);
+
+            journal.Append(CreateRecord("event-1", "trade.offer", 1));
+            journal.Append(CreateRecord("event-2", "trade.accepted", 2));
+            journal.Append(CreateRecord("event-3", "raid.started", 3));
+
+            TestAssert.Equal(2, journal.Count, "Journal should retain only the configured maximum event count.");
+            TestAssert.False(journal.Contains("event-1"), "Trim should remove the oldest id from the index.");
+            TestAssert.True(journal.Contains("event-2"), "Trim should keep newer records.");
+            TestAssert.True(journal.Contains("event-3"), "Trim should keep newest records.");
+            TestAssert.Equal((long)3, journal.LatestTick, "LatestTick should survive trim.");
+        }
+
+        private static void ReplayCursorAdvancesAfterApply()
+        {
+            ShelteredWorldEventJournal journal = new ShelteredWorldEventJournal();
+            journal.Append(CreateRecord("event-1", "trade.offer", 1));
+            journal.Append(CreateRecord("event-2", "trade.accepted", 1));
+            journal.Append(CreateRecord("event-3", "raid.started", 2));
+            ShelteredWorldEventReplayCursor cursor = new ShelteredWorldEventReplayCursor();
+
+            IList<ShelteredWorldEventRecord> firstRead = cursor.EnumerateUnapplied(journal);
+            cursor.AdvanceAfterApply(firstRead[0]);
+            IList<ShelteredWorldEventRecord> secondRead = cursor.EnumerateUnapplied(journal);
+            cursor.AdvanceAfterApply(secondRead[0]);
+            cursor.AdvanceAfterApply(secondRead[1]);
+
+            TestAssert.Equal(3, firstRead.Count, "Cursor should initially expose all unapplied records.");
+            TestAssert.Equal(2, secondRead.Count, "Cursor should hide records only after successful apply.");
+            TestAssert.Equal((long)2, cursor.LastAppliedTick, "Cursor should track the last applied tick.");
+            TestAssert.Equal("event-3", cursor.LastAppliedEventId, "Cursor should track the last applied event id.");
         }
 
         private static ShelteredWorldEventRecord CreateRecord(string eventId, string eventKind, long worldTick)

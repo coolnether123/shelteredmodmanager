@@ -11,6 +11,7 @@ namespace ShelteredAPI.Storage
     {
         Assigned,
         Reserved,
+        CargoReserved,
         Equipped,
         Carried,
         Medical,

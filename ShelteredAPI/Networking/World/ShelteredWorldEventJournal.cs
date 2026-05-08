@@ -35,6 +35,11 @@ namespace ShelteredAPI.Networking.World
             }
         }
 
+        public int MaxRetainedEvents
+        {
+            get { return _maxRetainedEvents; }
+        }
+
         public int Count
         {
             get
@@ -47,6 +52,20 @@ namespace ShelteredAPI.Networking.World
         }
 
         public ShelteredWorldEventAppendResult Append(ShelteredWorldEventRecord record)
+        {
+            try
+            {
+                return AppendCore(record);
+            }
+            catch (Exception ex)
+            {
+                return ShelteredWorldEventAppendResult.Rejected(
+                    record != null ? Normalize(record.EventId) : string.Empty,
+                    ex.Message);
+            }
+        }
+
+        private ShelteredWorldEventAppendResult AppendCore(ShelteredWorldEventRecord record)
         {
             if (record == null)
                 return ShelteredWorldEventAppendResult.Rejected(string.Empty, "World event record is required.");
@@ -156,6 +175,14 @@ namespace ShelteredAPI.Networking.World
                 _records.Clear();
                 _recordsById.Clear();
                 _latestTick = 0;
+            }
+        }
+
+        public void TrimToMaxRetained()
+        {
+            lock (_sync)
+            {
+                TrimOldestIfNeeded();
             }
         }
 

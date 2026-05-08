@@ -46,8 +46,8 @@ namespace ShelteredAPI.Networking
             WorldDeltaSeconds = worldDeltaSeconds;
             GameTimeMode = gameTimeMode;
             SetupPhase = setupPhase;
-            Roster = roster ?? new ShelteredMultiplayerPeerInfo[0];
-            BunkerAssignments = bunkerAssignments ?? new ShelteredMultiplayerBunkerAssignmentRecord[0];
+            Roster = CloneRoster(roster);
+            BunkerAssignments = CloneBunkerAssignments(bunkerAssignments);
             SetupSettings = setupSettings ?? ShelteredMultiplayerSetupSettings.Empty;
             Status = status ?? string.Empty;
         }
@@ -81,6 +81,87 @@ namespace ShelteredAPI.Networking
             }
 
             return networkPeerId == NetworkDefaults.HostPeerId ? 1 : 0;
+        }
+
+        public ShelteredMultiplayerSessionContext Snapshot()
+        {
+            return new ShelteredMultiplayerSessionContext(
+                Mode,
+                SessionId,
+                LocalPlayerId,
+                NetworkLocalPeerId,
+                LocalStablePeerId,
+                TickRate,
+                WorldTick,
+                WorldDeltaSeconds,
+                GameTimeMode,
+                SetupPhase,
+                Roster,
+                BunkerAssignments,
+                SetupSettings,
+                Status);
+        }
+
+        public ShelteredMultiplayerPeerInfo[] GetRosterSnapshot()
+        {
+            return CloneRoster(Roster);
+        }
+
+        public ShelteredMultiplayerBunkerAssignmentRecord[] GetBunkerAssignmentSnapshot()
+        {
+            return CloneBunkerAssignments(BunkerAssignments);
+        }
+
+        public bool TryGetRosterPeer(byte networkPeerId, out ShelteredMultiplayerPeerInfo peerInfo)
+        {
+            for (int i = 0; i < Roster.Length; i++)
+            {
+                if (Roster[i] != null && Roster[i].NetworkPeerId == networkPeerId)
+                {
+                    peerInfo = Roster[i];
+                    return true;
+                }
+            }
+
+            peerInfo = null;
+            return false;
+        }
+
+        public bool TryGetBunkerAssignmentForPlayer(int playerId, out ShelteredMultiplayerBunkerAssignmentRecord assignment)
+        {
+            for (int i = 0; i < BunkerAssignments.Length; i++)
+            {
+                if (BunkerAssignments[i] != null && BunkerAssignments[i].PlayerId == playerId)
+                {
+                    assignment = BunkerAssignments[i];
+                    return true;
+                }
+            }
+
+            assignment = null;
+            return false;
+        }
+
+        private static ShelteredMultiplayerPeerInfo[] CloneRoster(ShelteredMultiplayerPeerInfo[] roster)
+        {
+            if (roster == null || roster.Length == 0)
+                return new ShelteredMultiplayerPeerInfo[0];
+
+            ShelteredMultiplayerPeerInfo[] copy = new ShelteredMultiplayerPeerInfo[roster.Length];
+            Array.Copy(roster, copy, roster.Length);
+            return copy;
+        }
+
+        private static ShelteredMultiplayerBunkerAssignmentRecord[] CloneBunkerAssignments(
+            ShelteredMultiplayerBunkerAssignmentRecord[] assignments)
+        {
+            if (assignments == null || assignments.Length == 0)
+                return new ShelteredMultiplayerBunkerAssignmentRecord[0];
+
+            ShelteredMultiplayerBunkerAssignmentRecord[] copy =
+                new ShelteredMultiplayerBunkerAssignmentRecord[assignments.Length];
+            Array.Copy(assignments, copy, assignments.Length);
+            return copy;
         }
     }
 
@@ -202,7 +283,7 @@ namespace ShelteredAPI.Networking
             {
                 lock (_sync)
                 {
-                    return _context;
+                    return _context.Snapshot();
                 }
             }
         }

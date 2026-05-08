@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Networking;
 using ShelteredAPI.Bunkers;
+using ShelteredAPI.Networking.Knowledge;
+using ShelteredAPI.Networking.World;
 using UnityEngine;
 
 namespace ShelteredAPI.Networking.Map
@@ -22,6 +24,11 @@ namespace ShelteredAPI.Networking.Map
 
         public List<ShelteredMultiplayerMapMarker> BuildBunkerMarkers()
         {
+            return BuildMarkers();
+        }
+
+        public List<ShelteredMultiplayerMapMarker> BuildMarkers()
+        {
             List<ShelteredMultiplayerMapMarker> markers = new List<ShelteredMultiplayerMapMarker>();
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
             if (context == null || !context.IsMultiplayerActive)
@@ -31,41 +38,36 @@ namespace ShelteredAPI.Networking.Map
             if (manager == null || manager.mapSourceSprite == null)
                 return markers;
 
-            int localBunkerOwnerId = ShelteredMultiplayerMapMarkerAssignmentResolver.ResolveLocalBunkerOwnerId(
-                context.BunkerAssignments,
-                context.LocalPlayerId);
-
-            IEnumerable<BunkerDefinition> bunkers = ShelteredBunkers.GetAllBunkers();
-            if (bunkers == null)
-                return markers;
-
-            foreach (BunkerDefinition bunker in bunkers)
+            IList<ShelteredMapEntity> entities = ShelteredMapEntities.GetAll();
+            for (int i = 0; i < entities.Count; i++)
             {
-                if (bunker == null)
+                ShelteredMapEntity entity = entities[i];
+                if (entity == null)
                     continue;
 
-                ShelteredMultiplayerBunkerAssignmentRecord assignment =
-                    ShelteredMultiplayerMapMarkerAssignmentResolver.FindAssignment(
-                        context.BunkerAssignments,
-                        bunker.BunkerOwnerId);
-                bool isLocal = bunker.BunkerOwnerId == localBunkerOwnerId;
+                if (entity.Kind == ShelteredMapEntityKind.Bunker)
+                    entity.MapPixels = ResolveBunkerMapPixels(manager, entity, context);
 
-                markers.Add(new ShelteredMultiplayerMapMarker(
-                    ShelteredMultiplayerMapMarkerAssignmentResolver.CreateMarkerId(bunker.BunkerOwnerId),
-                    ShelteredMultiplayerMapMarkerAssignmentResolver.ResolveLabel(bunker, assignment),
-                    bunker.BunkerOwnerId,
-                    ShelteredMultiplayerMapMarkerAssignmentResolver.ResolvePeerId(bunker, assignment),
-                    ResolveMapPixels(manager, bunker, isLocal),
-                    isLocal,
-                    ShelteredMultiplayerMapMarkerAssignmentResolver.ResolveOnlineState(bunker, assignment)));
+                ShelteredMultiplayerMapMarker marker =
+                    ShelteredMapKnowledgeService.Instance.BuildDisplayMarker(context.LocalPlayerId, entity);
+                if (marker != null)
+                    markers.Add(marker);
             }
 
             markers.Sort(CompareMarkers);
             return markers;
         }
 
-        private static Vector3 ResolveMapPixels(ExplorationManager manager, BunkerDefinition bunker, bool isLocal)
+        private static Vector3 ResolveBunkerMapPixels(
+            ExplorationManager manager,
+            ShelteredMapEntity entity,
+            ShelteredMultiplayerSessionContext context)
         {
+            int localBunkerOwnerId = ShelteredMultiplayerMapMarkerAssignmentResolver.ResolveLocalBunkerOwnerId(
+                context.BunkerAssignments,
+                context.LocalPlayerId);
+            bool isLocal = entity.BunkerOwnerId == localBunkerOwnerId;
+
             if (isLocal)
             {
                 Vector3 cached = ShelteredMultiplayerBunkerAnchorRuntime.GetActiveBunkerMapPixels();
@@ -76,8 +78,8 @@ namespace ShelteredAPI.Networking.Map
             try
             {
                 return new Vector3(
-                    manager.WorldToMapPixelsX(bunker.Position.x),
-                    manager.WorldToMapPixelsY(bunker.Position.y),
+                    manager.WorldToMapPixelsX(entity.WorldPosition.x),
+                    manager.WorldToMapPixelsY(entity.WorldPosition.y),
                     0f);
             }
             catch

@@ -37,6 +37,8 @@ namespace ShelteredAPI.Networking.Map
                     return;
 
                 _lastLoggedFrame = UnityEngine.Time.frameCount;
+                ShelteredMultiplayerMapMarkerRuntime.Enabled = true;
+                ShelteredMultiplayerMapMarkerRuntime.Refresh("expedition-map-opened");
                 LogMarkersForMapOpen();
             }
             catch (Exception ex)
@@ -44,6 +46,13 @@ namespace ShelteredAPI.Networking.Map
                 MMLog.WarnOnce("ShelteredMultiplayerMapMarkers.OnEnable",
                     "Multiplayer bunker marker debug hook failed: " + ex.Message);
             }
+        }
+
+        [HarmonyPatch("OnDisable")]
+        [HarmonyPostfix]
+        private static void OnDisablePostfix()
+        {
+            ShelteredMultiplayerMapMarkerRuntime.Clear("expedition-map-closed");
         }
 
         private static void LogMarkersForMapOpen()

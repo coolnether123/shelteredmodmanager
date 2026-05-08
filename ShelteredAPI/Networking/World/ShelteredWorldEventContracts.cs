@@ -69,6 +69,8 @@ namespace ShelteredAPI.Networking.World
         ShelteredWorldEventRecord GetById(string eventId);
         bool Contains(string eventId);
         void Clear(string reason);
+        void TrimToMaxRetained();
+        int MaxRetainedEvents { get; }
         long LatestTick { get; }
         int Count { get; }
     }

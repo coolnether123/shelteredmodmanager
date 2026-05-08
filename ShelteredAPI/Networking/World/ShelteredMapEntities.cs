@@ -27,9 +27,29 @@ namespace ShelteredAPI.Networking.World
             return _registry.Upsert(entity);
         }
 
+        public static bool Remove(string entityId)
+        {
+            return _registry.Remove(entityId);
+        }
+
+        public static ShelteredMapEntity Get(string entityId)
+        {
+            return _registry.Get(entityId);
+        }
+
         public static System.Collections.Generic.IList<ShelteredMapEntity> GetAll()
         {
             return _registry.GetAll();
+        }
+
+        public static System.Collections.Generic.IList<ShelteredMapEntity> GetByOwnerPlayerId(int playerId)
+        {
+            return _registry.GetByOwnerPlayerId(playerId);
+        }
+
+        public static System.Collections.Generic.IList<ShelteredMapEntity> GetByKind(ShelteredMapEntityKind kind)
+        {
+            return _registry.GetByKind(kind);
         }
 
         public static void Clear()

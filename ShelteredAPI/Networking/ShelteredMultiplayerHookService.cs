@@ -156,7 +156,7 @@ namespace ShelteredAPI.Networking
                 if (_mainThreadQueue.Count > 256 && _queueWarningCount < 3)
                 {
                     _queueWarningCount++;
-                    MMLog.WriteWithSource(MMLog.LogLevel.Warning, MMLog.LogCategory.Network, LogSource,
+                    TryWrite(MMLog.LogLevel.Warning,
                         "Main-thread queue contains " + _mainThreadQueue.Count + " actions.");
                 }
             }
@@ -172,7 +172,7 @@ namespace ShelteredAPI.Networking
                 _worldStartBlocked = blocked;
             }
 
-            MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+            TryWrite(MMLog.LogLevel.Info,
                 "World start block " + (blocked ? "enabled" : "disabled") + ". Reason=" + (reason ?? string.Empty) + ".");
         }
 
@@ -349,7 +349,7 @@ namespace ShelteredAPI.Networking
         {
             try
             {
-                MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                TryWrite(MMLog.LogLevel.Info,
                     "Session state changed: mode=" + state.Mode + ", player=" + state.LocalPlayerId
                     + ", session='" + state.SessionId + "', tickRate=" + state.TickRate
                     + ", timeMode=" + state.GameTimeMode + ", status=" + state.Status + ".");
@@ -438,7 +438,7 @@ namespace ShelteredAPI.Networking
             try { handler(context); }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("ShelteredMultiplayerHooks." + name, name + " handler failed: " + ex.Message);
+                TryWarnOnce("ShelteredMultiplayerHooks." + name, name + " handler failed: " + ex.Message);
             }
         }
 
@@ -451,7 +451,7 @@ namespace ShelteredAPI.Networking
             catch (Exception ex)
             {
                 context.Error = ex.Message;
-                MMLog.WarnOnce("ShelteredMultiplayerHooks." + name, name + " handler failed: " + ex.Message);
+                TryWarnOnce("ShelteredMultiplayerHooks." + name, name + " handler failed: " + ex.Message);
             }
         }
 
@@ -460,7 +460,29 @@ namespace ShelteredAPI.Networking
             try { action(); }
             catch (Exception ex)
             {
-                MMLog.WarnOnce("ShelteredMultiplayerHooks." + name, name + " action failed: " + ex.Message);
+                TryWarnOnce("ShelteredMultiplayerHooks." + name, name + " action failed: " + ex.Message);
+            }
+        }
+
+        private static void TryWrite(MMLog.LogLevel level, string message)
+        {
+            try
+            {
+                MMLog.WriteWithSource(level, MMLog.LogCategory.Network, LogSource, message);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void TryWarnOnce(string key, string message)
+        {
+            try
+            {
+                MMLog.WarnOnce(key, message);
+            }
+            catch
+            {
             }
         }
     }

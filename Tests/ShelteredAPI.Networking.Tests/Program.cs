@@ -9,13 +9,30 @@ namespace ShelteredAPI.Networking.Tests
             List<TestCase> tests = new List<TestCase>();
             ShelteredTradeEventTests.Register(tests);
             ShelteredTradeCargoValidationTests.Register(tests);
+            ShelteredTradeCargoReservationTests.Register(tests);
+            ShelteredTradeStateTests.Register(tests);
+            ShelteredTradeCaravanTests.Register(tests);
             ShelteredMultiplayerTimePolicyTests.Register(tests);
             ShelteredWorldEventJournalTests.Register(tests);
             ShelteredWorldClockTests.Register(tests);
+            ShelteredCompatibilityHashTests.Register(tests);
             ShelteredMapEntityRegistryTests.Register(tests);
+            ShelteredMapKnowledgeTests.Register(tests);
             ShelteredMultiplayerMapMarkerTests.Register(tests);
             ShelteredMultiplayerMapAnchorDiagnosticsTests.Register(tests);
             ShelteredTravelPredictionTests.Register(tests);
+            ShelteredTravelStateRegistryTests.Register(tests);
+            ShelteredLocationStateTests.Register(tests);
+            ShelteredLocationLootTests.Register(tests);
+            ShelteredResourceNodeTests.Register(tests);
+            ShelteredRaidStateTests.Register(tests);
+            ShelterDefenseRatingTests.Register(tests);
+            ShelteredSettlementStateTests.Register(tests);
+            FactionBridgeNullTests.Register(tests);
+            ShelteredMultiplayerWorldPersistenceTests.Register(tests);
+            ShelteredMultiplayerCatchupTests.Register(tests);
+            RngDiagnosticsTests.Register(tests);
+            DesyncDigestTests.Register(tests);
             return TestRunner.Run("ShelteredAPI networking tests", tests);
         }
     }

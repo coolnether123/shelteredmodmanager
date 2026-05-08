@@ -53,11 +53,28 @@
     <Compile Include="ShelteredMultiplayerMapMarkerTests.cs" />
     <Compile Include="ShelteredMultiplayerTimePolicyTests.cs" />
     <Compile Include="ShelteredMapEntityRegistryTests.cs" />
+    <Compile Include="ShelteredMapKnowledgeTests.cs" />
+    <Compile Include="ShelteredTradeCaravanTests.cs" />
+    <Compile Include="ShelteredTradeCargoReservationTests.cs" />
     <Compile Include="ShelteredTradeCargoValidationTests.cs" />
     <Compile Include="ShelteredTradeEventTests.cs" />
+    <Compile Include="ShelteredTradeStateTests.cs" />
     <Compile Include="ShelteredTravelPredictionTests.cs" />
+    <Compile Include="ShelteredTravelStateRegistryTests.cs" />
+    <Compile Include="ShelteredLocationStateTests.cs" />
+    <Compile Include="ShelteredLocationLootTests.cs" />
+    <Compile Include="ShelteredResourceNodeTests.cs" />
+    <Compile Include="ShelteredRaidStateTests.cs" />
+    <Compile Include="ShelterDefenseRatingTests.cs" />
+    <Compile Include="ShelteredSettlementStateTests.cs" />
+    <Compile Include="FactionBridgeNullTests.cs" />
+    <Compile Include="ShelteredCompatibilityHashTests.cs" />
     <Compile Include="ShelteredWorldClockTests.cs" />
     <Compile Include="ShelteredWorldEventJournalTests.cs" />
+    <Compile Include="ShelteredMultiplayerWorldPersistenceTests.cs" />
+    <Compile Include="ShelteredMultiplayerCatchupTests.cs" />
+    <Compile Include="RngDiagnosticsTests.cs" />
+    <Compile Include="DesyncDigestTests.cs" />
     <Compile Include="TestSupport.cs" />
   </ItemGroup>
   <ItemGroup>

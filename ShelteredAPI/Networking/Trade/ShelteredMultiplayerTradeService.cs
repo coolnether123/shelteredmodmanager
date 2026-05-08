@@ -10,6 +10,8 @@ namespace ShelteredAPI.Networking.Trade
     public sealed class ShelteredMultiplayerTradeService : IDisposable
     {
         private readonly Func<string, IItemStore> _resolveOwnerStore;
+        private readonly ShelteredMultiplayerTradeStateRegistry _states;
+        private readonly ShelteredMultiplayerTradeCargoReservationService _reservations;
         private bool _disposed;
 
         public ShelteredMultiplayerTradeService()
@@ -18,8 +20,21 @@ namespace ShelteredAPI.Networking.Trade
         }
 
         public ShelteredMultiplayerTradeService(Func<string, IItemStore> resolveOwnerStore)
+            : this(
+                resolveOwnerStore,
+                new ShelteredMultiplayerTradeStateRegistry(),
+                resolveOwnerStore != null ? new ShelteredMultiplayerTradeCargoReservationService(resolveOwnerStore) : null)
+        {
+        }
+
+        internal ShelteredMultiplayerTradeService(
+            Func<string, IItemStore> resolveOwnerStore,
+            ShelteredMultiplayerTradeStateRegistry states,
+            ShelteredMultiplayerTradeCargoReservationService reservations)
         {
             _resolveOwnerStore = resolveOwnerStore;
+            _states = states;
+            _reservations = reservations;
             ShelteredMultiplayerNetworkEvents.IntentReceived += OnIntentReceived;
             ShelteredMultiplayerNetworkEvents.AuthoritativeReceived += OnAuthoritativeReceived;
         }
@@ -81,9 +96,22 @@ namespace ShelteredAPI.Networking.Trade
             ShelteredTradeCargoValidationResult validation =
                 ShelteredMultiplayerTradeValidation.ValidateOfferIntent(tradeEvent, _resolveOwnerStore);
 
-            ShelteredMultiplayerTradeEvent authoritative = validation.Success
+            ShelteredMultiplayerTradeEvent authoritative;
+            if (validation.Success && _reservations != null)
+            {
+                ShelteredTradeCargoReservationResult reservation = _reservations.Reserve(tradeEvent);
+                if (!reservation.Success)
+                    validation = ShelteredTradeCargoValidationResult.Failed(
+                        reservation.ErrorMessage,
+                        validation.TotalCargoLines,
+                        validation.TotalItemCount);
+            }
+
+            authoritative = validation.Success
                 ? CreateAuthoritativeTradeEvent(tradeEvent, ShelteredNetworkEventKinds.TradeOfferAccepted, string.Empty)
                 : CreateAuthoritativeTradeEvent(tradeEvent, ShelteredNetworkEventKinds.TradeOfferRejected, validation.ErrorMessage);
+
+            ApplyState(authoritative);
 
             context.Accept(ShelteredMultiplayerTradeContractCodec.ToGameplayEvent(authoritative));
         }
@@ -95,7 +123,10 @@ namespace ShelteredAPI.Networking.Trade
             if (!ShelteredMultiplayerTradeContractCodec.IsTradeEventKind(context.GameplayEvent.EventKind))
                 return;
 
-            Raise(AuthoritativeReceived, ShelteredMultiplayerTradeContractCodec.FromGameplayEvent(context.GameplayEvent));
+            ShelteredMultiplayerTradeEvent tradeEvent =
+                ShelteredMultiplayerTradeContractCodec.FromGameplayEvent(context.GameplayEvent);
+            ApplyState(tradeEvent);
+            Raise(AuthoritativeReceived, tradeEvent);
         }
 
         private static ShelteredMultiplayerTradeEvent CreateAuthoritativeTradeEvent(
@@ -115,6 +146,12 @@ namespace ShelteredAPI.Networking.Trade
         {
             if (handler != null)
                 handler(tradeEvent);
+        }
+
+        private void ApplyState(ShelteredMultiplayerTradeEvent tradeEvent)
+        {
+            if (_states != null && tradeEvent != null)
+                _states.Apply(tradeEvent);
         }
     }
 }

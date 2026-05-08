@@ -12,13 +12,23 @@ namespace ShelteredAPI.Networking.Travel
 
         private readonly Dictionary<string, ShelteredTravelStartedEvent> _activeTravels =
             new Dictionary<string, ShelteredTravelStartedEvent>(StringComparer.Ordinal);
+        private readonly IShelteredTravelStateRegistry _stateRegistry;
         private bool _disposed;
 
         public ShelteredTravelSyncService()
+            : this(ShelteredExpeditionTravelHookService.Instance.Registry)
         {
+        }
+
+        internal ShelteredTravelSyncService(IShelteredTravelStateRegistry stateRegistry)
+        {
+            _stateRegistry = stateRegistry;
+            Active = this;
             ShelteredMultiplayerNetworkEvents.IntentReceived += OnIntentReceived;
             ShelteredMultiplayerNetworkEvents.AuthoritativeReceived += OnAuthoritativeReceived;
         }
+
+        public static ShelteredTravelSyncService Active { get; private set; }
 
         public event Action<ShelteredTravelStartedEvent> TravelStarted;
         public event Action<ShelteredTravelCorrectedEvent> TravelCorrected;
@@ -57,6 +67,56 @@ namespace ShelteredAPI.Networking.Travel
                 ShelteredTravelContractCodec.ToGameplayEvent(started));
         }
 
+        public bool PublishTravelStarted(ShelteredTravelStartedEvent started)
+        {
+            if (_disposed || started == null)
+                return false;
+
+            ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            if (context == null || !context.IsMultiplayerActive)
+                return false;
+
+            if (context.Mode == ShelteredMultiplayerSessionMode.Host)
+                return BroadcastAuthoritativeTravelStarted(started);
+
+            return ShelteredMultiplayerNetworkEvents.PublishIntent(
+                ShelteredTravelContractCodec.ToGameplayEvent(started));
+        }
+
+        public bool PublishTravelCorrected(ShelteredTravelCorrectedEvent corrected)
+        {
+            if (_disposed || corrected == null)
+                return false;
+
+            ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            if (context == null || !context.IsMultiplayerActive)
+                return false;
+
+            if (context.Mode != ShelteredMultiplayerSessionMode.Host)
+                return ShelteredMultiplayerNetworkEvents.PublishIntent(
+                    ShelteredTravelContractCodec.ToGameplayEvent(corrected));
+
+            return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(
+                ShelteredTravelContractCodec.ToGameplayEvent(corrected));
+        }
+
+        public bool PublishTravelArrived(ShelteredTravelArrivedEvent arrived)
+        {
+            if (_disposed || arrived == null)
+                return false;
+
+            ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            if (context == null || !context.IsMultiplayerActive)
+                return false;
+
+            if (context.Mode != ShelteredMultiplayerSessionMode.Host)
+                return ShelteredMultiplayerNetworkEvents.PublishIntent(
+                    ShelteredTravelContractCodec.ToGameplayEvent(arrived));
+
+            return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(
+                ShelteredTravelContractCodec.ToGameplayEvent(arrived));
+        }
+
         public bool BroadcastAuthoritativeTravelStarted(ShelteredTravelStartedEvent started)
         {
             if (_disposed || started == null)
@@ -73,8 +133,21 @@ namespace ShelteredAPI.Networking.Travel
 
         public void ApplyAuthoritativeTravel(ShelteredTravelStartedEvent started)
         {
+            ApplyAuthoritativeTravel(started, null);
+        }
+
+        public void ApplyAuthoritativeTravel(ShelteredTravelStartedEvent started, string eventId)
+        {
             if (_disposed || started == null || string.IsNullOrEmpty(started.TravelId))
                 return;
+
+            if (_stateRegistry != null)
+            {
+                ShelteredTravelApplyResult applyResult =
+                    _stateRegistry.ApplyTravelStarted(started, ResolveCurrentEventId(eventId, started.TravelId, ShelteredNetworkEventKinds.TravelStarted));
+                if (!applyResult.AppliedEvent)
+                    return;
+            }
 
             _activeTravels[started.TravelId] = started.Copy();
             ShelteredWorldEvents.AppendAuthoritative(
@@ -88,11 +161,24 @@ namespace ShelteredAPI.Networking.Travel
 
         public void ApplyAuthoritativeTravel(ShelteredTravelCorrectedEvent corrected)
         {
+            ApplyAuthoritativeTravel(corrected, null);
+        }
+
+        public void ApplyAuthoritativeTravel(ShelteredTravelCorrectedEvent corrected, string eventId)
+        {
             if (_disposed || corrected == null || string.IsNullOrEmpty(corrected.TravelId))
                 return;
 
             ShelteredTravelStartedEvent existing;
             _activeTravels.TryGetValue(corrected.TravelId, out existing);
+            if (_stateRegistry != null)
+            {
+                ShelteredTravelApplyResult applyResult =
+                    _stateRegistry.ApplyTravelCorrected(corrected, ResolveCurrentEventId(eventId, corrected.TravelId, ShelteredNetworkEventKinds.TravelCorrected));
+                if (!applyResult.AppliedEvent)
+                    return;
+            }
+
             _activeTravels[corrected.TravelId] =
                 ShelteredTravelPrediction.CreateCorrectedStart(existing, corrected);
             ShelteredWorldEvents.AppendAuthoritative(
@@ -106,11 +192,24 @@ namespace ShelteredAPI.Networking.Travel
 
         public void ApplyAuthoritativeTravel(ShelteredTravelArrivedEvent arrived)
         {
+            ApplyAuthoritativeTravel(arrived, null);
+        }
+
+        public void ApplyAuthoritativeTravel(ShelteredTravelArrivedEvent arrived, string eventId)
+        {
             if (_disposed || arrived == null || string.IsNullOrEmpty(arrived.TravelId))
                 return;
 
             ShelteredTravelStartedEvent existing;
             _activeTravels.TryGetValue(arrived.TravelId, out existing);
+            if (_stateRegistry != null)
+            {
+                ShelteredTravelApplyResult applyResult =
+                    _stateRegistry.ApplyTravelArrived(arrived, ResolveCurrentEventId(eventId, arrived.TravelId, ShelteredNetworkEventKinds.TravelArrived));
+                if (!applyResult.AppliedEvent)
+                    return;
+            }
+
             _activeTravels.Remove(arrived.TravelId);
             ShelteredWorldEvents.AppendAuthoritative(
                 ShelteredNetworkEventKinds.TravelArrived,
@@ -143,6 +242,8 @@ namespace ShelteredAPI.Networking.Travel
             ShelteredMultiplayerNetworkEvents.IntentReceived -= OnIntentReceived;
             ShelteredMultiplayerNetworkEvents.AuthoritativeReceived -= OnAuthoritativeReceived;
             _activeTravels.Clear();
+            if (ReferenceEquals(Active, this))
+                Active = null;
             _disposed = true;
         }
 
@@ -150,7 +251,7 @@ namespace ShelteredAPI.Networking.Travel
         {
             if (_disposed || context == null || context.GameplayEvent == null)
                 return;
-            if (!string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelStarted, StringComparison.Ordinal))
+            if (!ShelteredTravelContractCodec.IsTravelEventKind(context.GameplayEvent.EventKind))
                 return;
 
             ShelteredMultiplayerSessionContext sessionContext = ShelteredMultiplayerSessionCoordinator.Instance.Context;
@@ -160,10 +261,27 @@ namespace ShelteredAPI.Networking.Travel
                 return;
             }
 
-            ShelteredTravelStartedEvent started =
-                ShelteredTravelContractCodec.StartedFromGameplayEvent(context.GameplayEvent);
-            context.Accept(ShelteredTravelContractCodec.ToGameplayEvent(
-                NormalizeAuthoritativeStarted(started, sessionContext)));
+            if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelStarted, StringComparison.Ordinal))
+            {
+                ShelteredTravelStartedEvent started =
+                    ShelteredTravelContractCodec.StartedFromGameplayEvent(context.GameplayEvent);
+                context.Accept(ShelteredTravelContractCodec.ToGameplayEvent(
+                    NormalizeAuthoritativeStarted(started, sessionContext)));
+                return;
+            }
+
+            if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelCorrected, StringComparison.Ordinal))
+            {
+                context.Accept(ShelteredTravelContractCodec.ToGameplayEvent(
+                    ShelteredTravelContractCodec.CorrectedFromGameplayEvent(context.GameplayEvent)));
+                return;
+            }
+
+            if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelArrived, StringComparison.Ordinal))
+            {
+                context.Accept(ShelteredTravelContractCodec.ToGameplayEvent(
+                    ShelteredTravelContractCodec.ArrivedFromGameplayEvent(context.GameplayEvent)));
+            }
         }
 
         private void OnAuthoritativeReceived(ShelteredNetworkEventContext context)
@@ -175,18 +293,24 @@ namespace ShelteredAPI.Networking.Travel
 
             if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelStarted, StringComparison.Ordinal))
             {
-                ApplyAuthoritativeTravel(ShelteredTravelContractCodec.StartedFromGameplayEvent(context.GameplayEvent));
+                ApplyAuthoritativeTravel(
+                    ShelteredTravelContractCodec.StartedFromGameplayEvent(context.GameplayEvent),
+                    context.GameplayEvent.EventId);
                 return;
             }
 
             if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelCorrected, StringComparison.Ordinal))
             {
-                ApplyAuthoritativeTravel(ShelteredTravelContractCodec.CorrectedFromGameplayEvent(context.GameplayEvent));
+                ApplyAuthoritativeTravel(
+                    ShelteredTravelContractCodec.CorrectedFromGameplayEvent(context.GameplayEvent),
+                    context.GameplayEvent.EventId);
                 return;
             }
 
             if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelArrived, StringComparison.Ordinal))
-                ApplyAuthoritativeTravel(ShelteredTravelContractCodec.ArrivedFromGameplayEvent(context.GameplayEvent));
+                ApplyAuthoritativeTravel(
+                    ShelteredTravelContractCodec.ArrivedFromGameplayEvent(context.GameplayEvent),
+                    context.GameplayEvent.EventId);
         }
 
         private static ShelteredTravelStartedEvent CreateTravelStarted(
@@ -309,6 +433,15 @@ namespace ShelteredAPI.Networking.Travel
         {
             if (handler != null)
                 handler(value);
+        }
+
+        private static string ResolveCurrentEventId(string eventId, string travelId, string eventKind)
+        {
+            if (!string.IsNullOrEmpty(eventId))
+                return eventId;
+
+            return "travel-sync:" + (eventKind ?? string.Empty) + ":" + (travelId ?? string.Empty) + ":"
+                + ShelteredMultiplayer.Hooks.CurrentWorldTick.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
     }
 }

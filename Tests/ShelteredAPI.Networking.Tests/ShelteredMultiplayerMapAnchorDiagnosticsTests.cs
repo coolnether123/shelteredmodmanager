@@ -61,6 +61,8 @@ namespace ShelteredAPI.Networking.Tests
 
             TestAssert.True(ContainsWarning(report, "does not resolve to any multiplayer bunker owner id"),
                 "A local player id with no assignment should be reported.");
+            TestAssert.Equal(1, report.BunkerCount,
+                "Diagnostics should report the coordinator bunker assignment count.");
 
             ResetState();
         }

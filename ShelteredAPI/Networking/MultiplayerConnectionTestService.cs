@@ -12,6 +12,7 @@ using ModAPI.Networking.Discovery;
 using ModAPI.Networking.Protocol;
 using ModAPI.Networking.Sessions;
 using ShelteredAPI.Harmony;
+using ShelteredAPI.Networking.Compatibility;
 
 namespace ShelteredAPI.Networking
 {
@@ -490,6 +491,9 @@ namespace ShelteredAPI.Networking
             options.StablePeerId = CreateStablePeerId(role);
             options.ReconnectToken = options.StablePeerId;
             options.MaxPeers = NetworkDefaults.DefaultMaxPeers;
+            string compatibilityHash = new ShelteredMultiplayerCompatibilityHasher().CaptureCurrentHash();
+            options.ContentSchemaHash = compatibilityHash;
+            options.ModContentHash = compatibilityHash;
             return options;
         }
 

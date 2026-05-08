@@ -12,6 +12,7 @@ namespace ShelteredAPI.Networking.Diagnostics
         public string SessionId = string.Empty;
         public int LocalPlayerId;
         public int ActiveBunkerOwnerId;
+        public int BunkerCount;
         public Vector2 ActiveWorldPosition;
         public Vector3 ActiveMapPixels;
         public int GridX;
@@ -19,6 +20,7 @@ namespace ShelteredAPI.Networking.Diagnostics
         public bool HasExplorationManager;
         public bool HasExpeditionMap;
         public bool HasMapSprite;
+        public bool ShelterCellValid;
         public string[] Warnings = new string[0];
     }
 
@@ -47,6 +49,7 @@ namespace ShelteredAPI.Networking.Diagnostics
                 report.LocalPlayerId = context.LocalPlayerId;
 
                 bool hasAssignments = context.BunkerAssignments != null && context.BunkerAssignments.Length > 0;
+                report.BunkerCount = hasAssignments ? context.BunkerAssignments.Length : 0;
                 if (!hasAssignments)
                     warnings.Add("No multiplayer bunker assignments are available.");
 
@@ -227,7 +230,8 @@ namespace ShelteredAPI.Networking.Diagnostics
                 return;
             }
 
-            if (region.topography != MapRegion.Topography.Shelter)
+            report.ShelterCellValid = region.topography == MapRegion.Topography.Shelter;
+            if (!report.ShelterCellValid)
                 warnings.Add("ExpeditionMap active bunker grid ref is not marked as a Shelter cell.");
         }
     }

@@ -17,6 +17,7 @@ namespace ShelteredAPI.Networking.World
         private readonly ShelteredMultiplayerSessionCoordinator _coordinator;
         private double _fractionalTicks;
         private bool _hasHostSample;
+        private ShelteredWorldClockSample _lastHostSample;
 
         internal ShelteredMultiplayerWorldClock()
             : this(ShelteredMultiplayerSessionCoordinator.Instance)
@@ -78,12 +79,27 @@ namespace ShelteredAPI.Networking.World
 
             lock (_sync)
             {
-                _hasHostSample = true;
-                _fractionalTicks = 0d;
+                if (_hasHostSample && sampleTick <= context.WorldTick)
+                    return false;
             }
 
             if (sampleTick < context.WorldTick)
                 return false;
+
+            lock (_sync)
+            {
+                _hasHostSample = true;
+                _lastHostSample = new ShelteredWorldClockSample
+                {
+                    SessionId = sample.SessionId,
+                    WorldTick = sampleTick,
+                    DeltaSeconds = sampleDelta,
+                    TickRate = sample.TickRate,
+                    SampleUtc = sample.SampleUtc,
+                    HostAuthoritative = sample.HostAuthoritative
+                };
+                _fractionalTicks = 0d;
+            }
 
             _coordinator.SetWorldTick(sampleTick, sampleDelta, RemoteSampleReason);
             return true;
@@ -112,12 +128,39 @@ namespace ShelteredAPI.Networking.World
             return context != null && context.WorldTick > 0 ? context.WorldTick : 0;
         }
 
+        public ShelteredWorldClockDriftReport GetDriftReport()
+        {
+            ShelteredMultiplayerSessionContext context = _coordinator.Context;
+            ShelteredWorldClockSample lastSample;
+            lock (_sync)
+            {
+                lastSample = _lastHostSample != null ? _lastHostSample.Copy() : null;
+            }
+
+            long localTick = context != null ? context.WorldTick : 0;
+            long hostTick = lastSample != null ? lastSample.WorldTick : localTick;
+            DateTime sampleUtc = lastSample != null ? lastSample.SampleUtc : DateTime.UtcNow;
+            TimeSpan sampleAge = sampleUtc > DateTime.MinValue ? DateTime.UtcNow - sampleUtc : TimeSpan.Zero;
+            if (sampleAge < TimeSpan.Zero)
+                sampleAge = TimeSpan.Zero;
+
+            return new ShelteredWorldClockDriftReport
+            {
+                LocalTick = localTick,
+                HostTick = hostTick,
+                DriftTicks = localTick - hostTick,
+                SampleAge = sampleAge,
+                IsHostAuthoritative = context != null && context.Mode == ShelteredMultiplayerSessionMode.Host
+            };
+        }
+
         public void Reset(string reason)
         {
             lock (_sync)
             {
                 _fractionalTicks = 0d;
                 _hasHostSample = false;
+                _lastHostSample = null;
             }
 
             _coordinator.SetWorldTick(0, 0f, BuildResetReason(reason));

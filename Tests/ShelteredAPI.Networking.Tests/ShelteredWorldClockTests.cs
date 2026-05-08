@@ -17,6 +17,8 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("WorldClock_OldRemoteSampleIsIgnored", OldRemoteSampleIsIgnored));
             tests.Add(new TestCase("WorldClock_NegativeRemoteTickClampsToZero", NegativeRemoteTickClampsToZero));
             tests.Add(new TestCase("WorldClock_ClientPredictionStopsAfterHostSample", ClientPredictionStopsAfterHostSample));
+            tests.Add(new TestCase("WorldClock_EqualRemoteSampleAfterHostSampleIsIgnored", EqualRemoteSampleAfterHostSampleIsIgnored));
+            tests.Add(new TestCase("WorldClock_DriftReportUsesLastHostSample", DriftReportUsesLastHostSample));
         }
 
         private static void HostUpdateAdvancesTick()
@@ -128,6 +130,53 @@ namespace ShelteredAPI.Networking.Tests
             }
         }
 
+        private static void EqualRemoteSampleAfterHostSampleIsIgnored()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
+
+            try
+            {
+                TestAssert.True(clock.ApplyRemoteSample(CreateHostSample(7, 0.05f, 20)),
+                    "Client should apply the first host sample.");
+
+                bool applied = clock.ApplyRemoteSample(CreateHostSample(7, 0.05f, 20));
+
+                TestAssert.False(applied, "Client should ignore equal host samples once host authority is established.");
+                TestAssert.Equal(7L, clock.GetCurrentTick(), "Equal host sample should not change current tick.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void DriftReportUsesLastHostSample()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
+
+            try
+            {
+                TestAssert.True(clock.ApplyRemoteSample(CreateHostSample(8, 0.05f, 20)),
+                    "Client should apply host sample before reporting drift.");
+                ShelteredMultiplayerSessionCoordinator.Instance.SetWorldTick(10, 0.05f, "world-clock-test-local-drift");
+
+                ShelteredWorldClockDriftReport report = clock.GetDriftReport();
+
+                TestAssert.Equal(10L, report.LocalTick, "Drift report should include local tick.");
+                TestAssert.Equal(8L, report.HostTick, "Drift report should include last host tick.");
+                TestAssert.Equal(2L, report.DriftTicks, "Drift report should compute local minus host tick.");
+                TestAssert.False(report.IsHostAuthoritative, "Client drift report should not mark local host authority.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
         private static ShelteredMultiplayerSessionContext ActivateHost(ShelteredMultiplayerWorldClock clock, int tickRate)
         {
             ShelteredMultiplayerSessionContext previous = ReplaceContext(CreateContext(
@@ -224,6 +273,9 @@ namespace ShelteredAPI.Networking.Tests
             typeof(ShelteredMultiplayerWorldClock).GetField(
                 "_hasHostSample",
                 BindingFlags.Instance | BindingFlags.NonPublic).SetValue(clock, false);
+            typeof(ShelteredMultiplayerWorldClock).GetField(
+                "_lastHostSample",
+                BindingFlags.Instance | BindingFlags.NonPublic).SetValue(clock, null);
         }
     }
 }

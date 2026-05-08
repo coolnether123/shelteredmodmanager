@@ -12,7 +12,8 @@ namespace ShelteredAPI.Networking.World
         RaidParty,
         Settlement,
         ResourceNode,
-        FactionMarker
+        FactionMarker,
+        UnknownContact
     }
 
     internal sealed class ShelteredMapEntity

@@ -1,4 +1,5 @@
 using ModAPI.Core;
+using ShelteredAPI.Networking.Persistence;
 using ShelteredAPI.Networking.Travel;
 using ShelteredAPI.Networking.World;
 using UnityEngine;
@@ -56,6 +57,9 @@ namespace ShelteredAPI.Networking
                 _worldClockSync = new ShelteredMultiplayerWorldClockSyncService();
             if (_travelSync == null)
                 _travelSync = new ShelteredTravelSyncService();
+            ShelteredMultiplayerWorldPersistence.Instance.EnsureRegistered();
+            if (RngDebugOptions.WorldTickProvider == null)
+                RngDebugOptions.WorldTickProvider = ShelteredMultiplayerWorldClock.Instance.GetCurrentTick;
         }
 
         private void DisposeRuntimeServices()

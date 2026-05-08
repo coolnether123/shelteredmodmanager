@@ -94,10 +94,12 @@ namespace ShelteredAPI.Networking.Trade
             return string.Equals(eventKind, ShelteredNetworkEventKinds.TradeOfferIntent, StringComparison.Ordinal)
                 || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeOfferAccepted, StringComparison.Ordinal)
                 || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeOfferRejected, StringComparison.Ordinal)
+                || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeCargoReserved, StringComparison.Ordinal)
                 || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeCaravanLaunched, StringComparison.Ordinal)
                 || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeCaravanArrived, StringComparison.Ordinal)
                 || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeCompleted, StringComparison.Ordinal)
-                || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeCancelled, StringComparison.Ordinal);
+                || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeCancelled, StringComparison.Ordinal)
+                || string.Equals(eventKind, ShelteredNetworkEventKinds.TradeFailed, StringComparison.Ordinal);
         }
 
         public static ShelteredNetworkGameplayEvent ToGameplayEvent(ShelteredMultiplayerTradeEvent tradeEvent)

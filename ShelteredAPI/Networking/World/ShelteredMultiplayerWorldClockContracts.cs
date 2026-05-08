@@ -33,6 +33,15 @@ namespace ShelteredAPI.Networking.World
         }
     }
 
+    internal sealed class ShelteredWorldClockDriftReport
+    {
+        public long LocalTick { get; set; }
+        public long HostTick { get; set; }
+        public long DriftTicks { get; set; }
+        public TimeSpan SampleAge { get; set; }
+        public bool IsHostAuthoritative { get; set; }
+    }
+
     internal static class ShelteredWorldClockSampleCodec
     {
         public static ShelteredNetworkGameplayEvent ToGameplayEvent(ShelteredWorldClockSample sample)

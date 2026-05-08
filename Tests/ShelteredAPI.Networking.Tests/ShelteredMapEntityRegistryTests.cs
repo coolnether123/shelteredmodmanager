@@ -10,8 +10,37 @@ namespace ShelteredAPI.Networking.Tests
         {
             tests.Add(new TestCase("MapEntityRegistry_UpsertReplacesExistingEntity", UpsertReplacesExistingEntity));
             tests.Add(new TestCase("MapEntityRegistry_GetByKindReturnsOnlySelectedKind", GetByKindReturnsOnlySelectedKind));
+            tests.Add(new TestCase("MapEntityRegistry_GetByOwnerAndRemoveWork", GetByOwnerAndRemoveWork));
+            tests.Add(new TestCase("MapEntityRegistry_SupportsUnknownContactKind", SupportsUnknownContactKind));
             tests.Add(new TestCase("MapEntityRegistry_BunkerAssignmentBecomesBunkerEntity", BunkerAssignmentBecomesBunkerEntity));
             tests.Add(new TestCase("MapEntityRegistry_ClearRemovesEntities", ClearRemovesEntities));
+        }
+
+        private static void GetByOwnerAndRemoveWork()
+        {
+            ShelteredMapEntityRegistry registry = new ShelteredMapEntityRegistry(delegate { return 0; });
+            registry.Upsert(CreateEntity("owner-2-bunker", ShelteredMapEntityKind.Bunker, 2));
+            registry.Upsert(CreateEntity("owner-2-expedition", ShelteredMapEntityKind.Expedition, 2));
+            registry.Upsert(CreateEntity("owner-3-bunker", ShelteredMapEntityKind.Bunker, 3));
+
+            IList<ShelteredMapEntity> ownerEntities = registry.GetByOwnerPlayerId(2);
+            bool removed = registry.Remove("owner-2-expedition");
+
+            TestAssert.Equal(2, ownerEntities.Count, "GetByOwner should return only the selected owner's entities.");
+            TestAssert.True(removed, "Remove should return true for an existing entity.");
+            TestAssert.True(registry.Get("owner-2-expedition") == null, "Removed entity should no longer be returned.");
+        }
+
+        private static void SupportsUnknownContactKind()
+        {
+            ShelteredMapEntityRegistry registry = new ShelteredMapEntityRegistry(delegate { return 0; });
+            registry.Upsert(CreateEntity("unknown-1", ShelteredMapEntityKind.UnknownContact, 0));
+
+            IList<ShelteredMapEntity> contacts = registry.GetByKind(ShelteredMapEntityKind.UnknownContact);
+
+            TestAssert.Equal(1, contacts.Count, "Registry should support unknown contact entities.");
+            TestAssert.Equal(ShelteredMapEntityKind.UnknownContact, contacts[0].Kind,
+                "Unknown contact entity kind should round-trip.");
         }
 
         private static void UpsertReplacesExistingEntity()

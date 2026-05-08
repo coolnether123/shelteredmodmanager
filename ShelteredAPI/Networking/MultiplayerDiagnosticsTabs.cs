@@ -257,6 +257,7 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawValue("Session", report.SessionId);
             MultiplayerDiagnosticsWidgets.DrawValue("Local player", report.LocalPlayerId.ToString());
             MultiplayerDiagnosticsWidgets.DrawValue("Bunker owner", report.ActiveBunkerOwnerId.ToString());
+            MultiplayerDiagnosticsWidgets.DrawValue("Bunkers", report.BunkerCount.ToString());
             MultiplayerDiagnosticsWidgets.DrawValue("World", FormatVector(report.ActiveWorldPosition));
             MultiplayerDiagnosticsWidgets.DrawValue("Map pixels", FormatVector(report.ActiveMapPixels));
             MultiplayerDiagnosticsWidgets.DrawValue("Grid", report.GridX + ", " + report.GridY);
@@ -265,6 +266,7 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawValue("ExplorationManager", report.HasExplorationManager ? "yes" : "no");
             MultiplayerDiagnosticsWidgets.DrawValue("ExpeditionMap", report.HasExpeditionMap ? "yes" : "no");
             MultiplayerDiagnosticsWidgets.DrawValue("Map sprite", report.HasMapSprite ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("Shelter cell", report.ShelterCellValid ? "yes" : "no");
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Warnings");
             if (report.Warnings == null || report.Warnings.Length == 0)

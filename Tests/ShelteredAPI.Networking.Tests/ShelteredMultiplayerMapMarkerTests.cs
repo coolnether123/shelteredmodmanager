@@ -2,7 +2,9 @@ using System.Collections.Generic;
 using ModAPI.Networking;
 using ShelteredAPI.Bunkers;
 using ShelteredAPI.Networking;
+using ShelteredAPI.Networking.Knowledge;
 using ShelteredAPI.Networking.Map;
+using ShelteredAPI.Networking.World;
 using UnityEngine;
 
 namespace ShelteredAPI.Networking.Tests
@@ -13,6 +15,7 @@ namespace ShelteredAPI.Networking.Tests
         {
             tests.Add(new TestCase("MapMarkers_ResolveLocalOwnerFromAssignments", ResolveLocalOwnerFromAssignments));
             tests.Add(new TestCase("MapMarkers_AssignmentMetadataOverridesBunkerDefaults", AssignmentMetadataOverridesBunkerDefaults));
+            tests.Add(new TestCase("MapMarkers_KnowledgeMarkerUsesStableId", KnowledgeMarkerUsesStableId));
         }
 
         private static void ResolveLocalOwnerFromAssignments()
@@ -55,6 +58,36 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.True(
                 ShelteredMultiplayerMapMarkerAssignmentResolver.ResolveOnlineState(bunker, assignment),
                 "Assignment online state should win over stale bunker online state.");
+        }
+
+        private static void KnowledgeMarkerUsesStableId()
+        {
+            ShelteredMapEntities.Clear("marker-test");
+            ShelteredMapKnowledgeService.Instance.Clear("marker-test");
+
+            ShelteredMapEntity entity = new ShelteredMapEntity();
+            entity.EntityId = "mapentity:bunker:3";
+            entity.Kind = ShelteredMapEntityKind.Bunker;
+            entity.OwnerPlayerId = 4;
+            entity.OwnerPeerId = 9;
+            entity.BunkerOwnerId = 3;
+            entity.DisplayName = "Remote";
+            entity.MapPixels = new Vector3(33f, 44f, 0f);
+            entity.IsOnline = false;
+            entity.IsVisible = true;
+            ShelteredMapEntities.Upsert(entity);
+
+            ShelteredMultiplayerMapMarker marker =
+                ShelteredMapKnowledgeService.Instance.BuildDisplayMarker(1, entity);
+
+            TestAssert.Equal("multiplayer-bunker-3", marker.MarkerId,
+                "Knowledge-built bunker markers should keep stable bunker marker ids.");
+            TestAssert.Equal("?", marker.Label,
+                "Unrevealed remote bunker markers should display as question marks.");
+            TestAssert.False(marker.IsOnline, "Marker should preserve offline state.");
+
+            ShelteredMapEntities.Clear("marker-test-end");
+            ShelteredMapKnowledgeService.Instance.Clear("marker-test-end");
         }
     }
 }
