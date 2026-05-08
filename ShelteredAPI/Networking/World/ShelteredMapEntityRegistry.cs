@@ -175,6 +175,18 @@ namespace ShelteredAPI.Networking.World
             if (right == null)
                 return 1;
 
+            int kindCompare = left.Kind.CompareTo(right.Kind);
+            if (kindCompare != 0)
+                return kindCompare;
+
+            int bunkerCompare = left.BunkerOwnerId.CompareTo(right.BunkerOwnerId);
+            if (bunkerCompare != 0)
+                return bunkerCompare;
+
+            int ownerCompare = left.OwnerPlayerId.CompareTo(right.OwnerPlayerId);
+            if (ownerCompare != 0)
+                return ownerCompare;
+
             return string.Compare(left.EntityId, right.EntityId, StringComparison.Ordinal);
         }
     }

@@ -4,6 +4,8 @@ using System.Net;
 using System.Threading;
 using ModAPI.Networking;
 using ModAPI.Networking.Sessions;
+using ShelteredAPI.Networking.Knowledge;
+using ShelteredAPI.Networking.World;
 
 namespace ShelteredAPI.Networking.Tests
 {
@@ -70,6 +72,27 @@ namespace ShelteredAPI.Networking.Tests
         {
             if (Math.Abs(expected - actual) > tolerance)
                 throw new InvalidOperationException(message + " Expected: " + expected + " Actual: " + actual);
+        }
+    }
+
+    internal static class ShelteredNetworkingTestContext
+    {
+        public static void ResetClientContext(bool fog)
+        {
+            ShelteredMapEntities.Clear("test-context-reset");
+            ShelteredMapKnowledgeService.Instance.Clear("test-context-reset");
+            ShelteredMapKnowledgeService.DebugRevealAll = false;
+            ShelteredMultiplayerSessionCoordinator.Instance.Deactivate("test-context-reset");
+            ShelteredMultiplayerSessionCoordinator.Instance.ActivateClient(
+                "knowledge-test-session",
+                1,
+                NetworkDefaults.HostPeerId,
+                "client",
+                20,
+                "knowledge-test-client");
+            ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                new ShelteredMultiplayerSetupSettings(0, 0, 1, 1, 1, 1, 1, 0, fog),
+                "knowledge-test-settings");
         }
     }
 

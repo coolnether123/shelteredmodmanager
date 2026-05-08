@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ShelteredAPI.Networking.Map;
 using ShelteredAPI.Networking.World;
 
@@ -67,9 +68,12 @@ namespace ShelteredAPI.Networking.Knowledge
     internal interface IShelteredMapKnowledgeService
     {
         MapKnowledgeRecord GetKnowledge(int viewerPlayerId, string entityId);
+        MapKnowledgeRecord GetEffectiveKnowledge(int viewerPlayerId, ShelteredMapEntity entity);
         MapKnowledgeRecord Reveal(int viewerPlayerId, string entityId, MapKnowledgeLevel level, string reason);
         bool Forget(int viewerPlayerId, string entityId, string reason);
         bool CanSeeExactLocation(int viewerPlayerId, string entityId);
+        ShelteredMapEntity BuildVisibleEntity(int viewerPlayerId, ShelteredMapEntity entity);
+        IList<ShelteredMapEntity> GetVisibleEntities(int viewerPlayerId, IShelteredMapEntityRegistry registry);
         ShelteredMultiplayerMapMarker BuildDisplayMarker(int viewerPlayerId, ShelteredMapEntity entity);
     }
 }

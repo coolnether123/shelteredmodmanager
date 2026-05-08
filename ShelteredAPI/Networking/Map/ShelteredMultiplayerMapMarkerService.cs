@@ -38,7 +38,9 @@ namespace ShelteredAPI.Networking.Map
             if (manager == null || manager.mapSourceSprite == null)
                 return markers;
 
-            IList<ShelteredMapEntity> entities = ShelteredMapEntities.GetAll();
+            IList<ShelteredMapEntity> entities = ShelteredMapKnowledgeService.Instance.GetVisibleEntities(
+                context.LocalPlayerId,
+                ShelteredMapEntities.Registry);
             for (int i = 0; i < entities.Count; i++)
             {
                 ShelteredMapEntity entity = entities[i];

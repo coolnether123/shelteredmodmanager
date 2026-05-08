@@ -9,6 +9,9 @@ namespace ShelteredAPI.Networking.Tests
         public static void Register(List<TestCase> tests)
         {
             tests.Add(new TestCase("MapEntityRegistry_UpsertReplacesExistingEntity", UpsertReplacesExistingEntity));
+            tests.Add(new TestCase("MapEntityRegistry_StableBunkerEntityIdFromOwner", StableBunkerEntityIdFromOwner));
+            tests.Add(new TestCase("MapEntityRegistry_DuplicateStableUpsertUpdatesWithoutDuplicating", DuplicateStableUpsertUpdatesWithoutDuplicating));
+            tests.Add(new TestCase("MapEntityRegistry_DeterministicOrderingUsesKindAndOwner", DeterministicOrderingUsesKindAndOwner));
             tests.Add(new TestCase("MapEntityRegistry_GetByKindReturnsOnlySelectedKind", GetByKindReturnsOnlySelectedKind));
             tests.Add(new TestCase("MapEntityRegistry_GetByOwnerAndRemoveWork", GetByOwnerAndRemoveWork));
             tests.Add(new TestCase("MapEntityRegistry_SupportsUnknownContactKind", SupportsUnknownContactKind));
@@ -61,6 +64,58 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.Equal(1, all.Count, "Upsert should deduplicate by entity id.");
             TestAssert.Equal("Second", all[0].DisplayName, "Upsert should replace the existing entity.");
             TestAssert.Equal((long)42, all[0].UpdatedWorldTick, "Missing update tick should use the session world tick source.");
+        }
+
+        private static void StableBunkerEntityIdFromOwner()
+        {
+            ShelteredMapEntityRegistry registry = new ShelteredMapEntityRegistry(delegate { return 0; });
+
+            ShelteredMapEntity entity = registry.Upsert(CreateBunkerWithoutExplicitId(2, 3, "Remote"));
+
+            TestAssert.Equal("mapentity:bunker:2", entity.EntityId,
+                "Bunker entity ids should derive from the stable bunker owner id.");
+            TestAssert.True(registry.Get("mapentity:bunker:2") != null,
+                "Derived bunker entity id should be queryable.");
+        }
+
+        private static void DuplicateStableUpsertUpdatesWithoutDuplicating()
+        {
+            ShelteredMapEntityRegistry registry = new ShelteredMapEntityRegistry(delegate { return 77; });
+
+            registry.Upsert(CreateBunkerWithoutExplicitId(4, 5, "Before"));
+            ShelteredMapEntity updated = CreateBunkerWithoutExplicitId(4, 5, "After");
+            updated.IsOnline = false;
+            registry.Upsert(updated);
+
+            IList<ShelteredMapEntity> all = registry.GetAll();
+            TestAssert.Equal(1, all.Count,
+                "Duplicate upsert with a derived stable id should update instead of duplicating.");
+            TestAssert.Equal("After", all[0].DisplayName,
+                "Duplicate upsert should replace the existing entity data.");
+            TestAssert.False(all[0].IsOnline,
+                "Duplicate upsert should preserve updated online state.");
+            TestAssert.Equal((long)77, all[0].UpdatedWorldTick,
+                "Duplicate upsert should stamp missing ticks from the registry tick source.");
+        }
+
+        private static void DeterministicOrderingUsesKindAndOwner()
+        {
+            ShelteredMapEntityRegistry registry = new ShelteredMapEntityRegistry(delegate { return 0; });
+            registry.Upsert(CreateBunkerWithoutExplicitId(10, 11, "Ten"));
+            registry.Upsert(CreateEntity("expedition-1", ShelteredMapEntityKind.Expedition, 2));
+            registry.Upsert(CreateBunkerWithoutExplicitId(0, 1, "Host"));
+            registry.Upsert(CreateBunkerWithoutExplicitId(2, 3, "Two"));
+
+            IList<ShelteredMapEntity> all = registry.GetAll();
+
+            TestAssert.Equal("mapentity:bunker:0", all[0].EntityId,
+                "Bunker owner zero should sort first among bunkers.");
+            TestAssert.Equal("mapentity:bunker:2", all[1].EntityId,
+                "Bunker owner two should sort numerically before owner ten.");
+            TestAssert.Equal("mapentity:bunker:10", all[2].EntityId,
+                "Bunker owner ten should sort numerically after owner two.");
+            TestAssert.Equal("expedition-1", all[3].EntityId,
+                "Non-bunker entity ordering should remain deterministic after bunkers.");
         }
 
         private static void GetByKindReturnsOnlySelectedKind()
@@ -130,6 +185,14 @@ namespace ShelteredAPI.Networking.Tests
             entity.MapPixels = Vector3.zero;
             entity.IsOnline = true;
             entity.IsVisible = true;
+            return entity;
+        }
+
+        private static ShelteredMapEntity CreateBunkerWithoutExplicitId(int bunkerOwnerId, int ownerPlayerId, string displayName)
+        {
+            ShelteredMapEntity entity = CreateEntity(string.Empty, ShelteredMapEntityKind.Bunker, ownerPlayerId);
+            entity.BunkerOwnerId = bunkerOwnerId;
+            entity.DisplayName = displayName;
             return entity;
         }
     }

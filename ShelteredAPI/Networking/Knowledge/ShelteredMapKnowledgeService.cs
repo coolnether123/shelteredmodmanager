@@ -37,10 +37,31 @@ namespace ShelteredAPI.Networking.Knowledge
             }
         }
 
+        public MapKnowledgeRecord GetEffectiveKnowledge(int viewerPlayerId, ShelteredMapEntity entity)
+        {
+            if (entity == null)
+                return null;
+
+            MapKnowledgeLevel defaultLevel = ResolveDefaultLevel(viewerPlayerId, entity);
+            MapKnowledgeRecord explicitRecord = GetKnowledge(viewerPlayerId, entity.EntityId);
+            if (explicitRecord == null)
+                return CreateRecord(viewerPlayerId, entity, defaultLevel);
+
+            MapKnowledgeLevel effectiveLevel = MaxLevel(defaultLevel, explicitRecord.KnowledgeLevel);
+            if (effectiveLevel == explicitRecord.KnowledgeLevel)
+                return explicitRecord;
+
+            return CreateRecord(viewerPlayerId, entity, effectiveLevel);
+        }
+
         public MapKnowledgeRecord Reveal(int viewerPlayerId, string entityId, MapKnowledgeLevel level, string reason)
         {
             ShelteredMapEntity entity = ShelteredMapEntities.Get(entityId);
-            MapKnowledgeRecord record = CreateRecord(viewerPlayerId, entity, level);
+            MapKnowledgeRecord existing = GetKnowledge(viewerPlayerId, entityId);
+            MapKnowledgeLevel effectiveLevel = existing != null
+                ? MaxLevel(existing.KnowledgeLevel, level)
+                : level;
+            MapKnowledgeRecord record = CreateRecord(viewerPlayerId, entity, effectiveLevel);
             record.DiscoveredByEventId = ShelteredMapDiscoveryEvents.AppendReveal(record, reason);
 
             lock (_sync)
@@ -72,43 +93,87 @@ namespace ShelteredAPI.Networking.Knowledge
             if (entity == null)
                 return false;
 
-            MapKnowledgeLevel level = ResolveKnowledgeLevel(viewerPlayerId, entity);
-            return level == MapKnowledgeLevel.Scouted
-                || level == MapKnowledgeLevel.Identified
-                || level == MapKnowledgeLevel.Confirmed
-                || level == MapKnowledgeLevel.Allied
-                || level == MapKnowledgeLevel.DebugFull;
+            MapKnowledgeRecord knowledge = GetEffectiveKnowledge(viewerPlayerId, entity);
+            return knowledge != null && IsExactLocationKnown(knowledge.KnowledgeLevel);
         }
 
-        public ShelteredMultiplayerMapMarker BuildDisplayMarker(int viewerPlayerId, ShelteredMapEntity entity)
+        public ShelteredMapEntity BuildVisibleEntity(int viewerPlayerId, ShelteredMapEntity entity)
         {
             if (entity == null || !entity.IsVisible)
                 return null;
 
-            MapKnowledgeRecord knowledge = ResolveDisplayKnowledge(viewerPlayerId, entity);
-            bool exact = CanSeeExactLocation(viewerPlayerId, entity.EntityId);
-            bool local = entity.OwnerPlayerId > 0 && entity.OwnerPlayerId == viewerPlayerId;
-            bool known = knowledge.KnowledgeLevel == MapKnowledgeLevel.Identified
-                || knowledge.KnowledgeLevel == MapKnowledgeLevel.Confirmed
-                || knowledge.KnowledgeLevel == MapKnowledgeLevel.Allied
-                || knowledge.KnowledgeLevel == MapKnowledgeLevel.DebugFull
-                || local;
+            MapKnowledgeRecord knowledge = GetEffectiveKnowledge(viewerPlayerId, entity);
+            if (knowledge == null || !IsVisibleLevel(knowledge.KnowledgeLevel))
+                return null;
 
-            string label = known && !string.IsNullOrEmpty(knowledge.KnownDisplayName)
+            ShelteredMapEntity visible = entity.Clone();
+            bool local = IsLocalEntity(viewerPlayerId, entity);
+            bool identityKnown = local || IsKnownIdentity(knowledge.KnowledgeLevel);
+            bool detailsKnown = local || IsFullDetailsKnown(knowledge.KnowledgeLevel);
+
+            visible.GridX = knowledge.LastKnownGridX;
+            visible.GridY = knowledge.LastKnownGridY;
+            visible.UpdatedWorldTick = knowledge.LastKnownWorldTick;
+
+            if (!identityKnown)
+            {
+                visible.DisplayName = string.Empty;
+                visible.OwnerPeerId = NetworkDefaults.UnassignedPeerId;
+            }
+
+            if (!detailsKnown)
+            {
+                visible.State = string.Empty;
+                visible.PayloadJson = string.Empty;
+            }
+
+            return visible;
+        }
+
+        public IList<ShelteredMapEntity> GetVisibleEntities(int viewerPlayerId, IShelteredMapEntityRegistry registry)
+        {
+            List<ShelteredMapEntity> visible = new List<ShelteredMapEntity>();
+            if (registry == null)
+                return visible;
+
+            IList<ShelteredMapEntity> entities = registry.GetAll();
+            for (int i = 0; i < entities.Count; i++)
+            {
+                ShelteredMapEntity entity = BuildVisibleEntity(viewerPlayerId, entities[i]);
+                if (entity != null)
+                    visible.Add(entity);
+            }
+
+            return visible;
+        }
+
+        public ShelteredMultiplayerMapMarker BuildDisplayMarker(int viewerPlayerId, ShelteredMapEntity entity)
+        {
+            ShelteredMapEntity visibleEntity = BuildVisibleEntity(viewerPlayerId, entity);
+            if (visibleEntity == null)
+                return null;
+
+            MapKnowledgeRecord knowledge = GetEffectiveKnowledge(viewerPlayerId, entity);
+            bool exact = knowledge != null && IsExactLocationKnown(knowledge.KnowledgeLevel);
+            bool local = entity.OwnerPlayerId > 0 && entity.OwnerPlayerId == viewerPlayerId;
+            bool knownKind = local || (knowledge != null && IsKnownKind(knowledge.KnowledgeLevel));
+            bool knownIdentity = local || (knowledge != null && IsKnownIdentity(knowledge.KnowledgeLevel));
+
+            string label = knownIdentity && !string.IsNullOrEmpty(knowledge.KnownDisplayName)
                 ? knowledge.KnownDisplayName
                 : "?";
 
             return new ShelteredMultiplayerMapMarker(
-                CreateMarkerId(entity),
+                CreateMarkerId(visibleEntity),
                 label,
-                entity.BunkerOwnerId,
-                entity.OwnerPeerId,
-                ResolveMapPixels(entity, knowledge, exact),
+                visibleEntity.BunkerOwnerId,
+                visibleEntity.OwnerPeerId,
+                ResolveMapPixels(visibleEntity, knowledge, exact),
                 local,
-                entity.IsOnline,
-                known ? ResolveVisualKind(entity.Kind, local) : ShelteredMultiplayerMapMarkerVisualKind.Unknown,
-                entity.EntityId,
-                knowledge.IsStale);
+                visibleEntity.IsOnline,
+                knownKind ? ResolveVisualKind(visibleEntity.Kind, local) : ShelteredMultiplayerMapMarkerVisualKind.Unknown,
+                visibleEntity.EntityId,
+                knowledge != null && knowledge.IsStale);
         }
 
         internal void Clear(string reason)
@@ -139,33 +204,16 @@ namespace ShelteredAPI.Networking.Knowledge
             return MapContactKind.Unknown;
         }
 
-        private MapKnowledgeRecord ResolveDisplayKnowledge(int viewerPlayerId, ShelteredMapEntity entity)
-        {
-            MapKnowledgeRecord explicitRecord = GetKnowledge(viewerPlayerId, entity.EntityId);
-            if (explicitRecord != null)
-                return explicitRecord;
-
-            return CreateRecord(viewerPlayerId, entity, ResolveDefaultLevel(viewerPlayerId, entity));
-        }
-
-        private MapKnowledgeLevel ResolveKnowledgeLevel(int viewerPlayerId, ShelteredMapEntity entity)
-        {
-            MapKnowledgeRecord explicitRecord = GetKnowledge(viewerPlayerId, entity.EntityId);
-            return explicitRecord != null
-                ? explicitRecord.KnowledgeLevel
-                : ResolveDefaultLevel(viewerPlayerId, entity);
-        }
-
         private static MapKnowledgeLevel ResolveDefaultLevel(int viewerPlayerId, ShelteredMapEntity entity)
         {
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
             if (DebugRevealAll || IsFogDisabled(context))
                 return MapKnowledgeLevel.DebugFull;
-            if (context != null && context.Mode == ShelteredMultiplayerSessionMode.Host)
-                return MapKnowledgeLevel.DebugFull;
             if (entity.OwnerPlayerId > 0 && entity.OwnerPlayerId == viewerPlayerId)
                 return MapKnowledgeLevel.Confirmed;
             if (entity.Kind == ShelteredMapEntityKind.Bunker && entity.OwnerPlayerId > 0)
+                return MapKnowledgeLevel.Suspicious;
+            if (entity.Kind == ShelteredMapEntityKind.UnknownContact)
                 return MapKnowledgeLevel.Suspicious;
 
             return MapKnowledgeLevel.Unknown;
@@ -216,6 +264,42 @@ namespace ShelteredAPI.Networking.Knowledge
                 || level == MapKnowledgeLevel.Confirmed
                 || level == MapKnowledgeLevel.Allied
                 || level == MapKnowledgeLevel.DebugFull;
+        }
+
+        private static bool IsVisibleLevel(MapKnowledgeLevel level)
+        {
+            return level == MapKnowledgeLevel.Suspicious
+                || level == MapKnowledgeLevel.Scouted
+                || level == MapKnowledgeLevel.Identified
+                || level == MapKnowledgeLevel.Confirmed
+                || level == MapKnowledgeLevel.Allied
+                || level == MapKnowledgeLevel.DebugFull;
+        }
+
+        private static bool IsExactLocationKnown(MapKnowledgeLevel level)
+        {
+            return level == MapKnowledgeLevel.Scouted
+                || level == MapKnowledgeLevel.Identified
+                || level == MapKnowledgeLevel.Confirmed
+                || level == MapKnowledgeLevel.Allied
+                || level == MapKnowledgeLevel.DebugFull;
+        }
+
+        private static bool IsFullDetailsKnown(MapKnowledgeLevel level)
+        {
+            return level == MapKnowledgeLevel.Confirmed
+                || level == MapKnowledgeLevel.Allied
+                || level == MapKnowledgeLevel.DebugFull;
+        }
+
+        private static bool IsLocalEntity(int viewerPlayerId, ShelteredMapEntity entity)
+        {
+            return entity != null && entity.OwnerPlayerId > 0 && entity.OwnerPlayerId == viewerPlayerId;
+        }
+
+        private static MapKnowledgeLevel MaxLevel(MapKnowledgeLevel left, MapKnowledgeLevel right)
+        {
+            return left >= right ? left : right;
         }
 
         private static Vector3 ResolveMapPixels(

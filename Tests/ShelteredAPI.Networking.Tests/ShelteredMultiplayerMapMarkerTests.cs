@@ -16,6 +16,7 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("MapMarkers_ResolveLocalOwnerFromAssignments", ResolveLocalOwnerFromAssignments));
             tests.Add(new TestCase("MapMarkers_AssignmentMetadataOverridesBunkerDefaults", AssignmentMetadataOverridesBunkerDefaults));
             tests.Add(new TestCase("MapMarkers_KnowledgeMarkerUsesStableId", KnowledgeMarkerUsesStableId));
+            tests.Add(new TestCase("MapMarkers_BunkerAssignmentsAreDeterministicForStablePeers", BunkerAssignmentsAreDeterministicForStablePeers));
         }
 
         private static void ResolveLocalOwnerFromAssignments()
@@ -88,6 +89,82 @@ namespace ShelteredAPI.Networking.Tests
 
             ShelteredMapEntities.Clear("marker-test-end");
             ShelteredMapKnowledgeService.Instance.Clear("marker-test-end");
+        }
+
+        private static void BunkerAssignmentsAreDeterministicForStablePeers()
+        {
+            ShelteredMultiplayerSessionContext firstContext = CreateHostContext(new ShelteredMultiplayerPeerInfo[]
+            {
+                new ShelteredMultiplayerPeerInfo(NetworkDefaults.HostPeerId, true, "host-stable", "Host", true),
+                new ShelteredMultiplayerPeerInfo(7, false, "stable-client-b", "Client B", true),
+                new ShelteredMultiplayerPeerInfo(2, false, "stable-client-a", "Client A", true)
+            });
+            ShelteredMultiplayerSessionContext secondContext = CreateHostContext(new ShelteredMultiplayerPeerInfo[]
+            {
+                new ShelteredMultiplayerPeerInfo(NetworkDefaults.HostPeerId, true, "host-stable", "Host", true),
+                new ShelteredMultiplayerPeerInfo(2, false, "stable-client-a", "Client A", true),
+                new ShelteredMultiplayerPeerInfo(7, false, "stable-client-b", "Client B", true)
+            });
+
+            ShelteredMultiplayerBunkerAssignmentSnapshot first =
+                ShelteredMultiplayerBunkerAssignments.CreateForHost(firstContext);
+            ShelteredMultiplayerBunkerAssignmentSnapshot second =
+                ShelteredMultiplayerBunkerAssignments.CreateForHost(secondContext);
+
+            TestAssert.Equal(1, first.GetPlayerIdForNetworkPeer(NetworkDefaults.HostPeerId),
+                "Host should remain gameplay player 1.");
+            TestAssert.Equal(0, FindRecord(first, NetworkDefaults.HostPeerId).BunkerOwnerId,
+                "Host should keep bunker owner 0.");
+            TestAssert.Equal(first.Records.Count, second.Records.Count,
+                "Same stable roster should produce the same assignment count.");
+
+            for (int i = 0; i < first.Records.Count; i++)
+            {
+                ShelteredMultiplayerBunkerAssignmentRecord left = first.Records[i];
+                ShelteredMultiplayerBunkerAssignmentRecord right = second.Records[i];
+                TestAssert.Equal(left.NetworkPeerId, right.NetworkPeerId,
+                    "Stable roster ordering should not depend on source roster order.");
+                TestAssert.Equal(left.PlayerId, right.PlayerId,
+                    "Gameplay player id should be deterministic for stable peers.");
+                TestAssert.Equal(left.BunkerOwnerId, right.BunkerOwnerId,
+                    "Bunker owner id should be deterministic for stable peers.");
+                TestAssert.Near(left.Position.x, right.Position.x, 0.0001f,
+                    "Bunker X placement should derive deterministically from session identity.");
+                TestAssert.Near(left.Position.y, right.Position.y, 0.0001f,
+                    "Bunker Y placement should derive deterministically from session identity.");
+            }
+        }
+
+        private static ShelteredMultiplayerSessionContext CreateHostContext(ShelteredMultiplayerPeerInfo[] roster)
+        {
+            return new ShelteredMultiplayerSessionContext(
+                ShelteredMultiplayerSessionMode.Host,
+                "deterministic-session",
+                1,
+                NetworkDefaults.HostPeerId,
+                "host-stable",
+                20,
+                0,
+                0f,
+                ShelteredMultiplayerGameTimeMode.HostAuthoritative,
+                ShelteredMultiplayerSetupPhase.Preparing,
+                roster,
+                new ShelteredMultiplayerBunkerAssignmentRecord[0],
+                new ShelteredMultiplayerSetupSettings(0, 0, 1, 1, 1, 1, 1, 0, true),
+                "test");
+        }
+
+        private static ShelteredMultiplayerBunkerAssignmentRecord FindRecord(
+            ShelteredMultiplayerBunkerAssignmentSnapshot snapshot,
+            byte networkPeerId)
+        {
+            for (int i = 0; i < snapshot.Records.Count; i++)
+            {
+                if (snapshot.Records[i].NetworkPeerId == networkPeerId)
+                    return snapshot.Records[i];
+            }
+
+            return null;
         }
     }
 }
