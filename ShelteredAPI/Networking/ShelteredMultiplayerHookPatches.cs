@@ -6,8 +6,8 @@ using ModAPI.Harmony;
 namespace ShelteredAPI.Networking
 {
     [PatchPolicy(PatchDomain.World, "ShelteredMultiplayerGameTimeHooks",
-        TargetBehavior = "GameTime.Update publishes multiplayer hook events and allows remote-authoritative clients to suppress local clock advancement.",
-        FailureMode = "Multiplayer cannot centralize world tick ownership and clients may drift from the host clock.",
+        TargetBehavior = "GameTime.Update publishes multiplayer hook events while active multiplayer projects vanilla-visible time from WorldTick.",
+        FailureMode = "Vanilla frame delta can advance multiplayer GameTime locally and desynchronize the shared calendar.",
         RollbackStrategy = "Disable the World patch domain or remove the multiplayer hook patch host.",
         StartupTiming = PatchStartupTiming.GameplayDeferred)]
     [HarmonyPatch(typeof(GameTime), "Update")]

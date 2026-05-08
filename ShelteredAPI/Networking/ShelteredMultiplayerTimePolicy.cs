@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using HarmonyLib;
 using ModAPI.Core;
+using ShelteredAPI.Networking.World;
 using UnityEngine;
 
 namespace ShelteredAPI.Networking
@@ -20,6 +21,11 @@ namespace ShelteredAPI.Networking
         private static readonly FieldInfo GameTimeDaySecondsField = AccessTools.Field(typeof(GameTime), "day_seconds");
         private static readonly FieldInfo GameTimeRealToGameMultiplierField = AccessTools.Field(typeof(GameTime), "real_to_game_seconds_multiplier");
         private static readonly FieldInfo GameTimeGameToRealMultiplierField = AccessTools.Field(typeof(GameTime), "game_to_real_seconds_multiplier");
+        private static readonly FieldInfo GameTimeGameTimeField = AccessTools.Field(typeof(GameTime), "game_time");
+        private static readonly FieldInfo GameTimeMinuteField = AccessTools.Field(typeof(GameTime), "current_minute");
+        private static readonly FieldInfo GameTimeHourField = AccessTools.Field(typeof(GameTime), "current_hour");
+        private static readonly FieldInfo GameTimeDayField = AccessTools.Field(typeof(GameTime), "current_day");
+        private static readonly FieldInfo GameTimeWeekField = AccessTools.Field(typeof(GameTime), "current_week");
         private static readonly FieldInfo CameraFastForwardField = AccessTools.Field(typeof(BasicCamera), "m_isFastForwarding");
         private static readonly FieldInfo CameraSlowDownField = AccessTools.Field(typeof(BasicCamera), "m_isSlowedDown");
         private static readonly object Sync = new object();
@@ -143,6 +149,23 @@ namespace ShelteredAPI.Networking
             _ownsGameTimeScale = multiplayerActive;
         }
 
+        internal static ShelteredWorldTimeProjectionSnapshot ApplyMultiplayerGameTimeProjection(
+            GameTime gameTime,
+            ShelteredMultiplayerSessionContext context)
+        {
+            if (context == null || !context.IsMultiplayerActive)
+                return null;
+
+            ApplyGameTimePolicy(gameTime);
+            ShelteredWorldTimeProjectionSnapshot projection = ShelteredWorldTimeProjection.Instance.Project(
+                context.WorldTick,
+                context.TickRate,
+                ShelteredMultiplayerTimeSettings.MultiplayerDaySeconds);
+
+            ApplyGameTimeProjection(projection);
+            return projection;
+        }
+
         public static void ForceRealtimeTimescale()
         {
             if (!ShelteredMultiplayerHookService.Instance.IsMultiplayerActive)
@@ -176,6 +199,23 @@ namespace ShelteredAPI.Networking
                 GameTimeGameToRealMultiplierField.SetValue(null, gameToReal);
             if (GameTimeRealToGameMultiplierField != null)
                 GameTimeRealToGameMultiplierField.SetValue(null, realToGame);
+        }
+
+        private static void ApplyGameTimeProjection(ShelteredWorldTimeProjectionSnapshot projection)
+        {
+            if (projection == null)
+                return;
+
+            if (GameTimeGameTimeField != null)
+                GameTimeGameTimeField.SetValue(null, (float)projection.GameSeconds);
+            if (GameTimeMinuteField != null)
+                GameTimeMinuteField.SetValue(null, projection.Minute);
+            if (GameTimeHourField != null)
+                GameTimeHourField.SetValue(null, projection.Hour);
+            if (GameTimeDayField != null)
+                GameTimeDayField.SetValue(null, projection.Day);
+            if (GameTimeWeekField != null)
+                GameTimeWeekField.SetValue(null, projection.Week);
         }
 
         private static void SetCameraSpeedState(object camera, bool fastForward, bool slowDown)

@@ -40,6 +40,98 @@ namespace ShelteredAPI.Networking.World
         public long DriftTicks { get; set; }
         public TimeSpan SampleAge { get; set; }
         public bool IsHostAuthoritative { get; set; }
+        public ShelteredWorldClockDriftSeverity Severity { get; set; }
+        public bool RequiresDesyncDiagnostics { get; set; }
+    }
+
+    internal static class ShelteredWorldClockDiagnosticTime
+    {
+        public static DateTime UtcNow()
+        {
+            return DateTime.UtcNow;
+        }
+    }
+
+    internal enum ShelteredWorldClockCorrectionOutcome
+    {
+        Ignored = 0,
+        Applied = 1,
+        DesyncDiagnosticsRequired = 2
+    }
+
+    internal sealed class ShelteredWorldClockCorrectionResult
+    {
+        public ShelteredWorldClockCorrectionOutcome Outcome { get; set; }
+
+        public string Reason { get; set; }
+
+        public long LocalTick { get; set; }
+
+        public long HostTick { get; set; }
+
+        public long DriftTicks { get; set; }
+
+        public ShelteredWorldClockDriftDecision DriftDecision { get; set; }
+
+        public bool Applied
+        {
+            get { return Outcome == ShelteredWorldClockCorrectionOutcome.Applied; }
+        }
+
+        public bool RequiresDesyncDiagnostics
+        {
+            get
+            {
+                return Outcome == ShelteredWorldClockCorrectionOutcome.DesyncDiagnosticsRequired
+                    || (DriftDecision != null && DriftDecision.RequiresDesyncDiagnostics);
+            }
+        }
+
+        public static ShelteredWorldClockCorrectionResult Ignored(string reason, long localTick, long hostTick)
+        {
+            return Create(ShelteredWorldClockCorrectionOutcome.Ignored, reason, localTick, hostTick, null);
+        }
+
+        public static ShelteredWorldClockCorrectionResult AppliedCorrection(
+            string reason,
+            long localTick,
+            long hostTick,
+            ShelteredWorldClockDriftDecision decision)
+        {
+            return Create(ShelteredWorldClockCorrectionOutcome.Applied, reason, localTick, hostTick, decision);
+        }
+
+        public static ShelteredWorldClockCorrectionResult DesyncRequired(
+            string reason,
+            long localTick,
+            long hostTick,
+            ShelteredWorldClockDriftDecision decision)
+        {
+            return Create(
+                ShelteredWorldClockCorrectionOutcome.DesyncDiagnosticsRequired,
+                reason,
+                localTick,
+                hostTick,
+                decision);
+        }
+
+        private static ShelteredWorldClockCorrectionResult Create(
+            ShelteredWorldClockCorrectionOutcome outcome,
+            string reason,
+            long localTick,
+            long hostTick,
+            ShelteredWorldClockDriftDecision decision)
+        {
+            return new ShelteredWorldClockCorrectionResult
+            {
+                Outcome = outcome,
+                Reason = reason ?? string.Empty,
+                LocalTick = localTick,
+                HostTick = hostTick,
+                DriftTicks = decision != null ? decision.DriftTicks : hostTick - localTick,
+                DriftDecision = decision
+            };
+        }
     }
 
     internal static class ShelteredWorldClockSampleCodec
@@ -136,7 +228,7 @@ namespace ShelteredAPI.Networking.World
             if (normalized.TickRate <= 0)
                 normalized.TickRate = ShelteredMultiplayerWorldClock.DefaultTickRate;
             if (normalized.SampleUtc == DateTime.MinValue)
-                normalized.SampleUtc = DateTime.UtcNow;
+                normalized.SampleUtc = ShelteredWorldClockDiagnosticTime.UtcNow();
 
             return normalized;
         }

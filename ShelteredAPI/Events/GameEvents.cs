@@ -22,6 +22,7 @@ namespace ShelteredAPI.Events
     internal static class GameEvents
     {
         public static event Action<int> OnNewDay;
+        public static event Action<int, int, int, int> OnCalendarTimeProjected;
         public static event Action<SaveData> OnBeforeSave;
         public static event Action<SaveData> OnBeforeLoadSceneContents;
         public static event Action<SaveData> OnAfterLoad;
@@ -202,6 +203,14 @@ namespace ShelteredAPI.Events
             {
                 WarnOnce("GameEvents.OnNewDay", "OnNewDay handler failed: " + ex.Message);
             }
+        }
+
+        internal static void TryRaiseCalendarTimeProjected(int day, int week, int hour, int minute)
+        {
+            if (OnCalendarTimeProjected == null)
+                return;
+
+            SafeInvoke(delegate { OnCalendarTimeProjected(day, week, hour, minute); }, "OnCalendarTimeProjected");
         }
 
         private static void OnPartyReturnedInternal(int partyId)

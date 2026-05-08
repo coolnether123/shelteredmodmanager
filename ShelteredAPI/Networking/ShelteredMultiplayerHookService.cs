@@ -51,6 +51,10 @@ namespace ShelteredAPI.Networking
         {
             get
             {
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+                if (context != null)
+                    return CreateState(context);
+
                 lock (_sync)
                 {
                     return _sessionState;
@@ -65,12 +69,20 @@ namespace ShelteredAPI.Networking
 
         public long CurrentWorldTick
         {
-            get { return SessionState.WorldTick; }
+            get
+            {
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+                return context != null && context.WorldTick > 0 ? context.WorldTick : 0;
+            }
         }
 
         public float CurrentWorldDeltaSeconds
         {
-            get { return SessionState.WorldDeltaSeconds; }
+            get
+            {
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+                return context != null && context.WorldDeltaSeconds > 0f ? context.WorldDeltaSeconds : 0f;
+            }
         }
 
         public void EnsureInstalled()
@@ -203,33 +215,45 @@ namespace ShelteredAPI.Networking
 
         internal bool BeginGameTimeUpdate(GameTime gameTime)
         {
-            ShelteredMultiplayerSessionState state = SessionState;
+            ShelteredMultiplayerSessionContext sessionContext = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            ShelteredMultiplayerSessionState state = CreateState(sessionContext);
             ShelteredMultiplayerTimePolicy.ApplyGameTimePolicy(gameTime);
             if (state.IsMultiplayerActive)
+            {
                 ApplyTimescalePolicy();
+                ShelteredMultiplayerTimePolicy.ApplyMultiplayerGameTimeProjection(gameTime, sessionContext);
+            }
 
             ShelteredMultiplayerHookContext context = CreateContext(
                 ShelteredMultiplayerHookKind.BeforeGameTimeUpdate,
                 "GameTime.Update",
-                gameTime);
+                gameTime,
+                state);
 
-            if (state.GameTimeMode == ShelteredMultiplayerGameTimeMode.RemoteAuthoritative)
-                context.CancelVanilla = true;
-            if (IsWorldStartBlocked)
+            bool forceCancelVanilla = state.IsMultiplayerActive || IsWorldStartBlocked;
+            if (forceCancelVanilla)
                 context.CancelVanilla = true;
 
             SafeRaise(BeforeGameTimeUpdate, context, "BeforeGameTimeUpdate");
+            if (forceCancelVanilla)
+                context.CancelVanilla = true;
+
             return !context.CancelVanilla;
         }
 
         internal void EndGameTimeUpdate(GameTime gameTime)
         {
-            if (IsMultiplayerActive)
+            ShelteredMultiplayerSessionContext sessionContext = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            ShelteredMultiplayerSessionState state = CreateState(sessionContext);
+            if (state.IsMultiplayerActive)
+            {
                 ApplyTimescalePolicy();
+                ShelteredMultiplayerTimePolicy.ApplyMultiplayerGameTimeProjection(gameTime, sessionContext);
+            }
 
             SafeRaise(
                 AfterGameTimeUpdate,
-                CreateContext(ShelteredMultiplayerHookKind.AfterGameTimeUpdate, "GameTime.Update", gameTime),
+                CreateContext(ShelteredMultiplayerHookKind.AfterGameTimeUpdate, "GameTime.Update", gameTime, state),
                 "AfterGameTimeUpdate");
         }
 
@@ -323,11 +347,20 @@ namespace ShelteredAPI.Networking
 
         private ShelteredMultiplayerHookContext CreateContext(ShelteredMultiplayerHookKind kind, string source, object hostContext)
         {
+            return CreateContext(kind, source, hostContext, SessionState);
+        }
+
+        private ShelteredMultiplayerHookContext CreateContext(
+            ShelteredMultiplayerHookKind kind,
+            string source,
+            object hostContext,
+            ShelteredMultiplayerSessionState sessionState)
+        {
             return new ShelteredMultiplayerHookContext(
                 kind,
                 source,
                 hostContext,
-                SessionState,
+                sessionState,
                 SafeReadFrameCount(),
                 SafeReadUnityTime(),
                 SafeReadUnityDeltaTime(),

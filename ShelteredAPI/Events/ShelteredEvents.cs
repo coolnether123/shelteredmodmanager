@@ -16,6 +16,12 @@ namespace ShelteredAPI.Events
             remove { GameEvents.OnNewDay -= value; }
         }
 
+        public static event Action<int, int, int, int> CalendarTimeProjected
+        {
+            add { GameEvents.OnCalendarTimeProjected += value; }
+            remove { GameEvents.OnCalendarTimeProjected -= value; }
+        }
+
         public static event Action<SaveData> BeforeSave
         {
             add { GameEvents.OnBeforeSave += value; }

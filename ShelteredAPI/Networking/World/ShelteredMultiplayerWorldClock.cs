@@ -7,6 +7,7 @@ namespace ShelteredAPI.Networking.World
         internal const int DefaultTickRate = 20;
 
         private const string FixedAdvanceReason = "world-clock-fixed-advance";
+        private const string RuntimeBridgeAdvanceReason = "world-clock-runtime-bridge-advance";
         private const string RemoteCorrectionReason = "world-clock-remote-correction";
         private const string ResetReasonPrefix = "world-clock-reset";
         private static readonly ShelteredMultiplayerWorldClock _instance =
@@ -14,7 +15,8 @@ namespace ShelteredAPI.Networking.World
 
         private readonly object _sync = new object();
         private readonly ShelteredMultiplayerSessionCoordinator _coordinator;
-        private double _fractionalTicks;
+        private readonly IShelteredWorldTickScheduler _scheduler;
+        private readonly ShelteredWorldClockDriftPolicy _driftPolicy;
         private ShelteredWorldClockSample _lastHostSample;
 
         internal ShelteredMultiplayerWorldClock()
@@ -23,11 +25,21 @@ namespace ShelteredAPI.Networking.World
         }
 
         internal ShelteredMultiplayerWorldClock(ShelteredMultiplayerSessionCoordinator coordinator)
+            : this(coordinator, new ShelteredWorldTickScheduler(), new ShelteredWorldClockDriftPolicy())
+        {
+        }
+
+        internal ShelteredMultiplayerWorldClock(
+            ShelteredMultiplayerSessionCoordinator coordinator,
+            IShelteredWorldTickScheduler scheduler,
+            ShelteredWorldClockDriftPolicy driftPolicy)
         {
             if (coordinator == null)
                 throw new ArgumentNullException("coordinator");
 
             _coordinator = coordinator;
+            _scheduler = scheduler ?? new ShelteredWorldTickScheduler();
+            _driftPolicy = driftPolicy ?? new ShelteredWorldClockDriftPolicy();
         }
 
         public static ShelteredMultiplayerWorldClock Instance
@@ -35,77 +47,102 @@ namespace ShelteredAPI.Networking.World
             get { return _instance; }
         }
 
-        public long AdvanceFixedDelta(float deltaSeconds)
+        public long AdvanceFixedSteps(long stepCount)
         {
             ShelteredMultiplayerSessionContext context = _coordinator.Context;
             if (context == null || !context.IsMultiplayerActive)
                 return 0;
 
-            return Advance(context, deltaSeconds, FixedAdvanceReason);
+            return Advance(context, _scheduler.AdvanceFixedSteps(stepCount, context.TickRate), FixedAdvanceReason);
+        }
+
+        public long AdvanceRuntimeBridgeDelta(float deltaSeconds)
+        {
+            ShelteredMultiplayerSessionContext context = _coordinator.Context;
+            if (context == null || !context.IsMultiplayerActive)
+                return 0;
+
+            return Advance(
+                context,
+                _scheduler.AccumulateFixedInterval(deltaSeconds, context.TickRate),
+                RuntimeBridgeAdvanceReason);
+        }
+
+        public long AdvanceFixedDelta(float deltaSeconds)
+        {
+            return AdvanceRuntimeBridgeDelta(deltaSeconds);
         }
 
         public bool ApplyRemoteSample(ShelteredWorldClockSample sample)
         {
+            return ApplyRemoteSampleDetailed(sample).Applied;
+        }
+
+        public ShelteredWorldClockCorrectionResult ApplyRemoteSampleDetailed(ShelteredWorldClockSample sample)
+        {
             if (sample == null)
-                return false;
+                return ShelteredWorldClockCorrectionResult.Ignored("missing-sample", GetCurrentTick(), 0);
 
             ShelteredMultiplayerSessionContext context = _coordinator.Context;
-            if (context == null
-                || context.Mode != ShelteredMultiplayerSessionMode.Client
-                || !sample.HostAuthoritative
-                || !IsCurrentSession(context, sample.SessionId))
-            {
-                return false;
-            }
+            long currentTick = NormalizeTick(context != null ? context.WorldTick : 0);
+            if (context == null || context.Mode != ShelteredMultiplayerSessionMode.Client)
+                return ShelteredWorldClockCorrectionResult.Ignored("not-client-session", currentTick, NormalizeTick(sample.WorldTick));
+            if (!sample.HostAuthoritative)
+                return ShelteredWorldClockCorrectionResult.Ignored("non-authoritative-sample", currentTick, NormalizeTick(sample.WorldTick));
+            if (!IsCurrentSession(context, sample.SessionId))
+                return ShelteredWorldClockCorrectionResult.Ignored("foreign-session-sample", currentTick, NormalizeTick(sample.WorldTick));
 
-            long sampleTick = sample.WorldTick < 0 ? 0 : sample.WorldTick;
+            long sampleTick = NormalizeTick(sample.WorldTick);
             float sampleDelta = sample.DeltaSeconds < 0f ? 0f : sample.DeltaSeconds;
-            long currentTick = context.WorldTick < 0 ? 0 : context.WorldTick;
-            if (sampleTick < currentTick)
-                return false;
-
-            lock (_sync)
-            {
-                if (_lastHostSample != null && sampleTick < _lastHostSample.WorldTick)
-                    return false;
-
-                _lastHostSample = new ShelteredWorldClockSample
-                {
-                    SessionId = sample.SessionId,
-                    WorldTick = sampleTick,
-                    DeltaSeconds = sampleDelta,
-                    TickRate = sample.TickRate,
-                    SampleUtc = sample.SampleUtc,
-                    HostAuthoritative = sample.HostAuthoritative
-                };
-            }
-
             if (sampleTick <= currentTick)
-                return false;
+                return ShelteredWorldClockCorrectionResult.Ignored("stale-or-equal-host-sample", currentTick, sampleTick);
 
+            ShelteredWorldClockSample normalizedSample = CopySample(sample, sampleTick, sampleDelta);
             lock (_sync)
             {
-                _fractionalTicks = 0d;
+                if (_lastHostSample != null && sampleTick <= _lastHostSample.WorldTick)
+                    return ShelteredWorldClockCorrectionResult.Ignored("non-monotonic-host-sample", currentTick, sampleTick);
+
+                _lastHostSample = normalizedSample;
             }
 
+            ShelteredWorldClockDriftDecision decision = _driftPolicy.Evaluate(currentTick, sampleTick);
+            if (!decision.CanApplyCorrection)
+            {
+                return ShelteredWorldClockCorrectionResult.DesyncRequired(
+                    decision.Reason,
+                    currentTick,
+                    sampleTick,
+                    decision);
+            }
+
+            _scheduler.Reset();
             _coordinator.SetWorldTick(sampleTick, sampleDelta, RemoteCorrectionReason);
-            return true;
+            return ShelteredWorldClockCorrectionResult.AppliedCorrection(
+                decision.Reason,
+                currentTick,
+                sampleTick,
+                decision);
         }
 
         public ShelteredWorldClockSample BuildLocalSample()
         {
             ShelteredMultiplayerSessionContext context = _coordinator.Context;
             if (context == null)
-                return new ShelteredWorldClockSample { TickRate = DefaultTickRate, SampleUtc = DateTime.UtcNow };
+                return new ShelteredWorldClockSample
+                {
+                    TickRate = DefaultTickRate,
+                    SampleUtc = ShelteredWorldClockDiagnosticTime.UtcNow()
+                };
 
-            // SampleUtc is diagnostic metadata only; gameplay progression is driven by fixed deltas and ticks.
+            // SampleUtc is diagnostic metadata only; gameplay progression is driven by fixed scheduler ticks.
             return new ShelteredWorldClockSample
             {
                 SessionId = context.SessionId,
-                WorldTick = context.WorldTick < 0 ? 0 : context.WorldTick,
+                WorldTick = NormalizeTick(context.WorldTick),
                 DeltaSeconds = context.WorldDeltaSeconds < 0f ? 0f : context.WorldDeltaSeconds,
                 TickRate = NormalizeTickRate(context.TickRate),
-                SampleUtc = DateTime.UtcNow,
+                SampleUtc = ShelteredWorldClockDiagnosticTime.UtcNow(),
                 HostAuthoritative = context.Mode == ShelteredMultiplayerSessionMode.Host
             };
         }
@@ -127,26 +164,31 @@ namespace ShelteredAPI.Networking.World
 
             long localTick = context != null ? context.WorldTick : 0;
             long hostTick = lastSample != null ? lastSample.WorldTick : localTick;
-            DateTime sampleUtc = lastSample != null ? lastSample.SampleUtc : DateTime.UtcNow;
-            TimeSpan sampleAge = sampleUtc > DateTime.MinValue ? DateTime.UtcNow - sampleUtc : TimeSpan.Zero;
+            DateTime sampleUtc = lastSample != null ? lastSample.SampleUtc : ShelteredWorldClockDiagnosticTime.UtcNow();
+            TimeSpan sampleAge = sampleUtc > DateTime.MinValue
+                ? ShelteredWorldClockDiagnosticTime.UtcNow() - sampleUtc
+                : TimeSpan.Zero;
             if (sampleAge < TimeSpan.Zero)
                 sampleAge = TimeSpan.Zero;
 
+            ShelteredWorldClockDriftDecision decision = _driftPolicy.Evaluate(localTick, hostTick);
             return new ShelteredWorldClockDriftReport
             {
                 LocalTick = localTick,
                 HostTick = hostTick,
                 DriftTicks = localTick - hostTick,
                 SampleAge = sampleAge,
-                IsHostAuthoritative = context != null && context.Mode == ShelteredMultiplayerSessionMode.Host
+                IsHostAuthoritative = context != null && context.Mode == ShelteredMultiplayerSessionMode.Host,
+                Severity = decision.Severity,
+                RequiresDesyncDiagnostics = decision.RequiresDesyncDiagnostics
             };
         }
 
         public void Reset(string reason)
         {
+            _scheduler.Reset();
             lock (_sync)
             {
-                _fractionalTicks = 0d;
                 _lastHostSample = null;
             }
 
@@ -165,37 +207,58 @@ namespace ShelteredAPI.Networking.World
 
         public bool TryApplyAuthoritativeEvent(ShelteredNetworkGameplayEvent gameplayEvent)
         {
-            ShelteredWorldClockSample sample;
-            return ShelteredWorldClockSampleCodec.TryFromGameplayEvent(gameplayEvent, out sample)
-                && ApplyRemoteSample(sample);
+            return TryApplyAuthoritativeEventDetailed(gameplayEvent).Applied;
         }
 
-        private long Advance(ShelteredMultiplayerSessionContext context, float deltaSeconds, string reason)
+        public ShelteredWorldClockCorrectionResult TryApplyAuthoritativeEventDetailed(
+            ShelteredNetworkGameplayEvent gameplayEvent)
         {
-            float normalizedDelta = deltaSeconds < 0f ? 0f : deltaSeconds;
-            int tickRate = NormalizeTickRate(context.TickRate);
-            long ticksToAdvance;
+            ShelteredWorldClockSample sample;
+            if (!ShelteredWorldClockSampleCodec.TryFromGameplayEvent(gameplayEvent, out sample))
+                return ShelteredWorldClockCorrectionResult.Ignored("not-world-clock-sample", GetCurrentTick(), 0);
 
-            lock (_sync)
-            {
-                _fractionalTicks += normalizedDelta * tickRate;
-                ticksToAdvance = (long)Math.Floor(_fractionalTicks);
-                if (ticksToAdvance <= 0)
-                    return context.WorldTick;
+            return ApplyRemoteSampleDetailed(sample);
+        }
 
-                _fractionalTicks -= ticksToAdvance;
-            }
+        private long Advance(
+            ShelteredMultiplayerSessionContext context,
+            ShelteredWorldTickAdvance advance,
+            string reason)
+        {
+            if (advance == null || advance.TicksToAdvance <= 0)
+                return context.WorldTick;
 
-            long nextTick = context.WorldTick + ticksToAdvance;
+            long nextTick = context.WorldTick + advance.TicksToAdvance;
             if (nextTick < 0)
                 nextTick = 0;
 
-            return _coordinator.SetWorldTick(nextTick, normalizedDelta, reason).WorldTick;
+            return _coordinator.SetWorldTick(nextTick, advance.DeltaSeconds, reason).WorldTick;
         }
 
         private static int NormalizeTickRate(int tickRate)
         {
             return tickRate > 0 ? tickRate : DefaultTickRate;
+        }
+
+        private static long NormalizeTick(long tick)
+        {
+            return tick > 0 ? tick : 0;
+        }
+
+        private static ShelteredWorldClockSample CopySample(
+            ShelteredWorldClockSample sample,
+            long sampleTick,
+            float sampleDelta)
+        {
+            return new ShelteredWorldClockSample
+            {
+                SessionId = sample.SessionId,
+                WorldTick = sampleTick,
+                DeltaSeconds = sampleDelta,
+                TickRate = NormalizeTickRate(sample.TickRate),
+                SampleUtc = sample.SampleUtc,
+                HostAuthoritative = sample.HostAuthoritative
+            };
         }
 
         private static bool IsCurrentSession(ShelteredMultiplayerSessionContext context, string sessionId)

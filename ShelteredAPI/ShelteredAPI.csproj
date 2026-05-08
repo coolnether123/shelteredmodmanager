@@ -221,9 +221,14 @@
     <Compile Include="Networking\World\ShelteredMapEntityContracts.cs" />
     <Compile Include="Networking\World\ShelteredMapEntityRegistry.cs" />
     <Compile Include="Networking\World\ShelteredMapEntities.cs" />
+    <Compile Include="Networking\World\ShelteredWorldTickScheduler.cs" />
+    <Compile Include="Networking\World\ShelteredWorldClockDriftPolicy.cs" />
     <Compile Include="Networking\World\ShelteredMultiplayerWorldClockContracts.cs" />
     <Compile Include="Networking\World\ShelteredMultiplayerWorldClock.cs" />
     <Compile Include="Networking\World\ShelteredMultiplayerWorldClockCorrectionService.cs" />
+    <Compile Include="Networking\World\ShelteredWorldTimeProjection.cs" />
+    <Compile Include="Networking\World\ShelteredWorldTimeSideEffectContracts.cs" />
+    <Compile Include="Networking\World\ShelteredWorldTimeSideEffectService.cs" />
     <Compile Include="Networking\World\ShelteredWorldEventContracts.cs" />
     <Compile Include="Networking\World\ShelteredWorldEventJournal.cs" />
     <Compile Include="Networking\World\ShelteredWorldEventReplayCursor.cs" />
