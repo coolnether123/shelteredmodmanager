@@ -132,6 +132,7 @@ namespace ShelteredAPI.Networking.Recovery
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - compatibility hash provider failures reject strict matching via empty hash fallback.
             }
 
             return string.Empty;

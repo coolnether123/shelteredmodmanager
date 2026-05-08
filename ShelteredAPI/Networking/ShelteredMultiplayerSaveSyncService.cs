@@ -56,6 +56,15 @@ namespace ShelteredAPI.Networking
             get { return _lastError; }
         }
 
+        private string CurrentSessionId
+        {
+            get
+            {
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+                return context != null ? context.SessionId : string.Empty;
+            }
+        }
+
         public static bool IsSaveSyncMessage(ushort messageType)
         {
             return messageType == SaveSyncRequestMessageType
@@ -249,7 +258,7 @@ namespace ShelteredAPI.Networking
                 WriteSessionMetadata(location, reason);
                 ShelteredMultiplayerSavePackage package = ShelteredMultiplayerSavePackage.Capture(
                     location,
-                    _session.SessionId,
+                    CurrentSessionId,
                     reason);
                 payload = package.ToBytes();
                 return true;
@@ -295,7 +304,7 @@ namespace ShelteredAPI.Networking
             try
             {
                 if (_session.Mode == NetworkSessionMode.Client)
-                    _clientBackup = SaveBackupRecord.CreateOrUpdate(_session.SessionId, target, "pre-apply");
+                    _clientBackup = SaveBackupRecord.CreateOrUpdate(CurrentSessionId, target, "pre-apply");
 
                 package.ApplyTo(target);
                 WriteSessionMetadata(target, package.Reason);
@@ -304,7 +313,7 @@ namespace ShelteredAPI.Networking
                 if (_session.Mode == NetworkSessionMode.Client
                     && string.Equals(package.Reason, "save", StringComparison.OrdinalIgnoreCase))
                 {
-                    _clientBackup = SaveBackupRecord.CreateOrUpdate(_session.SessionId, target, "successful-save");
+                    _clientBackup = SaveBackupRecord.CreateOrUpdate(CurrentSessionId, target, "successful-save");
                 }
 
                 SetStatus("host save snapshot applied");
@@ -354,6 +363,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - snapshot ack send failures are already reflected by transport/session state.
             }
         }
 
@@ -387,7 +397,7 @@ namespace ShelteredAPI.Networking
 
             try
             {
-                _clientBackup = SaveBackupRecord.CreateOrUpdate(_session.SessionId, location, reason);
+                _clientBackup = SaveBackupRecord.CreateOrUpdate(CurrentSessionId, location, reason);
                 WriteLog(MMLog.LogLevel.Info, "Updated multiplayer backup from successful save state.");
             }
             catch (Exception ex)
@@ -408,7 +418,7 @@ namespace ShelteredAPI.Networking
             string path = Path.Combine(modFolder, "session.json");
             string json = "{"
                 + "\"version\":1,"
-                + "\"sessionId\":\"" + EscapeJson(_session.SessionId) + "\","
+                + "\"sessionId\":\"" + EscapeJson(CurrentSessionId) + "\","
                 + "\"sessionNonce\":\"" + EscapeJson(_session.SessionNonce) + "\","
                 + "\"mode\":\"" + EscapeJson(_session.Mode.ToString()) + "\","
                 + "\"localPeerId\":" + _session.LocalPeerId + ","

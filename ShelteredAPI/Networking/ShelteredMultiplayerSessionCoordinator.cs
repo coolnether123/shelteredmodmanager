@@ -378,6 +378,46 @@ namespace ShelteredAPI.Networking
             return updated;
         }
 
+        public ShelteredMultiplayerSessionContext MarkPeerDisconnected(byte networkPeerId, string reason)
+        {
+            if (networkPeerId == NetworkDefaults.HostPeerId || networkPeerId == NetworkDefaults.UnassignedPeerId)
+                return Context;
+
+            ShelteredMultiplayerSessionContext current = Context;
+            if (current.Roster == null || current.Roster.Length == 0)
+                return current;
+
+            bool changed = false;
+            List<ShelteredMultiplayerPeerInfo> roster = new List<ShelteredMultiplayerPeerInfo>();
+            for (int i = 0; i < current.Roster.Length; i++)
+            {
+                ShelteredMultiplayerPeerInfo peer = current.Roster[i];
+                if (peer == null)
+                    continue;
+
+                if (peer.NetworkPeerId == networkPeerId)
+                {
+                    roster.Add(new ShelteredMultiplayerPeerInfo(
+                        peer.NetworkPeerId,
+                        peer.IsHost,
+                        peer.StablePeerId,
+                        peer.DisplayName,
+                        false));
+                    changed = changed || peer.IsConnected;
+                    continue;
+                }
+
+                roster.Add(peer);
+            }
+
+            if (!changed)
+                return current;
+
+            ShelteredMultiplayerSessionContext updated = With(roster.ToArray(), null, null, null, null, null, reason);
+            Raise(ShelteredMultiplayerLifecycleEventKind.RosterChanged, updated, reason);
+            return updated;
+        }
+
         public ShelteredMultiplayerSessionContext BeginSetupPreparation(ShelteredMultiplayerSetupSettings setupSettings, string reason)
         {
             ShelteredMultiplayerSessionContext updated = With(
@@ -579,6 +619,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - coordinator state logging is best-effort and must not affect session state.
             }
         }
 
@@ -624,6 +665,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - coordinator error logging is best-effort after state has already been updated.
             }
         }
 
@@ -635,6 +677,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - coordinator warning logging is best-effort after state has already been updated.
             }
         }
 

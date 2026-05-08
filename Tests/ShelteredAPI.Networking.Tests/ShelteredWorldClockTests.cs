@@ -12,29 +12,54 @@ namespace ShelteredAPI.Networking.Tests
 
         public static void Register(List<TestCase> tests)
         {
-            tests.Add(new TestCase("WorldClock_HostUpdateAdvancesTick", HostUpdateAdvancesTick));
+            tests.Add(new TestCase("WorldClock_FixedDeltaAdvancesTick", FixedDeltaAdvancesTick));
+            tests.Add(new TestCase("WorldClock_FractionalFixedDeltaIsDeterministic", FractionalFixedDeltaIsDeterministic));
             tests.Add(new TestCase("WorldClock_ClientRemoteSampleAppliesIfNewer", ClientRemoteSampleAppliesIfNewer));
             tests.Add(new TestCase("WorldClock_OldRemoteSampleIsIgnored", OldRemoteSampleIsIgnored));
-            tests.Add(new TestCase("WorldClock_NegativeRemoteTickClampsToZero", NegativeRemoteTickClampsToZero));
-            tests.Add(new TestCase("WorldClock_ClientPredictionStopsAfterHostSample", ClientPredictionStopsAfterHostSample));
+            tests.Add(new TestCase("WorldClock_ForeignSessionRemoteSampleIsIgnored", ForeignSessionRemoteSampleIsIgnored));
+            tests.Add(new TestCase("WorldClock_NegativeRemoteTickDoesNotMoveCurrentTick", NegativeRemoteTickDoesNotMoveCurrentTick));
+            tests.Add(new TestCase("WorldClock_ClientFixedProgressContinuesAfterHostSample", ClientFixedProgressContinuesAfterHostSample));
             tests.Add(new TestCase("WorldClock_EqualRemoteSampleAfterHostSampleIsIgnored", EqualRemoteSampleAfterHostSampleIsIgnored));
             tests.Add(new TestCase("WorldClock_DriftReportUsesLastHostSample", DriftReportUsesLastHostSample));
+            tests.Add(new TestCase("WorldClock_CorrectionServiceAdvancesWithoutHostSamples", CorrectionServiceAdvancesWithoutHostSamples));
+            tests.Add(new TestCase("WorldClock_CorrectionServiceAppliesAuthoritativeEvent", CorrectionServiceAppliesAuthoritativeEvent));
         }
 
-        private static void HostUpdateAdvancesTick()
+        private static void FixedDeltaAdvancesTick()
         {
             ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
             ShelteredMultiplayerSessionContext previous = ActivateHost(clock, 20);
 
             try
             {
-                long tick = clock.UpdateFromHostFrame(0.1f);
+                long tick = clock.AdvanceFixedDelta(0.1f);
 
-                TestAssert.Equal(2L, tick, "Host frame should advance by delta seconds multiplied by tick rate.");
+                TestAssert.Equal(2L, tick, "Fixed delta should advance by delta seconds multiplied by tick rate.");
                 TestAssert.Equal(2L, ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldTick,
-                    "Host frame should update coordinator world tick.");
+                    "Fixed delta should update coordinator world tick.");
                 TestAssert.Near(0.1f, ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldDeltaSeconds, 0.0001f,
-                    "Host frame should update coordinator world delta.");
+                    "Fixed delta should update coordinator world delta.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void FractionalFixedDeltaIsDeterministic()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateHost(clock, 20);
+
+            try
+            {
+                TestAssert.Equal(0L, clock.AdvanceFixedDelta(0.024f),
+                    "Fractional fixed delta should not advance until a whole tick is accumulated.");
+                TestAssert.Equal(1L, clock.AdvanceFixedDelta(0.026f),
+                    "Accumulated fixed delta should advance exactly one tick at 20 Hz.");
+                TestAssert.Equal(3L, clock.AdvanceFixedDelta(0.1f),
+                    "Subsequent fixed delta should preserve deterministic accumulated state.");
             }
             finally
             {
@@ -85,20 +110,20 @@ namespace ShelteredAPI.Networking.Tests
             }
         }
 
-        private static void NegativeRemoteTickClampsToZero()
+        private static void ForeignSessionRemoteSampleIsIgnored()
         {
             ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
             ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
 
             try
             {
-                bool applied = clock.ApplyRemoteSample(CreateHostSample(-20, -1f, 20));
+                ShelteredWorldClockSample sample = CreateHostSample(7, 0.05f, 20);
+                sample.SessionId = "foreign-session";
 
-                TestAssert.True(applied, "Client should accept the first host sample after clamping negative values.");
-                TestAssert.Equal(0L, ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldTick,
-                    "Negative host sample tick should clamp to zero.");
-                TestAssert.Near(0f, ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldDeltaSeconds, 0.0001f,
-                    "Negative host sample delta should clamp to zero.");
+                bool applied = clock.ApplyRemoteSample(sample);
+
+                TestAssert.False(applied, "Client should ignore a host sample from a different session.");
+                TestAssert.Equal(0L, clock.GetCurrentTick(), "Foreign-session host sample should not change current tick.");
             }
             finally
             {
@@ -107,21 +132,43 @@ namespace ShelteredAPI.Networking.Tests
             }
         }
 
-        private static void ClientPredictionStopsAfterHostSample()
+        private static void NegativeRemoteTickDoesNotMoveCurrentTick()
         {
             ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
             ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
 
             try
             {
-                TestAssert.Equal(2L, clock.UpdateFromHostFrame(0.1f),
-                    "Client may predict the clock before a host sample exists.");
+                bool applied = clock.ApplyRemoteSample(CreateHostSample(-20, -1f, 20));
+
+                TestAssert.False(applied, "Client should not treat a clamped negative host sample as a correction.");
+                TestAssert.Equal(0L, ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldTick,
+                    "Negative host sample tick should not move current tick.");
+                TestAssert.Near(0f, ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldDeltaSeconds, 0.0001f,
+                    "Negative host sample delta should not move current delta.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void ClientFixedProgressContinuesAfterHostSample()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
+
+            try
+            {
+                TestAssert.Equal(2L, clock.AdvanceFixedDelta(0.1f),
+                    "Client should advance from fixed local deltas before a host sample exists.");
                 TestAssert.True(clock.ApplyRemoteSample(CreateHostSample(3, 0.05f, 20)),
-                    "Client should accept the first newer host sample.");
+                    "Client should accept a newer host sample as a correction.");
 
-                long tick = clock.UpdateFromHostFrame(1f);
+                long tick = clock.AdvanceFixedDelta(1f);
 
-                TestAssert.Equal(3L, tick, "Client should not freely advance authoritative tick after a host sample exists.");
+                TestAssert.Equal(23L, tick, "Client should keep fixed-rate progression after a correction sample.");
             }
             finally
             {
@@ -137,13 +184,60 @@ namespace ShelteredAPI.Networking.Tests
 
             try
             {
-                TestAssert.True(clock.ApplyRemoteSample(CreateHostSample(7, 0.05f, 20)),
-                    "Client should apply the first host sample.");
+                ShelteredMultiplayerSessionCoordinator.Instance.SetWorldTick(7, 0.05f, "world-clock-test-current");
 
                 bool applied = clock.ApplyRemoteSample(CreateHostSample(7, 0.05f, 20));
 
-                TestAssert.False(applied, "Client should ignore equal host samples once host authority is established.");
+                TestAssert.False(applied, "Client should ignore equal host samples as non-corrections.");
                 TestAssert.Equal(7L, clock.GetCurrentTick(), "Equal host sample should not change current tick.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void CorrectionServiceAdvancesWithoutHostSamples()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
+
+            try
+            {
+                using (ShelteredMultiplayerWorldClockCorrectionService service = new ShelteredMultiplayerWorldClockCorrectionService(clock))
+                {
+                    service.Update(0.1f);
+                }
+
+                TestAssert.Equal(2L, clock.GetCurrentTick(),
+                    "Correction service should advance clients from fixed local deltas without requiring periodic host samples.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void CorrectionServiceAppliesAuthoritativeEvent()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
+
+            try
+            {
+                using (ShelteredMultiplayerWorldClockCorrectionService service = new ShelteredMultiplayerWorldClockCorrectionService(clock))
+                {
+                    ShelteredNetworkGameplayEvent gameplayEvent =
+                        ShelteredWorldClockSampleCodec.ToGameplayEvent(CreateHostSample(10, 0.05f, 20));
+
+                    ShelteredMultiplayerNetworkEvents.RaiseAuthoritative(
+                        new ShelteredNetworkEventContext(null, null, gameplayEvent));
+                }
+
+                TestAssert.Equal(10L, clock.GetCurrentTick(),
+                    "Correction service should apply newer authoritative correction events.");
             }
             finally
             {
@@ -270,9 +364,6 @@ namespace ShelteredAPI.Networking.Tests
             typeof(ShelteredMultiplayerWorldClock).GetField(
                 "_fractionalTicks",
                 BindingFlags.Instance | BindingFlags.NonPublic).SetValue(clock, 0d);
-            typeof(ShelteredMultiplayerWorldClock).GetField(
-                "_hasHostSample",
-                BindingFlags.Instance | BindingFlags.NonPublic).SetValue(clock, false);
             typeof(ShelteredMultiplayerWorldClock).GetField(
                 "_lastHostSample",
                 BindingFlags.Instance | BindingFlags.NonPublic).SetValue(clock, null);

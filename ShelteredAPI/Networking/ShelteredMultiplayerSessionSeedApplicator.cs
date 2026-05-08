@@ -61,6 +61,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - session seed application must not fail because its diagnostic log failed.
             }
         }
     }

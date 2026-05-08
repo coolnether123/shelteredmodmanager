@@ -6,9 +6,8 @@ namespace ShelteredAPI.Networking.World
     {
         internal const int DefaultTickRate = 20;
 
-        private const string HostFrameReason = "world-clock-host-frame";
-        private const string ClientPredictionReason = "world-clock-client-prediction";
-        private const string RemoteSampleReason = "world-clock-remote-sample";
+        private const string FixedAdvanceReason = "world-clock-fixed-advance";
+        private const string RemoteCorrectionReason = "world-clock-remote-correction";
         private const string ResetReasonPrefix = "world-clock-reset";
         private static readonly ShelteredMultiplayerWorldClock _instance =
             new ShelteredMultiplayerWorldClock(ShelteredMultiplayerSessionCoordinator.Instance);
@@ -16,7 +15,6 @@ namespace ShelteredAPI.Networking.World
         private readonly object _sync = new object();
         private readonly ShelteredMultiplayerSessionCoordinator _coordinator;
         private double _fractionalTicks;
-        private bool _hasHostSample;
         private ShelteredWorldClockSample _lastHostSample;
 
         internal ShelteredMultiplayerWorldClock()
@@ -37,27 +35,13 @@ namespace ShelteredAPI.Networking.World
             get { return _instance; }
         }
 
-        public long UpdateFromHostFrame(float deltaSeconds)
+        public long AdvanceFixedDelta(float deltaSeconds)
         {
             ShelteredMultiplayerSessionContext context = _coordinator.Context;
             if (context == null || !context.IsMultiplayerActive)
                 return 0;
 
-            bool canAdvance = context.Mode == ShelteredMultiplayerSessionMode.Host;
-            if (!canAdvance && context.Mode == ShelteredMultiplayerSessionMode.Client)
-            {
-                lock (_sync)
-                {
-                    canAdvance = !_hasHostSample;
-                }
-            }
-
-            if (!canAdvance)
-                return context.WorldTick;
-
-            return Advance(context, deltaSeconds, context.Mode == ShelteredMultiplayerSessionMode.Host
-                ? HostFrameReason
-                : ClientPredictionReason);
+            return Advance(context, deltaSeconds, FixedAdvanceReason);
         }
 
         public bool ApplyRemoteSample(ShelteredWorldClockSample sample)
@@ -76,19 +60,15 @@ namespace ShelteredAPI.Networking.World
 
             long sampleTick = sample.WorldTick < 0 ? 0 : sample.WorldTick;
             float sampleDelta = sample.DeltaSeconds < 0f ? 0f : sample.DeltaSeconds;
-
-            lock (_sync)
-            {
-                if (_hasHostSample && sampleTick <= context.WorldTick)
-                    return false;
-            }
-
-            if (sampleTick < context.WorldTick)
+            long currentTick = context.WorldTick < 0 ? 0 : context.WorldTick;
+            if (sampleTick < currentTick)
                 return false;
 
             lock (_sync)
             {
-                _hasHostSample = true;
+                if (_lastHostSample != null && sampleTick < _lastHostSample.WorldTick)
+                    return false;
+
                 _lastHostSample = new ShelteredWorldClockSample
                 {
                     SessionId = sample.SessionId,
@@ -98,10 +78,17 @@ namespace ShelteredAPI.Networking.World
                     SampleUtc = sample.SampleUtc,
                     HostAuthoritative = sample.HostAuthoritative
                 };
+            }
+
+            if (sampleTick <= currentTick)
+                return false;
+
+            lock (_sync)
+            {
                 _fractionalTicks = 0d;
             }
 
-            _coordinator.SetWorldTick(sampleTick, sampleDelta, RemoteSampleReason);
+            _coordinator.SetWorldTick(sampleTick, sampleDelta, RemoteCorrectionReason);
             return true;
         }
 
@@ -111,6 +98,7 @@ namespace ShelteredAPI.Networking.World
             if (context == null)
                 return new ShelteredWorldClockSample { TickRate = DefaultTickRate, SampleUtc = DateTime.UtcNow };
 
+            // SampleUtc is diagnostic metadata only; gameplay progression is driven by fixed deltas and ticks.
             return new ShelteredWorldClockSample
             {
                 SessionId = context.SessionId,
@@ -159,7 +147,6 @@ namespace ShelteredAPI.Networking.World
             lock (_sync)
             {
                 _fractionalTicks = 0d;
-                _hasHostSample = false;
                 _lastHostSample = null;
             }
 

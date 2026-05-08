@@ -8,7 +8,7 @@ namespace ShelteredAPI.Networking
 {
     internal sealed class ShelteredMultiplayerRuntimeDriver : MonoBehaviour
     {
-        private ShelteredMultiplayerWorldClockSyncService _worldClockSync;
+        private ShelteredMultiplayerWorldClockCorrectionService _worldClockCorrection;
         private ShelteredTravelSyncService _travelSync;
 
         internal static void EnsureInstalled(GameObject runtimeRoot)
@@ -36,7 +36,7 @@ namespace ShelteredAPI.Networking
         private void Update()
         {
             EnsureRuntimeServices();
-            _worldClockSync.Update(Time.deltaTime);
+            _worldClockCorrection.Update(Time.deltaTime);
             ShelteredMultiplayerHookService.Instance.RuntimeUpdateTick();
         }
 
@@ -53,8 +53,8 @@ namespace ShelteredAPI.Networking
 
         private void EnsureRuntimeServices()
         {
-            if (_worldClockSync == null)
-                _worldClockSync = new ShelteredMultiplayerWorldClockSyncService();
+            if (_worldClockCorrection == null)
+                _worldClockCorrection = new ShelteredMultiplayerWorldClockCorrectionService();
             if (_travelSync == null)
                 _travelSync = new ShelteredTravelSyncService();
             ShelteredMultiplayerWorldPersistence.Instance.EnsureRegistered();
@@ -64,10 +64,10 @@ namespace ShelteredAPI.Networking
 
         private void DisposeRuntimeServices()
         {
-            if (_worldClockSync != null)
+            if (_worldClockCorrection != null)
             {
-                _worldClockSync.Dispose();
-                _worldClockSync = null;
+                _worldClockCorrection.Dispose();
+                _worldClockCorrection = null;
             }
 
             if (_travelSync != null)

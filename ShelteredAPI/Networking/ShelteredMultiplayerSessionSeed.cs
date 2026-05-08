@@ -107,6 +107,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - session seed logging is diagnostic-only after the seed decision is made.
             }
         }
 

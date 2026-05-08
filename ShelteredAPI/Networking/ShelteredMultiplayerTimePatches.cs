@@ -34,7 +34,7 @@ namespace ShelteredAPI.Networking
     }
 
     [PatchPolicy(PatchDomain.World, "ShelteredMultiplayerCameraSpeedControls",
-        TargetBehavior = "Fast-forward and slow-down inputs change multiplayer expedition map speed, not Time.timeScale.",
+        TargetBehavior = "Fast-forward and slow-down inputs record local bunker intensity, not Time.timeScale or shared world-clock speed.",
         FailureMode = "Camera speed buttons or hotkeys can still change Time.timeScale and desynchronize multiplayer time.",
         RollbackStrategy = "Disable the World patch domain or remove the multiplayer camera speed patch host.",
         StartupTiming = PatchStartupTiming.GameplayDeferred)]
@@ -152,9 +152,9 @@ namespace ShelteredAPI.Networking
         }
     }
 
-    [PatchPolicy(PatchDomain.World, "ShelteredMultiplayerExpeditionMapSpeed",
-        TargetBehavior = "Expedition travel compensates for the shorter multiplayer day and then applies the selected map speed mode.",
-        FailureMode = "Faster multiplayer days make expeditions move faster than intended or let local time-scale controls affect map travel.",
+    [PatchPolicy(PatchDomain.World, "ShelteredMultiplayerExpeditionTravelCompensation",
+        TargetBehavior = "Expedition travel compensates for the shorter multiplayer day without applying local fast/slow input.",
+        FailureMode = "Faster multiplayer days make expeditions move faster than intended or let local time-scale controls affect shared travel.",
         RollbackStrategy = "Disable the World patch domain or remove the multiplayer expedition speed patch host.",
         StartupTiming = PatchStartupTiming.GameplayDeferred)]
     [HarmonyPatch(typeof(ExplorationParty), "Update_Traveling")]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Threading;
 using ModAPI.Core;
 using ShelteredAPI.Events;
@@ -12,6 +13,7 @@ namespace ShelteredAPI.Networking
         private const int DefaultTickRate = 20;
         private const string LogSource = "ShelteredAPI.MultiplayerHooks";
         private static readonly ShelteredMultiplayerHookService _instance = new ShelteredMultiplayerHookService();
+        private static readonly bool _standaloneTestHost = IsStandaloneTestHost();
 
         private readonly object _sync = new object();
         private readonly Queue<Action> _mainThreadQueue = new Queue<Action>();
@@ -326,9 +328,9 @@ namespace ShelteredAPI.Networking
                 source,
                 hostContext,
                 SessionState,
-                Time.frameCount,
-                Time.time,
-                Time.deltaTime,
+                SafeReadFrameCount(),
+                SafeReadUnityTime(),
+                SafeReadUnityDeltaTime(),
                 IsMainThread);
         }
 
@@ -356,6 +358,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - multiplayer hook logging is best-effort and cannot affect gameplay hook flow.
             }
         }
 
@@ -472,6 +475,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - hook diagnostic logging is best-effort and cannot affect gameplay hook flow.
             }
         }
 
@@ -483,6 +487,55 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - hook warning logging is best-effort and cannot affect gameplay hook flow.
+            }
+        }
+
+        private static int SafeReadFrameCount()
+        {
+            object value = TryReadUnityTimeProperty("frameCount");
+            return value is int ? (int)value : 0;
+        }
+
+        private static float SafeReadUnityTime()
+        {
+            object value = TryReadUnityTimeProperty("time");
+            return value is float ? (float)value : 0f;
+        }
+
+        private static float SafeReadUnityDeltaTime()
+        {
+            object value = TryReadUnityTimeProperty("deltaTime");
+            return value is float ? (float)value : 0f;
+        }
+
+        private static object TryReadUnityTimeProperty(string name)
+        {
+            if (_standaloneTestHost)
+                return null;
+
+            try
+            {
+                PropertyInfo property = typeof(Time).GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+                return property != null ? property.GetValue(null, null) : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool IsStandaloneTestHost()
+        {
+            try
+            {
+                Assembly entryAssembly = Assembly.GetEntryAssembly();
+                string name = entryAssembly != null ? entryAssembly.GetName().Name : string.Empty;
+                return name != null && name.IndexOf(".Tests", System.StringComparison.Ordinal) >= 0;
+            }
+            catch
+            {
+                return false;
             }
         }
     }

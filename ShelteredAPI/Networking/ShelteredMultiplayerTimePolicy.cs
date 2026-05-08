@@ -6,11 +6,11 @@ using UnityEngine;
 
 namespace ShelteredAPI.Networking
 {
-    internal enum ShelteredMultiplayerMapSpeedMode
+    internal enum ShelteredMultiplayerLocalBunkerIntensityMode
     {
-        Slow = 0,
+        Careful = 0,
         Normal = 1,
-        Fast = 2
+        Rush = 2
     }
 
     internal static class ShelteredMultiplayerTimePolicy
@@ -24,44 +24,41 @@ namespace ShelteredAPI.Networking
         private static readonly FieldInfo CameraSlowDownField = AccessTools.Field(typeof(BasicCamera), "m_isSlowedDown");
         private static readonly object Sync = new object();
 
-        private static ShelteredMultiplayerMapSpeedMode _mapSpeedMode = ShelteredMultiplayerMapSpeedMode.Normal;
+        private static Func<float> _timeScaleReader = ReadUnityTimeScale;
+        private static Action<float> _timeScaleWriter = WriteUnityTimeScale;
+        private static ShelteredMultiplayerLocalBunkerIntensityMode _localBunkerIntensityMode = ShelteredMultiplayerLocalBunkerIntensityMode.Normal;
         private static bool _ownsGameTimeScale;
         private static float _originalDaySeconds = ShelteredMultiplayerTimeSettings.VanillaDaySeconds;
 
-        public static ShelteredMultiplayerMapSpeedMode MapSpeedMode
+        public static ShelteredMultiplayerLocalBunkerIntensityMode LocalBunkerIntensityMode
         {
             get
             {
                 lock (Sync)
                 {
-                    return _mapSpeedMode;
+                    return _localBunkerIntensityMode;
                 }
             }
         }
 
-        public static float MultiplayerMapCompensationMultiplier
+        public static float CurrentLocalBunkerIntensityMultiplier
+        {
+            get { return GetLocalBunkerIntensityMultiplier(LocalBunkerIntensityMode); }
+        }
+
+        public static float SharedWorldTravelCompensationMultiplier
         {
             get { return ShelteredMultiplayerTimeSettings.MultiplayerDaySeconds / ShelteredMultiplayerTimeSettings.VanillaDaySeconds; }
         }
 
-        public static float CurrentMapSpeedFactor
-        {
-            get { return GetMapSpeedFactor(MapSpeedMode); }
-        }
-
-        public static float CurrentTravelSpeedMultiplier
-        {
-            get { return MultiplayerMapCompensationMultiplier * CurrentMapSpeedFactor; }
-        }
-
-        public static void SetMapSpeedMode(ShelteredMultiplayerMapSpeedMode mode, string source)
+        public static void SetLocalBunkerIntensityMode(ShelteredMultiplayerLocalBunkerIntensityMode mode, string source)
         {
             bool changed = false;
             lock (Sync)
             {
-                if (_mapSpeedMode != mode)
+                if (_localBunkerIntensityMode != mode)
                 {
-                    _mapSpeedMode = mode;
+                    _localBunkerIntensityMode = mode;
                     changed = true;
                 }
             }
@@ -70,9 +67,10 @@ namespace ShelteredAPI.Networking
 
             if (changed)
             {
-                MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
-                    "Map speed mode changed to " + mode + " (" + CurrentTravelSpeedMultiplier.ToString("0.###")
-                    + "x travel multiplier). Source=" + (source ?? string.Empty) + ".");
+                TryWrite(MMLog.LogLevel.Info,
+                    "Local bunker intensity mode changed to " + mode + " ("
+                    + CurrentLocalBunkerIntensityMultiplier.ToString("0.###")
+                    + "x local multiplier reserved for future bunker simulation). Source=" + (source ?? string.Empty) + ".");
             }
         }
 
@@ -82,9 +80,9 @@ namespace ShelteredAPI.Networking
                 return false;
 
             if (active)
-                SetMapSpeedMode(ShelteredMultiplayerMapSpeedMode.Fast, source);
-            else if (MapSpeedMode == ShelteredMultiplayerMapSpeedMode.Fast)
-                SetMapSpeedMode(ShelteredMultiplayerMapSpeedMode.Normal, source);
+                SetLocalBunkerIntensityMode(ShelteredMultiplayerLocalBunkerIntensityMode.Rush, source);
+            else if (LocalBunkerIntensityMode == ShelteredMultiplayerLocalBunkerIntensityMode.Rush)
+                SetLocalBunkerIntensityMode(ShelteredMultiplayerLocalBunkerIntensityMode.Normal, source);
 
             SetCameraSpeedState(camera, active, false);
             return true;
@@ -96,9 +94,9 @@ namespace ShelteredAPI.Networking
                 return false;
 
             if (active)
-                SetMapSpeedMode(ShelteredMultiplayerMapSpeedMode.Slow, source);
-            else if (MapSpeedMode == ShelteredMultiplayerMapSpeedMode.Slow)
-                SetMapSpeedMode(ShelteredMultiplayerMapSpeedMode.Normal, source);
+                SetLocalBunkerIntensityMode(ShelteredMultiplayerLocalBunkerIntensityMode.Careful, source);
+            else if (LocalBunkerIntensityMode == ShelteredMultiplayerLocalBunkerIntensityMode.Careful)
+                SetLocalBunkerIntensityMode(ShelteredMultiplayerLocalBunkerIntensityMode.Normal, source);
 
             SetCameraSpeedState(camera, false, active);
             return true;
@@ -107,13 +105,13 @@ namespace ShelteredAPI.Networking
         public static bool IsFastModeActive()
         {
             return ShelteredMultiplayerHookService.Instance.IsMultiplayerActive
-                && MapSpeedMode == ShelteredMultiplayerMapSpeedMode.Fast;
+                && LocalBunkerIntensityMode == ShelteredMultiplayerLocalBunkerIntensityMode.Rush;
         }
 
         public static bool IsSlowModeActive()
         {
             return ShelteredMultiplayerHookService.Instance.IsMultiplayerActive
-                && MapSpeedMode == ShelteredMultiplayerMapSpeedMode.Slow;
+                && LocalBunkerIntensityMode == ShelteredMultiplayerLocalBunkerIntensityMode.Careful;
         }
 
         public static float ApplyTravelDistance(float distanceWorldUnits)
@@ -121,7 +119,7 @@ namespace ShelteredAPI.Networking
             if (!ShelteredMultiplayerHookService.Instance.IsMultiplayerActive)
                 return distanceWorldUnits;
 
-            return distanceWorldUnits * CurrentTravelSpeedMultiplier;
+            return distanceWorldUnits * SharedWorldTravelCompensationMultiplier;
         }
 
         public static void ApplyGameTimePolicy(GameTime gameTime)
@@ -147,18 +145,21 @@ namespace ShelteredAPI.Networking
 
         public static void ForceRealtimeTimescale()
         {
-            if (ShelteredMultiplayerHookService.Instance.IsMultiplayerActive && Math.Abs(Time.timeScale - ShelteredMultiplayerTimeSettings.RealtimeTimescale) > ShelteredMultiplayerTimeSettings.TimescaleEpsilon)
-                Time.timeScale = ShelteredMultiplayerTimeSettings.RealtimeTimescale;
+            if (!ShelteredMultiplayerHookService.Instance.IsMultiplayerActive)
+                return;
+
+            if (Math.Abs(ReadTimeScale() - ShelteredMultiplayerTimeSettings.RealtimeTimescale) > ShelteredMultiplayerTimeSettings.TimescaleEpsilon)
+                WriteTimeScale(ShelteredMultiplayerTimeSettings.RealtimeTimescale);
         }
 
-        internal static float GetMapSpeedFactor(ShelteredMultiplayerMapSpeedMode mode)
+        internal static float GetLocalBunkerIntensityMultiplier(ShelteredMultiplayerLocalBunkerIntensityMode mode)
         {
-            if (mode == ShelteredMultiplayerMapSpeedMode.Slow)
-                return ShelteredMultiplayerTimeSettings.SlowMapSpeedFactor;
-            if (mode == ShelteredMultiplayerMapSpeedMode.Fast)
-                return ShelteredMultiplayerTimeSettings.FastMapSpeedFactor;
+            if (mode == ShelteredMultiplayerLocalBunkerIntensityMode.Careful)
+                return ShelteredMultiplayerTimeSettings.CarefulBunkerIntensityMultiplier;
+            if (mode == ShelteredMultiplayerLocalBunkerIntensityMode.Rush)
+                return ShelteredMultiplayerTimeSettings.RushBunkerIntensityMultiplier;
 
-            return ShelteredMultiplayerTimeSettings.NormalMapSpeedFactor;
+            return ShelteredMultiplayerTimeSettings.NormalBunkerIntensityMultiplier;
         }
 
         private static void ApplyGameTimeStaticConversion(float daySeconds)
@@ -186,6 +187,64 @@ namespace ShelteredAPI.Networking
                 CameraFastForwardField.SetValue(camera, fastForward);
             if (CameraSlowDownField != null)
                 CameraSlowDownField.SetValue(camera, slowDown);
+        }
+
+        internal static void OverrideTimeScaleAccessorsForTests(Func<float> reader, Action<float> writer)
+        {
+            lock (Sync)
+            {
+                _timeScaleReader = reader ?? ReadUnityTimeScale;
+                _timeScaleWriter = writer ?? WriteUnityTimeScale;
+            }
+        }
+
+        internal static void ResetTimeScaleAccessorsForTests()
+        {
+            OverrideTimeScaleAccessorsForTests(null, null);
+        }
+
+        private static float ReadTimeScale()
+        {
+            Func<float> reader;
+            lock (Sync)
+            {
+                reader = _timeScaleReader;
+            }
+
+            return reader();
+        }
+
+        private static void WriteTimeScale(float value)
+        {
+            Action<float> writer;
+            lock (Sync)
+            {
+                writer = _timeScaleWriter;
+            }
+
+            writer(value);
+        }
+
+        private static float ReadUnityTimeScale()
+        {
+            return Time.timeScale;
+        }
+
+        private static void WriteUnityTimeScale(float value)
+        {
+            Time.timeScale = value;
+        }
+
+        private static void TryWrite(MMLog.LogLevel level, string message)
+        {
+            try
+            {
+                MMLog.WriteWithSource(level, MMLog.LogCategory.Network, LogSource, message);
+            }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - time-policy logging is diagnostic-only and must not affect tick decisions.
+            }
         }
     }
 }
