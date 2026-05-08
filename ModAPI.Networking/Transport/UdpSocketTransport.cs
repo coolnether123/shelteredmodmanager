@@ -87,14 +87,20 @@ namespace ModAPI.Networking.Transport
                 if (_socket != null)
                     _socket.Close();
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - Stop is best-effort cleanup and reports the stopped state regardless.
+            }
 
             try
             {
                 if (_receiveThread != null && _receiveThread.IsAlive)
                     _receiveThread.Join(250);
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - Stop should not throw if the receive thread is already gone.
+            }
 
             _receiveThread = null;
             _socket = null;
@@ -226,7 +232,11 @@ namespace ModAPI.Networking.Transport
             Action<Exception> handler = TransportError;
             if (handler != null)
             {
-                try { handler(exception); } catch { }
+                try { handler(exception); }
+                catch
+                {
+                    // GuardrailAllow: SilentCatch - transport error subscribers are isolated after diagnostics are emitted.
+                }
             }
         }
 
@@ -237,7 +247,10 @@ namespace ModAPI.Networking.Transport
                 if (_socket != null)
                     _socket.Close();
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - failed-start socket cleanup must preserve the original startup exception.
+            }
 
             _socket = null;
             LocalEndPoint = null;

@@ -22,8 +22,17 @@ namespace ModAPI.Core
         /// </summary>
         public static void WarnOnce(this IModLogger log, string key, string message)
         {
-            try { MMLog.WarnOnce(key, message); } catch { }
-            try { if (log != null) log.Warn(message); } catch { }
+            try { MMLog.WarnOnce(key, message); }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - this extension is a best-effort warning mirror.
+            }
+
+            try { if (log != null) log.Warn(message); }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - plugin logger failures must not break caller control flow.
+            }
         }
 
         private class ScopedLogger : IModLogger

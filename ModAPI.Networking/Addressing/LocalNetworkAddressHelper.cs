@@ -118,6 +118,7 @@ namespace ModAPI.Networking.Addressing
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - interface property probing is best-effort; missing details produce an interface without addresses.
             }
 
             if (properties != null)
@@ -129,7 +130,11 @@ namespace ModAPI.Networking.Addressing
                         continue;
 
                     IPAddress mask = null;
-                    try { mask = unicast.IPv4Mask; } catch { }
+                    try { mask = unicast.IPv4Mask; }
+                    catch
+                    {
+                        // GuardrailAllow: SilentCatch - some platforms do not expose IPv4Mask; null mask is an accepted fallback.
+                    }
                     addresses.Add(new LocalNetworkAddressInfo(
                         unicast.Address,
                         mask,

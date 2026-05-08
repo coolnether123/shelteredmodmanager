@@ -20,6 +20,8 @@ if ([string]::IsNullOrWhiteSpace($BaselinePath)) {
 
 $ModApiRoot = Join-Path $RepoRoot "ModAPI"
 $ModApiProject = Join-Path $ModApiRoot "ModAPI.csproj"
+$ModApiNetworkingRoot = Join-Path $RepoRoot "ModAPI.Networking"
+$ModApiNetworkingProject = Join-Path $ModApiNetworkingRoot "ModAPI.Networking.csproj"
 
 $GameSymbols = @(
     "BasePanel",
@@ -97,6 +99,56 @@ $ShelteredAssemblyNames = @(
     "ShelteredAPI"
 )
 
+$HostNeutralForbiddenAssemblyNames = @(
+    "0Harmony",
+    "Assembly-CSharp",
+    "Assembly-CSharp-firstpass",
+    "Harmony",
+    "HarmonyLib",
+    "Manager",
+    "ShelteredAPI",
+    "UnityEngine",
+    "UnityEngine.CoreModule",
+    "UnityEngine.UI"
+)
+
+$HostNeutralForbiddenSourceSymbols = @(
+    "Assembly-CSharp",
+    "Assembly_CSharp",
+    "HarmonyLib",
+    "ShelteredAPI",
+    "UnityEngine"
+)
+
+$ShelteredGameplayTerms = @(
+    "Bunker",
+    "Bunkers",
+    "EncounterCharacter",
+    "EncounterManager",
+    "Expedition",
+    "ExpeditionMap",
+    "ExplorationParty",
+    "Faction",
+    "FamilyManager",
+    "FamilyMember",
+    "GameTime",
+    "InventoryManager",
+    "ItemManager",
+    "Loot",
+    "MapRegion",
+    "NpcVisitor",
+    "Raid",
+    "Raids",
+    "SaveData",
+    "SaveEntry",
+    "SaveManager",
+    "Settlement",
+    "Settlements",
+    "ShelterDefense",
+    "TradingPanel",
+    "WeatherManager"
+)
+
 $ShelteredPathTerms = @(
     "Sheltered",
     "SaveManager",
@@ -149,9 +201,42 @@ function New-Key {
 }
 
 function Get-SourceFiles {
-    Get-ChildItem -LiteralPath $ModApiRoot -Recurse -File -Filter "*.cs" |
+    param([string]$Root)
+
+    Get-ChildItem -LiteralPath $Root -Recurse -File -Filter "*.cs" |
         Where-Object { $_.FullName -notmatch "\\(bin|obj)\\" } |
         Sort-Object FullName
+}
+
+function Add-ProjectReferenceFindings {
+    param(
+        [System.Collections.Generic.List[object]]$Findings,
+        [string]$ProjectPath,
+        [string]$Rule,
+        [string[]]$ForbiddenNames
+    )
+
+    if (-not (Test-Path -LiteralPath $ProjectPath)) {
+        throw "Missing project file: $ProjectPath"
+    }
+
+    [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
+    $projectRelativePath = ConvertTo-RepoRelativePath $ProjectPath
+    foreach ($reference in $projectXml.GetElementsByTagName("Reference")) {
+        $include = [string]$reference.GetAttribute("Include")
+        $simpleInclude = ($include -split ",")[0].Trim()
+        if ($ForbiddenNames -contains $simpleInclude) {
+            $Findings.Add((New-BoundaryFinding -Rule $Rule -Path $projectRelativePath -Symbol $simpleInclude -Count 1))
+        }
+    }
+
+    foreach ($reference in $projectXml.GetElementsByTagName("ProjectReference")) {
+        $include = [string]$reference.GetAttribute("Include")
+        $projectName = [System.IO.Path]::GetFileNameWithoutExtension($include)
+        if ($ForbiddenNames -contains $projectName) {
+            $Findings.Add((New-BoundaryFinding -Rule $Rule -Path $projectRelativePath -Symbol $projectName -Count 1))
+        }
+    }
 }
 
 function Add-MatchFindings {
@@ -186,26 +271,24 @@ function Add-MatchFindings {
 function Get-CurrentFindings {
     $findings = New-Object "System.Collections.Generic.List[object]"
 
-    if (-not (Test-Path -LiteralPath $ModApiProject)) {
-        throw "Missing project file: $ModApiProject"
-    }
+    Add-ProjectReferenceFindings `
+        -Findings $findings `
+        -ProjectPath $ModApiProject `
+        -Rule "project-reference" `
+        -ForbiddenNames $ShelteredAssemblyNames
 
-    [xml]$projectXml = Get-Content -LiteralPath $ModApiProject -Raw
-    $projectRelativePath = ConvertTo-RepoRelativePath $ModApiProject
-    foreach ($reference in $projectXml.GetElementsByTagName("Reference")) {
-        $include = [string]$reference.GetAttribute("Include")
-        $simpleInclude = ($include -split ",")[0].Trim()
-        if ($ShelteredAssemblyNames -contains $simpleInclude) {
-            $findings.Add((New-BoundaryFinding -Rule "project-reference" -Path $projectRelativePath -Symbol $simpleInclude -Count 1))
-        }
-    }
+    Add-ProjectReferenceFindings `
+        -Findings $findings `
+        -ProjectPath $ModApiNetworkingProject `
+        -Rule "networking-project-reference" `
+        -ForbiddenNames $HostNeutralForbiddenAssemblyNames
 
     $gamePattern = "\b(" + (($GameSymbols | ForEach-Object { [System.Text.RegularExpressions.Regex]::Escape($_) }) -join "|") + ")\b"
     $nguiPattern = "\b(" + ($NguiSymbols -join "|") + ")\b"
     $pathPattern = "(" + (($ShelteredPathTerms | ForEach-Object { [System.Text.RegularExpressions.Regex]::Escape($_) }) -join "|") + ")"
     $namespacePattern = "(?m)^\s*namespace\s+([A-Za-z0-9_.]+)"
 
-    foreach ($file in Get-SourceFiles) {
+    foreach ($file in Get-SourceFiles $ModApiRoot) {
         $relativePath = ConvertTo-RepoRelativePath $file.FullName
         $text = Get-Content -LiteralPath $file.FullName -Raw
 
@@ -232,6 +315,41 @@ function Get-CurrentFindings {
             $namespaceTerm = [System.Text.RegularExpressions.Regex]::Match($namespace, $pathPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
             if ($namespaceTerm.Success) {
                 $findings.Add((New-BoundaryFinding -Rule "sheltered-namespace" -Path $relativePath -Symbol $namespace -Count 1))
+            }
+        }
+    }
+
+    $neutralReferencePattern = "\b(" + (($HostNeutralForbiddenSourceSymbols | ForEach-Object { [System.Text.RegularExpressions.Regex]::Escape($_) }) -join "|") + ")\b"
+    $gameplayTermPattern = "\b(" + (($ShelteredGameplayTerms | ForEach-Object { [System.Text.RegularExpressions.Regex]::Escape($_) }) -join "|") + ")\b"
+    $gameplayPathPattern = "(" + (($ShelteredGameplayTerms | ForEach-Object { [System.Text.RegularExpressions.Regex]::Escape($_) }) -join "|") + ")"
+
+    foreach ($file in Get-SourceFiles $ModApiNetworkingRoot) {
+        $relativePath = ConvertTo-RepoRelativePath $file.FullName
+        $text = Get-Content -LiteralPath $file.FullName -Raw
+
+        Add-MatchFindings -Findings $findings -Rule "networking-host-reference" -RelativePath $relativePath -Text $text -Pattern $neutralReferencePattern
+        Add-MatchFindings -Findings $findings -Rule "networking-gameplay-term" -RelativePath $relativePath -Text $text -Pattern $gameplayTermPattern
+
+        $pathMatches = [System.Text.RegularExpressions.Regex]::Matches($relativePath, $gameplayPathPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+        $pathTerms = @{}
+        foreach ($match in $pathMatches) {
+            if (-not $pathTerms.ContainsKey($match.Value)) {
+                $pathTerms[$match.Value] = 0
+            }
+
+            $pathTerms[$match.Value] += 1
+        }
+
+        foreach ($term in ($pathTerms.Keys | Sort-Object)) {
+            $findings.Add((New-BoundaryFinding -Rule "networking-gameplay-filename" -Path $relativePath -Symbol $term -Count $pathTerms[$term]))
+        }
+
+        $namespaceMatches = [System.Text.RegularExpressions.Regex]::Matches($text, $namespacePattern)
+        foreach ($match in $namespaceMatches) {
+            $namespace = $match.Groups[1].Value
+            $namespaceTerm = [System.Text.RegularExpressions.Regex]::Match($namespace, $gameplayPathPattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
+            if ($namespaceTerm.Success) {
+                $findings.Add((New-BoundaryFinding -Rule "networking-gameplay-namespace" -Path $relativePath -Symbol $namespace -Count 1))
             }
         }
     }
@@ -341,6 +459,7 @@ if ($unbaselined.Count -gt 0) {
         Write-Host ("NEW`t" + (ConvertTo-TsvLine $finding))
     }
 
+    Write-Host "Move Sheltered/Unity/Harmony/gameplay code out of ModAPI.Networking. If a legacy ModAPI exception is intentional, run with -ListCurrent and add a justified baseline entry."
     exit 1
 }
 

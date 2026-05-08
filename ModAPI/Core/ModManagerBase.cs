@@ -62,7 +62,11 @@ namespace ModAPI.Core
 
             if (Events != null)
             {
-                try { Events.Dispose(); } catch { }
+                try { Events.Dispose(); }
+                catch
+                {
+                    // GuardrailAllow: SilentCatch - stale event cleanup is best-effort before replacing the registry.
+                }
             }
             Events = new EventRegistry();
 
@@ -238,7 +242,10 @@ namespace ModAPI.Core
                         Log.Debug("Patch Result: " + who + " -> " + reason);
                     }
                 }
-                catch { }
+                catch
+                {
+                    // GuardrailAllow: SilentCatch - patch result logging is diagnostic-only and must not affect patch application.
+                }
             };
 
             return opts;

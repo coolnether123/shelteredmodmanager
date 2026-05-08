@@ -65,6 +65,7 @@ namespace ShelteredAPI.Networking.Diagnostics
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - desync report generation must still return text if diagnostic logging fails.
             }
 
             return text;
@@ -111,6 +112,7 @@ namespace ShelteredAPI.Networking.Diagnostics
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - diagnostics providers are optional; report generation falls back to empty sections.
             }
         }
 
@@ -123,6 +125,7 @@ namespace ShelteredAPI.Networking.Diagnostics
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - compatibility hash provider failures are diagnostics-only here.
             }
 
             return string.Empty;

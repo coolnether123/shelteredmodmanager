@@ -174,7 +174,10 @@ namespace ModAPI.Core
                         "Unhandled exception (non-Exception object).");
                 }
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - unhandled-exception logging has no safer fallback sink.
+            }
         }
 
         private static void OnUnityLogMessageReceived(string condition, string stackTrace, LogType type)
@@ -236,7 +239,10 @@ namespace ModAPI.Core
                     MMLog.WriteWithSource(MMLog.LogLevel.Warning, MMLog.LogCategory.General, "UnityLog", msg);
                 }
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - Unity log mirroring is best-effort and must not recurse on logger failures.
+            }
         }
 
         private void OnSceneLoadedModern(object scene, object mode)

@@ -69,6 +69,7 @@ namespace ModAPI.Core
                 }
                 catch
                 {
+                    // GuardrailAllow: SilentCatch - normalization predicates are best-effort and should not break Unity log mirroring.
                 }
             }
 

@@ -53,7 +53,11 @@ namespace ModAPI.Core
         {
             if (OnSeedChanged != null)
             {
-                try { OnSeedChanged(); } catch { }
+                try { OnSeedChanged(); }
+                catch
+                {
+                    // GuardrailAllow: SilentCatch - seed-change subscribers are isolated so one mod cannot break RNG reseeding.
+                }
             }
         }
 
@@ -136,6 +140,7 @@ namespace ModAPI.Core
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - RNG debug logging must not affect deterministic random flow.
             }
         }
 
@@ -147,6 +152,7 @@ namespace ModAPI.Core
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - RNG strict-mode warnings are diagnostic and must not affect deterministic random flow.
             }
         }
 

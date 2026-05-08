@@ -205,6 +205,7 @@ namespace ModAPI.Core
                 }
                 catch
                 {
+                    // GuardrailAllow: SilentCatch - strict RNG diagnostics must not throw from random hot paths.
                 }
             }
 
@@ -282,6 +283,7 @@ namespace ModAPI.Core
                 }
                 catch
                 {
+                    // GuardrailAllow: SilentCatch - dumping RNG diagnostics should still return content if logging fails.
                 }
 
                 return;

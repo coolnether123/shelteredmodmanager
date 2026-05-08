@@ -109,6 +109,10 @@ Invoke-Step "Runtime compatibility rectangle checks" {
     Invoke-ToolScript "tools\Verify-RuntimeCompatRect.ps1"
 }
 
+Invoke-Step "Runtime guardrail checks" {
+    Invoke-ToolScript "tools\Verify-RuntimeGuardrails.ps1"
+}
+
 Invoke-Step "Sheltered API public surface checks" {
     Invoke-ToolScript "tools\Verify-ShelteredApiPublicSurface.ps1"
 }
