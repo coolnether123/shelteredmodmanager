@@ -74,13 +74,15 @@ namespace ModAPI.Core
                 if (mode == RandomnessMode.Legacy)
                 {
                     _legacyRandom = new Random(seed);
+                    if (RngDebugOptions.MultiplayerStrict)
+                        TryWarnOnce("ModRandom.MultiplayerStrict.Legacy", "ModRandom Legacy mode is not recommended for deterministic multiplayer.");
                 }
                 else
                 {
                     _legacyRandom = null;
                 }
                 
-                MMLog.WriteDebug(string.Format("[ModRandom] Initialized with seed {0} in mode {1}", seed, mode));
+                TryWriteDebug(string.Format("[ModRandom] Initialized with seed {0} in mode {1}", seed, mode));
             }
         }
 
@@ -126,6 +128,28 @@ namespace ModAPI.Core
         /// </summary>
         public static int CurrentSeed { get { return _seed; } }
 
+        private static void TryWriteDebug(string message)
+        {
+            try
+            {
+                MMLog.WriteDebug(message);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void TryWarnOnce(string key, string message)
+        {
+            try
+            {
+                MMLog.WarnOnce(key, message);
+            }
+            catch
+            {
+            }
+        }
+
         /// <summary>
         /// How many numbers have been generated since initialization.
         /// </summary>
@@ -162,7 +186,7 @@ namespace ModAPI.Core
                     _stepCount += steps;
                 }
                 
-                MMLog.WriteDebug(string.Format("[ModRandom] Fast-forwarded {0} steps. Current Step: {1}", steps, _stepCount));
+                TryWriteDebug(string.Format("[ModRandom] Fast-forwarded {0} steps. Current Step: {1}", steps, _stepCount));
             }
         }
 
@@ -177,7 +201,11 @@ namespace ModAPI.Core
             if (maxExclusive <= minInclusive) return minInclusive;
             lock (_lock)
             {
-                return minInclusive + (int)(NextULongInternal() % (ulong)(maxExclusive - minInclusive));
+                ulong before = _stepCount;
+                ulong value = NextULongInternal();
+                int result = minInclusive + (int)(value % (ulong)(maxExclusive - minInclusive));
+                ModRandomDiagnostics.Trace("default", "RangeInt", before, _stepCount, (ulong)result);
+                return result;
             }
         }
 
@@ -204,7 +232,9 @@ namespace ModAPI.Core
 
             lock (_lock)
             {
+                ulong before = _stepCount;
                 do { result = (uint)NextULongInternal(); } while (result > limit);
+                ModRandomDiagnostics.Trace("default", "RangeUnbiased", before, _stepCount, result);
             }
             
             return min + (int)(result % range);
@@ -227,12 +257,18 @@ namespace ModAPI.Core
             {
                 if (_mode == RandomnessMode.Legacy)
                 {
+                    ulong before = _stepCount;
                     _stepCount++;
-                    return _legacyRandom.NextDouble();
+                    double legacy = _legacyRandom.NextDouble();
+                    ModRandomDiagnostics.Trace("default", "ValueDouble", before, _stepCount, (ulong)(legacy * uint.MaxValue));
+                    return legacy;
                 }
 
                 // 53 bits of entropy mapped into [0,1) using double precision.
-                return (double)(NextULongInternal() >> 11) * (1.0 / 9007199254740992.0);
+                ulong stepBefore = _stepCount;
+                ulong value = NextULongInternal();
+                ModRandomDiagnostics.Trace("default", "ValueDouble", stepBefore, _stepCount, value);
+                return (double)(value >> 11) * (1.0 / 9007199254740992.0);
             }
         }
 
@@ -330,10 +366,56 @@ namespace ModAPI.Core
                 }
 
                 int streamSeed = DeriveStreamSeed(_seed, streamName);
-                stream = new ModRandomStream(streamSeed);
+                stream = new ModRandomStream(streamSeed, streamName);
                 _namedStreams[streamName] = stream;
                 return stream;
             }
+        }
+
+        public static DeterminismDigest GetDeterminismDigest()
+        {
+            lock (_lock)
+            {
+                unchecked
+                {
+                    DeterminismDigest digest = new DeterminismDigest();
+                    digest.MasterSeed = _seed;
+                    digest.Mode = _mode;
+                    digest.MasterStep = _stepCount;
+                    digest.MasterHash = HashDigest((uint)_seed, _state, _stepCount, (uint)_mode);
+
+                    List<string> names = new List<string>(_namedStreams.Keys);
+                    names.Sort(StringComparer.Ordinal);
+
+                    uint streamHash = 2166136261u;
+                    for (int i = 0; i < names.Count; i++)
+                    {
+                        ModRandomStream stream = _namedStreams[names[i]];
+                        streamHash = HashString(streamHash, names[i]);
+                        streamHash = HashDigest(streamHash, stream.InternalState, stream.CurrentStep, 0);
+                    }
+
+                    digest.StreamCount = names.Count;
+                    digest.StreamHash = streamHash;
+                    digest.CombinedHash = HashDigest(digest.MasterHash, digest.StreamHash, (ulong)digest.StreamCount, 0);
+                    return digest;
+                }
+            }
+        }
+
+        public static void DumpRngDiagnostics(string reason)
+        {
+            DumpRngDiagnostics(reason, null);
+        }
+
+        public static void DumpRngDiagnostics(string reason, string path)
+        {
+            ModRandomDiagnostics.WriteDump(reason, path, GetDeterminismDigest());
+        }
+
+        public static IDisposable EnterMultiplayerSensitiveContext(string reason)
+        {
+            return ModRandomDiagnostics.EnterMultiplayerSensitiveContext(reason);
         }
 
         internal static ModRandomStateSnapshot CreateSnapshot()
@@ -414,7 +496,7 @@ namespace ModAPI.Core
                             continue;
                         }
 
-                        ModRandomStream stream = new ModRandomStream(1);
+                        ModRandomStream stream = new ModRandomStream(1, name);
                         stream.SetInternalState(snapshot.StreamStates[i], snapshot.StreamSteps[i]);
                         _namedStreams[name] = stream;
                     }
@@ -447,12 +529,18 @@ namespace ModAPI.Core
             {
                 if (_mode == RandomnessMode.Legacy)
                 {
+                    ulong before = _stepCount;
                     _stepCount++;
-                    return _legacyRandom.NextDouble();
+                    double legacy = _legacyRandom.NextDouble();
+                    ModRandomDiagnostics.Trace("default", "ValueDoubleInclusive", before, _stepCount, (ulong)(legacy * uint.MaxValue));
+                    return legacy;
                 }
 
                 // Inclusive 1.0 endpoint for Unity-like float range semantics.
-                return (double)NextULongInternal() / 18446744073709551615.0;
+                ulong stepBefore = _stepCount;
+                ulong value = NextULongInternal();
+                ModRandomDiagnostics.Trace("default", "ValueDoubleInclusive", stepBefore, _stepCount, value);
+                return (double)value / 18446744073709551615.0;
             }
         }
 
@@ -475,6 +563,31 @@ namespace ModAPI.Core
             _stepCount++;
             return _state * 2685821657736338717ul;
         }
+
+        private static uint HashDigest(uint seed, ulong first, ulong second, uint third)
+        {
+            unchecked
+            {
+                uint hash = seed == 0 ? 2166136261u : seed;
+                hash = (hash ^ (uint)first) * 16777619u;
+                hash = (hash ^ (uint)(first >> 32)) * 16777619u;
+                hash = (hash ^ (uint)second) * 16777619u;
+                hash = (hash ^ (uint)(second >> 32)) * 16777619u;
+                hash = (hash ^ third) * 16777619u;
+                return hash;
+            }
+        }
+
+        private static uint HashString(uint hash, string value)
+        {
+            unchecked
+            {
+                value = value ?? string.Empty;
+                for (int i = 0; i < value.Length; i++)
+                    hash = (hash ^ value[i]) * 16777619u;
+                return hash;
+            }
+        }
     }
 
     internal class ModRandomStateSnapshot
@@ -496,17 +609,28 @@ namespace ModAPI.Core
     {
         private ulong _state;
         private ulong _stepCount;
+        private readonly string _streamName;
 
         public ModRandomStream(int seed)
+            : this(seed, "default")
+        {
+        }
+
+        internal ModRandomStream(int seed, string streamName)
         {
             _state = (ulong)(seed == 0 ? 1234567 : seed);
             _stepCount = 0;
+            _streamName = string.IsNullOrEmpty(streamName) ? "default" : streamName;
         }
 
         public int Range(int min, int max)
         {
             if (max <= min) return min;
-            return min + (int)(NextULong() % (ulong)(max - min));
+            ulong before = _stepCount;
+            ulong value = NextULong();
+            int result = min + (int)(value % (ulong)(max - min));
+            ModRandomDiagnostics.Trace(_streamName, "RangeInt", before, _stepCount, (ulong)result);
+            return result;
         }
 
         public float Range(float min, float max)
@@ -516,7 +640,10 @@ namespace ModAPI.Core
 
         public float Value()
         {
-            return (float)((double)(NextULong() >> 11) * (1.0 / 9007199254740992.0));
+            ulong before = _stepCount;
+            ulong value = NextULong();
+            ModRandomDiagnostics.Trace(_streamName, "Value", before, _stepCount, value);
+            return (float)((double)(value >> 11) * (1.0 / 9007199254740992.0));
         }
 
         public bool Bool(float probability = 0.5f)
