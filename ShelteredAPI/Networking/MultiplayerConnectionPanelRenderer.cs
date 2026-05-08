@@ -16,6 +16,7 @@ namespace ShelteredAPI.Networking
                 new MultiplayerSummaryDiagnosticsTab(),
                 new MultiplayerPeerDiagnosticsTab(),
                 new MultiplayerTrafficDiagnosticsTab(),
+                new MultiplayerMapAnchorDiagnosticsTab(),
                 new MultiplayerLogDiagnosticsTab()
             };
             _tabLabels = BuildTabLabels(_tabs);

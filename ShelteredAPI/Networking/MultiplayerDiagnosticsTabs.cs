@@ -1,5 +1,6 @@
 using ModAPI.Networking.Connections;
 using ModAPI.Networking.Diagnostics;
+using ShelteredAPI.Networking.Diagnostics;
 using UnityEngine;
 
 namespace ShelteredAPI.Networking
@@ -237,6 +238,55 @@ namespace ShelteredAPI.Networking
 
             for (int i = 0; i < model.LogLines.Length; i++)
                 GUILayout.Label(model.LogLines[i] ?? string.Empty);
+        }
+    }
+
+    internal sealed class MultiplayerMapAnchorDiagnosticsTab : IMultiplayerDiagnosticsTab
+    {
+        public string Title
+        {
+            get { return "Map Anchor"; }
+        }
+
+        public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
+        {
+            ShelteredMultiplayerMapAnchorReport report = ShelteredMultiplayerMapAnchorDiagnostics.BuildReport();
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Active Bunker Anchor");
+            MultiplayerDiagnosticsWidgets.DrawValue("MP active", report.MultiplayerActive ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("Session", report.SessionId);
+            MultiplayerDiagnosticsWidgets.DrawValue("Local player", report.LocalPlayerId.ToString());
+            MultiplayerDiagnosticsWidgets.DrawValue("Bunker owner", report.ActiveBunkerOwnerId.ToString());
+            MultiplayerDiagnosticsWidgets.DrawValue("World", FormatVector(report.ActiveWorldPosition));
+            MultiplayerDiagnosticsWidgets.DrawValue("Map pixels", FormatVector(report.ActiveMapPixels));
+            MultiplayerDiagnosticsWidgets.DrawValue("Grid", report.GridX + ", " + report.GridY);
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Runtime Objects");
+            MultiplayerDiagnosticsWidgets.DrawValue("ExplorationManager", report.HasExplorationManager ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("ExpeditionMap", report.HasExpeditionMap ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("Map sprite", report.HasMapSprite ? "yes" : "no");
+
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Warnings");
+            if (report.Warnings == null || report.Warnings.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint(report.MultiplayerActive
+                    ? "No map anchor warnings."
+                    : "Multiplayer is inactive.");
+                return;
+            }
+
+            for (int i = 0; i < report.Warnings.Length; i++)
+                MultiplayerDiagnosticsWidgets.DrawWarning(report.Warnings[i] ?? string.Empty);
+        }
+
+        private static string FormatVector(Vector2 value)
+        {
+            return value.x.ToString("F1") + ", " + value.y.ToString("F1");
+        }
+
+        private static string FormatVector(Vector3 value)
+        {
+            return value.x.ToString("F1") + ", " + value.y.ToString("F1") + ", " + value.z.ToString("F1");
         }
     }
 }
