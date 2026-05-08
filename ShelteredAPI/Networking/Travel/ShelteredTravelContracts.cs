@@ -24,6 +24,11 @@ namespace ShelteredAPI.Networking.Travel
         public int StartGridY { get; set; }
         public int DestinationGridX { get; set; }
         public int DestinationGridY { get; set; }
+        public bool HasWorldPosition { get; set; }
+        public float StartWorldX { get; set; }
+        public float StartWorldY { get; set; }
+        public float DestinationWorldX { get; set; }
+        public float DestinationWorldY { get; set; }
         public float WorldUnitsPerTick { get; set; }
         public long ExpectedArrivalTick { get; set; }
         public string SeedStreamName { get; set; }
@@ -41,6 +46,11 @@ namespace ShelteredAPI.Networking.Travel
                 StartGridY = StartGridY,
                 DestinationGridX = DestinationGridX,
                 DestinationGridY = DestinationGridY,
+                HasWorldPosition = HasWorldPosition,
+                StartWorldX = StartWorldX,
+                StartWorldY = StartWorldY,
+                DestinationWorldX = DestinationWorldX,
+                DestinationWorldY = DestinationWorldY,
                 WorldUnitsPerTick = WorldUnitsPerTick,
                 ExpectedArrivalTick = ExpectedArrivalTick,
                 SeedStreamName = SeedStreamName ?? string.Empty
@@ -63,6 +73,11 @@ namespace ShelteredAPI.Networking.Travel
         public int CorrectedGridY { get; set; }
         public int DestinationGridX { get; set; }
         public int DestinationGridY { get; set; }
+        public bool HasWorldPosition { get; set; }
+        public float CorrectedWorldX { get; set; }
+        public float CorrectedWorldY { get; set; }
+        public float DestinationWorldX { get; set; }
+        public float DestinationWorldY { get; set; }
         public float WorldUnitsPerTick { get; set; }
         public long ExpectedArrivalTick { get; set; }
         public string Reason { get; set; }
@@ -77,6 +92,11 @@ namespace ShelteredAPI.Networking.Travel
                 CorrectedGridY = CorrectedGridY,
                 DestinationGridX = DestinationGridX,
                 DestinationGridY = DestinationGridY,
+                HasWorldPosition = HasWorldPosition,
+                CorrectedWorldX = CorrectedWorldX,
+                CorrectedWorldY = CorrectedWorldY,
+                DestinationWorldX = DestinationWorldX,
+                DestinationWorldY = DestinationWorldY,
                 WorldUnitsPerTick = WorldUnitsPerTick,
                 ExpectedArrivalTick = ExpectedArrivalTick,
                 Reason = Reason ?? string.Empty
@@ -98,6 +118,9 @@ namespace ShelteredAPI.Networking.Travel
         public long ArrivalTick { get; set; }
         public int ArrivalGridX { get; set; }
         public int ArrivalGridY { get; set; }
+        public bool HasWorldPosition { get; set; }
+        public float ArrivalWorldX { get; set; }
+        public float ArrivalWorldY { get; set; }
         public string ResultKind { get; set; }
         public string ResultPayloadJson { get; set; }
 
@@ -109,6 +132,9 @@ namespace ShelteredAPI.Networking.Travel
                 ArrivalTick = ArrivalTick,
                 ArrivalGridX = ArrivalGridX,
                 ArrivalGridY = ArrivalGridY,
+                HasWorldPosition = HasWorldPosition,
+                ArrivalWorldX = ArrivalWorldX,
+                ArrivalWorldY = ArrivalWorldY,
                 ResultKind = ResultKind ?? string.Empty,
                 ResultPayloadJson = ResultPayloadJson ?? string.Empty
             };
@@ -123,6 +149,9 @@ namespace ShelteredAPI.Networking.Travel
         public float Progress01 { get; set; }
         public int GridX { get; set; }
         public int GridY { get; set; }
+        public bool HasWorldPosition { get; set; }
+        public float WorldX { get; set; }
+        public float WorldY { get; set; }
         public long ExpectedArrivalTick { get; set; }
     }
 
@@ -220,6 +249,11 @@ namespace ShelteredAPI.Networking.Travel
                 writer.WriteAttributeString("startGridY", FormatInt(started.StartGridY));
                 writer.WriteAttributeString("destinationGridX", FormatInt(started.DestinationGridX));
                 writer.WriteAttributeString("destinationGridY", FormatInt(started.DestinationGridY));
+                writer.WriteAttributeString("hasWorldPosition", FormatBool(started.HasWorldPosition));
+                writer.WriteAttributeString("startWorldX", FormatFloat(started.StartWorldX));
+                writer.WriteAttributeString("startWorldY", FormatFloat(started.StartWorldY));
+                writer.WriteAttributeString("destinationWorldX", FormatFloat(started.DestinationWorldX));
+                writer.WriteAttributeString("destinationWorldY", FormatFloat(started.DestinationWorldY));
                 writer.WriteAttributeString("worldUnitsPerTick", FormatFloat(started.WorldUnitsPerTick));
                 writer.WriteAttributeString("expectedArrivalTick", FormatLong(started.ExpectedArrivalTick));
                 writer.WriteAttributeString("seedStreamName", started.SeedStreamName ?? string.Empty);
@@ -241,6 +275,11 @@ namespace ShelteredAPI.Networking.Travel
                 writer.WriteAttributeString("correctedGridY", FormatInt(corrected.CorrectedGridY));
                 writer.WriteAttributeString("destinationGridX", FormatInt(corrected.DestinationGridX));
                 writer.WriteAttributeString("destinationGridY", FormatInt(corrected.DestinationGridY));
+                writer.WriteAttributeString("hasWorldPosition", FormatBool(corrected.HasWorldPosition));
+                writer.WriteAttributeString("correctedWorldX", FormatFloat(corrected.CorrectedWorldX));
+                writer.WriteAttributeString("correctedWorldY", FormatFloat(corrected.CorrectedWorldY));
+                writer.WriteAttributeString("destinationWorldX", FormatFloat(corrected.DestinationWorldX));
+                writer.WriteAttributeString("destinationWorldY", FormatFloat(corrected.DestinationWorldY));
                 writer.WriteAttributeString("worldUnitsPerTick", FormatFloat(corrected.WorldUnitsPerTick));
                 writer.WriteAttributeString("expectedArrivalTick", FormatLong(corrected.ExpectedArrivalTick));
                 writer.WriteAttributeString("reason", corrected.Reason ?? string.Empty);
@@ -260,6 +299,9 @@ namespace ShelteredAPI.Networking.Travel
                 writer.WriteAttributeString("arrivalTick", FormatLong(arrived.ArrivalTick));
                 writer.WriteAttributeString("arrivalGridX", FormatInt(arrived.ArrivalGridX));
                 writer.WriteAttributeString("arrivalGridY", FormatInt(arrived.ArrivalGridY));
+                writer.WriteAttributeString("hasWorldPosition", FormatBool(arrived.HasWorldPosition));
+                writer.WriteAttributeString("arrivalWorldX", FormatFloat(arrived.ArrivalWorldX));
+                writer.WriteAttributeString("arrivalWorldY", FormatFloat(arrived.ArrivalWorldY));
                 writer.WriteAttributeString("resultKind", arrived.ResultKind ?? string.Empty);
                 writer.WriteAttributeString("resultPayloadJson", arrived.ResultPayloadJson ?? string.Empty);
                 writer.WriteEndElement();
@@ -282,6 +324,11 @@ namespace ShelteredAPI.Networking.Travel
             AppendJsonInt(builder, "startGridY", started.StartGridY);
             AppendJsonInt(builder, "destinationGridX", started.DestinationGridX);
             AppendJsonInt(builder, "destinationGridY", started.DestinationGridY);
+            AppendJsonBool(builder, "hasWorldPosition", started.HasWorldPosition);
+            AppendJsonFloat(builder, "startWorldX", started.StartWorldX);
+            AppendJsonFloat(builder, "startWorldY", started.StartWorldY);
+            AppendJsonFloat(builder, "destinationWorldX", started.DestinationWorldX);
+            AppendJsonFloat(builder, "destinationWorldY", started.DestinationWorldY);
             AppendJsonFloat(builder, "worldUnitsPerTick", started.WorldUnitsPerTick);
             AppendJsonLong(builder, "expectedArrivalTick", started.ExpectedArrivalTick);
             AppendJsonString(builder, "seedStreamName", started.SeedStreamName);
@@ -302,6 +349,11 @@ namespace ShelteredAPI.Networking.Travel
             AppendJsonInt(builder, "correctedGridY", corrected.CorrectedGridY);
             AppendJsonInt(builder, "destinationGridX", corrected.DestinationGridX);
             AppendJsonInt(builder, "destinationGridY", corrected.DestinationGridY);
+            AppendJsonBool(builder, "hasWorldPosition", corrected.HasWorldPosition);
+            AppendJsonFloat(builder, "correctedWorldX", corrected.CorrectedWorldX);
+            AppendJsonFloat(builder, "correctedWorldY", corrected.CorrectedWorldY);
+            AppendJsonFloat(builder, "destinationWorldX", corrected.DestinationWorldX);
+            AppendJsonFloat(builder, "destinationWorldY", corrected.DestinationWorldY);
             AppendJsonFloat(builder, "worldUnitsPerTick", corrected.WorldUnitsPerTick);
             AppendJsonLong(builder, "expectedArrivalTick", corrected.ExpectedArrivalTick);
             AppendJsonString(builder, "reason", corrected.Reason);
@@ -320,6 +372,9 @@ namespace ShelteredAPI.Networking.Travel
             AppendJsonLong(builder, "arrivalTick", arrived.ArrivalTick);
             AppendJsonInt(builder, "arrivalGridX", arrived.ArrivalGridX);
             AppendJsonInt(builder, "arrivalGridY", arrived.ArrivalGridY);
+            AppendJsonBool(builder, "hasWorldPosition", arrived.HasWorldPosition);
+            AppendJsonFloat(builder, "arrivalWorldX", arrived.ArrivalWorldX);
+            AppendJsonFloat(builder, "arrivalWorldY", arrived.ArrivalWorldY);
             AppendJsonString(builder, "resultKind", arrived.ResultKind);
             AppendJsonString(builder, "resultPayloadJson", arrived.ResultPayloadJson);
             builder.Append("}");
@@ -342,6 +397,11 @@ namespace ShelteredAPI.Networking.Travel
             started.StartGridY = ReadIntAttribute(root, "startGridY", 0);
             started.DestinationGridX = ReadIntAttribute(root, "destinationGridX", 0);
             started.DestinationGridY = ReadIntAttribute(root, "destinationGridY", 0);
+            started.HasWorldPosition = ReadBoolAttribute(root, "hasWorldPosition", false);
+            started.StartWorldX = ReadFloatAttribute(root, "startWorldX", 0f);
+            started.StartWorldY = ReadFloatAttribute(root, "startWorldY", 0f);
+            started.DestinationWorldX = ReadFloatAttribute(root, "destinationWorldX", 0f);
+            started.DestinationWorldY = ReadFloatAttribute(root, "destinationWorldY", 0f);
             started.WorldUnitsPerTick = ReadFloatAttribute(root, "worldUnitsPerTick", 0f);
             started.ExpectedArrivalTick = ReadLongAttribute(root, "expectedArrivalTick", 0);
             started.SeedStreamName = ReadAttribute(root, "seedStreamName");
@@ -361,6 +421,11 @@ namespace ShelteredAPI.Networking.Travel
             corrected.CorrectedGridY = ReadIntAttribute(root, "correctedGridY", 0);
             corrected.DestinationGridX = ReadIntAttribute(root, "destinationGridX", 0);
             corrected.DestinationGridY = ReadIntAttribute(root, "destinationGridY", 0);
+            corrected.HasWorldPosition = ReadBoolAttribute(root, "hasWorldPosition", false);
+            corrected.CorrectedWorldX = ReadFloatAttribute(root, "correctedWorldX", 0f);
+            corrected.CorrectedWorldY = ReadFloatAttribute(root, "correctedWorldY", 0f);
+            corrected.DestinationWorldX = ReadFloatAttribute(root, "destinationWorldX", 0f);
+            corrected.DestinationWorldY = ReadFloatAttribute(root, "destinationWorldY", 0f);
             corrected.WorldUnitsPerTick = ReadFloatAttribute(root, "worldUnitsPerTick", 0f);
             corrected.ExpectedArrivalTick = ReadLongAttribute(root, "expectedArrivalTick", 0);
             corrected.Reason = ReadAttribute(root, "reason");
@@ -378,6 +443,9 @@ namespace ShelteredAPI.Networking.Travel
             arrived.ArrivalTick = ReadLongAttribute(root, "arrivalTick", 0);
             arrived.ArrivalGridX = ReadIntAttribute(root, "arrivalGridX", 0);
             arrived.ArrivalGridY = ReadIntAttribute(root, "arrivalGridY", 0);
+            arrived.HasWorldPosition = ReadBoolAttribute(root, "hasWorldPosition", false);
+            arrived.ArrivalWorldX = ReadFloatAttribute(root, "arrivalWorldX", 0f);
+            arrived.ArrivalWorldY = ReadFloatAttribute(root, "arrivalWorldY", 0f);
             arrived.ResultKind = ReadAttribute(root, "resultKind");
             arrived.ResultPayloadJson = ReadAttribute(root, "resultPayloadJson");
             return arrived;
@@ -463,6 +531,14 @@ namespace ShelteredAPI.Networking.Travel
                 : fallback;
         }
 
+        private static bool ReadBoolAttribute(XmlElement element, string attributeName, bool fallback)
+        {
+            bool parsed;
+            return bool.TryParse(ReadAttribute(element, attributeName), out parsed)
+                ? parsed
+                : fallback;
+        }
+
         private static string FormatInt(int value)
         {
             return value.ToString(CultureInfo.InvariantCulture);
@@ -476,6 +552,11 @@ namespace ShelteredAPI.Networking.Travel
         private static string FormatFloat(float value)
         {
             return value.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        private static string FormatBool(bool value)
+        {
+            return value ? "true" : "false";
         }
 
         private static void AppendJsonString(StringBuilder builder, string name, string value)
@@ -494,6 +575,12 @@ namespace ShelteredAPI.Networking.Travel
         {
             AppendJsonName(builder, name);
             builder.Append(value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendJsonBool(StringBuilder builder, string name, bool value)
+        {
+            AppendJsonName(builder, name);
+            builder.Append(value ? "true" : "false");
         }
 
         private static void AppendJsonFloat(StringBuilder builder, string name, float value)

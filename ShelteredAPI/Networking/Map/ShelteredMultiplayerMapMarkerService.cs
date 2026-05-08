@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Networking;
 using ShelteredAPI.Bunkers;
 using ShelteredAPI.Networking.Knowledge;
+using ShelteredAPI.Networking.Travel;
 using ShelteredAPI.Networking.World;
 using UnityEngine;
 
@@ -38,6 +39,8 @@ namespace ShelteredAPI.Networking.Map
             if (manager == null || manager.mapSourceSprite == null)
                 return markers;
 
+            RefreshPredictedExpeditionEntities(context.WorldTick);
+
             IList<ShelteredMapEntity> entities = ShelteredMapKnowledgeService.Instance.GetVisibleEntities(
                 context.LocalPlayerId,
                 ShelteredMapEntities.Registry);
@@ -58,6 +61,20 @@ namespace ShelteredAPI.Networking.Map
 
             markers.Sort(CompareMarkers);
             return markers;
+        }
+
+        private static void RefreshPredictedExpeditionEntities(long worldTick)
+        {
+            IShelteredTravelStateRegistry travelRegistry = ShelteredExpeditionTravelHookService.Instance.Registry;
+            if (travelRegistry == null)
+                return;
+
+            IList<ShelteredTravelState> active = travelRegistry.GetActive();
+            for (int i = 0; i < active.Count; i++)
+            {
+                if (active[i] != null)
+                    travelRegistry.Predict(active[i].TravelId, worldTick);
+            }
         }
 
         private static Vector3 ResolveBunkerMapPixels(

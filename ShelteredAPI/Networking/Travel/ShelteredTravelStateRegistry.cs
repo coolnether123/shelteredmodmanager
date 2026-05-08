@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ShelteredAPI.Networking.World;
+using UnityEngine;
 
 namespace ShelteredAPI.Networking.Travel
 {
@@ -48,7 +49,7 @@ namespace ShelteredAPI.Networking.Travel
                 _states[started.TravelId] = state;
             }
 
-            UpsertMapEntity(state, state.LastPredictedGridX, state.LastPredictedGridY);
+            UpsertMapEntity(state, ShelteredTravelPrediction.Predict(state.StartedEvent, state.LastAuthoritativeTick));
             return ShelteredTravelApplyResult.Applied;
         }
 
@@ -102,7 +103,7 @@ namespace ShelteredAPI.Networking.Travel
                 updated = state.Copy();
             }
 
-            UpsertMapEntity(updated, updated.LastPredictedGridX, updated.LastPredictedGridY);
+            UpsertMapEntity(updated, ShelteredTravelPrediction.Predict(updated.StartedEvent, updated.LastAuthoritativeTick));
             return ShelteredTravelApplyResult.Applied;
         }
 
@@ -134,7 +135,7 @@ namespace ShelteredAPI.Networking.Travel
                 updated = state.Copy();
             }
 
-            UpsertMapEntity(updated, updated.LastPredictedGridX, updated.LastPredictedGridY);
+            UpsertMapEntity(updated, CreateTerminalPrediction(updated, arrived));
             return ShelteredTravelApplyResult.Applied;
         }
 
@@ -149,6 +150,7 @@ namespace ShelteredAPI.Networking.Travel
             }
 
             ShelteredTravelPredictionResult prediction = ShelteredTravelPrediction.Predict(state.StartedEvent, worldTick);
+            ShelteredTravelState entityState = state.Copy();
             lock (_sync)
             {
                 ShelteredTravelState current;
@@ -158,10 +160,11 @@ namespace ShelteredAPI.Networking.Travel
                     current.LastPredictedGridY = prediction.GridY;
                     if (current.State == ShelteredTravelStateKind.Corrected)
                         current.State = ShelteredTravelStateKind.Active;
+                    entityState = current.Copy();
                 }
             }
 
-            UpsertMapEntity(state, prediction.GridX, prediction.GridY);
+            UpsertMapEntity(entityState, prediction);
             return prediction;
         }
 
@@ -208,7 +211,7 @@ namespace ShelteredAPI.Networking.Travel
                 {
                     ShelteredTravelState state = states[i];
                     if (state != null)
-                        UpsertMapEntity(state, state.LastPredictedGridX, state.LastPredictedGridY);
+                        UpsertMapEntity(state, CreateSnapshotPrediction(state));
                 }
             }
         }
@@ -258,10 +261,14 @@ namespace ShelteredAPI.Networking.Travel
                 _appliedEventIds.Add(normalized);
         }
 
-        private void UpsertMapEntity(ShelteredTravelState state, int gridX, int gridY)
+        private void UpsertMapEntity(ShelteredTravelState state, ShelteredTravelPredictionResult prediction)
         {
             if (_mapEntities == null || state == null || state.TravelId.Length == 0)
                 return;
+
+            int gridX = prediction != null ? prediction.GridX : state.LastPredictedGridX;
+            int gridY = prediction != null ? prediction.GridY : state.LastPredictedGridY;
+            long updatedWorldTick = prediction != null ? prediction.CurrentTick : state.LastAuthoritativeTick;
 
             ShelteredMapEntity entity = new ShelteredMapEntity();
             entity.EntityId = CreateMapEntityId(state.TravelId);
@@ -271,12 +278,93 @@ namespace ShelteredAPI.Networking.Travel
             entity.DisplayName = "Expedition " + state.PartyId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             entity.GridX = gridX;
             entity.GridY = gridY;
+            ApplyPredictedWorldPosition(entity, prediction);
             entity.IsOnline = IsActiveState(state.State);
             entity.IsVisible = true;
             entity.State = state.State.ToString();
-            entity.UpdatedWorldTick = state.LastAuthoritativeTick;
+            entity.UpdatedWorldTick = updatedWorldTick;
             entity.PayloadJson = "{\"travelId\":\"" + EscapeJson(state.TravelId) + "\"}";
             _mapEntities.Upsert(entity);
+        }
+
+        private static ShelteredTravelPredictionResult CreateSnapshotPrediction(ShelteredTravelState state)
+        {
+            if (state == null)
+                return null;
+
+            if (state.StartedEvent != null)
+                return ShelteredTravelPrediction.Predict(state.StartedEvent, state.LastAuthoritativeTick);
+
+            ShelteredTravelPredictionResult prediction = new ShelteredTravelPredictionResult();
+            prediction.CurrentTick = state.LastAuthoritativeTick;
+            prediction.GridX = state.LastPredictedGridX;
+            prediction.GridY = state.LastPredictedGridY;
+            prediction.IsComplete = !IsActiveState(state.State);
+            return prediction;
+        }
+
+        private static ShelteredTravelPredictionResult CreateTerminalPrediction(
+            ShelteredTravelState state,
+            ShelteredTravelArrivedEvent arrived)
+        {
+            if (arrived == null)
+                return CreateSnapshotPrediction(state);
+
+            ShelteredTravelPredictionResult prediction = new ShelteredTravelPredictionResult();
+            prediction.CurrentTick = arrived.ArrivalTick;
+            prediction.ExpectedArrivalTick = arrived.ArrivalTick;
+            prediction.IsComplete = true;
+            prediction.Progress01 = 1f;
+            prediction.GridX = arrived.ArrivalGridX;
+            prediction.GridY = arrived.ArrivalGridY;
+            prediction.HasWorldPosition = arrived.HasWorldPosition;
+            prediction.WorldX = arrived.ArrivalWorldX;
+            prediction.WorldY = arrived.ArrivalWorldY;
+            return prediction;
+        }
+
+        private static void ApplyPredictedWorldPosition(
+            ShelteredMapEntity entity,
+            ShelteredTravelPredictionResult prediction)
+        {
+            if (entity == null || prediction == null)
+                return;
+
+            if (prediction.HasWorldPosition)
+            {
+                entity.WorldPosition = new Vector2(prediction.WorldX, prediction.WorldY);
+                entity.MapPixels = ResolveMapPixels(entity.WorldPosition);
+                return;
+            }
+
+            Vector2 worldPosition;
+            if (TryResolveGridWorldPosition(prediction.GridX, prediction.GridY, out worldPosition))
+            {
+                entity.WorldPosition = worldPosition;
+                entity.MapPixels = ResolveMapPixels(worldPosition);
+            }
+        }
+
+        private static bool TryResolveGridWorldPosition(int gridX, int gridY, out Vector2 worldPosition)
+        {
+            worldPosition = Vector2.zero;
+            if (ExpeditionMap.Instance == null)
+                return false;
+
+            worldPosition = ExpeditionMap.Instance.GetGridRefCentreWorldPos(new ExpeditionMap.GridRef(gridX, gridY));
+            return true;
+        }
+
+        private static Vector3 ResolveMapPixels(Vector2 worldPosition)
+        {
+            ExplorationManager manager = ExplorationManager.Instance;
+            if (manager == null)
+                return Vector3.zero;
+
+            return new Vector3(
+                manager.WorldToMapPixelsX(worldPosition.x),
+                manager.WorldToMapPixelsY(worldPosition.y),
+                0f);
         }
 
         private static ShelteredTravelState CreateStateFromCorrection(ShelteredTravelCorrectedEvent corrected)

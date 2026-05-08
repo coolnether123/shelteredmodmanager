@@ -97,7 +97,8 @@ namespace ShelteredAPI.Networking.Travel
                     ShelteredTravelContractCodec.ToGameplayEvent(corrected));
 
             return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(
-                ShelteredTravelContractCodec.ToGameplayEvent(corrected));
+                ShelteredTravelContractCodec.ToGameplayEvent(
+                    NormalizeAuthoritativeCorrected(corrected, context)));
         }
 
         public bool PublishTravelArrived(ShelteredTravelArrivedEvent arrived)
@@ -114,7 +115,8 @@ namespace ShelteredAPI.Networking.Travel
                     ShelteredTravelContractCodec.ToGameplayEvent(arrived));
 
             return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(
-                ShelteredTravelContractCodec.ToGameplayEvent(arrived));
+                ShelteredTravelContractCodec.ToGameplayEvent(
+                    NormalizeAuthoritativeArrived(arrived, context)));
         }
 
         public bool BroadcastAuthoritativeTravelStarted(ShelteredTravelStartedEvent started)
@@ -273,14 +275,18 @@ namespace ShelteredAPI.Networking.Travel
             if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelCorrected, StringComparison.Ordinal))
             {
                 context.Accept(ShelteredTravelContractCodec.ToGameplayEvent(
-                    ShelteredTravelContractCodec.CorrectedFromGameplayEvent(context.GameplayEvent)));
+                    NormalizeAuthoritativeCorrected(
+                        ShelteredTravelContractCodec.CorrectedFromGameplayEvent(context.GameplayEvent),
+                        sessionContext)));
                 return;
             }
 
             if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.TravelArrived, StringComparison.Ordinal))
             {
                 context.Accept(ShelteredTravelContractCodec.ToGameplayEvent(
-                    ShelteredTravelContractCodec.ArrivedFromGameplayEvent(context.GameplayEvent)));
+                    NormalizeAuthoritativeArrived(
+                        ShelteredTravelContractCodec.ArrivedFromGameplayEvent(context.GameplayEvent),
+                        sessionContext)));
             }
         }
 
@@ -367,6 +373,49 @@ namespace ShelteredAPI.Networking.Travel
                 authoritative.SeedStreamName = CreateSeedStreamName(context.SessionId, authoritative.TravelId);
 
             return authoritative;
+        }
+
+        private static ShelteredTravelCorrectedEvent NormalizeAuthoritativeCorrected(
+            ShelteredTravelCorrectedEvent corrected,
+            ShelteredMultiplayerSessionContext context)
+        {
+            ShelteredTravelCorrectedEvent authoritative = corrected != null
+                ? corrected.Copy()
+                : new ShelteredTravelCorrectedEvent();
+
+            long acceptedTick = ResolveAuthoritativeTick(context);
+            long remainingDuration = ResolvePositiveDuration(
+                authoritative.CorrectionTick,
+                authoritative.ExpectedArrivalTick);
+            authoritative.CorrectionTick = acceptedTick;
+            if (remainingDuration > 0)
+                authoritative.ExpectedArrivalTick = acceptedTick + remainingDuration;
+            else if (authoritative.ExpectedArrivalTick < acceptedTick)
+                authoritative.ExpectedArrivalTick = acceptedTick;
+
+            return authoritative;
+        }
+
+        private static ShelteredTravelArrivedEvent NormalizeAuthoritativeArrived(
+            ShelteredTravelArrivedEvent arrived,
+            ShelteredMultiplayerSessionContext context)
+        {
+            ShelteredTravelArrivedEvent authoritative = arrived != null
+                ? arrived.Copy()
+                : new ShelteredTravelArrivedEvent();
+
+            authoritative.ArrivalTick = ResolveAuthoritativeTick(context);
+            return authoritative;
+        }
+
+        private static long ResolveAuthoritativeTick(ShelteredMultiplayerSessionContext context)
+        {
+            return context != null && context.WorldTick > 0 ? context.WorldTick : 0;
+        }
+
+        private static long ResolvePositiveDuration(long startTick, long expectedArrivalTick)
+        {
+            return expectedArrivalTick > startTick ? expectedArrivalTick - startTick : 0;
         }
 
         private static string CreateTravelId(

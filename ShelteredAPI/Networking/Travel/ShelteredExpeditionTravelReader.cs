@@ -71,7 +71,7 @@ namespace ShelteredAPI.Networking.Travel
             int partyId = party.id;
             long startTick = context.WorldTick;
             float worldUnitsPerTick = CalculateWorldUnitsPerTick(party, context);
-            long expectedArrivalTick = CalculateExpectedArrivalTick(route, party, startTick, context);
+            long expectedArrivalTick = CalculateExpectedArrivalTick(route, party, start, destination, startTick, context);
 
             ShelteredTravelStartedEvent started = new ShelteredTravelStartedEvent();
             started.TravelId = CreateTravelId(context, partyId, startTick);
@@ -83,6 +83,11 @@ namespace ShelteredAPI.Networking.Travel
             started.StartGridY = startGrid.y;
             started.DestinationGridX = destinationGrid.x;
             started.DestinationGridY = destinationGrid.y;
+            started.HasWorldPosition = true;
+            started.StartWorldX = start.x;
+            started.StartWorldY = start.y;
+            started.DestinationWorldX = destination.x;
+            started.DestinationWorldY = destination.y;
             started.WorldUnitsPerTick = worldUnitsPerTick;
             started.ExpectedArrivalTick = expectedArrivalTick;
             started.SeedStreamName = CreateSeedStreamName(context.SessionId, started.TravelId);
@@ -118,6 +123,11 @@ namespace ShelteredAPI.Networking.Travel
             corrected.CorrectedGridY = currentGrid.y;
             corrected.DestinationGridX = destinationGrid.x;
             corrected.DestinationGridY = destinationGrid.y;
+            corrected.HasWorldPosition = true;
+            corrected.CorrectedWorldX = party.location.x;
+            corrected.CorrectedWorldY = party.location.y;
+            corrected.DestinationWorldX = destination.x;
+            corrected.DestinationWorldY = destination.y;
             corrected.WorldUnitsPerTick = CalculateWorldUnitsPerTick(party, context);
             corrected.ExpectedArrivalTick = correctionTick + CalculateTicksForDistance(Vector2.Distance(party.location, destination), party, context);
             corrected.Reason = reason ?? ShelteredTravelCorrectionReasons.HostCorrection;
@@ -146,6 +156,9 @@ namespace ShelteredAPI.Networking.Travel
             arrived.ArrivalTick = arrivalTick;
             arrived.ArrivalGridX = arrivalGrid.x;
             arrived.ArrivalGridY = arrivalGrid.y;
+            arrived.HasWorldPosition = true;
+            arrived.ArrivalWorldX = party.location.x;
+            arrived.ArrivalWorldY = party.location.y;
             arrived.ResultKind = string.IsNullOrEmpty(resultKind) ? ShelteredTravelArrivalKinds.Arrived : resultKind;
             arrived.ResultPayloadJson = "{\"partyId\":" + party.id.ToString(CultureInfo.InvariantCulture) + "}";
 
@@ -202,9 +215,7 @@ namespace ShelteredAPI.Networking.Travel
         {
             if (route == null || route.Count == 0)
                 return Vector2.zero;
-            if (route.Count > 2 && Vector2.Distance(route[0], route[route.Count - 1]) <= Mathf.Epsilon)
-                return route[route.Count - 2];
-            return route[route.Count - 1];
+            return route[ResolvePrimaryDestinationIndex(route)];
         }
 
         private static Vector2 ResolveCorrectionDestination(ExplorationParty party, string reason)
@@ -232,14 +243,47 @@ namespace ShelteredAPI.Networking.Travel
         private static long CalculateExpectedArrivalTick(
             IList<Vector2> route,
             ExplorationParty party,
+            Vector2 start,
+            Vector2 destination,
             long startTick,
             ShelteredMultiplayerSessionContext context)
         {
-            float distance = 0f;
-            for (int i = 1; route != null && i < route.Count; i++)
-                distance += Vector2.Distance(route[i - 1], route[i]);
-
+            float distance = CalculateDistanceToDestination(route, start, destination);
             return startTick + CalculateTicksForDistance(distance, party, context);
+        }
+
+        private static int ResolvePrimaryDestinationIndex(IList<Vector2> route)
+        {
+            if (route == null || route.Count == 0)
+                return 0;
+            if (route.Count > 2 && Vector2.Distance(route[0], route[route.Count - 1]) <= Mathf.Epsilon)
+                return route.Count - 2;
+            return route.Count - 1;
+        }
+
+        private static float CalculateDistanceToDestination(IList<Vector2> route, Vector2 start, Vector2 destination)
+        {
+            if (route == null || route.Count == 0)
+                return Vector2.Distance(start, destination);
+
+            int destinationIndex = ResolvePrimaryDestinationIndex(route);
+            if (destinationIndex < 0 || destinationIndex >= route.Count)
+                return Vector2.Distance(start, destination);
+
+            float distance = 0f;
+            Vector2 previous = start;
+            int firstRouteIndex = Vector2.Distance(start, route[0]) <= Mathf.Epsilon ? 1 : 0;
+
+            for (int i = firstRouteIndex; i <= destinationIndex; i++)
+            {
+                distance += Vector2.Distance(previous, route[i]);
+                previous = route[i];
+            }
+
+            if (Vector2.Distance(previous, destination) > Mathf.Epsilon)
+                distance += Vector2.Distance(previous, destination);
+
+            return distance;
         }
 
         private static long CalculateTicksForDistance(float distanceWorldUnits, ExplorationParty party, ShelteredMultiplayerSessionContext context)
