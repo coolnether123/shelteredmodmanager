@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ShelteredAPI.Networking;
 using ShelteredAPI.Networking.Travel;
 
 namespace ShelteredAPI.Networking.Tests
@@ -10,6 +11,9 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("Travel prediction is deterministic for the same start and tick", SameStartAndTickPredictSamePosition));
             tests.Add(new TestCase("Travel prediction clamps ticks before start", BeforeStartTickClampsToStart));
             tests.Add(new TestCase("Travel prediction clamps after arrival", AfterArrivalClampsToDestination));
+            tests.Add(new TestCase("Travel prediction is stateless across chunked updates", ChunkedUpdatesDoNotChangeFinalPosition));
+            tests.Add(new TestCase("Travel prediction derives duration from speed when needed", MissingArrivalTickUsesWorldUnitsPerTick));
+            tests.Add(new TestCase("Travel prediction ignores local bunker intensity", LocalBunkerIntensityDoesNotAffectPrediction));
             tests.Add(new TestCase("Travel correction creates a new start state from correction tick", CorrectionCreatesNewStartState));
         }
 
@@ -53,6 +57,76 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.Equal(true, result.IsComplete, "Prediction after arrival should be complete.");
         }
 
+        private static void ChunkedUpdatesDoNotChangeFinalPosition()
+        {
+            ShelteredTravelStartedEvent started = CreateStarted();
+            ShelteredTravelPrediction.Predict(started, 12);
+            ShelteredTravelPrediction.Predict(started, 18);
+            ShelteredTravelPrediction.Predict(started, 25);
+
+            ShelteredTravelPredictionResult chunkedFinal = ShelteredTravelPrediction.Predict(started, 30);
+            ShelteredTravelPredictionResult directFinal = ShelteredTravelPrediction.Predict(started, 30);
+
+            TestAssert.Equal(directFinal.GridX, chunkedFinal.GridX,
+                "Frequent prediction calls must not alter final route position.");
+            TestAssert.Equal(directFinal.GridY, chunkedFinal.GridY,
+                "Frequent prediction calls must not alter final route position.");
+            TestAssert.Near(directFinal.Progress01, chunkedFinal.Progress01, 0.0001f,
+                "Prediction progress should be derived from ticks, not previous update chunks.");
+        }
+
+        private static void MissingArrivalTickUsesWorldUnitsPerTick()
+        {
+            ShelteredTravelStartedEvent started = CreateStarted();
+            started.ExpectedArrivalTick = 0;
+            started.StartTick = 4;
+            started.StartGridX = 0;
+            started.StartGridY = 0;
+            started.DestinationGridX = 10;
+            started.DestinationGridY = 0;
+            started.WorldUnitsPerTick = 2f;
+
+            ShelteredTravelPredictionResult halfway = ShelteredTravelPrediction.Predict(started, 7);
+            ShelteredTravelPredictionResult arrived = ShelteredTravelPrediction.Predict(started, 9);
+
+            TestAssert.Equal((long)9, halfway.ExpectedArrivalTick,
+                "Missing arrival ticks should be derived from route distance and speed.");
+            TestAssert.Equal(6, halfway.GridX,
+                "Prediction should advance according to derived tick duration.");
+            TestAssert.Equal(true, arrived.IsComplete,
+                "Derived arrival tick should mark terminal prediction at the destination tick.");
+        }
+
+        private static void LocalBunkerIntensityDoesNotAffectPrediction()
+        {
+            ShelteredTravelStartedEvent started = CreateStarted();
+            try
+            {
+                ShelteredMultiplayerTimePolicy.SetLocalBunkerIntensityMode(
+                    ShelteredMultiplayerLocalBunkerIntensityMode.Careful,
+                    "travel-prediction-test");
+                ShelteredTravelPredictionResult careful = ShelteredTravelPrediction.Predict(started, 20);
+
+                ShelteredMultiplayerTimePolicy.SetLocalBunkerIntensityMode(
+                    ShelteredMultiplayerLocalBunkerIntensityMode.Rush,
+                    "travel-prediction-test");
+                ShelteredTravelPredictionResult rush = ShelteredTravelPrediction.Predict(started, 20);
+
+                TestAssert.Equal(careful.GridX, rush.GridX,
+                    "Local bunker speed mode must not change shared travel prediction.");
+                TestAssert.Equal(careful.GridY, rush.GridY,
+                    "Local bunker speed mode must not change shared travel prediction.");
+                TestAssert.Near(careful.Progress01, rush.Progress01, 0.0001f,
+                    "Local bunker speed mode must not change shared travel progress.");
+            }
+            finally
+            {
+                ShelteredMultiplayerTimePolicy.SetLocalBunkerIntensityMode(
+                    ShelteredMultiplayerLocalBunkerIntensityMode.Normal,
+                    "travel-prediction-test-cleanup");
+            }
+        }
+
         private static void CorrectionCreatesNewStartState()
         {
             ShelteredTravelStartedEvent started = CreateStarted();
@@ -78,6 +152,8 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.Equal(30, correctedStart.DestinationGridY, "Corrected start should use updated destination grid Y.");
             TestAssert.Near(1.5f, correctedStart.WorldUnitsPerTick, 0.0001f, "Corrected start should use updated speed.");
             TestAssert.Equal((long)40, correctedStart.ExpectedArrivalTick, "Corrected start should use updated arrival tick.");
+            TestAssert.Equal(false, correctedStart.HasWorldPosition,
+                "Grid-only corrections should not keep stale world interpolation points.");
 
             ShelteredTravelPredictionResult prediction =
                 ShelteredTravelPrediction.Predict(correctedStart, 16);

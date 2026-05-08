@@ -74,6 +74,7 @@
     <Compile Include="FactionBridgeNullTests.cs" />
     <Compile Include="ShelteredCompatibilityHashTests.cs" />
     <Compile Include="ShelteredWorldClockTests.cs" />
+    <Compile Include="ShelteredWorldTimeSideEffectTests.cs" />
     <Compile Include="ShelteredWorldEventJournalTests.cs" />
     <Compile Include="ShelteredMultiplayerWorldPersistenceTests.cs" />
     <Compile Include="ShelteredMultiplayerCatchupTests.cs" />

@@ -28,6 +28,14 @@ namespace ModAPI.Networking.Tests
             "Assembly_CSharp",
             "HarmonyLib",
             "ShelteredAPI",
+            "ShelteredBunker",
+            "ShelteredLocation",
+            "ShelteredMultiplayer",
+            "ShelteredRaid",
+            "ShelteredSettlement",
+            "ShelteredTrade",
+            "ShelteredTravel",
+            "ShelteredWorld",
             "UnityEngine"
         };
 
@@ -39,6 +47,7 @@ namespace ModAPI.Networking.Tests
             "EncounterManager",
             "Expedition",
             "ExpeditionMap",
+            "ExplorationManager",
             "ExplorationParty",
             "Faction",
             "FamilyManager",

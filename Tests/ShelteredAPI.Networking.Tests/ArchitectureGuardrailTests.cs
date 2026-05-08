@@ -16,10 +16,14 @@ namespace ShelteredAPI.Networking.Tests
         public static void Register(List<TestCase> tests)
         {
             tests.Add(new TestCase("Architecture_PublicSurfaceMatchesBaseline", PublicSurfaceMatchesBaseline));
-            tests.Add(new TestCase("Architecture_NetworkSessionSessionIdReadsStayApproved", NetworkSessionSessionIdReadsStayApproved));
-            tests.Add(new TestCase("Architecture_GameplayDateTimeUseStaysAllowlisted", GameplayDateTimeUseStaysAllowlisted));
+            tests.Add(new TestCase("Architecture_GameplayMustNotReadNetworkSessionSessionIdOutsideStartupBridges", NetworkSessionSessionIdReadsStayApproved));
+            tests.Add(new TestCase("Architecture_WorldTickAuthorityMustNotUseDateTimeUtcNow", WorldTickAuthorityMustNotUseDateTimeUtcNow));
+            tests.Add(new TestCase("Architecture_DateTimeUseInNetworkingMustStayDiagnosticsOnly", GameplayDateTimeUseStaysAllowlisted));
+            tests.Add(new TestCase("Architecture_HostClockSamplesMustNotBecomePeriodicBroadcastLoop", HostClockSamplesMustNotBecomePeriodicBroadcastLoop));
+            tests.Add(new TestCase("Architecture_SharedWorldSystemsMustNotReadUnityDeltaTimeOutsideRuntimeBridge", SharedWorldDeterministicSystemsMustNotReadUnityDeltaTimeOutsideRuntimeBridge));
+            tests.Add(new TestCase("Architecture_FastSlowPolicyMustNotMutateSharedWorldTick", FastSlowPolicyMustNotMutateSharedWorldTick));
             tests.Add(new TestCase("Architecture_GameplayRandomUseRequiresDeterministicStreams", GameplayRandomUseRequiresDeterministicStreams));
-            tests.Add(new TestCase("Architecture_NetworkingHasNoUnsafeSilentCatches", NetworkingHasNoUnsafeSilentCatches));
+            tests.Add(new TestCase("Architecture_NetworkingCatchBlocksMustBeLoggedOrDocumented", NetworkingHasNoUnsafeSilentCatches));
             tests.Add(new TestCase("Architecture_SetupDtosPopulateCoordinatorContext", SetupDtosPopulateCoordinatorContext));
             tests.Add(new TestCase("Architecture_EventRegistriesKeepIdempotencyIndexes", EventRegistriesKeepIdempotencyIndexes));
         }
@@ -46,7 +50,9 @@ namespace ShelteredAPI.Networking.Tests
         private static void NetworkSessionSessionIdReadsStayApproved()
         {
             Dictionary<string, int> allowed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            // Startup connection bridge only. Sheltered gameplay identity must come from the coordinator context.
             allowed["ShelteredAPI/Networking/MultiplayerConnectionTestService.cs"] = 1;
+            // Temporary setup wire bridge: resolves the first coordinator context before gameplay systems are active.
             allowed["ShelteredAPI/Networking/ShelteredMultiplayerSetupService.cs"] = 2;
 
             List<string> findings = FindCountedFindings(
@@ -58,15 +64,42 @@ namespace ShelteredAPI.Networking.Tests
                 "Sheltered gameplay code must read identity from ShelteredMultiplayerSessionCoordinator/ShelteredMultiplayerSessionContext. Do not add direct NetworkSession.SessionId reads outside approved startup integration points.");
         }
 
+        private static void WorldTickAuthorityMustNotUseDateTimeUtcNow()
+        {
+            string repoRoot = FindRepoRoot();
+            Regex pattern = new Regex(@"\bDateTime\.(?:UtcNow|Now)\b");
+            List<string> findings = new List<string>();
+
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "AdvanceFixedSteps", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "AdvanceRuntimeBridgeDelta", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "AdvanceFixedDelta", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "ApplyRemoteSample", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "ApplyRemoteSampleDetailed", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "TryApplyAuthoritativeEventDetailed", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "Advance", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs", "Reset", pattern, findings);
+
+            AssertNoFindings(
+                findings,
+                "WorldTick authority must be derived from session context, accepted events, and deterministic fixed-tick inputs. DateTime is allowed only for diagnostic timestamps and sample-age reporting.");
+        }
+
         private static void GameplayDateTimeUseStaysAllowlisted()
         {
             Dictionary<string, int> allowed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            // Connection panel status timestamps are display-only.
             allowed["ShelteredAPI/Networking/MultiplayerConnectionTestService.cs"] = 1;
+            // Diagnostics age formatting is display-only.
             allowed["ShelteredAPI/Networking/MultiplayerDiagnosticsFormatter.cs"] = 1;
+            // Persistence timestamps describe snapshot metadata, not simulation time.
             allowed["ShelteredAPI/Networking/Persistence/ShelteredMultiplayerWorldSnapshot.cs"] = 1;
+            // Save sync timestamps identify files/messages and must not drive shared world ticks.
             allowed["ShelteredAPI/Networking/ShelteredMultiplayerSaveSyncService.cs"] = 3;
+            // Temporary Dev-1.4 bridge: clock samples carry diagnostic UTC metadata only, never tick authority.
             allowed["ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs"] = 4;
+            // Temporary Dev-1.4 bridge: missing sample timestamps are normalized for diagnostics only.
             allowed["ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClockContracts.cs"] = 1;
+            // Event CreatedUtc is journal metadata; WorldTick comes from the coordinator.
             allowed["ShelteredAPI/Networking/World/ShelteredWorldEventJournal.cs"] = 1;
 
             Regex pattern = new Regex(@"\bDateTime\.(?:UtcNow|Now)\b");
@@ -77,6 +110,58 @@ namespace ShelteredAPI.Networking.Tests
             AssertNoFindings(
                 findings,
                 "DateTime is allowed for diagnostics/logging/sample timestamps only. Gameplay decisions should use coordinator world tick or deterministic event data.");
+        }
+
+        private static void HostClockSamplesMustNotBecomePeriodicBroadcastLoop()
+        {
+            string repoRoot = FindRepoRoot();
+            List<string> findings = new List<string>();
+            string sourceRoot = Path.Combine(repoRoot, Path.Combine("ShelteredAPI", "Networking"));
+
+            AddDisallowedBroadcastLocalSampleCallFindings(sourceRoot, findings);
+            AddDisallowedWorldClockSampleBroadcastFindings(sourceRoot, findings);
+
+            AssertNoFindings(
+                findings,
+                "World.ClockSample is a rare correction/diagnostic event. Do not call BroadcastLocalSample or broadcast clock samples from runtime/update loops as the primary clock.");
+        }
+
+        private static void SharedWorldDeterministicSystemsMustNotReadUnityDeltaTimeOutsideRuntimeBridge()
+        {
+            Dictionary<string, int> allowed = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            // Temporary Dev-1.4 bridge until the signed-off fixed-step scheduler replaces Unity frame delta.
+            allowed["ShelteredAPI/Networking/ShelteredMultiplayerRuntimeDriver.cs"] = 1;
+
+            Regex pattern = new Regex(@"\bTime\.deltaTime\b");
+            List<string> findings = FindCountedFindings(
+                FindSourceOccurrences(Path.Combine(FindRepoRoot(), Path.Combine("ShelteredAPI", "Networking")), pattern),
+                allowed);
+
+            AssertNoFindings(
+                findings,
+                "Shared-world deterministic systems must not read Unity Time.deltaTime directly. Route temporary runtime bridge deltas through the approved scheduler/correction service only.");
+        }
+
+        private static void FastSlowPolicyMustNotMutateSharedWorldTick()
+        {
+            string repoRoot = FindRepoRoot();
+            Regex pattern = new Regex(@"\b(?:WorldTick|SetWorldTick|AdvanceFixedDelta|ShelteredMultiplayerWorldClock)\b");
+            List<string> findings = new List<string>();
+
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePolicy.cs", "SetLocalBunkerIntensityMode", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePolicy.cs", "TryHandleFastForward", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePolicy.cs", "TryHandleSlowDown", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePolicy.cs", "IsFastModeActive", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePolicy.cs", "IsSlowModeActive", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePolicy.cs", "ApplyTravelDistance", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePatches.cs", "StartFastForwardPrefix", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePatches.cs", "EndFastForwardPrefix", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePatches.cs", "StartSlowDownPrefix", pattern, findings);
+            RequireMethodDoesNotContain(repoRoot, "ShelteredAPI/Networking/ShelteredMultiplayerTimePatches.cs", "EndSlowDownPrefix", pattern, findings);
+
+            AssertNoFindings(
+                findings,
+                "Fast/slow policy is local bunker intensity only. It must not read, write, advance, or otherwise affect shared WorldTick.");
         }
 
         private static void GameplayRandomUseRequiresDeterministicStreams()
@@ -192,6 +277,69 @@ namespace ShelteredAPI.Networking.Tests
             return entries;
         }
 
+        private static void RequireMethodDoesNotContain(
+            string repoRoot,
+            string relativePath,
+            string methodName,
+            Regex pattern,
+            List<string> findings)
+        {
+            string path = Path.Combine(repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            string text = File.ReadAllText(path);
+            int blockStartIndex;
+            string methodBlock = ExtractMethodBlock(text, methodName, out blockStartIndex);
+            if (methodBlock.Length == 0)
+            {
+                findings.Add(relativePath + " should contain method '" + methodName + "'.");
+                return;
+            }
+
+            MatchCollection matches = pattern.Matches(methodBlock);
+            for (int i = 0; i < matches.Count; i++)
+            {
+                int lineNumber = CountLinesBefore(text, blockStartIndex + matches[i].Index) + 1;
+                findings.Add(relativePath + ":" + lineNumber + " contains " + matches[i].Value + " inside " + methodName);
+            }
+        }
+
+        private static string ExtractMethodBlock(string text, string methodName, out int blockStartIndex)
+        {
+            blockStartIndex = -1;
+            Regex methodPattern = new Regex(
+                @"(?m)^\s*(?:public|private|internal|protected)\s+"
+                + @"(?:(?:static|virtual|override|sealed|new|extern|async)\s+)*"
+                + @"[A-Za-z_][A-Za-z0-9_<>,\[\]\.?]*\s+"
+                + Regex.Escape(methodName)
+                + @"\s*\(");
+            Match match = methodPattern.Match(text);
+            while (match.Success)
+            {
+                int openBrace = text.IndexOf('{', match.Index);
+                if (openBrace < 0)
+                    return string.Empty;
+
+                int depth = 0;
+                for (int i = openBrace; i < text.Length; i++)
+                {
+                    if (text[i] == '{')
+                        depth++;
+                    else if (text[i] == '}')
+                    {
+                        depth--;
+                        if (depth == 0)
+                        {
+                            blockStartIndex = openBrace;
+                            return text.Substring(openBrace, i - openBrace + 1);
+                        }
+                    }
+                }
+
+                match = match.NextMatch();
+            }
+
+            return string.Empty;
+        }
+
         private static List<Occurrence> FindDirectNetworkSessionSessionIdReads(string sourceRoot)
         {
             Regex declarationPattern = new Regex(@"\bNetworkSession\s+([A-Za-z_][A-Za-z0-9_]*)");
@@ -250,6 +398,91 @@ namespace ShelteredAPI.Networking.Tests
             }
 
             return findings;
+        }
+
+        private static void AddDisallowedBroadcastLocalSampleCallFindings(string sourceRoot, List<string> findings)
+        {
+            Regex pattern = new Regex(@"\bBroadcastLocalSample\s*\(");
+            string[] files = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories);
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                string file = files[i];
+                if (IsGeneratedPath(file))
+                    continue;
+
+                string relativePath = ToRepoRelativePath(file);
+                string[] lines = File.ReadAllLines(file);
+                for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+                {
+                    if (!pattern.IsMatch(lines[lineIndex]))
+                        continue;
+
+                    if (relativePath == "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs"
+                        && lines[lineIndex].IndexOf("bool BroadcastLocalSample", StringComparison.Ordinal) >= 0)
+                    {
+                        continue;
+                    }
+
+                    findings.Add(relativePath + ":" + (lineIndex + 1) + " calls BroadcastLocalSample");
+                }
+            }
+        }
+
+        private static void AddDisallowedWorldClockSampleBroadcastFindings(string sourceRoot, List<string> findings)
+        {
+            string[] files = Directory.GetFiles(sourceRoot, "*.cs", SearchOption.AllDirectories);
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                string file = files[i];
+                if (IsGeneratedPath(file))
+                    continue;
+
+                string relativePath = ToRepoRelativePath(file);
+                if (relativePath == "ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs")
+                    continue;
+
+                string[] lines = File.ReadAllLines(file);
+                for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+                {
+                    if (lines[lineIndex].IndexOf("BroadcastAuthoritative", StringComparison.Ordinal) < 0)
+                        continue;
+
+                    if (NearbyLinesContain(lines, lineIndex + 1, "ShelteredWorldClockSampleCodec")
+                        || NearbyLinesContain(lines, lineIndex + 1, "WorldClockSample"))
+                    {
+                        findings.Add(relativePath + ":" + (lineIndex + 1) + " broadcasts a World.ClockSample");
+                    }
+                }
+            }
+        }
+
+        private static bool NearbyLinesContain(string[] lines, int lineNumber, string value)
+        {
+            int start = Math.Max(1, lineNumber - 4);
+            int end = Math.Min(lines.Length, lineNumber + 4);
+            for (int i = start; i <= end; i++)
+            {
+                if (lines[i - 1].IndexOf(value, StringComparison.Ordinal) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void AddFileOccurrenceFindings(string repoRoot, string relativePath, Regex pattern, List<string> findings)
+        {
+            string path = Path.Combine(repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            string[] lines = File.ReadAllLines(path);
+            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+            {
+                Match match = pattern.Match(lines[lineIndex]);
+                if (match.Success)
+                    findings.Add(relativePath + ":" + (lineIndex + 1) + " contains " + match.Value);
+            }
         }
 
         private static void AddUnsafeSilentCatchFindings(string sourceRoot, List<string> findings)

@@ -14,6 +14,8 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("Travel registry ignores duplicate event ids", DuplicateEventIdIgnored));
             tests.Add(new TestCase("Travel registry ignores out-of-order corrections", OlderCorrectionIgnored));
             tests.Add(new TestCase("Travel replay rewinds only corrected travel entity", ReplayCorrectionOnlyUpdatesTargetTravel));
+            tests.Add(new TestCase("Travel arrival marks terminal state", ArrivalMarksTerminalState));
+            tests.Add(new TestCase("Travel registry map entity receives predicted position", MapEntityReceivesPredictedPosition));
             tests.Add(new TestCase("Travel registry map entity remains knowledge filtered", TravelMapEntityRequiresKnowledgeToDisplay));
             tests.Add(new TestCase("Travel crossing detects two active crossing expeditions", CrossingDetectorCreatesCandidate));
             tests.Add(new TestCase("Travel crossing ignores same player expeditions", CrossingDetectorIgnoresSamePlayer));
@@ -77,6 +79,43 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.Equal(0, replayed.GridY, "Replay should rewind corrected travel to corrected Y.");
             TestAssert.Equal(5, untouched.GridX, "Uncorrected travel should keep original prediction.");
             TestAssert.Equal(10, untouched.GridY, "Uncorrected travel should keep original Y.");
+        }
+
+        private static void ArrivalMarksTerminalState()
+        {
+            ShelteredTravelStateRegistry registry = new ShelteredTravelStateRegistry(null);
+            registry.ApplyTravelStarted(CreateStarted("travel-1", 0, 0, 10, 0), "event-1");
+
+            ShelteredTravelArrivedEvent arrived = new ShelteredTravelArrivedEvent();
+            arrived.TravelId = "travel-1";
+            arrived.ArrivalTick = 10;
+            arrived.ArrivalGridX = 10;
+            arrived.ArrivalGridY = 0;
+            arrived.ResultKind = ShelteredTravelArrivalKinds.ReturnedHome;
+
+            ShelteredTravelApplyResult applied = registry.ApplyTravelArrived(arrived, "event-2");
+
+            TestAssert.Equal(true, applied.AppliedEvent, "Arrival event should apply.");
+            TestAssert.Equal(0, registry.GetActive().Count,
+                "Arrived travel should not remain in the active prediction set.");
+        }
+
+        private static void MapEntityReceivesPredictedPosition()
+        {
+            ShelteredMapEntityRegistry map = new ShelteredMapEntityRegistry(delegate { return 0; });
+            ShelteredTravelStateRegistry registry = new ShelteredTravelStateRegistry(map);
+            registry.ApplyTravelStarted(CreateStarted("travel-1", 0, 0, 10, 0), "event-1");
+
+            registry.Predict("travel-1", 6);
+
+            ShelteredMapEntity entity = map.Get(ShelteredTravelStateRegistry.CreateMapEntityId("travel-1"));
+            TestAssert.True(entity != null, "Prediction should upsert a map entity for the expedition.");
+            TestAssert.Equal(6, entity.GridX,
+                "Map entity grid X should come from the WorldTick prediction.");
+            TestAssert.Equal(0, entity.GridY,
+                "Map entity grid Y should come from the WorldTick prediction.");
+            TestAssert.Equal((long)6, entity.UpdatedWorldTick,
+                "Map entity update tick should be the prediction tick, not only the route-start tick.");
         }
 
         private static void TravelMapEntityRequiresKnowledgeToDisplay()

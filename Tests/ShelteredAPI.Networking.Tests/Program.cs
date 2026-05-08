@@ -17,6 +17,7 @@ namespace ShelteredAPI.Networking.Tests
             ShelteredMultiplayerSetupServiceTests.Register(tests);
             ShelteredWorldEventJournalTests.Register(tests);
             ShelteredWorldClockTests.Register(tests);
+            ShelteredWorldTimeSideEffectTests.Register(tests);
             ShelteredCompatibilityHashTests.Register(tests);
             ShelteredMapEntityRegistryTests.Register(tests);
             ShelteredMapKnowledgeTests.Register(tests);
