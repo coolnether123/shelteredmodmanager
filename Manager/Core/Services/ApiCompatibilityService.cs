@@ -14,11 +14,31 @@ namespace Manager.Core.Services
         private const string ShelteredApiName = "ShelteredAPI";
 
         private readonly Dictionary<string, string> _installedVersions;
+        private readonly HashSet<string> _knownApiNames;
+
         public ApiCompatibilityService(Dictionary<string, string> installedVersions)
+            : this(installedVersions, new string[] { ModApiName, ShelteredApiName, "ModAPI.Networking" })
+        {
+        }
+
+        public ApiCompatibilityService(Dictionary<string, string> installedVersions, IEnumerable<string> knownApiNames)
         {
             _installedVersions = installedVersions != null
                 ? new Dictionary<string, string>(installedVersions, StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _knownApiNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (knownApiNames != null)
+            {
+                foreach (string apiName in knownApiNames)
+                {
+                    if (!string.IsNullOrEmpty(apiName))
+                        _knownApiNames.Add(apiName);
+                }
+            }
+
+            if (_knownApiNames.Count == 0)
+                _knownApiNames.Add(ModApiName);
         }
 
         public ApiCompatibilityReport Evaluate(IEnumerable<AssemblyVersionChecker.ModAssemblyVersion> assemblyReferences, string declaredModApiVersion, string declaredShelteredApiVersion)
@@ -45,8 +65,10 @@ namespace Manager.Core.Services
                 }
             }
 
-            AddDeclaredRequirement(report, ModApiName, declaredModApiVersion);
-            AddDeclaredRequirement(report, ShelteredApiName, declaredShelteredApiVersion);
+            if (UsesApi(ModApiName))
+                AddDeclaredRequirement(report, ModApiName, declaredModApiVersion);
+            if (UsesApi(ShelteredApiName))
+                AddDeclaredRequirement(report, ShelteredApiName, declaredShelteredApiVersion);
 
             PopulateSummaries(report);
             return report;
@@ -94,14 +116,14 @@ namespace Manager.Core.Services
             if (string.IsNullOrEmpty(installed))
             {
                 requirement.Severity = ApiCompatibilitySeverity.Error;
-                requirement.Message = "SMM is missing a required compatibility file. Reinstall or update SMM, then try again.";
+                requirement.Message = "The manager runtime is missing a required compatibility file. Reinstall or update the manager, then try again.";
                 return requirement;
             }
 
             if (!AssemblyVersionChecker.IsCompatible(installed, requirement.RequiredVersion))
             {
                 requirement.Severity = ApiCompatibilitySeverity.Error;
-                requirement.Message = "This mod requires a newer SMM API version. Update SMM before using this mod.";
+                requirement.Message = "This mod requires a newer manager API version. Update the manager before using this mod.";
                 return requirement;
             }
 
@@ -115,6 +137,11 @@ namespace Manager.Core.Services
             requirement.Severity = ApiCompatibilitySeverity.None;
             requirement.Message = string.Empty;
             return requirement;
+        }
+
+        private bool UsesApi(string apiName)
+        {
+            return !string.IsNullOrEmpty(apiName) && _knownApiNames.Contains(apiName);
         }
 
         private void PopulateSummaries(ApiCompatibilityReport report)

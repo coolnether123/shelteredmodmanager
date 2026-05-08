@@ -15,10 +15,17 @@ namespace Manager.Core.Services
     {
         private readonly NexusGraphQlClient _client;
         private readonly string _apiKey;
+        private readonly string _applicationName;
 
         public NexusModsService(string apiKey)
+            : this(apiKey, "Mod Manager")
+        {
+        }
+
+        public NexusModsService(string apiKey, string applicationName)
         {
             _apiKey = apiKey ?? string.Empty;
+            _applicationName = string.IsNullOrEmpty(applicationName) ? "Mod Manager" : applicationName;
             _client = new NexusGraphQlClient(apiKey);
         }
 
@@ -402,7 +409,7 @@ query modFiles($modId: ID!, $gameId: ID!){
                 request.KeepAlive = false;
                 request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
                 request.Headers["apikey"] = apiKey;
-                request.Headers["application-name"] = "Sheltered Mod Manager";
+                request.Headers["application-name"] = _applicationName;
                 request.Headers["application-version"] = AppVersionInfo.NexusHeader;
 
                 using (var response = (HttpWebResponse)request.GetResponse())

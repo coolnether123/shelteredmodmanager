@@ -4,6 +4,9 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using Manager.Core;
+using Manager.Core.Games;
+using Manager.Core.Games.Models;
+using Manager.Core.Games.Services;
 using Manager.Core.Models;
 using Manager.Core.Services;
 using Manager.Views;
@@ -11,7 +14,7 @@ using Manager.Views;
 namespace Manager
 {
     /// <summary>
-    /// Modern, refactored main form for Sheltered Mod Manager.
+    /// Modern, refactored main form for the selected game profile.
     /// Uses separation of concerns with dedicated services and custom controls.
     /// </summary>
     public class MainForm : Form
@@ -44,6 +47,12 @@ namespace Manager
         private ModDiscoveryService _discoveryService;
         private LoadOrderService _orderService;
         private NexusModsService _nexusService;
+        private GameProfileRegistry _gameProfileRegistry;
+        private GameProfile _gameProfile;
+        private GamePreflightService _preflightService;
+        private GameProcessLauncher _processLauncher;
+        private GameLaunchConfigurationService _launchConfigurationService;
+        private DoorstopConfigurationService _doorstopConfigurationService;
 
         // State
         private AppSettings _settings;
@@ -78,8 +87,7 @@ namespace Manager
             {
                 var assembly = System.Reflection.Assembly.GetExecutingAssembly();
                 
-                // App Title
-                this.Text = "Sheltered Mod Manager v" + APP_VERSION;
+                ApplyGameProfileToChrome();
                 
                 // Tab Versions
                 if (_aboutTab != null) _aboutTab.AppVersion = APP_VERSION;
@@ -112,28 +120,36 @@ namespace Manager
 
         private void InitializeServices()
         {
-            _settingsService = new SettingsService();
+            _gameProfileRegistry = GameProfileRegistry.CreateDefault();
+            _settingsService = new SettingsService(_gameProfileRegistry);
             _orderService = new LoadOrderService();
+            _preflightService = new GamePreflightService();
+            _processLauncher = new GameProcessLauncher();
+            _launchConfigurationService = new GameLaunchConfigurationService();
+            _doorstopConfigurationService = new DoorstopConfigurationService();
             
             // Settings loaded first to get ModAPI version path
             _settings = _settingsService.Load();
+            _gameProfile = _gameProfileRegistry.Resolve(_settings.SelectedGameId);
+            NormalizeSettingsForProfile();
             
             var installedApiVersions = DetectInstalledApiVersions(_settings);
             ApplyInstalledApiVersions(_settings, installedApiVersions);
 
-            _discoveryService = new ModDiscoveryService(installedApiVersions);
-            _nexusService = new NexusModsService(_settings.NexusApiKey);
+            _discoveryService = new ModDiscoveryService(_gameProfile, installedApiVersions);
+            _nexusService = new NexusModsService(_settings.NexusApiKey, _gameProfile.ManagerTitle);
         }
 
-        private static Dictionary<string, string> DetectInstalledApiVersions(AppSettings settings)
+        private Dictionary<string, string> DetectInstalledApiVersions(AppSettings settings)
         {
             if (settings == null || !settings.IsGamePathValid)
                 return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             try
             {
-                string smmPath = Path.Combine(Path.GetDirectoryName(settings.GamePath), "SMM");
-                return AssemblyVersionChecker.GetInstalledApiVersions(smmPath);
+                string gameDir = Path.GetDirectoryName(settings.GamePath);
+                string runtimePath = _gameProfile.RuntimeLayout.GetRuntimePath(gameDir);
+                return AssemblyVersionChecker.GetInstalledApiVersions(runtimePath, _gameProfile.GetApiAssemblyNames());
             }
             catch
             {
@@ -141,21 +157,61 @@ namespace Manager
             }
         }
 
+        private void ApplyGameProfileToChrome()
+        {
+            if (_gameProfile == null)
+                return;
+
+            this.Text = _gameProfile.ManagerTitle + " v" + APP_VERSION;
+            if (_titleLabel != null)
+                _titleLabel.Text = _gameProfile.ManagerTitle;
+            if (_aboutTab != null)
+                _aboutTab.ApplyGameProfile(_gameProfile);
+            if (_gameSetupTab != null)
+                _gameSetupTab.SetGameProfiles(_gameProfileRegistry.GetAll(), _gameProfile);
+            if (_settingsTab != null)
+                _settingsTab.ApplyGameProfile(_gameProfile);
+        }
+
         private static void ApplyInstalledApiVersions(AppSettings settings, Dictionary<string, string> versions)
         {
             if (settings == null || versions == null)
                 return;
 
+            settings.InstalledApiVersions = new Dictionary<string, string>(versions, StringComparer.OrdinalIgnoreCase);
+
             string version;
             if (versions.TryGetValue("ModAPI", out version))
                 settings.InstalledModApiVersion = version;
+            else
+                settings.InstalledModApiVersion = string.Empty;
             if (versions.TryGetValue("ShelteredAPI", out version))
                 settings.InstalledShelteredApiVersion = version;
+            else
+                settings.InstalledShelteredApiVersion = string.Empty;
+        }
+
+        private void NormalizeSettingsForProfile()
+        {
+            if (_settings == null || _gameProfile == null)
+                return;
+
+            _settings.SelectedGameId = _gameProfile.Id;
+            if (_settings.IsGamePathValid)
+                _settings.ModsPath = _gameProfile.GetModsPath(_settings.GamePath);
+
+            if (string.IsNullOrEmpty(_settings.NexusGameDomain))
+                _settings.NexusGameDomain = _gameProfile.DefaultNexusGameDomain ?? string.Empty;
+
+            if (_settings.ManagerNexusModId <= 0 && _gameProfile.DefaultManagerNexusModId > 0)
+                _settings.ManagerNexusModId = _gameProfile.DefaultManagerNexusModId;
         }
 
         private void RecreateNexusService()
         {
-            _nexusService = new NexusModsService(_settings != null ? _settings.NexusApiKey : string.Empty);
+            _nexusService = new NexusModsService(
+                _settings != null ? _settings.NexusApiKey : string.Empty,
+                _gameProfile != null ? _gameProfile.ManagerTitle : "Mod Manager");
         }
 
         private void ApplyNexusAccountStatus(NexusAccountStatus status)
@@ -285,7 +341,7 @@ namespace Manager
             this._titleLabel.Name = "_titleLabel";
             this._titleLabel.Size = new System.Drawing.Size(329, 37);
             this._titleLabel.TabIndex = 1;
-            this._titleLabel.Text = "Sheltered Mod Manager";
+            this._titleLabel.Text = "Mod Manager";
             // 
             // _headerStatusPanel
             // 
@@ -463,7 +519,7 @@ namespace Manager
             this.MinimumSize = new System.Drawing.Size(900, 600);
             this.Name = "MainForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Sheltered Mod Manager";
+            this.Text = "Mod Manager";
             this.headerPanel.ResumeLayout(false);
             this.headerPanel.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this._logoBox)).EndInit();
@@ -488,6 +544,7 @@ namespace Manager
             this.ResizeEnd += MainForm_ResizeEnd;
 
             // Game setup events
+            _gameSetupTab.GameProfileChanged += GameSetupTab_GameProfileChanged;
             _gameSetupTab.GamePathChanged += GameSetupTab_GamePathChanged;
             _gameSetupTab.LaunchRequested += GameSetupTab_LaunchRequested;
             _gameSetupTab.ViewGameLogRequested += GameSetupTab_ViewGameLogRequested;
@@ -515,19 +572,22 @@ namespace Manager
                 if (!_settings.IsGamePathValid) return;
                 
                 string gameDir = Path.GetDirectoryName(_settings.GamePath);
-                // Look for mod_manager.log in SMM folder (standard location) or root
-                string logPath = Path.Combine(Path.Combine(gameDir, "SMM"), "mod_manager.log");
-                
-                if (!File.Exists(logPath))
+                string logPath = null;
+                string[] relativeLogPaths = _gameProfile.LogFileRelativePaths ?? new string[0];
+                for (int i = 0; i < relativeLogPaths.Length; i++)
                 {
-                    // Fallback to root just in case
-                    logPath = Path.Combine(gameDir, "mod_manager.log");
+                    string candidate = Path.Combine(gameDir, relativeLogPaths[i]);
+                    if (File.Exists(candidate))
+                    {
+                        logPath = candidate;
+                        break;
+                    }
                 }
 
-                if (File.Exists(logPath))
+                if (!string.IsNullOrEmpty(logPath) && File.Exists(logPath))
                 {
                     string content = File.ReadAllText(logPath);
-                    _gameSetupTab.Log("--- CONTENT OF MOD_MANAGER.LOG ---");
+                    _gameSetupTab.Log("--- CONTENT OF " + Path.GetFileName(logPath).ToUpperInvariant() + " ---");
                     _gameSetupTab.Log(content);
                     _gameSetupTab.Log("--- END OF LOG ---");
                 }
@@ -551,10 +611,12 @@ namespace Manager
             NexusInstallService.CleanupStartupArtifacts();
 
             // Initialize tabs with services and settings
+            ApplyGameProfileToChrome();
             _gameSetupTab.Initialize(_settings);
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _settingsTab.Initialize(_settings);
+            _settingsTab.ApplyGameProfile(_gameProfile);
             RefreshNexusAccountStatusAsync(true);
 
             // Apply initial theme
@@ -621,28 +683,54 @@ namespace Manager
             }
         }
 
+        private void GameSetupTab_GameProfileChanged(string profileId)
+        {
+            GameProfile previousProfile = _gameProfile;
+            _gameProfile = _gameProfileRegistry.Resolve(profileId);
+            string previousDefaultDomain = previousProfile != null ? previousProfile.DefaultNexusGameDomain : string.Empty;
+
+            _settings.SelectedGameId = _gameProfile.Id;
+            if (_settings.IsGamePathValid)
+                _settings.ModsPath = _gameProfile.GetModsPath(_settings.GamePath);
+
+            if (string.IsNullOrEmpty(_settings.NexusGameDomain) ||
+                string.Equals(_settings.NexusGameDomain, previousDefaultDomain, StringComparison.OrdinalIgnoreCase))
+            {
+                _settings.NexusGameDomain = _gameProfile.DefaultNexusGameDomain ?? string.Empty;
+            }
+
+            if (_settings.ManagerNexusModId <= 0 ||
+                (previousProfile != null && _settings.ManagerNexusModId == previousProfile.DefaultManagerNexusModId))
+            {
+                _settings.ManagerNexusModId = _gameProfile.DefaultManagerNexusModId;
+            }
+
+            var installedApiVersions = DetectInstalledApiVersions(_settings);
+            ApplyInstalledApiVersions(_settings, installedApiVersions);
+            _discoveryService = new ModDiscoveryService(_gameProfile, installedApiVersions);
+            _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
+            _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+            _settingsTab.Initialize(_settings);
+            ApplyGameProfileToChrome();
+            SaveSettingsFromUi();
+            UpdateStatusCounts();
+            _gameSetupTab.Log("Profile applied: " + _gameProfile.DisplayName + ".");
+        }
+
         private void GameSetupTab_GamePathChanged(string newPath)
         {
             if (!string.IsNullOrEmpty(newPath) && File.Exists(newPath))
             {
                 _settings.GamePath = newPath;
-                _settings.ModsPath = Path.Combine(Path.GetDirectoryName(newPath), "mods");
+                _settings.ModsPath = _gameProfile.GetModsPath(newPath);
                 
                 var installedApiVersions = DetectInstalledApiVersions(_settings);
                 ApplyInstalledApiVersions(_settings, installedApiVersions);
                 
                 // Recreate discovery service with new version
-                _discoveryService = new ModDiscoveryService(installedApiVersions);
+                _discoveryService = new ModDiscoveryService(_gameProfile, installedApiVersions);
                 _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
                 _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
-                
-                // Setup doorstop
-                try
-                {
-                    // Note: Doorstop setup would be called here from ManagerGUI.LaunchAndPreflight.cs
-                    // SetupDoorstop();
-                }
-                catch { }
                 
                 // Save and refresh
                 _settingsService.Save(_settings);
@@ -690,43 +778,22 @@ namespace Manager
 
         private void LaunchWithMods()
         {
-            if (CheckGameRunning())
+            if (_processLauncher.IsGameRunning(_settings))
             {
-                MessageBox.Show("Sheltered is already running. Please close it before launching via Manager.", 
+                MessageBox.Show(_gameProfile.DisplayName + " is already running. Please close it before launching via Manager.", 
                     "Game Running", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             ReconcileLoadOrderForLaunch();
-            SetupDoorstop();
+            _doorstopConfigurationService.ConfigureModded(_gameProfile, _settings, BuildDoorstopAssemblySearchPaths(), LogGameSetupMessage);
             if (!PreflightCheck()) return;
 
             try
             {
                 try
                 {
-                    var gameDir = Path.GetDirectoryName(_settings.GamePath);
-                    var smmDir = Path.Combine(gameDir, "SMM");
-                    var binDir = Path.Combine(smmDir, "bin");
-                    if (!Directory.Exists(binDir)) Directory.CreateDirectory(binDir);
-                    
-                    var iniPath = Path.Combine(binDir, "mod_manager.ini");
-                    var lines = new System.Collections.Generic.List<string>();
-                    lines.Add("# Generated by Manager at launch");
-                    lines.Add("GamePath=" + (_settings.GamePath ?? string.Empty));
-                    lines.Add("DarkMode=" + (_settings.DarkMode ? "True" : "False"));
-                    lines.Add("DevMode=" + (_settings.DevMode ? "True" : "False"));
-                    lines.Add("LogLevel=" + (_settings.LogLevel ?? "Info"));
-                    lines.Add("AutoCondenseSaves=" + (_settings.AutoCondenseSaves ?? "ask"));
-                    
-                    // LogCategories disabled in v1.0 - category filtering not currently used
-                    // var catList = new System.Collections.Generic.List<string>();
-                    // foreach (string cat in _settings.LogCategories)
-                    //     catList.Add(cat);
-                    // lines.Add("LogCategories=" + string.Join(",", catList.ToArray()));
-                    lines.Add("IgnoreOrderChecks=" + (_settings.IgnoreOrderChecks ? "True" : "False"));
-                    lines.Add("AutoLoadSaveSlot=" + _settings.AutoLoadSaveSlot);
-                    File.WriteAllLines(iniPath, lines.ToArray());
+                    _launchConfigurationService.WriteLaunchConfiguration(_gameProfile, _settings);
                 }
                 catch { }
 
@@ -770,14 +837,9 @@ namespace Manager
                     catch { }
                 }
 
-                // Launch the game
-                var startInfo = new System.Diagnostics.ProcessStartInfo();
-                startInfo.FileName = _settings.GamePath;
-                startInfo.WorkingDirectory = Path.GetDirectoryName(_settings.GamePath);
-                startInfo.UseShellExecute = false;
-                System.Diagnostics.Process.Start(startInfo);
+                _processLauncher.Launch(_settings);
                 
-                _gameSetupTab.Log("Launched Sheltered with mods");
+                _gameSetupTab.Log("Launched " + _gameProfile.DisplayName + " with mods");
             }
             catch (Exception ex)
             {
@@ -789,6 +851,43 @@ namespace Manager
         private static string NormalizeModId(string id)
         {
             return (id ?? string.Empty).Trim().ToLowerInvariant();
+        }
+
+        private IEnumerable<string> BuildDoorstopAssemblySearchPaths()
+        {
+            List<string> searchPaths = new List<string>();
+            if (_settings == null)
+                return searchPaths;
+
+            searchPaths.Add(_settings.ModsPath);
+
+            try
+            {
+                string[] enabledIds = _orderService.ReadOrder(_settings.ModsPath);
+                HashSet<string> enabledSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string id in enabledIds)
+                    enabledSet.Add(id);
+
+                List<ModItem> allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
+                foreach (ModItem mod in allMods)
+                {
+                    if (mod == null || !enabledSet.Contains(mod.Id))
+                        continue;
+
+                    string assembliesPath = Path.Combine(mod.RootPath, "Assemblies");
+                    if (Directory.Exists(assembliesPath))
+                        searchPaths.Add(assembliesPath);
+                }
+            }
+            catch { }
+
+            return searchPaths;
+        }
+
+        private void LogGameSetupMessage(string message)
+        {
+            if (_gameSetupTab != null && !string.IsNullOrEmpty(message))
+                _gameSetupTab.Log(message);
         }
 
         /// <summary>
@@ -956,48 +1055,18 @@ namespace Manager
             _settings.WindowMaximized = this.WindowState == FormWindowState.Maximized;
         }
 
-        private bool CheckGameRunning()
-        {
-            try
-            {
-                string procName = Path.GetFileNameWithoutExtension(_settings.GamePath);
-                var procs = System.Diagnostics.Process.GetProcessesByName(procName);
-                return procs.Length > 0;
-            }
-            catch { return false; }
-        }
-
         private bool PreflightCheck()
         {
             try
             {
                 if (!_settings.IsGamePathValid)
                 {
-                    MessageBox.Show("Please select a valid Sheltered executable first.", "Launch Error", 
+                    MessageBox.Show("Please select a valid " + _gameProfile.DisplayName + " executable first.", "Launch Error", 
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return false;
                 }
 
-                string gameDir = Path.GetDirectoryName(_settings.GamePath);
-                var missing = new System.Collections.Generic.List<string>();
-
-                string winhttpPath = Path.Combine(gameDir, "winhttp.dll");
-                if (!File.Exists(winhttpPath)) missing.Add("winhttp.dll (in game folder)");
-
-                string smmDir = Path.Combine(gameDir, "SMM");
-                string doorstopDllRoot = Path.Combine(smmDir, "Doorstop.dll");
-                string doorstopDllBin = Path.Combine(Path.Combine(smmDir, "bin"), "Doorstop.dll");
-                if (!File.Exists(doorstopDllRoot) && !File.Exists(doorstopDllBin)) missing.Add("SMM/Doorstop.dll");
-
-                string modapiDll = Path.Combine(smmDir, "ModAPI.dll");
-                if (!File.Exists(modapiDll)) missing.Add("SMM/ModAPI.dll");
-
-                string shelteredApiDllRoot = Path.Combine(smmDir, "ShelteredAPI.dll");
-                string shelteredApiDllBin = Path.Combine(Path.Combine(smmDir, "bin"), "ShelteredAPI.dll");
-                if (!File.Exists(shelteredApiDllRoot) && !File.Exists(shelteredApiDllBin)) missing.Add("SMM/bin/ShelteredAPI.dll");
-
-                string networkingDll = Path.Combine(Path.Combine(smmDir, "bin"), "ModAPI.Networking.dll");
-                if (!File.Exists(networkingDll)) missing.Add("SMM/bin/ModAPI.Networking.dll");
+                var missing = _preflightService.GetMissingRuntimeFiles(_gameProfile, _settings);
 
                 if (missing.Count == 0) return true;
 
@@ -1011,112 +1080,13 @@ namespace Manager
             catch { return true; }
         }
 
-        private void SetupDoorstop()
-        {
-            try
-            {
-                if (!_settings.IsGamePathValid) return;
-                string gameDir = Path.GetDirectoryName(_settings.GamePath);
-
-
-
-                var searchPaths = new System.Collections.Generic.List<string>();
-                searchPaths.Add(_settings.ModsPath);
-
-                try
-                {
-                    var enabledIds = _orderService.ReadOrder(_settings.ModsPath);
-                    var enabledSet = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (var id in enabledIds) enabledSet.Add(id);
-
-                    var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
-                    foreach (var mod in allMods)
-                    {
-                        if (enabledSet.Contains(mod.Id))
-                        {
-                            string assembliesPath = Path.Combine(mod.RootPath, "Assemblies");
-                            if (Directory.Exists(assembliesPath))
-                                searchPaths.Add(assembliesPath);
-                        }
-                    }
-                }
-                catch { }
-
-                var uniquePaths = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var p in searchPaths)
-                {
-                    if (!string.IsNullOrEmpty(p))
-                        uniquePaths.Add(p);
-                }
-
-                var relativePaths = new System.Collections.Generic.List<string>();
-                foreach (var p in uniquePaths)
-                {
-                    try { relativePaths.Add(GetRelativePath(gameDir, p)); } catch { relativePaths.Add(p); }
-                }
-
-                string dllSearchPath = string.Join(";", relativePaths.ToArray());
-
-                string smmDir = Path.Combine(gameDir, "SMM");
-                string doorstopTargetRelative = @"SMM\bin\Doorstop.dll";
-                string doorstopBinPath = Path.Combine(Path.Combine(smmDir, "bin"), "Doorstop.dll");
-                string doorstopRootPath = Path.Combine(smmDir, "Doorstop.dll");
-
-                if (File.Exists(doorstopBinPath))
-                {
-                    doorstopTargetRelative = @"SMM\bin\Doorstop.dll";
-                }
-                else if (File.Exists(doorstopRootPath))
-                {
-                    doorstopTargetRelative = @"SMM\Doorstop.dll";
-                }
-                else
-                {
-                    _gameSetupTab.Log("Doorstop target assembly missing in both SMM/bin and SMM root. Launch may fail to load ModAPI.");
-                }
-
-                string iniPath = Path.Combine(gameDir, "doorstop_config.ini");
-                var ini = new System.Collections.Generic.List<string>();
-                ini.Add("# Auto-generated by Sheltered Mod Manager");
-                ini.Add("[General]");
-                ini.Add("enabled=true");
-                ini.Add("target_assembly=" + doorstopTargetRelative);
-                ini.Add("redirect_output_log=true");
-                ini.Add("");
-                ini.Add("[UnityMono]");
-                ini.Add("dll_search_path_override=" + dllSearchPath);
-                ini.Add("debug_enabled=false");
-                ini.Add("debug_address=127.0.0.1:10000");
-                ini.Add("debug_suspend=false");
-                File.WriteAllLines(iniPath, ini.ToArray());
-                _gameSetupTab.Log("Doorstop configured. target_assembly=" + doorstopTargetRelative);
-
-                bool is64Bit = DetectIsExe64Bit(_settings.GamePath);
-                CopyWinhttpForGame(gameDir, is64Bit);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to configure Doorstop: " + ex.Message,
-                    "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         private void LaunchVanilla()
         {
             try
             {
-                string gameDir = Path.GetDirectoryName(_settings.GamePath);
-                string doorstopConfigPath = Path.Combine(gameDir, "doorstop_config.ini");
-                
-                var lines = new System.Collections.Generic.List<string>();
-                lines.Add("# Auto-generated by Sheltered Mod Manager (Vanilla Mode)");
-                lines.Add("[General]");
-                lines.Add("enabled=false");
-                lines.Add("target_assembly=SMM\\bin\\Doorstop.dll");
-                File.WriteAllLines(doorstopConfigPath, lines.ToArray());
-
-                System.Diagnostics.Process.Start(_settings.GamePath);
-                _gameSetupTab.Log("Launched Sheltered (vanilla mode)");
+                _doorstopConfigurationService.ConfigureVanilla(_gameProfile, _settings);
+                _processLauncher.Launch(_settings);
+                _gameSetupTab.Log("Launched " + _gameProfile.DisplayName + " (vanilla mode)");
             }
             catch (Exception ex)
             {
@@ -1124,59 +1094,6 @@ namespace Manager
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-
-        private string GetRelativePath(string fromPath, string toPath)
-        {
-            Uri fromUri = new Uri(fromPath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
-            Uri toUri = new Uri(toPath);
-            Uri relativeUri = fromUri.MakeRelativeUri(toUri);
-            return Uri.UnescapeDataString(relativeUri.ToString().Replace('/', Path.DirectorySeparatorChar));
-        }
-
-        private bool DetectIsExe64Bit(string exePath)
-        {
-            FileStream fs = null;
-            BinaryReader br = null;
-            try
-            {
-                fs = new FileStream(exePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                br = new BinaryReader(fs);
-                fs.Seek(0x3C, SeekOrigin.Begin);
-                int peOffset = br.ReadInt32();
-                fs.Seek(peOffset, SeekOrigin.Begin);
-                uint peSignature = br.ReadUInt32();
-                if (peSignature != 0x00004550) return false;
-                ushort machine = br.ReadUInt16();
-                return machine == 0x8664;
-            }
-            catch { return false; }
-            finally
-            {
-                if (br != null) br.Close();
-                if (fs != null) fs.Close();
-            }
-        }
-
-        private void CopyWinhttpForGame(string gameDir, bool is64Bit)
-        {
-            try
-            {
-                string smmDir = Path.Combine(gameDir, "SMM");
-                string doorstopDir = Path.Combine(smmDir, "Doorstop");
-                string bitnessDir = is64Bit ? Path.Combine(doorstopDir, "x64") : Path.Combine(doorstopDir, "x32");
-                string sourceWinhttp = Path.Combine(bitnessDir, "winhttp.dll");
-                string targetWinhttp = Path.Combine(gameDir, "winhttp.dll");
-
-                if (File.Exists(sourceWinhttp))
-                {
-                    File.Copy(sourceWinhttp, targetWinhttp, true);
-                    _gameSetupTab.Log("Copied " + (is64Bit ? "64-bit" : "32-bit") + " winhttp.dll");
-                }
-            }
-            catch { }
-        }
-
-
 
         private void ModManagerTab_OrderSaved(string[] newOrder)
         {
@@ -1227,7 +1144,13 @@ namespace Manager
         {
             var previous = _settings;
             _settings = settings;
+            _gameProfile = _gameProfileRegistry.Resolve(_settings.SelectedGameId);
+            NormalizeSettingsForProfile();
             RecreateNexusService();
+            var installedApiVersions = DetectInstalledApiVersions(_settings);
+            ApplyInstalledApiVersions(_settings, installedApiVersions);
+            _discoveryService = new ModDiscoveryService(_gameProfile, installedApiVersions);
+            ApplyGameProfileToChrome();
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             SaveSettingsFromUi();
@@ -1252,35 +1175,35 @@ namespace Manager
 
             var previous = _settings;
 
-            // Preserve or re-detect API versions as they are derived from installed SMM files.
-            string version = _settings?.InstalledModApiVersion;
-            string shelteredVersion = _settings?.InstalledShelteredApiVersion;
+            // Preserve or re-detect API versions as they are derived from installed runtime files.
+            Dictionary<string, string> previousApiVersions = _settings != null && _settings.InstalledApiVersions != null
+                ? new Dictionary<string, string>(_settings.InstalledApiVersions, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             _settings = settings;
+            _gameProfile = _gameProfileRegistry.Resolve(_settings.SelectedGameId);
+            NormalizeSettingsForProfile();
 
-            if (string.IsNullOrEmpty(_settings.InstalledModApiVersion) && !string.IsNullOrEmpty(version))
+            if ((_settings.InstalledApiVersions == null || _settings.InstalledApiVersions.Count == 0) && previousApiVersions.Count > 0)
             {
-                _settings.InstalledModApiVersion = version;
+                ApplyInstalledApiVersions(_settings, previousApiVersions);
             }
 
-            if (string.IsNullOrEmpty(_settings.InstalledShelteredApiVersion) && !string.IsNullOrEmpty(shelteredVersion))
-            {
-                _settings.InstalledShelteredApiVersion = shelteredVersion;
-            }
-
-            if ((string.IsNullOrEmpty(_settings.InstalledModApiVersion) || string.IsNullOrEmpty(_settings.InstalledShelteredApiVersion)) && _settings.IsGamePathValid)
+            if (MissingKnownApiVersions(_settings) && _settings.IsGamePathValid)
             {
                 var installedApiVersions = DetectInstalledApiVersions(_settings);
                 ApplyInstalledApiVersions(_settings, installedApiVersions);
-                _discoveryService = new ModDiscoveryService(installedApiVersions);
+                _discoveryService = new ModDiscoveryService(_gameProfile, installedApiVersions);
             }
 
             RecreateNexusService();
             
             // Re-initialize tabs with new settings
+            ApplyGameProfileToChrome();
             _gameSetupTab.Initialize(_settings);
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _settingsTab.Initialize(_settings);
+            _settingsTab.ApplyGameProfile(_gameProfile);
             
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
@@ -1347,6 +1270,8 @@ namespace Manager
 
             var changes = new System.Collections.Generic.List<string>();
 
+            if (!string.Equals(previous.SelectedGameId, current.SelectedGameId, StringComparison.OrdinalIgnoreCase))
+                changes.Add("SelectedGameId");
             if (!string.Equals(previous.GamePath, current.GamePath, StringComparison.OrdinalIgnoreCase))
                 changes.Add("GamePath");
             if (!string.Equals(previous.ModsPath, current.ModsPath, StringComparison.OrdinalIgnoreCase))
@@ -1399,6 +1324,26 @@ namespace Manager
             _settingsService.Save(_settings);
         }
 
+        private bool MissingKnownApiVersions(AppSettings settings)
+        {
+            if (settings == null || _gameProfile == null)
+                return false;
+
+            string[] apiNames = _gameProfile.GetApiAssemblyNames();
+            if (apiNames.Length == 0)
+                return false;
+
+            Dictionary<string, string> versions = settings.InstalledApiVersions ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < apiNames.Length; i++)
+            {
+                string version;
+                if (!versions.TryGetValue(apiNames[i], out version) || string.IsNullOrEmpty(version))
+                    return true;
+            }
+
+            return false;
+        }
+
         private void UpdateStatusCounts()
         {
             if (_settings.IsModsPathValid)
@@ -1430,19 +1375,28 @@ namespace Manager
             }
         }
 
-        private static string FormatInstalledApiVersions(AppSettings settings)
+        private string FormatInstalledApiVersions(AppSettings settings)
         {
             if (settings == null)
                 return "Unknown";
 
-            string modApi = string.IsNullOrEmpty(settings.InstalledModApiVersion)
-                ? "missing"
-                : settings.InstalledModApiVersion;
-            string shelteredApi = string.IsNullOrEmpty(settings.InstalledShelteredApiVersion)
-                ? "missing"
-                : settings.InstalledShelteredApiVersion;
+            string[] apiNames = _gameProfile != null ? _gameProfile.GetApiAssemblyNames() : new string[] { "ModAPI" };
+            if (apiNames.Length == 0)
+                return "None";
 
-            return "ModAPI " + modApi + " / ShelteredAPI " + shelteredApi;
+            List<string> parts = new List<string>();
+            Dictionary<string, string> versions = settings.InstalledApiVersions ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < apiNames.Length; i++)
+            {
+                string apiName = apiNames[i];
+                string version;
+                if (!versions.TryGetValue(apiName, out version) || string.IsNullOrEmpty(version))
+                    version = "missing";
+
+                parts.Add(apiName + " " + version);
+            }
+
+            return string.Join(" / ", parts.ToArray());
         }
 
         private void ApplyTheme(bool isDark)
@@ -1558,9 +1512,8 @@ namespace Manager
             {
                 if (!_settings.IsGamePathValid) return;
 
-                // Look for restart.json in SMM/Bin
                 var gameDir = Path.GetDirectoryName(_settings.GamePath);
-                var restartPath = Path.Combine(Path.Combine(Path.Combine(gameDir, "SMM"), "Bin"), "restart.json");
+                var restartPath = Path.Combine(_gameProfile.RuntimeLayout.GetBinPath(gameDir), "restart.json");
 
                 if (!File.Exists(restartPath)) return;
 

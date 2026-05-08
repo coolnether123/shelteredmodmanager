@@ -3,6 +3,8 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using Manager.Controls;
+using Manager.Core.Games.Detection;
+using Manager.Core.Games.Models;
 using Manager.Core.Models;
 
 namespace Manager.Views
@@ -17,12 +19,16 @@ namespace Manager.Views
     /// </summary>
     public delegate void BoolEventHandler(bool value);
 
+    public delegate void GameProfileChangedHandler(string profileId);
+
     /// <summary>
     /// Game Setup tab - handles game path configuration and launch.
     /// </summary>
     public class GameSetupTab : UserControl
     {
         // Path controls
+        private Label _gameProfileLabel;
+        private ComboBox _gameProfileComboBox;
         private Label _gamePathLabel;
         private TextBox _gamePathTextBox;
         private Button _browseButton;
@@ -59,6 +65,7 @@ namespace Manager.Views
 
         // State
         private AppSettings _settings;
+        private GameProfile _profile;
         private bool _isDarkMode = false;
         private bool _isUpdating = false;
         private string _lastLoggedPath = null;
@@ -67,6 +74,8 @@ namespace Manager.Views
         /// Event raised when game path changes
         /// </summary>
         public event StringPathHandler GamePathChanged;
+
+        public event GameProfileChangedHandler GameProfileChanged;
 
         /// <summary>
         /// Event raised when launch is requested (true = with mods, false = vanilla)
@@ -90,14 +99,76 @@ namespace Manager.Views
             UpdateFromSettings();
         }
 
+        public void SetGameProfiles(System.Collections.Generic.IList<GameProfile> profiles, GameProfile selectedProfile)
+        {
+            _isUpdating = true;
+            try
+            {
+                _gameProfileComboBox.Items.Clear();
+                if (profiles != null)
+                {
+                    for (int i = 0; i < profiles.Count; i++)
+                    {
+                        GameProfile profile = profiles[i];
+                        if (profile != null)
+                            _gameProfileComboBox.Items.Add(new GameProfileListItem(profile));
+                    }
+                }
+
+                if (selectedProfile != null)
+                    ApplyGameProfile(selectedProfile);
+
+                for (int i = 0; i < _gameProfileComboBox.Items.Count; i++)
+                {
+                    GameProfileListItem item = _gameProfileComboBox.Items[i] as GameProfileListItem;
+                    if (item != null && selectedProfile != null &&
+                        string.Equals(item.Profile.Id, selectedProfile.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _gameProfileComboBox.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                _isUpdating = false;
+            }
+        }
+
+        public void ApplyGameProfile(GameProfile profile)
+        {
+            _profile = profile;
+            if (_profile == null)
+                return;
+
+            _gamePathLabel.Text = _profile.DisplayName + " Installation";
+            _launchButton.Text = "Launch " + _profile.DisplayName + " (Modded)";
+            _launchVanillaButton.Text = "Launch " + _profile.DisplayName + " (Vanilla)";
+            _autoLoadLabel.Visible = _profile.SupportsSaveDiscovery;
+            _autoLoadComboBox.Visible = _profile.SupportsSaveDiscovery;
+            _refreshSavesButton.Visible = _profile.SupportsSaveDiscovery;
+        }
+
         private void InitializeComponent()
         {
             this.SuspendLayout();
             this.Padding = new Padding(20);
 
+            _gameProfileLabel = new Label();
+            _gameProfileLabel.Text = "Game Profile";
+            _gameProfileLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _gameProfileLabel.AutoSize = true;
+            _gameProfileLabel.Location = new Point(20, 20);
+
+            _gameProfileComboBox = new ComboBox();
+            _gameProfileComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _gameProfileComboBox.Font = new Font("Segoe UI", 10f);
+            _gameProfileComboBox.Location = new Point(20, 48);
+            _gameProfileComboBox.Width = 260;
+
             // Game Path Section
             _gamePathLabel = new Label();
-            _gamePathLabel.Text = "Sheltered Installation";
+            _gamePathLabel.Text = "Game Installation";
             _gamePathLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
             _gamePathLabel.AutoSize = true;
             _gamePathLabel.Location = new Point(20, 20);
@@ -198,7 +269,7 @@ namespace Manager.Views
 
             // Launch Buttons
             _launchButton = new ActionButton();
-            _launchButton.Text = "Launch Sheltered (Modded)";
+            _launchButton.Text = "Launch Game (Modded)";
             _launchButton.IsPrimary = true;
             _launchButton.Location = new Point(20, 200);
             _launchButton.Width = 250;
@@ -309,6 +380,10 @@ namespace Manager.Views
             _loadGameLogButton.Location = new Point(540, 318);
             _logContainer.Location = new Point(20, 345);
 
+            OffsetControlsForProfileSelector(62);
+            this.Controls.Add(_gameProfileLabel);
+            this.Controls.Add(_gameProfileComboBox);
+
             this.ResumeLayout();
         }
 
@@ -321,11 +396,50 @@ namespace Manager.Views
             _launchButton.Click += LaunchButton_Click;
             _launchVanillaButton.Click += LaunchVanillaButton_Click;
             _gamePathTextBox.TextChanged += GamePathTextBox_TextChanged;
+            _gameProfileComboBox.SelectedIndexChanged += GameProfileComboBox_SelectedIndexChanged;
             _clearLogButton.Click += ClearLogButton_Click;
             _loadGameLogButton.Click += LoadGameLogButton_Click;
             _autoLoadComboBox.SelectedIndexChanged += AutoLoadComboBox_SelectedIndexChanged;
             _refreshSavesButton.Click += (s, e) => RefreshSavesList();
             this.Load += GameSetupTab_Load;
+        }
+
+        private void OffsetControlsForProfileSelector(int yOffset)
+        {
+            foreach (Control control in this.Controls)
+            {
+                control.Location = new Point(control.Left, control.Top + yOffset);
+            }
+        }
+
+        private sealed class GameProfileListItem
+        {
+            public readonly GameProfile Profile;
+
+            public GameProfileListItem(GameProfile profile)
+            {
+                Profile = profile;
+            }
+
+            public override string ToString()
+            {
+                return Profile != null ? Profile.DisplayName : string.Empty;
+            }
+        }
+
+        private void GameProfileComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_isUpdating)
+                return;
+
+            GameProfileListItem selected = _gameProfileComboBox.SelectedItem as GameProfileListItem;
+            if (selected == null || selected.Profile == null)
+                return;
+
+            ApplyGameProfile(selected.Profile);
+            Log("Game profile selected: " + selected.Profile.DisplayName);
+            if (GameProfileChanged != null)
+                GameProfileChanged(selected.Profile.Id);
         }
 
         private void AutoLoadComboBox_SelectedIndexChanged(object sender, EventArgs e)
@@ -361,6 +475,9 @@ namespace Manager.Views
                 return;
             }
 
+            if (_profile == null || !_profile.SupportsSaveDiscovery)
+                return;
+
             _isUpdating = true;
             try
             {
@@ -375,8 +492,7 @@ namespace Manager.Views
                 );
                 if (currentSelection == AUTO_LOAD_NEW_SAVE) selectIndex = newSaveIndex;
 
-                var discovery = new Manager.Core.Services.SaveDiscoveryService();
-                var saves = discovery.DiscoverSaves(_settings.GamePath);
+                var saves = _profile.SaveDiscovery.DiscoverSaves(_profile, _settings.GamePath);
                 foreach (var save in saves)
                 {
                     var item = new SaveSlotItem { Slot = save.AbsoluteSlot, Description = save.ToString() };
@@ -445,8 +561,8 @@ namespace Manager.Views
         {
             using (var dialog = new OpenFileDialog())
             {
-                dialog.Title = "Locate Sheltered.exe";
-                dialog.Filter = "Sheltered Executable|Sheltered.exe;ShelteredWindows64_EOS.exe|All Executables|*.exe";
+                dialog.Title = _profile != null ? _profile.LocateExecutableTitle : "Locate game executable";
+                dialog.Filter = _profile != null ? _profile.ExecutableDialogFilter : "Game Executable|*.exe|All Executables|*.exe";
                 dialog.RestoreDirectory = true;
 
                 if (dialog.ShowDialog(this) == DialogResult.OK)
@@ -459,9 +575,9 @@ namespace Manager.Views
 
         private void DetectGameButton_Click(object sender, EventArgs e)
         {
-            Log("Searching for Sheltered installation...");
-            var settingsService = new Manager.Core.Services.SettingsService();
-            string detected = settingsService.Load().GamePath; // This triggers auto-detect if current is invalid
+            string gameName = _profile != null ? _profile.DisplayName : "game";
+            Log("Searching for " + gameName + " installation...");
+            string detected = new GamePathDetector().TryDetect(_profile);
             
             if (!string.IsNullOrEmpty(detected) && File.Exists(detected))
             {
@@ -470,7 +586,7 @@ namespace Manager.Views
             }
             else
             {
-                MessageBox.Show("Could not find Sheltered automatically. Please use 'Browse' to locate Sheltered.exe.", 
+                MessageBox.Show("Could not find " + gameName + " automatically. Please use Browse to locate the executable.",
                     "Detection Failed", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
@@ -493,25 +609,20 @@ namespace Manager.Views
             // If a directory was provided, try to find the executable within it
             if (Directory.Exists(path) && !File.Exists(path))
             {
-                string[] possibleExes = { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
-                foreach (var exe in possibleExes)
+                string fullPath = new GamePathDetector().ResolveExecutableFromDirectory(_profile, path);
+                if (!string.IsNullOrEmpty(fullPath))
                 {
-                    string fullPath = Path.Combine(path, exe);
-                    if (File.Exists(fullPath))
-                    {
-                        path = fullPath;
-                        _isUpdating = true;
-                        _gamePathTextBox.Text = path;
-                        _isUpdating = false;
-                        break;
-                    }
+                    path = fullPath;
+                    _isUpdating = true;
+                    _gamePathTextBox.Text = path;
+                    _isUpdating = false;
                 }
             }
 
             if (File.Exists(path))
             {
                 string gameDir = Path.GetDirectoryName(path);
-                string modsPath = Path.Combine(gameDir, "mods");
+                string modsPath = _profile != null ? _profile.GetModsPath(path) : Path.Combine(gameDir, "mods");
                 
                 _modsPathTextBox.Text = modsPath;
                 
@@ -598,14 +709,16 @@ namespace Manager.Views
 
         private void LaunchButton_Click(object sender, EventArgs e)
         {
-            Log("Launching Sheltered with mods...");
+            string gameName = _profile != null ? _profile.DisplayName : "game";
+            Log("Launching " + gameName + " with mods...");
             if (LaunchRequested != null)
                 LaunchRequested(true);
         }
 
         private void LaunchVanillaButton_Click(object sender, EventArgs e)
         {
-            Log("Launching Sheltered (vanilla)...");
+            string gameName = _profile != null ? _profile.DisplayName : "game";
+            Log("Launching " + gameName + " (vanilla)...");
             if (LaunchRequested != null)
                 LaunchRequested(false);
         }
@@ -682,6 +795,10 @@ namespace Manager.Views
             if (isDark)
             {
                 this.BackColor = Color.FromArgb(45, 45, 48);
+                _gameProfileLabel.ForeColor = Color.White;
+                _gameProfileComboBox.BackColor = Color.FromArgb(60, 60, 60);
+                _gameProfileComboBox.ForeColor = Color.White;
+                _gameProfileComboBox.FlatStyle = FlatStyle.Flat;
                 _gamePathLabel.ForeColor = Color.White;
                 _gamePathTextBox.BackColor = Color.FromArgb(60, 60, 60);
                 _gamePathTextBox.ForeColor = Color.White;
@@ -712,6 +829,10 @@ namespace Manager.Views
             else
             {
                 this.BackColor = SystemColors.Control;
+                _gameProfileLabel.ForeColor = SystemColors.ControlText;
+                _gameProfileComboBox.BackColor = SystemColors.Window;
+                _gameProfileComboBox.ForeColor = SystemColors.WindowText;
+                _gameProfileComboBox.FlatStyle = FlatStyle.Standard;
                 _gamePathLabel.ForeColor = SystemColors.ControlText;
                 _gamePathTextBox.BackColor = SystemColors.Window;
                 _gamePathTextBox.ForeColor = SystemColors.WindowText;

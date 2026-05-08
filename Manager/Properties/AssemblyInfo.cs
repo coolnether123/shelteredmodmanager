@@ -2,11 +2,11 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 // General assembly metadata.
-[assembly: AssemblyTitle("Sheltered Mod Manager")]
-[assembly: AssemblyDescription("Desktop manager for the Sheltered Mod Manager modding framework.")]
+[assembly: AssemblyTitle("Mod Manager")]
+[assembly: AssemblyDescription("Desktop mod manager with game-profile based runtime integration.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Coolnether123")]
-[assembly: AssemblyProduct("Sheltered Mod Manager")]
+[assembly: AssemblyProduct("Mod Manager")]
 [assembly: AssemblyCopyright("Original loader foundation Copyright 2019 benjaminfoo; maintained 2025-present by Coolnether123")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

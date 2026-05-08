@@ -592,7 +592,7 @@ namespace Manager.Views
             var unresolvedMods = new List<ModItem>();
             string fallbackDomain = (_settings != null && !string.IsNullOrEmpty(_settings.NexusGameDomain))
                 ? _settings.NexusGameDomain
-                : "sheltered";
+                : ((_settings != null && string.Equals(_settings.SelectedGameId, "sheltered", StringComparison.OrdinalIgnoreCase)) ? "sheltered" : string.Empty);
 
             foreach (var mod in _allMods)
             {

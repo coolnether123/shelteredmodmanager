@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using Manager.Core.Games.Models;
 using Manager.Core.Models;
 using Manager.Core.Services;
 
@@ -51,8 +52,10 @@ namespace Manager.Views
         private bool _nexusApiKeyRevealed;
         private bool _skipNextNexusApiAutoHide;
         private bool _showAdvancedNexusOptions;
+        private bool _supportsSaveOptions = true;
+        private string _defaultNexusGameDomain = "sheltered";
         private ToolTip _helpToolTip;
-        private readonly ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
+        private ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
         private readonly List<CheckBox> _runtimeFeatureCheckBoxes = new List<CheckBox>();
         private IList<ManagerBooleanOptionRecord> _runtimeOptions = new List<ManagerBooleanOptionRecord>();
         private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/users/myaccount?tab=api";
@@ -78,6 +81,20 @@ namespace Manager.Views
         {
             _nexusAccountStatus = status;
             UpdateNexusStatusLabels();
+        }
+
+        public void ApplyGameProfile(GameProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            _supportsSaveOptions = profile.SupportsSaveDiscovery;
+            _defaultNexusGameDomain = profile.DefaultNexusGameDomain ?? string.Empty;
+            _runtimeOptionsService = new ManagerBooleanOptionsService(profile.UsesApiAssembly("ShelteredAPI"));
+            _autoCondenseLabel.Visible = _supportsSaveOptions;
+            _autoCondenseCombo.Visible = _supportsSaveOptions;
+            LoadRuntimeOptions();
+            UpdateDynamicLayout();
         }
 
         private void InitializeComponent()
@@ -362,11 +379,15 @@ namespace Manager.Views
             y += 30;
             _darkModeCheckBox.Location = new Point(x + 10, y);
             y += 42;
-            _autoCondenseLabel.Location = new Point(x + 10, y);
-            y += 24;
-            _autoCondenseCombo.Location = new Point(x + 10, y);
-            _autoCondenseCombo.Width = 240;
-            return y + 52;
+            if (_supportsSaveOptions)
+            {
+                _autoCondenseLabel.Location = new Point(x + 10, y);
+                y += 24;
+                _autoCondenseCombo.Location = new Point(x + 10, y);
+                _autoCondenseCombo.Width = 240;
+                y += 52;
+            }
+            return y;
         }
 
         private int LayoutNexusSection(int x, int y)
@@ -526,7 +547,7 @@ namespace Manager.Views
                 else _autoCondenseCombo.SelectedIndex = 0;
 
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
-                _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
+                _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? _defaultNexusGameDomain;
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
                 _nexusApiKeyRevealed = false;
                 ApplyNexusApiKeyDisplayMode();

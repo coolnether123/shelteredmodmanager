@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using Manager.Core.Games.Models;
 
 namespace Manager.Views
 {
@@ -9,9 +10,9 @@ namespace Manager.Views
     /// </summary>
     public class AboutTab : UserControl
     {
-        private const string IssuesUrl = "https://github.com/coolnether123/shelteredmodmanager/issues";
-        private const string NexusModsUrl = "https://www.nexusmods.com/games/sheltered";
-        private const string NexusManagerUrl = "https://www.nexusmods.com/sheltered/mods/1";
+        private string _issuesUrl = "https://github.com/coolnether123/shelteredmodmanager/issues";
+        private string _nexusModsUrl = string.Empty;
+        private string _nexusManagerUrl = string.Empty;
 
         private Label _titleLabel;
         private Label _versionLabel;
@@ -57,6 +58,24 @@ namespace Manager.Views
             InitializeComponent();
         }
 
+        public void ApplyGameProfile(GameProfile profile)
+        {
+            if (profile == null || profile.AboutContent == null)
+                return;
+
+            GameAboutContent content = profile.AboutContent;
+            _titleLabel.Text = !string.IsNullOrEmpty(content.Title) ? content.Title : profile.ManagerTitle;
+            _descriptionBox.Text = content.Description ?? string.Empty;
+            _creditsBox.Text = content.Credits ?? string.Empty;
+            _issuesUrl = content.IssuesUrl ?? string.Empty;
+            _nexusModsUrl = content.NexusGameUrl ?? string.Empty;
+            _nexusManagerUrl = content.NexusManagerUrl ?? string.Empty;
+            _nexusModsLink.Text = !string.IsNullOrEmpty(content.NexusGameLinkText) ? content.NexusGameLinkText : "Nexus Mods";
+            _nexusManagerLink.Text = !string.IsNullOrEmpty(content.NexusManagerLinkText) ? content.NexusManagerLinkText : "Manager on Nexus";
+            _nexusModsLink.Visible = !string.IsNullOrEmpty(_nexusModsUrl);
+            _nexusManagerLink.Visible = !string.IsNullOrEmpty(_nexusManagerUrl);
+        }
+
         private void InitializeComponent()
         {
             this.SuspendLayout();
@@ -65,7 +84,7 @@ namespace Manager.Views
             int yPos = 20;
 
             _titleLabel = new Label();
-            _titleLabel.Text = "Sheltered Mod Manager";
+            _titleLabel.Text = "Mod Manager";
             _titleLabel.Font = new Font("Segoe UI", 18f, FontStyle.Bold);
             _titleLabel.AutoSize = true;
             _titleLabel.Location = new Point(20, yPos);
@@ -91,23 +110,7 @@ namespace Manager.Views
 
             _descriptionBox = new RichTextBox();
             _descriptionBox.Text =
-                "Sheltered Mod Manager is a modding framework for Sheltered by Unicube and Team17. It installs non-destructively alongside the game and supports Steam/GOG 32-bit builds and Epic 64-bit builds.\n\n" +
-
-                "Core features:\n" +
-                "- Plugin loader with dependency resolution and load order management.\n" +
-                "- Unlimited save slots for vanilla scenarios with mod tracking and verification.\n" +
-                "- Desktop and in-game mod managers.\n" +
-                "- Rebindable Sheltered and mod-defined keybindings.\n" +
-
-                "Experimental scenario support:\n" +
-                "- Custom scenario browser, XML scenario packs, triggers, scheduled effects, and win/loss runtime support.\n\n" +
-
-                "Developer API:\n" +
-                "- ModAPI.dll provides the neutral modding framework surface.\n" +
-                "- ShelteredAPI.dll provides Sheltered content, saves, UI, input, events, actors, scenarios, and Harmony integration.\n" +
-                "- ModManagerBase, attribute settings, Spine settings UI, isolated persistence, event bus, and runtime inspector (F9).\n\n" +
-
-                "Originally created by benjaminfoo in 2019. Maintained by Coolnether123 from 2025 to present with the original author's permission.";
+                "This desktop manager loads a selected game profile to provide mod discovery, dependency resolution, load order management, runtime launch configuration, and Nexus integration.";
 
             _descriptionBox.Font = new Font("Segoe UI", 10f);
             _descriptionBox.Location = new Point(20, yPos);
@@ -130,10 +133,10 @@ namespace Manager.Views
             _issuesLink = CreateLinkLabel("GitHub Issues", rightColumnX + 10, rightColumnY, IssuesLink_LinkClicked);
             rightColumnY += 25;
 
-            _nexusModsLink = CreateLinkLabel("Nexus Mods - Sheltered", rightColumnX + 10, rightColumnY, NexusModsLink_LinkClicked);
+            _nexusModsLink = CreateLinkLabel("Nexus Mods", rightColumnX + 10, rightColumnY, NexusModsLink_LinkClicked);
             rightColumnY += 25;
 
-            _nexusManagerLink = CreateLinkLabel("Sheltered Mod Manager on Nexus", rightColumnX + 10, rightColumnY, NexusManagerLink_LinkClicked);
+            _nexusManagerLink = CreateLinkLabel("Manager on Nexus", rightColumnX + 10, rightColumnY, NexusManagerLink_LinkClicked);
             rightColumnY += 50;
 
             _creditsLabel = new Label();
@@ -147,8 +150,6 @@ namespace Manager.Views
             _creditsBox = new RichTextBox();
             _creditsBox.Text = "- Coolnether123: 2025 maintenance and development.\n" +
                    "- benjaminfoo: Original 2019 mod loader foundation.\n" +
-                   "- Team17: Publisher of Sheltered.\n" +
-                   "- Unicube: Original game developers.\n" +
                    "- NeighTools: UnityDoorstop injection framework.\n" +
                    "- Andreas Pardeike: Harmony runtime patching library.";
             _creditsBox.Font = new Font("Segoe UI", 10f);
@@ -188,23 +189,26 @@ namespace Manager.Views
 
         private void IssuesLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            OpenUrl(IssuesUrl);
+            OpenUrl(_issuesUrl);
         }
 
         private void NexusModsLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            OpenUrl(NexusModsUrl);
+            OpenUrl(_nexusModsUrl);
         }
 
         private void NexusManagerLink_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            OpenUrl(NexusManagerUrl);
+            OpenUrl(_nexusManagerUrl);
         }
 
         private void OpenUrl(string url)
         {
             try
             {
+                if (string.IsNullOrEmpty(url))
+                    return;
+
                 System.Diagnostics.Process.Start(url);
             }
             catch (Exception ex)

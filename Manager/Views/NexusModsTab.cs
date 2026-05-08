@@ -168,7 +168,7 @@ namespace Manager.Views
             _managerStatusLabel.AutoEllipsis = true;
 
             ConfigurePrimaryButton(_refreshButton, "Refresh");
-            ConfigurePrimaryButton(_checkManagerButton, "Check SMM Update");
+            ConfigurePrimaryButton(_checkManagerButton, "Check Manager Update");
             _refreshButton.Size = new Size(120, 32);
             _checkManagerButton.Size = new Size(145, 32);
             _refreshButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -349,23 +349,23 @@ namespace Manager.Views
         {
             if (_settings == null || _nexusService == null || !_settings.EnableNexusIntegration)
             {
-                _managerStatusLabel.Text = "SMM: disabled";
+                _managerStatusLabel.Text = "Manager: disabled";
                 return;
             }
             if (_settings.ManagerNexusModId <= 0)
             {
-                _managerStatusLabel.Text = "SMM: no manager ID";
+                _managerStatusLabel.Text = "Manager: no manager ID";
                 return;
             }
 
             string domain = GetGameDomain();
             if (string.IsNullOrEmpty(domain))
             {
-                _managerStatusLabel.Text = "SMM: no domain";
+                _managerStatusLabel.Text = "Manager: no domain";
                 return;
             }
 
-            _managerStatusLabel.Text = "SMM: checking...";
+            _managerStatusLabel.Text = "Manager: checking...";
             _checkManagerButton.Enabled = false;
 
             ThreadPool.QueueUserWorkItem(delegate
@@ -382,13 +382,13 @@ namespace Manager.Views
                         _checkManagerButton.Enabled = true;
                         if (!string.IsNullOrEmpty(error))
                         {
-                            _managerStatusLabel.Text = "SMM: check failed";
-                            EmitActivity("SMM update check failed: " + error);
+                            _managerStatusLabel.Text = "Manager: check failed";
+                            EmitActivity("Manager update check failed: " + error);
                             return;
                         }
                         if (remote == null)
                         {
-                            _managerStatusLabel.Text = "SMM: not found on Nexus";
+                            _managerStatusLabel.Text = "Manager: not found on Nexus";
                             return;
                         }
 
@@ -398,11 +398,11 @@ namespace Manager.Views
                         string remoteChannel = FormatReleaseChannelSuffix(remote.Version);
                         string localChannel = FormatReleaseChannelSuffix(_managerVersion);
                         if (comparison < 0)
-                            _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + remoteChannel + ")";
+                            _managerStatusLabel.Text = "Manager: update available (" + remoteVersion + remoteChannel + ")";
                         else if (comparison == 0)
-                            _managerStatusLabel.Text = "SMM: current (" + localVersion + localChannel + ")";
+                            _managerStatusLabel.Text = "Manager: current (" + localVersion + localChannel + ")";
                         else
-                            _managerStatusLabel.Text = "SMM: local build newer than Nexus (" + localVersion + localChannel + ")";
+                            _managerStatusLabel.Text = "Manager: local build newer than Nexus (" + localVersion + localChannel + ")";
                     });
                 }
                 catch { }
@@ -857,7 +857,7 @@ namespace Manager.Views
                 _summaryLabel.Text = "Installed " + _installedMods.Count + "   Linked " + _installedByNexusKey.Count + "   Updates " + CountUpdates(_installedMods) + "   Compatibility " + CountApiIssues(_installedMods) + BuildLastCheckedSuffix();
 
             if (string.IsNullOrEmpty(_managerStatusLabel.Text))
-                _managerStatusLabel.Text = "SMM: not checked";
+                _managerStatusLabel.Text = "Manager: not checked";
 
             _downloadLabel.Visible = !string.IsNullOrEmpty(_downloadLabel.Text);
             LayoutTopPanel();
@@ -1040,7 +1040,9 @@ namespace Manager.Views
         private string GetGameDomain()
         {
             if (_settings == null || string.IsNullOrEmpty(_settings.NexusGameDomain))
-                return "sheltered";
+                return _settings != null && string.Equals(_settings.SelectedGameId, "sheltered", StringComparison.OrdinalIgnoreCase)
+                    ? "sheltered"
+                    : string.Empty;
             return _settings.NexusGameDomain.Trim().ToLowerInvariant();
         }
 
