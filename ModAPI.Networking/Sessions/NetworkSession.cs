@@ -275,6 +275,7 @@ namespace ModAPI.Networking.Sessions
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - Dispose must finish unhooking transport handlers even if shutdown already failed.
             }
 
             _transport.PacketReceived -= OnPacketReceived;
@@ -748,6 +749,8 @@ namespace ModAPI.Networking.Sessions
             NetworkMessage message;
             while (reader.TryReadNext(out message))
             {
+                // Reliable is reliable-unordered: duplicate packet sequences are suppressed, but later
+                // reliable packets are not held while an earlier sequence is missing.
                 if (message.Channel == NetworkChannel.Reliable && !isNewSequence)
                     continue;
 
@@ -813,7 +816,9 @@ namespace ModAPI.Networking.Sessions
                 peer.Diagnostics.RecordPacketSent(packet.Length);
                 peer.TouchSend(utcNow);
                 _diagnosticsEvents.Add(NetworkDiagnosticsEventKind.PacketSent, peer.PeerId, peer.EndPoint,
-                    packet.Length, packet.Sequence, 0, "Resent reliable packet.");
+                    packet.Length, packet.Sequence, 0,
+                    "Resent reliable-unordered packet " + packet.Sequence + " to " + peer.EndPoint
+                    + " (retry " + packet.RetryCount + ").");
             }
             catch (Exception ex)
             {
@@ -823,7 +828,9 @@ namespace ModAPI.Networking.Sessions
 
         private void HandleReliableTimeout(NetworkPeer peer, ReliableSentPacket packet)
         {
-            string message = "Reliable packet " + packet.Sequence + " was not acknowledged before the connection timeout.";
+            string message = "Reliable-unordered packet " + packet.Sequence + " for peer " + peer.PeerId
+                + " at " + peer.EndPoint + " was not acknowledged within "
+                + Config.ConnectionTimeoutMilliseconds + "ms after " + packet.RetryCount + " retries.";
             peer.LastError = message;
 
             if (Mode == NetworkSessionMode.Host)

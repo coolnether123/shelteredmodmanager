@@ -37,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AddressingTests.cs" />
+    <Compile Include="ArchitectureBoundaryTests.cs" />
     <Compile Include="CoreNetworkingExpansionTests.cs" />
     <Compile Include="DiagnosticsTests.cs" />
     <Compile Include="DiscoveryTests.cs" />

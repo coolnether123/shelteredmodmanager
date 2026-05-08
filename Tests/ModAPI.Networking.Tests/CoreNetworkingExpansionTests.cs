@@ -26,6 +26,7 @@ namespace ModAPI.Networking.Tests
             tests.Add(new TestCase("Client disconnect reports reason to host", ClientDisconnectReportsReasonToHost));
             tests.Add(new TestCase("Host disconnects a selected client", HostDisconnectsSelectedClient));
             tests.Add(new TestCase("Two-client localhost smoke covers broadcast and direct send", TwoClientLocalhostSmokeCoversBroadcastAndDirectSend));
+            tests.Add(new TestCase("Two-process localhost harness completes reliable UDP round trip", TwoProcessLocalhostHarnessCompletesReliableUdpRoundTrip));
             tests.Add(new TestCase("Application sends flush in configured batches", ApplicationSendsFlushInConfiguredBatches));
             tests.Add(new TestCase("Repeated localhost sessions remain independent", RepeatedLocalhostSessionsRemainIndependent));
         }
@@ -363,6 +364,11 @@ namespace ModAPI.Networking.Tests
                 if (host != null)
                     host.Dispose();
             }
+        }
+
+        private static void TwoProcessLocalhostHarnessCompletesReliableUdpRoundTrip()
+        {
+            NetworkTestUtilities.RunTwoProcessLocalhostHarness();
         }
 
         private static void RepeatedLocalhostSessionsRemainIndependent()

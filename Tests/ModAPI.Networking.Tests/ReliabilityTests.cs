@@ -16,8 +16,13 @@ namespace ModAPI.Networking.Tests
         internal static void Register(List<TestCase> tests)
         {
             tests.Add(new TestCase("Reliable outbound queue removes ACKed packets", ReliableOutboundQueueRemovesAckedPackets));
+            tests.Add(new TestCase("Reliable message delivers exactly once after ACK", ReliableMessageDeliversExactlyOnceAfterAck));
             tests.Add(new TestCase("Reliable ACK-only packets clear queue before heartbeat", ReliableAckOnlyPacketsClearQueueBeforeHeartbeat));
+            tests.Add(new TestCase("Lost ACK causes reliable resend without duplicate delivery", LostAckCausesReliableResendWithoutDuplicateDelivery));
             tests.Add(new TestCase("Reliable packets resend after packet loss and clear after ACK", ReliablePacketsResendAndClearAfterAck));
+            tests.Add(new TestCase("Reliable resend timeout marks sender failed predictably", ReliableResendTimeoutMarksSenderFailedPredictably));
+            tests.Add(new TestCase("Multiple reliable messages in one packet deliver once", MultipleReliableMessagesInOnePacketDeliverOnce));
+            tests.Add(new TestCase("Out-of-order reliable packets deliver unordered", OutOfOrderReliablePacketsDeliverUnordered));
             tests.Add(new TestCase("Reliable receive suppresses duplicate packets", ReliableReceiveSuppressesDuplicatePackets));
             tests.Add(new TestCase("Unreliable packets stay fire-and-forget after loss", UnreliablePacketsDoNotResend));
         }
@@ -37,6 +42,54 @@ namespace ModAPI.Networking.Tests
             TestAssert.Equal(1, queue.Count, "Only the unacked packet should remain.");
             TestAssert.Equal(1, queue.ProcessAcks(10, 0), "Cumulative ACK should remove the final packet.");
             TestAssert.Equal(0, queue.Count, "Queue should be empty after all ACKs.");
+        }
+
+        private static void ReliableMessageDeliversExactlyOnceAfterAck()
+        {
+            PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                NetworkConfig config = CreateReliableTestConfig();
+                config.HeartbeatIntervalMilliseconds = 1000;
+                host = new NetworkSession(config, transports.Host);
+                client = new NetworkSession(config, transports.Client);
+                NetworkTestUtilities.Connect(host, client, "ModAPI.Networking.ReliabilityTests");
+
+                int received = 0;
+                host.MessageReceived += delegate(object sender, NetworkMessageReceivedEventArgs e)
+                {
+                    if (e.MessageType == TestMessageType)
+                        received++;
+                };
+
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 8 }),
+                    "Reliable send should be accepted.");
+
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return received == 1 && ClientReliableQueueCount(client) == 0;
+                }, "Reliable payload was not delivered and ACKed.", 1000);
+
+                DateTime settleUntil = DateTime.UtcNow.AddMilliseconds(150);
+                while (DateTime.UtcNow < settleUntil)
+                {
+                    NetworkTestUtilities.PumpOnce(host, client);
+                    System.Threading.Thread.Sleep(10);
+                }
+
+                TestAssert.Equal(1, received, "Reliable payload should be surfaced exactly once after a clean ACK.");
+                TestAssert.Equal(1, transports.ClientToHostReliableApplicationSends,
+                    "Clean reliable delivery should not retransmit.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
         }
 
         private static void ReliableAckOnlyPacketsClearQueueBeforeHeartbeat()
@@ -83,6 +136,56 @@ namespace ModAPI.Networking.Tests
             }
         }
 
+        private static void LostAckCausesReliableResendWithoutDuplicateDelivery()
+        {
+            PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                NetworkConfig config = CreateReliableTestConfig();
+                config.AckFlushMilliseconds = 10;
+                config.ReliableResendMilliseconds = 40;
+                config.HeartbeatIntervalMilliseconds = 1000;
+                host = new NetworkSession(config, transports.Host);
+                client = new NetworkSession(config, transports.Client);
+                NetworkTestUtilities.Connect(host, client, "ModAPI.Networking.ReliabilityTests");
+
+                transports.DropNextHostToClientAckOnly = true;
+
+                int received = 0;
+                host.MessageReceived += delegate(object sender, NetworkMessageReceivedEventArgs e)
+                {
+                    if (e.MessageType == TestMessageType)
+                        received++;
+                };
+
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 4 }),
+                    "Reliable send should be accepted.");
+
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return ClientReliableQueueCount(client) == 0
+                        && transports.HostToClientAckOnlyDrops == 1
+                        && transports.ClientToHostReliableApplicationSends >= 2;
+                }, "Lost ACK did not force a reliable resend that later cleared.", 2000);
+
+                TestAssert.Equal(1, transports.HostToClientAckOnlyDrops,
+                    "The first receiver ACK-only packet should have been dropped by the test transport.");
+                TestAssert.True(transports.ClientToHostReliableApplicationSends >= 2,
+                    "Sender should resend when the ACK is lost.");
+                TestAssert.Equal(1, received,
+                    "Receiver should suppress the duplicate reliable packet caused by the lost ACK.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
+        }
+
         private static void ReliablePacketsResendAndClearAfterAck()
         {
             PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
@@ -117,6 +220,167 @@ namespace ModAPI.Networking.Tests
                 TestAssert.True(transports.ClientToHostReliableApplicationSends >= 2,
                     "Reliable delivery should retransmit after the configured resend interval.");
                 TestAssert.Equal(1, received, "Receiver should surface the reliable payload once.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
+        }
+
+        private static void ReliableResendTimeoutMarksSenderFailedPredictably()
+        {
+            PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                NetworkConfig config = CreateReliableTestConfig();
+                config.ConnectionTimeoutMilliseconds = 180;
+                config.ReliableResendMilliseconds = 30;
+                config.HeartbeatIntervalMilliseconds = 40;
+                host = new NetworkSession(config, transports.Host);
+                client = new NetworkSession(config, transports.Client);
+                NetworkTestUtilities.Connect(host, client, "ModAPI.Networking.ReliabilityTests");
+
+                transports.DropAllClientToHostReliableApplication = true;
+
+                int hostReceived = 0;
+                int clientDisconnected = 0;
+                NetworkDisconnectReason reason = NetworkDisconnectReason.None;
+                string disconnectMessage = string.Empty;
+                host.MessageReceived += delegate(object sender, NetworkMessageReceivedEventArgs e)
+                {
+                    if (e.MessageType == TestMessageType)
+                        hostReceived++;
+                };
+                client.PeerDisconnected += delegate(object sender, NetworkPeerDisconnectedEventArgs e)
+                {
+                    clientDisconnected++;
+                    reason = e.Reason;
+                    disconnectMessage = e.Message;
+                };
+
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 6 }),
+                    "Reliable send should be accepted.");
+
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return client.State == NetworkSessionState.Failed && clientDisconnected == 1;
+                }, "Sender did not fail predictably after the reliable resend timeout.", 2000);
+
+                TestAssert.Equal(0, hostReceived, "Dropped reliable packet should never reach the receiver.");
+                TestAssert.True(transports.ClientToHostReliableApplicationSends >= 2,
+                    "Sender should attempt reliable retries before timing out.");
+                TestAssert.Equal(NetworkDisconnectReason.Timeout, reason,
+                    "Reliable resend expiry should report a timeout disconnect.");
+                TestAssert.True(disconnectMessage.IndexOf("Reliable-unordered packet", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "Reliable timeout diagnostics should identify the unacked reliable packet.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
+        }
+
+        private static void MultipleReliableMessagesInOnePacketDeliverOnce()
+        {
+            PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                NetworkConfig config = CreateReliableTestConfig();
+                config.HeartbeatIntervalMilliseconds = 1000;
+                host = new NetworkSession(config, transports.Host);
+                client = new NetworkSession(config, transports.Client);
+                NetworkTestUtilities.Connect(host, client, "ModAPI.Networking.ReliabilityTests");
+
+                List<byte> received = new List<byte>();
+                host.MessageReceived += delegate(object sender, NetworkMessageReceivedEventArgs e)
+                {
+                    if (e.MessageType == TestMessageType && e.Payload.Length == 1)
+                        received.Add(e.Payload[0]);
+                };
+
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 11 }),
+                    "First reliable send should be accepted.");
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 12 }),
+                    "Second reliable send should be accepted.");
+
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return received.Count == 2 && ClientReliableQueueCount(client) == 0;
+                }, "Batched reliable messages were not delivered and ACKed.", 1000);
+
+                TestAssert.Equal(1, transports.ClientToHostReliableApplicationSends,
+                    "Two queued reliable messages to the same peer should share one packet.");
+                TestAssert.Equal(2, received.Count, "Both reliable messages should be surfaced exactly once.");
+                TestAssert.Equal((byte)11, received[0], "First batched reliable payload should be delivered.");
+                TestAssert.Equal((byte)12, received[1], "Second batched reliable payload should be delivered.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
+        }
+
+        private static void OutOfOrderReliablePacketsDeliverUnordered()
+        {
+            PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                NetworkConfig config = CreateReliableTestConfig();
+                config.ReliableResendMilliseconds = 500;
+                config.HeartbeatIntervalMilliseconds = 1000;
+                host = new NetworkSession(config, transports.Host);
+                client = new NetworkSession(config, transports.Client);
+                NetworkTestUtilities.Connect(host, client, "ModAPI.Networking.ReliabilityTests");
+
+                List<byte> received = new List<byte>();
+                host.MessageReceived += delegate(object sender, NetworkMessageReceivedEventArgs e)
+                {
+                    if (e.MessageType == TestMessageType && e.Payload.Length == 1)
+                        received.Add(e.Payload[0]);
+                };
+
+                transports.HoldNextClientToHostReliableApplication = true;
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 1 }),
+                    "First reliable send should be accepted.");
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return transports.HeldClientToHostReliableApplicationPackets == 1;
+                }, "First reliable packet was not held by the test transport.", 1000);
+
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 2 }),
+                    "Second reliable send should be accepted.");
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return received.Count == 1 && received[0] == 2;
+                }, "Second reliable packet did not arrive ahead of the held first packet.", 1000);
+
+                transports.ReleaseHeldClientToHostReliablePackets();
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return received.Count == 2 && ClientReliableQueueCount(client) == 0;
+                }, "Held out-of-order reliable packet was not delivered and ACKed.", 1000);
+
+                TestAssert.Equal((byte)2, received[0],
+                    "Reliable-unordered delivery should surface the newer packet when it arrives first.");
+                TestAssert.Equal((byte)1, received[1],
+                    "Reliable-unordered delivery should surface the older missing packet when it arrives later.");
+                TestAssert.Equal(2, transports.ClientToHostReliableApplicationSends,
+                    "Out-of-order delivery test should send two application packets without relying on resend.");
             }
             finally
             {
@@ -216,6 +480,8 @@ namespace ModAPI.Networking.Tests
         private static NetworkConfig CreateReliableTestConfig()
         {
             NetworkConfig config = NetworkTestUtilities.CreateLoopbackConfig();
+            config.FlushIntervalMilliseconds = 10;
+            config.AckFlushMilliseconds = 10;
             config.ReliableResendMilliseconds = 40;
             config.ConnectionTimeoutMilliseconds = 1000;
             config.HeartbeatIntervalMilliseconds = 40;
@@ -234,13 +500,18 @@ namespace ModAPI.Networking.Tests
 
             public bool DropNextClientToHostReliableApplication;
             public bool DropNextClientToHostUnreliableApplication;
+            public bool DropNextHostToClientAckOnly;
+            public bool DropAllClientToHostReliableApplication;
             public bool DuplicateNextClientToHostReliableApplication;
+            public bool HoldNextClientToHostReliableApplication;
             public int ClientToHostReliableApplicationSends;
             public int ClientToHostUnreliableApplicationSends;
             public int ClientToHostReliableApplicationDrops;
             public int ClientToHostUnreliableApplicationDrops;
             public int ClientToHostReliableApplicationDuplicates;
             public int HostToClientAckOnlySends;
+            public int HostToClientAckOnlyDrops;
+            private readonly List<HeldPacket> _heldClientToHostReliablePackets = new List<HeldPacket>();
 
             public static PairedMemoryTransportPair Create()
             {
@@ -252,18 +523,51 @@ namespace ModAPI.Networking.Tests
                 return pair;
             }
 
+            public int HeldClientToHostReliableApplicationPackets
+            {
+                get { return _heldClientToHostReliablePackets.Count; }
+            }
+
+            public void ReleaseHeldClientToHostReliablePackets()
+            {
+                while (_heldClientToHostReliablePackets.Count > 0)
+                {
+                    HeldPacket held = _heldClientToHostReliablePackets[0];
+                    _heldClientToHostReliablePackets.RemoveAt(0);
+                    Host.Receive(held.RemoteEndPoint, held.Bytes);
+                }
+            }
+
             public bool ShouldDrop(PairedMemoryTransport sender, PacketDescription packet)
             {
-                if (sender.IsHost || !packet.IsApplication)
+                if (sender.IsHost)
                 {
                     if (sender.IsHost && packet.IsAckOnly)
+                    {
                         HostToClientAckOnlySends++;
+                        if (DropNextHostToClientAckOnly)
+                        {
+                            DropNextHostToClientAckOnly = false;
+                            HostToClientAckOnlyDrops++;
+                            return true;
+                        }
+                    }
+
                     return false;
                 }
+
+                if (!packet.IsApplication)
+                    return false;
 
                 if (packet.Channel == NetworkChannel.Reliable)
                 {
                     ClientToHostReliableApplicationSends++;
+                    if (DropAllClientToHostReliableApplication)
+                    {
+                        ClientToHostReliableApplicationDrops++;
+                        return true;
+                    }
+
                     if (DropNextClientToHostReliableApplication)
                     {
                         DropNextClientToHostReliableApplication = false;
@@ -285,6 +589,20 @@ namespace ModAPI.Networking.Tests
                 return false;
             }
 
+            public bool ShouldHold(PairedMemoryTransport sender, PacketDescription packet, byte[] bytes)
+            {
+                if (sender.IsHost || !packet.IsApplication || packet.Channel != NetworkChannel.Reliable)
+                    return false;
+                if (!HoldNextClientToHostReliableApplication)
+                    return false;
+
+                HoldNextClientToHostReliableApplication = false;
+                byte[] copy = new byte[bytes.Length];
+                Buffer.BlockCopy(bytes, 0, copy, 0, bytes.Length);
+                _heldClientToHostReliablePackets.Add(new HeldPacket(sender.LocalEndPoint, copy));
+                return true;
+            }
+
             public bool ShouldDuplicate(PairedMemoryTransport sender, PacketDescription packet)
             {
                 if (sender.IsHost || !packet.IsApplication || packet.Channel != NetworkChannel.Reliable)
@@ -295,6 +613,18 @@ namespace ModAPI.Networking.Tests
                 DuplicateNextClientToHostReliableApplication = false;
                 ClientToHostReliableApplicationDuplicates++;
                 return true;
+            }
+
+            private sealed class HeldPacket
+            {
+                public HeldPacket(IPEndPoint remoteEndPoint, byte[] bytes)
+                {
+                    RemoteEndPoint = remoteEndPoint;
+                    Bytes = bytes;
+                }
+
+                public IPEndPoint RemoteEndPoint;
+                public byte[] Bytes;
             }
         }
 
@@ -348,6 +678,8 @@ namespace ModAPI.Networking.Tests
                 PacketDescription packet = PacketDescription.Read(copy, count);
                 if (_pair.ShouldDrop(this, packet))
                     return;
+                if (_pair.ShouldHold(this, packet, copy))
+                    return;
 
                 Partner.Receive(LocalEndPoint, copy);
                 if (_pair.ShouldDuplicate(this, packet))
@@ -363,7 +695,7 @@ namespace ModAPI.Networking.Tests
                 Stop();
             }
 
-            private void Receive(IPEndPoint remoteEndPoint, byte[] bytes)
+            public void Receive(IPEndPoint remoteEndPoint, byte[] bytes)
             {
                 Action<ReceivedPacket> handler = PacketReceived;
                 if (handler == null)

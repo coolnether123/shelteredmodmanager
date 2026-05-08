@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading;
 using ModAPI.Networking.Diagnostics;
 using ModAPI.Networking.Protocol;
 using ModAPI.Networking.Sessions;
+using ModAPI.Networking.Transport;
 
 namespace ModAPI.Networking.Tests
 {
@@ -18,6 +20,8 @@ namespace ModAPI.Networking.Tests
             tests.Add(new TestCase("Diagnostics snapshot tracks last peer error", DiagnosticsSnapshotTracksLastError));
             tests.Add(new TestCase("Diagnostics estimates heartbeat latency after ACK timing", DiagnosticsEstimatesHeartbeatLatency));
             tests.Add(new TestCase("Network config validates simulation hooks", NetworkConfigValidatesSimulationHooks));
+            tests.Add(new TestCase("UDP transport packet-loss simulation drops packets", UdpTransportPacketLossSimulationDropsPackets));
+            tests.Add(new TestCase("UDP transport latency and jitter simulation delays packets", UdpTransportLatencyAndJitterSimulationDelaysPackets));
         }
 
         private static void DiagnosticsSnapshotIncludesCounters()
@@ -188,6 +192,97 @@ namespace ModAPI.Networking.Tests
                 invalid.SimulatedJitterMilliseconds = -1;
                 invalid.Validate();
             }, "Negative simulated jitter should be rejected.");
+        }
+
+        private static void UdpTransportPacketLossSimulationDropsPackets()
+        {
+            UdpSocketTransport receiver = null;
+            UdpSocketTransport sender = null;
+            ManualResetEvent receivedEvent = new ManualResetEvent(false);
+            try
+            {
+                NetworkConfig receiverConfig = CreateTransportSimulationConfig();
+                NetworkConfig senderConfig = CreateTransportSimulationConfig();
+                senderConfig.SimulatedPacketLossPercent = 100;
+                receiver = new UdpSocketTransport(receiverConfig);
+                sender = new UdpSocketTransport(senderConfig);
+                receiver.PacketReceived += delegate(ReceivedPacket packet)
+                {
+                    packet.Dispose();
+                    receivedEvent.Set();
+                };
+
+                receiver.Start(0);
+                sender.Start(0);
+                byte[] payload = new byte[] { 1, 2, 3, 4 };
+                sender.Send(ToLoopback(receiver.LocalEndPoint), payload, 0, payload.Length);
+
+                TestAssert.False(receivedEvent.WaitOne(200, false),
+                    "Transport configured with 100 percent simulated packet loss should drop outbound packets.");
+            }
+            finally
+            {
+                receivedEvent.Close();
+                if (sender != null)
+                    sender.Dispose();
+                if (receiver != null)
+                    receiver.Dispose();
+            }
+        }
+
+        private static void UdpTransportLatencyAndJitterSimulationDelaysPackets()
+        {
+            UdpSocketTransport receiver = null;
+            UdpSocketTransport sender = null;
+            ManualResetEvent receivedEvent = new ManualResetEvent(false);
+            DateTime sentUtc = DateTime.MinValue;
+            DateTime receivedUtc = DateTime.MinValue;
+            try
+            {
+                NetworkConfig receiverConfig = CreateTransportSimulationConfig();
+                NetworkConfig senderConfig = CreateTransportSimulationConfig();
+                senderConfig.SimulatedLatencyMilliseconds = 150;
+                senderConfig.SimulatedJitterMilliseconds = 25;
+                receiver = new UdpSocketTransport(receiverConfig);
+                sender = new UdpSocketTransport(senderConfig);
+                receiver.PacketReceived += delegate(ReceivedPacket packet)
+                {
+                    receivedUtc = DateTime.UtcNow;
+                    packet.Dispose();
+                    receivedEvent.Set();
+                };
+
+                receiver.Start(0);
+                sender.Start(0);
+                byte[] payload = new byte[] { 5, 6, 7, 8 };
+                sentUtc = DateTime.UtcNow;
+                sender.Send(ToLoopback(receiver.LocalEndPoint), payload, 0, payload.Length);
+
+                TestAssert.True(receivedEvent.WaitOne(2000, false),
+                    "Transport with simulated latency/jitter should still deliver the delayed packet.");
+                TestAssert.True((receivedUtc - sentUtc).TotalMilliseconds >= 100,
+                    "Transport latency simulation should delay delivery by a measurable amount.");
+            }
+            finally
+            {
+                receivedEvent.Close();
+                if (sender != null)
+                    sender.Dispose();
+                if (receiver != null)
+                    receiver.Dispose();
+            }
+        }
+
+        private static NetworkConfig CreateTransportSimulationConfig()
+        {
+            NetworkConfig config = NetworkConfig.CreateDefault();
+            config.Port = 0;
+            return config;
+        }
+
+        private static IPEndPoint ToLoopback(IPEndPoint endPoint)
+        {
+            return new IPEndPoint(IPAddress.Loopback, endPoint.Port);
         }
 
         private delegate void ThrowingAction();

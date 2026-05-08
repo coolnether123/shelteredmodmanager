@@ -6,6 +6,9 @@ namespace ModAPI.Networking.Tests
     {
         public static int Main(string[] args)
         {
+            if (NetworkTestUtilities.IsLocalhostHarnessCommand(args))
+                return NetworkTestUtilities.RunLocalhostHarnessProcess(args);
+
             List<TestCase> tests = new List<TestCase>();
             SaveResumeHookTests.Register(tests);
             CoreNetworkingExpansionTests.Register(tests);
@@ -15,6 +18,7 @@ namespace ModAPI.Networking.Tests
             AddressingTests.Register(tests);
             DiscoveryTests.Register(tests);
             DiagnosticsTests.Register(tests);
+            ArchitectureBoundaryTests.Register(tests);
             return TestRunner.Run(tests);
         }
     }
