@@ -148,6 +148,7 @@ namespace ModAPI.Networking.Sessions
                 && (State == NetworkSessionState.Connecting || State == NetworkSessionState.Connected))
                 _client.Pump(utcNow);
 
+            FlushDueAcks(utcNow);
             FlushApplicationMessages(utcNow, false);
             PumpReliableResends(utcNow);
         }
@@ -311,6 +312,29 @@ namespace ModAPI.Networking.Sessions
             NetworkHeartbeatMessage heartbeat = new NetworkHeartbeatMessage();
             heartbeat.PeerId = LocalPeerId;
             SendBuiltIn(peer, SessionMessageTypes.Heartbeat, CreatePayload(heartbeat.WriteTo), PacketFlags.IsHeartbeat);
+        }
+
+        internal void SendAckOnly(NetworkPeer peer)
+        {
+            if (peer == null || peer.State != NetworkConnectionState.Connected)
+                return;
+
+            PooledBuffer buffer = _sendPool.Rent();
+            try
+            {
+                MessageBatchBuilder builder = new MessageBatchBuilder(buffer.Bytes);
+                builder.AddFlags(PacketFlags.IsAckOnly);
+                SendPreparedPacket(peer.EndPoint, peer, builder, buffer.Bytes);
+            }
+            catch (Exception ex)
+            {
+                peer.LastError = ex.Message;
+                ReportSessionError("Failed to send ACK packet to " + peer.EndPoint, ex, false);
+            }
+            finally
+            {
+                buffer.Dispose();
+            }
         }
 
         internal void SendDisconnect(NetworkPeer peer, NetworkDisconnectReason reason, string message)
@@ -715,6 +739,8 @@ namespace ModAPI.Networking.Sessions
                 peer.Diagnostics.RecordInboundAck(header.Ack, header.AckBits, utcNow);
                 peer.Diagnostics.RecordPacketReceived(packet.Length);
                 isNewSequence = peer.TouchReceive(utcNow, header.Sequence);
+                if ((header.Flags & PacketFlags.HasReliableMessages) != 0)
+                    peer.MarkAckFlushDue(utcNow, Config.AckFlushMilliseconds);
                 _diagnosticsEvents.Add(NetworkDiagnosticsEventKind.PacketReceived, peer.PeerId, peer.EndPoint,
                     packet.Length, header.Sequence, header.MessageCount, DescribePacket("Received", header.Flags));
             }
@@ -754,6 +780,24 @@ namespace ModAPI.Networking.Sessions
                 ReliableSentPacket[] duePackets = peer.ReliableOutbound.GetDuePackets(utcNow, Config.ReliableResendMilliseconds);
                 for (int j = 0; j < duePackets.Length; j++)
                     ResendReliablePacket(peer, duePackets[j], utcNow);
+            }
+        }
+
+        private void FlushDueAcks(DateTime utcNow)
+        {
+            if (!_transport.IsRunning)
+                return;
+
+            NetworkPeer[] peers = Peers.GetAll();
+            for (int i = 0; i < peers.Length; i++)
+            {
+                NetworkPeer peer = peers[i];
+                if (peer.State == NetworkConnectionState.Connected
+                    && peer.AckFlushPending
+                    && utcNow >= peer.AckFlushDueUtc)
+                {
+                    SendAckOnly(peer);
+                }
             }
         }
 
@@ -800,6 +844,8 @@ namespace ModAPI.Networking.Sessions
                 return direction + " handshake packet.";
             if ((flags & PacketFlags.IsHeartbeat) != 0)
                 return direction + " heartbeat packet.";
+            if ((flags & PacketFlags.IsAckOnly) != 0)
+                return direction + " ACK packet.";
             if ((flags & PacketFlags.HasReliableMessages) != 0)
                 return direction + " reliable packet.";
             return direction + " packet.";

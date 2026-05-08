@@ -17,6 +17,7 @@ namespace ModAPI.Networking.Tests
             tests.Add(new TestCase("Diagnostics ring buffer respects configured bounds", DiagnosticsRingBufferRespectsBounds));
             tests.Add(new TestCase("Diagnostics snapshot tracks last peer error", DiagnosticsSnapshotTracksLastError));
             tests.Add(new TestCase("Diagnostics estimates heartbeat latency after ACK timing", DiagnosticsEstimatesHeartbeatLatency));
+            tests.Add(new TestCase("Network config validates simulation hooks", NetworkConfigValidatesSimulationHooks));
         }
 
         private static void DiagnosticsSnapshotIncludesCounters()
@@ -157,6 +158,53 @@ namespace ModAPI.Networking.Tests
                 if (host != null)
                     host.Dispose();
             }
+        }
+
+        private static void NetworkConfigValidatesSimulationHooks()
+        {
+            NetworkConfig config = NetworkConfig.CreateDefault();
+            config.SimulatedPacketLossPercent = 25;
+            config.SimulatedLatencyMilliseconds = 50;
+            config.SimulatedJitterMilliseconds = 10;
+            config.Validate();
+
+            AssertConfigRejected(delegate
+            {
+                NetworkConfig invalid = NetworkConfig.CreateDefault();
+                invalid.SimulatedPacketLossPercent = 101;
+                invalid.Validate();
+            }, "Packet loss above 100 percent should be rejected.");
+
+            AssertConfigRejected(delegate
+            {
+                NetworkConfig invalid = NetworkConfig.CreateDefault();
+                invalid.SimulatedLatencyMilliseconds = -1;
+                invalid.Validate();
+            }, "Negative simulated latency should be rejected.");
+
+            AssertConfigRejected(delegate
+            {
+                NetworkConfig invalid = NetworkConfig.CreateDefault();
+                invalid.SimulatedJitterMilliseconds = -1;
+                invalid.Validate();
+            }, "Negative simulated jitter should be rejected.");
+        }
+
+        private delegate void ThrowingAction();
+
+        private static void AssertConfigRejected(ThrowingAction action, string message)
+        {
+            bool rejected = false;
+            try
+            {
+                action();
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                rejected = true;
+            }
+
+            TestAssert.True(rejected, message);
         }
 
         private static NetworkPeerDiagnosticsSnapshot FindPeer(NetworkDiagnosticsSnapshot snapshot, byte peerId)

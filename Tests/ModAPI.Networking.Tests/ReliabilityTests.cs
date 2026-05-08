@@ -16,6 +16,7 @@ namespace ModAPI.Networking.Tests
         internal static void Register(List<TestCase> tests)
         {
             tests.Add(new TestCase("Reliable outbound queue removes ACKed packets", ReliableOutboundQueueRemovesAckedPackets));
+            tests.Add(new TestCase("Reliable ACK-only packets clear queue before heartbeat", ReliableAckOnlyPacketsClearQueueBeforeHeartbeat));
             tests.Add(new TestCase("Reliable packets resend after packet loss and clear after ACK", ReliablePacketsResendAndClearAfterAck));
             tests.Add(new TestCase("Reliable receive suppresses duplicate packets", ReliableReceiveSuppressesDuplicatePackets));
             tests.Add(new TestCase("Unreliable packets stay fire-and-forget after loss", UnreliablePacketsDoNotResend));
@@ -36,6 +37,50 @@ namespace ModAPI.Networking.Tests
             TestAssert.Equal(1, queue.Count, "Only the unacked packet should remain.");
             TestAssert.Equal(1, queue.ProcessAcks(10, 0), "Cumulative ACK should remove the final packet.");
             TestAssert.Equal(0, queue.Count, "Queue should be empty after all ACKs.");
+        }
+
+        private static void ReliableAckOnlyPacketsClearQueueBeforeHeartbeat()
+        {
+            PairedMemoryTransportPair transports = PairedMemoryTransportPair.Create();
+            NetworkSession host = null;
+            NetworkSession client = null;
+            try
+            {
+                NetworkConfig config = CreateReliableTestConfig();
+                config.AckFlushMilliseconds = 10;
+                config.ReliableResendMilliseconds = 200;
+                config.HeartbeatIntervalMilliseconds = 1000;
+                host = new NetworkSession(config, transports.Host);
+                client = new NetworkSession(config, transports.Client);
+                NetworkTestUtilities.Connect(host, client, "ModAPI.Networking.ReliabilityTests");
+
+                int received = 0;
+                host.MessageReceived += delegate(object sender, NetworkMessageReceivedEventArgs e)
+                {
+                    if (e.MessageType == TestMessageType)
+                        received++;
+                };
+
+                TestAssert.True(client.SendToHost(TestMessageType, NetworkChannel.Reliable, new byte[] { 9 }),
+                    "Reliable send should be accepted.");
+
+                NetworkTestUtilities.PumpUntil(new NetworkSession[] { host, client }, delegate
+                {
+                    return received == 1 && ClientReliableQueueCount(client) == 0;
+                }, "ACK-only packet did not clear the reliable queue before heartbeat/resend.", 1000);
+
+                TestAssert.Equal(1, transports.ClientToHostReliableApplicationSends,
+                    "Reliable sender should not retransmit while waiting for the next heartbeat ACK.");
+                TestAssert.True(transports.HostToClientAckOnlySends > 0,
+                    "Receiver should send a compact ACK-only packet for reliable data.");
+            }
+            finally
+            {
+                if (client != null)
+                    client.Dispose();
+                if (host != null)
+                    host.Dispose();
+            }
         }
 
         private static void ReliablePacketsResendAndClearAfterAck()
@@ -195,6 +240,7 @@ namespace ModAPI.Networking.Tests
             public int ClientToHostReliableApplicationDrops;
             public int ClientToHostUnreliableApplicationDrops;
             public int ClientToHostReliableApplicationDuplicates;
+            public int HostToClientAckOnlySends;
 
             public static PairedMemoryTransportPair Create()
             {
@@ -209,7 +255,11 @@ namespace ModAPI.Networking.Tests
             public bool ShouldDrop(PairedMemoryTransport sender, PacketDescription packet)
             {
                 if (sender.IsHost || !packet.IsApplication)
+                {
+                    if (sender.IsHost && packet.IsAckOnly)
+                        HostToClientAckOnlySends++;
                     return false;
+                }
 
                 if (packet.Channel == NetworkChannel.Reliable)
                 {
@@ -333,6 +383,7 @@ namespace ModAPI.Networking.Tests
         private struct PacketDescription
         {
             public bool IsApplication;
+            public bool IsAckOnly;
             public NetworkChannel Channel;
 
             public static PacketDescription Read(byte[] bytes, int count)
@@ -344,6 +395,7 @@ namespace ModAPI.Networking.Tests
                 try
                 {
                     MessageBatchReader reader = new MessageBatchReader(bytes, 0, count);
+                    description.IsAckOnly = (reader.Header.Flags & PacketFlags.IsAckOnly) != 0;
                     NetworkMessage message;
                     if (reader.TryReadNext(out message))
                     {

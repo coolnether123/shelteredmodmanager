@@ -15,6 +15,7 @@ namespace ModAPI.Networking
         public const int DefaultReceiveBufferPoolSize = 64;
         public const int DefaultSendBufferPoolSize = 64;
         public const int DefaultReliableResendMilliseconds = 250;
+        public const int DefaultAckFlushMilliseconds = 25;
         public const int DefaultConnectionTimeoutMilliseconds = 3000;
         public const int DefaultHandshakeRetryMilliseconds = 500;
         public const int DefaultHandshakeTimeoutMilliseconds = 5000;

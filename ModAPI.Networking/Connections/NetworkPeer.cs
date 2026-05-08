@@ -9,6 +9,8 @@ namespace ModAPI.Networking.Connections
     {
         private readonly AckWindow _ackWindow = new AckWindow();
         private readonly ReliableOutboundQueue _reliableOutbound = new ReliableOutboundQueue();
+        private bool _ackFlushPending;
+        private DateTime _ackFlushDueUtc;
 
         internal NetworkPeer(byte peerId, IPEndPoint endPoint, bool isHost, NetworkConnectionState state)
         {
@@ -37,6 +39,8 @@ namespace ModAPI.Networking.Connections
         internal NetworkPeerDiagnostics Diagnostics { get; private set; }
         internal AckWindow AckWindow { get { return _ackWindow; } }
         internal ReliableOutboundQueue ReliableOutbound { get { return _reliableOutbound; } }
+        internal bool AckFlushPending { get { return _ackFlushPending; } }
+        internal DateTime AckFlushDueUtc { get { return _ackFlushDueUtc; } }
 
         internal ushort NextSequence()
         {
@@ -55,6 +59,15 @@ namespace ModAPI.Networking.Connections
         internal void TouchSend(DateTime utcNow)
         {
             Connection.LastSendUtc = utcNow;
+            _ackFlushPending = false;
+        }
+
+        internal void MarkAckFlushDue(DateTime utcNow, int delayMilliseconds)
+        {
+            DateTime dueUtc = utcNow.AddMilliseconds(delayMilliseconds);
+            if (!_ackFlushPending || dueUtc < _ackFlushDueUtc)
+                _ackFlushDueUtc = dueUtc;
+            _ackFlushPending = true;
         }
 
         internal void SetState(NetworkConnectionState state, DateTime utcNow)

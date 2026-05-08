@@ -13,6 +13,7 @@ namespace ModAPI.Networking
         public int ReceiveBufferPoolSize = NetworkDefaults.DefaultReceiveBufferPoolSize;
         public int SendBufferPoolSize = NetworkDefaults.DefaultSendBufferPoolSize;
         public int ReliableResendMilliseconds = NetworkDefaults.DefaultReliableResendMilliseconds;
+        public int AckFlushMilliseconds = NetworkDefaults.DefaultAckFlushMilliseconds;
         public int ConnectionTimeoutMilliseconds = NetworkDefaults.DefaultConnectionTimeoutMilliseconds;
         public int HandshakeRetryMilliseconds = NetworkDefaults.DefaultHandshakeRetryMilliseconds;
         public int HandshakeTimeoutMilliseconds = NetworkDefaults.DefaultHandshakeTimeoutMilliseconds;
@@ -21,6 +22,9 @@ namespace ModAPI.Networking
         public int DiagnosticsEventCapacity = NetworkDefaults.DefaultDiagnosticsEventCapacity;
         public bool EnableBroadcastDiscovery = true;
         public bool AllowBroadcast;
+        public int SimulatedPacketLossPercent;
+        public int SimulatedLatencyMilliseconds;
+        public int SimulatedJitterMilliseconds;
 
         public void Validate()
         {
@@ -38,6 +42,8 @@ namespace ModAPI.Networking
                 throw new ArgumentOutOfRangeException("SendBufferPoolSize");
             if (ReliableResendMilliseconds <= 0)
                 throw new ArgumentOutOfRangeException("ReliableResendMilliseconds");
+            if (AckFlushMilliseconds <= 0)
+                throw new ArgumentOutOfRangeException("AckFlushMilliseconds");
             if (ConnectionTimeoutMilliseconds <= 0)
                 throw new ArgumentOutOfRangeException("ConnectionTimeoutMilliseconds");
             if (HandshakeRetryMilliseconds <= 0)
@@ -50,6 +56,12 @@ namespace ModAPI.Networking
                 throw new ArgumentOutOfRangeException("DiscoveryTimeoutMilliseconds");
             if (DiagnosticsEventCapacity < 0)
                 throw new ArgumentOutOfRangeException("DiagnosticsEventCapacity");
+            if (SimulatedPacketLossPercent < 0 || SimulatedPacketLossPercent > 100)
+                throw new ArgumentOutOfRangeException("SimulatedPacketLossPercent", "Simulated packet loss must be between 0 and 100 percent.");
+            if (SimulatedLatencyMilliseconds < 0)
+                throw new ArgumentOutOfRangeException("SimulatedLatencyMilliseconds");
+            if (SimulatedJitterMilliseconds < 0)
+                throw new ArgumentOutOfRangeException("SimulatedJitterMilliseconds");
         }
 
         public static NetworkConfig CreateDefault()

@@ -15,6 +15,8 @@ namespace ModAPI.Networking.Transport
         private readonly NetworkConfig _config;
         private readonly BufferPool _receivePool;
         private readonly object _sendSync = new object();
+        private readonly object _randomSync = new object();
+        private readonly Random _simulationRandom = new Random();
         private Socket _socket;
         private Thread _receiveThread;
         private volatile bool _running;
@@ -110,9 +112,43 @@ namespace ModAPI.Networking.Transport
             if (!_running || _socket == null)
                 throw new InvalidOperationException("Transport is not running.");
 
+            if (ShouldDropSimulatedPacket())
+                return;
+
+            int delayMilliseconds = GetSimulatedDelayMilliseconds();
+            if (delayMilliseconds > 0)
+            {
+                byte[] copy = new byte[count];
+                Buffer.BlockCopy(buffer, offset, copy, 0, count);
+                IPEndPoint target = new IPEndPoint(endPoint.Address, endPoint.Port);
+                ThreadPool.QueueUserWorkItem(delegate
+                {
+                    try
+                    {
+                        Thread.Sleep(delayMilliseconds);
+                        SendNow(target, copy, 0, copy.Length);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_running)
+                            RaiseError(ex);
+                    }
+                });
+                return;
+            }
+
+            SendNow(endPoint, buffer, offset, count);
+        }
+
+        private void SendNow(IPEndPoint endPoint, byte[] buffer, int offset, int count)
+        {
+            if (!_running || _socket == null)
+                return;
+
             lock (_sendSync)
             {
-                _socket.SendTo(buffer, offset, count, SocketFlags.None, endPoint);
+                if (_running && _socket != null)
+                    _socket.SendTo(buffer, offset, count, SocketFlags.None, endPoint);
             }
         }
 
@@ -212,6 +248,33 @@ namespace ModAPI.Networking.Transport
         {
             if (port < 0 || port > 65535)
                 throw new ArgumentOutOfRangeException("port", "Port must be between 0 and 65535.");
+        }
+
+        private bool ShouldDropSimulatedPacket()
+        {
+            if (_config.SimulatedPacketLossPercent <= 0)
+                return false;
+            if (_config.SimulatedPacketLossPercent >= 100)
+                return true;
+
+            lock (_randomSync)
+            {
+                return _simulationRandom.Next(100) < _config.SimulatedPacketLossPercent;
+            }
+        }
+
+        private int GetSimulatedDelayMilliseconds()
+        {
+            int delay = _config.SimulatedLatencyMilliseconds;
+            if (_config.SimulatedJitterMilliseconds > 0)
+            {
+                lock (_randomSync)
+                {
+                    delay += _simulationRandom.Next(_config.SimulatedJitterMilliseconds + 1);
+                }
+            }
+
+            return delay;
         }
     }
 }

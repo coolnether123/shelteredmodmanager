@@ -8,6 +8,7 @@ namespace ModAPI.Networking.Protocol
         None = 0,
         HasReliableMessages = 1,
         IsHeartbeat = 2,
-        IsHandshake = 4
+        IsHandshake = 4,
+        IsAckOnly = 8
     }
 }
