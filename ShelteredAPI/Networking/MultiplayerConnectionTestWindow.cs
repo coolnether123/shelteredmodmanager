@@ -40,7 +40,7 @@ namespace ShelteredAPI.Networking
             }
 
             MultiplayerConnectionTestService service = _controller.Service;
-            MultiplayerConnectionPanelViewModel model = _presenter.Build(service);
+            MultiplayerConnectionPanelViewModel model = _presenter.Build(service, _panelState);
 
             Rect contentRect = new Rect(
                 WindowPadding,

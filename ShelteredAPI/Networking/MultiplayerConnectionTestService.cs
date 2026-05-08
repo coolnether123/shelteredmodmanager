@@ -73,6 +73,15 @@ namespace ShelteredAPI.Networking
             }
         }
 
+        public NetworkSessionState SessionState
+        {
+            get
+            {
+                NetworkSession session = _session;
+                return session != null ? session.State : NetworkSessionState.Stopped;
+            }
+        }
+
         public bool HasActiveSession
         {
             get { return _session != null; }
@@ -103,6 +112,15 @@ namespace ShelteredAPI.Networking
         public string LocalEndpointText
         {
             get { return _localEndpointText; }
+        }
+
+        public string GetLanEndpointText(int port)
+        {
+            MultiplayerPortValidationResult validation = MultiplayerConnectionInputValidator.ValidatePort(port);
+            if (!validation.IsValid)
+                return string.Empty;
+
+            return GetCachedLanEndpoint(validation.Port);
         }
 
         public string SaveSyncStatus
@@ -161,19 +179,20 @@ namespace ShelteredAPI.Networking
 
         public void StartHost(int port)
         {
-            if (port <= 0 || port > 65535)
+            MultiplayerPortValidationResult validation = MultiplayerConnectionInputValidator.ValidatePort(port);
+            if (!validation.IsValid)
             {
-                SetLastError("Port must be between 1 and 65535.");
+                SetLastError(validation.ErrorText);
                 AddWarning("Host", "Host rejected invalid port: " + port + ".");
                 return;
             }
 
-            AddDebug("Host", "Start requested on UDP port " + port + ".");
+            AddDebug("Host", "Start requested on UDP port " + validation.Port + ".");
             StopSessionOnly("Replacing existing session.");
 
             try
             {
-                NetworkConfig config = CreateConfig(port);
+                NetworkConfig config = CreateConfig(validation.Port);
                 _session = new NetworkSession(config);
                 AttachEvents(_session);
                 EnsureSetupService(_session);
@@ -187,7 +206,7 @@ namespace ShelteredAPI.Networking
                     20,
                     "connection-test-host-start");
                 RefreshLocalEndpoint();
-                AddInfo("Host", "Host listening on UDP " + port + ". Local endpoint: " + _localEndpointText + ".");
+                AddInfo("Host", "Host listening on UDP " + validation.Port + ". Local endpoint: " + _localEndpointText + ".");
                 ClearLastError();
             }
             catch (Exception ex)
@@ -201,14 +220,17 @@ namespace ShelteredAPI.Networking
 
         public void Join(string endpoint)
         {
-            if (string.IsNullOrEmpty(endpoint))
+            MultiplayerEndpointValidationResult validation =
+                MultiplayerConnectionInputValidator.ValidateEndpointText(endpoint, DefaultPort);
+            if (!validation.IsValid)
             {
-                SetLastError("Enter an endpoint like 192.168.1.10:7777.");
-                AddWarning("Client", "Join rejected because endpoint text was empty.");
+                SetLastError(validation.ErrorText);
+                AddWarning("Client", "Join rejected because endpoint was invalid: " + validation.ErrorText);
                 return;
             }
 
-            AddDebug("Client", "Join requested for endpoint '" + endpoint + "'.");
+            string endpointText = validation.EndpointText;
+            AddDebug("Client", "Join requested for endpoint '" + endpointText + "'.");
             StopSessionOnly("Replacing existing session.");
 
             try
@@ -218,9 +240,9 @@ namespace ShelteredAPI.Networking
                 AttachEvents(_session);
                 EnsureSetupService(_session);
                 EnsureEventSyncService(_session);
-                _session.Join(endpoint, CreateOptions("Client"));
+                _session.Join(endpointText, CreateOptions("Client"));
                 RefreshLocalEndpoint();
-                AddInfo("Client", "Connecting to " + endpoint + ". Local endpoint: " + _localEndpointText + ".");
+                AddInfo("Client", "Connecting to " + endpointText + ". Local endpoint: " + _localEndpointText + ".");
                 ClearLastError();
             }
             catch (Exception ex)
@@ -322,9 +344,10 @@ namespace ShelteredAPI.Networking
 
         public void StartLanDiscovery(int port)
         {
-            if (port <= 0 || port > 65535)
+            MultiplayerPortValidationResult validation = MultiplayerConnectionInputValidator.ValidatePort(port);
+            if (!validation.IsValid)
             {
-                SetLastError("Discovery port must be between 1 and 65535.");
+                SetLastError(validation.ErrorText);
                 AddWarning("Discovery", "Discovery rejected invalid port: " + port + ".");
                 return;
             }
@@ -338,11 +361,11 @@ namespace ShelteredAPI.Networking
                 _discoveryResults.Clear();
             }
 
-            AddInfo("Discovery", "LAN discovery started on UDP " + port + ".");
+            AddInfo("Discovery", "LAN discovery started on UDP " + validation.Port + ".");
 
             Thread thread = new Thread(delegate()
             {
-                RunDiscovery(port);
+                RunDiscovery(validation.Port);
             });
             thread.IsBackground = true;
             thread.Name = "ShelteredAPI.MultiplayerDiscovery";
@@ -507,6 +530,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - machine name is display-only; fallback keeps LAN discovery usable.
             }
 
             return "Sheltered " + role + " - " + machineName;
@@ -522,6 +546,7 @@ namespace ShelteredAPI.Networking
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - machine name is display-only; fallback keeps LAN discovery usable.
             }
 
             return "Sheltered:" + role + ":" + machineName;

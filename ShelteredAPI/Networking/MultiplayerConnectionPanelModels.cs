@@ -12,6 +12,7 @@ namespace ShelteredAPI.Networking
         public string MessageText = "ping";
         public Vector2 AdvancedScroll;
         public int ActiveTabIndex;
+        public bool ShowAdvancedDiagnostics;
         public bool ShowSentEvents = true;
         public bool ShowReceivedEvents = true;
         public bool ShowPeerEvents = true;
@@ -26,10 +27,24 @@ namespace ShelteredAPI.Networking
         public string[] DiscoveryResults = new string[0];
         public string[] ReceivedMessages = new string[0];
         public string[] LogLines = new string[0];
+        public MultiplayerEndpointSuggestion[] SuggestedEndpoints = new MultiplayerEndpointSuggestion[0];
+        public MultiplayerPortValidationResult PortValidation = MultiplayerPortValidationResult.Valid(MultiplayerConnectionTestService.DefaultPort);
+        public MultiplayerEndpointValidationResult EndpointValidation = MultiplayerEndpointValidationResult.Invalid(string.Empty);
+        public MultiplayerConnectionActionState HostAction = MultiplayerConnectionActionState.Unavailable("Host", "Service is unavailable.");
+        public MultiplayerConnectionActionState JoinAction = MultiplayerConnectionActionState.Unavailable("Join", "Service is unavailable.");
+        public MultiplayerConnectionActionState StopAction = MultiplayerConnectionActionState.Unavailable("Stop", "No active session.");
+        public MultiplayerConnectionActionState DiscoveryAction = MultiplayerConnectionActionState.Unavailable("Find LAN", "Service is unavailable.");
+        public MultiplayerConnectionActionState SendTestMessageAction = MultiplayerConnectionActionState.Unavailable("Send Ping", "No connected peer.");
+        public MultiplayerConnectionActionState BeginSetupAction = MultiplayerConnectionActionState.Unavailable("Begin Game Setup", "Host a session first.");
+        public MultiplayerConnectionActionState ReleaseSetupAction = MultiplayerConnectionActionState.Unavailable("Everyone Loaded", "Setup is not ready.");
+        public MultiplayerSetupReadinessText SetupReadiness = new MultiplayerSetupReadinessText();
 
         public string RoleText = string.Empty;
         public string StateText = string.Empty;
+        public string ConnectionSummary = string.Empty;
+        public string ConnectionDetail = string.Empty;
         public string LocalEndpointText = string.Empty;
+        public string LanEndpointText = string.Empty;
         public string LocalPeerIdText = string.Empty;
         public string ConfigurationSummary = string.Empty;
         public string SaveSyncStatus = string.Empty;

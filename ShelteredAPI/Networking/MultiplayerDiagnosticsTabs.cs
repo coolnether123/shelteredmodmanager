@@ -42,42 +42,8 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawMiniMetric("Received", model.TotalPacketsReceived + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
             GUILayout.EndHorizontal();
 
-            DrawDiscovery(model, state);
-
             if (!model.CanSendTestMessage)
                 MultiplayerDiagnosticsWidgets.DrawHint("Test messages unlock after a client connects or a host has at least one peer.");
-        }
-
-        private static void DrawDiscovery(
-            MultiplayerConnectionPanelViewModel model,
-            MultiplayerConnectionPanelState state)
-        {
-            MultiplayerDiagnosticsWidgets.DrawSectionHeader(model.IsDiscovering ? "LAN Discovery: Searching" : "LAN Discovery");
-
-            if (model.DiscoveryResults.Length == 0)
-            {
-                MultiplayerDiagnosticsWidgets.DrawHint("Use Find LAN, or enter an endpoint manually.");
-                return;
-            }
-
-            for (int i = 0; i < model.DiscoveryResults.Length; i++)
-            {
-                string result = model.DiscoveryResults[i] ?? string.Empty;
-                string endpoint = MultiplayerDiagnosticsFormatter.ExtractEndpoint(result);
-                bool canUse = MultiplayerDiagnosticsFormatter.HasUsableDiscoveryEndpoint(endpoint);
-
-                GUILayout.BeginHorizontal();
-                GUILayout.Label(result);
-
-                bool previousEnabled = GUI.enabled;
-                GUI.enabled = canUse;
-                if (GUILayout.Button("Use", GUILayout.Width(52f)))
-                    state.EndpointText = endpoint;
-                if (GUILayout.Button("Join", GUILayout.Width(56f)))
-                    model.Service.Join(endpoint);
-                GUI.enabled = previousEnabled;
-                GUILayout.EndHorizontal();
-            }
         }
     }
 
