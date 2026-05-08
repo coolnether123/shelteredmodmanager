@@ -9,12 +9,14 @@ namespace ShelteredAPI.Networking.Locations
         public LocationState()
         {
             LocationId = string.Empty;
+            MapIdentity = string.Empty;
             LocationKind = string.Empty;
             GeneratedSeedStream = string.Empty;
             RemainingLootSummaryJson = string.Empty;
         }
 
         public string LocationId { get; set; }
+        public string MapIdentity { get; set; }
         public int GridX { get; set; }
         public int GridY { get; set; }
         public string LocationKind { get; set; }
@@ -32,6 +34,7 @@ namespace ShelteredAPI.Networking.Locations
             return new LocationState
             {
                 LocationId = LocationId ?? string.Empty,
+                MapIdentity = MapIdentity ?? string.Empty,
                 GridX = GridX,
                 GridY = GridY,
                 LocationKind = LocationKind ?? string.Empty,
@@ -83,6 +86,7 @@ namespace ShelteredAPI.Networking.Locations
         public ShelteredLocationEvent()
         {
             LocationId = string.Empty;
+            MapIdentity = string.Empty;
             LocationKind = string.Empty;
             SeedStreamName = string.Empty;
             RemainingLootSummaryJson = string.Empty;
@@ -92,6 +96,7 @@ namespace ShelteredAPI.Networking.Locations
         }
 
         public string LocationId { get; set; }
+        public string MapIdentity { get; set; }
         public int GridX { get; set; }
         public int GridY { get; set; }
         public string LocationKind { get; set; }
@@ -110,6 +115,7 @@ namespace ShelteredAPI.Networking.Locations
         {
             ShelteredLocationEvent copy = new ShelteredLocationEvent();
             copy.LocationId = LocationId ?? string.Empty;
+            copy.MapIdentity = MapIdentity ?? string.Empty;
             copy.GridX = GridX;
             copy.GridY = GridY;
             copy.LocationKind = LocationKind ?? string.Empty;

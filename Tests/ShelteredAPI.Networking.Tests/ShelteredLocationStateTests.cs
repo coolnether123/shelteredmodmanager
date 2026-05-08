@@ -17,11 +17,12 @@ namespace ShelteredAPI.Networking.Tests
             LocationState state = new LocationState();
             state.GridX = 4;
             state.GridY = 7;
+            state.MapIdentity = "map-test";
             state.LocationKind = "SmallHouse";
 
             LocationState saved = registry.Upsert(state);
 
-            TestAssert.Equal("location:4:7:SmallHouse", saved.LocationId, "Missing ids should derive from grid and kind.");
+            TestAssert.Equal("location:map-test:4:7:SmallHouse", saved.LocationId, "Missing ids should derive from map identity, grid, and kind.");
             TestAssert.Equal((long)99, saved.LastUpdatedTick, "Missing update tick should use the supplied world tick.");
         }
 

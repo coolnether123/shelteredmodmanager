@@ -90,7 +90,7 @@ namespace ShelteredAPI.Networking.World
 
             lock (_sync)
             {
-                if (_recordsById.ContainsKey(normalized.EventId))
+                if (Contains(normalized.EventId))
                     return ShelteredWorldEventAppendResult.Rejected(normalized.EventId, "World event already exists.");
 
                 _records.Add(normalized);

@@ -31,6 +31,25 @@ namespace ShelteredAPI.Networking.Locations
             }
         }
 
+        [HarmonyPatch(typeof(MapRegion), "AddItem")]
+        [HarmonyPostfix]
+        private static void AddItemPostfix(MapRegion __instance, bool __result)
+        {
+            if (!__result)
+                return;
+
+            try
+            {
+                ShelteredLocationLootService.Instance.RecordGenerated(__instance);
+                ShelteredLocationLootService.Instance.RecordLootGenerated(__instance);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ShelteredLocationLoot.AddItem",
+                    "Location loot add observer failed: " + ex.Message);
+            }
+        }
+
         [HarmonyPatch(typeof(MapRegion), "OnItemsChanged")]
         [HarmonyPostfix]
         private static void OnItemsChangedPostfix(
@@ -53,6 +72,22 @@ namespace ShelteredAPI.Networking.Locations
             {
                 MMLog.WarnOnce("ShelteredLocationLoot.OnItemsChanged",
                     "Location loot transfer observer failed: " + ex.Message);
+            }
+        }
+
+        [HarmonyPatch(typeof(ExplorationParty), "DiscoverLocationItems")]
+        [HarmonyPostfix]
+        private static void DiscoverLocationItemsPostfix(ExplorationParty __instance)
+        {
+            try
+            {
+                MapRegion region = __instance != null ? __instance.currentRegion : null;
+                ShelteredLocationLootService.Instance.RecordLootGenerated(region);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ShelteredLocationLoot.DiscoverLocationItems",
+                    "Location loot discovery observer failed: " + ex.Message);
             }
         }
 

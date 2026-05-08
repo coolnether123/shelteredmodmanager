@@ -74,13 +74,23 @@ namespace ShelteredAPI.Networking.Locations
 
         public void SetLoot(string locationId, IList<LootItemRecord> loot)
         {
+            TrySetLoot(locationId, loot);
+        }
+
+        public bool TrySetLoot(string locationId, IList<LootItemRecord> loot)
+        {
             string key = NormalizeId(locationId);
             if (key.Length == 0)
-                return;
+                return false;
 
             lock (_sync)
             {
+                if (!_locations.ContainsKey(key))
+                    return false;
+
                 _loot[key] = CloneLoot(loot);
+                MarkLocationLootMutationLocked(key, ResolveWorldTick());
+                return true;
             }
         }
 
@@ -98,9 +108,24 @@ namespace ShelteredAPI.Networking.Locations
 
         public bool ApplyLootTaken(string locationId, string eventCorrelationId, IList<LootItemRecord> taken, int playerId, long takenTick)
         {
+            string errorMessage;
+            return TryApplyLootTaken(locationId, eventCorrelationId, taken, playerId, takenTick, out errorMessage);
+        }
+
+        public bool TryApplyLootTaken(
+            string locationId,
+            string eventCorrelationId,
+            IList<LootItemRecord> taken,
+            int playerId,
+            long takenTick,
+            out string errorMessage)
+        {
             string key = NormalizeId(locationId);
             if (key.Length == 0)
+            {
+                errorMessage = "Location id is required.";
                 return false;
+            }
 
             string eventKey = NormalizeId(eventCorrelationId);
             if (eventKey.Length == 0)
@@ -109,36 +134,44 @@ namespace ShelteredAPI.Networking.Locations
             lock (_sync)
             {
                 if (_takenEventIds.ContainsKey(eventKey))
-                    return false;
-
-                _takenEventIds[eventKey] = true;
-                List<LootItemRecord> existing;
-                if (!_loot.TryGetValue(key, out existing))
                 {
-                    existing = new List<LootItemRecord>();
-                    _loot[key] = existing;
+                    errorMessage = "Loot-taken event already applied.";
+                    return false;
                 }
+
+                List<LootItemRecord> existing;
+                if (!CanApplyLootTakenLocked(key, taken, out existing, out errorMessage))
+                    return false;
 
                 for (int i = 0; taken != null && i < taken.Count; i++)
                 {
                     LootItemRecord request = taken[i];
-                    if (request == null || request.Count <= 0)
+                    if (!IsValidLootRequest(request))
                         continue;
 
-                    int remaining = request.Count;
-                    for (int j = 0; j < existing.Count && remaining > 0; j++)
-                    {
-                        LootItemRecord record = existing[j];
-                        if (record == null || record.Count <= 0 || !SameItem(record, request))
-                            continue;
-
-                        int moved = Math.Min(record.Count, remaining);
-                        record.Count -= moved;
-                        remaining -= moved;
-                    }
+                    ConsumeFromLoot(existing, request);
                 }
 
+                _takenEventIds[eventKey] = true;
+                MarkLocationLootMutationLocked(key, takenTick);
+                errorMessage = string.Empty;
                 return true;
+            }
+        }
+
+        public bool CanApplyLootTaken(string locationId, IList<LootItemRecord> taken, out string errorMessage)
+        {
+            string key = NormalizeId(locationId);
+            if (key.Length == 0)
+            {
+                errorMessage = "Location id is required.";
+                return false;
+            }
+
+            lock (_sync)
+            {
+                List<LootItemRecord> existing;
+                return CanApplyLootTakenLocked(key, taken, out existing, out errorMessage);
             }
         }
 
@@ -173,12 +206,26 @@ namespace ShelteredAPI.Networking.Locations
             if (state == null)
                 throw new ArgumentNullException("state");
 
-            return BuildLocationId(state.GridX, state.GridY, state.LocationKind);
+            return BuildLocationId(state.MapIdentity, state.GridX, state.GridY, state.LocationKind);
         }
 
         internal static string BuildLocationId(int gridX, int gridY, string locationKind)
         {
-            return "location:" + gridX.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            return BuildLocationId(string.Empty, gridX, gridY, locationKind);
+        }
+
+        internal static string BuildLocationId(string mapIdentity, int gridX, int gridY, string locationKind)
+        {
+            string normalizedMap = NormalizeId(mapIdentity);
+            if (normalizedMap.Length == 0)
+            {
+                return "location:" + gridX.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + ":" + gridY.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + ":" + NormalizeId(locationKind);
+            }
+
+            return "location:" + NormalizeIdPart(normalizedMap)
+                + ":" + gridX.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + ":" + gridY.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + ":" + NormalizeId(locationKind);
         }
@@ -220,11 +267,37 @@ namespace ShelteredAPI.Networking.Locations
             return result;
         }
 
-        private static string BuildTakenEventKey(string locationId, IList<LootItemRecord> taken, int playerId, long tick)
+        internal static string BuildTakenEventKey(string locationId, IList<LootItemRecord> taken, int playerId, long tick)
         {
             return "loottaken:" + locationId + ":" + playerId.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + ":" + tick.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                + ":" + (taken != null ? taken.Count : 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                + ":" + BuildLootSignature(taken);
+        }
+
+        internal static string BuildLootSetEventKey(string locationId, IList<LootItemRecord> loot, long tick)
+        {
+            return "lootset:" + locationId + ":"
+                + tick.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ":" + BuildLootSignature(loot);
+        }
+
+        internal static string BuildLootSignature(IList<LootItemRecord> loot)
+        {
+            List<string> parts = new List<string>();
+            for (int i = 0; loot != null && i < loot.Count; i++)
+            {
+                LootItemRecord record = loot[i];
+                if (!IsValidLootRequest(record))
+                    continue;
+
+                string itemId = record.VanillaItemTypeInt.HasValue
+                    ? "v:" + record.VanillaItemTypeInt.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : "c:" + NormalizeId(record.CustomItemId);
+                parts.Add(itemId + "x" + record.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            parts.Sort(StringComparer.Ordinal);
+            return string.Join("|", parts.ToArray());
         }
 
         private static int CompareLocations(LocationState left, LocationState right)
@@ -235,6 +308,134 @@ namespace ShelteredAPI.Networking.Locations
         private static string NormalizeId(string value)
         {
             return (value ?? string.Empty).Trim();
+        }
+
+        private bool CanApplyLootTakenLocked(
+            string locationId,
+            IList<LootItemRecord> taken,
+            out List<LootItemRecord> existing,
+            out string errorMessage)
+        {
+            existing = null;
+            if (!_locations.ContainsKey(locationId))
+            {
+                errorMessage = "Location is not registered.";
+                return false;
+            }
+
+            if (!_loot.TryGetValue(locationId, out existing))
+            {
+                errorMessage = "Location loot is not registered.";
+                return false;
+            }
+
+            if (!HasAnyValidLootRequest(taken))
+            {
+                errorMessage = "Loot-taken request must include at least one positive item count.";
+                return false;
+            }
+
+            List<LootItemRecord> remaining = CloneLoot(existing);
+            for (int i = 0; taken != null && i < taken.Count; i++)
+            {
+                LootItemRecord request = taken[i];
+                if (!IsValidLootRequest(request))
+                    continue;
+
+                if (!ConsumeFromLoot(remaining, request))
+                {
+                    errorMessage = "Requested loot is no longer available.";
+                    return false;
+                }
+            }
+
+            errorMessage = string.Empty;
+            return true;
+        }
+
+        private static bool ConsumeFromLoot(IList<LootItemRecord> loot, LootItemRecord request)
+        {
+            int remaining = request != null ? request.Count : 0;
+            if (remaining <= 0)
+                return true;
+
+            for (int i = 0; loot != null && i < loot.Count && remaining > 0; i++)
+            {
+                LootItemRecord record = loot[i];
+                if (record == null || record.Count <= 0 || !SameItem(record, request))
+                    continue;
+
+                int moved = Math.Min(record.Count, remaining);
+                record.Count -= moved;
+                remaining -= moved;
+            }
+
+            return remaining <= 0;
+        }
+
+        private static bool HasAnyValidLootRequest(IList<LootItemRecord> taken)
+        {
+            for (int i = 0; taken != null && i < taken.Count; i++)
+            {
+                if (IsValidLootRequest(taken[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsValidLootRequest(LootItemRecord record)
+        {
+            if (record == null || record.Count <= 0)
+                return false;
+
+            if (record.VanillaItemTypeInt.HasValue)
+                return record.VanillaItemTypeInt.Value >= 0;
+
+            return NormalizeId(record.CustomItemId).Length > 0;
+        }
+
+        private void MarkLocationLootMutationLocked(string locationId, long tick)
+        {
+            LocationState state;
+            if (!_locations.TryGetValue(locationId, out state) || state == null)
+                return;
+
+            state.LastUpdatedTick = tick > 0 ? tick : ResolveWorldTick();
+            state.IsDepleted = IsDepletedLocked(locationId);
+        }
+
+        private bool IsDepletedLocked(string locationId)
+        {
+            List<LootItemRecord> loot;
+            if (!_loot.TryGetValue(locationId, out loot))
+                return false;
+
+            for (int i = 0; i < loot.Count; i++)
+            {
+                if (loot[i] != null && loot[i].Count > 0)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static string NormalizeIdPart(string value)
+        {
+            string normalized = NormalizeId(value);
+            if (normalized.Length == 0)
+                return "none";
+
+            char[] chars = normalized.ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                char c = chars[i];
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-')
+                    continue;
+                chars[i] = '_';
+            }
+
+            return new string(chars);
         }
     }
 }

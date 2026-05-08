@@ -17,8 +17,13 @@ namespace ShelteredAPI.Networking.Locations
             LocationState state = new LocationState();
             state.GridX = region.gridReference != null ? region.gridReference.x : 0;
             state.GridY = region.gridReference != null ? region.gridReference.y : 0;
+            state.MapIdentity = ResolveMapIdentity();
             state.LocationKind = region.topography.ToString();
-            state.LocationId = ShelteredLocationStateRegistry.BuildLocationId(state.GridX, state.GridY, state.LocationKind);
+            state.LocationId = ShelteredLocationStateRegistry.BuildLocationId(
+                state.MapIdentity,
+                state.GridX,
+                state.GridY,
+                state.LocationKind);
             state.GeneratedSeedStream = ShelteredLocationLootService.CreateLocationSeedStreamName(state.LocationId);
             state.IsGenerated = true;
             state.DiscoveredByPlayerId = ResolveLocalPlayerId();
@@ -135,6 +140,17 @@ namespace ShelteredAPI.Networking.Locations
         {
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
             return context != null ? context.WorldTick : 0;
+        }
+
+        private static string ResolveMapIdentity()
+        {
+            ExpeditionMap map = ExpeditionMap.Instance;
+            if (map == null)
+                return string.Empty;
+
+            return "map-" + map.randomSeed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "-" + map.width.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "x" + map.height.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
     }
 }

@@ -127,6 +127,7 @@ namespace ShelteredAPI.Networking.World
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - world-event facade logging is best-effort after event state has been updated.
             }
         }
 

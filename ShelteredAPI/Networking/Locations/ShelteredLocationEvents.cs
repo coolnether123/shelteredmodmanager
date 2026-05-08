@@ -45,10 +45,16 @@ namespace ShelteredAPI.Networking.Locations
             ShelteredLocationEvent locationEvent = FromDetailsXml(gameplayEvent.Details);
             if (string.IsNullOrEmpty(locationEvent.LocationId))
                 locationEvent.LocationId = gameplayEvent.TargetId ?? string.Empty;
+            if (string.IsNullOrEmpty(locationEvent.EventCorrelationId))
+                locationEvent.EventCorrelationId = !string.IsNullOrEmpty(gameplayEvent.EventId)
+                    ? gameplayEvent.EventId
+                    : gameplayEvent.CorrelationId;
             if (locationEvent.GridX == 0)
                 locationEvent.GridX = gameplayEvent.GridX;
             if (locationEvent.GridY == 0)
                 locationEvent.GridY = gameplayEvent.GridY;
+            if (locationEvent.WorldTick <= 0)
+                locationEvent.WorldTick = gameplayEvent.WorldTick;
             if (locationEvent.PlayerId <= 0)
             {
                 int playerId;
@@ -67,6 +73,7 @@ namespace ShelteredAPI.Networking.Locations
             StringBuilder builder = new StringBuilder();
             builder.Append("{");
             AppendJsonString(builder, "locationId", locationEvent.LocationId);
+            AppendJsonString(builder, "mapIdentity", locationEvent.MapIdentity);
             AppendJsonInt(builder, "gridX", locationEvent.GridX);
             AppendJsonInt(builder, "gridY", locationEvent.GridY);
             AppendJsonString(builder, "locationKind", locationEvent.LocationKind);
@@ -78,6 +85,8 @@ namespace ShelteredAPI.Networking.Locations
             AppendJsonBool(builder, "isDepleted", locationEvent.IsDepleted);
             AppendJsonString(builder, "remainingLootSummaryJson", locationEvent.RemainingLootSummaryJson);
             AppendJsonString(builder, "reason", locationEvent.Reason);
+            AppendJsonString(builder, "eventCorrelationId", locationEvent.EventCorrelationId);
+            AppendJsonLoot(builder, "loot", locationEvent.Loot);
             builder.Append("}");
             return builder.ToString();
         }
@@ -94,6 +103,7 @@ namespace ShelteredAPI.Networking.Locations
                 {
                     writer.WriteStartElement("LocationEvent");
                     writer.WriteAttributeString("locationId", locationEvent.LocationId ?? string.Empty);
+                    writer.WriteAttributeString("mapIdentity", locationEvent.MapIdentity ?? string.Empty);
                     writer.WriteAttributeString("gridX", locationEvent.GridX.ToString(CultureInfo.InvariantCulture));
                     writer.WriteAttributeString("gridY", locationEvent.GridY.ToString(CultureInfo.InvariantCulture));
                     writer.WriteAttributeString("locationKind", locationEvent.LocationKind ?? string.Empty);
@@ -151,6 +161,7 @@ namespace ShelteredAPI.Networking.Locations
                 return locationEvent;
 
             locationEvent.LocationId = ReadAttribute(root, "locationId");
+            locationEvent.MapIdentity = ReadAttribute(root, "mapIdentity");
             locationEvent.GridX = ReadInt(root, "gridX", 0);
             locationEvent.GridY = ReadInt(root, "gridY", 0);
             locationEvent.LocationKind = ReadAttribute(root, "locationKind");
@@ -243,6 +254,64 @@ namespace ShelteredAPI.Networking.Locations
         {
             AppendJsonName(builder, name);
             builder.Append(value ? "true" : "false");
+        }
+
+        private static void AppendJsonLoot(StringBuilder builder, string name, IList<LootItemRecord> loot)
+        {
+            AppendJsonName(builder, name);
+            builder.Append("[");
+            bool needsComma = false;
+            for (int i = 0; loot != null && i < loot.Count; i++)
+            {
+                LootItemRecord record = loot[i];
+                if (record == null)
+                    continue;
+
+                if (needsComma)
+                    builder.Append(",");
+                needsComma = true;
+
+                builder.Append("{");
+                bool itemNeedsComma = false;
+                AppendJsonPropertyName(builder, "vanillaItemTypeInt", ref itemNeedsComma);
+                if (record.VanillaItemTypeInt.HasValue)
+                    builder.Append(record.VanillaItemTypeInt.Value.ToString(CultureInfo.InvariantCulture));
+                else
+                    builder.Append("null");
+                AppendJsonStringProperty(builder, "customItemId", record.CustomItemId, ref itemNeedsComma);
+                AppendJsonIntProperty(builder, "count", record.Count, ref itemNeedsComma);
+                AppendJsonStringProperty(builder, "source", record.Source, ref itemNeedsComma);
+                AppendJsonIntProperty(builder, "takenByPlayerId", record.TakenByPlayerId, ref itemNeedsComma);
+                AppendJsonLongProperty(builder, "takenTick", record.TakenTick, ref itemNeedsComma);
+                builder.Append("}");
+            }
+            builder.Append("]");
+        }
+
+        private static void AppendJsonStringProperty(StringBuilder builder, string name, string value, ref bool needsComma)
+        {
+            AppendJsonPropertyName(builder, name, ref needsComma);
+            builder.Append("\"").Append(ShelteredLocationLootDiagnostics.EscapeJson(value)).Append("\"");
+        }
+
+        private static void AppendJsonIntProperty(StringBuilder builder, string name, int value, ref bool needsComma)
+        {
+            AppendJsonPropertyName(builder, name, ref needsComma);
+            builder.Append(value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendJsonLongProperty(StringBuilder builder, string name, long value, ref bool needsComma)
+        {
+            AppendJsonPropertyName(builder, name, ref needsComma);
+            builder.Append(value.ToString(CultureInfo.InvariantCulture));
+        }
+
+        private static void AppendJsonPropertyName(StringBuilder builder, string name, ref bool needsComma)
+        {
+            if (needsComma)
+                builder.Append(",");
+            needsComma = true;
+            builder.Append("\"").Append(name).Append("\":");
         }
 
         private static void AppendJsonName(StringBuilder builder, string name)

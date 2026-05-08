@@ -45,7 +45,9 @@ namespace ShelteredAPI.Networking.Locations
             if (state == null)
                 return false;
 
-            return PublishOrApply(ShelteredNetworkEventKinds.LocationGenerated, CreateEventFromState(state, "Vanilla.MapRegion.Generated"));
+            ShelteredLocationEvent locationEvent = CreateEventFromState(state, "Vanilla.MapRegion.Generated");
+            locationEvent.EventCorrelationId = BuildLocationEventCorrelationId(ShelteredNetworkEventKinds.LocationGenerated, state.LocationId);
+            return PublishOrApply(ShelteredNetworkEventKinds.LocationGenerated, locationEvent);
         }
 
         public bool RecordDiscovered(MapRegion region)
@@ -54,7 +56,9 @@ namespace ShelteredAPI.Networking.Locations
             if (state == null)
                 return false;
 
-            return PublishOrApply(ShelteredNetworkEventKinds.LocationDiscovered, CreateEventFromState(state, "Vanilla.MapRegion.Discovered"));
+            ShelteredLocationEvent locationEvent = CreateEventFromState(state, "Vanilla.MapRegion.Discovered");
+            locationEvent.EventCorrelationId = BuildLocationEventCorrelationId(ShelteredNetworkEventKinds.LocationDiscovered, state.LocationId);
+            return PublishOrApply(ShelteredNetworkEventKinds.LocationDiscovered, locationEvent);
         }
 
         public bool RecordLootGenerated(MapRegion region)
@@ -65,6 +69,10 @@ namespace ShelteredAPI.Networking.Locations
 
             ShelteredLocationEvent locationEvent = CreateEventFromState(state, "Vanilla.MapRegion.LootGenerated");
             locationEvent.Loot = ShelteredLocationVanillaReader.ReadDiscoveredLoot(region, "Generated");
+            locationEvent.EventCorrelationId = ShelteredLocationStateRegistry.BuildLootSetEventKey(
+                state.LocationId,
+                locationEvent.Loot,
+                locationEvent.WorldTick);
             return PublishOrApply(ShelteredNetworkEventKinds.LocationLootGenerated, locationEvent);
         }
 
@@ -87,34 +95,59 @@ namespace ShelteredAPI.Networking.Locations
                 return false;
 
             state.IsDepleted = true;
-            return PublishOrApply(ShelteredNetworkEventKinds.LocationDepleted, CreateEventFromState(state, "Vanilla.MapRegion.Depleted"));
+            ShelteredLocationEvent locationEvent = CreateEventFromState(state, "Vanilla.MapRegion.Depleted");
+            locationEvent.EventCorrelationId = BuildLocationEventCorrelationId(ShelteredNetworkEventKinds.LocationDepleted, state.LocationId);
+            return PublishOrApply(ShelteredNetworkEventKinds.LocationDepleted, locationEvent);
         }
 
-        public void ApplyAuthoritative(string eventKind, ShelteredLocationEvent locationEvent)
+        public bool ApplyAuthoritative(string eventKind, ShelteredLocationEvent locationEvent)
+        {
+            return ApplyAuthoritative(eventKind, locationEvent, string.Empty);
+        }
+
+        internal bool ApplyAuthoritative(string eventKind, ShelteredLocationEvent locationEvent, string authoritativeEventId)
         {
             if (_disposed || locationEvent == null || string.IsNullOrEmpty(locationEvent.LocationId))
-                return;
+                return false;
 
             LocationState state = ToState(locationEvent);
+            CompleteStateFromExisting(state);
             if (string.Equals(eventKind, ShelteredNetworkEventKinds.LocationLootGenerated, StringComparison.Ordinal))
-                _registry.SetLoot(locationEvent.LocationId, locationEvent.Loot);
+            {
+                _registry.Upsert(state);
+                if (!_registry.TrySetLoot(locationEvent.LocationId, locationEvent.Loot))
+                    return false;
+                state.IsDepleted = _registry.IsDepleted(locationEvent.LocationId);
+                state.RemainingLootSummaryJson = ShelteredLocationLootDiagnostics.ToLootSummaryJson(_registry.GetLoot(locationEvent.LocationId));
+            }
             else if (string.Equals(eventKind, ShelteredNetworkEventKinds.LocationLootTaken, StringComparison.Ordinal))
-                _registry.ApplyLootTaken(locationEvent.LocationId, locationEvent.EventCorrelationId, locationEvent.Loot, locationEvent.PlayerId, locationEvent.WorldTick);
+            {
+                string errorMessage;
+                if (!_registry.TryApplyLootTaken(
+                    locationEvent.LocationId,
+                    ResolveEventCorrelationId(locationEvent, authoritativeEventId),
+                    locationEvent.Loot,
+                    locationEvent.PlayerId,
+                    locationEvent.WorldTick,
+                    out errorMessage))
+                {
+                    return false;
+                }
+                state.IsDepleted = _registry.IsDepleted(locationEvent.LocationId);
+                state.RemainingLootSummaryJson = ShelteredLocationLootDiagnostics.ToLootSummaryJson(_registry.GetLoot(locationEvent.LocationId));
+            }
             else if (string.Equals(eventKind, ShelteredNetworkEventKinds.LocationDepleted, StringComparison.Ordinal))
-                state.IsDepleted = true;
-
-            if (string.Equals(eventKind, ShelteredNetworkEventKinds.LocationLootTaken, StringComparison.Ordinal)
-                && _registry.IsDepleted(locationEvent.LocationId))
                 state.IsDepleted = true;
 
             _registry.Upsert(state);
             ShelteredWorldEvents.AppendAuthoritative(
                 eventKind,
-                !string.IsNullOrEmpty(locationEvent.EventCorrelationId) ? locationEvent.EventCorrelationId : locationEvent.LocationId,
+                ResolveEventCorrelationId(locationEvent, authoritativeEventId),
                 ShelteredLocationEvents.ToPayloadJson(locationEvent),
                 locationEvent.PlayerId,
                 NetworkDefaults.UnassignedPeerId);
             Raise(LocationEventApplied, locationEvent.Copy());
+            return true;
         }
 
         public static string CreateLocationSeedStreamName(string locationId)
@@ -138,14 +171,12 @@ namespace ShelteredAPI.Networking.Locations
         {
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
             if (context == null || !context.IsMultiplayerActive)
-            {
-                ApplyAuthoritative(eventKind, locationEvent);
-                return true;
-            }
+                return ApplyAuthoritative(eventKind, locationEvent);
 
             if (context.Mode == ShelteredMultiplayerSessionMode.Host)
             {
-                ApplyAuthoritative(eventKind, locationEvent);
+                if (!ApplyAuthoritative(eventKind, locationEvent))
+                    return false;
                 if (ShelteredMultiplayerNetworkEvents.IsAvailable)
                     return ShelteredMultiplayerNetworkEvents.BroadcastAuthoritative(ShelteredLocationEvents.ToGameplayEvent(eventKind, locationEvent));
                 return true;
@@ -166,7 +197,24 @@ namespace ShelteredAPI.Networking.Locations
                 return;
             }
 
-            context.Accept(context.GameplayEvent.Copy());
+            ShelteredLocationEvent locationEvent = ShelteredLocationEvents.FromGameplayEvent(context.GameplayEvent);
+            if (string.IsNullOrEmpty(locationEvent.LocationId))
+            {
+                context.Reject("Location id is required.");
+                return;
+            }
+
+            if (string.Equals(context.GameplayEvent.EventKind, ShelteredNetworkEventKinds.LocationLootTaken, StringComparison.Ordinal))
+            {
+                string errorMessage;
+                if (!_registry.CanApplyLootTaken(locationEvent.LocationId, locationEvent.Loot, out errorMessage))
+                {
+                    context.Reject(errorMessage);
+                    return;
+                }
+            }
+
+            context.Accept(ShelteredLocationEvents.ToGameplayEvent(context.GameplayEvent.EventKind, locationEvent));
         }
 
         private void OnAuthoritativeReceived(ShelteredNetworkEventContext context)
@@ -174,13 +222,17 @@ namespace ShelteredAPI.Networking.Locations
             if (_disposed || context == null || context.GameplayEvent == null || !ShelteredLocationEvents.IsLocationEventKind(context.GameplayEvent.EventKind))
                 return;
 
-            ApplyAuthoritative(context.GameplayEvent.EventKind, ShelteredLocationEvents.FromGameplayEvent(context.GameplayEvent));
+            ApplyAuthoritative(
+                context.GameplayEvent.EventKind,
+                ShelteredLocationEvents.FromGameplayEvent(context.GameplayEvent),
+                context.GameplayEvent.EventId);
         }
 
         private static ShelteredLocationEvent CreateEventFromState(LocationState state, string reason)
         {
             ShelteredLocationEvent locationEvent = new ShelteredLocationEvent();
             locationEvent.LocationId = state.LocationId;
+            locationEvent.MapIdentity = state.MapIdentity;
             locationEvent.GridX = state.GridX;
             locationEvent.GridY = state.GridY;
             locationEvent.LocationKind = state.LocationKind;
@@ -199,6 +251,7 @@ namespace ShelteredAPI.Networking.Locations
         {
             LocationState state = new LocationState();
             state.LocationId = locationEvent.LocationId;
+            state.MapIdentity = locationEvent.MapIdentity;
             state.GridX = locationEvent.GridX;
             state.GridY = locationEvent.GridY;
             state.LocationKind = locationEvent.LocationKind;
@@ -215,9 +268,46 @@ namespace ShelteredAPI.Networking.Locations
 
         private static string BuildLootTakenCorrelationId(string locationId, IList<LootItemRecord> loot, int playerId, long tick)
         {
-            return "loottaken:" + locationId + ":" + playerId.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                + ":" + tick.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                + ":" + (loot != null ? loot.Count : 0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return ShelteredLocationStateRegistry.BuildTakenEventKey(locationId, loot, playerId, tick);
+        }
+
+        private static string BuildLocationEventCorrelationId(string eventKind, string locationId)
+        {
+            return "locationevent:" + (eventKind ?? string.Empty) + ":" + (locationId ?? string.Empty);
+        }
+
+        private static string ResolveEventCorrelationId(ShelteredLocationEvent locationEvent, string fallbackEventId)
+        {
+            if (locationEvent != null && !string.IsNullOrEmpty(locationEvent.EventCorrelationId))
+                return locationEvent.EventCorrelationId;
+            if (!string.IsNullOrEmpty(fallbackEventId))
+                return fallbackEventId;
+            return locationEvent != null ? locationEvent.LocationId : string.Empty;
+        }
+
+        private void CompleteStateFromExisting(LocationState state)
+        {
+            if (state == null || string.IsNullOrEmpty(state.LocationId))
+                return;
+
+            LocationState existing;
+            if (!_registry.TryGet(state.LocationId, out existing))
+                return;
+
+            if (string.IsNullOrEmpty(state.MapIdentity))
+                state.MapIdentity = existing.MapIdentity;
+            if (string.IsNullOrEmpty(state.LocationKind))
+                state.LocationKind = existing.LocationKind;
+            if (string.IsNullOrEmpty(state.GeneratedSeedStream))
+                state.GeneratedSeedStream = existing.GeneratedSeedStream;
+            if (state.GeneratedWorldTick <= 0)
+                state.GeneratedWorldTick = existing.GeneratedWorldTick;
+            if (state.DiscoveredByPlayerId <= 0)
+                state.DiscoveredByPlayerId = existing.DiscoveredByPlayerId;
+            state.IsGenerated = state.IsGenerated || existing.IsGenerated;
+            state.IsSearched = state.IsSearched || existing.IsSearched;
+            if (string.IsNullOrEmpty(state.RemainingLootSummaryJson))
+                state.RemainingLootSummaryJson = existing.RemainingLootSummaryJson;
         }
 
         private static string NormalizeIdPart(string value)
