@@ -6,6 +6,7 @@ namespace ShelteredAPI.Storage
     /// <summary>
     /// Public facade for character-associated item assignments.
     /// Assignments are metadata over existing stores and do not move inventory.
+    /// Reserved assignments hold source-store availability when the source supports reservations.
     /// </summary>
     public static class ShelteredCharacterItems
     {

@@ -736,7 +736,7 @@ Task guide: [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_S
 
 ```csharp
 public enum ItemStoreKind { Unknown, Inventory, Freezer, Mod }
-public enum CharacterItemAssignmentKind { Assigned, Reserved, Equipped, Carried, Medical, Food, Tool, Quest }
+public enum CharacterItemAssignmentKind { Assigned, Reserved, Equipped, Carried, Quest }
 public enum CharacterItemSlot { None, MainHand, OffHand, Backpack, Medicine, Food, Tool }
 
 public interface IItemStore
@@ -814,6 +814,7 @@ public sealed class CharacterItemAssignment
     public ItemStoreKind SourceStoreKind { get; set; }
     public string ItemId { get; set; }
     public int Quantity { get; set; }
+    public string ReservationId { get; set; }
     public CharacterItemAssignmentKind Kind { get; set; }
     public CharacterItemSlot Slot { get; set; }
 }

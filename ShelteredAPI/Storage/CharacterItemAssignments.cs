@@ -89,17 +89,15 @@ namespace ShelteredAPI.Storage
             {
                 RememberSource(source);
 
-                int storeCount = GetAssignableCount(source, itemId);
-                if (storeCount < quantity)
-                    throw new InvalidOperationException("Source store does not contain the requested item quantity.");
-
-                int alreadyAssigned = GetAssignedCountInStore(sourceStoreId, itemId);
-                if (storeCount - alreadyAssigned < quantity)
+                int assignableCount = GetUnassignedAvailableCount(source, sourceStoreId, itemId);
+                if (assignableCount < quantity)
                     throw new InvalidOperationException("Source store does not have enough unassigned quantity for this item.");
 
+                string assignmentId = "assignment." + Guid.NewGuid().ToString("N");
+                string reservationId = ReserveSourceForAssignment(source, itemId, quantity, kind, assignmentId);
                 CharacterItemAssignment assignment = new CharacterItemAssignment
                 {
-                    AssignmentId = "assignment." + Guid.NewGuid().ToString("N"),
+                    AssignmentId = assignmentId,
                     ActorId = CloneActorId(actorId),
                     MemberDisplayName = string.IsNullOrEmpty(displayName) ? BuildActorKey(actorId) : displayName,
                     SourceStoreId = sourceStoreId,
@@ -107,6 +105,7 @@ namespace ShelteredAPI.Storage
                     SourceStoreKind = source.Kind,
                     ItemId = itemId,
                     Quantity = quantity,
+                    ReservationId = reservationId,
                     Kind = kind,
                     Slot = slot
                 };
@@ -130,6 +129,7 @@ namespace ShelteredAPI.Storage
                     CharacterItemAssignment assignment = _assignments[i];
                     if (assignment != null && string.Equals(assignment.AssignmentId, assignmentId, StringComparison.OrdinalIgnoreCase))
                     {
+                        CancelAssignmentReservation(assignment);
                         _assignments.RemoveAt(i);
                         return true;
                     }
@@ -250,6 +250,7 @@ namespace ShelteredAPI.Storage
                     CharacterItemAssignment assignment = _assignments[i];
                     if (IsActorAssignment(assignment, resolvedActorId))
                     {
+                        CancelAssignmentReservation(assignment);
                         _assignments.RemoveAt(i);
                         removed++;
                     }
@@ -297,8 +298,10 @@ namespace ShelteredAPI.Storage
                 for (int i = 0; assignments != null && i < assignments.Count; i++)
                 {
                     CharacterItemAssignment assignment = assignments[i];
-                    if (IsValidLoadedAssignment(assignment))
-                        _assignments.Add(assignment.Clone());
+                    if (!IsValidLoadedAssignment(assignment))
+                        continue;
+
+                    _assignments.Add(assignment.Clone());
                 }
             }
         }
@@ -309,7 +312,10 @@ namespace ShelteredAPI.Storage
             if (source == null || string.IsNullOrEmpty(assignment.ItemId) || assignment.Quantity <= 0)
                 return false;
 
-            return GetAssignableCount(source, assignment.ItemId) >= GetAssignedCountInStore(assignment.SourceStoreId, assignment.ItemId);
+            if (!string.IsNullOrEmpty(assignment.ReservationId))
+                return source.GetCount(assignment.ItemId) >= assignment.Quantity;
+
+            return GetAssignableCount(source, assignment.ItemId) >= GetAssignedCountInStore(assignment.SourceStoreId, assignment.ItemId, false);
         }
 
         private IItemStore ResolveSource(CharacterItemAssignment assignment)
@@ -336,7 +342,7 @@ namespace ShelteredAPI.Storage
                 _knownSources[source.StoreId] = source;
         }
 
-        private int GetAssignedCountInStore(string sourceStoreId, string itemId)
+        private int GetAssignedCountInStore(string sourceStoreId, string itemId, bool includeReservationBacked)
         {
             if (string.IsNullOrEmpty(sourceStoreId) || string.IsNullOrEmpty(itemId))
                 return 0;
@@ -349,6 +355,9 @@ namespace ShelteredAPI.Storage
                     && string.Equals(assignment.SourceStoreId, sourceStoreId, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(assignment.ItemId, itemId, StringComparison.OrdinalIgnoreCase))
                 {
+                    if (!includeReservationBacked && !string.IsNullOrEmpty(assignment.ReservationId))
+                        continue;
+
                     total += Math.Max(0, assignment.Quantity);
                 }
             }
@@ -371,19 +380,52 @@ namespace ShelteredAPI.Storage
             if (source == null)
                 return 0;
 
-            try
-            {
-                System.Reflection.MethodInfo method = source.GetType().GetMethod(
-                    "GetAvailableCount",
-                    new Type[] { typeof(string) });
-                if (method != null && method.ReturnType == typeof(int))
-                    return (int)method.Invoke(source, new object[] { itemId });
-            }
-            catch
-            {
-            }
+            IReservableItemStore reservable = source as IReservableItemStore;
+            if (reservable != null)
+                return reservable.GetAvailableCount(itemId);
 
             return source.GetCount(itemId);
+        }
+
+        private int GetUnassignedAvailableCount(IItemStore source, string sourceStoreId, string itemId)
+        {
+            bool sourceReservationsDiscountAvailability = source is IReservableItemStore;
+            int alreadyAssigned = GetAssignedCountInStore(sourceStoreId, itemId, !sourceReservationsDiscountAvailability);
+            return Math.Max(0, GetAssignableCount(source, itemId) - alreadyAssigned);
+        }
+
+        private static string ReserveSourceForAssignment(
+            IItemStore source,
+            string itemId,
+            int quantity,
+            CharacterItemAssignmentKind kind,
+            string assignmentId)
+        {
+            if (kind != CharacterItemAssignmentKind.Reserved)
+                return string.Empty;
+
+            IReservableItemStore reservable = source as IReservableItemStore;
+            if (reservable == null)
+                return string.Empty;
+
+            ItemReservationResult reservation = reservable.Reserve(itemId, quantity, assignmentId);
+            if (reservation == null || !reservation.Success)
+                throw new InvalidOperationException(reservation != null && !string.IsNullOrEmpty(reservation.ErrorMessage)
+                    ? reservation.ErrorMessage
+                    : "Source store could not reserve the requested item quantity.");
+
+            return reservation.ReservationId;
+        }
+
+        private void CancelAssignmentReservation(CharacterItemAssignment assignment)
+        {
+            if (assignment == null || string.IsNullOrEmpty(assignment.ReservationId))
+                return;
+
+            IItemStore source = ResolveSource(assignment);
+            IReservableItemStore reservable = source as IReservableItemStore;
+            if (reservable != null)
+                reservable.CancelReservation(assignment.ReservationId);
         }
 
         private static ActorId ResolveFamilyMemberActorId(FamilyMember member)
@@ -570,6 +612,7 @@ namespace ShelteredAPI.Storage
             string sourceStoreKind = entry.SourceStoreKind.ToString();
             string itemId = entry.ItemId;
             int quantity = entry.Quantity;
+            string reservationId = entry.ReservationId;
             string kind = entry.Kind.ToString();
             string slot = entry.Slot.ToString();
 
@@ -584,6 +627,7 @@ namespace ShelteredAPI.Storage
             data.SaveLoad("sourceStoreKind", ref sourceStoreKind);
             data.SaveLoad("itemId", ref itemId);
             data.SaveLoad("quantity", ref quantity);
+            data.SaveLoad("reservationId", ref reservationId);
             data.SaveLoad("kind", ref kind);
             data.SaveLoad("slot", ref slot);
             data.GroupEnd();
@@ -597,6 +641,7 @@ namespace ShelteredAPI.Storage
             entry.SourceStoreKind = ParseEnum(sourceStoreKind, ItemStoreKind.Unknown);
             entry.ItemId = itemId;
             entry.Quantity = quantity;
+            entry.ReservationId = reservationId;
             entry.Kind = ParseEnum(kind, CharacterItemAssignmentKind.Assigned);
             entry.Slot = ParseEnum(slot, CharacterItemSlot.None);
         }

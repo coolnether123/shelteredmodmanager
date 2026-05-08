@@ -5,7 +5,7 @@ namespace ShelteredAPI.Storage
 {
     /// <summary>
     /// Mod-facing classification for an item assignment attached to a family member.
-    /// The backing item remains in its source IItemStore.
+    /// Reserved assignments acquire an IReservableItemStore reservation when the source supports it.
     /// </summary>
     public enum CharacterItemAssignmentKind
     {
@@ -13,9 +13,6 @@ namespace ShelteredAPI.Storage
         Reserved,
         Equipped,
         Carried,
-        Medical,
-        Food,
-        Tool,
         Quest
     }
 
@@ -47,6 +44,7 @@ namespace ShelteredAPI.Storage
             SourceStoreName = string.Empty;
             SourceStoreKind = ItemStoreKind.Unknown;
             ItemId = string.Empty;
+            ReservationId = string.Empty;
             Kind = CharacterItemAssignmentKind.Assigned;
             Slot = CharacterItemSlot.None;
         }
@@ -59,6 +57,7 @@ namespace ShelteredAPI.Storage
         public ItemStoreKind SourceStoreKind { get; set; }
         public string ItemId { get; set; }
         public int Quantity { get; set; }
+        public string ReservationId { get; set; }
         public CharacterItemAssignmentKind Kind { get; set; }
         public CharacterItemSlot Slot { get; set; }
 
@@ -74,6 +73,7 @@ namespace ShelteredAPI.Storage
                 SourceStoreKind = SourceStoreKind,
                 ItemId = ItemId,
                 Quantity = Quantity,
+                ReservationId = ReservationId,
                 Kind = Kind,
                 Slot = Slot
             };
@@ -82,6 +82,7 @@ namespace ShelteredAPI.Storage
 
     /// <summary>
     /// Character assignment service. Assignments classify existing store contents; they do not move or duplicate items.
+    /// Reserved assignments hold source-store availability when the source supports reservations.
     /// </summary>
     public interface ICharacterItemAssignmentService
     {
