@@ -1,5 +1,5 @@
 using System;
-using System.Reflection;
+using System.IO;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -12,6 +12,8 @@ namespace ModAPI.Core
     {
         private static string _unityVersion;
         private static string _gameVersion;
+        private static string _unityDataPath;
+        private static string _gameRoot;
         private static bool? _isModernSceneApi;
 
         public static string UnityVersion
@@ -19,7 +21,7 @@ namespace ModAPI.Core
             get
             {
                 if (!string.IsNullOrEmpty(_unityVersion)) return _unityVersion;
-                _unityVersion = TryGetAppStringProperty("unityVersion") ?? "unknown";
+                _unityVersion = RuntimeEnvironmentInfo.UnityVersion;
                 return _unityVersion;
             }
         }
@@ -29,7 +31,7 @@ namespace ModAPI.Core
             get
             {
                 if (!string.IsNullOrEmpty(_gameVersion)) return _gameVersion;
-                _gameVersion = TryGetAppStringProperty("version") ?? "unknown";
+                _gameVersion = RuntimeEnvironmentInfo.GameVersion;
                 return _gameVersion;
             }
         }
@@ -48,6 +50,46 @@ namespace ModAPI.Core
             get
             {
                 return IntPtr.Size == 8 ? "x64" : "x86";
+            }
+        }
+
+        public static string UnityDataPath
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(_unityDataPath)) return _unityDataPath;
+                _unityDataPath = RuntimeEnvironmentInfo.UnityDataPath;
+                return _unityDataPath;
+            }
+        }
+
+        public static string GameRoot
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(_gameRoot)) return _gameRoot;
+
+                string dataPath = UnityDataPath;
+                if (!string.IsNullOrEmpty(dataPath)
+                    && !string.Equals(dataPath, RuntimeEnvironmentInfo.UnavailableValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        DirectoryInfo parent = Directory.GetParent(dataPath);
+                        if (parent != null)
+                        {
+                            _gameRoot = parent.FullName;
+                            return _gameRoot;
+                        }
+                    }
+                    catch
+                    {
+                        // GuardrailAllow: SilentCatch - Unity dataPath may be unavailable during early loader probes; callers get a current-directory fallback.
+                    }
+                }
+
+                _gameRoot = Directory.GetCurrentDirectory();
+                return _gameRoot;
             }
         }
 
@@ -75,22 +117,6 @@ namespace ModAPI.Core
                 }
                 return _isModernSceneApi.Value;
             }
-        }
-
-        private static string TryGetAppStringProperty(string name)
-        {
-            try
-            {
-                var prop = typeof(Application).GetProperty(name, BindingFlags.Public | BindingFlags.Static);
-                if (prop == null) return null;
-                var val = prop.GetValue(null, null) as string;
-                if (!string.IsNullOrEmpty(val)) return val;
-            }
-            catch
-            {
-                // Swallow; older Unity builds may not expose these properties or their icalls.
-            }
-            return null;
         }
     }
 }

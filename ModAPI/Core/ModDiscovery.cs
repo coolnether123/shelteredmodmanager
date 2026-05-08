@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using UnityEngine;
 
 namespace ModAPI.Core
 {
@@ -20,7 +19,7 @@ namespace ModAPI.Core
             var results = new List<ModEntry>();
             try
             {
-                string gameRootPath = Directory.GetParent(Application.dataPath).FullName;
+                string gameRootPath = RuntimeCompat.GameRoot;
                 string modsRoot = Path.Combine(gameRootPath, "mods");
 
                 // Minimal logging: only emit per-mod discovery at info level.

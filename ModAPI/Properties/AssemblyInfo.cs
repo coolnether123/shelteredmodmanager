@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 // General assembly metadata.
 [assembly: AssemblyTitle("ModAPI")]
@@ -29,3 +30,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyVersion("1.3.0.0")]
 [assembly: AssemblyFileVersion("1.3.0.3")]
 [assembly: AssemblyInformationalVersion("1.3.0-beta.3")]
+[assembly: InternalsVisibleTo("ShelteredAPI.Networking.Tests")]

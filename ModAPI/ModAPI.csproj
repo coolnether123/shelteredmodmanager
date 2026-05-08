@@ -147,6 +147,7 @@
     <Compile Include="Core\ModPrefs.cs" />
     <Compile Include="Core\RuntimeApiCompatibility.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
+    <Compile Include="Core\RuntimeEnvironmentInfo.cs" />
     <Compile Include="Util\CollectionCompatibility.cs" />
     <Compile Include="Loading\ModLoadPlanBuilder.cs" />
     <Compile Include="Persistence\ModPersistenceStore.cs" />

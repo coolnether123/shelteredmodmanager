@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using UnityEngine;
 
 namespace ModAPI.Core
 {
@@ -39,7 +38,11 @@ namespace ModAPI.Core
 
             string simpleName = null;
             try { simpleName = Path.GetFileNameWithoutExtension(assemblyPath); }
-            catch { return false; }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - malformed assembly paths are simply not shared runtime assemblies.
+                return false;
+            }
 
             return IsSharedRuntimeAssemblyName(simpleName);
         }
@@ -150,7 +153,10 @@ namespace ModAPI.Core
                         return candidates[i];
                 }
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - candidate probing is best-effort; missing paths mean unresolved.
+            }
 
             return null;
         }
@@ -159,7 +165,7 @@ namespace ModAPI.Core
         {
             try
             {
-                string gameRoot = Directory.GetParent(Application.dataPath).FullName;
+                string gameRoot = RuntimeCompat.GameRoot;
                 string smmDir = Path.Combine(gameRoot, "SMM");
                 return new[]
                 {
@@ -205,7 +211,11 @@ namespace ModAPI.Core
         private static string SafeLocation(Assembly assembly)
         {
             try { return assembly != null ? assembly.Location : null; }
-            catch { return null; }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - dynamic assemblies may throw for Location; callers use fallback matching.
+                return null;
+            }
         }
 
         private static bool PathsEqual(string left, string right)

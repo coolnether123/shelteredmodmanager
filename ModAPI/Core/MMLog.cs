@@ -98,7 +98,7 @@ namespace ModAPI.Core
             _enabledCategories.Add(LogCategory.Assembly);
 
             InitializeFromManagerIni();
-            WriteStartupBanner();
+            TryWriteStartupBanner();
         }
 
         private static void InitializeFromManagerIni()
@@ -159,8 +159,9 @@ namespace ModAPI.Core
 
         private static void WriteStartupBanner()
         {
-            var unityVersion = RuntimeCompat.UnityVersion;
-            var gameVersion = RuntimeCompat.GameVersion;
+            var unityInfo = RuntimeEnvironmentInfo.GetUnityRuntimeInfo();
+            var unityVersion = unityInfo.UnityVersion;
+            var gameVersion = unityInfo.GameVersion;
             var modApiVersion = RuntimeCompat.ModApiVersion;
             var arch = RuntimeCompat.Architecture;
             var buildTarget = unityVersion.StartsWith("5.6") ? "Epic Games (x64)" : "Steam/GOG (x86)";
@@ -175,12 +176,27 @@ namespace ModAPI.Core
             banner.AppendLine(string.Format("Build Target:    {0}", buildTarget));
             banner.AppendLine(string.Format("Game Version:    {0}", gameVersion));
             banner.AppendLine(string.Format("Unity Version:   {0}", unityVersion));
-            banner.AppendLine(string.Format("Data Path:       {0}", Application.dataPath));
+            banner.AppendLine(string.Format("Unity Platform:  {0}", unityInfo.Platform));
+            banner.AppendLine(string.Format("Data Path:       {0}", unityInfo.DataPath));
             banner.AppendLine(string.Format("Log Level:       {0}", _minLevel));
             banner.AppendLine("=================================================================================");
 
-            try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); } 
-            catch { }
+            File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8);
+        }
+
+        private static bool TryWriteStartupBanner()
+        {
+            try
+            {
+                WriteStartupBanner();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteInternal(LogLevel.Warning, LogCategory.General, "Logger",
+                    "Startup banner could not be written: " + ex.GetType().Name + ": " + ex.Message);
+                return false;
+            }
         }
 
         // Version probes are centralized in RuntimeCompat to keep 5.3/5.6 differences in one place.
@@ -272,7 +288,11 @@ namespace ModAPI.Core
                 if (_warnOnceKeys.Contains(key)) return;
                 _warnOnceKeys.Add(key);
             }
-            try { logAction(); } catch { }
+            try { logAction(); }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - LogOnce is best-effort logging fanout and must not break the caller.
+            }
         }
 
         public static void WriteException(Exception ex, string context = "", LogCategory category = LogCategory.General)
@@ -507,6 +527,7 @@ namespace ModAPI.Core
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - file logging has no lower-level fallback sink.
             }
         }
 
@@ -567,7 +588,10 @@ namespace ModAPI.Core
                         File.WriteAllText(_logPath, $"[LOG ROTATION FAILED: {ex.Message}]\n");
                         _logFileSize = 0;
                     }
-                    catch { }
+                    catch
+                    {
+                        // GuardrailAllow: SilentCatch - log rotation fallback has no lower-level sink during IO failure.
+                    }
                 }
             }
         }
@@ -652,7 +676,10 @@ namespace ModAPI.Core
                     return declaringType.Name;
                 }
             }
-            catch { }
+            catch
+            {
+                // GuardrailAllow: SilentCatch - caller attribution is diagnostic only and must never block logging.
+            }
             return "Unknown";
         }
 
@@ -706,6 +733,7 @@ namespace ModAPI.Core
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - lightweight caller attribution is diagnostic only and must never block logging.
             }
 
             return "General";
@@ -729,6 +757,7 @@ namespace ModAPI.Core
             }
             catch
             {
+                // GuardrailAllow: SilentCatch - stack trace attachment is diagnostic only and must not hide the original log message.
             }
 
             return sb.ToString();

@@ -243,7 +243,7 @@ namespace ModAPI.Core
                 return null;
             };
 
-            _gameRoot = Directory.GetParent(Application.dataPath).FullName;
+            _gameRoot = RuntimeCompat.GameRoot;
             _modsRoot = Path.Combine(_gameRoot, "mods");
 
             _loaderRoot = doorstepGameObject != null ? doorstepGameObject : new GameObject("ModAPI.Loader");
@@ -1055,6 +1055,7 @@ namespace ModAPI.Core
                 }
                 catch
                 {
+                    // GuardrailAllow: SilentCatch - unreadable assemblies are skipped while searching loaded runtime APIs.
                 }
             }
 

@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using UnityEngine;
 
 namespace ModAPI.Core
 {
@@ -15,7 +14,7 @@ namespace ModAPI.Core
             {
                 try
                 {
-                    return Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+                    return RuntimeCompat.GameRoot;
                 }
                 catch
                 {
