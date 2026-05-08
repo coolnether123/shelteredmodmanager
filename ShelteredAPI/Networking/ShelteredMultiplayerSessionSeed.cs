@@ -87,16 +87,26 @@ namespace ShelteredAPI.Networking
                     _lastMasterSeed = masterSeed;
                 }
 
-                MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                TryWrite(MMLog.LogLevel.Info,
                     "Applied ModRandom master seed " + masterSeed + " from session '" + normalized + "'.");
                 return true;
             }
             catch (Exception ex)
             {
                 error = ex.Message;
-                MMLog.WriteWithSource(MMLog.LogLevel.Error, MMLog.LogCategory.Network, LogSource,
-                    "Failed to apply session seed: " + ex.Message);
+                TryWrite(MMLog.LogLevel.Error, "Failed to apply session seed: " + ex.Message);
                 return false;
+            }
+        }
+
+        private static void TryWrite(MMLog.LogLevel level, string message)
+        {
+            try
+            {
+                MMLog.WriteWithSource(level, MMLog.LogCategory.Network, LogSource, message);
+            }
+            catch
+            {
             }
         }
 

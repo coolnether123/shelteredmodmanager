@@ -342,11 +342,21 @@ namespace ShelteredAPI.Networking
                 _sessionState = state;
             }
 
-            MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
-                "Session state changed: mode=" + state.Mode + ", player=" + state.LocalPlayerId
-                + ", session='" + state.SessionId + "', tickRate=" + state.TickRate
-                + ", timeMode=" + state.GameTimeMode + ", status=" + state.Status + ".");
+            TryWriteSessionStateChanged(state);
+        }
 
+        private static void TryWriteSessionStateChanged(ShelteredMultiplayerSessionState state)
+        {
+            try
+            {
+                MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                    "Session state changed: mode=" + state.Mode + ", player=" + state.LocalPlayerId
+                    + ", session='" + state.SessionId + "', tickRate=" + state.TickRate
+                    + ", timeMode=" + state.GameTimeMode + ", status=" + state.Status + ".");
+            }
+            catch
+            {
+            }
         }
 
         private bool IsMainThread

@@ -483,11 +483,22 @@ namespace ShelteredAPI.Networking
                 _context = context;
             }
 
-            MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
-                "Context changed: mode=" + context.Mode + ", session='" + context.SessionId
-                + "', gameplayPlayer=" + context.LocalPlayerId + ", networkPeer=" + context.NetworkLocalPeerId
-                + ", phase=" + context.SetupPhase + ", status=" + context.Status
-                + ", reason=" + (reason ?? string.Empty) + ".");
+            TryWriteContextChanged(context, reason);
+        }
+
+        private static void TryWriteContextChanged(ShelteredMultiplayerSessionContext context, string reason)
+        {
+            try
+            {
+                MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                    "Context changed: mode=" + context.Mode + ", session='" + context.SessionId
+                    + "', gameplayPlayer=" + context.LocalPlayerId + ", networkPeer=" + context.NetworkLocalPeerId
+                    + ", phase=" + context.SetupPhase + ", status=" + context.Status
+                    + ", reason=" + (reason ?? string.Empty) + ".");
+            }
+            catch
+            {
+            }
         }
 
         private void Raise(ShelteredMultiplayerLifecycleEventKind kind, ShelteredMultiplayerSessionContext context, string reason)
@@ -513,12 +524,36 @@ namespace ShelteredAPI.Networking
                     string message = kind + " handler " + registration.Handler.GetType().Name + " failed: " + ex.Message;
                     if (registration.StartupCritical)
                     {
-                        MMLog.WriteWithSource(MMLog.LogLevel.Error, MMLog.LogCategory.Network, LogSource, message);
+                        TryWriteLifecycleHandlerError(message);
                         throw new InvalidOperationException(message, ex);
                     }
 
-                    MMLog.WarnOnce("ShelteredMultiplayerSession." + kind + "." + registration.Handler.GetType().Name, message);
+                    TryWriteLifecycleHandlerWarning(
+                        "ShelteredMultiplayerSession." + kind + "." + registration.Handler.GetType().Name,
+                        message);
                 }
+            }
+        }
+
+        private static void TryWriteLifecycleHandlerError(string message)
+        {
+            try
+            {
+                MMLog.WriteWithSource(MMLog.LogLevel.Error, MMLog.LogCategory.Network, LogSource, message);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void TryWriteLifecycleHandlerWarning(string key, string message)
+        {
+            try
+            {
+                MMLog.WarnOnce(key, message);
+            }
+            catch
+            {
             }
         }
 

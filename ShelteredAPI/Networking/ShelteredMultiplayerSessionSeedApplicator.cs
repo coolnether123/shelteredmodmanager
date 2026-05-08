@@ -49,8 +49,19 @@ namespace ShelteredAPI.Networking
                 throw new InvalidOperationException("Failed to apply multiplayer session seed: " + error);
 
             _appliedSeedSessionId = context.SessionId;
-            MMLog.WriteWithSource(MMLog.LogLevel.Debug, MMLog.LogCategory.Network, LogSource,
-                "Session seed applied for " + reason + ". Seed=" + seed + ".");
+            TryWriteApplied(reason, seed);
+        }
+
+        private static void TryWriteApplied(string reason, int seed)
+        {
+            try
+            {
+                MMLog.WriteWithSource(MMLog.LogLevel.Debug, MMLog.LogCategory.Network, LogSource,
+                    "Session seed applied for " + reason + ". Seed=" + seed + ".");
+            }
+            catch
+            {
+            }
         }
     }
 }
