@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Networking;
 using ShelteredAPI.Bunkers;
+using ShelteredAPI.Networking.World;
 using UnityEngine;
 
 namespace ShelteredAPI.Networking
@@ -46,6 +47,12 @@ namespace ShelteredAPI.Networking
                 || lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.WorldStartReleased)
             {
                 Apply(lifecycleEvent.Context, lifecycleEvent.Reason);
+                return;
+            }
+
+            if (lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.SessionDeactivated)
+            {
+                ShelteredMapEntities.Clear(lifecycleEvent.Reason);
             }
         }
 
@@ -371,7 +378,8 @@ namespace ShelteredAPI.Networking
             List<BunkerDefinition> definitions = ToBunkers(assignments);
             ShelteredBunkers.Service.LoadDefinitions(definitions);
             ShelteredBunkers.SetActivePlayerId(ResolveBunkerOwnerId(assignments, localPlayerId));
-            ShelteredMultiplayerMapSeedRuntime.CacheActiveBunkerPosition(reason);
+            ShelteredMultiplayerBunkerAnchorRuntime.CacheActiveBunkerPosition(reason);
+            RegisterMapEntities(assignments);
 
             MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
                 "Applied " + definitions.Count + " multiplayer bunker assignment(s). LocalPlayerId="
@@ -511,6 +519,26 @@ namespace ShelteredAPI.Networking
                 true,
                 gameplayEvent.IsOnline,
                 peerId));
+
+            ShelteredMapEntities.RegisterBunkerFromAssignment(new ShelteredMultiplayerBunkerAssignmentRecord(
+                peerId,
+                gameplayEvent.BunkerOwnerId + 1,
+                gameplayEvent.BunkerOwnerId,
+                gameplayEvent.WorldPosition,
+                gameplayEvent.DisplayName,
+                gameplayEvent.IsOnline));
+        }
+
+        private static void RegisterMapEntities(ShelteredMultiplayerBunkerAssignmentRecord[] assignments)
+        {
+            if (assignments == null)
+                return;
+
+            for (int i = 0; i < assignments.Length; i++)
+            {
+                if (assignments[i] != null)
+                    ShelteredMapEntities.RegisterBunkerFromAssignment(assignments[i]);
+            }
         }
 
         private static bool IsBunkerEvent(string eventKind)
