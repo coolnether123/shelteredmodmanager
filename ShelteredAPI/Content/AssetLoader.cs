@@ -193,7 +193,8 @@ namespace ShelteredAPI.Content
                 throw new InvalidOperationException("Mod root path is not set; cannot resolve asset.");
             if (string.IsNullOrEmpty(relativePath))
                 throw new ArgumentNullException(nameof(relativePath));
-            return Path.GetFullPath(Path.Combine(modRootPath, relativePath));
+
+            return ResolveUnderRoot(modRootPath, relativePath, true, "AssetLoader.ExplicitPath");
         }
 
         private static string ResolvePath(Assembly asm, string relativePath)
@@ -202,19 +203,13 @@ namespace ShelteredAPI.Content
             ModAPI.Core.ModEntry entry;
             if (ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.RootPath))
             {
-                return Path.GetFullPath(Path.Combine(entry.RootPath, relativePath));
+                return ResolveUnderRoot(entry.RootPath, relativePath, false, "AssetLoader.ModPath");
             }
-            try
-            {
-                var asmDir = Path.GetDirectoryName(asm.Location);
-                var path = Path.GetFullPath(Path.Combine(asmDir ?? string.Empty, relativePath));
-                return path;
-            }
-            catch (Exception ex)
-            {
-                MMLog.WarnOnce("AssetLoader.ResolvePath", "Failed to resolve asset path: " + ex.Message);
-                return null;
-            }
+
+            MMLog.WarnOnce(
+                "AssetLoader.ResolvePath.NoModRoot." + SafeAssemblyName(asm) + "." + relativePath,
+                "Cannot resolve asset path '" + relativePath + "' because assembly '" + SafeAssemblyName(asm) + "' is not registered to a mod root.");
+            return null;
         }
 
         private static string CacheKey(Assembly asm, string relativePath)
@@ -222,8 +217,54 @@ namespace ShelteredAPI.Content
             if (asm == null || string.IsNullOrEmpty(relativePath)) return null;
             ModAPI.Core.ModEntry entry;
             var modId = ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null ? entry.Id ?? entry.RootPath : null;
-            var asmName = asm.GetName().Name;
+            var asmName = SafeAssemblyName(asm);
             return (modId ?? asmName) + "|" + relativePath;
+        }
+
+        private static string ResolveUnderRoot(string rootPath, string relativePath, bool throwOnInvalid, string warningKeyPrefix)
+        {
+            try
+            {
+                if (Path.IsPathRooted(relativePath))
+                    return InvalidAssetPath("Asset path must be relative to the mod root: '" + relativePath + "'", relativePath, throwOnInvalid, warningKeyPrefix);
+
+                string fullRoot = Path.GetFullPath(rootPath);
+                string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath));
+                if (!IsInsideRoot(fullRoot, fullPath))
+                    return InvalidAssetPath("Asset path escapes the mod root: '" + relativePath + "'", fullPath, throwOnInvalid, warningKeyPrefix);
+
+                return fullPath;
+            }
+            catch (Exception ex)
+            {
+                if (throwOnInvalid)
+                    throw;
+
+                MMLog.WarnOnce(warningKeyPrefix + ".Invalid." + relativePath, "Failed to resolve mod asset path '" + relativePath + "': " + ex.Message);
+                return null;
+            }
+        }
+
+        private static string InvalidAssetPath(string message, string path, bool throwOnInvalid, string warningKeyPrefix)
+        {
+            if (throwOnInvalid)
+                throw new InvalidOperationException(message);
+
+            MMLog.WarnOnce(warningKeyPrefix + ".Rejected." + path, message);
+            return null;
+        }
+
+        private static bool IsInsideRoot(string rootPath, string path)
+        {
+            string root = rootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string candidate = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string SafeAssemblyName(Assembly asm)
+        {
+            try { return asm != null ? asm.GetName().Name : "unknown"; }
+            catch { return "unknown"; }
         }
     }
 }

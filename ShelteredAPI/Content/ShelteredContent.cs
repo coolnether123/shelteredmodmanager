@@ -30,11 +30,13 @@ namespace ShelteredAPI.Content
 
         public static RegistrationResult RegisterItem(ItemDefinition definition)
         {
+            ContentOwnerAssemblyResolver.EnsureOwner(definition);
             return Service.Registration.RegisterItem(definition);
         }
 
         public static RegistrationResult RegisterItem(string modId, string itemId, ItemDefinition definition)
         {
+            ContentOwnerAssemblyResolver.EnsureOwner(definition);
             return Service.Registration.RegisterItem(modId, itemId, definition);
         }
 

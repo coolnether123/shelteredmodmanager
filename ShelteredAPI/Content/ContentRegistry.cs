@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -232,7 +235,7 @@ namespace ShelteredAPI.Content
             def.NormalizeLegacyFields();
             if (def.OwnerAssembly == null)
             {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
+                try { def.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
             }
             if (string.IsNullOrEmpty(def.Id))
             {
@@ -269,7 +272,7 @@ namespace ShelteredAPI.Content
             def.Id = string.IsNullOrEmpty(def.Id) ? itemId : def.Id;
             if (def.OwnerAssembly == null)
             {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
+                try { def.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
             }
             if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
@@ -392,7 +395,7 @@ namespace ShelteredAPI.Content
         {
             if (def.OwnerAssembly == null)
             {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
+                try { def.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
             }
             if (def.CustomTypeId.HasValue)
             {
@@ -829,6 +832,86 @@ namespace ShelteredAPI.Content
                 .WithCategory(ItemCategory.Tool)
                 .WithStackSize(1)
                 .WithTradeValue(tradeValue);
+        }
+    }
+
+    internal static class ContentOwnerAssemblyResolver
+    {
+        private static readonly Assembly ShelteredApiAssembly = typeof(ContentOwnerAssemblyResolver).Assembly;
+        private static readonly Assembly ModApiAssembly = typeof(ModAPI.Core.ModRegistry).Assembly;
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void EnsureOwner(ItemDefinition definition)
+        {
+            if (definition == null || definition.OwnerAssembly != null)
+                return;
+
+            definition.OwnerAssembly = ResolveCallingAssembly();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static Assembly ResolveCallingAssembly()
+        {
+            try
+            {
+                StackTrace stackTrace = new StackTrace(false);
+
+                for (int i = 1; i < stackTrace.FrameCount; i++)
+                {
+                    Assembly assembly = GetFrameAssembly(stackTrace, i);
+                    if (assembly == null || IsFrameworkAssembly(assembly))
+                        continue;
+
+                    ModEntry entry;
+                    if (ModRegistry.TryGetModByAssembly(assembly, out entry) && entry != null)
+                        return assembly;
+                }
+
+                for (int i = 1; i < stackTrace.FrameCount; i++)
+                {
+                    Assembly assembly = GetFrameAssembly(stackTrace, i);
+                    if (assembly != null && !IsFrameworkAssembly(assembly))
+                        return assembly;
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static Assembly GetFrameAssembly(StackTrace stackTrace, int index)
+        {
+            StackFrame frame = stackTrace.GetFrame(index);
+            if (frame == null)
+                return null;
+
+            MethodBase method = frame.GetMethod();
+            if (method == null || method.DeclaringType == null)
+                return null;
+
+            return method.DeclaringType.Assembly;
+        }
+
+        private static bool IsFrameworkAssembly(Assembly assembly)
+        {
+            if (assembly == null || assembly == ShelteredApiAssembly || assembly == ModApiAssembly)
+                return true;
+
+            string name;
+            try { name = assembly.GetName().Name; }
+            catch { return true; }
+
+            if (string.IsNullOrEmpty(name))
+                return true;
+
+            return string.Equals(name, "mscorlib", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "System", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "System.Core", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "UnityEngine", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "Assembly-CSharp", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "0Harmony", StringComparison.OrdinalIgnoreCase);
         }
     }
 

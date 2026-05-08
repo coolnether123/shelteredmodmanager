@@ -99,7 +99,7 @@ namespace ShelteredAPI.Content
             definition.NormalizeLegacyFields();
             if (definition.OwnerAssembly == null)
             {
-                try { definition.OwnerAssembly = Assembly.GetCallingAssembly(); } catch { }
+                try { definition.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
             }
 
             definition.CustomTypeId = (int)itemType;
