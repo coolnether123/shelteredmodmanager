@@ -4,7 +4,6 @@ using ShelteredAPI.Events;
 using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -465,7 +464,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed active authoring session '" + previous.DraftId
                 + "'. Reason=" + (reason ?? "unspecified") + ", resumeGame=" + resumeGame
-                + ", scene=" + SceneManager.GetActiveScene().name + ".");
+                + ", scene=" + GetActiveSceneName() + ".");
+        }
+
+        private static string GetActiveSceneName()
+        {
+            string sceneName;
+            return RuntimeCompat.TryGetActiveSceneName(out sceneName) ? sceneName : string.Empty;
         }
 
         private void CleanupPendingDraftArtifacts(ScenarioAuthoringSession pending, string reason)

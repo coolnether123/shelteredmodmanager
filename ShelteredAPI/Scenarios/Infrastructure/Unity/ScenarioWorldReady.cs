@@ -1,4 +1,4 @@
-using UnityEngine.SceneManagement;
+using ModAPI.Core;
 using UnityEngine;
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioWorldReady
@@ -11,16 +11,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public static bool Evaluate(out string blockingReason)
         {
-            Scene activeScene = SceneManager.GetActiveScene();
-            if (!activeScene.IsValid())
+            string activeSceneName;
+            if (!RuntimeCompat.TryGetActiveSceneName(out activeSceneName))
             {
-                blockingReason = "The active scene is not valid yet.";
+                blockingReason = "The active scene is not available yet.";
                 return false;
             }
 
-            if (!IsShelterSceneName(activeScene.name))
+            if (!IsShelterSceneName(activeSceneName))
             {
-                blockingReason = "Authoring requires a shelter scene but the active scene is '" + activeScene.name + "'.";
+                blockingReason = "Authoring requires a shelter scene but the active scene is '" + activeSceneName + "'.";
                 return false;
             }
 
@@ -120,8 +120,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public static bool IsShelterSceneActive()
         {
-            Scene activeScene = SceneManager.GetActiveScene();
-            return activeScene.IsValid() && IsShelterSceneName(activeScene.name);
+            string activeSceneName;
+            return RuntimeCompat.TryGetActiveSceneName(out activeSceneName)
+                && IsShelterSceneName(activeSceneName);
         }
 
         private static bool IsShelterSceneName(string sceneName)

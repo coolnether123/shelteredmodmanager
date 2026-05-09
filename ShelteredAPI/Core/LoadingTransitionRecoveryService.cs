@@ -2,7 +2,6 @@ using System;
 using ModAPI.Core;
 using ShelteredAPI.UI;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 using ShelteredAPI.Hooks;
 namespace ShelteredAPI.Core
@@ -19,6 +18,7 @@ namespace ShelteredAPI.Core
         private float _nextDialogAttemptAt;
         private bool _recoveryInProgress;
         private bool _sceneLoadedAttached;
+        private object _sceneLoadedHandler;
 
         public static void EnsureInstalled(GameObject host)
         {
@@ -207,7 +207,10 @@ namespace ShelteredAPI.Core
                 LoadingTransitionRuntime.ResetAfterFailedTransition();
                 bool returnedToMainMenu = LoadingTransitionRuntime.TryReturnToMainMenu();
                 if (!returnedToMainMenu)
-                    SceneManager.LoadScene(LoadingTransitionRecoveryConstants.MenuSceneName);
+                {
+                    if (!RuntimeCompat.TryLoadScene(LoadingTransitionRecoveryConstants.MenuSceneName))
+                        MMLog.WriteWarning("[LoadingTransitionRecovery] Failed to request fallback menu scene load.");
+                }
             }
             catch (Exception recoverEx)
             {
@@ -237,9 +240,12 @@ namespace ShelteredAPI.Core
             LoadingTransitionRecoveryDialog.Show(recovery.Title, recovery.Message);
         }
 
-        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        private void OnSceneLoadedModern(object scene, object mode)
         {
-            string sceneName = string.IsNullOrEmpty(scene.name) ? "<empty>" : scene.name;
+            string sceneName;
+            if (!RuntimeCompat.TryGetSceneName(scene, out sceneName))
+                sceneName = "<empty>";
+
             HandleSceneLoaded(sceneName, "SceneManager.sceneLoaded");
         }
 
@@ -280,17 +286,18 @@ namespace ShelteredAPI.Core
             if (!RuntimeCompat.IsModernSceneApi)
                 return;
 
-            try
+            object handler;
+            if (RuntimeCompat.TryAddSceneLoadedHandler(this, "OnSceneLoadedModern", out handler))
             {
-                SceneManager.sceneLoaded += OnSceneLoaded;
+                _sceneLoadedHandler = handler;
                 _sceneLoadedAttached = true;
                 MMLog.WriteInfo("[LoadingTransitionRecovery] Attached SceneManager.sceneLoaded callback.");
+                return;
             }
-            catch (MissingMethodException)
-            {
-                _sceneLoadedAttached = false;
-                MMLog.WriteWarning("[LoadingTransitionRecovery] SceneManager.sceneLoaded exists but is unavailable at runtime; using OnLevelWasLoaded fallback.");
-            }
+
+            _sceneLoadedHandler = null;
+            _sceneLoadedAttached = false;
+            MMLog.WriteWarning("[LoadingTransitionRecovery] SceneManager.sceneLoaded exists but is unavailable at runtime; using OnLevelWasLoaded fallback.");
         }
 
         private void TryDetachSceneLoaded()
@@ -298,17 +305,9 @@ namespace ShelteredAPI.Core
             if (!_sceneLoadedAttached)
                 return;
 
-            try
-            {
-                SceneManager.sceneLoaded -= OnSceneLoaded;
-            }
-            catch (MissingMethodException)
-            {
-            }
-            finally
-            {
-                _sceneLoadedAttached = false;
-            }
+            RuntimeCompat.TryRemoveSceneLoadedHandler(_sceneLoadedHandler);
+            _sceneLoadedHandler = null;
+            _sceneLoadedAttached = false;
         }
 
         private void OnUnityLog(string condition, string stackTrace, LogType type)

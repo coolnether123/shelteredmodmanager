@@ -3,7 +3,6 @@ using System.Collections;
 using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace ShelteredAPI.Core
 {
@@ -11,15 +10,11 @@ namespace ShelteredAPI.Core
     {
         public static string GetActiveSceneName()
         {
-            try
-            {
-                Scene scene = SceneManager.GetActiveScene();
-                return string.IsNullOrEmpty(scene.name) ? "<empty>" : scene.name;
-            }
-            catch
-            {
-                return "<scene-error>";
-            }
+            string sceneName;
+            if (RuntimeCompat.TryGetActiveSceneName(out sceneName))
+                return string.IsNullOrEmpty(sceneName) ? "<empty>" : sceneName;
+
+            return "<scene-error>";
         }
 
         public static bool CanUseNgui()

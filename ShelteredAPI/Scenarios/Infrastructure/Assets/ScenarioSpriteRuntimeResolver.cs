@@ -1,7 +1,7 @@
 using System;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -168,11 +168,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             if (segments.Length == 0)
                 return null;
 
-            Scene scene = SceneManager.GetActiveScene();
-            if (!scene.IsValid())
+            GameObject[] roots;
+            if (!RuntimeCompat.TryGetActiveSceneRootGameObjects(out roots))
                 return null;
 
-            GameObject[] roots = scene.GetRootGameObjects();
             for (int i = 0; i < roots.Length; i++)
             {
                 GameObject root = roots[i];

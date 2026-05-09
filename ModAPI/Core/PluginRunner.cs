@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading;
 using UnityEngine;
 
@@ -102,19 +101,14 @@ namespace ModAPI.Core
             UnhookUnityLogBridge();
             if (_useModernApi && _sceneLoadedDelegate != null)
             {
-                try
-                {
-                    var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
-                    var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
-                    sceneLoadedEvent.GetRemoveMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
+                RuntimeCompat.TryRemoveSceneLoadedHandler(_sceneLoadedDelegate);
+                _sceneLoadedDelegate = null;
 
-                    if (_sceneUnloadedDelegate != null)
-                    {
-                        var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
-                        sceneUnloadedEvent.GetRemoveMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
-                    }
+                if (_sceneUnloadedDelegate != null)
+                {
+                    RuntimeCompat.TryRemoveSceneUnloadedHandler(_sceneUnloadedDelegate);
+                    _sceneUnloadedDelegate = null;
                 }
-                catch (Exception ex) { MMLog.WarnOnce("PluginRunner.OnDestroy", "Error unsubscribing from scene events: " + ex.Message); }
             }
         }
 
@@ -258,12 +252,7 @@ namespace ModAPI.Core
                     return;
                 }
 
-                Manager.OnSceneLoaded(sceneName);
-                SceneLoaded?.Invoke(sceneName);
-                if (IsQuitting)
-                {
-                    SaveExitTracker.Mark("OnSceneLoadedModern", sceneName);
-                }
+                NotifySceneLoaded(sceneName, "OnSceneLoadedModern");
             }
             catch (Exception ex)
             {
@@ -288,12 +277,7 @@ namespace ModAPI.Core
                     return;
                 }
 
-                Manager.OnSceneUnloaded(sceneName);
-                SceneUnloaded?.Invoke(sceneName);
-                if (IsQuitting)
-                {
-                    SaveExitTracker.Mark("OnSceneUnloadedModern", sceneName);
-                }
+                NotifySceneUnloaded(sceneName, "OnSceneUnloadedModern");
             }
             catch (Exception ex)
             {
@@ -307,18 +291,31 @@ namespace ModAPI.Core
 
         private static string TryGetSceneName(object scene)
         {
-            if (scene == null) return string.Empty;
-            try
+            string sceneName;
+            return RuntimeCompat.TryGetSceneName(scene, out sceneName) ? sceneName : string.Empty;
+        }
+
+        private void NotifySceneLoaded(string sceneName, string source)
+        {
+            if (Manager == null) return;
+
+            Manager.OnSceneLoaded(sceneName);
+            SceneLoaded?.Invoke(sceneName);
+            if (IsQuitting)
             {
-                var t = scene.GetType();
-                var nameProp = t.GetProperty("name", BindingFlags.Public | BindingFlags.Instance);
-                if (nameProp == null) return string.Empty;
-                var value = nameProp.GetValue(scene, null);
-                return value as string ?? string.Empty;
+                SaveExitTracker.Mark(source, sceneName);
             }
-            catch
+        }
+
+        private void NotifySceneUnloaded(string sceneName, string source)
+        {
+            if (Manager == null) return;
+
+            Manager.OnSceneUnloaded(sceneName);
+            SceneUnloaded?.Invoke(sceneName);
+            if (IsQuitting)
             {
-                return string.Empty;
+                SaveExitTracker.Mark(source, sceneName);
             }
         }
 
@@ -326,16 +323,17 @@ namespace ModAPI.Core
         {
             if (!_useModernApi)
             {
-                var newSceneName = Application.loadedLevelName;
+                string newSceneName;
+                if (!RuntimeCompat.TryGetActiveSceneName(out newSceneName))
+                    newSceneName = string.Empty;
+
                 if (Manager != null && _currentSceneName != newSceneName)
                 {
                     if (!string.IsNullOrEmpty(_currentSceneName))
                     {
-                        Manager.OnSceneUnloaded(_currentSceneName);
-                        SceneUnloaded?.Invoke(_currentSceneName);
+                        NotifySceneUnloaded(_currentSceneName, "OnLevelWasLoaded.LegacyUnload");
                     }
-                    Manager.OnSceneLoaded(newSceneName);
-                    SceneLoaded?.Invoke(newSceneName);
+                    NotifySceneLoaded(newSceneName, "OnLevelWasLoaded.LegacyLoad");
                     _currentSceneName = newSceneName;
                 }
             }
@@ -389,55 +387,22 @@ namespace ModAPI.Core
                     return false;
                 }
 
-                var sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
-                if (sceneManagerType == null)
+                if (!RuntimeCompat.TryAddSceneLoadedHandler(this, "OnSceneLoadedModern", out _sceneLoadedDelegate))
                 {
-                    MMLog.WriteDebug("SceneManager type not found.");
+                    MMLog.WriteError("SceneManager.sceneLoaded event not found or unavailable.");
                     return false;
                 }
 
-                var sceneLoadedEvent = sceneManagerType.GetEvent("sceneLoaded");
-                if (sceneLoadedEvent == null)
-                {
-                    MMLog.WriteError("SceneManager.sceneLoaded event not found.");
-                    return false;
-                }
-
-                var sceneUnloadedEvent = sceneManagerType.GetEvent("sceneUnloaded");
-                var onLoadedMethod = GetType().GetMethod("OnSceneLoadedModern", BindingFlags.NonPublic | BindingFlags.Instance);
-                var onUnloadedMethod = GetType().GetMethod("OnSceneUnloadedModern", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (onLoadedMethod == null)
-                {
-                    MMLog.WriteError("OnSceneLoadedModern method missing.");
-                    return false;
-                }
-                if (onUnloadedMethod == null)
-                {
-                    MMLog.WriteError("OnSceneUnloadedModern method missing.");
-                    return false;
-                }
-
-                _sceneLoadedDelegate = Delegate.CreateDelegate(sceneLoadedEvent.EventHandlerType, this, onLoadedMethod);
-                sceneLoadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneLoadedDelegate });
-
-                if (sceneUnloadedEvent != null)
-                {
-                    _sceneUnloadedDelegate = Delegate.CreateDelegate(sceneUnloadedEvent.EventHandlerType, this, onUnloadedMethod);
-                    sceneUnloadedEvent.GetAddMethod().Invoke(null, new object[] { _sceneUnloadedDelegate });
-                }
+                RuntimeCompat.TryAddSceneUnloadedHandler(this, "OnSceneUnloadedModern", out _sceneUnloadedDelegate);
 
                 IsModernUnity = true;
                 MMLog.WriteDebug("Modern scene events hooked successfully.");
 
                 try
                 {
-                    var activeSceneProp = sceneManagerType.GetProperty("activeScene");
-                    var activeScene = activeSceneProp != null ? activeSceneProp.GetValue(null, null) : null;
-                    var isLoadedProp = activeScene != null ? activeScene.GetType().GetProperty("isLoaded") : null;
-                    if (activeScene != null && isLoadedProp != null && (bool)isLoadedProp.GetValue(activeScene, null))
-                    {
-                        OnSceneLoadedModern(activeScene, null);
-                    }
+                    string activeSceneName;
+                    if (RuntimeCompat.TryGetActiveSceneName(out activeSceneName))
+                        NotifySceneLoaded(activeSceneName, "PluginRunner.ActiveScene");
                 }
                 catch (Exception ex)
                 {
@@ -462,11 +427,12 @@ namespace ModAPI.Core
             IsModernUnity = false;
             MMLog.Write("Modern SceneManager not found. Using legacy OnLevelWasLoaded (Unity 5.3).");
 
-            _currentSceneName = Application.loadedLevelName;
+            if (!RuntimeCompat.TryGetActiveSceneName(out _currentSceneName))
+                _currentSceneName = string.Empty;
+
             if (Manager != null && !string.IsNullOrEmpty(_currentSceneName))
             {
-                Manager.OnSceneLoaded(_currentSceneName);
-                SceneLoaded?.Invoke(_currentSceneName);
+                NotifySceneLoaded(_currentSceneName, "PluginRunner.LegacyInitialScene");
             }
         }
     }

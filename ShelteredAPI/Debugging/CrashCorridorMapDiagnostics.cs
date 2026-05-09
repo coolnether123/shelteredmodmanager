@@ -539,15 +539,11 @@ namespace ShelteredAPI.Debugging
 
         private static string GetActiveSceneSafe()
         {
-            try
-            {
-                var s = SceneManager.GetActiveScene();
-                return string.IsNullOrEmpty(s.name) ? "<empty>" : s.name;
-            }
-            catch
-            {
+            string sceneName;
+            if (!RuntimeCompat.TryGetActiveSceneName(out sceneName))
                 return "<scene-error>";
-            }
+
+            return string.IsNullOrEmpty(sceneName) ? "<empty>" : sceneName;
         }
 
         private static bool ReadBoolField(object instance, FieldInfo field)

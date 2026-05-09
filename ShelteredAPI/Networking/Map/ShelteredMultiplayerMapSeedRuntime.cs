@@ -1,6 +1,5 @@
 using System;
 using ModAPI.Core;
-using UnityEngine;
 
 namespace ShelteredAPI.Networking
 {
@@ -30,7 +29,7 @@ namespace ShelteredAPI.Networking
             }
 
             map.randomSeed = masterSeed;
-            UnityEngine.Random.InitState(masterSeed);
+            bool unityRandomSeeded = RuntimeCompat.TrySetUnityRandomSeed(masterSeed);
 
             if (_lastLoggedMapSeed != masterSeed || !string.Equals(_lastLoggedMapReason, reason ?? string.Empty, StringComparison.Ordinal))
             {
@@ -38,7 +37,7 @@ namespace ShelteredAPI.Networking
                 _lastLoggedMapReason = reason ?? string.Empty;
                 MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
                     "Applied multiplayer master seed " + masterSeed + " to ExpeditionMap.randomSeed for "
-                    + _lastLoggedMapReason + ".");
+                    + _lastLoggedMapReason + ". unityRandomSeeded=" + unityRandomSeeded + ".");
             }
         }
     }
