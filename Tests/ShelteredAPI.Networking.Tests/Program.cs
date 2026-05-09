@@ -14,6 +14,7 @@ namespace ShelteredAPI.Networking.Tests
             ShelteredTradeStateTests.Register(tests);
             ShelteredTradeCaravanTests.Register(tests);
             ShelteredMultiplayerTimePolicyTests.Register(tests);
+            MultiplayerAutoLoadFlowTests.Register(tests);
             ShelteredMultiplayerSetupServiceTests.Register(tests);
             ShelteredWorldEventJournalTests.Register(tests);
             ShelteredWorldClockTests.Register(tests);
@@ -23,6 +24,8 @@ namespace ShelteredAPI.Networking.Tests
             ShelteredMapKnowledgeTests.Register(tests);
             ShelteredMultiplayerMapMarkerTests.Register(tests);
             ShelteredMultiplayerMapAnchorDiagnosticsTests.Register(tests);
+            ShelteredMultiplayerMapAnchorValidatorTests.Register(tests);
+            ShelteredMultiplayerTimelineTests.Register(tests);
             ShelteredTravelPredictionTests.Register(tests);
             ShelteredTravelStateRegistryTests.Register(tests);
             ShelteredLocationStateTests.Register(tests);

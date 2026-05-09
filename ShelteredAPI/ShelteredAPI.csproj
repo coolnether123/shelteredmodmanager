@@ -126,6 +126,7 @@
     <Compile Include="Saves\Runtime\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
+    <Compile Include="Harmony\AutoLoadFlow.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\MainMenuMultiplayerPatches.cs" />
     <Compile Include="Harmony\LoadingTransitionRecoveryPatches.cs" />
@@ -152,6 +153,7 @@
     <Compile Include="Networking\ShelteredMultiplayerBunkerAssignments.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerMapSeedRuntime.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerBunkerAnchorRuntime.cs" />
+    <Compile Include="Networking\Map\ShelteredMultiplayerMapAnchorValidator.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerShelterCellRuntime.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerShelterAnchorTranspiler.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerMapSeedPatches.cs" />
@@ -164,6 +166,9 @@
     <Compile Include="Networking\Map\ShelteredMultiplayerMapMarkerRuntime.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerMapMarkerService.cs" />
     <Compile Include="Networking\Map\ShelteredMultiplayerMapMarkerPatches.cs" />
+    <Compile Include="Networking\Setup\MultiplayerAutoLoadDiagnostics.cs" />
+    <Compile Include="Networking\Setup\MultiplayerAutoLoadFlow.cs" />
+    <Compile Include="Networking\Setup\MultiplayerAutoLoadState.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSetupService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerEventSyncService.cs" />
@@ -179,6 +184,9 @@
     <Compile Include="Networking\Recovery\ShelteredMultiplayerResyncPolicy.cs" />
     <Compile Include="Networking\Diagnostics\ShelteredMultiplayerDesyncDiagnostics.cs" />
     <Compile Include="Networking\Diagnostics\ShelteredMultiplayerDesyncReport.cs" />
+    <Compile Include="Networking\Diagnostics\ShelteredMultiplayerTimeline.cs" />
+    <Compile Include="Networking\Diagnostics\ShelteredMultiplayerTimelineEntry.cs" />
+    <Compile Include="Networking\Diagnostics\ShelteredMultiplayerTimelineFormatter.cs" />
     <Compile Include="Networking\Locations\ShelteredLocationContracts.cs" />
     <Compile Include="Networking\Locations\ShelteredLocationEvents.cs" />
     <Compile Include="Networking\Locations\ShelteredLocationLootDiagnostics.cs" />
@@ -246,6 +254,10 @@
     <Compile Include="Networking\MultiplayerConnectionPanelModels.cs" />
     <Compile Include="Networking\MultiplayerConnectionInputValidation.cs" />
     <Compile Include="Networking\MultiplayerConnectionStatusText.cs" />
+    <Compile Include="Networking\MultiplayerConnectionWizardState.cs" />
+    <Compile Include="Networking\MultiplayerConnectionWizardActions.cs" />
+    <Compile Include="Networking\MultiplayerConnectionWizardTextBuilder.cs" />
+    <Compile Include="Networking\MultiplayerEndpointCandidate.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelPresenter.cs" />
     <Compile Include="Networking\MultiplayerConnectionPanelRenderer.cs" />
     <Compile Include="Networking\MultiplayerDiagnosticsTabs.cs" />

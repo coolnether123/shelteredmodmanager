@@ -52,7 +52,10 @@
     <Compile Include="Program.cs" />
     <Compile Include="RuntimeEnvironmentInfoTests.cs" />
     <Compile Include="MultiplayerConnectionPanelHelperTests.cs" />
+    <Compile Include="MultiplayerAutoLoadFlowTests.cs" />
     <Compile Include="ShelteredMultiplayerMapAnchorDiagnosticsTests.cs" />
+    <Compile Include="ShelteredMultiplayerMapAnchorValidatorTests.cs" />
+    <Compile Include="ShelteredMultiplayerTimelineTests.cs" />
     <Compile Include="ShelteredMultiplayerMapMarkerTests.cs" />
     <Compile Include="ShelteredMultiplayerSetupServiceTests.cs" />
     <Compile Include="ShelteredMultiplayerTimePolicyTests.cs" />

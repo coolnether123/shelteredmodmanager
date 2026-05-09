@@ -23,6 +23,8 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("Architecture_SharedWorldSystemsMustNotReadUnityDeltaTimeOutsideRuntimeBridge", SharedWorldDeterministicSystemsMustNotReadUnityDeltaTimeOutsideRuntimeBridge));
             tests.Add(new TestCase("Architecture_FastSlowPolicyMustNotMutateSharedWorldTick", FastSlowPolicyMustNotMutateSharedWorldTick));
             tests.Add(new TestCase("Architecture_GameplayRandomUseRequiresDeterministicStreams", GameplayRandomUseRequiresDeterministicStreams));
+            tests.Add(new TestCase("Architecture_SteamSensitiveSceneManagerUseStaysInRuntimeCompat", SteamSensitiveSceneManagerUseStaysInRuntimeCompat));
+            tests.Add(new TestCase("Architecture_UnityRandomInitStateStaysInRuntimeCompat", UnityRandomInitStateStaysInRuntimeCompat));
             tests.Add(new TestCase("Architecture_NetworkingCatchBlocksMustBeLoggedOrDocumented", NetworkingHasNoUnsafeSilentCatches));
             tests.Add(new TestCase("Architecture_SetupDtosPopulateCoordinatorContext", SetupDtosPopulateCoordinatorContext));
             tests.Add(new TestCase("Architecture_EventRegistriesKeepIdempotencyIndexes", EventRegistriesKeepIdempotencyIndexes));
@@ -91,6 +93,8 @@ namespace ShelteredAPI.Networking.Tests
             allowed["ShelteredAPI/Networking/MultiplayerConnectionTestService.cs"] = 1;
             // Diagnostics age formatting is display-only.
             allowed["ShelteredAPI/Networking/MultiplayerDiagnosticsFormatter.cs"] = 1;
+            // Multiplayer timeline timestamps are diagnostic metadata only.
+            allowed["ShelteredAPI/Networking/Diagnostics/ShelteredMultiplayerTimeline.cs"] = 1;
             // Persistence timestamps describe snapshot metadata, not simulation time.
             allowed["ShelteredAPI/Networking/Persistence/ShelteredMultiplayerWorldSnapshot.cs"] = 1;
             // Save sync timestamps identify files/messages and must not drive shared world ticks.
@@ -174,6 +178,37 @@ namespace ShelteredAPI.Networking.Tests
             AssertNoFindings(
                 FormatOccurrences(findings),
                 "Multiplayer-sensitive random placement must use session/stable ids and named deterministic streams, not unseeded Random or UnityEngine.Random.Range/value.");
+        }
+
+        private static void SteamSensitiveSceneManagerUseStaysInRuntimeCompat()
+        {
+            List<string> findings = FindShelteredApiDirectSceneManagerFindings();
+
+            AssertNoFindings(
+                findings,
+                "ShelteredAPI runtime code must not directly call Steam-sensitive SceneManager APIs. Use ModAPI.Core.RuntimeCompat scene helpers so Unity 5.3 can fall back to legacy APIs.");
+        }
+
+        private static void UnityRandomInitStateStaysInRuntimeCompat()
+        {
+            string repoRoot = FindRepoRoot();
+            Regex pattern = new Regex(@"\b(?:UnityEngine\.)?Random\s*\.\s*InitState\s*\(");
+            List<Occurrence> occurrences = new List<Occurrence>();
+            occurrences.AddRange(FindSourceOccurrences(Path.Combine(repoRoot, "ModAPI"), pattern));
+            occurrences.AddRange(FindSourceOccurrences(Path.Combine(repoRoot, "ShelteredAPI"), pattern));
+
+            List<string> findings = new List<string>();
+            for (int i = 0; i < occurrences.Count; i++)
+            {
+                if (string.Equals(occurrences[i].Path, "ModAPI/Core/RuntimeCompat.cs", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                findings.Add(occurrences[i].ToString());
+            }
+
+            AssertNoFindings(
+                findings,
+                "UnityEngine.Random.InitState is not available on all supported Sheltered Unity runtimes. Route Unity RNG seeding through ModAPI.Core.RuntimeCompat.TrySetUnityRandomSeed.");
         }
 
         private static void NetworkingHasNoUnsafeSilentCatches()
@@ -398,6 +433,50 @@ namespace ShelteredAPI.Networking.Tests
             }
 
             return findings;
+        }
+
+        private static List<string> FindShelteredApiDirectSceneManagerFindings()
+        {
+            string repoRoot = FindRepoRoot();
+            List<string> findings = new List<string>();
+            Regex getActiveScene = new Regex(@"\bSceneManager\s*\.\s*GetActiveScene\s*\(");
+            Regex loadScene = new Regex(@"\bSceneManager\s*\.\s*LoadScene\s*\(");
+            Regex sceneEventSubscription = new Regex(@"\bSceneManager\s*\.\s*scene(?:Loaded|Unloaded)\s*(?:\+=|-=)");
+
+            string[] files = Directory.GetFiles(Path.Combine(repoRoot, "ShelteredAPI"), "*.cs", SearchOption.AllDirectories);
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < files.Length; i++)
+            {
+                string file = files[i];
+                if (IsGeneratedPath(file))
+                    continue;
+
+                string relativePath = ToRepoRelativePath(file);
+                string[] lines = File.ReadAllLines(file);
+                for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+                {
+                    string line = lines[lineIndex];
+                    AddSceneManagerFinding(getActiveScene, relativePath, lineIndex + 1, line, "GetActiveScene", findings);
+                    AddSceneManagerFinding(loadScene, relativePath, lineIndex + 1, line, "LoadScene", findings);
+                    AddSceneManagerFinding(sceneEventSubscription, relativePath, lineIndex + 1, line, "sceneLoaded/sceneUnloaded subscription", findings);
+                }
+            }
+
+            return findings;
+        }
+
+        private static void AddSceneManagerFinding(
+            Regex pattern,
+            string relativePath,
+            int lineNumber,
+            string line,
+            string apiName,
+            List<string> findings)
+        {
+            Match match = pattern.Match(line);
+            if (match.Success)
+                findings.Add(relativePath + ":" + lineNumber + " directly uses SceneManager." + apiName);
         }
 
         private static void AddDisallowedBroadcastLocalSampleCallFindings(string sourceRoot, List<string> findings)
