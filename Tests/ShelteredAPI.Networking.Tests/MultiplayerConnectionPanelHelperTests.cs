@@ -15,6 +15,11 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("ConnectionPanel_EndpointValidation_ReportsFriendlyErrors", EndpointValidationReportsFriendlyErrors));
             tests.Add(new TestCase("ConnectionPanel_StatusText_IsReadableForHost", StatusTextIsReadableForHost));
             tests.Add(new TestCase("ConnectionPanel_SetupReadiness_MapsCommonStates", SetupReadinessMapsCommonStates));
+            tests.Add(new TestCase("ConnectionPanel_Wizard_OfflineJoinUsesManualEndpointPrimary", WizardOfflineJoinUsesManualEndpointPrimary));
+            tests.Add(new TestCase("ConnectionPanel_Wizard_HostingPrimaryBeginsSetup", WizardHostingPrimaryBeginsSetup));
+            tests.Add(new TestCase("ConnectionPanel_Wizard_SetupReleaseExplainsDisabledReason", WizardSetupReleaseExplainsDisabledReason));
+            tests.Add(new TestCase("ConnectionPanel_EndpointCandidates_ClassifyCommonAdapters", EndpointCandidatesClassifyCommonAdapters));
+            tests.Add(new TestCase("ConnectionPanel_TimelineStatus_ReportsEmptyAvailableAccessor", TimelineStatusReportsEmptyAvailableAccessor));
         }
 
         private static void PortValidationBlankUsesDefaultPort()
@@ -95,6 +100,116 @@ namespace ShelteredAPI.Networking.Tests
                 MultiplayerSetupReadinessKind.Released,
                 MultiplayerSetupReadinessTextBuilder.Build("released", string.Empty, NetworkSessionMode.Host, true, false, 1).Kind,
                 "Released setup should read as released.");
+        }
+
+        private static void WizardOfflineJoinUsesManualEndpointPrimary()
+        {
+            MultiplayerConnectionPanelState state = new MultiplayerConnectionPanelState();
+            state.SelectedRole = MultiplayerConnectionWizardRole.Join;
+
+            MultiplayerConnectionPanelViewModel model = new MultiplayerConnectionPanelViewModel();
+            model.HasActiveSession = false;
+            model.JoinAction = MultiplayerConnectionActionState.Available("Join");
+            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
+
+            TestAssert.Equal(
+                MultiplayerConnectionWizardSectionKind.Offline,
+                model.Wizard.CurrentSection,
+                "Offline model should stay in the offline wizard section.");
+            TestAssert.Equal(
+                MultiplayerConnectionWizardActionKind.Join,
+                model.Wizard.PrimaryAction.Kind,
+                "Join-selected offline flow should make manual join the primary action.");
+            TestAssert.True(model.Wizard.PrimaryAction.Enabled, "Join primary action should be enabled when validation allows it.");
+        }
+
+        private static void WizardHostingPrimaryBeginsSetup()
+        {
+            MultiplayerConnectionPanelViewModel model = new MultiplayerConnectionPanelViewModel();
+            model.HasActiveSession = true;
+            model.Mode = NetworkSessionMode.Host;
+            model.SessionState = NetworkSessionState.Listening;
+            model.SetupReadiness = MultiplayerSetupReadinessTextBuilder.Build(
+                "idle",
+                string.Empty,
+                NetworkSessionMode.Host,
+                true,
+                false,
+                1);
+            model.BeginSetupAction = MultiplayerConnectionActionState.Available("Begin Game Setup");
+
+            MultiplayerConnectionPanelState state = new MultiplayerConnectionPanelState();
+            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
+
+            TestAssert.Equal(
+                MultiplayerConnectionWizardSectionKind.Hosting,
+                model.Wizard.CurrentSection,
+                "Active host without setup should show the hosting section.");
+            TestAssert.Equal(
+                MultiplayerConnectionWizardActionKind.BeginSetup,
+                model.Wizard.PrimaryAction.Kind,
+                "Hosting primary action should begin setup.");
+            TestAssert.True(model.Wizard.PrimaryAction.Enabled, "Host setup action should be enabled when the presenter allows it.");
+        }
+
+        private static void WizardSetupReleaseExplainsDisabledReason()
+        {
+            MultiplayerConnectionPanelViewModel model = new MultiplayerConnectionPanelViewModel();
+            model.HasActiveSession = true;
+            model.Mode = NetworkSessionMode.Host;
+            model.SessionState = NetworkSessionState.Listening;
+            model.SetupReadiness = MultiplayerSetupReadinessTextBuilder.Build(
+                "waiting for host startup to finish",
+                string.Empty,
+                NetworkSessionMode.Host,
+                true,
+                false,
+                1);
+
+            MultiplayerConnectionPanelState state = new MultiplayerConnectionPanelState();
+            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
+
+            TestAssert.Equal(
+                MultiplayerConnectionWizardSectionKind.Setup,
+                model.Wizard.CurrentSection,
+                "Active setup should show the setup section.");
+            TestAssert.Equal(
+                MultiplayerConnectionWizardActionKind.ReleaseSetup,
+                model.Wizard.PrimaryAction.Kind,
+                "Setup primary action should be the host release gate.");
+            TestAssert.False(model.Wizard.PrimaryAction.Enabled, "Release should stay disabled while host load is not done.");
+            TestAssert.True(
+                model.Wizard.PrimaryAction.DisabledReason.IndexOf("host save", System.StringComparison.OrdinalIgnoreCase) >= 0,
+                "Disabled release should explain that the host save is still loading.");
+        }
+
+        private static void EndpointCandidatesClassifyCommonAdapters()
+        {
+            TestAssert.Equal(
+                "Loopback",
+                MultiplayerEndpointCandidateBuilder.ClassifyForText("Loopback", string.Empty, string.Empty, true, false, false),
+                "Loopback addresses should be clearly labeled.");
+            TestAssert.Equal(
+                "VPN",
+                MultiplayerEndpointCandidateBuilder.ClassifyForText("Radmin VPN", "Radmin adapter", "Ethernet", false, true, false),
+                "Known VPN adapter names should be labeled as VPN.");
+            TestAssert.Equal(
+                "LAN",
+                MultiplayerEndpointCandidateBuilder.ClassifyForText("Ethernet", "Intel adapter", "Ethernet", false, true, false),
+                "Private non-VPN adapters should be labeled as LAN.");
+        }
+
+        private static void TimelineStatusReportsEmptyAvailableAccessor()
+        {
+            MultiplayerTimelineStatusText status = MultiplayerConnectionWizardTextBuilder.BuildTimelineStatus(new string[0]);
+
+            TestAssert.Equal("No timeline entries", status.StatusText, "Empty timeline should report that the accessor is available.");
+            TestAssert.True(
+                status.DetailText.IndexOf("available", System.StringComparison.OrdinalIgnoreCase) >= 0,
+                "Timeline status should explain that diagnostics are available.");
         }
     }
 }

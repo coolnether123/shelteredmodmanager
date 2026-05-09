@@ -5,8 +5,8 @@ namespace ShelteredAPI.Networking
     internal sealed class MultiplayerConnectionTestWindow : MonoBehaviour
     {
         private const int WindowId = 774421;
-        private const float WindowMinWidth = 620f;
-        private const float WindowMinHeight = 640f;
+        private const float WindowMinWidth = 720f;
+        private const float WindowMinHeight = 660f;
         private const float WindowHeaderHeight = 26f;
         private const float WindowPadding = 8f;
         private const float CloseButtonSize = 22f;
@@ -15,7 +15,7 @@ namespace ShelteredAPI.Networking
         private readonly MultiplayerConnectionPanelState _panelState = new MultiplayerConnectionPanelState();
         private readonly MultiplayerConnectionPanelPresenter _presenter = new MultiplayerConnectionPanelPresenter();
         private readonly MultiplayerConnectionPanelRenderer _renderer = new MultiplayerConnectionPanelRenderer();
-        private Rect _windowRect = new Rect(80f, 80f, 680f, 720f);
+        private Rect _windowRect = new Rect(80f, 80f, 760f, 740f);
 
         public void Initialize(MultiplayerMenuController controller)
         {
@@ -48,6 +48,7 @@ namespace ShelteredAPI.Networking
                 _windowRect.width - (WindowPadding * 2f),
                 _windowRect.height - WindowHeaderHeight - WindowPadding);
 
+            DrawContentBackground(contentRect);
             GUILayout.BeginArea(contentRect);
             _renderer.Draw(model, _panelState, GetScrollHeight(), delegate { UnityEngine.Object.Destroy(this); });
             GUILayout.EndArea();
@@ -57,10 +58,18 @@ namespace ShelteredAPI.Networking
 
         private float GetScrollHeight()
         {
-            float available = _windowRect.height - 245f;
-            if (available < 180f)
-                return 180f;
+            float available = _windowRect.height - 390f;
+            if (available < 160f)
+                return 160f;
             return available;
+        }
+
+        private static void DrawContentBackground(Rect contentRect)
+        {
+            Color previous = GUI.color;
+            GUI.color = new Color(0.96f, 0.96f, 0.96f, 0.96f);
+            GUI.DrawTexture(contentRect, Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         private void ClampWindowToScreen()

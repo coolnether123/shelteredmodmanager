@@ -1,7 +1,7 @@
-using System.Collections.Generic;
 using ModAPI.Networking.Connections;
 using ModAPI.Networking.Diagnostics;
 using ModAPI.Networking.Sessions;
+using ShelteredAPI.Networking.Diagnostics;
 
 namespace ShelteredAPI.Networking
 {
@@ -26,7 +26,9 @@ namespace ShelteredAPI.Networking
             model.DiscoveryResults = service.GetDiscoveryResults();
             model.ReceivedMessages = service.GetReceivedMessages();
             model.LogLines = service.GetLogTail();
+            model.TimelineLines = ShelteredMultiplayerTimeline.Instance.FormatCompact(80);
             model.Mode = service.Mode;
+            model.SessionState = service.SessionState;
 
             model.LocalEndpointText = service.LocalEndpointText;
             model.LanEndpointText = model.PortValidation.IsValid
@@ -38,6 +40,9 @@ namespace ShelteredAPI.Networking
             model.SaveSyncLastError = service.SaveSyncLastError;
             model.SetupStatus = service.SetupStatus;
             model.SetupLastError = service.SetupLastError;
+            model.AutoLoadFlowStatus = service.AutoLoadStatus;
+            model.AutoLoadFlowStatusText = service.AutoLoadStatusText;
+            model.AutoLoadFlowLastError = service.AutoLoadLastError;
             model.LastError = service.LastError;
             model.IsDiscovering = service.IsDiscovering;
             model.HasActiveSession = service.HasActiveSession;
@@ -53,7 +58,12 @@ namespace ShelteredAPI.Networking
             PopulateTrafficTotals(model, snapshot);
             PopulateStatusText(model, snapshot, service);
             PopulateActions(model, service);
-            model.SuggestedEndpoints = BuildEndpointSuggestions(service, model.PortValidation);
+            PopulateEndpointCandidates(model);
+            PopulateDiscoveryFallback(model);
+            model.AutoLoadDisplayStatus = MultiplayerConnectionWizardTextBuilder.BuildAutoLoadStatus();
+            model.TimelineStatus = MultiplayerConnectionWizardTextBuilder.BuildTimelineStatus(model.TimelineLines);
+            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
             return model;
         }
 
@@ -78,6 +88,8 @@ namespace ShelteredAPI.Networking
                 model.HostAction = MultiplayerConnectionActionState.Unavailable("Host", "Service is unavailable.");
                 model.JoinAction = MultiplayerConnectionActionState.Unavailable("Join", "Service is unavailable.");
                 model.DiscoveryAction = MultiplayerConnectionActionState.Unavailable("Find LAN", "Service is unavailable.");
+                model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+                MultiplayerConnectionWizardActionBuilder.Populate(model, state);
             }
         }
 
@@ -138,6 +150,8 @@ namespace ShelteredAPI.Networking
         {
             NetworkSessionState state = snapshot != null ? snapshot.State : service.SessionState;
             NetworkSessionMode mode = snapshot != null ? snapshot.Mode : service.Mode;
+            model.SessionState = state;
+            model.Mode = mode;
             MultiplayerConnectionStatusText status = MultiplayerConnectionStatusTextBuilder.Build(
                 mode,
                 state,
@@ -194,29 +208,48 @@ namespace ShelteredAPI.Networking
                 : MultiplayerConnectionActionState.Unavailable("Everyone Loaded", "Setup is not ready to release.");
         }
 
-        private static MultiplayerEndpointSuggestion[] BuildEndpointSuggestions(
-            MultiplayerConnectionTestService service,
-            MultiplayerPortValidationResult port)
+        private static void PopulateEndpointCandidates(MultiplayerConnectionPanelViewModel model)
         {
-            if (service == null || port == null || !port.IsValid)
-                return new MultiplayerEndpointSuggestion[0];
-
-            List<MultiplayerEndpointSuggestion> suggestions = new List<MultiplayerEndpointSuggestion>();
-            string lanEndpoint = service.GetLanEndpointText(port.Port);
-            if (!string.IsNullOrEmpty(lanEndpoint))
+            if (model == null || model.PortValidation == null || !model.PortValidation.IsValid)
             {
-                suggestions.Add(new MultiplayerEndpointSuggestion(
-                    "LAN",
-                    lanEndpoint,
-                    "Give this endpoint to friends on the same LAN or VPN."));
+                if (model != null)
+                    model.EndpointCandidateStatus = model != null && model.PortValidation != null
+                        ? model.PortValidation.ErrorText
+                        : string.Empty;
+                return;
             }
 
-            suggestions.Add(new MultiplayerEndpointSuggestion(
-                "Local test",
-                "127.0.0.1:" + port.Port,
-                "Use this for a second local client instance."));
+            MultiplayerEndpointCandidateList candidates =
+                MultiplayerEndpointCandidateBuilder.Build(model.PortValidation.Port);
+            model.EndpointCandidates = candidates.Candidates;
+            model.EndpointCandidateStatus = candidates.StatusText;
+        }
 
-            return suggestions.ToArray();
+        private static void PopulateDiscoveryFallback(MultiplayerConnectionPanelViewModel model)
+        {
+            if (model == null)
+                return;
+
+            if (model.DiscoveryResults != null)
+            {
+                for (int i = 0; i < model.DiscoveryResults.Length; i++)
+                {
+                    string line = model.DiscoveryResults[i] ?? string.Empty;
+                    if (line.IndexOf("No hosts", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        model.DiscoveryFallbackText =
+                            "LAN discovery did not find a host. Ask the host for a LAN/VPN endpoint and enter it manually.";
+                        return;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(model.LastError)
+                && model.LastError.IndexOf("discovery", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                model.DiscoveryFallbackText =
+                    "Discovery failed. Manual endpoint entry still works when you know the host address and port.";
+            }
         }
     }
 }

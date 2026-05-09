@@ -1,6 +1,7 @@
 using ModAPI.Networking.Connections;
 using ModAPI.Networking.Diagnostics;
 using ModAPI.Networking.Sessions;
+using ShelteredAPI.Networking.Setup;
 using UnityEngine;
 
 namespace ShelteredAPI.Networking
@@ -12,6 +13,7 @@ namespace ShelteredAPI.Networking
         public string MessageText = "ping";
         public Vector2 AdvancedScroll;
         public int ActiveTabIndex;
+        public MultiplayerConnectionWizardRole SelectedRole = MultiplayerConnectionWizardRole.Host;
         public bool ShowAdvancedDiagnostics;
         public bool ShowSentEvents = true;
         public bool ShowReceivedEvents = true;
@@ -27,7 +29,8 @@ namespace ShelteredAPI.Networking
         public string[] DiscoveryResults = new string[0];
         public string[] ReceivedMessages = new string[0];
         public string[] LogLines = new string[0];
-        public MultiplayerEndpointSuggestion[] SuggestedEndpoints = new MultiplayerEndpointSuggestion[0];
+        public string[] TimelineLines = new string[0];
+        public MultiplayerEndpointCandidate[] EndpointCandidates = new MultiplayerEndpointCandidate[0];
         public MultiplayerPortValidationResult PortValidation = MultiplayerPortValidationResult.Valid(MultiplayerConnectionTestService.DefaultPort);
         public MultiplayerEndpointValidationResult EndpointValidation = MultiplayerEndpointValidationResult.Invalid(string.Empty);
         public MultiplayerConnectionActionState HostAction = MultiplayerConnectionActionState.Unavailable("Host", "Service is unavailable.");
@@ -38,6 +41,9 @@ namespace ShelteredAPI.Networking
         public MultiplayerConnectionActionState BeginSetupAction = MultiplayerConnectionActionState.Unavailable("Begin Game Setup", "Host a session first.");
         public MultiplayerConnectionActionState ReleaseSetupAction = MultiplayerConnectionActionState.Unavailable("Everyone Loaded", "Setup is not ready.");
         public MultiplayerSetupReadinessText SetupReadiness = new MultiplayerSetupReadinessText();
+        public MultiplayerConnectionWizardModel Wizard = new MultiplayerConnectionWizardModel();
+        public MultiplayerAutoLoadStatusText AutoLoadDisplayStatus = new MultiplayerAutoLoadStatusText();
+        public MultiplayerTimelineStatusText TimelineStatus = new MultiplayerTimelineStatusText();
 
         public string RoleText = string.Empty;
         public string StateText = string.Empty;
@@ -45,12 +51,17 @@ namespace ShelteredAPI.Networking
         public string ConnectionDetail = string.Empty;
         public string LocalEndpointText = string.Empty;
         public string LanEndpointText = string.Empty;
+        public string EndpointCandidateStatus = string.Empty;
+        public string DiscoveryFallbackText = string.Empty;
         public string LocalPeerIdText = string.Empty;
         public string ConfigurationSummary = string.Empty;
         public string SaveSyncStatus = string.Empty;
         public string SaveSyncLastError = string.Empty;
         public string SetupStatus = string.Empty;
         public string SetupLastError = string.Empty;
+        public MultiplayerAutoLoadStatus AutoLoadFlowStatus;
+        public string AutoLoadFlowStatusText = string.Empty;
+        public string AutoLoadFlowLastError = string.Empty;
         public string LastError = string.Empty;
         public string SnapshotAgeText = string.Empty;
 
@@ -68,5 +79,6 @@ namespace ShelteredAPI.Networking
         public bool CanBeginSetup;
         public bool CanReleaseSetup;
         public NetworkSessionMode Mode;
+        public NetworkSessionState SessionState;
     }
 }

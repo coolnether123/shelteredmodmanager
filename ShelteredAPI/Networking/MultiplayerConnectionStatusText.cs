@@ -27,20 +27,6 @@ namespace ShelteredAPI.Networking
         }
     }
 
-    internal sealed class MultiplayerEndpointSuggestion
-    {
-        public MultiplayerEndpointSuggestion(string label, string endpointText, string description)
-        {
-            Label = label ?? string.Empty;
-            EndpointText = endpointText ?? string.Empty;
-            Description = description ?? string.Empty;
-        }
-
-        public string Label { get; private set; }
-        public string EndpointText { get; private set; }
-        public string Description { get; private set; }
-    }
-
     internal sealed class MultiplayerConnectionStatusText
     {
         public string RoleText = "Offline";
@@ -201,6 +187,47 @@ namespace ShelteredAPI.Networking
                 return text;
             }
 
+            if (Contains(normalized, "host startup")
+                || Contains(normalized, "host is not loaded"))
+            {
+                text.Kind = MultiplayerSetupReadinessKind.Loading;
+                text.StatusText = "Waiting for host load";
+                text.DetailText = "The host save is still loading. Clients remain gated until the host world is ready.";
+                return text;
+            }
+
+            if (Contains(normalized, "client loading")
+                || Contains(normalized, "setup received")
+                || Contains(normalized, "setup started"))
+            {
+                text.Kind = MultiplayerSetupReadinessKind.Loading;
+                text.StatusText = "Client loading";
+                text.DetailText = string.IsNullOrEmpty(status)
+                    ? "The client is loading the setup save."
+                    : status;
+                return text;
+            }
+
+            if (Contains(normalized, "loaded; waiting for host release"))
+            {
+                text.Kind = MultiplayerSetupReadinessKind.EveryoneLoaded;
+                text.StatusText = "Loaded";
+                text.DetailText = "Local setup load is complete. Waiting for the host to release world start.";
+                return text;
+            }
+
+            if (Contains(normalized, "waiting for peers")
+                || Contains(normalized, "waiting for ") && Contains(normalized, " peer")
+                || Contains(normalized, "no clients"))
+            {
+                text.Kind = MultiplayerSetupReadinessKind.Waiting;
+                text.StatusText = "Waiting for clients";
+                text.DetailText = status;
+                if (mode == NetworkSessionMode.Host && connectedPeerCount == 0)
+                    text.DetailText = "Waiting for at least one client to connect and load.";
+                return text;
+            }
+
             if (Contains(normalized, "waiting"))
             {
                 text.Kind = MultiplayerSetupReadinessKind.Waiting;
@@ -213,8 +240,6 @@ namespace ShelteredAPI.Networking
 
             if (Contains(normalized, "loading")
                 || Contains(normalized, "loaded")
-                || Contains(normalized, "setup received")
-                || Contains(normalized, "setup started")
                 || Contains(normalized, "startup"))
             {
                 text.Kind = MultiplayerSetupReadinessKind.Loading;
