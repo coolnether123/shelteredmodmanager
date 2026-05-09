@@ -31,8 +31,13 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Systems");
             MultiplayerDiagnosticsWidgets.DrawValue("Save sync", model.SaveSyncStatus);
             MultiplayerDiagnosticsWidgets.DrawValue("Setup", model.SetupStatus);
+            MultiplayerDiagnosticsWidgets.DrawValue("Auto-load", model.AutoLoadDisplayStatus != null ? model.AutoLoadDisplayStatus.StatusText : "unknown");
+            if (model.AutoLoadFlowStatus != null)
+                MultiplayerDiagnosticsWidgets.DrawValue("Auto-load state", model.AutoLoadFlowStatus.CurrentState + ": " + model.AutoLoadFlowStatusText);
+            MultiplayerDiagnosticsWidgets.DrawValue("Timeline", model.TimelineStatus != null ? model.TimelineStatus.StatusText : "unknown");
             MultiplayerDiagnosticsWidgets.DrawOptionalError("Sync error", model.SaveSyncLastError);
             MultiplayerDiagnosticsWidgets.DrawOptionalError("Setup error", model.SetupLastError);
+            MultiplayerDiagnosticsWidgets.DrawOptionalError("Auto-load error", model.AutoLoadFlowLastError);
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Counters");
             GUILayout.BeginHorizontal();
@@ -175,6 +180,33 @@ namespace ShelteredAPI.Networking
         }
     }
 
+    internal sealed class MultiplayerTimelineDiagnosticsTab : IMultiplayerDiagnosticsTab
+    {
+        public string Title
+        {
+            get { return "Timeline"; }
+        }
+
+        public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Session Timeline");
+            if (model != null && model.TimelineStatus != null)
+            {
+                MultiplayerDiagnosticsWidgets.DrawValue("Status", model.TimelineStatus.StatusText);
+                MultiplayerDiagnosticsWidgets.DrawHint(model.TimelineStatus.DetailText);
+            }
+
+            if (model == null || model.TimelineLines == null || model.TimelineLines.Length == 0)
+            {
+                MultiplayerDiagnosticsWidgets.DrawHint("No session timeline entries yet.");
+                return;
+            }
+
+            for (int i = 0; i < model.TimelineLines.Length; i++)
+                GUILayout.Label(model.TimelineLines[i] ?? string.Empty);
+        }
+    }
+
     internal sealed class MultiplayerLogDiagnosticsTab : IMultiplayerDiagnosticsTab
     {
         public string Title
@@ -224,14 +256,24 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawValue("Local player", report.LocalPlayerId.ToString());
             MultiplayerDiagnosticsWidgets.DrawValue("Bunker owner", report.ActiveBunkerOwnerId.ToString());
             MultiplayerDiagnosticsWidgets.DrawValue("Bunkers", report.BunkerCount.ToString());
-            MultiplayerDiagnosticsWidgets.DrawValue("World", FormatVector(report.ActiveWorldPosition));
+            MultiplayerDiagnosticsWidgets.DrawValue("Assigned world", FormatVector(report.AssignedWorldPosition));
+            MultiplayerDiagnosticsWidgets.DrawValue("Chosen world", FormatVector(report.ActiveWorldPosition));
             MultiplayerDiagnosticsWidgets.DrawValue("Map pixels", FormatVector(report.ActiveMapPixels));
-            MultiplayerDiagnosticsWidgets.DrawValue("Grid", report.GridX + ", " + report.GridY);
+            MultiplayerDiagnosticsWidgets.DrawValue("Requested grid", report.RequestedGridX + ", " + report.RequestedGridY);
+            MultiplayerDiagnosticsWidgets.DrawValue("Chosen grid", report.GridX + ", " + report.GridY);
+            MultiplayerDiagnosticsWidgets.DrawValue("Anchor valid", report.AnchorValid ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("Fallback", report.AnchorFallback ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("Override", report.AnchorOverrideEnabled ? "enabled" : "disabled");
+            MultiplayerDiagnosticsWidgets.DrawValue("Reason", report.ValidationReason);
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Runtime Objects");
             MultiplayerDiagnosticsWidgets.DrawValue("ExplorationManager", report.HasExplorationManager ? "yes" : "no");
             MultiplayerDiagnosticsWidgets.DrawValue("ExpeditionMap", report.HasExpeditionMap ? "yes" : "no");
             MultiplayerDiagnosticsWidgets.DrawValue("Map sprite", report.HasMapSprite ? "yes" : "no");
+            MultiplayerDiagnosticsWidgets.DrawValue("Map size", report.MapWidth + " x " + report.MapHeight);
+            MultiplayerDiagnosticsWidgets.DrawValue("World X bounds", report.WorldMinX.ToString("F1") + " to " + report.WorldMaxX.ToString("F1"));
+            MultiplayerDiagnosticsWidgets.DrawValue("World Y bounds", report.WorldMinY.ToString("F1") + " to " + report.WorldMaxY.ToString("F1"));
+            MultiplayerDiagnosticsWidgets.DrawValue("Valid regions", report.ValidRegionCount.ToString());
             MultiplayerDiagnosticsWidgets.DrawValue("Shelter cell", report.ShelterCellValid ? "yes" : "no");
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Warnings");

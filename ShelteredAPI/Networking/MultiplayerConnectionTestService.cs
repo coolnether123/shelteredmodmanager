@@ -13,6 +13,8 @@ using ModAPI.Networking.Protocol;
 using ModAPI.Networking.Sessions;
 using ShelteredAPI.Harmony;
 using ShelteredAPI.Networking.Compatibility;
+using ShelteredAPI.Networking.Diagnostics;
+using ShelteredAPI.Networking.Setup;
 
 namespace ShelteredAPI.Networking
 {
@@ -143,6 +145,29 @@ namespace ShelteredAPI.Networking
             get { return _setup != null ? _setup.LastError : string.Empty; }
         }
 
+        public MultiplayerAutoLoadStatus AutoLoadStatus
+        {
+            get { return AutoLoadFlow.CurrentStatus; }
+        }
+
+        public string AutoLoadStatusText
+        {
+            get
+            {
+                MultiplayerAutoLoadStatus status = AutoLoadStatus;
+                return status != null ? status.DetailText : string.Empty;
+            }
+        }
+
+        public string AutoLoadLastError
+        {
+            get
+            {
+                MultiplayerAutoLoadStatus status = AutoLoadStatus;
+                return status != null ? status.LastError : string.Empty;
+            }
+        }
+
         public bool CanReleaseSetup
         {
             get { return _setup != null && _setup.CanHostReleaseStart; }
@@ -206,6 +231,11 @@ namespace ShelteredAPI.Networking
                     20,
                     "connection-test-host-start");
                 RefreshLocalEndpoint();
+                AppendTimeline(
+                    ShelteredMultiplayerTimelineCategory.Connection,
+                    ShelteredMultiplayerTimelineEventKind.HostStarted,
+                    _session.LocalPeerId,
+                    "port=" + validation.Port + " endpoint=" + _localEndpointText);
                 AddInfo("Host", "Host listening on UDP " + validation.Port + ". Local endpoint: " + _localEndpointText + ".");
                 ClearLastError();
             }
@@ -213,6 +243,10 @@ namespace ShelteredAPI.Networking
             {
                 SetLastError(ex.Message);
                 AddError("Host", "Host failed: " + ex.Message);
+                AppendTimeline(
+                    ShelteredMultiplayerTimelineCategory.Connection,
+                    ShelteredMultiplayerTimelineEventKind.ConnectionFailure,
+                    "host start failed: " + ex.Message);
                 LogException("Host", ex, "Host start failed.");
                 StopSessionOnly("Host start failed.");
             }
@@ -232,6 +266,10 @@ namespace ShelteredAPI.Networking
             string endpointText = validation.EndpointText;
             AddDebug("Client", "Join requested for endpoint '" + endpointText + "'.");
             StopSessionOnly("Replacing existing session.");
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Connection,
+                ShelteredMultiplayerTimelineEventKind.JoinRequested,
+                "endpoint=" + endpointText);
 
             try
             {
@@ -249,6 +287,10 @@ namespace ShelteredAPI.Networking
             {
                 SetLastError(ex.Message);
                 AddError("Client", "Join failed: " + ex.Message);
+                AppendTimeline(
+                    ShelteredMultiplayerTimelineCategory.Connection,
+                    ShelteredMultiplayerTimelineEventKind.ConnectionFailure,
+                    "join failed: endpoint=" + endpointText + " error=" + ex.Message);
                 LogException("Client", ex, "Join failed.");
                 StopSessionOnly("Join failed.");
             }
@@ -274,6 +316,9 @@ namespace ShelteredAPI.Networking
             ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("Multiplayer host auto-new-save");
             ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("Multiplayer host auto-new-save");
             AutoLoadFlow.BeginNewSave(0);
+            ShelteredMultiplayerTimeline.Instance.AppendAutoLoadStateChanged(
+                "host-new-save-requested",
+                "preferredSlot=0 reason=BeginSetup");
             AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer host setup");
             AddInfo("Setup", "Host setup will begin when the host new-save slot is chosen.");
         }
@@ -742,6 +787,11 @@ namespace ShelteredAPI.Networking
                 _setup.HandlePeerConnected(peer);
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
                 EnsureSetupService(_session);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Connection,
+                ShelteredMultiplayerTimelineEventKind.PeerConnected,
+                PeerIdOrNone(peer),
+                FormatPeerDetails(peer));
             AddInfo(GetComponentName(), "Peer connected: " + FormatPeerDetails(peer));
         }
 
@@ -758,6 +808,11 @@ namespace ShelteredAPI.Networking
             }
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
                 ShelteredMultiplayer.Deactivate(string.IsNullOrEmpty(message) ? "peer-disconnected" : message);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Connection,
+                ShelteredMultiplayerTimelineEventKind.PeerDisconnected,
+                PeerIdOrNone(e != null ? e.Peer : null),
+                "reason=" + (e != null ? e.Reason.ToString() : "Unknown") + " message=" + message);
             AddWarning(GetComponentName(), "Peer disconnected: " + FormatPeerDetails(e != null ? e.Peer : null)
                 + " Reason=" + (e != null ? e.Reason.ToString() : "Unknown") + " Message=" + message);
             if (!string.IsNullOrEmpty(message))
@@ -776,6 +831,10 @@ namespace ShelteredAPI.Networking
             SetLastError(message);
             if (_setup != null)
                 _setup.HandleLocalSessionEnding(string.IsNullOrEmpty(message) ? "connection-failed" : message);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Connection,
+                ShelteredMultiplayerTimelineEventKind.ConnectionFailure,
+                "reason=" + (e != null ? e.Reason.ToString() : "Unknown") + " message=" + message);
             AddError("Client", "Connection failed: " + message);
             if (e != null && e.Exception != null)
                 LogException("Client", e.Exception, "Connection failed.");
@@ -806,6 +865,12 @@ namespace ShelteredAPI.Networking
 
         private void OnTransportReconnected(object sender, NetworkTransportReconnectEventArgs e)
         {
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Connection,
+                ShelteredMultiplayerTimelineEventKind.Reconnect,
+                PeerIdOrNone(e != null ? e.Peer : null),
+                "previousPeerId=" + (e != null ? e.PreviousPeerId.ToString() : "unknown")
+                    + " " + FormatPeerDetails(e != null ? e.Peer : null));
             AddInfo(GetComponentName(), "Transport reconnected: " + FormatPeerDetails(e != null ? e.Peer : null)
                 + " PreviousPeerId=" + (e != null ? e.PreviousPeerId.ToString() : "unknown"));
         }
@@ -952,6 +1017,9 @@ namespace ShelteredAPI.Networking
                 return;
 
             EnsureSetupService(_session);
+            ShelteredMultiplayerTimeline.Instance.AppendAutoLoadStateChanged(
+                "host-slot-chosen",
+                "slot=" + absoluteSlot);
             _setup.BeginHostSetup(absoluteSlot);
         }
 
@@ -986,6 +1054,28 @@ namespace ShelteredAPI.Networking
         private static string Timestamp()
         {
             return DateTime.Now.ToString("HH:mm:ss");
+        }
+
+        private static int PeerIdOrNone(NetworkPeer peer)
+        {
+            return peer != null ? peer.PeerId : ShelteredMultiplayerTimeline.NoNetworkPeer;
+        }
+
+        private static void AppendTimeline(
+            ShelteredMultiplayerTimelineCategory category,
+            ShelteredMultiplayerTimelineEventKind eventKind,
+            string message)
+        {
+            ShelteredMultiplayerTimeline.Instance.Append(category, eventKind, message);
+        }
+
+        private static void AppendTimeline(
+            ShelteredMultiplayerTimelineCategory category,
+            ShelteredMultiplayerTimelineEventKind eventKind,
+            int networkPeerId,
+            string message)
+        {
+            ShelteredMultiplayerTimeline.Instance.Append(category, eventKind, networkPeerId, message);
         }
     }
 }

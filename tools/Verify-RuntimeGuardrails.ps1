@@ -31,6 +31,8 @@ $ShelteredDateTimeAllowCounts = @{
     "ShelteredAPI/Networking/MultiplayerConnectionTestService.cs" = 1
     # Diagnostics age formatting is display-only.
     "ShelteredAPI/Networking/MultiplayerDiagnosticsFormatter.cs" = 1
+    # Multiplayer timeline timestamps are diagnostic metadata only.
+    "ShelteredAPI/Networking/Diagnostics/ShelteredMultiplayerTimeline.cs" = 1
     # Persistence timestamps describe snapshot metadata, not simulation time.
     "ShelteredAPI/Networking/Persistence/ShelteredMultiplayerWorldSnapshot.cs" = 1
     # Save sync timestamps identify files/messages and must not drive shared world ticks.
