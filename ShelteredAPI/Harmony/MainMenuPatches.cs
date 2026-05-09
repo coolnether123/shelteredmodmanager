@@ -16,76 +16,6 @@ using UnityEngine;
 using ShelteredAPI.UI.Internal.ModManager;
 namespace ShelteredAPI.Harmony
 {
-    internal static class AutoLoadFlow
-    {
-        // Sentinel value from Manager: AutoLoadSaveSlot=-1 means "start a new game in lowest free slot".
-        public const int NewSaveSentinel = -1;
-
-        public static bool PendingNewSave = false;
-        public static bool ModeChosen = false;
-        public static bool SlotChosen = false;
-        public static bool MainMenuAdvanceIssued = false;
-        public static int PreferredNewSaveSlot = 0;
-
-        public static void BeginNewSave()
-        {
-            BeginNewSave(0);
-        }
-
-        public static void BeginNewSave(int preferredAbsoluteSlot)
-        {
-            PendingNewSave = true;
-            ModeChosen = false;
-            SlotChosen = false;
-            MainMenuAdvanceIssued = false;
-            PreferredNewSaveSlot = preferredAbsoluteSlot > 0 ? preferredAbsoluteSlot : 0;
-        }
-
-        public static bool TryAdvanceFromActiveMainMenu(string reason)
-        {
-            MainMenu mainMenu = UnityEngine.Object.FindObjectOfType<MainMenu>();
-            return TryAdvanceFromMainMenu(mainMenu, reason);
-        }
-
-        public static bool TryAdvanceFromMainMenu(MainMenu mainMenu, string reason)
-        {
-            if (!PendingNewSave || MainMenuAdvanceIssued || mainMenu == null)
-                return false;
-
-            var tweenField = typeof(MainMenu).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
-            var tween = (TweenAlpha)tweenField?.GetValue(mainMenu);
-            if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse)
-                return false;
-
-            if (!IsMainMenuInputEnabled(mainMenu))
-                return false;
-
-            MainMenuAdvanceIssued = true;
-            MMLog.WriteDebug("[AutoLoad] Main menu ready. Triggering Play for auto-new-save. Reason=" + (reason ?? string.Empty) + ".");
-            mainMenu.OnPlayButtonPressed();
-            return true;
-        }
-
-        public static void Reset()
-        {
-            PendingNewSave = false;
-            ModeChosen = false;
-            SlotChosen = false;
-            MainMenuAdvanceIssued = false;
-            PreferredNewSaveSlot = 0;
-        }
-
-        private static bool IsMainMenuInputEnabled(MainMenu instance)
-        {
-            if (instance == null)
-                return false;
-
-            bool inputEnabled = Traverse.Create(instance).Field("m_inputEnabled").GetValue<bool>();
-            bool userSignedOut = Traverse.Create(instance).Field("m_userSignedOut").GetValue<bool>();
-            return inputEnabled && !userSignedOut;
-        }
-    }
-
     [PatchPolicy(PatchDomain.UI, "MainMenuModsEntry",
         TargetBehavior = "Main menu mods button injection and manager-driven auto-load/new-save flow",
         FailureMode = "Mods entry or manager-driven auto-load flow fails to start from the main menu.",
@@ -331,23 +261,7 @@ namespace ShelteredAPI.Harmony
     {
         static void Postfix(GameModeSelectionPanel __instance)
         {
-            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.ModeChosen) return;
-
-            try
-            {
-                var tweenField = typeof(GameModeSelectionPanel).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
-                var tween = (TweenAlpha)tweenField?.GetValue(__instance);
-                if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse) return;
-
-                AutoLoadFlow.ModeChosen = true;
-                MMLog.WriteDebug("[AutoLoad] Auto-selecting Survival mode for New Save.");
-                __instance.OnSurvivalModeChosen();
-            }
-            catch (Exception ex)
-            {
-                AutoLoadFlow.Reset();
-                MMLog.WriteError("[AutoLoad] Failed choosing mode: " + ex.Message);
-            }
+            AutoLoadFlow.TryAdvanceFromGameModeSelection(__instance, "GameModeSelectionPanel.OnTweenFinished");
         }
     }
 
@@ -361,98 +275,49 @@ namespace ShelteredAPI.Harmony
     {
         static void Postfix(SlotSelectionPanel __instance)
         {
-            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.SlotChosen) return;
-            if (!__instance.m_inputEnabled) return;
-
-            try
-            {
-                var tweenField = typeof(SlotSelectionPanel).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
-                var tween = (TweenAlpha)tweenField?.GetValue(__instance);
-                if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse) return;
-
-                AutoLoadFlow.SlotChosen = true;
-
-                int lowestSlot = ResolveTargetSurvivalSlot();
-                int targetPage;
-                int targetIndex;
-
-                if (lowestSlot <= 3)
-                {
-                    targetPage = 0;
-                    targetIndex = lowestSlot - 1;
-                }
-                else
-                {
-                    int customOffset = lowestSlot - 4;
-                    targetPage = (customOffset / 3) + 1;
-                    targetIndex = customOffset % 3;
-                }
-
-                int currentPage = PagingManager.GetPage(__instance);
-                while (currentPage < targetPage)
-                {
-                    int before = currentPage;
-                    PagingManager.ChangePage(__instance, +1);
-                    currentPage = PagingManager.GetPage(__instance);
-                    if (currentPage == before) break;
-                }
-
-                while (currentPage > targetPage)
-                {
-                    int before = currentPage;
-                    PagingManager.ChangePage(__instance, -1);
-                    currentPage = PagingManager.GetPage(__instance);
-                    if (currentPage == before) break;
-                }
-
-                Traverse.Create(__instance).Field("m_selectedSlot").SetValue(targetIndex);
-                MMLog.Write($"[AutoLoad] Starting New Save in slot {lowestSlot} (page {targetPage}, index {targetIndex}).");
-
-                __instance.OnSlotChosen();
-                AutoLoadFlow.Reset();
-            }
-            catch (Exception ex)
-            {
-                AutoLoadFlow.Reset();
-                MMLog.WriteError("[AutoLoad] Failed choosing New Save slot: " + ex.Message);
-            }
+            AutoLoadFlow.TryAdvanceFromSlotSelection(__instance, "SlotSelectionPanel.OnTweenFinished");
         }
+    }
 
-        private static int ResolveTargetSurvivalSlot()
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveModeSelectionCancel",
+        TargetBehavior = "Clear auto-new-save state when the user backs out of mode selection",
+        FailureMode = "Auto-new-save continues after manual cancellation.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save cancellation patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(GameModeSelectionPanel), "OnCancel")]
+    internal static class GameModeSelectionPanel_OnCancel_AutoNewSave_Patch
+    {
+        static void Postfix()
         {
-            int preferred = AutoLoadFlow.PreferredNewSaveSlot;
-            if (preferred > 0 && IsSurvivalSlotAvailable(preferred))
-                return preferred;
-
-            return FindLowestAvailableSurvivalSlot();
+            AutoLoadFlow.NotifyManualCancellation("User cancelled game mode selection during auto-new-save.");
         }
+    }
 
-        private static bool IsSurvivalSlotAvailable(int slot)
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveSlotSelectionCancel",
+        TargetBehavior = "Clear auto-new-save state when the user backs out of slot selection",
+        FailureMode = "Auto-new-save continues after manual slot-selection cancellation.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save slot cancellation patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]
+    internal static class SlotSelectionPanel_OnCancel_AutoNewSave_Patch
+    {
+        static void Postfix()
         {
-            if (slot <= 0)
-                return false;
-
-            if (slot <= 3)
-                return SaveRegistryCore.ReadVanillaSaveInfo(slot) == null;
-
-            return ExpandedVanillaSaves.GetBySlot(slot) == null;
+            AutoLoadFlow.NotifyManualCancellation("User cancelled slot selection during auto-new-save.");
         }
+    }
 
-        private static int FindLowestAvailableSurvivalSlot()
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveCustomisationCancel",
+        TargetBehavior = "Clear auto-new-save state when the user backs out of customization",
+        FailureMode = "Auto-new-save continues after manual customization cancellation.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save customization cancellation patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(CustomisationPanel), "OnCancel")]
+    internal static class CustomisationPanel_OnCancel_AutoNewSave_Patch
+    {
+        static void Postfix()
         {
-            for (int slot = 1; slot <= 3; slot++)
-            {
-                var info = SaveRegistryCore.ReadVanillaSaveInfo(slot);
-                if (info == null) return slot;
-            }
-
-            int customSlot = 4;
-            while (ExpandedVanillaSaves.GetBySlot(customSlot) != null)
-            {
-                customSlot++;
-            }
-
-            return customSlot;
+            AutoLoadFlow.NotifyManualCancellation("User cancelled customization during auto-new-save.");
         }
     }
 }
