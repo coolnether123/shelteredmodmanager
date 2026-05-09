@@ -18,6 +18,145 @@ namespace ShelteredAPI.Networking
         Released = 5
     }
 
+    internal sealed class ShelteredMultiplayerWorldStartGateState
+    {
+        public ShelteredMultiplayerWorldStartGateState(
+            bool isActive,
+            string reason,
+            int waitingClientCount,
+            byte[] waitingPeerIds,
+            bool readyForHostRelease)
+        {
+            IsActive = isActive;
+            Reason = reason ?? string.Empty;
+            WaitingClientCount = waitingClientCount > 0 ? waitingClientCount : 0;
+            WaitingPeerIds = ClonePeerIds(waitingPeerIds);
+            ReadyForHostRelease = readyForHostRelease;
+        }
+
+        public readonly bool IsActive;
+        public readonly string Reason;
+        public readonly int WaitingClientCount;
+        public readonly byte[] WaitingPeerIds;
+        public readonly bool ReadyForHostRelease;
+
+        public ShelteredMultiplayerWorldStartGateState Snapshot()
+        {
+            return new ShelteredMultiplayerWorldStartGateState(
+                IsActive,
+                Reason,
+                WaitingClientCount,
+                WaitingPeerIds,
+                ReadyForHostRelease);
+        }
+
+        private static byte[] ClonePeerIds(byte[] waitingPeerIds)
+        {
+            if (waitingPeerIds == null || waitingPeerIds.Length == 0)
+                return new byte[0];
+
+            byte[] copy = new byte[waitingPeerIds.Length];
+            Array.Copy(waitingPeerIds, copy, waitingPeerIds.Length);
+            return copy;
+        }
+    }
+
+    internal static class ShelteredMultiplayerWorldStartGate
+    {
+        public static ShelteredMultiplayerWorldStartGateState Inactive(string reason)
+        {
+            return new ShelteredMultiplayerWorldStartGateState(
+                false,
+                string.IsNullOrEmpty(reason) ? "inactive" : reason,
+                0,
+                new byte[0],
+                false);
+        }
+
+        public static ShelteredMultiplayerWorldStartGateState Released()
+        {
+            return Inactive("released");
+        }
+
+        public static ShelteredMultiplayerWorldStartGateState Blocked(
+            string reason,
+            int waitingClientCount,
+            byte[] waitingPeerIds,
+            bool readyForHostRelease)
+        {
+            return new ShelteredMultiplayerWorldStartGateState(
+                true,
+                string.IsNullOrEmpty(reason) ? "setup gate active" : reason,
+                waitingClientCount,
+                waitingPeerIds,
+                readyForHostRelease);
+        }
+
+        public static bool IsActive(ShelteredMultiplayerSessionContext context)
+        {
+            ShelteredMultiplayerWorldStartGateState state = Evaluate(context);
+            return state != null && state.IsActive;
+        }
+
+        public static bool CanAdvanceWorld(ShelteredMultiplayerSessionContext context)
+        {
+            return !IsActive(context);
+        }
+
+        public static ShelteredMultiplayerWorldStartGateState Evaluate(ShelteredMultiplayerSessionContext context)
+        {
+            if (context == null)
+                return Inactive("inactive");
+
+            return Normalize(
+                context.Mode,
+                context.SetupPhase,
+                context.Status,
+                context.WorldStartGate);
+        }
+
+        internal static ShelteredMultiplayerWorldStartGateState Normalize(
+            ShelteredMultiplayerSessionMode mode,
+            ShelteredMultiplayerSetupPhase setupPhase,
+            string status,
+            ShelteredMultiplayerWorldStartGateState candidate)
+        {
+            if (mode != ShelteredMultiplayerSessionMode.Host && mode != ShelteredMultiplayerSessionMode.Client)
+                return Inactive("inactive");
+
+            if (setupPhase == ShelteredMultiplayerSetupPhase.Inactive)
+                return Inactive("inactive");
+
+            if (setupPhase == ShelteredMultiplayerSetupPhase.Released)
+                return Released();
+
+            if (setupPhase == ShelteredMultiplayerSetupPhase.Activated)
+            {
+                if (candidate != null && candidate.IsActive)
+                    return candidate.Snapshot();
+
+                return Inactive(string.IsNullOrEmpty(status) ? "activated" : status);
+            }
+
+            if (candidate != null && candidate.IsActive)
+                return candidate.Snapshot();
+
+            return Blocked(GetDefaultReason(setupPhase, status), 0, new byte[0], false);
+        }
+
+        private static string GetDefaultReason(ShelteredMultiplayerSetupPhase setupPhase, string status)
+        {
+            if (setupPhase == ShelteredMultiplayerSetupPhase.Preparing)
+                return "waiting for host world load";
+            if (setupPhase == ShelteredMultiplayerSetupPhase.Received)
+                return "setup received; waiting for local world load";
+            if (setupPhase == ShelteredMultiplayerSetupPhase.LocalWorldLoaded)
+                return "waiting for host release";
+
+            return string.IsNullOrEmpty(status) ? "setup gate active" : status;
+        }
+    }
+
     internal sealed class ShelteredMultiplayerSessionContext
     {
         public ShelteredMultiplayerSessionContext(
@@ -35,6 +174,41 @@ namespace ShelteredAPI.Networking
             ShelteredMultiplayerBunkerAssignmentRecord[] bunkerAssignments,
             ShelteredMultiplayerSetupSettings setupSettings,
             string status)
+            : this(
+                mode,
+                sessionId,
+                localPlayerId,
+                networkLocalPeerId,
+                localStablePeerId,
+                tickRate,
+                worldTick,
+                worldDeltaSeconds,
+                gameTimeMode,
+                setupPhase,
+                roster,
+                bunkerAssignments,
+                setupSettings,
+                status,
+                null)
+        {
+        }
+
+        public ShelteredMultiplayerSessionContext(
+            ShelteredMultiplayerSessionMode mode,
+            string sessionId,
+            int localPlayerId,
+            byte networkLocalPeerId,
+            string localStablePeerId,
+            int tickRate,
+            long worldTick,
+            float worldDeltaSeconds,
+            ShelteredMultiplayerGameTimeMode gameTimeMode,
+            ShelteredMultiplayerSetupPhase setupPhase,
+            ShelteredMultiplayerPeerInfo[] roster,
+            ShelteredMultiplayerBunkerAssignmentRecord[] bunkerAssignments,
+            ShelteredMultiplayerSetupSettings setupSettings,
+            string status,
+            ShelteredMultiplayerWorldStartGateState worldStartGate)
         {
             Mode = mode;
             SessionId = sessionId ?? string.Empty;
@@ -50,6 +224,11 @@ namespace ShelteredAPI.Networking
             BunkerAssignments = CloneBunkerAssignments(bunkerAssignments);
             SetupSettings = setupSettings ?? ShelteredMultiplayerSetupSettings.Empty;
             Status = status ?? string.Empty;
+            WorldStartGate = ShelteredMultiplayerWorldStartGate.Normalize(
+                Mode,
+                SetupPhase,
+                Status,
+                worldStartGate);
         }
 
         public readonly ShelteredMultiplayerSessionMode Mode;
@@ -66,10 +245,21 @@ namespace ShelteredAPI.Networking
         public readonly ShelteredMultiplayerBunkerAssignmentRecord[] BunkerAssignments;
         public readonly ShelteredMultiplayerSetupSettings SetupSettings;
         public readonly string Status;
+        public readonly ShelteredMultiplayerWorldStartGateState WorldStartGate;
 
         public bool IsMultiplayerActive
         {
             get { return Mode == ShelteredMultiplayerSessionMode.Host || Mode == ShelteredMultiplayerSessionMode.Client; }
+        }
+
+        public bool IsWorldStartGateActive
+        {
+            get { return WorldStartGate != null && WorldStartGate.IsActive; }
+        }
+
+        public string WorldStartGateReason
+        {
+            get { return WorldStartGate != null ? WorldStartGate.Reason : string.Empty; }
         }
 
         public int GetPlayerIdForNetworkPeer(byte networkPeerId)
@@ -99,7 +289,8 @@ namespace ShelteredAPI.Networking
                 Roster,
                 BunkerAssignments,
                 SetupSettings,
-                Status);
+                Status,
+                WorldStartGate);
         }
 
         public ShelteredMultiplayerPeerInfo[] GetRosterSnapshot()
@@ -497,6 +688,29 @@ namespace ShelteredAPI.Networking
             return Context;
         }
 
+        public ShelteredMultiplayerSessionContext UpdateWorldStartGate(
+            ShelteredMultiplayerWorldStartGateState gateState,
+            string status,
+            string reason)
+        {
+            string resolvedStatus = status;
+            if (string.IsNullOrEmpty(resolvedStatus) && gateState != null)
+                resolvedStatus = gateState.Reason;
+
+            return With(
+                null,
+                null,
+                null,
+                null,
+                null,
+                resolvedStatus,
+                reason,
+                null,
+                null,
+                null,
+                gateState);
+        }
+
         public ShelteredMultiplayerSessionContext SetGameTimeMode(ShelteredMultiplayerGameTimeMode mode, string reason)
         {
             return With(null, null, null, null, null, null, reason, null, null, mode);
@@ -545,7 +759,8 @@ namespace ShelteredAPI.Networking
                 current.Roster,
                 current.BunkerAssignments,
                 current.SetupSettings,
-                status);
+                status,
+                ShelteredMultiplayerWorldStartGate.Inactive(status));
 
             SetContext(activated, reason);
             Raise(ShelteredMultiplayerLifecycleEventKind.SessionActivated, activated, reason);
@@ -576,7 +791,38 @@ namespace ShelteredAPI.Networking
             float? worldDeltaSeconds,
             ShelteredMultiplayerGameTimeMode? gameTimeMode)
         {
+            return With(
+                roster,
+                bunkerAssignments,
+                setupSettings,
+                localPlayerId,
+                setupPhase,
+                status,
+                reason,
+                worldTick,
+                worldDeltaSeconds,
+                gameTimeMode,
+                null);
+        }
+
+        private ShelteredMultiplayerSessionContext With(
+            ShelteredMultiplayerPeerInfo[] roster,
+            ShelteredMultiplayerBunkerAssignmentRecord[] bunkerAssignments,
+            ShelteredMultiplayerSetupSettings setupSettings,
+            int? localPlayerId,
+            ShelteredMultiplayerSetupPhase? setupPhase,
+            string status,
+            string reason,
+            long? worldTick,
+            float? worldDeltaSeconds,
+            ShelteredMultiplayerGameTimeMode? gameTimeMode,
+            ShelteredMultiplayerWorldStartGateState worldStartGate)
+        {
             ShelteredMultiplayerSessionContext current = Context;
+            ShelteredMultiplayerWorldStartGateState resolvedGate = worldStartGate;
+            if (resolvedGate == null && !setupPhase.HasValue)
+                resolvedGate = current.WorldStartGate;
+
             ShelteredMultiplayerSessionContext updated = new ShelteredMultiplayerSessionContext(
                 current.Mode,
                 current.SessionId,
@@ -591,7 +837,8 @@ namespace ShelteredAPI.Networking
                 roster ?? current.Roster,
                 bunkerAssignments ?? current.BunkerAssignments,
                 setupSettings ?? current.SetupSettings,
-                status ?? current.Status);
+                status ?? current.Status,
+                resolvedGate);
 
             SetContext(updated, reason);
             return updated;
@@ -615,6 +862,8 @@ namespace ShelteredAPI.Networking
                     "Context changed: mode=" + context.Mode + ", session='" + context.SessionId
                     + "', gameplayPlayer=" + context.LocalPlayerId + ", networkPeer=" + context.NetworkLocalPeerId
                     + ", phase=" + context.SetupPhase + ", status=" + context.Status
+                    + ", gateActive=" + context.IsWorldStartGateActive
+                    + ", gateReason=" + context.WorldStartGateReason
                     + ", reason=" + (reason ?? string.Empty) + ".");
             }
             catch
@@ -697,7 +946,8 @@ namespace ShelteredAPI.Networking
                 new ShelteredMultiplayerPeerInfo[0],
                 new ShelteredMultiplayerBunkerAssignmentRecord[0],
                 ShelteredMultiplayerSetupSettings.Empty,
-                status);
+                status,
+                ShelteredMultiplayerWorldStartGate.Inactive(status));
         }
 
         private sealed class HandlerRegistration

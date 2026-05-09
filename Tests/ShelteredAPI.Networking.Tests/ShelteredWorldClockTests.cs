@@ -17,6 +17,11 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("WorldClock_FixedStepSequenceIsDeterministic", FixedStepSequenceIsDeterministic));
             tests.Add(new TestCase("WorldClock_FrameChunkingUsesSameFixedTicks", FrameChunkingUsesSameFixedTicks));
             tests.Add(new TestCase("WorldClock_FractionalFixedDeltaIsDeterministic", FractionalFixedDeltaIsDeterministic));
+            tests.Add(new TestCase("WorldClock_HostSetupPreparingBlocksTick", HostSetupPreparingBlocksTick));
+            tests.Add(new TestCase("WorldClock_ClientSetupReceivedBlocksTick", ClientSetupReceivedBlocksTick));
+            tests.Add(new TestCase("WorldClock_LocalWorldLoadedStillBlocksUntilRelease", LocalWorldLoadedStillBlocksUntilRelease));
+            tests.Add(new TestCase("WorldClock_ReleaseUnblocksTick", ReleaseUnblocksTick));
+            tests.Add(new TestCase("WorldClock_DeactivationResetsGate", DeactivationResetsGate));
             tests.Add(new TestCase("WorldClock_ClientRemoteSampleAppliesIfNewer", ClientRemoteSampleAppliesIfNewer));
             tests.Add(new TestCase("WorldClock_OldRemoteSampleIsIgnored", OldRemoteSampleIsIgnored));
             tests.Add(new TestCase("WorldClock_ForeignSessionRemoteSampleIsIgnored", ForeignSessionRemoteSampleIsIgnored));
@@ -172,6 +177,151 @@ namespace ShelteredAPI.Networking.Tests
                     "Accumulated fixed delta should advance exactly one tick at 20 Hz.");
                 TestAssert.Equal(3L, clock.AdvanceFixedDelta(0.1f),
                     "Subsequent fixed delta should preserve deterministic accumulated state.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void HostSetupPreparingBlocksTick()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateHost(clock, 20);
+
+            try
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                    ShelteredMultiplayerSetupSettings.Empty,
+                    "world-clock-test-host-setup");
+
+                long tick = clock.AdvanceFixedDelta(1f);
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+
+                TestAssert.Equal(0L, tick, "Host setup preparation should block world clock advancement.");
+                TestAssert.True(context.IsWorldStartGateActive,
+                    "Host setup preparation should expose an active world-start gate.");
+                AssertContains(context.WorldStartGateReason, "host world load",
+                    "Host setup preparation should expose the host-load gate reason.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void ClientSetupReceivedBlocksTick()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateClient(clock, 20);
+
+            try
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.ApplyReceivedSetup(
+                    SessionId,
+                    2,
+                    2,
+                    "client-setup-received",
+                    ShelteredMultiplayerSetupSettings.Empty,
+                    new ShelteredMultiplayerBunkerAssignmentRecord[0],
+                    "world-clock-test-client-setup");
+                clock.Reset("world-clock-test-client-setup");
+
+                long tick = clock.AdvanceFixedDelta(1f);
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+
+                TestAssert.Equal(0L, tick, "Client setup receipt should block world clock advancement.");
+                TestAssert.True(context.IsWorldStartGateActive,
+                    "Client setup receipt should expose an active world-start gate.");
+                AssertContains(context.WorldStartGateReason, "local world load",
+                    "Client setup receipt should expose the local-load gate reason.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void LocalWorldLoadedStillBlocksUntilRelease()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateHost(clock, 20);
+
+            try
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                    ShelteredMultiplayerSetupSettings.Empty,
+                    "world-clock-test-local-loaded");
+                ShelteredMultiplayerSessionCoordinator.Instance.MarkLocalWorldLoaded("world-clock-test-local-loaded");
+
+                long tick = clock.AdvanceFixedDelta(1f);
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+
+                TestAssert.Equal(0L, tick, "Local world load should still block world clock advancement until release.");
+                TestAssert.True(context.IsWorldStartGateActive,
+                    "Local world loaded setup phase should keep the world-start gate active.");
+                AssertContains(context.WorldStartGateReason, "host release",
+                    "Local world loaded setup phase should expose the release-wait gate reason.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void ReleaseUnblocksTick()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateHost(clock, 20);
+
+            try
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                    ShelteredMultiplayerSetupSettings.Empty,
+                    "world-clock-test-release");
+                ShelteredMultiplayerSessionCoordinator.Instance.MarkLocalWorldLoaded("world-clock-test-release");
+                ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart("world-clock-test-release");
+
+                long tick = clock.AdvanceFixedDelta(1f);
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+
+                TestAssert.Equal(20L, tick, "World start release should unblock fixed world clock advancement.");
+                TestAssert.False(context.IsWorldStartGateActive,
+                    "World start release should deactivate the world-start gate.");
+                AssertContains(context.WorldStartGateReason, "released",
+                    "World start release should expose the released gate reason.");
+            }
+            finally
+            {
+                RestoreContext(previous);
+                ResetClockFields(clock);
+            }
+        }
+
+        private static void DeactivationResetsGate()
+        {
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            ShelteredMultiplayerSessionContext previous = ActivateHost(clock, 20);
+
+            try
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                    ShelteredMultiplayerSetupSettings.Empty,
+                    "world-clock-test-deactivate");
+
+                ShelteredMultiplayerSessionCoordinator.Instance.Deactivate("world-clock-test-deactivate");
+                ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+
+                TestAssert.Equal(ShelteredMultiplayerSetupPhase.Inactive, context.SetupPhase,
+                    "Session deactivation should reset setup phase.");
+                TestAssert.False(context.IsWorldStartGateActive,
+                    "Session deactivation should deactivate the world-start gate.");
+                AssertContains(context.WorldStartGateReason, "inactive",
+                    "Session deactivation should expose an inactive gate reason.");
             }
             finally
             {
@@ -584,6 +734,12 @@ namespace ShelteredAPI.Networking.Tests
             typeof(ShelteredMultiplayerWorldClock).GetField(
                 "_lastHostSample",
                 BindingFlags.Instance | BindingFlags.NonPublic).SetValue(clock, null);
+        }
+
+        private static void AssertContains(string value, string expected, string message)
+        {
+            if ((value ?? string.Empty).IndexOf(expected, StringComparison.Ordinal) < 0)
+                throw new InvalidOperationException(message + " Expected to find '" + expected + "' in '" + value + "'.");
         }
 
         private static string FindRepoRoot()

@@ -141,6 +141,10 @@ namespace ShelteredAPI.Networking.Tests
                 AssertContains(setup.Status, "waiting for 1 peer", "Status should keep reporting the missing expected peer.");
                 TestAssert.True(ShelteredMultiplayerHookService.Instance.IsWorldStartBlocked,
                     "World start should remain blocked when an expected peer disconnects mid-setup.");
+                TestAssert.True(ShelteredMultiplayerSessionCoordinator.Instance.Context.IsWorldStartGateActive,
+                    "Coordinator gate state should remain active when an expected peer disconnects mid-setup.");
+                AssertContains(ShelteredMultiplayerSessionCoordinator.Instance.Context.WorldStartGateReason, "peer id",
+                    "Coordinator gate reason should expose the missing peer id list.");
                 TestAssert.False(GetAssignmentOnline(peerId), "Coordinator bunker assignment should retain the peer as offline.");
             }
             finally

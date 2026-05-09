@@ -52,6 +52,8 @@ namespace ShelteredAPI.Networking.World
             ShelteredMultiplayerSessionContext context = _coordinator.Context;
             if (context == null || !context.IsMultiplayerActive)
                 return 0;
+            if (!ShelteredMultiplayerWorldStartGate.CanAdvanceWorld(context))
+                return context.WorldTick;
 
             return Advance(context, _scheduler.AdvanceFixedSteps(stepCount, context.TickRate), FixedAdvanceReason);
         }
@@ -61,6 +63,8 @@ namespace ShelteredAPI.Networking.World
             ShelteredMultiplayerSessionContext context = _coordinator.Context;
             if (context == null || !context.IsMultiplayerActive)
                 return 0;
+            if (!ShelteredMultiplayerWorldStartGate.CanAdvanceWorld(context))
+                return context.WorldTick;
 
             return Advance(
                 context,

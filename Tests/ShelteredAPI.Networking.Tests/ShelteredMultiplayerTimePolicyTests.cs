@@ -19,6 +19,7 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("TimePolicy_MultiplayerGameTimeSuppressesVanillaDeltaAuthority", MultiplayerGameTimeSuppressesVanillaDeltaAuthority));
             tests.Add(new TestCase("TimePolicy_SinglePlayerGameTimePathAllowsVanillaUpdate", SinglePlayerGameTimePathAllowsVanillaUpdate));
             tests.Add(new TestCase("TimePolicy_PauseDoesNotStopProjectedMultiplayerTime", PauseDoesNotStopProjectedMultiplayerTime));
+            tests.Add(new TestCase("TimePolicy_SetupGateProjectionDoesNotCrossDayBoundary", SetupGateProjectionDoesNotCrossDayBoundary));
         }
 
         private static void SharedWorldTravelCompensationNeutralizesShorterMultiplayerDay()
@@ -231,6 +232,50 @@ namespace ShelteredAPI.Networking.Tests
             finally
             {
                 ShelteredMultiplayerHookService.Instance.EndGameTimeUpdate(null);
+                ShelteredMultiplayerHookService.Instance.Deactivate("time-policy-test-cleanup");
+                ShelteredMultiplayerTimePolicy.ApplyGameTimePolicy(null);
+                ShelteredMultiplayerTimePolicy.ResetTimeScaleAccessorsForTests();
+                previous.Restore();
+            }
+        }
+
+        private static void SetupGateProjectionDoesNotCrossDayBoundary()
+        {
+            GameTimeStaticState previous = CaptureGameTimeStaticState();
+            ShelteredMultiplayerWorldClock clock = ShelteredMultiplayerWorldClock.Instance;
+            long dayBoundaryTick = MultiplayerDayTicks(20);
+            UseFakeTimeScale(1f);
+            ShelteredMultiplayerHookService.Instance.ActivateHost(1, "time-policy-setup-gate", 20);
+            try
+            {
+                clock.Reset("time-policy-setup-gate");
+                ShelteredMultiplayerHookService.Instance.SetWorldTick(dayBoundaryTick - 1, 0.05f);
+                ShelteredMultiplayerSessionCoordinator.Instance.BeginSetupPreparation(
+                    ShelteredMultiplayerSetupSettings.Empty,
+                    "time-policy-setup-gate");
+
+                bool allowVanillaUpdateBefore = ShelteredMultiplayerHookService.Instance.BeginGameTimeUpdate(null);
+                ShelteredMultiplayerHookService.Instance.EndGameTimeUpdate(null);
+                long blockedTick = clock.AdvanceFixedDelta(1f);
+                bool allowVanillaUpdateAfter = ShelteredMultiplayerHookService.Instance.BeginGameTimeUpdate(null);
+
+                TestAssert.False(allowVanillaUpdateBefore,
+                    "Active setup gate should suppress vanilla GameTime.Update before a blocked tick attempt.");
+                TestAssert.False(allowVanillaUpdateAfter,
+                    "Active setup gate should suppress vanilla GameTime.Update after a blocked tick attempt.");
+                TestAssert.Equal(dayBoundaryTick - 1, blockedTick,
+                    "Setup gate should prevent the world clock from crossing the day boundary.");
+                TestAssert.Equal(1, ReadIntGameTimeField("current_day"),
+                    "Projected GameTime should stay on day one while setup is gated.");
+                TestAssert.Equal(5, ReadIntGameTimeField("current_hour"),
+                    "Projected GameTime should stay before the 06:00 day boundary while setup is gated.");
+                TestAssert.Equal(59, ReadIntGameTimeField("current_minute"),
+                    "Projected GameTime should stay before the 06:00 day boundary while setup is gated.");
+            }
+            finally
+            {
+                ShelteredMultiplayerHookService.Instance.EndGameTimeUpdate(null);
+                clock.Reset("time-policy-test-cleanup");
                 ShelteredMultiplayerHookService.Instance.Deactivate("time-policy-test-cleanup");
                 ShelteredMultiplayerTimePolicy.ApplyGameTimePolicy(null);
                 ShelteredMultiplayerTimePolicy.ResetTimeScaleAccessorsForTests();

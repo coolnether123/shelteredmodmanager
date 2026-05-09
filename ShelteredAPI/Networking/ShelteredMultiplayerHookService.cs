@@ -18,7 +18,6 @@ namespace ShelteredAPI.Networking
         private readonly object _sync = new object();
         private readonly Queue<Action> _mainThreadQueue = new Queue<Action>();
         private ShelteredMultiplayerSessionState _sessionState;
-        private bool _worldStartBlocked;
         private int _mainThreadId;
         private bool _gameEventsAttached;
         private int _queueWarningCount;
@@ -138,18 +137,6 @@ namespace ShelteredAPI.Networking
             if (lifecycleEvent == null || lifecycleEvent.Context == null)
                 return;
 
-            if (lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.SetupPreparing
-                || lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.SetupReceived
-                || lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.LocalWorldLoaded)
-            {
-                SetWorldStartBlocked(true, lifecycleEvent.Reason);
-            }
-            else if (lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.WorldStartReleased
-                || lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.SessionDeactivated)
-            {
-                SetWorldStartBlocked(false, lifecycleEvent.Reason);
-            }
-
             SetSessionState(CreateState(lifecycleEvent.Context));
         }
 
@@ -174,20 +161,6 @@ namespace ShelteredAPI.Networking
                         "Main-thread queue contains " + _mainThreadQueue.Count + " actions.");
                 }
             }
-        }
-
-        internal void SetWorldStartBlocked(bool blocked, string reason)
-        {
-            lock (_sync)
-            {
-                if (_worldStartBlocked == blocked)
-                    return;
-
-                _worldStartBlocked = blocked;
-            }
-
-            TryWrite(MMLog.LogLevel.Info,
-                "World start block " + (blocked ? "enabled" : "disabled") + ". Reason=" + (reason ?? string.Empty) + ".");
         }
 
         public string CaptureWorldSnapshot(string reason, object hostContext)
@@ -230,7 +203,8 @@ namespace ShelteredAPI.Networking
                 gameTime,
                 state);
 
-            bool forceCancelVanilla = state.IsMultiplayerActive || IsWorldStartBlocked;
+            bool worldStartBlocked = ShelteredMultiplayerWorldStartGate.IsActive(sessionContext);
+            bool forceCancelVanilla = state.IsMultiplayerActive || worldStartBlocked;
             if (forceCancelVanilla)
                 context.CancelVanilla = true;
 
@@ -408,10 +382,8 @@ namespace ShelteredAPI.Networking
         {
             get
             {
-                lock (_sync)
-                {
-                    return _worldStartBlocked;
-                }
+                return ShelteredMultiplayerWorldStartGate.IsActive(
+                    ShelteredMultiplayerSessionCoordinator.Instance.Context);
             }
         }
 
@@ -443,7 +415,7 @@ namespace ShelteredAPI.Networking
                 context.WorldDeltaSeconds,
                 context.GameTimeMode,
                 true,
-                context.Status);
+                context.IsWorldStartGateActive ? context.WorldStartGateReason : context.Status);
         }
 
         private static byte ToBytePlayerId(int playerId)

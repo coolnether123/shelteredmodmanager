@@ -8,6 +8,8 @@ using ModAPI.Networking.Serialization;
 using ModAPI.Networking.Sessions;
 using ShelteredAPI.Events;
 using ShelteredAPI.Harmony;
+using ShelteredAPI.Networking.Diagnostics;
+using ShelteredAPI.Networking.Setup;
 using ShelteredAPI.Saves;
 using UnityEngine;
 
@@ -176,6 +178,12 @@ namespace ShelteredAPI.Networking
 
             PrepareHostSetup(string.IsNullOrEmpty(reason) ? "setup-difficulty-updated" : reason);
             BroadcastBeginSetup();
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Setup,
+                ShelteredMultiplayerTimelineEventKind.SetupDifficultyUpdated,
+                "rain=" + rain + " resources=" + resources + " breach=" + breach
+                    + " faction=" + faction + " mood=" + mood + " map=" + map + " fog=" + fog
+                    + " reason=" + (reason ?? string.Empty));
             WriteLog(MMLog.LogLevel.Info, "Host setup difficulty updated and broadcast. Rain=" + rain
                 + ", Resources=" + resources + ", Breach=" + breach + ", Faction=" + faction
                 + ", Mood=" + mood + ", Map=" + map + ", Fog=" + fog + ".");
@@ -192,6 +200,10 @@ namespace ShelteredAPI.Networking
             if (!IsHostReadyForRelease())
             {
                 SetStatus("not ready for host release; " + BuildWaitingReason());
+                AppendTimeline(
+                    ShelteredMultiplayerTimelineCategory.Release,
+                    ShelteredMultiplayerTimelineEventKind.ReleaseBlocked,
+                    "reason=" + BuildWaitingReason() + " " + BuildSetupProgress());
                 WriteLog(MMLog.LogLevel.Warning, "Host release requested before setup was ready. " + BuildSetupProgress()
                     + ", reason=" + BuildWaitingReason() + ".");
                 return;
@@ -237,10 +249,18 @@ namespace ShelteredAPI.Networking
             if (_disposed)
                 return;
 
+            AutoLoadFlow.NotifyManualCancellation("Setup session ending: " + (reason ?? string.Empty));
+
             if (_currentSetup == null && _loadedPeers.Count == 0 && _expectedPeers.Count == 0)
+            {
+                ShelteredMultiplayerSessionCoordinator.Instance.Deactivate(
+                    string.IsNullOrEmpty(reason) ? "setup-session-ending" : reason);
                 return;
+            }
 
             ClearSetupState();
+            ShelteredMultiplayerSessionCoordinator.Instance.Deactivate(
+                string.IsNullOrEmpty(reason) ? "setup-session-ending" : reason);
             SetStatus(StatusCancelled);
             WriteLog(MMLog.LogLevel.Info, "Setup cancelled. Reason=" + (reason ?? string.Empty) + ".");
         }
@@ -254,8 +274,15 @@ namespace ShelteredAPI.Networking
                 && _session.Mode == NetworkSessionMode.Client
                 && AutoLoadFlow.PendingNewSave)
             {
-                AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer setup");
+                if (AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer setup"))
+                {
+                    ShelteredMultiplayerTimeline.Instance.AppendAutoLoadStateChanged(
+                        "client-main-menu-advanced",
+                        "reason=Multiplayer setup");
+                }
             }
+
+            UpdateClientAutoLoadStatus();
         }
 
         private void BroadcastBeginSetup()
@@ -276,7 +303,20 @@ namespace ShelteredAPI.Networking
 
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
             int localPlayerId = context.GetPlayerIdForNetworkPeer(peerId);
-            _session.SendToPeer(peerId, BeginSetupMessageType, NetworkChannel.Reliable, _currentSetup.ToPayload(context, localPlayerId));
+            bool sent = _session.SendToPeer(
+                peerId,
+                BeginSetupMessageType,
+                NetworkChannel.Reliable,
+                _currentSetup.ToPayload(context, localPlayerId));
+            if (sent)
+            {
+                AppendTimeline(
+                    ShelteredMultiplayerTimelineCategory.Setup,
+                    ShelteredMultiplayerTimelineEventKind.SetupBeginSent,
+                    context,
+                    peerId,
+                    "localPlayerForPeer=" + localPlayerId + " bunkers=" + context.BunkerAssignments.Length);
+            }
             WriteLog(MMLog.LogLevel.Info, "Sent setup begin to peer " + peerId
                 + " as player " + localPlayerId + ".");
         }
@@ -315,18 +355,29 @@ namespace ShelteredAPI.Networking
                     _currentSetup.ToSetupSettings(),
                     _currentSetup.ToBunkerAssignments(),
                     "setup-begin-client");
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Setup,
+                ShelteredMultiplayerTimelineEventKind.SetupReceived,
+                context,
+                NetworkDefaults.HostPeerId,
+                "suggestedSlot=" + context.SetupSettings.ClientSuggestedSlot
+                    + " restart=" + shouldStartNewSave
+                    + " bunkers=" + _currentSetup.Bunkers.Count);
 
             if (shouldStartNewSave)
             {
                 ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("Multiplayer setup client auto-new-save");
                 ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("Multiplayer setup client auto-new-save");
                 AutoLoadFlow.BeginNewSave(context.SetupSettings.ClientSuggestedSlot);
+                ShelteredMultiplayerTimeline.Instance.AppendAutoLoadStateChanged(
+                    "client-new-save-requested",
+                    "preferredSlot=" + context.SetupSettings.ClientSuggestedSlot + " reason=setup-received");
                 AutoLoadFlow.TryAdvanceFromActiveMainMenu("Multiplayer setup begin");
-                SetStatus(StatusClientLoading);
+                SetStatus(BuildClientAutoLoadStatusText());
             }
             else
             {
-                SetStatus(_localLoaded ? StatusLoadedWaitingRelease : StatusClientLoading);
+                SetStatus(_localLoaded ? StatusLoadedWaitingRelease : BuildClientAutoLoadStatusText());
             }
 
             WriteLog(MMLog.LogLevel.Info, "Received setup begin. SuggestedSlot="
@@ -372,6 +423,11 @@ namespace ShelteredAPI.Networking
             }
 
             _loadedPeers.Add(peer.PeerId);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Setup,
+                ShelteredMultiplayerTimelineEventKind.PeerLoaded,
+                peer.PeerId,
+                "slot=" + loaded.AbsoluteSlot + " " + BuildSetupProgress());
             WriteLog(MMLog.LogLevel.Info, "Peer " + peer.PeerId + " loaded setup slot "
                 + loaded.AbsoluteSlot + ". " + BuildSetupProgress() + ".");
             UpdateHostReadyStatus();
@@ -398,8 +454,17 @@ namespace ShelteredAPI.Networking
             }
 
             _released = true;
+            ShelteredMultiplayerSessionCoordinator.Instance.SetWorldTick(
+                release.WorldTick,
+                0f,
+                "setup-release-host-tick");
             ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart("setup-release-" + release.WorldTick);
             SetStatus(StatusReleased);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Release,
+                ShelteredMultiplayerTimelineEventKind.WorldReleased,
+                NetworkDefaults.HostPeerId,
+                "hostTick=" + release.WorldTick + " source=host-message");
             WriteLog(MMLog.LogLevel.Info, "Setup released by host at tick " + release.WorldTick + ".");
         }
 
@@ -411,11 +476,17 @@ namespace ShelteredAPI.Networking
             _localLoaded = true;
             ShelteredMultiplayerSessionContext context =
                 ShelteredMultiplayerSessionCoordinator.Instance.MarkLocalWorldLoaded("setup-local-loaded");
+            int slot = ResolveCurrentSlot();
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Load,
+                ShelteredMultiplayerTimelineEventKind.LocalWorldLoaded,
+                context,
+                _session != null ? _session.LocalPeerId : ShelteredMultiplayerTimeline.NoNetworkPeer,
+                "slot=" + slot);
 
             if (_session == null)
                 return;
 
-            int slot = ResolveCurrentSlot();
             if (_session.Mode == NetworkSessionMode.Client)
             {
                 SetupLoadedMessage loaded = new SetupLoadedMessage();
@@ -432,6 +503,51 @@ namespace ShelteredAPI.Networking
                 WriteLog(MMLog.LogLevel.Info, "Host world loaded for setup. Slot=" + slot + ". " + BuildSetupProgress() + ".");
                 UpdateHostReadyStatus();
             }
+        }
+
+        private void UpdateClientAutoLoadStatus()
+        {
+            if (_session == null || _session.Mode != NetworkSessionMode.Client || _currentSetup == null || _released)
+                return;
+
+            MultiplayerAutoLoadStatus status = AutoLoadFlow.CurrentStatus;
+            if (status == null)
+                return;
+
+            if (status.CurrentState == MultiplayerAutoLoadState.Failed)
+            {
+                string error = string.IsNullOrEmpty(status.LastError)
+                    ? "Client auto-load failed."
+                    : status.LastError;
+                if (_status != "client auto-load failed" || _lastError != error)
+                {
+                    SetWarningStatus("client auto-load failed", error);
+                    WriteLog(MMLog.LogLevel.Error, "Client auto-load failed. " + error);
+                }
+                return;
+            }
+
+            if (status.CurrentState == MultiplayerAutoLoadState.Cancelled)
+            {
+                if (_status != StatusCancelled)
+                {
+                    SetStatus(StatusCancelled);
+                    WriteLog(MMLog.LogLevel.Info, "Client auto-load cancelled. " + status.DetailText);
+                }
+                return;
+            }
+
+            if (status.IsActive)
+                SetStatus(BuildClientAutoLoadStatusText());
+        }
+
+        private static string BuildClientAutoLoadStatusText()
+        {
+            MultiplayerAutoLoadStatus status = AutoLoadFlow.CurrentStatus;
+            if (status == null || string.IsNullOrEmpty(status.DetailText))
+                return StatusClientLoading;
+
+            return StatusClientLoading + ": " + status.DetailText;
         }
 
         private void UpdateHostReadyStatus()
@@ -520,6 +636,11 @@ namespace ShelteredAPI.Networking
             _released = true;
             ShelteredMultiplayerSessionCoordinator.Instance.ReleaseWorldStart(reason);
             SetStatus(StatusReleased);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Release,
+                ShelteredMultiplayerTimelineEventKind.WorldReleased,
+                _session != null ? _session.LocalPeerId : ShelteredMultiplayerTimeline.NoNetworkPeer,
+                "hostTick=" + worldTick + " source=host-confirmed reason=" + (reason ?? string.Empty));
             WriteLog(MMLog.LogLevel.Info, "Host released multiplayer start after all players loaded.");
         }
 
@@ -610,6 +731,18 @@ namespace ShelteredAPI.Networking
             return "[" + string.Join(",", values) + "]";
         }
 
+        private static string FormatPeerIds(byte[] peers)
+        {
+            if (peers == null || peers.Length == 0)
+                return "[]";
+
+            string[] values = new string[peers.Length];
+            for (int i = 0; i < peers.Length; i++)
+                values[i] = peers[i].ToString();
+
+            return "[" + string.Join(",", values) + "]";
+        }
+
         private static string LoadingText(string value)
         {
             return string.IsNullOrEmpty(value) ? "<empty>" : value;
@@ -646,6 +779,7 @@ namespace ShelteredAPI.Networking
         {
             _status = status ?? string.Empty;
             _lastError = string.Empty;
+            PublishWorldStartGateStatus("setup-status");
         }
 
         private void SetWarningStatus(string status, string message)
@@ -661,10 +795,135 @@ namespace ShelteredAPI.Networking
             WriteLog(MMLog.LogLevel.Error, _lastError);
         }
 
+        private void PublishWorldStartGateStatus(string reason)
+        {
+            if (_currentSetup == null)
+                return;
+
+            ShelteredMultiplayerSessionCoordinator.Instance.UpdateWorldStartGate(
+                BuildWorldStartGateState(),
+                _status,
+                reason);
+        }
+
+        private ShelteredMultiplayerWorldStartGateState BuildWorldStartGateState()
+        {
+            if (_released)
+                return ShelteredMultiplayerWorldStartGate.Released();
+
+            if (_session != null && _session.Mode == NetworkSessionMode.Host)
+                return BuildHostWorldStartGateState();
+
+            if (_session != null && _session.Mode == NetworkSessionMode.Client)
+                return BuildClientWorldStartGateState();
+
+            return ShelteredMultiplayerWorldStartGate.Blocked(
+                "setup gate active",
+                0,
+                new byte[0],
+                false);
+        }
+
+        private ShelteredMultiplayerWorldStartGateState BuildHostWorldStartGateState()
+        {
+            if (!_localLoaded)
+            {
+                return ShelteredMultiplayerWorldStartGate.Blocked(
+                    "waiting for host world load",
+                    CountUnloadedExpectedPeers(),
+                    GetUnloadedExpectedPeerIds(),
+                    false);
+            }
+
+            byte[] waitingPeerIds = GetUnloadedExpectedPeerIds();
+            if (waitingPeerIds.Length > 0)
+            {
+                return ShelteredMultiplayerWorldStartGate.Blocked(
+                    "waiting for " + waitingPeerIds.Length + " client(s); waiting for peer id(s): "
+                    + FormatPeerIds(waitingPeerIds),
+                    waitingPeerIds.Length,
+                    waitingPeerIds,
+                    false);
+            }
+
+            if (_expectedPeers.Count == 0)
+            {
+                return ShelteredMultiplayerWorldStartGate.Blocked(
+                    "waiting for client(s)",
+                    0,
+                    new byte[0],
+                    false);
+            }
+
+            return ShelteredMultiplayerWorldStartGate.Blocked(
+                "ready for host release",
+                0,
+                new byte[0],
+                true);
+        }
+
+        private ShelteredMultiplayerWorldStartGateState BuildClientWorldStartGateState()
+        {
+            if (!_localLoaded)
+            {
+                return ShelteredMultiplayerWorldStartGate.Blocked(
+                    "setup received; waiting for local world load",
+                    0,
+                    new byte[0],
+                    false);
+            }
+
+            return ShelteredMultiplayerWorldStartGate.Blocked(
+                "waiting for host release",
+                0,
+                new byte[0],
+                false);
+        }
+
+        private byte[] GetUnloadedExpectedPeerIds()
+        {
+            List<byte> peers = new List<byte>();
+            foreach (byte peerId in _expectedPeers)
+            {
+                if (!_loadedPeers.Contains(peerId))
+                    peers.Add(peerId);
+            }
+
+            peers.Sort();
+            return peers.ToArray();
+        }
+
         private void WriteLog(MMLog.LogLevel level, string message)
         {
             if (_log != null)
                 _log(level, LogComponent, message ?? string.Empty);
+        }
+
+        private static void AppendTimeline(
+            ShelteredMultiplayerTimelineCategory category,
+            ShelteredMultiplayerTimelineEventKind eventKind,
+            string message)
+        {
+            ShelteredMultiplayerTimeline.Instance.Append(category, eventKind, message);
+        }
+
+        private static void AppendTimeline(
+            ShelteredMultiplayerTimelineCategory category,
+            ShelteredMultiplayerTimelineEventKind eventKind,
+            int networkPeerId,
+            string message)
+        {
+            ShelteredMultiplayerTimeline.Instance.Append(category, eventKind, networkPeerId, message);
+        }
+
+        private static void AppendTimeline(
+            ShelteredMultiplayerTimelineCategory category,
+            ShelteredMultiplayerTimelineEventKind eventKind,
+            ShelteredMultiplayerSessionContext context,
+            int networkPeerId,
+            string message)
+        {
+            ShelteredMultiplayerTimeline.Instance.Append(category, eventKind, context, networkPeerId, message);
         }
 
         private sealed class MultiplayerSetupMessage
