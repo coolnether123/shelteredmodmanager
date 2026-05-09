@@ -52,6 +52,7 @@ namespace ShelteredAPI.Networking
 
             if (lifecycleEvent.Kind == ShelteredMultiplayerLifecycleEventKind.SessionDeactivated)
             {
+                ShelteredMultiplayerBunkerAnchorRuntime.ResetValidatedAnchor(lifecycleEvent.Reason);
                 ShelteredMapEntities.Clear(lifecycleEvent.Reason);
             }
         }

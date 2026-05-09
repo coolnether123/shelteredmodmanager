@@ -18,6 +18,7 @@ namespace ShelteredAPI.Networking
         {
             try
             {
+                ShelteredMultiplayerBunkerAnchorRuntime.ResetValidatedAnchor("ExpeditionMap.CreateMap");
                 ShelteredMultiplayerMapSeedRuntime.ApplyMapSeed(__instance, "ExpeditionMap.CreateMap");
             }
             catch (Exception ex)
@@ -33,6 +34,7 @@ namespace ShelteredAPI.Networking
         {
             try
             {
+                ShelteredMultiplayerBunkerAnchorRuntime.ResetValidatedAnchor("ExpeditionMap.CreateStasisMap");
                 ShelteredMultiplayerMapSeedRuntime.ApplyMapSeed(__instance, "ExpeditionMap.CreateStasisMap");
             }
             catch (Exception ex)

@@ -16,6 +16,10 @@ namespace ShelteredAPI.Networking
         private static Vector2 _lastLoggedShelterWorldPosition = new Vector2(float.MinValue, float.MinValue);
         private static Vector3 _lastLoggedShelterMapPosition = new Vector3(float.MinValue, float.MinValue, float.MinValue);
         private static Vector2 _lastLoggedRedirectedWorldPosition = new Vector2(float.MinValue, float.MinValue);
+        private static bool _hasValidatedAnchor;
+        private static ShelteredMultiplayerMapAnchorValidationResult _validatedAnchor;
+        private static bool _anchorOverrideDisabled;
+        private static string _lastValidationLogKey = string.Empty;
 
         public static void CacheActiveBunkerPosition(string reason)
         {
@@ -34,27 +38,56 @@ namespace ShelteredAPI.Networking
                 }
             }
 
-            Vector3 mapPosition;
-            if (!TryGetActiveBunkerMapPosition(out mapPosition))
+            ShelteredMultiplayerMapAnchorValidationResult validation;
+            if (!TryGetValidatedActiveBunkerAnchor(out validation, reason))
                 return;
 
-            _cachedShelterMapPosition = mapPosition;
+            _cachedShelterWorldPosition = validation.ChosenWorldPosition;
+            _hasCachedShelterWorldPosition = true;
+            _cachedShelterMapPosition = validation.ChosenMapPixels;
             _hasCachedShelterMapPosition = true;
+            _anchorOverrideDisabled = false;
 
-            if (Vector3.Distance(_lastLoggedShelterMapPosition, mapPosition) > 0.001f)
+            if (Vector3.Distance(_lastLoggedShelterMapPosition, validation.ChosenMapPixels) > 0.001f)
             {
-                _lastLoggedShelterMapPosition = mapPosition;
+                _lastLoggedShelterMapPosition = validation.ChosenMapPixels;
                 MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
-                    "Cached active multiplayer bunker map position (" + mapPosition.x.ToString("F1") + ", "
-                    + mapPosition.y.ToString("F1") + ") for vanilla shelter-anchor call sites. Reason="
+                    "Cached validated multiplayer bunker anchor. Assigned=("
+                    + validation.AssignedWorldPosition.x.ToString("F1") + ", "
+                    + validation.AssignedWorldPosition.y.ToString("F1") + "), requestedGrid=("
+                    + validation.RequestedGridX + ", " + validation.RequestedGridY + "), chosenGrid=("
+                    + validation.ChosenGridX + ", " + validation.ChosenGridY + "), mapPixels=("
+                    + validation.ChosenMapPixels.x.ToString("F1") + ", "
+                    + validation.ChosenMapPixels.y.ToString("F1") + "), fallback="
+                    + validation.IsFallback + ", reason=" + validation.Reason + ", call="
                     + (reason ?? string.Empty) + ".");
             }
+        }
+
+        public static void ResetValidatedAnchor(string reason)
+        {
+            _hasValidatedAnchor = false;
+            _validatedAnchor = null;
+            _anchorOverrideDisabled = false;
+            _lastValidationLogKey = string.Empty;
         }
 
         public static void RedirectShelterOriginWorldPosition(ref Vector2 worldPosition)
         {
             if (worldPosition.sqrMagnitude > 0.0001f)
                 return;
+
+            if (!IsMultiplayerAnchorActive())
+                return;
+
+            if (_anchorOverrideDisabled)
+                return;
+
+            if (_hasValidatedAnchor && _validatedAnchor != null && _validatedAnchor.IsValid)
+            {
+                worldPosition = _validatedAnchor.ChosenWorldPosition;
+                return;
+            }
 
             Vector2 activeWorldPosition;
             if (!TryGetActiveBunkerWorldPosition(out activeWorldPosition))
@@ -80,16 +113,25 @@ namespace ShelteredAPI.Networking
 
         public static Vector3 GetActiveBunkerMapPixels()
         {
+            if (!IsMultiplayerAnchorActive())
+                return Vector3.zero;
+
             if (ShouldSkipMapLookup())
                 return _hasCachedShelterMapPosition ? _cachedShelterMapPosition : Vector3.zero;
 
-            Vector3 mapPosition;
-            if (TryGetActiveBunkerMapPosition(out mapPosition))
+            ShelteredMultiplayerMapAnchorValidationResult validation;
+            if (TryGetValidatedActiveBunkerAnchor(out validation, "GetActiveBunkerMapPixels"))
             {
-                _cachedShelterMapPosition = mapPosition;
+                _cachedShelterWorldPosition = validation.ChosenWorldPosition;
+                _hasCachedShelterWorldPosition = true;
+                _cachedShelterMapPosition = validation.ChosenMapPixels;
                 _hasCachedShelterMapPosition = true;
-                return mapPosition;
+                _anchorOverrideDisabled = false;
+                return validation.ChosenMapPixels;
             }
+
+            if (_anchorOverrideDisabled)
+                return Vector3.zero;
 
             return _hasCachedShelterMapPosition ? _cachedShelterMapPosition : Vector3.zero;
         }
@@ -123,22 +165,94 @@ namespace ShelteredAPI.Networking
             return worldPosition.sqrMagnitude > 0.0001f;
         }
 
-        private static bool TryGetActiveBunkerMapPosition(out Vector3 mapPosition)
+        internal static bool TryGetValidatedActiveBunkerAnchor(
+            out ShelteredMultiplayerMapAnchorValidationResult validation,
+            string reason)
         {
-            mapPosition = Vector3.zero;
+            validation = null;
+
+            if (!IsMultiplayerAnchorActive())
+                return false;
 
             if (ShouldSkipMapLookup())
                 return false;
 
-            Vector2 worldPosition;
-            if (!TryGetActiveBunkerWorldPosition(out worldPosition))
-                return false;
+            validation = ShelteredMultiplayerMapAnchorValidator.ValidateActiveBunker(reason);
+            _validatedAnchor = validation;
+            _hasValidatedAnchor = validation != null;
 
-            if (ExplorationManager.Instance == null || ExplorationManager.Instance.mapSourceSprite == null)
-                return false;
+            if (validation == null || !validation.IsValid)
+            {
+                if (ShouldDisableAnchorOverride(validation))
+                {
+                    _anchorOverrideDisabled = true;
+                    LogValidationFailure(validation, reason);
+                }
 
-            mapPosition = ShelteredBunkers.GetActiveBunkerMapPixels();
+                return false;
+            }
+
+            LogValidationFallback(validation, reason);
             return true;
+        }
+
+        private static bool IsMultiplayerAnchorActive()
+        {
+            ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            return context != null && context.IsMultiplayerActive;
+        }
+
+        private static bool ShouldDisableAnchorOverride(ShelteredMultiplayerMapAnchorValidationResult validation)
+        {
+            if (validation == null)
+                return false;
+
+            return validation.HasExpeditionMap
+                && validation.HasMapRegionSource
+                && validation.ValidRegionCount == 0;
+        }
+
+        private static void LogValidationFallback(
+            ShelteredMultiplayerMapAnchorValidationResult validation,
+            string reason)
+        {
+            if (validation == null || !validation.IsFallback)
+                return;
+
+            string key = "fallback:" + validation.BunkerOwnerId + ":"
+                + validation.RequestedGridX + "," + validation.RequestedGridY + "->"
+                + validation.ChosenGridX + "," + validation.ChosenGridY + ":"
+                + (validation.Reason ?? string.Empty);
+            if (string.Equals(_lastValidationLogKey, key, StringComparison.Ordinal))
+                return;
+
+            _lastValidationLogKey = key;
+            MMLog.WriteWithSource(MMLog.LogLevel.Warning, MMLog.LogCategory.Network, LogSource,
+                "Multiplayer bunker anchor fallback selected nearest valid map region. Assigned=("
+                + validation.AssignedWorldPosition.x.ToString("F1") + ", "
+                + validation.AssignedWorldPosition.y.ToString("F1") + "), requestedGrid=("
+                + validation.RequestedGridX + ", " + validation.RequestedGridY + "), chosenGrid=("
+                + validation.ChosenGridX + ", " + validation.ChosenGridY + "), validRegions="
+                + validation.ValidRegionCount + ", reason=" + validation.Reason + ", call="
+                + (reason ?? string.Empty) + ".");
+        }
+
+        private static void LogValidationFailure(
+            ShelteredMultiplayerMapAnchorValidationResult validation,
+            string reason)
+        {
+            string key = validation != null
+                ? "disabled:" + validation.BunkerOwnerId + ":" + (validation.Reason ?? string.Empty)
+                : "disabled:null";
+            if (string.Equals(_lastValidationLogKey, key, StringComparison.Ordinal))
+                return;
+
+            _lastValidationLogKey = key;
+            MMLog.WarnOnce("ShelteredMultiplayerBunkerAnchor.Disabled." + key,
+                "Disabled multiplayer bunker anchor override because no valid ExpeditionMap regions were available. "
+                + "Reason=" + (validation != null ? validation.Reason : "unknown")
+                + ", validRegions=" + (validation != null ? validation.ValidRegionCount.ToString() : "0")
+                + ", call=" + (reason ?? string.Empty) + ".");
         }
 
         private static bool ShouldSkipMapLookup()

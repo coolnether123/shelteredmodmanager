@@ -13,14 +13,29 @@ namespace ShelteredAPI.Networking.Diagnostics
         public int LocalPlayerId;
         public int ActiveBunkerOwnerId;
         public int BunkerCount;
+        public Vector2 AssignedWorldPosition;
         public Vector2 ActiveWorldPosition;
         public Vector3 ActiveMapPixels;
+        public int RequestedGridX;
+        public int RequestedGridY;
         public int GridX;
         public int GridY;
+        public int MapWidth;
+        public int MapHeight;
+        public float WorldMinX;
+        public float WorldMaxX;
+        public float WorldMinY;
+        public float WorldMaxY;
+        public int ValidRegionCount;
         public bool HasExplorationManager;
         public bool HasExpeditionMap;
         public bool HasMapSprite;
+        public bool AnchorValid;
+        public bool AnchorFallback;
+        public bool AnchorOverrideEnabled;
+        public bool ChosenRegionIsShelter;
         public bool ShelterCellValid;
+        public string ValidationReason = string.Empty;
         public string[] Warnings = new string[0];
     }
 
@@ -58,14 +73,14 @@ namespace ShelteredAPI.Networking.Diagnostics
                 if (activeAssignment != null)
                 {
                     report.ActiveBunkerOwnerId = activeAssignment.BunkerOwnerId;
-                    report.ActiveWorldPosition = activeAssignment.Position;
+                    report.AssignedWorldPosition = activeAssignment.Position;
                 }
                 else
                 {
                     report.ActiveBunkerOwnerId = ShelteredMultiplayerBunkerAssignments.ResolveBunkerOwnerId(
                         context.BunkerAssignments,
                         context.LocalPlayerId);
-                    report.ActiveWorldPosition = ShelteredBunkers.GetBunkerWorldPosition(report.ActiveBunkerOwnerId);
+                    report.AssignedWorldPosition = ShelteredBunkers.GetBunkerWorldPosition(report.ActiveBunkerOwnerId);
                 }
 
                 if (hasAssignments && !localPlayerResolved)
@@ -86,7 +101,7 @@ namespace ShelteredAPI.Networking.Diagnostics
                     warnings.Add("ExplorationManager map source sprite is not available; active bunker map pixels cannot be verified.");
 
                 BunkerDefinition serviceBunker = ShelteredBunkers.GetBunker(report.ActiveBunkerOwnerId);
-                if (serviceBunker != null && Vector2.Distance(serviceBunker.Position, report.ActiveWorldPosition) > PositionEpsilon)
+                if (serviceBunker != null && Vector2.Distance(serviceBunker.Position, report.AssignedWorldPosition) > PositionEpsilon)
                 {
                     warnings.Add("Coordinator active bunker world position does not match ShelteredBunkers for owner "
                         + report.ActiveBunkerOwnerId + ".");
@@ -98,26 +113,35 @@ namespace ShelteredAPI.Networking.Diagnostics
                         + " does not match coordinator active bunker owner " + report.ActiveBunkerOwnerId + ".");
                 }
 
-                report.ActiveMapPixels = ShelteredBunkers.GetBunkerMapPixels(report.ActiveBunkerOwnerId);
-                ExpeditionMap.GridRef gridRef = ShelteredBunkers.GetBunkerGridRef(report.ActiveBunkerOwnerId);
-                if (gridRef != null)
+                ShelteredMultiplayerMapAnchorValidationResult validation =
+                    ShelteredMultiplayerMapAnchorValidator.ValidateActiveBunker("diagnostics");
+                ApplyValidation(report, validation, warnings);
+
+                if (!report.AnchorValid)
                 {
-                    report.GridX = gridRef.x;
-                    report.GridY = gridRef.y;
+                    report.ActiveWorldPosition = report.AssignedWorldPosition;
+                    report.ActiveMapPixels = ShelteredBunkers.GetBunkerMapPixels(report.ActiveBunkerOwnerId);
+                    ExpeditionMap.GridRef gridRef = ShelteredBunkers.GetBunkerGridRef(report.ActiveBunkerOwnerId);
+                    if (gridRef != null)
+                    {
+                        report.RequestedGridX = gridRef.x;
+                        report.RequestedGridY = gridRef.y;
+                        report.GridX = gridRef.x;
+                        report.GridY = gridRef.y;
+                    }
                 }
 
-                bool hasWorldPosition = report.ActiveWorldPosition.sqrMagnitude > PositionEpsilon;
+                bool hasWorldPosition = report.AssignedWorldPosition.sqrMagnitude > PositionEpsilon;
                 if (!hasWorldPosition && hasAssignments)
                     warnings.Add("Active multiplayer bunker world position is zero.");
 
-                if (hasWorldPosition && report.ActiveMapPixels.sqrMagnitude <= PositionEpsilon)
+                if (report.AnchorValid && report.ActiveMapPixels.sqrMagnitude <= PositionEpsilon)
                     warnings.Add("Active bunker map pixels are zero while the active world position is nonzero.");
 
-                if (hasWorldPosition && report.GridX == 0 && report.GridY == 0)
+                if (hasWorldPosition && report.RequestedGridX == 0 && report.RequestedGridY == 0)
                     warnings.Add("Active bunker grid ref is 0,0 while the active world position is nonzero.");
 
                 VerifyMapPixelAgreement(report, warnings);
-                VerifyGridAgreement(report, warnings);
                 VerifyShelterCell(report, warnings);
             }
             catch (Exception ex)
@@ -139,9 +163,27 @@ namespace ShelteredAPI.Networking.Diagnostics
                 "Map anchor report for " + (reason ?? string.Empty)
                 + ": session='" + report.SessionId + "', localPlayer=" + report.LocalPlayerId
                 + ", activeOwner=" + report.ActiveBunkerOwnerId
-                + ", world=(" + report.ActiveWorldPosition.x.ToString("F1") + ", " + report.ActiveWorldPosition.y.ToString("F1") + ")"
+                + ", assignedWorld=(" + report.AssignedWorldPosition.x.ToString("F1") + ", " + report.AssignedWorldPosition.y.ToString("F1") + ")"
+                + ", chosenWorld=(" + report.ActiveWorldPosition.x.ToString("F1") + ", " + report.ActiveWorldPosition.y.ToString("F1") + ")"
                 + ", mapPixels=(" + report.ActiveMapPixels.x.ToString("F1") + ", " + report.ActiveMapPixels.y.ToString("F1") + ")"
-                + ", grid=(" + report.GridX + ", " + report.GridY + ").");
+                + ", requestedGrid=(" + report.RequestedGridX + ", " + report.RequestedGridY + ")"
+                + ", chosenGrid=(" + report.GridX + ", " + report.GridY + ")"
+                + ", mapSize=(" + report.MapWidth + "x" + report.MapHeight + ")"
+                + ", validRegions=" + report.ValidRegionCount
+                + ", fallback=" + report.AnchorFallback
+                + ", reason=" + report.ValidationReason + ".");
+
+            string timelineDetail = "reason=" + (reason ?? string.Empty)
+                + " owner=" + report.ActiveBunkerOwnerId
+                + " requestedGrid=" + report.RequestedGridX + "," + report.RequestedGridY
+                + " chosenGrid=" + report.GridX + "," + report.GridY
+                + " valid=" + report.AnchorValid
+                + " fallback=" + report.AnchorFallback
+                + " warnings=" + report.Warnings.Length;
+            if (report.AnchorValid && !report.AnchorFallback && report.Warnings.Length == 0)
+                ShelteredMultiplayerTimeline.Instance.AppendMapAnchorValidated(timelineDetail);
+            else
+                ShelteredMultiplayerTimeline.Instance.AppendMapAnchorFallback(timelineDetail);
 
             for (int i = 0; i < report.Warnings.Length; i++)
             {
@@ -175,13 +217,58 @@ namespace ShelteredAPI.Networking.Diagnostics
             return false;
         }
 
+        private static void ApplyValidation(
+            ShelteredMultiplayerMapAnchorReport report,
+            ShelteredMultiplayerMapAnchorValidationResult validation,
+            List<string> warnings)
+        {
+            if (report == null || validation == null)
+                return;
+
+            report.AnchorValid = validation.IsValid;
+            report.AnchorFallback = validation.IsFallback;
+            report.AnchorOverrideEnabled = validation.IsValid;
+            report.ActiveWorldPosition = validation.IsValid
+                ? validation.ChosenWorldPosition
+                : validation.AssignedWorldPosition;
+            report.ActiveMapPixels = validation.ChosenMapPixels;
+            report.RequestedGridX = validation.RequestedGridX;
+            report.RequestedGridY = validation.RequestedGridY;
+            report.GridX = validation.ChosenGridX;
+            report.GridY = validation.ChosenGridY;
+            report.MapWidth = validation.MapWidth;
+            report.MapHeight = validation.MapHeight;
+            report.WorldMinX = validation.WorldMinX;
+            report.WorldMaxX = validation.WorldMaxX;
+            report.WorldMinY = validation.WorldMinY;
+            report.WorldMaxY = validation.WorldMaxY;
+            report.ValidRegionCount = validation.ValidRegionCount;
+            report.ChosenRegionIsShelter = validation.ChosenRegionIsShelter;
+            report.ValidationReason = validation.Reason ?? string.Empty;
+
+            if (warnings == null)
+                return;
+
+            if (!validation.IsValid && validation.HasExpeditionMap && validation.HasMapRegionSource)
+            {
+                warnings.Add("No valid ExpeditionMap region exists for the active multiplayer bunker anchor. Multiplayer anchor override is disabled.");
+            }
+            else if (validation.IsFallback)
+            {
+                warnings.Add("Active multiplayer bunker anchor requested grid "
+                    + validation.RequestedGridX + "," + validation.RequestedGridY
+                    + " but fell back to nearest valid grid "
+                    + validation.ChosenGridX + "," + validation.ChosenGridY + ".");
+            }
+        }
+
         private static void VerifyMapPixelAgreement(
             ShelteredMultiplayerMapAnchorReport report,
             List<string> warnings)
         {
             if (report == null || warnings == null || !report.HasExplorationManager || !report.HasMapSprite)
                 return;
-            if (report.ActiveWorldPosition.sqrMagnitude <= PositionEpsilon)
+            if (!report.AnchorValid || report.ActiveWorldPosition.sqrMagnitude <= PositionEpsilon)
                 return;
 
             Vector3 expected = new Vector3(
@@ -195,32 +282,13 @@ namespace ShelteredAPI.Networking.Diagnostics
             }
         }
 
-        private static void VerifyGridAgreement(
-            ShelteredMultiplayerMapAnchorReport report,
-            List<string> warnings)
-        {
-            if (report == null || warnings == null || !report.HasExpeditionMap || !report.HasExplorationManager)
-                return;
-            if (report.ActiveWorldPosition.sqrMagnitude <= PositionEpsilon)
-                return;
-
-            ExpeditionMap.GridRef expected = ExpeditionMap.Instance.WorldPosToGridRef(report.ActiveWorldPosition);
-            if (expected == null)
-                return;
-
-            if (expected.x != report.GridX || expected.y != report.GridY)
-            {
-                warnings.Add("Active bunker grid ref does not match ExpeditionMap.WorldPosToGridRef for the active world position.");
-            }
-        }
-
         private static void VerifyShelterCell(
             ShelteredMultiplayerMapAnchorReport report,
             List<string> warnings)
         {
             if (report == null || warnings == null || !report.HasExpeditionMap)
                 return;
-            if (report.ActiveWorldPosition.sqrMagnitude <= PositionEpsilon)
+            if (!report.AnchorValid)
                 return;
 
             MapRegion region = ExpeditionMap.Instance.GetRegionOnMap(new ExpeditionMap.GridRef(report.GridX, report.GridY));
