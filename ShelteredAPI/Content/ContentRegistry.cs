@@ -247,6 +247,7 @@ namespace ShelteredAPI.Content
             }
             catch (Exception ex)
             {
+                MMLog.WriteWarning("[ContentRegistry] Failed to register item '" + (def.Id ?? string.Empty) + "': " + ex.Message);
                 return RegistrationResult.Failed(ex.Message);
             }
         }
@@ -276,6 +277,7 @@ namespace ShelteredAPI.Content
             }
             catch (Exception ex)
             {
+                MMLog.WriteWarning("[ContentRegistry] Failed to register fixed-id item '" + itemId + "' for mod '" + modId + "': " + ex.Message);
                 return RegistrationResult.Failed(ex.Message);
             }
         }
