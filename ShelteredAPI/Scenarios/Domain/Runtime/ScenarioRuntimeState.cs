@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Domain.Runtime{
     internal class ScenarioRuntimeState
     {
@@ -20,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Domain.Runtime{
         public string RuntimeBindingId { get; set; }
         public string ScenarioOutcome { get; set; }
         public string ScenarioOutcomeConditionId { get; set; }
+        public ScenarioScoreSnapshot ScoreSnapshot { get; set; }
         public int LastProcessedDay { get; set; }
         public int LastProcessedHour { get; set; }
         public int LastProcessedMinute { get; set; }

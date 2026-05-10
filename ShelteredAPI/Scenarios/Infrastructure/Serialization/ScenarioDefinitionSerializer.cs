@@ -270,6 +270,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             definition.Quests = questMapSerializer.ReadQuests(Child(root, "Quests"));
             definition.Map = questMapSerializer.ReadMap(Child(root, "Map"));
             definition.WinLossConditions = winLossSerializer.Read(Child(root, "WinLossConditions"));
+            definition.Scoring = ReadScoring(Child(root, "Scoring"));
             definition.AssetReferences = assetSerializer.Read(Child(root, "AssetReferences"));
             definition.BunkerGrid = bunkerGridSerializer.Read(Child(root, "BunkerGrid"));
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
@@ -785,6 +786,65 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             return result;
         }
 
+        internal static ScenarioScoringDefinition ReadScoring(XmlElement element)
+        {
+            ScenarioScoringDefinition result = new ScenarioScoringDefinition();
+            if (element == null)
+                return result;
+
+            result.Enabled = ReadBoolAttribute(element, "enabled", result.Enabled);
+            result.ScoreLabel = AttributeOrChild(element, "scoreLabel", "ScoreLabel") ?? result.ScoreLabel;
+            result.HigherIsBetter = ReadBoolAttribute(element, "higherIsBetter", result.HigherIsBetter);
+            result.LeaderboardKey = AttributeOrChild(element, "leaderboardKey", "LeaderboardKey");
+
+            XmlElement categories = Child(element, "Categories");
+            if (categories != null)
+            {
+                XmlNodeList nodes = categories.GetElementsByTagName("Category");
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    XmlElement categoryElement = nodes[i] as XmlElement;
+                    if (categoryElement == null || categoryElement.ParentNode != categories)
+                        continue;
+
+                    result.Categories.Add(new ScenarioScoreCategoryDefinition
+                    {
+                        Id = AttributeOrChild(categoryElement, "id", "Id"),
+                        DisplayName = AttributeOrChild(categoryElement, "displayName", "DisplayName"),
+                        Description = AttributeOrChild(categoryElement, "description", "Description"),
+                        SortOrder = ReadIntAttribute(categoryElement, "sortOrder", 0)
+                    });
+                }
+            }
+
+            XmlElement rules = Child(element, "Rules");
+            if (rules != null)
+            {
+                XmlNodeList nodes = rules.GetElementsByTagName("Rule");
+                for (int i = 0; i < nodes.Count; i++)
+                {
+                    XmlElement ruleElement = nodes[i] as XmlElement;
+                    if (ruleElement == null || ruleElement.ParentNode != rules)
+                        continue;
+
+                    ScenarioScoreRuleDefinition rule = new ScenarioScoreRuleDefinition();
+                    rule.Id = AttributeOrChild(ruleElement, "id", "Id");
+                    rule.CategoryId = AttributeOrChild(ruleElement, "categoryId", "CategoryId");
+                    rule.DisplayName = AttributeOrChild(ruleElement, "displayName", "DisplayName");
+                    rule.Description = AttributeOrChild(ruleElement, "description", "Description");
+                    rule.Source = AttributeOrChild(ruleElement, "source", "Source");
+                    rule.Operation = AttributeOrChild(ruleElement, "operation", "Operation") ?? rule.Operation;
+                    rule.OutcomeFilter = AttributeOrChild(ruleElement, "outcomeFilter", "OutcomeFilter") ?? rule.OutcomeFilter;
+                    rule.Weight = ReadFloatAttribute(ruleElement, "weight", rule.Weight);
+                    ReadProperties(Child(ruleElement, "Properties"), rule.Properties);
+                    result.Rules.Add(rule);
+                }
+            }
+
+            ReadProperties(Child(element, "Metadata"), result.Metadata);
+            return result;
+        }
+
         internal static QuestAuthoringDefinition ReadQuests(XmlElement element)
         {
             QuestAuthoringDefinition result = new QuestAuthoringDefinition();
@@ -998,6 +1058,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             questMapSerializer.WriteQuests(writer, definition.Quests);
             questMapSerializer.WriteMap(writer, definition.Map);
             winLossSerializer.Write(writer, definition.WinLossConditions);
+            WriteScoring(writer, definition.Scoring);
             assetSerializer.Write(writer, definition.AssetReferences);
             bunkerGridSerializer.Write(writer, definition.BunkerGrid);
             gateSerializer.Write(writer, definition.Gates);
@@ -1438,6 +1499,58 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteStartElement("WinLossConditions");
             WriteConditions(writer, "WinConditions", value.WinConditions);
             WriteConditions(writer, "LossConditions", value.LossConditions);
+            writer.WriteEndElement();
+        }
+
+        internal static void WriteScoring(XmlWriter writer, ScenarioScoringDefinition value)
+        {
+            if (value == null)
+                value = new ScenarioScoringDefinition();
+
+            writer.WriteStartElement("Scoring");
+            writer.WriteAttributeString("enabled", value.Enabled ? "true" : "false");
+            WriteAttribute(writer, "scoreLabel", value.ScoreLabel);
+            writer.WriteAttributeString("higherIsBetter", value.HigherIsBetter ? "true" : "false");
+            WriteAttribute(writer, "leaderboardKey", value.LeaderboardKey);
+
+            writer.WriteStartElement("Categories");
+            for (int i = 0; value.Categories != null && i < value.Categories.Count; i++)
+            {
+                ScenarioScoreCategoryDefinition category = value.Categories[i];
+                if (category == null)
+                    continue;
+
+                writer.WriteStartElement("Category");
+                WriteAttribute(writer, "id", category.Id);
+                WriteAttribute(writer, "displayName", category.DisplayName);
+                WriteAttribute(writer, "description", category.Description);
+                writer.WriteAttributeString("sortOrder", category.SortOrder.ToString(CultureInfo.InvariantCulture));
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+
+            writer.WriteStartElement("Rules");
+            for (int i = 0; value.Rules != null && i < value.Rules.Count; i++)
+            {
+                ScenarioScoreRuleDefinition rule = value.Rules[i];
+                if (rule == null)
+                    continue;
+
+                writer.WriteStartElement("Rule");
+                WriteAttribute(writer, "id", rule.Id);
+                WriteAttribute(writer, "categoryId", rule.CategoryId);
+                WriteAttribute(writer, "displayName", rule.DisplayName);
+                WriteAttribute(writer, "description", rule.Description);
+                WriteAttribute(writer, "source", rule.Source);
+                WriteAttribute(writer, "operation", rule.Operation);
+                WriteAttribute(writer, "outcomeFilter", rule.OutcomeFilter);
+                writer.WriteAttributeString("weight", rule.Weight.ToString(CultureInfo.InvariantCulture));
+                WriteProperties(writer, "Properties", rule.Properties);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+
+            WriteProperties(writer, "Metadata", value.Metadata);
             writer.WriteEndElement();
         }
 

@@ -57,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Quests = new QuestAuthoringDefinition();
             Map = new MapAuthoringDefinition();
             WinLossConditions = new WinLossConditionsDefinition();
+            Scoring = new ScenarioScoringDefinition();
             AssetReferences = new AssetReferencesDefinition();
             BunkerGrid = new ScenarioBunkerGridDefinition();
             Gates = new List<ScenarioGateDefinition>();
@@ -82,6 +83,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public QuestAuthoringDefinition Quests { get; set; }
         public MapAuthoringDefinition Map { get; set; }
         public WinLossConditionsDefinition WinLossConditions { get; set; }
+        public ScenarioScoringDefinition Scoring { get; set; }
         public AssetReferencesDefinition AssetReferences { get; set; }
         public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
         public List<ScenarioGateDefinition> Gates { get; private set; }
@@ -684,6 +686,124 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
         public List<ConditionDef> WinConditions { get; private set; }
         public List<ConditionDef> LossConditions { get; private set; }
+    }
+
+    /// <summary>
+    /// Authored scoring metadata for custom scenarios.
+    /// Runtime score calculation is intentionally supplied by scenario code until vanilla hooks exist.
+    /// </summary>
+    public class ScenarioScoringDefinition
+    {
+        public ScenarioScoringDefinition()
+        {
+            ScoreLabel = "Score";
+            HigherIsBetter = true;
+            Categories = new List<ScenarioScoreCategoryDefinition>();
+            Rules = new List<ScenarioScoreRuleDefinition>();
+            Metadata = new List<ScenarioProperty>();
+        }
+
+        public bool Enabled { get; set; }
+        public string ScoreLabel { get; set; }
+        public bool HigherIsBetter { get; set; }
+        public string LeaderboardKey { get; set; }
+        public List<ScenarioScoreCategoryDefinition> Categories { get; private set; }
+        public List<ScenarioScoreRuleDefinition> Rules { get; private set; }
+        public List<ScenarioProperty> Metadata { get; private set; }
+    }
+
+    /// <summary>
+    /// Author-visible grouping for one or more score rules.
+    /// </summary>
+    public class ScenarioScoreCategoryDefinition
+    {
+        public string Id { get; set; }
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public int SortOrder { get; set; }
+    }
+
+    /// <summary>
+    /// A neutral scoring rule declaration. Source and properties describe the metric;
+    /// scenario runtime code remains responsible for evaluating it.
+    /// </summary>
+    public class ScenarioScoreRuleDefinition
+    {
+        public ScenarioScoreRuleDefinition()
+        {
+            Operation = "Add";
+            OutcomeFilter = "Any";
+            Weight = 1f;
+            Properties = new List<ScenarioProperty>();
+        }
+
+        public string Id { get; set; }
+        public string CategoryId { get; set; }
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public string Source { get; set; }
+        public string Operation { get; set; }
+        public string OutcomeFilter { get; set; }
+        public float Weight { get; set; }
+        public List<ScenarioProperty> Properties { get; private set; }
+    }
+
+    public enum ScenarioScoreCompletionState
+    {
+        Unknown = 0,
+        InProgress = 1,
+        Won = 2,
+        Lost = 3,
+        Completed = 4,
+        Failed = 5,
+        Abandoned = 6
+    }
+
+    /// <summary>
+    /// Per-save score state for a custom scenario run.
+    /// This is a snapshot supplied by scenario runtime code, not an implicit vanilla score.
+    /// </summary>
+    public class ScenarioScoreSnapshot
+    {
+        public ScenarioScoreSnapshot()
+        {
+            CompletionState = ScenarioScoreCompletionState.InProgress;
+            Categories = new List<ScenarioScoreCategorySnapshot>();
+            Rules = new List<ScenarioScoreRuleSnapshot>();
+            Metadata = new List<ScenarioProperty>();
+        }
+
+        public string ScenarioId { get; set; }
+        public string ScenarioVersion { get; set; }
+        public string RuntimeBindingId { get; set; }
+        public ScenarioScoreCompletionState CompletionState { get; set; }
+        public string Outcome { get; set; }
+        public string OutcomeConditionId { get; set; }
+        public bool HasTotalScore { get; set; }
+        public int TotalScore { get; set; }
+        public int Day { get; set; }
+        public int Hour { get; set; }
+        public int Minute { get; set; }
+        public List<ScenarioScoreCategorySnapshot> Categories { get; private set; }
+        public List<ScenarioScoreRuleSnapshot> Rules { get; private set; }
+        public List<ScenarioProperty> Metadata { get; private set; }
+    }
+
+    public class ScenarioScoreCategorySnapshot
+    {
+        public string CategoryId { get; set; }
+        public string DisplayName { get; set; }
+        public int Score { get; set; }
+    }
+
+    public class ScenarioScoreRuleSnapshot
+    {
+        public string RuleId { get; set; }
+        public string CategoryId { get; set; }
+        public string DisplayName { get; set; }
+        public string Source { get; set; }
+        public float Value { get; set; }
+        public int Score { get; set; }
     }
 
     /// <summary>
