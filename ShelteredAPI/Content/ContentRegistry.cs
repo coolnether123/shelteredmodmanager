@@ -1,9 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -233,10 +230,7 @@ namespace ShelteredAPI.Content
         {
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
             def.NormalizeLegacyFields();
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(def);
             if (string.IsNullOrEmpty(def.Id))
             {
                 TryAssignLegacyItemId(def);
@@ -270,10 +264,7 @@ namespace ShelteredAPI.Content
             if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
 
             def.Id = string.IsNullOrEmpty(def.Id) ? itemId : def.Id;
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(def);
             if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
             try
@@ -393,17 +384,14 @@ namespace ShelteredAPI.Content
 
         internal static int EnsureCustomTypeId(ItemDefinition def)
         {
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(def);
             if (def.CustomTypeId.HasValue)
             {
                 ReserveExplicitCustomTypeId(def.CustomTypeId.Value, def.Id);
                 return def.CustomTypeId.Value;
             }
 
-            var modId = ResolveModId(def.OwnerAssembly);
+            var modId = ContentOwnerAssemblyResolver.ResolveModId(def.OwnerAssembly);
             var itemKey = !string.IsNullOrEmpty(def.Id) ? def.Id : def.DisplayName ?? Guid.NewGuid().ToString("N");
             var id = ClaimCustomItemId(modId, itemKey);
             def.CustomTypeId = id;
@@ -430,7 +418,7 @@ namespace ShelteredAPI.Content
             if (string.IsNullOrEmpty(legacyKey))
                 return;
 
-            var modId = ResolveModId(def.OwnerAssembly);
+            var modId = ContentOwnerAssemblyResolver.ResolveModId(def.OwnerAssembly);
             def.Id = $"legacy.{SanitizeIdPart(modId)}.{SanitizeIdPart(legacyKey)}";
             MMLog.WriteWarning($"Item registration used legacy fields without an explicit Id. Generated '{def.Id}'.");
         }
@@ -496,18 +484,6 @@ namespace ShelteredAPI.Content
 
                 return (int)(hash & 0x7fffffff);
             }
-        }
-
-        private static string ResolveModId(System.Reflection.Assembly asm)
-        {
-            try
-            {
-                ModAPI.Core.ModEntry entry;
-                if (ModAPI.Core.ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
-                    return entry.Id;
-            }
-            catch { }
-            try { return asm != null ? asm.GetName().Name : "mod"; } catch { return "mod"; }
         }
 
         private static string SanitizeIdPart(string value)
@@ -832,86 +808,6 @@ namespace ShelteredAPI.Content
                 .WithCategory(ItemCategory.Tool)
                 .WithStackSize(1)
                 .WithTradeValue(tradeValue);
-        }
-    }
-
-    internal static class ContentOwnerAssemblyResolver
-    {
-        private static readonly Assembly ShelteredApiAssembly = typeof(ContentOwnerAssemblyResolver).Assembly;
-        private static readonly Assembly ModApiAssembly = typeof(ModAPI.Core.ModRegistry).Assembly;
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void EnsureOwner(ItemDefinition definition)
-        {
-            if (definition == null || definition.OwnerAssembly != null)
-                return;
-
-            definition.OwnerAssembly = ResolveCallingAssembly();
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static Assembly ResolveCallingAssembly()
-        {
-            try
-            {
-                StackTrace stackTrace = new StackTrace(false);
-
-                for (int i = 1; i < stackTrace.FrameCount; i++)
-                {
-                    Assembly assembly = GetFrameAssembly(stackTrace, i);
-                    if (assembly == null || IsFrameworkAssembly(assembly))
-                        continue;
-
-                    ModEntry entry;
-                    if (ModRegistry.TryGetModByAssembly(assembly, out entry) && entry != null)
-                        return assembly;
-                }
-
-                for (int i = 1; i < stackTrace.FrameCount; i++)
-                {
-                    Assembly assembly = GetFrameAssembly(stackTrace, i);
-                    if (assembly != null && !IsFrameworkAssembly(assembly))
-                        return assembly;
-                }
-            }
-            catch
-            {
-            }
-
-            return null;
-        }
-
-        private static Assembly GetFrameAssembly(StackTrace stackTrace, int index)
-        {
-            StackFrame frame = stackTrace.GetFrame(index);
-            if (frame == null)
-                return null;
-
-            MethodBase method = frame.GetMethod();
-            if (method == null || method.DeclaringType == null)
-                return null;
-
-            return method.DeclaringType.Assembly;
-        }
-
-        private static bool IsFrameworkAssembly(Assembly assembly)
-        {
-            if (assembly == null || assembly == ShelteredApiAssembly || assembly == ModApiAssembly)
-                return true;
-
-            string name;
-            try { name = assembly.GetName().Name; }
-            catch { return true; }
-
-            if (string.IsNullOrEmpty(name))
-                return true;
-
-            return string.Equals(name, "mscorlib", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "System", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "System.Core", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "UnityEngine", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "Assembly-CSharp", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "0Harmony", StringComparison.OrdinalIgnoreCase);
         }
     }
 

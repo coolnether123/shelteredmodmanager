@@ -89,21 +89,7 @@ namespace ShelteredAPI.Content
 
         private static string OwnerKey(Assembly asm)
         {
-            if (asm == null)
-                return "unknown";
-
-            try
-            {
-                ModAPI.Core.ModEntry entry;
-                if (ModAPI.Core.ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
-                    return entry.Id;
-
-                return asm.GetName().Name;
-            }
-            catch
-            {
-                return "unknown";
-            }
+            return ContentOwnerAssemblyResolver.ResolveOwnerKey(asm);
         }
     }
 

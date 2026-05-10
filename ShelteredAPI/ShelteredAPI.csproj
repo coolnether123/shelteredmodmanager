@@ -63,6 +63,7 @@
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\Ownership\ContentOwnerAssemblyResolver.cs" />
     <Compile Include="Content\ShelteredContent.cs" />
     <Compile Include="Content\ShelteredContentServices.cs" />
     <Compile Include="Content\ShelteredContentResolutionService.cs" />

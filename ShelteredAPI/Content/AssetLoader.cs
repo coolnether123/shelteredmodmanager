@@ -5,8 +5,6 @@ using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
 
-
-using ShelteredAPI.Persistence;
 namespace ShelteredAPI.Content
 {
     /// <summary>
@@ -200,25 +198,23 @@ namespace ShelteredAPI.Content
         private static string ResolvePath(Assembly asm, string relativePath)
         {
             if (asm == null || string.IsNullOrEmpty(relativePath)) return null;
-            ModAPI.Core.ModEntry entry;
-            if (ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.RootPath))
+            string rootPath;
+            if (ContentOwnerAssemblyResolver.TryResolveModRoot(asm, out rootPath))
             {
-                return ResolveUnderRoot(entry.RootPath, relativePath, false, "AssetLoader.ModPath");
+                return ResolveUnderRoot(rootPath, relativePath, false, "AssetLoader.ModPath");
             }
 
+            string assemblyName = ContentOwnerAssemblyResolver.SafeAssemblyName(asm);
             MMLog.WarnOnce(
-                "AssetLoader.ResolvePath.NoModRoot." + SafeAssemblyName(asm) + "." + relativePath,
-                "Cannot resolve asset path '" + relativePath + "' because assembly '" + SafeAssemblyName(asm) + "' is not registered to a mod root.");
+                "AssetLoader.ResolvePath.NoModRoot." + assemblyName + "." + relativePath,
+                "Cannot resolve asset path '" + relativePath + "' because assembly '" + assemblyName + "' is not registered to a mod root.");
             return null;
         }
 
         private static string CacheKey(Assembly asm, string relativePath)
         {
             if (asm == null || string.IsNullOrEmpty(relativePath)) return null;
-            ModAPI.Core.ModEntry entry;
-            var modId = ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null ? entry.Id ?? entry.RootPath : null;
-            var asmName = SafeAssemblyName(asm);
-            return (modId ?? asmName) + "|" + relativePath;
+            return ContentOwnerAssemblyResolver.ResolveAssetCacheOwnerKey(asm) + "|" + relativePath;
         }
 
         private static string ResolveUnderRoot(string rootPath, string relativePath, bool throwOnInvalid, string warningKeyPrefix)
@@ -261,10 +257,5 @@ namespace ShelteredAPI.Content
             return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string SafeAssemblyName(Assembly asm)
-        {
-            try { return asm != null ? asm.GetName().Name : "unknown"; }
-            catch { return "unknown"; }
-        }
     }
 }
