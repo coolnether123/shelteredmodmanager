@@ -194,24 +194,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     + entry.StorageScenarioId + ": " + ex.Message);
             }
 
+            List<ScenarioBookSaveDetailModel> saveDetails = new List<ScenarioBookSaveDetailModel>();
             for (int i = 0; i < saves.Length; i++)
             {
                 SaveEntry save = saves[i];
                 if (save == null)
                     continue;
 
-                rows.Add(new ScenarioBookRowModel
-                {
-                    Kind = ScenarioBookRowKind.LoadSave,
-                    Scenario = entry,
-                    Save = save,
-                    Title = BuildSaveSlotTitle(save),
-                    Detail = BuildSaveDetail(save),
-                    Badge = ScenarioSaveLibrary.IsVanillaScenarioSaveEntry(save) ? "Vanilla" : "Load",
-                    IsLocked = !entry.CanStart,
-                    CanDelete = !ScenarioSaveLibrary.IsVanillaScenarioSaveEntry(save)
-                });
+                saveDetails.Add(ScenarioBookSaveMetadataReader.Read(entry.StorageScenarioId, save));
             }
+
+            saveDetails.Sort(CompareSaveDetails);
 
             rows.Add(new ScenarioBookRowModel
             {
@@ -222,6 +215,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Badge = "New Game",
                 IsLocked = !entry.CanStart
             });
+
+            for (int i = 0; i < saveDetails.Count; i++)
+            {
+                ScenarioBookSaveDetailModel detail = saveDetails[i];
+                SaveEntry save = detail != null ? detail.Save : null;
+                if (save == null)
+                    continue;
+
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.LoadSave,
+                    Scenario = entry,
+                    Save = save,
+                    SaveDetail = detail,
+                    Title = BuildSaveSlotTitle(detail, i + 1),
+                    Detail = BuildSaveDetail(detail),
+                    Badge = BuildSaveBadge(detail),
+                    IsLocked = !entry.CanStart,
+                    CanDelete = !ScenarioSaveLibrary.IsVanillaScenarioSaveEntry(save)
+                });
+            }
 
             return rows;
         }
@@ -311,21 +325,87 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return entry != null ? entry.SaveCount.ToString() + " save(s)" : string.Empty;
         }
 
-        private static string BuildSaveDetail(SaveEntry save)
+        private static int CompareSaveDetails(ScenarioBookSaveDetailModel left, ScenarioBookSaveDetailModel right)
         {
-            string family = save.saveInfo != null && !string.IsNullOrEmpty(save.saveInfo.familyName)
-                ? save.saveInfo.familyName
-                : "Unknown family";
-            string days = save.saveInfo != null ? save.saveInfo.daysSurvived.ToString() + " day(s)" : "no day info";
-            return family + ", " + days + "\n" + BuildDifficultyLine(save);
+            if (object.ReferenceEquals(left, right)) return 0;
+            if (left == null) return 1;
+            if (right == null) return -1;
+
+            int days = right.DaysSurvived.CompareTo(left.DaysSurvived);
+            if (days != 0) return days;
+
+            DateTime leftTime;
+            DateTime rightTime;
+            bool hasLeftTime = TryParseSortTime(left.SaveTime, out leftTime);
+            bool hasRightTime = TryParseSortTime(right.SaveTime, out rightTime);
+            if (hasLeftTime && hasRightTime)
+            {
+                int time = rightTime.CompareTo(leftTime);
+                if (time != 0) return time;
+            }
+            else if (hasLeftTime)
+                return -1;
+            else if (hasRightTime)
+                return 1;
+
+            int leftSlot = left.Save != null ? left.Save.absoluteSlot : 0;
+            int rightSlot = right.Save != null ? right.Save.absoluteSlot : 0;
+            return leftSlot.CompareTo(rightSlot);
         }
 
-        private static string BuildSaveSlotTitle(SaveEntry save)
+        private static string BuildSaveDetail(ScenarioBookSaveDetailModel detail)
         {
-            if (save == null)
-                return "Slot";
+            SaveEntry save = detail != null ? detail.Save : null;
+            string family = save != null && save.saveInfo != null && !string.IsNullOrEmpty(save.saveInfo.familyName)
+                ? save.saveInfo.familyName
+                : "Unknown family";
+            string days = detail != null ? detail.DaysSurvived.ToString() + " day(s)" : "no day info";
+            string result = BuildOutcomeLabel(detail);
+            string score = "Score: not available yet";
+            return family + ", " + days + " - " + BuildStatusLabel(detail) + "\n" + result + " - " + score;
+        }
 
-            return "Slot " + save.absoluteSlot + ":\n" + FormatDisplayTime(GetSaveTime(save));
+        private static string BuildSaveSlotTitle(ScenarioBookSaveDetailModel detail, int rank)
+        {
+            SaveEntry save = detail != null ? detail.Save : null;
+            if (save == null)
+                return "Save";
+
+            string displayName = !string.IsNullOrEmpty(save.name)
+                ? save.name
+                : (save.saveInfo != null && !string.IsNullOrEmpty(save.saveInfo.familyName) ? save.saveInfo.familyName : "Slot " + save.absoluteSlot);
+            return "#" + rank.ToString() + " Slot " + save.absoluteSlot + ": " + displayName;
+        }
+
+        private static string BuildSaveBadge(ScenarioBookSaveDetailModel detail)
+        {
+            if (detail != null && detail.IsVanilla)
+                return "Vanilla";
+            return BuildStatusLabel(detail);
+        }
+
+        internal static string BuildStatusLabel(ScenarioBookSaveDetailModel detail)
+        {
+            if (detail == null)
+                return "Unknown";
+            if (detail.IsVanilla)
+                return "Vanilla";
+            if (!string.IsNullOrEmpty(detail.MetadataError))
+                return "Metadata error";
+            if (!detail.HasBinding)
+                return "No binding";
+            if (detail.IsConvertedToNormalSave)
+                return "Converted";
+            if (detail.IsActive)
+                return "Active";
+            return "Inactive";
+        }
+
+        internal static string BuildOutcomeLabel(ScenarioBookSaveDetailModel detail)
+        {
+            if (detail == null || string.IsNullOrEmpty(detail.ScenarioOutcome))
+                return "Outcome: not completed";
+            return "Outcome: " + detail.ScenarioOutcome;
         }
 
         internal static string FormatDisplayTime(string rawTime)
@@ -360,29 +440,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return rawTime;
         }
 
-        private static string GetSaveTime(SaveEntry save)
+        private static bool TryParseSortTime(string rawTime, out DateTime value)
         {
-            if (save == null)
-                return string.Empty;
-            if (save.saveInfo != null && !string.IsNullOrEmpty(save.saveInfo.saveTime))
-                return save.saveInfo.saveTime;
-            if (!string.IsNullOrEmpty(save.updatedAt))
-                return save.updatedAt;
-            return save.createdAt;
+            value = DateTime.MinValue;
+            if (string.IsNullOrEmpty(rawTime))
+                return false;
+
+            DateTimeOffset dto;
+            if (DateTimeOffset.TryParse(rawTime, out dto))
+            {
+                value = dto.UtcDateTime;
+                return true;
+            }
+
+            return DateTime.TryParse(rawTime, out value);
         }
 
-        private static string BuildDifficultyLine(SaveEntry save)
+        private static string GetSaveTime(SaveEntry save)
         {
-            int difficulty = save != null && save.saveInfo != null ? save.saveInfo.difficulty : -1;
-            switch (difficulty)
-            {
-                case 0: return "Difficulty: Easy";
-                case 1: return "Difficulty: Normal";
-                case 2: return "Difficulty: Hard";
-                case 3: return "Difficulty: Hardcore";
-                case 4: return "Difficulty: Custom";
-                default: return "Difficulty: Unknown";
-            }
+            return ScenarioBookSaveMetadataReader.GetSaveTime(save);
         }
 
         private static List<ScenarioBookRowModel> FilterRows(List<ScenarioBookRowModel> rows, string searchFilter)
@@ -413,7 +489,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 || ContainsSearch(row.Badge, searchFilter)
                 || ContainsSearch(row.Type.ToString(), searchFilter)
                 || (row.Scenario != null && MatchesScenario(row.Scenario, searchFilter))
-                || (row.Save != null && MatchesSave(row.Save, searchFilter));
+                || (row.Save != null && MatchesSave(row.Save, searchFilter))
+                || (row.SaveDetail != null && MatchesSaveDetail(row.SaveDetail, searchFilter));
         }
 
         private static bool MatchesScenario(ScenarioCatalogEntry scenario, string searchFilter)
@@ -439,6 +516,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 || ContainsSearch(save.scenarioVersion, searchFilter)
                 || ContainsSearch(GetSaveTime(save), searchFilter)
                 || (save.saveInfo != null && ContainsSearch(save.saveInfo.familyName, searchFilter));
+        }
+
+        private static bool MatchesSaveDetail(ScenarioBookSaveDetailModel detail, string searchFilter)
+        {
+            return ContainsSearch(detail.BindingScenarioId, searchFilter)
+                || ContainsSearch(detail.VersionApplied, searchFilter)
+                || ContainsSearch(detail.ScenarioOutcome, searchFilter)
+                || ContainsSearch(detail.ScenarioOutcomeConditionId, searchFilter)
+                || ContainsSearch(detail.MetadataError, searchFilter)
+                || ContainsSearch(BuildStatusLabel(detail), searchFilter)
+                || ContainsSearch(BuildOutcomeLabel(detail), searchFilter);
         }
 
         private static bool ContainsSearch(string value, string searchFilter)

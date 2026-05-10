@@ -18,6 +18,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private const int LeftPageWidth = 470;
         private const int RightPageWidth = 430;
         private const int RowPanelHeight = 68;
+        private const int SaveListRowHeight = 62;
+        private const int SaveListHeaderHeight = 42;
         private const int DraftInputWidth = 430;
         private const float SearchBarY = 222f;
         private const float SearchReservedHeight = 54f;
@@ -81,6 +83,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public void Render(
             ScenarioBookBrowserViewKind view,
             ScenarioCatalogEntry selectedScenario,
+            ScenarioBookPlayStatsModel playStats,
             IList<ScenarioBookRowModel> rows,
             int pageIndex,
             int pageCount,
@@ -97,7 +100,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _draftDescriptionInput = null;
             if (view == ScenarioBookBrowserViewKind.Saves)
             {
-                RenderScenarioDetail(selectedScenario, rows, pageIndex, select, delete);
+                RenderScenarioDetail(selectedScenario, playStats, rows, pageIndex, pageCount, select, delete);
                 _pagedList.Layout(6);
                 if (_navigator != null)
                     _navigator.UpdateState(pageIndex, pageCount);
@@ -127,6 +130,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string key,
             ScenarioBookBrowserViewKind view,
             ScenarioCatalogEntry selectedScenario,
+            ScenarioBookPlayStatsModel playStats,
             IList<ScenarioBookRowModel> rows,
             int pageIndex,
             int pageCount,
@@ -143,6 +147,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 key,
                 view,
                 selectedScenario,
+                playStats,
                 rows,
                 pageIndex,
                 headerTitle,
@@ -290,6 +295,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string key,
             ScenarioBookBrowserViewKind view,
             ScenarioCatalogEntry selectedScenario,
+            ScenarioBookPlayStatsModel playStats,
             IList<ScenarioBookRowModel> rows,
             int pageIndex,
             string headerTitle,
@@ -300,7 +306,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (view == ScenarioBookBrowserViewKind.Saves)
             {
                 GameObject spread = _ui.CreateChild(parent, "PreparedScenarioDetail_" + SanitizeObjectName(key), Vector3.zero);
-                BuildScenarioDetailSpread(spread, selectedScenario, rows, pageIndex, select, delete);
+                BuildScenarioDetailSpread(spread, selectedScenario, playStats, rows, pageIndex, GetSavePageCount(rows), select, delete);
                 return new PreparedPage { Root = spread, Height = 470 };
             }
 
@@ -356,46 +362,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void RenderScenarioDetail(
             ScenarioCatalogEntry scenario,
+            ScenarioBookPlayStatsModel playStats,
             IList<ScenarioBookRowModel> rows,
             int pageIndex,
+            int pageCount,
             Action<ScenarioBookRowModel> select,
             Action<ScenarioBookRowModel> delete)
         {
             GameObject spread = _ui.CreateChild(_pagedList.ContentRoot, "ScenarioDetailSpread", Vector3.zero);
-            BuildScenarioDetailSpread(spread, scenario, rows, pageIndex, select, delete);
+            BuildScenarioDetailSpread(spread, scenario, playStats, rows, pageIndex, pageCount, select, delete);
             _pagedList.AddRow(spread, 470);
         }
 
         private void BuildScenarioDetailSpread(
             GameObject spread,
             ScenarioCatalogEntry scenario,
+            ScenarioBookPlayStatsModel playStats,
             IList<ScenarioBookRowModel> rows,
             int pageIndex,
+            int pageCount,
             Action<ScenarioBookRowModel> select,
             Action<ScenarioBookRowModel> delete)
         {
-            BuildScenarioInfoPage(spread, scenario);
-
-            ScenarioBookRowModel slot = null;
-            int count = rows != null ? rows.Count : 0;
-            if (count > 0)
-                slot = rows[Mathf.Clamp(pageIndex, 0, count - 1)];
-
-            if (slot == null)
-            {
-                slot = new ScenarioBookRowModel
-                {
-                    Kind = ScenarioBookRowKind.Empty,
-                    Title = "No save slots",
-                    Detail = "This scenario does not have any available saves.",
-                    Badge = string.Empty
-                };
-            }
-
-            BuildSaveSlotPage(spread, slot, pageIndex, count, select, delete);
+            BuildScenarioInfoPage(spread, scenario, playStats);
+            BuildSaveListPage(spread, rows, pageIndex, pageCount, select, delete);
         }
 
-        private void BuildScenarioInfoPage(GameObject parent, ScenarioCatalogEntry scenario)
+        private void BuildScenarioInfoPage(GameObject parent, ScenarioCatalogEntry scenario, ScenarioBookPlayStatsModel playStats)
         {
             string title = scenario != null ? Safe(scenario.DisplayName, scenario.ScenarioId) : "Scenario";
             string description = scenario != null ? Safe(scenario.Description, "No description was provided for this scenario.") : string.Empty;
@@ -406,92 +399,257 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             titleLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
 
             UILabel descriptionLabel = _ui.CreateLabel(parent, "ScenarioDescription", description,
-                new Vector3(-520f, 128f, 0f), 17, _chrome.Palette.Ink,
-                LeftPageWidth - 18, 120, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+                new Vector3(-520f, 130f, 0f), 16, _chrome.Palette.Ink,
+                LeftPageWidth - 18, 98, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             descriptionLabel.multiLine = true;
             descriptionLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-            _ui.CreateQuad(parent, "ScenarioInfoRule", _chrome.Textures.White, new Vector3(LeftPageX, 43f, 0f),
+            _ui.CreateQuad(parent, "ScenarioInfoRule", _chrome.Textures.White, new Vector3(LeftPageX, 58f, 0f),
                 LeftPageWidth, 2, new Color(0.35f, 0.25f, 0.16f, 0.35f), _ui.NextDepth());
 
-            BuildStat(parent, "Mode", scenario != null ? scenario.BaseGameMode.ToString() : "Unknown", 8f);
-            BuildStat(parent, "Author", scenario != null ? Safe(scenario.OwnerModId, "local") : "Unknown", -32f);
-            BuildStat(parent, "Version", scenario != null ? Safe(scenario.Version, "unknown") : "unknown", -72f);
-            BuildStat(parent, "Saves", scenario != null ? scenario.SaveCount.ToString() : "0", -112f);
-            BuildStat(parent, "State", scenario != null && scenario.CanStart ? "Ready" : "Locked", -152f);
+            BuildStat(parent, "Scenario ID", scenario != null ? Safe(scenario.ScenarioId, "unknown") : "unknown", 32f);
+            BuildStat(parent, "Author/Source", BuildSourceLabel(scenario), 7f);
+            BuildStat(parent, "Version", scenario != null ? Safe(scenario.Version, "unknown") : "unknown", -18f);
+            BuildStat(parent, "Base Mode", scenario != null ? scenario.BaseGameMode.ToString() : "Unknown", -43f);
+            BuildStat(parent, "Dependencies", BuildDependencyLabel(scenario), -68f);
+            BuildStat(parent, "Saves", BuildSaveStatsLabel(scenario, playStats), -93f);
+            BuildStat(parent, "Best Day", playStats != null && playStats.BestDaySurvived > 0 ? playStats.BestDaySurvived.ToString() : "No saved days", -118f);
+            BuildStat(parent, "Outcomes", BuildOutcomeStatsLabel(playStats), -143f);
+            BuildStat(parent, "Score", playStats != null ? Safe(playStats.ScoreSummary, "Score not available yet") : "Score not available yet", -168f);
         }
 
         private void BuildStat(GameObject parent, string label, string value, float y)
         {
-            _ui.CreateLabel(parent, "Stat_" + label, label,
-                new Vector3(-520f, y, 0f), 16, _chrome.Palette.InkFaded,
-                120, 26, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            UILabel valueLabel = _ui.CreateLabel(parent, "StatValue_" + label, value,
-                new Vector3(-390f, y, 0f), 16, _chrome.Palette.Ink,
-                330, 26, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            string safeLabel = SanitizeObjectName(label);
+            _ui.CreateLabel(parent, "Stat_" + safeLabel, label,
+                new Vector3(-520f, y, 0f), 14, _chrome.Palette.InkFaded,
+                128, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            UILabel valueLabel = _ui.CreateLabel(parent, "StatValue_" + safeLabel, value,
+                new Vector3(-382f, y, 0f), 14, _chrome.Palette.Ink,
+                322, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             valueLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
         }
 
-        private void BuildSaveSlotPage(
+        private static string BuildSourceLabel(ScenarioCatalogEntry scenario)
+        {
+            if (scenario == null)
+                return "Unknown";
+            if (scenario.Source == ScenarioCatalogSource.Vanilla)
+                return "Vanilla";
+            if (scenario.Source == ScenarioCatalogSource.Draft)
+                return "Local draft";
+            return Safe(scenario.OwnerModId, "Local mod");
+        }
+
+        private static string BuildDependencyLabel(ScenarioCatalogEntry scenario)
+        {
+            if (scenario == null)
+                return "Unknown";
+            if (scenario.CanStart)
+                return "Ready";
+            return "Locked: " + scenario.DependencyState.ToString();
+        }
+
+        private static string BuildSaveStatsLabel(ScenarioCatalogEntry scenario, ScenarioBookPlayStatsModel stats)
+        {
+            int count = stats != null ? stats.SaveCount : (scenario != null ? scenario.SaveCount : 0);
+            if (stats == null || !stats.HasBindingData)
+                return count.ToString() + " total";
+
+            return count.ToString() + " total, "
+                + stats.ActiveSaveCount.ToString() + " active, "
+                + stats.ConvertedSaveCount.ToString() + " converted";
+        }
+
+        private static string BuildOutcomeStatsLabel(ScenarioBookPlayStatsModel stats)
+        {
+            if (stats == null || !stats.HasOutcomeData)
+                return "No completed runs yet";
+
+            return stats.CompletedSaveCount.ToString() + " completed, "
+                + stats.WinCount.ToString() + " win, "
+                + stats.LossCount.ToString() + " loss";
+        }
+
+        private void BuildSaveListPage(
             GameObject parent,
-            ScenarioBookRowModel row,
+            IList<ScenarioBookRowModel> rows,
             int pageIndex,
             int pageCount,
             Action<ScenarioBookRowModel> select,
             Action<ScenarioBookRowModel> delete)
         {
-            UILabel heading = _ui.CreateLabel(parent, "SaveSlotHeading", "Save Slots",
+            UILabel heading = _ui.CreateLabel(parent, "SaveListHeading", "Saves",
                 new Vector3(82f, 202f, 0f), 26, _chrome.Palette.Ink,
                 RightPageWidth, 38, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             heading.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-            string pageText = Math.Max(1, pageIndex + 1) + "/" + Math.Max(1, pageCount);
-            _ui.CreateLabel(parent, "SaveSlotCounter", pageText,
+            string pageText = Math.Max(1, pageIndex + 1).ToString() + "/" + Math.Max(1, pageCount).ToString();
+            _ui.CreateLabel(parent, "SaveListCounter", pageText,
                 new Vector3(512f, 204f, 0f), 16, _chrome.Palette.InkFaded,
                 80, 24, NGUIText.Alignment.Right, UIWidget.Pivot.Right, _ui.NextDepth());
 
-            GameObject card = _ui.CreateChild(parent, "SaveSlotCard", new Vector3(RightPageX, 40f, 0f));
-            Color background = BookSelectionRowStyle.Background(row.IsLocked);
-            Color hoverBackground = BookSelectionRowStyle.HoverBackground(row.IsLocked);
+            UILabel scoreLabel = _ui.CreateLabel(parent, "SaveListScoreNote", "Score not available yet",
+                new Vector3(300f, 169f, 0f), 14, _chrome.Palette.InkFaded,
+                RightPageWidth, 22, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            scoreLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-            UITexture bg = _ui.CreateQuad(card, "Background", _chrome.Textures.White, Vector3.zero,
-                RightPageWidth, 245, background, _ui.NextDepth());
+            BuildSaveListHeader(parent);
 
-            UILabel title = _ui.CreateLabel(card, "Title", row.Title,
-                new Vector3(-190f, 80f, 0f), 24, BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
-                RightPageWidth - 42, 72, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            title.multiLine = true;
-            title.overflowMethod = UILabel.Overflow.ShrinkContent;
-
-            UILabel detail = _ui.CreateLabel(card, "Detail", row.Detail,
-                new Vector3(-190f, -8f, 0f), 17, _chrome.Palette.InkFaded,
-                RightPageWidth - 42, 86, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
-            detail.multiLine = true;
-            detail.overflowMethod = UILabel.Overflow.ShrinkContent;
-
-            UILabel badge = _ui.CreateLabel(card, "Badge", row.Badge,
-                new Vector3(0f, -92f, 0f), 18, _chrome.Palette.Ink,
-                180, 30, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
-            badge.overflowMethod = UILabel.Overflow.ShrinkContent;
-
-            if (select != null && row.Kind != ScenarioBookRowKind.Empty)
-                _ui.AddClickCollider(card, RightPageWidth, 245, delegate { select(row); });
-
-            AttachSlotHover(card, bg, title, detail, badge, background, hoverBackground, row);
-
-            if (row.CanDelete && delete != null)
+            int count = rows != null ? rows.Count : 0;
+            int start = Math.Max(0, pageIndex) * ScenarioBookBrowserPanel.SaveRowsPerPage;
+            int end = Math.Min(count, start + ScenarioBookBrowserPanel.SaveRowsPerPage);
+            if (count == 0 || start >= count)
             {
-                _chrome.Buttons.Build(parent, "DeleteSave", "Delete",
-                    new Vector3(RightPageX, -116f, 0f), 140, 40, 16, delegate { delete(row); });
+                ScenarioBookRowModel empty = new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.Empty,
+                    Title = "No matching saves",
+                    Detail = "No saves match the current search.",
+                    Badge = string.Empty
+                };
+                BuildSaveListRow(parent, empty, 0, 108f, select, delete);
+                return;
+            }
+
+            for (int i = start; i < end; i++)
+            {
+                float y = 108f - ((i - start) * SaveListRowHeight);
+                BuildSaveListRow(parent, rows[i], i, y, select, delete);
             }
         }
 
-        private void AttachSlotHover(
+        private void BuildSaveListHeader(GameObject parent)
+        {
+            GameObject root = _ui.CreateChild(parent, "SaveListColumns", new Vector3(RightPageX, 142f, 0f));
+            _ui.CreateQuad(root, "Rule", _chrome.Textures.White, new Vector3(0f, -20f, 0f),
+                RightPageWidth, 2, new Color(0.35f, 0.25f, 0.16f, 0.35f), _ui.NextDepth());
+            _ui.CreateLabel(root, "SaveColumn", "Save",
+                new Vector3(-204f, 0f, 0f), 13, _chrome.Palette.InkFaded,
+                180, SaveListHeaderHeight, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            _ui.CreateLabel(root, "DayColumn", "Day",
+                new Vector3(-28f, 0f, 0f), 13, _chrome.Palette.InkFaded,
+                50, SaveListHeaderHeight, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            _ui.CreateLabel(root, "StateColumn", "State",
+                new Vector3(72f, 0f, 0f), 13, _chrome.Palette.InkFaded,
+                84, SaveListHeaderHeight, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            _ui.CreateLabel(root, "ResultColumn", "Result",
+                new Vector3(164f, 0f, 0f), 13, _chrome.Palette.InkFaded,
+                86, SaveListHeaderHeight, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+        }
+
+        private void BuildSaveListRow(
+            GameObject parent,
+            ScenarioBookRowModel row,
+            int index,
+            float y,
+            Action<ScenarioBookRowModel> select,
+            Action<ScenarioBookRowModel> delete)
+        {
+            if (row == null)
+                return;
+
+            GameObject root = _ui.CreateChild(parent, "SaveListRow_" + index.ToString(), new Vector3(RightPageX, y, 0f));
+            Color background = BookSelectionRowStyle.Background(row.IsLocked);
+            Color hoverBackground = BookSelectionRowStyle.HoverBackground(row.IsLocked);
+            UITexture bg = _ui.CreateQuad(root, "Background", _chrome.Textures.White, Vector3.zero,
+                RightPageWidth, 54, background, _ui.NextDepth());
+
+            UILabel title = _ui.CreateLabel(root, "Title", row.Title,
+                new Vector3(-204f, 10f, 0f), 16, BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
+                184, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            title.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            UILabel detail = _ui.CreateLabel(root, "Detail", BuildSaveListDetail(row),
+                new Vector3(-204f, -13f, 0f), 12, _chrome.Palette.InkFaded,
+                184, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            detail.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            UILabel day = _ui.CreateLabel(root, "Day", BuildDayLabel(row),
+                new Vector3(-28f, 0f, 0f), 16, _chrome.Palette.Ink,
+                50, 28, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            day.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            UILabel state = _ui.CreateLabel(root, "State", BuildStateColumnLabel(row),
+                new Vector3(72f, 0f, 0f), 14, _chrome.Palette.Ink,
+                84, 28, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            state.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            UILabel result = _ui.CreateLabel(root, "Result", BuildResultColumnLabel(row),
+                new Vector3(164f, 0f, 0f), 14, _chrome.Palette.Ink,
+                86, 28, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            result.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            if (select != null && row.Kind != ScenarioBookRowKind.Empty)
+                _ui.AddClickCollider(root, RightPageWidth, 54, delegate { select(row); });
+
+            AttachSaveListHover(root, bg, title, detail, day, state, result, background, hoverBackground, row);
+
+            if (row.CanDelete && delete != null)
+            {
+                _chrome.Buttons.Build(root, "Delete", "Del",
+                    new Vector3(190f, -16f, 0f), 52, 26, 12, delegate { delete(row); });
+            }
+        }
+
+        private static int GetSavePageCount(IList<ScenarioBookRowModel> rows)
+        {
+            int count = Math.Max(1, rows != null ? rows.Count : 0);
+            return Math.Max(1, (count + ScenarioBookBrowserPanel.SaveRowsPerPage - 1) / ScenarioBookBrowserPanel.SaveRowsPerPage);
+        }
+
+        private static string BuildSaveListDetail(ScenarioBookRowModel row)
+        {
+            if (row == null)
+                return string.Empty;
+            if (row.Kind != ScenarioBookRowKind.LoadSave || row.SaveDetail == null)
+                return Safe(row.Detail, string.Empty);
+
+            string formatted = ScenarioBookBrowserDataSource.FormatDisplayTime(row.SaveDetail.SaveTime);
+            if (string.IsNullOrEmpty(formatted))
+                formatted = "No save time";
+            if (row.SaveDetail.HasBinding && row.SaveDetail.DayCreated > 0)
+                return "Created D" + row.SaveDetail.DayCreated.ToString() + " - " + formatted;
+            return formatted;
+        }
+
+        private static string BuildDayLabel(ScenarioBookRowModel row)
+        {
+            if (row == null)
+                return "-";
+            if (row.Kind == ScenarioBookRowKind.StartScenario)
+                return "New";
+            return row.SaveDetail != null ? row.SaveDetail.DaysSurvived.ToString() : "-";
+        }
+
+        private static string BuildStateColumnLabel(ScenarioBookRowModel row)
+        {
+            if (row == null)
+                return string.Empty;
+            if (row.Kind == ScenarioBookRowKind.StartScenario)
+                return "Ready";
+            return ScenarioBookBrowserDataSource.BuildStatusLabel(row.SaveDetail);
+        }
+
+        private static string BuildResultColumnLabel(ScenarioBookRowModel row)
+        {
+            if (row == null)
+                return string.Empty;
+            if (row.Kind == ScenarioBookRowKind.StartScenario)
+                return "Start";
+            if (row.SaveDetail == null || string.IsNullOrEmpty(row.SaveDetail.ScenarioOutcome))
+                return "Not done";
+            return row.SaveDetail.ScenarioOutcome;
+        }
+
+        private void AttachSaveListHover(
             GameObject root,
             UITexture bg,
             UILabel title,
             UILabel detail,
-            UILabel badge,
+            UILabel day,
+            UILabel state,
+            UILabel result,
             Color background,
             Color hoverBackground,
             ScenarioBookRowModel row)
@@ -500,12 +658,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             HoverVisualState hover = root.AddComponent<HoverVisualState>();
-            hover.Widgets = new UIWidget[] { bg, title, detail, badge };
+            hover.Widgets = new UIWidget[] { bg, title, detail, day, state, result };
             hover.RestColors = new Color[]
             {
                 background,
                 BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
                 _chrome.Palette.InkFaded,
+                _chrome.Palette.Ink,
+                _chrome.Palette.Ink,
                 _chrome.Palette.Ink
             };
             hover.HoverColors = new Color[]
@@ -513,11 +673,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 hoverBackground,
                 BookSelectionRowStyle.TitleColor(_chrome.Palette, row.IsLocked),
                 _chrome.Palette.Ink,
+                _chrome.Palette.Ink,
+                _chrome.Palette.Ink,
                 _chrome.Palette.Ink
             };
             hover.ScaleTarget = root.transform;
             hover.RestScale = 1f;
-            hover.HoverScale = 1.015f;
+            hover.HoverScale = 1.01f;
         }
 
         private GameObject BuildDraftEditor(

@@ -39,6 +39,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public ScenarioBookType Type;
         public ScenarioCatalogEntry Scenario;
         public SaveEntry Save;
+        public ScenarioBookSaveDetailModel SaveDetail;
     }
 
     internal sealed class ScenarioBookDraftEditorModel
@@ -46,5 +47,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public ScenarioCatalogEntry Scenario;
         public string DisplayName;
         public string Description;
+    }
+
+    internal sealed class ScenarioBookSaveDetailModel
+    {
+        public SaveEntry Save;
+        public bool IsVanilla;
+        public int DaysSurvived;
+        public string SaveTime;
+        public bool HasBinding;
+        public string BindingScenarioId;
+        public string VersionApplied;
+        public bool IsActive;
+        public bool IsConvertedToNormalSave;
+        public int DayCreated;
+        public int? ScenarioQuestInstanceId;
+        public bool HasRuntimeState;
+        public string ScenarioOutcome;
+        public string ScenarioOutcomeConditionId;
+        public int LastProcessedDay;
+        public string MetadataError;
+    }
+
+    internal sealed class ScenarioBookPlayStatsModel
+    {
+        public int SaveCount;
+        public int ActiveSaveCount;
+        public int ConvertedSaveCount;
+        public int CompletedSaveCount;
+        public int WinCount;
+        public int LossCount;
+        public int BestDaySurvived;
+        public bool HasBindingData;
+        public bool HasOutcomeData;
+        public bool HasScoreData;
+        public string ScoreSummary;
     }
 }
