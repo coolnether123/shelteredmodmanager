@@ -35,10 +35,17 @@ namespace ShelteredAPI.Networking
                 return;
 
             GUILayout.BeginVertical();
-            DrawWizard(model, state);
-            DrawAdvancedDiagnostics(model, state, scrollHeight);
-            DrawFooter(closeAction);
-            GUILayout.EndVertical();
+            try
+            {
+                DrawRenderWarning(state);
+                DrawWizard(model, state);
+                DrawAdvancedDiagnostics(model, state, scrollHeight);
+                DrawFooter(closeAction);
+            }
+            finally
+            {
+                GUILayout.EndVertical();
+            }
         }
 
         private static void DrawWizard(
@@ -46,44 +53,85 @@ namespace ShelteredAPI.Networking
             MultiplayerConnectionPanelState state)
         {
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Guided Multiplayer");
-            DrawStepRow(model.Wizard);
 
             MultiplayerDiagnosticsWidgets.BeginSection();
-            MultiplayerDiagnosticsWidgets.DrawSectionHeader(model.Wizard.Title);
-            MultiplayerDiagnosticsWidgets.DrawHint(model.Wizard.Summary);
+            try
+            {
+                DrawMainState(model);
+                DrawNextAction(model, state);
+                DrawEndpointSessionInfo(model, state);
+                DrawSetupAutoLoadStatus(model);
+                DrawLastError(model);
+            }
+            finally
+            {
+                MultiplayerDiagnosticsWidgets.EndSection();
+            }
+        }
+
+        private static void DrawMainState(MultiplayerConnectionPanelViewModel model)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSubHeader("State");
+            DrawStepRow(model.Wizard);
+            MultiplayerDiagnosticsWidgets.DrawValue("Role", model.RoleText);
+            MultiplayerDiagnosticsWidgets.DrawValue("State", model.StateText);
+            MultiplayerDiagnosticsWidgets.DrawValue("Peers", model.ConnectedPeerCount + "/" + model.TotalPeerCount);
+        }
+
+        private static void DrawNextAction(
+            MultiplayerConnectionPanelViewModel model,
+            MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSubHeader("Next Action");
+            MultiplayerDiagnosticsWidgets.DrawHint(model.Wizard.Title + ": " + model.Wizard.Summary);
             MultiplayerDiagnosticsWidgets.DrawHint(model.Wizard.Detail);
-            DrawLastError(model);
+            DrawPrimaryAction(model, state);
+            DrawSecondaryActions(model, state);
+        }
+
+        private static void DrawEndpointSessionInfo(
+            MultiplayerConnectionPanelViewModel model,
+            MultiplayerConnectionPanelState state)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSubHeader("Endpoint / Session");
 
             switch (model.Wizard.CurrentSection)
             {
                 case MultiplayerConnectionWizardSectionKind.Offline:
                     DrawOfflineSection(model, state);
-                    break;
+                    return;
 
                 case MultiplayerConnectionWizardSectionKind.Hosting:
                     DrawHostingSection(model, state);
-                    break;
+                    return;
 
                 case MultiplayerConnectionWizardSectionKind.Joining:
                     DrawJoiningSection(model, state);
-                    break;
+                    return;
 
                 case MultiplayerConnectionWizardSectionKind.ConnectedClient:
                     DrawConnectedClientSection(model);
-                    break;
+                    return;
 
                 case MultiplayerConnectionWizardSectionKind.Setup:
-                    DrawSetupSection(model);
-                    break;
+                    DrawConnectionSummary(model);
+                    return;
 
                 case MultiplayerConnectionWizardSectionKind.InGame:
-                    DrawInGameSection(model);
-                    break;
+                    DrawConnectionSummary(model);
+                    return;
             }
+        }
 
-            DrawPrimaryAction(model, state);
-            DrawSecondaryActions(model, state);
-            MultiplayerDiagnosticsWidgets.EndSection();
+        private static void DrawSetupAutoLoadStatus(MultiplayerConnectionPanelViewModel model)
+        {
+            MultiplayerDiagnosticsWidgets.DrawSubHeader("Setup / Auto-load");
+            MultiplayerDiagnosticsWidgets.DrawValue("Setup", model.SetupReadiness.StatusText);
+            MultiplayerDiagnosticsWidgets.DrawHint(model.SetupReadiness.DetailText);
+            MultiplayerDiagnosticsWidgets.DrawValue("Save sync", model.SaveSyncStatus);
+            MultiplayerDiagnosticsWidgets.DrawOptionalError("Save sync error", model.SaveSyncLastError);
+            MultiplayerDiagnosticsWidgets.DrawOptionalError("Setup error", model.SetupLastError);
+            DrawAutoLoadStatus(model);
         }
 
         private static void DrawStepRow(MultiplayerConnectionWizardModel wizard)
@@ -92,16 +140,22 @@ namespace ShelteredAPI.Networking
                 return;
 
             GUILayout.BeginHorizontal();
-            for (int i = 0; i < wizard.Sections.Length; i++)
+            try
             {
-                MultiplayerConnectionWizardSectionModel section = wizard.Sections[i];
-                if (section == null || section.IsAdvanced)
-                    continue;
+                for (int i = 0; i < wizard.Sections.Length; i++)
+                {
+                    MultiplayerConnectionWizardSectionModel section = wizard.Sections[i];
+                    if (section == null || section.IsAdvanced)
+                        continue;
 
-                string label = section.IsCurrent ? "[" + section.Title + "]" : section.Title;
-                GUILayout.Label(label, GUILayout.MinWidth(78f));
+                    string label = section.IsCurrent ? "[" + section.Title + "]" : section.Title;
+                    GUILayout.Label(label, GUILayout.MinWidth(78f));
+                }
             }
-            GUILayout.EndHorizontal();
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
         }
 
         private static void DrawOfflineSection(
@@ -109,8 +163,6 @@ namespace ShelteredAPI.Networking
             MultiplayerConnectionPanelState state)
         {
             DrawRoleSelector(state);
-            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
-            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
             if (state.SelectedRole == MultiplayerConnectionWizardRole.Join)
             {
                 DrawJoinInput(model, state);
@@ -126,7 +178,6 @@ namespace ShelteredAPI.Networking
             MultiplayerConnectionPanelViewModel model,
             MultiplayerConnectionPanelState state)
         {
-            MultiplayerDiagnosticsWidgets.DrawSubHeader("Session");
             DrawConnectionSummary(model);
             MultiplayerDiagnosticsWidgets.DrawValue("Listening", model.LocalEndpointText);
             DrawEndpointCandidates(model);
@@ -136,7 +187,6 @@ namespace ShelteredAPI.Networking
             MultiplayerConnectionPanelViewModel model,
             MultiplayerConnectionPanelState state)
         {
-            MultiplayerDiagnosticsWidgets.DrawSubHeader("Endpoint");
             MultiplayerDiagnosticsWidgets.DrawValue("Target", model.EndpointValidation.EndpointText);
             MultiplayerDiagnosticsWidgets.DrawValue("State", model.StateText);
             MultiplayerDiagnosticsWidgets.DrawHint("If this stays here, confirm the host endpoint, firewall, and VPN/LAN route.");
@@ -144,7 +194,6 @@ namespace ShelteredAPI.Networking
 
         private static void DrawConnectedClientSection(MultiplayerConnectionPanelViewModel model)
         {
-            MultiplayerDiagnosticsWidgets.DrawSubHeader("Connection");
             DrawConnectionSummary(model);
             MultiplayerDiagnosticsWidgets.DrawValue("Setup", model.SetupReadiness.StatusText);
             MultiplayerDiagnosticsWidgets.DrawHint(model.SetupReadiness.DetailText);
@@ -175,9 +224,14 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawSubHeader("Path");
             int selected = state.SelectedRole == MultiplayerConnectionWizardRole.Join ? 1 : 0;
             int next = GUILayout.Toolbar(selected, new string[] { "Host", "Join" });
-            state.SelectedRole = next == 1
+            MultiplayerConnectionWizardRole nextRole = next == 1
                 ? MultiplayerConnectionWizardRole.Join
                 : MultiplayerConnectionWizardRole.Host;
+            if (state.SelectedRole != nextRole)
+            {
+                state.SelectedRole = nextRole;
+                state.UiRevision++;
+            }
         }
 
         private static void DrawHostInput(
@@ -186,9 +240,20 @@ namespace ShelteredAPI.Networking
         {
             MultiplayerDiagnosticsWidgets.DrawSubHeader("Host Port");
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Port", GUILayout.Width(CompactLabelWidth));
-            state.PortText = GUILayout.TextField(state.PortText, GUILayout.Width(110f));
-            GUILayout.EndHorizontal();
+            try
+            {
+                GUILayout.Label("Port", GUILayout.Width(CompactLabelWidth));
+                string nextPortText = GUILayout.TextField(state.PortText, GUILayout.Width(110f));
+                if (!string.Equals(state.PortText, nextPortText, StringComparison.Ordinal))
+                {
+                    state.PortText = nextPortText;
+                    state.UiRevision++;
+                }
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
             DrawValidationError(model.PortValidation.ErrorText);
         }
 
@@ -198,9 +263,20 @@ namespace ShelteredAPI.Networking
         {
             MultiplayerDiagnosticsWidgets.DrawSubHeader("Manual Endpoint");
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Endpoint", GUILayout.Width(CompactLabelWidth));
-            state.EndpointText = GUILayout.TextField(state.EndpointText, GUILayout.MinWidth(280f));
-            GUILayout.EndHorizontal();
+            try
+            {
+                GUILayout.Label("Endpoint", GUILayout.Width(CompactLabelWidth));
+                string nextEndpointText = GUILayout.TextField(state.EndpointText, GUILayout.MinWidth(280f));
+                if (!string.Equals(state.EndpointText, nextEndpointText, StringComparison.Ordinal))
+                {
+                    state.EndpointText = nextEndpointText;
+                    state.UiRevision++;
+                }
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
             DrawValidationError(model.EndpointValidation.ErrorText);
             MultiplayerDiagnosticsWidgets.DrawHint("Example: " + MultiplayerConnectionInputValidator.EndpointExample + ".");
         }
@@ -228,11 +304,17 @@ namespace ShelteredAPI.Networking
                 return;
 
             GUILayout.BeginHorizontal();
-            string label = candidate.Recommended ? candidate.Label + " *" : candidate.Label;
-            GUILayout.Label(label, GUILayout.Width(CompactLabelWidth));
-            GUILayout.TextField(candidate.EndpointText, GUILayout.Width(170f));
-            GUILayout.Label(candidate.Description, GUILayout.MinWidth(260f));
-            GUILayout.EndHorizontal();
+            try
+            {
+                string label = candidate.Recommended ? candidate.Label + " *" : candidate.Label;
+                GUILayout.Label(label, GUILayout.Width(CompactLabelWidth));
+                GUILayout.TextField(candidate.EndpointText, GUILayout.Width(170f));
+                GUILayout.Label(candidate.Description, GUILayout.MinWidth(260f));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
         }
 
         private static void DrawConnectionSummary(MultiplayerConnectionPanelViewModel model)
@@ -258,11 +340,20 @@ namespace ShelteredAPI.Networking
             MultiplayerConnectionPanelState state)
         {
             GUILayout.Space(10f);
+            bool clicked = false;
             GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            if (DrawWizardButton(model.Wizard.PrimaryAction, PrimaryButtonWidth))
-                MultiplayerConnectionWizardActionInvoker.Invoke(model.Wizard.PrimaryAction, model, state);
-            GUILayout.EndHorizontal();
+            try
+            {
+                GUILayout.FlexibleSpace();
+                clicked = DrawWizardButton(model.Wizard.PrimaryAction, PrimaryButtonWidth);
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
+
+            if (clicked)
+                QueueAction(state, model.Wizard.PrimaryAction);
 
             if (model.Wizard.PrimaryAction != null
                 && !model.Wizard.PrimaryAction.Enabled
@@ -280,15 +371,25 @@ namespace ShelteredAPI.Networking
                 return;
 
             GUILayout.Space(6f);
+            MultiplayerConnectionWizardAction clickedAction = null;
             GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            for (int i = 0; i < model.Wizard.SecondaryActions.Length; i++)
+            try
             {
-                MultiplayerConnectionWizardAction action = model.Wizard.SecondaryActions[i];
-                if (DrawWizardButton(action, SecondaryButtonWidth))
-                    MultiplayerConnectionWizardActionInvoker.Invoke(action, model, state);
+                GUILayout.FlexibleSpace();
+                for (int i = 0; i < model.Wizard.SecondaryActions.Length; i++)
+                {
+                    MultiplayerConnectionWizardAction action = model.Wizard.SecondaryActions[i];
+                    if (DrawWizardButton(action, SecondaryButtonWidth))
+                        clickedAction = action;
+                }
             }
-            GUILayout.EndHorizontal();
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
+
+            if (clickedAction != null)
+                QueueAction(state, clickedAction);
 
             for (int i = 0; i < model.Wizard.SecondaryActions.Length; i++)
             {
@@ -324,17 +425,37 @@ namespace ShelteredAPI.Networking
             string line = result ?? string.Empty;
             string endpoint = MultiplayerDiagnosticsFormatter.ExtractEndpoint(line);
             bool canUse = MultiplayerDiagnosticsFormatter.HasUsableDiscoveryEndpoint(endpoint);
+            bool canJoin = canUse && model.Service != null;
+            string reason = canUse ? string.Empty : "No usable endpoint";
+            bool useClicked = false;
+            bool joinClicked = false;
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label(line, GUILayout.MinWidth(300f));
-            bool previousEnabled = GUI.enabled;
-            GUI.enabled = canUse;
-            if (GUILayout.Button("Use", GUILayout.Width(52f)))
+            try
+            {
+                GUILayout.Label(line, GUILayout.MinWidth(300f));
+                useClicked = DrawFixedEnabledButton("Use", canUse, reason, 52f);
+                joinClicked = DrawFixedEnabledButton("Join", canJoin, canUse ? "Service is unavailable." : reason, 56f);
+                GUILayout.Label(reason, GUILayout.MinWidth(128f));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
+
+            if (useClicked)
+            {
                 state.EndpointText = endpoint;
-            if (GUILayout.Button("Join", GUILayout.Width(56f)) && model.Service != null)
-                model.Service.Join(endpoint);
-            GUI.enabled = previousEnabled;
-            GUILayout.EndHorizontal();
+                state.UiRevision++;
+            }
+            if (joinClicked)
+            {
+                state.EndpointText = endpoint;
+                state.UiRevision++;
+                QueueAction(
+                    state,
+                    MultiplayerConnectionWizardAction.Available(MultiplayerConnectionWizardActionKind.Join, "Join"));
+            }
         }
 
         private void DrawAdvancedDiagnostics(
@@ -343,12 +464,24 @@ namespace ShelteredAPI.Networking
             float scrollHeight)
         {
             GUILayout.Space(8f);
+            bool toggleAdvanced = false;
             GUILayout.BeginHorizontal();
-            MultiplayerDiagnosticsWidgets.DrawSectionHeader("Advanced / Diagnostics");
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button(state.ShowAdvancedDiagnostics ? "Hide" : "Show", GUILayout.Width(70f)))
+            try
+            {
+                MultiplayerDiagnosticsWidgets.DrawSectionHeader("Advanced / Diagnostics");
+                GUILayout.FlexibleSpace();
+                toggleAdvanced = GUILayout.Button(state.ShowAdvancedDiagnostics ? "Hide" : "Show", GUILayout.Width(70f));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
+
+            if (toggleAdvanced)
+            {
                 state.ShowAdvancedDiagnostics = !state.ShowAdvancedDiagnostics;
-            GUILayout.EndHorizontal();
+                state.UiRevision++;
+            }
 
             if (!state.ShowAdvancedDiagnostics)
             {
@@ -361,11 +494,21 @@ namespace ShelteredAPI.Networking
             int selectedTab = GUILayout.Toolbar(state.ActiveTabIndex, _tabLabels);
             if (selectedTab < 0 || selectedTab >= _tabs.Length)
                 selectedTab = 0;
-            state.ActiveTabIndex = selectedTab;
+            if (state.ActiveTabIndex != selectedTab)
+            {
+                state.ActiveTabIndex = selectedTab;
+                state.UiRevision++;
+            }
 
             state.AdvancedScroll = GUILayout.BeginScrollView(state.AdvancedScroll, GUILayout.Height(scrollHeight));
-            _tabs[selectedTab].Draw(model, state);
-            GUILayout.EndScrollView();
+            try
+            {
+                _tabs[selectedTab].Draw(model, state);
+            }
+            finally
+            {
+                GUILayout.EndScrollView();
+            }
         }
 
         private static void DrawDiagnosticsActions(
@@ -373,35 +516,65 @@ namespace ShelteredAPI.Networking
             MultiplayerConnectionPanelState state)
         {
             MultiplayerDiagnosticsWidgets.BeginSection();
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Message", GUILayout.Width(CompactLabelWidth));
-            state.MessageText = GUILayout.TextField(state.MessageText, GUILayout.MinWidth(180f));
+            MultiplayerConnectionWizardAction clickedAction = null;
             MultiplayerConnectionWizardAction action =
                 MultiplayerConnectionWizardAction.FromActionState(
                     MultiplayerConnectionWizardActionKind.SendTestMessage,
                     model.SendTestMessageAction);
-            if (DrawWizardButton(action, 112f))
-                MultiplayerConnectionWizardActionInvoker.Invoke(action, model, state);
-            GUILayout.EndHorizontal();
+            GUILayout.BeginHorizontal();
+            try
+            {
+                GUILayout.Label("Message", GUILayout.Width(CompactLabelWidth));
+                string nextMessageText = GUILayout.TextField(state.MessageText, GUILayout.MinWidth(180f));
+                if (!string.Equals(state.MessageText, nextMessageText, StringComparison.Ordinal))
+                {
+                    state.MessageText = nextMessageText;
+                    state.UiRevision++;
+                }
+                if (DrawWizardButton(action, 112f))
+                    clickedAction = action;
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+                MultiplayerDiagnosticsWidgets.EndSection();
+            }
+
+            if (clickedAction != null)
+                QueueAction(state, clickedAction);
             if (!action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
                 MultiplayerDiagnosticsWidgets.DrawHint("Send Ping disabled: " + action.DisabledReason);
-            MultiplayerDiagnosticsWidgets.EndSection();
         }
 
         private static void DrawFooter(Action closeAction)
         {
             GUILayout.Space(4f);
+            bool clicked = false;
             GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Close", GUILayout.Width(90f)) && closeAction != null)
+            try
+            {
+                GUILayout.FlexibleSpace();
+                clicked = GUILayout.Button("Close", GUILayout.Width(90f));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
+
+            if (clicked && closeAction != null)
                 closeAction();
-            GUILayout.EndHorizontal();
         }
 
         private static void DrawLastError(MultiplayerConnectionPanelViewModel model)
         {
-            if (!string.IsNullOrEmpty(model.LastError))
-                MultiplayerDiagnosticsWidgets.DrawWarning("Last error: " + model.LastError);
+            MultiplayerDiagnosticsWidgets.DrawSubHeader("Last Error");
+            MultiplayerDiagnosticsWidgets.DrawHint(string.IsNullOrEmpty(model.LastError) ? "None" : model.LastError);
+        }
+
+        private static void DrawRenderWarning(MultiplayerConnectionPanelState state)
+        {
+            if (state != null && !string.IsNullOrEmpty(state.LastRenderErrorText))
+                MultiplayerDiagnosticsWidgets.DrawWarning("Previous render failed: " + state.LastRenderErrorText);
         }
 
         private static string[] BuildTabLabels(IMultiplayerDiagnosticsTab[] tabs)
@@ -421,13 +594,38 @@ namespace ShelteredAPI.Networking
             if (action == null)
                 return false;
 
+            return DrawFixedEnabledButton(action.Label, action.Enabled, action.DisabledReason, width);
+        }
+
+        private static void QueueAction(
+            MultiplayerConnectionPanelState state,
+            MultiplayerConnectionWizardAction action)
+        {
+            if (state == null || action == null || !action.Enabled)
+                return;
+
+            state.PendingActionKind = action.Kind;
+        }
+
+        private static bool DrawFixedEnabledButton(
+            string label,
+            bool enabled,
+            string disabledReason,
+            float width)
+        {
             bool previousEnabled = GUI.enabled;
-            GUI.enabled = action.Enabled;
-            bool clicked = GUILayout.Button(
-                new GUIContent(action.Label, action.Enabled ? string.Empty : action.DisabledReason),
-                GUILayout.Width(width));
-            GUI.enabled = previousEnabled;
-            return clicked && action.Enabled;
+            GUI.enabled = enabled;
+            try
+            {
+                bool clicked = GUILayout.Button(
+                    new GUIContent(label ?? string.Empty, enabled ? string.Empty : disabledReason ?? string.Empty),
+                    GUILayout.Width(width));
+                return clicked && enabled;
+            }
+            finally
+            {
+                GUI.enabled = previousEnabled;
+            }
         }
 
         private static void DrawValidationError(string text)

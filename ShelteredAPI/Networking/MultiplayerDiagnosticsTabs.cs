@@ -41,11 +41,17 @@ namespace ShelteredAPI.Networking
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Counters");
             GUILayout.BeginHorizontal();
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Peers", model.ConnectedPeerCount + "/" + model.TotalPeerCount);
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Events", model.EventCount.ToString());
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Sent", model.TotalPacketsSent + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesSent));
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Received", model.TotalPacketsReceived + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
-            GUILayout.EndHorizontal();
+            try
+            {
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Peers", model.ConnectedPeerCount + "/" + model.TotalPeerCount);
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Events", model.EventCount.ToString());
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Sent", model.TotalPacketsSent + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesSent));
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Received", model.TotalPacketsReceived + " / " + MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
 
             if (!model.CanSendTestMessage)
                 MultiplayerDiagnosticsWidgets.DrawHint("Test messages unlock after a client connects or a host has at least one peer.");
@@ -117,19 +123,31 @@ namespace ShelteredAPI.Networking
         {
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Traffic Totals");
             GUILayout.BeginHorizontal();
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Packets out", model.TotalPacketsSent.ToString());
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Packets in", model.TotalPacketsReceived.ToString());
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Bytes out", MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesSent));
-            MultiplayerDiagnosticsWidgets.DrawMiniMetric("Bytes in", MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
-            GUILayout.EndHorizontal();
+            try
+            {
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Packets out", model.TotalPacketsSent.ToString());
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Packets in", model.TotalPacketsReceived.ToString());
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Bytes out", MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesSent));
+                MultiplayerDiagnosticsWidgets.DrawMiniMetric("Bytes in", MultiplayerDiagnosticsFormatter.FormatBytes(model.TotalBytesReceived));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Event Filters");
             GUILayout.BeginHorizontal();
-            state.ShowSentEvents = GUILayout.Toggle(state.ShowSentEvents, "Sent", GUILayout.Width(70f));
-            state.ShowReceivedEvents = GUILayout.Toggle(state.ShowReceivedEvents, "Received", GUILayout.Width(95f));
-            state.ShowPeerEvents = GUILayout.Toggle(state.ShowPeerEvents, "Peers", GUILayout.Width(75f));
-            state.ShowSessionEvents = GUILayout.Toggle(state.ShowSessionEvents, "Session", GUILayout.Width(90f));
-            GUILayout.EndHorizontal();
+            try
+            {
+                state.ShowSentEvents = GUILayout.Toggle(state.ShowSentEvents, "Sent", GUILayout.Width(70f));
+                state.ShowReceivedEvents = GUILayout.Toggle(state.ShowReceivedEvents, "Received", GUILayout.Width(95f));
+                state.ShowPeerEvents = GUILayout.Toggle(state.ShowPeerEvents, "Peers", GUILayout.Width(75f));
+                state.ShowSessionEvents = GUILayout.Toggle(state.ShowSessionEvents, "Session", GUILayout.Width(90f));
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Recent Events");
             if (model.Snapshot == null || model.Snapshot.RecentEvents.Length == 0)
@@ -248,7 +266,13 @@ namespace ShelteredAPI.Networking
 
         public void Draw(MultiplayerConnectionPanelViewModel model, MultiplayerConnectionPanelState state)
         {
-            ShelteredMultiplayerMapAnchorReport report = ShelteredMultiplayerMapAnchorDiagnostics.BuildReport();
+            ShelteredMultiplayerMapAnchorReport report = model != null ? model.MapAnchorReport : null;
+            if (report == null)
+            {
+                MultiplayerDiagnosticsWidgets.DrawSectionHeader("Active Bunker Anchor");
+                MultiplayerDiagnosticsWidgets.DrawHint("Map anchor diagnostics are cached while Advanced diagnostics are open.");
+                return;
+            }
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Active Bunker Anchor");
             MultiplayerDiagnosticsWidgets.DrawValue("MP active", report.MultiplayerActive ? "yes" : "no");

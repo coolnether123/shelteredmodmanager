@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Security;
 using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Networking.World;
@@ -251,7 +252,16 @@ namespace ShelteredAPI.Networking
                 reader = _timeScaleReader;
             }
 
-            return reader();
+            try
+            {
+                return reader();
+            }
+            catch (SecurityException ex)
+            {
+                TryWrite(MMLog.LogLevel.Warning,
+                    "Unity timeScale read unavailable outside Unity runtime; assuming realtime. " + ex.Message);
+                return ShelteredMultiplayerTimeSettings.RealtimeTimescale;
+            }
         }
 
         private static void WriteTimeScale(float value)

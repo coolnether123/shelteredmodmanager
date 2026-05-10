@@ -5,6 +5,13 @@ namespace ShelteredAPI.Networking
     internal static class MultiplayerDiagnosticsWidgets
     {
         private const float LabelWidth = 96f;
+        private static GUISkin _cachedSkin;
+        private static int _cachedLabelFontSize;
+        private static GUIStyle _headerStyle;
+        private static GUIStyle _subHeaderStyle;
+        private static GUIStyle _mutedStyle;
+        private static GUIStyle _warningStyle;
+        private static GUIStyle _wrappedStyle;
 
         public static void BeginSection()
         {
@@ -39,17 +46,29 @@ namespace ShelteredAPI.Networking
         public static void DrawMiniMetric(string label, string value)
         {
             GUILayout.BeginVertical(GUILayout.MinWidth(90f));
-            GUILayout.Label(label ?? string.Empty, BuildMutedStyle());
-            GUILayout.Label(value ?? string.Empty, BuildWrappedStyle());
-            GUILayout.EndVertical();
+            try
+            {
+                GUILayout.Label(label ?? string.Empty, BuildMutedStyle());
+                GUILayout.Label(value ?? string.Empty, BuildWrappedStyle());
+            }
+            finally
+            {
+                GUILayout.EndVertical();
+            }
         }
 
         public static void DrawValue(string label, string value)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label((label ?? string.Empty) + ":", GUILayout.Width(LabelWidth));
-            GUILayout.Label(value ?? string.Empty, BuildWrappedStyle());
-            GUILayout.EndHorizontal();
+            try
+            {
+                GUILayout.Label((label ?? string.Empty) + ":", GUILayout.Width(LabelWidth));
+                GUILayout.Label(value ?? string.Empty, BuildWrappedStyle());
+            }
+            finally
+            {
+                GUILayout.EndHorizontal();
+            }
         }
 
         public static void DrawOptionalError(string label, string value)
@@ -70,41 +89,67 @@ namespace ShelteredAPI.Networking
 
         private static GUIStyle BuildHeaderStyle()
         {
-            GUIStyle style = new GUIStyle(GUI.skin.label);
-            style.fontStyle = FontStyle.Bold;
-            if (GUI.skin.label.fontSize > 0)
-                style.fontSize = GUI.skin.label.fontSize + 2;
-            style.wordWrap = true;
-            return style;
+            EnsureStyles();
+            return _headerStyle;
         }
 
         private static GUIStyle BuildSubHeaderStyle()
         {
-            GUIStyle style = new GUIStyle(GUI.skin.label);
-            style.fontStyle = FontStyle.Bold;
-            style.wordWrap = true;
-            return style;
+            EnsureStyles();
+            return _subHeaderStyle;
         }
 
         private static GUIStyle BuildMutedStyle()
         {
-            GUIStyle style = new GUIStyle(GUI.skin.label);
-            style.wordWrap = true;
-            return style;
+            EnsureStyles();
+            return _mutedStyle;
         }
 
         private static GUIStyle BuildWarningStyle()
         {
-            GUIStyle style = BuildWrappedStyle();
-            style.fontStyle = FontStyle.Bold;
-            return style;
+            EnsureStyles();
+            return _warningStyle;
         }
 
         private static GUIStyle BuildWrappedStyle()
         {
-            GUIStyle style = new GUIStyle(GUI.skin.label);
-            style.wordWrap = true;
-            return style;
+            EnsureStyles();
+            return _wrappedStyle;
+        }
+
+        private static void EnsureStyles()
+        {
+            GUISkin skin = GUI.skin;
+            int labelFontSize = skin != null && skin.label != null ? skin.label.fontSize : 0;
+            if (_cachedSkin == skin
+                && _cachedLabelFontSize == labelFontSize
+                && _headerStyle != null)
+            {
+                return;
+            }
+
+            GUIStyle label = skin != null && skin.label != null ? skin.label : GUIStyle.none;
+            _cachedSkin = skin;
+            _cachedLabelFontSize = labelFontSize;
+
+            _wrappedStyle = new GUIStyle(label);
+            _wrappedStyle.wordWrap = true;
+
+            _mutedStyle = new GUIStyle(label);
+            _mutedStyle.wordWrap = true;
+
+            _subHeaderStyle = new GUIStyle(label);
+            _subHeaderStyle.fontStyle = FontStyle.Bold;
+            _subHeaderStyle.wordWrap = true;
+
+            _headerStyle = new GUIStyle(label);
+            _headerStyle.fontStyle = FontStyle.Bold;
+            if (labelFontSize > 0)
+                _headerStyle.fontSize = labelFontSize + 2;
+            _headerStyle.wordWrap = true;
+
+            _warningStyle = new GUIStyle(_wrappedStyle);
+            _warningStyle.fontStyle = FontStyle.Bold;
         }
     }
 }

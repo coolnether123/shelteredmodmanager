@@ -235,12 +235,29 @@ namespace ShelteredAPI.Events
 
         internal static void TryRaiseNewGame()
         {
-            if (OnNewGame != null) SafeInvoke(delegate { OnNewGame(); }, "OnNewGame");
+            SafeInvokeEach(OnNewGame, "OnNewGame");
         }
 
         internal static void TryRaiseSessionStarted()
         {
-            if (OnSessionStarted != null) SafeInvoke(delegate { OnSessionStarted(); }, "OnSessionStarted");
+            SafeInvokeEach(OnSessionStarted, "OnSessionStarted");
+        }
+
+        private static void SafeInvokeEach(Action handlers, string name)
+        {
+            if (handlers == null)
+                return;
+
+            Delegate[] invocationList = handlers.GetInvocationList();
+            for (int i = 0; i < invocationList.Length; i++)
+            {
+                Action handler = invocationList[i] as Action;
+                if (handler == null)
+                    continue;
+
+                try { handler(); }
+                catch (Exception ex) { WarnOnce("GameEvents.Invoke." + name + "." + i, name + " handler threw: " + ex.Message); }
+            }
         }
 
         // Harmony patches ---------------------------------------------------

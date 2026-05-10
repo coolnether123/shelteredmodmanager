@@ -1,6 +1,7 @@
 using ModAPI.Networking.Connections;
 using ModAPI.Networking.Diagnostics;
 using ModAPI.Networking.Sessions;
+using ShelteredAPI.Networking.Diagnostics;
 using ShelteredAPI.Networking.Setup;
 using UnityEngine;
 
@@ -19,6 +20,10 @@ namespace ShelteredAPI.Networking
         public bool ShowReceivedEvents = true;
         public bool ShowPeerEvents = true;
         public bool ShowSessionEvents = true;
+        public string LastRenderErrorText = string.Empty;
+        public int UiRevision;
+        public MultiplayerConnectionWizardActionKind PendingActionKind = MultiplayerConnectionWizardActionKind.None;
+        public bool PendingCloseRequested;
     }
 
     internal sealed class MultiplayerConnectionPanelViewModel
@@ -44,6 +49,7 @@ namespace ShelteredAPI.Networking
         public MultiplayerConnectionWizardModel Wizard = new MultiplayerConnectionWizardModel();
         public MultiplayerAutoLoadStatusText AutoLoadDisplayStatus = new MultiplayerAutoLoadStatusText();
         public MultiplayerTimelineStatusText TimelineStatus = new MultiplayerTimelineStatusText();
+        public ShelteredMultiplayerMapAnchorReport MapAnchorReport;
 
         public string RoleText = string.Empty;
         public string StateText = string.Empty;

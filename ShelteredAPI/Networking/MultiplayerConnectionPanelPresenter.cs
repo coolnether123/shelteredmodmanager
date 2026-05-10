@@ -2,11 +2,23 @@ using ModAPI.Networking.Connections;
 using ModAPI.Networking.Diagnostics;
 using ModAPI.Networking.Sessions;
 using ShelteredAPI.Networking.Diagnostics;
+using System;
 
 namespace ShelteredAPI.Networking
 {
     internal sealed class MultiplayerConnectionPanelPresenter
     {
+        private const int DiagnosticsRefreshMilliseconds = 250;
+        private const int EndpointCandidateRefreshMilliseconds = 2000;
+        private readonly MultiplayerConnectionPanelDiagnosticsCache _diagnosticsCache =
+            new MultiplayerConnectionPanelDiagnosticsCache();
+        private int _nextDiagnosticsRefreshTick = int.MinValue;
+        private MultiplayerConnectionTestService _cachedService;
+        private bool _cacheIncludesAdvanced;
+        private MultiplayerEndpointCandidateList _endpointCandidateCache = new MultiplayerEndpointCandidateList();
+        private int _endpointCandidateCachePort = int.MinValue;
+        private int _nextEndpointCandidateRefreshTick = int.MinValue;
+
         public MultiplayerConnectionPanelViewModel Build(
             MultiplayerConnectionTestService service,
             MultiplayerConnectionPanelState state)
@@ -18,15 +30,19 @@ namespace ShelteredAPI.Networking
             if (service == null)
                 return model;
 
-            NetworkDiagnosticsSnapshot snapshot = service.GetDiagnosticsSnapshot();
-            NetworkPeer[] fallbackPeers = service.GetPeers();
+            bool includeAdvancedDiagnostics = state != null && state.ShowAdvancedDiagnostics;
+            RefreshDiagnosticsCache(service, includeAdvancedDiagnostics);
+
+            NetworkDiagnosticsSnapshot snapshot = _diagnosticsCache.Snapshot;
+            NetworkPeer[] fallbackPeers = _diagnosticsCache.Peers;
 
             model.Snapshot = snapshot;
             model.Peers = fallbackPeers ?? new NetworkPeer[0];
-            model.DiscoveryResults = service.GetDiscoveryResults();
-            model.ReceivedMessages = service.GetReceivedMessages();
-            model.LogLines = service.GetLogTail();
-            model.TimelineLines = ShelteredMultiplayerTimeline.Instance.FormatCompact(80);
+            model.DiscoveryResults = _diagnosticsCache.DiscoveryResults;
+            model.ReceivedMessages = includeAdvancedDiagnostics ? _diagnosticsCache.ReceivedMessages : new string[0];
+            model.LogLines = includeAdvancedDiagnostics ? _diagnosticsCache.LogLines : new string[0];
+            model.TimelineLines = includeAdvancedDiagnostics ? _diagnosticsCache.TimelineLines : new string[0];
+            model.MapAnchorReport = includeAdvancedDiagnostics ? _diagnosticsCache.MapAnchorReport : null;
             model.Mode = service.Mode;
             model.SessionState = service.SessionState;
 
@@ -65,6 +81,43 @@ namespace ShelteredAPI.Networking
             model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
             MultiplayerConnectionWizardActionBuilder.Populate(model, state);
             return model;
+        }
+
+        private void RefreshDiagnosticsCache(
+            MultiplayerConnectionTestService service,
+            bool includeAdvancedDiagnostics)
+        {
+            int now = Environment.TickCount;
+            bool serviceChanged = !object.ReferenceEquals(_cachedService, service);
+            bool needsAdvancedUpgrade = includeAdvancedDiagnostics && !_cacheIncludesAdvanced;
+            if (!serviceChanged
+                && !needsAdvancedUpgrade
+                && unchecked(now - _nextDiagnosticsRefreshTick) < 0)
+            {
+                return;
+            }
+
+            _cachedService = service;
+            _cacheIncludesAdvanced = includeAdvancedDiagnostics;
+            _nextDiagnosticsRefreshTick = unchecked(now + DiagnosticsRefreshMilliseconds);
+
+            _diagnosticsCache.Snapshot = service.GetDiagnosticsSnapshot();
+            _diagnosticsCache.Peers = service.GetPeers() ?? new NetworkPeer[0];
+            _diagnosticsCache.DiscoveryResults = service.GetDiscoveryResults() ?? new string[0];
+
+            if (!includeAdvancedDiagnostics)
+            {
+                _diagnosticsCache.ReceivedMessages = new string[0];
+                _diagnosticsCache.LogLines = new string[0];
+                _diagnosticsCache.TimelineLines = new string[0];
+                _diagnosticsCache.MapAnchorReport = null;
+                return;
+            }
+
+            _diagnosticsCache.ReceivedMessages = service.GetReceivedMessages() ?? new string[0];
+            _diagnosticsCache.LogLines = service.GetLogTail() ?? new string[0];
+            _diagnosticsCache.TimelineLines = ShelteredMultiplayerTimeline.Instance.FormatCompact(80) ?? new string[0];
+            _diagnosticsCache.MapAnchorReport = ShelteredMultiplayerMapAnchorDiagnostics.BuildReport();
         }
 
         private static void PopulateInputState(
@@ -180,9 +233,12 @@ namespace ShelteredAPI.Networking
                 ? MultiplayerConnectionActionState.Available(service.HasActiveSession ? "Restart Host" : "Host")
                 : MultiplayerConnectionActionState.Unavailable("Host", model.PortValidation.ErrorText);
 
-            model.JoinAction = model.EndpointValidation.IsValid
-                ? MultiplayerConnectionActionState.Available(service.HasActiveSession ? "Reconnect" : "Join")
-                : MultiplayerConnectionActionState.Unavailable("Join", model.EndpointValidation.ErrorText);
+            if (service.IsJoining)
+                model.JoinAction = MultiplayerConnectionActionState.Unavailable("Resolving...", "Endpoint resolution is already running.");
+            else
+                model.JoinAction = model.EndpointValidation.IsValid
+                    ? MultiplayerConnectionActionState.Available(service.HasActiveSession ? "Reconnect" : "Join")
+                    : MultiplayerConnectionActionState.Unavailable("Join", model.EndpointValidation.ErrorText);
 
             model.StopAction = service.HasActiveSession
                 ? MultiplayerConnectionActionState.Available("Stop")
@@ -208,7 +264,7 @@ namespace ShelteredAPI.Networking
                 : MultiplayerConnectionActionState.Unavailable("Everyone Loaded", "Setup is not ready to release.");
         }
 
-        private static void PopulateEndpointCandidates(MultiplayerConnectionPanelViewModel model)
+        private void PopulateEndpointCandidates(MultiplayerConnectionPanelViewModel model)
         {
             if (model == null || model.PortValidation == null || !model.PortValidation.IsValid)
             {
@@ -219,8 +275,18 @@ namespace ShelteredAPI.Networking
                 return;
             }
 
-            MultiplayerEndpointCandidateList candidates =
-                MultiplayerEndpointCandidateBuilder.Build(model.PortValidation.Port);
+            int now = Environment.TickCount;
+            bool portChanged = model.PortValidation.Port != _endpointCandidateCachePort;
+            bool due = unchecked(now - _nextEndpointCandidateRefreshTick) >= 0;
+            if (portChanged || due || _endpointCandidateCache == null)
+            {
+                _endpointCandidateCache =
+                    MultiplayerEndpointCandidateBuilder.Build(model.PortValidation.Port);
+                _endpointCandidateCachePort = model.PortValidation.Port;
+                _nextEndpointCandidateRefreshTick = unchecked(now + EndpointCandidateRefreshMilliseconds);
+            }
+
+            MultiplayerEndpointCandidateList candidates = _endpointCandidateCache;
             model.EndpointCandidates = candidates.Candidates;
             model.EndpointCandidateStatus = candidates.StatusText;
         }
@@ -250,6 +316,17 @@ namespace ShelteredAPI.Networking
                 model.DiscoveryFallbackText =
                     "Discovery failed. Manual endpoint entry still works when you know the host address and port.";
             }
+        }
+
+        private sealed class MultiplayerConnectionPanelDiagnosticsCache
+        {
+            public NetworkDiagnosticsSnapshot Snapshot;
+            public NetworkPeer[] Peers = new NetworkPeer[0];
+            public string[] DiscoveryResults = new string[0];
+            public string[] ReceivedMessages = new string[0];
+            public string[] LogLines = new string[0];
+            public string[] TimelineLines = new string[0];
+            public ShelteredMultiplayerMapAnchorReport MapAnchorReport;
         }
     }
 }

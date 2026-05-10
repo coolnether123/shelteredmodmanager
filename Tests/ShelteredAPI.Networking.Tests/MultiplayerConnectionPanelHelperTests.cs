@@ -18,6 +18,9 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("ConnectionPanel_Wizard_OfflineJoinUsesManualEndpointPrimary", WizardOfflineJoinUsesManualEndpointPrimary));
             tests.Add(new TestCase("ConnectionPanel_Wizard_HostingPrimaryBeginsSetup", WizardHostingPrimaryBeginsSetup));
             tests.Add(new TestCase("ConnectionPanel_Wizard_SetupReleaseExplainsDisabledReason", WizardSetupReleaseExplainsDisabledReason));
+            tests.Add(new TestCase("ConnectionPanel_Wizard_ClientSetupExplainsDisabledReason", WizardClientSetupExplainsDisabledReason));
+            tests.Add(new TestCase("ConnectionPanel_Wizard_DiscoverySecondaryPreservesDisabledReason", WizardDiscoverySecondaryPreservesDisabledReason));
+            tests.Add(new TestCase("ConnectionPanel_Wizard_ActionStatePreservesDisabledReason", WizardActionStatePreservesDisabledReason));
             tests.Add(new TestCase("ConnectionPanel_EndpointCandidates_ClassifyCommonAdapters", EndpointCandidatesClassifyCommonAdapters));
             tests.Add(new TestCase("ConnectionPanel_TimelineStatus_ReportsEmptyAvailableAccessor", TimelineStatusReportsEmptyAvailableAccessor));
         }
@@ -184,6 +187,72 @@ namespace ShelteredAPI.Networking.Tests
             TestAssert.True(
                 model.Wizard.PrimaryAction.DisabledReason.IndexOf("host save", System.StringComparison.OrdinalIgnoreCase) >= 0,
                 "Disabled release should explain that the host save is still loading.");
+        }
+
+        private static void WizardClientSetupExplainsDisabledReason()
+        {
+            MultiplayerConnectionPanelViewModel model = new MultiplayerConnectionPanelViewModel();
+            model.HasActiveSession = true;
+            model.Mode = NetworkSessionMode.Client;
+            model.SessionState = NetworkSessionState.Connected;
+            model.SetupReadiness = MultiplayerSetupReadinessTextBuilder.Build(
+                "all players loaded; waiting for host release",
+                string.Empty,
+                NetworkSessionMode.Client,
+                true,
+                false,
+                1);
+
+            MultiplayerConnectionPanelState state = new MultiplayerConnectionPanelState();
+            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
+
+            TestAssert.Equal(
+                MultiplayerConnectionWizardSectionKind.Setup,
+                model.Wizard.CurrentSection,
+                "Connected clients in setup should remain in the setup section.");
+            TestAssert.False(model.Wizard.PrimaryAction.Enabled, "Client setup primary action should be disabled.");
+            TestAssert.True(
+                model.Wizard.PrimaryAction.DisabledReason.IndexOf("host", System.StringComparison.OrdinalIgnoreCase) >= 0,
+                "Client setup disabled reason should explain that the host controls release.");
+        }
+
+        private static void WizardDiscoverySecondaryPreservesDisabledReason()
+        {
+            MultiplayerConnectionPanelState state = new MultiplayerConnectionPanelState();
+            state.SelectedRole = MultiplayerConnectionWizardRole.Join;
+
+            MultiplayerConnectionPanelViewModel model = new MultiplayerConnectionPanelViewModel();
+            model.HasActiveSession = false;
+            model.JoinAction = MultiplayerConnectionActionState.Available("Join");
+            model.DiscoveryAction = MultiplayerConnectionActionState.Unavailable("Searching LAN...", "Discovery is already running.");
+            model.Wizard = MultiplayerConnectionWizardTextBuilder.Build(model, state);
+            MultiplayerConnectionWizardActionBuilder.Populate(model, state);
+
+            TestAssert.Equal(1, model.Wizard.SecondaryActions.Length, "Join flow should keep a stable discovery secondary action.");
+            TestAssert.Equal(
+                MultiplayerConnectionWizardActionKind.DiscoverLan,
+                model.Wizard.SecondaryActions[0].Kind,
+                "Join flow secondary action should be LAN discovery.");
+            TestAssert.False(model.Wizard.SecondaryActions[0].Enabled, "Discovery action should preserve disabled state.");
+            TestAssert.Equal(
+                "Discovery is already running.",
+                model.Wizard.SecondaryActions[0].DisabledReason,
+                "Discovery action should preserve the presenter disabled reason.");
+        }
+
+        private static void WizardActionStatePreservesDisabledReason()
+        {
+            MultiplayerConnectionActionState actionState =
+                MultiplayerConnectionActionState.Unavailable("Join", "Endpoint is invalid.");
+
+            MultiplayerConnectionWizardAction action =
+                MultiplayerConnectionWizardAction.FromActionState(MultiplayerConnectionWizardActionKind.Join, actionState);
+
+            TestAssert.Equal(MultiplayerConnectionWizardActionKind.Join, action.Kind, "Action kind should be preserved.");
+            TestAssert.Equal("Join", action.Label, "Action label should be preserved.");
+            TestAssert.False(action.Enabled, "Unavailable action state should stay disabled.");
+            TestAssert.Equal("Endpoint is invalid.", action.DisabledReason, "Disabled reason should be preserved.");
         }
 
         private static void EndpointCandidatesClassifyCommonAdapters()

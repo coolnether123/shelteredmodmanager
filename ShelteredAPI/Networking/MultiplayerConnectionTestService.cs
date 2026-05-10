@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
-using System.Threading;
 using ModAPI.Core;
 using ModAPI.Networking;
 using ModAPI.Networking.Addressing;
@@ -45,6 +44,8 @@ namespace ShelteredAPI.Networking
         private string _lastLocalEndpointKey = string.Empty;
         private string _cachedLanEndpoint = string.Empty;
         private int _cachedLanPort = -1;
+        private int _joinRequestId;
+        private bool _joining;
         private bool _discovering;
         private bool _disposed;
         private static MultiplayerConnectionTestService _active;
@@ -184,6 +185,17 @@ namespace ShelteredAPI.Networking
             }
         }
 
+        public bool IsJoining
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _joining;
+                }
+            }
+        }
+
         public bool CanSendTestMessage
         {
             get
@@ -266,10 +278,42 @@ namespace ShelteredAPI.Networking
             string endpointText = validation.EndpointText;
             AddDebug("Client", "Join requested for endpoint '" + endpointText + "'.");
             StopSessionOnly("Replacing existing session.");
+            int requestId = BeginJoinRequest();
             AppendTimeline(
                 ShelteredMultiplayerTimelineCategory.Connection,
                 ShelteredMultiplayerTimelineEventKind.JoinRequested,
                 "endpoint=" + endpointText);
+
+            ModThreads.RunAsync<JoinResolutionResult>(
+                delegate
+                {
+                    return ResolveJoinEndpoint(requestId, endpointText);
+                },
+                delegate(JoinResolutionResult result)
+                {
+                    CompleteJoin(result);
+                },
+                delegate(Exception ex)
+                {
+                    CompleteJoin(JoinResolutionResult.Failed(requestId, endpointText, ex.Message));
+                });
+        }
+
+        private void CompleteJoin(JoinResolutionResult result)
+        {
+            if (result == null || !IsCurrentJoinRequest(result.RequestId))
+                return;
+
+            EndJoinRequest(result.RequestId);
+
+            if (_disposed)
+                return;
+
+            if (!result.Success)
+            {
+                FailJoin(result.EndpointText, result.ErrorMessage, null);
+                return;
+            }
 
             try
             {
@@ -278,21 +322,14 @@ namespace ShelteredAPI.Networking
                 AttachEvents(_session);
                 EnsureSetupService(_session);
                 EnsureEventSyncService(_session);
-                _session.Join(endpointText, CreateOptions("Client"));
+                _session.Join(result.EndPoint, CreateOptions("Client"));
                 RefreshLocalEndpoint();
-                AddInfo("Client", "Connecting to " + endpointText + ". Local endpoint: " + _localEndpointText + ".");
+                AddInfo("Client", "Connecting to " + result.EndpointText + ". Local endpoint: " + _localEndpointText + ".");
                 ClearLastError();
             }
             catch (Exception ex)
             {
-                SetLastError(ex.Message);
-                AddError("Client", "Join failed: " + ex.Message);
-                AppendTimeline(
-                    ShelteredMultiplayerTimelineCategory.Connection,
-                    ShelteredMultiplayerTimelineEventKind.ConnectionFailure,
-                    "join failed: endpoint=" + endpointText + " error=" + ex.Message);
-                LogException("Client", ex, "Join failed.");
-                StopSessionOnly("Join failed.");
+                FailJoin(result.EndpointText, ex.Message, ex);
             }
         }
 
@@ -408,13 +445,10 @@ namespace ShelteredAPI.Networking
 
             AddInfo("Discovery", "LAN discovery started on UDP " + validation.Port + ".");
 
-            Thread thread = new Thread(delegate()
+            ModThreads.RunAsync(delegate
             {
                 RunDiscovery(validation.Port);
             });
-            thread.IsBackground = true;
-            thread.Name = "ShelteredAPI.MultiplayerDiscovery";
-            thread.Start();
         }
 
         public void SendTestMessage(string message)
@@ -551,6 +585,19 @@ namespace ShelteredAPI.Networking
             return config;
         }
 
+        private static JoinResolutionResult ResolveJoinEndpoint(int requestId, string endpointText)
+        {
+            ManualEndpointParseResult parseResult = ManualEndpointParser.Parse(endpointText, DefaultPort);
+            if (!parseResult.Success)
+                return JoinResolutionResult.Failed(requestId, endpointText, parseResult.Message);
+
+            EndpointResolutionResult resolution = parseResult.Endpoint.Resolve();
+            if (!resolution.Success)
+                return JoinResolutionResult.Failed(requestId, endpointText, resolution.Message);
+
+            return JoinResolutionResult.Succeeded(requestId, endpointText, resolution.EndPoint);
+        }
+
         private static NetworkSessionOptions CreateOptions(string role)
         {
             NetworkSessionOptions options = NetworkSessionOptions.CreateDefault();
@@ -637,6 +684,7 @@ namespace ShelteredAPI.Networking
 
         private void StopSessionOnly(string reason)
         {
+            CancelPendingJoin();
             NetworkSession session = _session;
             _session = null;
             if (_saveSync != null)
@@ -677,6 +725,56 @@ namespace ShelteredAPI.Networking
                 AddError("Service", "Stop failed: " + ex.Message);
                 LogException("Service", ex, "Stop failed.");
             }
+        }
+
+        private int BeginJoinRequest()
+        {
+            lock (_sync)
+            {
+                _joinRequestId++;
+                _joining = true;
+                return _joinRequestId;
+            }
+        }
+
+        private bool IsCurrentJoinRequest(int requestId)
+        {
+            lock (_sync)
+            {
+                return _joining && requestId == _joinRequestId;
+            }
+        }
+
+        private void EndJoinRequest(int requestId)
+        {
+            lock (_sync)
+            {
+                if (requestId == _joinRequestId)
+                    _joining = false;
+            }
+        }
+
+        private void CancelPendingJoin()
+        {
+            lock (_sync)
+            {
+                _joinRequestId++;
+                _joining = false;
+            }
+        }
+
+        private void FailJoin(string endpointText, string message, Exception exception)
+        {
+            string error = string.IsNullOrEmpty(message) ? "Unknown join failure." : message;
+            SetLastError(error);
+            AddError("Client", "Join failed: " + error);
+            AppendTimeline(
+                ShelteredMultiplayerTimelineCategory.Connection,
+                ShelteredMultiplayerTimelineEventKind.ConnectionFailure,
+                "join failed: endpoint=" + endpointText + " error=" + error);
+            if (exception != null)
+                LogException("Client", exception, "Join failed.");
+            StopSessionOnly("Join failed.");
         }
 
         private void RunDiscovery(int port)
@@ -1059,6 +1157,39 @@ namespace ShelteredAPI.Networking
         private static int PeerIdOrNone(NetworkPeer peer)
         {
             return peer != null ? peer.PeerId : ShelteredMultiplayerTimeline.NoNetworkPeer;
+        }
+
+        private sealed class JoinResolutionResult
+        {
+            private JoinResolutionResult(
+                int requestId,
+                string endpointText,
+                IPEndPoint endPoint,
+                bool success,
+                string errorMessage)
+            {
+                RequestId = requestId;
+                EndpointText = endpointText ?? string.Empty;
+                EndPoint = endPoint;
+                Success = success;
+                ErrorMessage = errorMessage ?? string.Empty;
+            }
+
+            public int RequestId;
+            public string EndpointText;
+            public IPEndPoint EndPoint;
+            public bool Success;
+            public string ErrorMessage;
+
+            public static JoinResolutionResult Succeeded(int requestId, string endpointText, IPEndPoint endPoint)
+            {
+                return new JoinResolutionResult(requestId, endpointText, endPoint, true, string.Empty);
+            }
+
+            public static JoinResolutionResult Failed(int requestId, string endpointText, string errorMessage)
+            {
+                return new JoinResolutionResult(requestId, endpointText, null, false, errorMessage);
+            }
         }
 
         private static void AppendTimeline(
