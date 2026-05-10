@@ -26,9 +26,12 @@ namespace ModAPI.Harmony
             Type replacementType, string replacementMethod,
             SearchMode mode = SearchMode.Start)
         {
-            return t
-                .FindCall(originalType, originalMethod, mode)
-                .ReplaceWithCall(replacementType, replacementMethod);
+            return t.ReplaceMethodCall(
+                originalType,
+                originalMethod,
+                replacementType,
+                replacementMethod,
+                mode);
         }
 
         /// <summary>
@@ -40,7 +43,7 @@ namespace ModAPI.Harmony
             Type originalType, string originalMethod,
             Type replacementType, string replacementMethod)
         {
-            return t.ReplaceAllCalls(
+            return t.ReplaceMethodCallAll(
                 originalType, originalMethod,
                 replacementType, replacementMethod);
         }

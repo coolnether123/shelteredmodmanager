@@ -121,6 +121,7 @@
     <Compile Include="Harmony\HarmonyHelper.cs" />
     <Compile Include="Harmony\PatchRegistry.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler.cs" />
+    <Compile Include="Harmony\Transpilers\FluentTranspiler_Intents.cs" />
     <Compile Include="Harmony\Transpilers\FluentTranspiler_Features.cs" />
     <Compile Include="Harmony\Transpilers\TranspilerDebugger.cs" />
     <Compile Include="Harmony\Transpilers\UnityPatterns.cs" />

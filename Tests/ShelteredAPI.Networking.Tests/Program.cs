@@ -8,6 +8,7 @@ namespace ShelteredAPI.Networking.Tests
         {
             List<TestCase> tests = new List<TestCase>();
             RuntimeEnvironmentInfoTests.Register(tests);
+            FluentTranspilerIntentTests.Register(tests);
             ShelteredTradeEventTests.Register(tests);
             ShelteredTradeCargoValidationTests.Register(tests);
             ShelteredTradeCargoReservationTests.Register(tests);

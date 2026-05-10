@@ -54,16 +54,19 @@ namespace ModAPI.Harmony
             sb.AppendLine($"[HarmonyPatch(typeof({config.TargetType.Name}), \"{config.TargetMethod}\")]");
             sb.AppendLine($"public static class {config.TargetMethod}_Patch");
             sb.AppendLine("{");
-            sb.AppendLine("    public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)");
+            sb.AppendLine("    public static IEnumerable<CodeInstruction> Transpiler(");
+            sb.AppendLine("        IEnumerable<CodeInstruction> instructions,");
+            sb.AppendLine("        MethodBase original,");
+            sb.AppendLine("        ILGenerator il)");
             sb.AppendLine("    {");
-            sb.AppendLine("        var t = FluentTranspiler.For(instructions);");
+            sb.AppendLine("        var t = FluentTranspiler.For(instructions, original, il);");
             sb.AppendLine();
             
             switch (config.Action)
             {
                 case PatchAction.InsertBefore:
-                    sb.AppendLine($"        t.MatchCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\")");
-                    sb.AppendLine($"         .InsertBefore(OpCodes.Call, AccessTools.Method(typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"{config.InjectionMethod}\"));");
+                    sb.AppendLine($"        t.InsertBeforeCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\",");
+                    sb.AppendLine($"            typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"{config.InjectionMethod}\");");
                     break;
                     
                 case PatchAction.ModifyOperand:
@@ -72,13 +75,13 @@ namespace ModAPI.Harmony
                     break;
 
                 case PatchAction.InsertAfter:
-                    sb.AppendLine($"        t.MatchCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\")");
-                    sb.AppendLine($"         .InsertAfter(OpCodes.Call, AccessTools.Method(typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"{config.InjectionMethod}\"));");
+                    sb.AppendLine($"        t.InsertAfterCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\",");
+                    sb.AppendLine($"            typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"{config.InjectionMethod}\");");
                     break;
 
                 case PatchAction.Replace:
-                    sb.AppendLine($"        t.MatchCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\")");
-                    sb.AppendLine($"         .ReplaceWith(OpCodes.Call, AccessTools.Method(typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"{config.InjectionMethod}\"));");
+                    sb.AppendLine($"        t.ReplaceMethodCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\",");
+                    sb.AppendLine($"            typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"{config.InjectionMethod}\");");
                     break;
 
                 case PatchAction.Skip:
@@ -88,8 +91,9 @@ namespace ModAPI.Harmony
 
                 case PatchAction.ConditionalWrap:
                     sb.AppendLine("        // Wrap target logic with a condition guard.");
-                    sb.AppendLine($"        t.MatchCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\")");
-                    sb.AppendLine($"         .InsertBefore(CodeInstruction.Call(typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"ShouldRun\"));");
+                    sb.AppendLine("        // Requires an ILGenerator overload when branch labels are needed.");
+                    sb.AppendLine($"        t.InjectGuardBeforeCall(typeof({config.AnchorType?.Name ?? "TargetType"}), \"{config.AnchorMethod}\",");
+                    sb.AppendLine($"            typeof({config.InjectionType?.Name ?? "PatchHelpers"}), \"ShouldRun\");");
                     break;
                     
                 // ... other cases

@@ -51,6 +51,7 @@
     <Compile Include="ArchitectureGuardrailTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="RuntimeEnvironmentInfoTests.cs" />
+    <Compile Include="FluentTranspilerIntentTests.cs" />
     <Compile Include="MultiplayerConnectionPanelHelperTests.cs" />
     <Compile Include="MultiplayerAutoLoadFlowTests.cs" />
     <Compile Include="ShelteredMultiplayerMapAnchorDiagnosticsTests.cs" />
