@@ -99,6 +99,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             detail.ScenarioOutcome = ReadString(group, "ScenarioOutcome");
             detail.ScenarioOutcomeConditionId = ReadString(group, "ScenarioOutcomeConditionId");
             detail.LastProcessedDay = ReadInt(group, "LastProcessedDay", 0);
+
+            detail.HasScoreSnapshot = ReadBool(group, "HasScoreSnapshot", false);
+            XmlNode snapshot = detail.HasScoreSnapshot ? group.SelectSingleNode("ScoreSnapshot") : null;
+            if (snapshot == null)
+                return;
+
+            detail.ScoreCompletionState = ReadString(snapshot, "CompletionState");
+            detail.ScoreHasTotal = ReadBool(snapshot, "HasTotalScore", false);
+            detail.ScoreTotal = ReadInt(snapshot, "TotalScore", 0);
+            detail.ScoreDay = ReadInt(snapshot, "Day", 0);
         }
 
         private static XmlNode SelectRootGroup(XmlDocument document, string name)

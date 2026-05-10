@@ -66,6 +66,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string ScenarioOutcome;
         public string ScenarioOutcomeConditionId;
         public int LastProcessedDay;
+        public bool HasScoreSnapshot;
+        public bool ScoreHasTotal;
+        public int ScoreTotal;
+        public string ScoreCompletionState;
+        public int ScoreDay;
         public string MetadataError;
     }
 

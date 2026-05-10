@@ -27,6 +27,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             {
                 Directory.CreateDirectory(root);
                 VerifyRoundTripAndCatalog(root, result);
+                VerifyScoringValidation(result);
                 VerifyDependencies(result);
                 VerifyAssetEscapes(root, result);
                 VerifySecureXmlParsing(result);
@@ -63,6 +64,15 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(loaded.BunkerEdits.ObjectPlacements.Count == 1, "Object placement was not parsed.", result);
             Assert(loaded.TriggersAndEvents.Triggers.Count == 1, "Trigger definition was not parsed.", result);
             Assert(loaded.WinLossConditions.WinConditions.Count == 1, "Win condition was not parsed.", result);
+            Assert(loaded.Scoring != null, "Scenario scoring definition was not initialized.", result);
+            Assert(loaded.Scoring.Categories.Count == 1, "Score category was not parsed.", result);
+            Assert(loaded.Scoring.Rules.Count == 1, "Score rule was not parsed.", result);
+            Assert(string.Equals(loaded.Scoring.Rules[0].Source, "daysSurvived", StringComparison.OrdinalIgnoreCase), "Score rule source was not parsed.", result);
+
+            ScenarioDefinition missingScoring = serializer.FromXml("<Scenario><Meta><Id>Scenario.NoScoring</Id><DisplayName>No Scoring</DisplayName></Meta></Scenario>");
+            Assert(missingScoring.Scoring != null, "Missing <Scoring> did not create a default scoring definition.", result);
+            Assert(!missingScoring.Scoring.Enabled && missingScoring.Scoring.Rules.Count == 0,
+                "Missing <Scoring> did not preserve default disabled scoring.", result);
 
             ScenarioCatalog catalog = new ScenarioCatalog(new VerificationFolderSource(root), serializer);
             catalog.Refresh();
@@ -112,6 +122,23 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 "Typed required ModDependency was not included in the scenario dependency manifest.", result);
             Assert(!HasDependency(dependencies, "Typed.Optional.Mod", "1.0.0"),
                 "Typed optional ModDependency should not lock scenario startup.", result);
+        }
+
+        private static void VerifyScoringValidation(ScenarioValidationResult result)
+        {
+            ScenarioDefinition enabledWithoutRules = CreateDefinition("Scenario.ScoringNoRules");
+            enabledWithoutRules.Scoring.Rules.Clear();
+            ScenarioValidationResult noRules = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(enabledWithoutRules, null);
+            Assert(ContainsIssue(noRules, "no score rules"), "Enabled scoring without rules did not produce a warning.", result);
+
+            ScenarioDefinition invalid = CreateDefinition("Scenario.ScoringInvalid");
+            invalid.Scoring.Categories.Add(new ScenarioScoreCategoryDefinition { Id = "survival", DisplayName = "Duplicate" });
+            invalid.Scoring.Rules[0].CategoryId = "missing";
+            invalid.Scoring.Rules[0].Source = string.Empty;
+            ScenarioValidationResult validation = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(invalid, null);
+            Assert(ContainsIssue(validation, "duplicated"), "Duplicate score category was not reported.", result);
+            Assert(ContainsIssue(validation, "unknown category"), "Unknown score category reference was not reported.", result);
+            Assert(ContainsIssue(validation, "requires a source"), "Missing score rule source was not reported.", result);
         }
 
         private static void VerifyAssetEscapes(string root, ScenarioValidationResult result)
@@ -327,6 +354,26 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             condition.Type = "surviveDays";
             condition.Properties.Add(new ScenarioProperty { Key = "days", Value = "7" });
             definition.WinLossConditions.WinConditions.Add(condition);
+
+            definition.Scoring.Enabled = true;
+            definition.Scoring.ScoreLabel = "Points";
+            definition.Scoring.LeaderboardKey = "verification";
+            definition.Scoring.Categories.Add(new ScenarioScoreCategoryDefinition
+            {
+                Id = "survival",
+                DisplayName = "Survival",
+                Description = "Days survived and end-state progress.",
+                SortOrder = 10
+            });
+            ScenarioScoreRuleDefinition scoreRule = new ScenarioScoreRuleDefinition();
+            scoreRule.Id = "days-survived";
+            scoreRule.CategoryId = "survival";
+            scoreRule.DisplayName = "Days Survived";
+            scoreRule.Source = "daysSurvived";
+            scoreRule.Operation = "Add";
+            scoreRule.Weight = 1f;
+            scoreRule.Properties.Add(new ScenarioProperty { Key = "metric", Value = "GameTime.Day" });
+            definition.Scoring.Rules.Add(scoreRule);
             return definition;
         }
 

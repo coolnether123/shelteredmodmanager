@@ -21,6 +21,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             if (stats.SaveCount == 0 && scenario != null && scenario.SaveCount > 0)
                 stats.SaveCount = scenario.SaveCount;
+            if (stats.HasScoreData)
+                stats.ScoreSummary = stats.ScoreSummary ?? "Score snapshot present";
 
             return stats;
         }
@@ -37,6 +39,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             AddBindingStats(stats, detail);
             AddOutcomeStats(stats, detail);
+            AddScoreStats(stats, detail);
         }
 
         private static void AddBindingStats(ScenarioBookPlayStatsModel stats, ScenarioBookSaveDetailModel detail)
@@ -62,6 +65,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 stats.WinCount++;
             else if (string.Equals(detail.ScenarioOutcome, "Loss", StringComparison.OrdinalIgnoreCase))
                 stats.LossCount++;
+        }
+
+        private static void AddScoreStats(ScenarioBookPlayStatsModel stats, ScenarioBookSaveDetailModel detail)
+        {
+            if (!detail.HasScoreSnapshot)
+                return;
+
+            stats.HasScoreData = true;
+            if (!detail.ScoreHasTotal)
+            {
+                stats.ScoreSummary = "Score snapshot present";
+                return;
+            }
+
+            stats.ScoreSummary = "Scored save data present";
         }
     }
 }

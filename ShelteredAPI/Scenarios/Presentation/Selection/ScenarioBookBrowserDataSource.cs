@@ -361,8 +361,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 : "Unknown family";
             string days = detail != null ? detail.DaysSurvived.ToString() + " day(s)" : "no day info";
             string result = BuildOutcomeLabel(detail);
-            string score = "Score: not available yet";
+            string score = BuildScoreLabel(detail);
             return family + ", " + days + " - " + BuildStatusLabel(detail) + "\n" + result + " - " + score;
+        }
+
+        private static string BuildScoreLabel(ScenarioBookSaveDetailModel detail)
+        {
+            if (detail == null || !detail.HasScoreSnapshot)
+                return "Score: not available yet";
+            if (!detail.ScoreHasTotal)
+                return "Score: snapshot present";
+            return "Score: " + detail.ScoreTotal.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string BuildSaveSlotTitle(ScenarioBookSaveDetailModel detail, int rank)
@@ -524,6 +533,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 || ContainsSearch(detail.VersionApplied, searchFilter)
                 || ContainsSearch(detail.ScenarioOutcome, searchFilter)
                 || ContainsSearch(detail.ScenarioOutcomeConditionId, searchFilter)
+                || ContainsSearch(detail.ScoreCompletionState, searchFilter)
+                || ContainsSearch(detail.ScoreHasTotal ? detail.ScoreTotal.ToString(CultureInfo.InvariantCulture) : null, searchFilter)
                 || ContainsSearch(detail.MetadataError, searchFilter)
                 || ContainsSearch(BuildStatusLabel(detail), searchFilter)
                 || ContainsSearch(BuildOutcomeLabel(detail), searchFilter);
