@@ -1,1 +1,2 @@
 # Rule	Path	Symbol	AllowedCount	Justification
+source-symbol	ModAPI/Properties/AssemblyInfo.cs	ShelteredAPI	1	Test-only InternalsVisibleTo exposes ModAPI internals to ShelteredAPI.Networking.Tests for runtime compatibility and RNG diagnostics coverage; ModAPI runtime code still has no ShelteredAPI dependency.

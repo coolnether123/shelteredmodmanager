@@ -465,7 +465,16 @@ public static FluentTranspiler For(IEnumerable<CodeInstruction> instructions, Me
 public static IEnumerable<CodeInstruction> Execute(IEnumerable<CodeInstruction> instructions, MethodBase original, ILGenerator generator, Action<FluentTranspiler> transformer);
 
 public FluentTranspiler FindCall(Type type, string methodName, SearchMode mode = SearchMode.Start, Type[] parameterTypes = null, Type[] genericArguments = null, bool includeInherited = true);
+public FluentTranspiler FindUniqueCall(Type targetType, string targetMethod, SearchMode mode = SearchMode.Start, Type[] targetParameterTypes = null, Type[] genericArguments = null, bool includeInherited = true);
 public FluentTranspiler ReplaceWithCall(Type type, string methodName, Type[] parameterTypes = null);
+public FluentTranspiler InsertBeforeCall(Type targetType, string targetMethod, Type hookType, string hookMethod, SearchMode mode = SearchMode.Start, Type[] targetParameterTypes = null, Type[] hookParameterTypes = null, bool includeInherited = true, bool requireSingleMatch = true);
+public FluentTranspiler InsertAfterCall(Type targetType, string targetMethod, Type hookType, string hookMethod, SearchMode mode = SearchMode.Start, Type[] targetParameterTypes = null, Type[] hookParameterTypes = null, bool includeInherited = true, bool requireSingleMatch = true);
+public FluentTranspiler InsertBeforeCallWithLocals(Type targetType, string targetMethod, Type hookType, string hookMethod, int[] localIndexes, SearchMode mode = SearchMode.Start, Type[] targetParameterTypes = null, Type[] hookParameterTypes = null, bool includeInherited = true, bool requireSingleMatch = true);
+public FluentTranspiler InsertAfterCallWithLocals(Type targetType, string targetMethod, Type hookType, string hookMethod, int[] localIndexes, SearchMode mode = SearchMode.Start, Type[] targetParameterTypes = null, Type[] hookParameterTypes = null, bool includeInherited = true, bool requireSingleMatch = true);
+public FluentTranspiler ReplaceMethodCall(Type originalType, string originalMethod, Type replacementType, string replacementMethod, SearchMode mode = SearchMode.Start, Type[] originalParameterTypes = null, Type[] replacementParameterTypes = null, bool includeInherited = true, bool requireSingleMatch = true);
+public FluentTranspiler ReplaceMethodCallAll(Type originalType, string originalMethod, Type replacementType, string replacementMethod, Type[] originalParameterTypes = null, Type[] replacementParameterTypes = null, bool includeInherited = true);
+public FluentTranspiler WrapReturnValue(Type wrapperType, string wrapperMethod, Type[] wrapperParameterTypes = null);
+public FluentTranspiler InjectGuardBeforeCall(Type targetType, string targetMethod, Type guardType, string guardMethod, SearchMode mode = SearchMode.Start, Type[] targetParameterTypes = null, Type[] guardParameterTypes = null, bool includeInherited = true, bool executeWhenTrue = true, bool requireSingleMatch = true);
 public FluentTranspiler ReplaceSequence(int removeCount, params CodeInstruction[] newInstructions);
 public FluentTranspiler ReplaceAll(IEnumerable<CodeInstruction> newInstructions);
 public FluentTranspiler ReplaceAllCalls(Type sourceType, string sourceMethod, Type targetType, string targetMethod, Type[] targetParams = null);

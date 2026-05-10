@@ -41,3 +41,13 @@ If you need temporary flexibility for debugging, you can disable individual flag
 This is intentional fail-safe behavior until full exception-flow analysis is implemented.
 
 In addition, replacement helpers (`ReplaceSequence`, `ReplaceAllPatterns`) now preserve Harmony exception markers and enforce exact index-aligned replacements on EH methods.
+
+## Intent Helper Diagnostics
+
+The high-level call intent helpers fail explicitly instead of falling back silently:
+
+- Missing call anchors report `Pattern not found`.
+- Ambiguous anchors report `Pattern found multiple times` unless `requireSingleMatch=false`.
+- Replacement calls validate static method signatures before replacing IL.
+- Structural helpers reject exception-handler methods because labels and block markers cannot be safely shifted there yet.
+- Guard injection requires `ILGenerator`, owns its branch labels, pops skipped arguments, and pushes a default return value when needed.

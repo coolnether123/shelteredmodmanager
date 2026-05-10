@@ -82,6 +82,7 @@ Common calls:
 - `WithTransaction(...)`
 
 `ReplaceAllPatterns(...)` is especially useful when you need to replace every known IL shape for the same behavior.
+For common call-level edits, prefer the intent helpers below because they validate match cardinality, replacement signatures, labels, branches, and stack shape before mutating IL.
 
 ## 5. Intent API
 
@@ -95,7 +96,60 @@ t.ChangeConstantAll(5, 10);
 t.RemoveCall(typeof(Analytics), "TrackEvent");
 ```
 
+Newer call-intent helpers are more explicit:
+
+```csharp
+t.FindUniqueCall(typeof(SaveManager), "SaveToCurrentSlot", targetParameterTypes: new[] { typeof(bool) });
+t.InsertBeforeCall(typeof(SaveManager), "SaveToCurrentSlot", typeof(Hooks), "BeforeSave");
+t.InsertAfterCall(typeof(InventoryManager), "AddExistingItem", typeof(Hooks), "AfterInventoryAdd");
+t.ReplaceMethodCall(typeof(UnityEngine.Random), "Range", typeof(Hooks), "DeterministicRange",
+    originalParameterTypes: new[] { typeof(int), typeof(int) },
+    replacementParameterTypes: new[] { typeof(int), typeof(int) });
+t.WrapReturnValue(typeof(Hooks), "ClampReturnedValue");
+t.InjectGuardBeforeCall(typeof(InventoryManager), "AddExistingItem", typeof(Hooks), "ShouldAllowInventoryAdd");
+```
+
+Rules enforced by these helpers:
+- `FindUniqueCall`, `InsertBeforeCall`, `InsertAfterCall`, `ReplaceMethodCall`, and `InjectGuardBeforeCall` fail when the anchor is missing or ambiguous unless `requireSingleMatch=false`.
+- `ReplaceMethodCall` validates that a replacement static method consumes the same stack arguments and returns a compatible type. Instance calls can be replaced by a static method whose first parameter is the instance.
+- `WrapReturnValue` wraps every `ret`; non-void wrappers must accept and return a compatible return type.
+- `InjectGuardBeforeCall` requires `ILGenerator`, inserts labels itself, pops skipped call arguments, and pushes a default return value when the guarded call returns a value.
+- `InsertBeforeCallWithLocals` and `InsertAfterCallWithLocals` validate local indexes and hook parameter types before loading locals.
+
 Use them whenever an intent helper expresses the change clearly.
+
+Example: replacing a Sheltered save call without raw IL:
+
+```csharp
+[HarmonyPatch(typeof(MainMenuPanel), "Quit")]
+public static class MainMenuPanel_Quit_SaveRedirect
+{
+    [HarmonyTranspiler]
+    public static IEnumerable<CodeInstruction> Transpiler(
+        IEnumerable<CodeInstruction> instructions,
+        MethodBase original,
+        ILGenerator il)
+    {
+        return FluentTranspiler.For(instructions, original, il)
+            .ReplaceMethodCall(
+                typeof(SaveManager),
+                "SaveToCurrentSlot",
+                typeof(MySaveHooks),
+                "SaveToCurrentSlot",
+                originalParameterTypes: new[] { typeof(bool) },
+                replacementParameterTypes: new[] { typeof(SaveManager), typeof(bool) })
+            .Build();
+    }
+}
+
+public static class MySaveHooks
+{
+    public static bool SaveToCurrentSlot(SaveManager manager, bool alsoSaveGlobalDataOnPs4)
+    {
+        return manager.SaveToCurrentSlot(alsoSaveGlobalDataOnPs4);
+    }
+}
+```
 
 ## 6. Validation
 

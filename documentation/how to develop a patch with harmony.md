@@ -90,8 +90,11 @@ public static class SomeGameType_MethodName_Transpiler
         ILGenerator il)
     {
         return FluentTranspiler.For(instructions, original, il)
-            .FindCall(typeof(SomeGameType), "OldCall", SearchMode.Start)
-            .ReplaceWithCall(typeof(MyHooks), "NewCall")
+            .ReplaceMethodCall(
+                typeof(SomeGameType),
+                "OldCall",
+                typeof(MyHooks),
+                "NewCall")
             .Build();
     }
 }
@@ -104,6 +107,48 @@ public static class SomeGameType_MethodName_Transpiler
 - Keep each patch focused on one behavior change.
 - Use stable anchors such as method calls and known patterns instead of brittle opcode offsets.
 - In development, keep validation on with `Build(strict: true, validateStack: true)`.
+- Prefer intent helpers such as `InsertBeforeCall`, `InsertAfterCall`, `ReplaceMethodCall`, `WrapReturnValue`, and `InjectGuardBeforeCall` for common transpiler edits.
+- Replacement methods must be static. When replacing an instance call, make the instance the first replacement parameter.
+
+Example: observe Sheltered inventory additions without writing raw IL:
+
+```csharp
+[HarmonyPatch(typeof(InventoryManager), "AddExistingItem")]
+public static class InventoryManager_AddExistingItem_Patch
+{
+    [HarmonyTranspiler]
+    public static IEnumerable<CodeInstruction> Transpiler(
+        IEnumerable<CodeInstruction> instructions,
+        MethodBase original,
+        ILGenerator il)
+    {
+        return FluentTranspiler.For(instructions, original, il)
+            .WrapReturnValue(typeof(InventoryHooks), "AfterAddExistingItem")
+            .Build();
+    }
+}
+
+public static class InventoryHooks
+{
+    public static bool AfterAddExistingItem(bool vanillaResult)
+    {
+        return vanillaResult;
+    }
+}
+```
+
+Example: guard a known Sheltered call and keep the stack balanced:
+
+```csharp
+return FluentTranspiler.For(instructions, original, il)
+    .InjectGuardBeforeCall(
+        typeof(InventoryManager),
+        "AddExistingItem",
+        typeof(InventoryHooks),
+        "ShouldAllowInventoryAdd",
+        targetParameterTypes: new[] { typeof(ItemInstance) })
+    .Build();
+```
 
 ## 6. Multi-Mod Compatibility
 
