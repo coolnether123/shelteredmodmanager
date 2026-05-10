@@ -384,7 +384,31 @@ namespace ShelteredAPI.Networking
 
             MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
                 "Applied " + definitions.Count + " multiplayer bunker assignment(s). LocalPlayerId="
-                + localPlayerId + ", Reason=" + (reason ?? string.Empty) + ".");
+                + localPlayerId + ", ActiveOwner=" + ShelteredBunkers.Service.ActivePlayerId
+                + ", Assignments=[" + FormatAssignmentSummary(assignments)
+                + "], Reason=" + (reason ?? string.Empty) + ".");
+        }
+
+        internal static string FormatAssignmentSummary(ShelteredMultiplayerBunkerAssignmentRecord[] assignments)
+        {
+            if (assignments == null || assignments.Length == 0)
+                return string.Empty;
+
+            List<string> parts = new List<string>();
+            for (int i = 0; i < assignments.Length; i++)
+            {
+                ShelteredMultiplayerBunkerAssignmentRecord record = assignments[i];
+                if (record == null)
+                    continue;
+
+                parts.Add("owner=" + record.BunkerOwnerId
+                    + " player=" + record.PlayerId
+                    + " peer=" + record.NetworkPeerId
+                    + " pos=(" + record.Position.x.ToString("F1") + "," + record.Position.y.ToString("F1") + ")"
+                    + " online=" + record.IsOnline);
+            }
+
+            return string.Join("; ", parts.ToArray());
         }
 
         internal static int ResolveBunkerOwnerId(ShelteredMultiplayerBunkerAssignmentRecord[] assignments, int localPlayerId)

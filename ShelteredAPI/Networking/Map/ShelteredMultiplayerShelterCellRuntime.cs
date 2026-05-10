@@ -10,13 +10,13 @@ namespace ShelteredAPI.Networking
         private static readonly FieldInfo MapScratchpadField =
             AccessTools.Field(typeof(ExpeditionMap), "m_mapScratchpad");
 
-        public static void ForceActiveBunkerShelterCell(ExpeditionMap map)
+        public static void ForceMapGenerationBunkerShelterCell(ExpeditionMap map)
         {
             if (map == null)
                 return;
 
             Vector2 worldPosition;
-            if (!ShelteredMultiplayerBunkerAnchorRuntime.TryGetActiveBunkerWorldPosition(out worldPosition))
+            if (!ShelteredMultiplayerBunkerAnchorRuntime.TryGetCanonicalMapBunkerWorldPosition(out worldPosition))
                 return;
             if (worldPosition.sqrMagnitude <= 0.0001f)
                 return;

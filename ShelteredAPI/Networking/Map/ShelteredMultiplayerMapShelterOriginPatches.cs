@@ -35,7 +35,7 @@ namespace ShelteredAPI.Networking
         {
             try
             {
-                ShelteredMultiplayerShelterCellRuntime.ForceActiveBunkerShelterCell(__instance);
+                ShelteredMultiplayerShelterCellRuntime.ForceMapGenerationBunkerShelterCell(__instance);
             }
             catch (Exception ex)
             {

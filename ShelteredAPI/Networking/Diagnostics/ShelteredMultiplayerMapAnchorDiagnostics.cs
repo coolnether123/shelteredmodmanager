@@ -12,9 +12,11 @@ namespace ShelteredAPI.Networking.Diagnostics
         public string SessionId = string.Empty;
         public int LocalPlayerId;
         public int ActiveBunkerOwnerId;
+        public int CanonicalMapBunkerOwnerId = -1;
         public int BunkerCount;
         public Vector2 AssignedWorldPosition;
         public Vector2 ActiveWorldPosition;
+        public Vector2 CanonicalMapWorldPosition;
         public Vector3 ActiveMapPixels;
         public int RequestedGridX;
         public int RequestedGridY;
@@ -87,6 +89,26 @@ namespace ShelteredAPI.Networking.Diagnostics
                 {
                     warnings.Add("Local player id " + context.LocalPlayerId
                         + " does not resolve to any multiplayer bunker owner id.");
+                }
+
+                ShelteredMultiplayerBunkerAssignmentRecord canonicalAssignment;
+                if (TryResolveBunkerOwnerAssignment(context, 0, out canonicalAssignment))
+                {
+                    report.CanonicalMapBunkerOwnerId = canonicalAssignment.BunkerOwnerId;
+                    report.CanonicalMapWorldPosition = canonicalAssignment.Position;
+                }
+                else
+                {
+                    Vector2 canonicalWorldPosition;
+                    if (ShelteredMultiplayerBunkerAnchorRuntime.TryGetCanonicalMapBunkerWorldPosition(out canonicalWorldPosition))
+                    {
+                        report.CanonicalMapBunkerOwnerId = 0;
+                        report.CanonicalMapWorldPosition = canonicalWorldPosition;
+                    }
+                    else if (hasAssignments)
+                    {
+                        warnings.Add("No canonical multiplayer map-generation bunker owner could be resolved.");
+                    }
                 }
 
                 report.HasExplorationManager = ExplorationManager.Instance != null;
@@ -163,8 +185,10 @@ namespace ShelteredAPI.Networking.Diagnostics
                 "Map anchor report for " + (reason ?? string.Empty)
                 + ": session='" + report.SessionId + "', localPlayer=" + report.LocalPlayerId
                 + ", activeOwner=" + report.ActiveBunkerOwnerId
+                + ", canonicalMapOwner=" + report.CanonicalMapBunkerOwnerId
                 + ", assignedWorld=(" + report.AssignedWorldPosition.x.ToString("F1") + ", " + report.AssignedWorldPosition.y.ToString("F1") + ")"
                 + ", chosenWorld=(" + report.ActiveWorldPosition.x.ToString("F1") + ", " + report.ActiveWorldPosition.y.ToString("F1") + ")"
+                + ", canonicalMapWorld=(" + report.CanonicalMapWorldPosition.x.ToString("F1") + ", " + report.CanonicalMapWorldPosition.y.ToString("F1") + ")"
                 + ", mapPixels=(" + report.ActiveMapPixels.x.ToString("F1") + ", " + report.ActiveMapPixels.y.ToString("F1") + ")"
                 + ", requestedGrid=(" + report.RequestedGridX + ", " + report.RequestedGridY + ")"
                 + ", chosenGrid=(" + report.GridX + ", " + report.GridY + ")"
@@ -175,6 +199,7 @@ namespace ShelteredAPI.Networking.Diagnostics
 
             string timelineDetail = "reason=" + (reason ?? string.Empty)
                 + " owner=" + report.ActiveBunkerOwnerId
+                + " canonicalMapOwner=" + report.CanonicalMapBunkerOwnerId
                 + " requestedGrid=" + report.RequestedGridX + "," + report.RequestedGridY
                 + " chosenGrid=" + report.GridX + "," + report.GridY
                 + " valid=" + report.AnchorValid
@@ -210,6 +235,28 @@ namespace ShelteredAPI.Networking.Diagnostics
                 if (record != null && record.PlayerId == context.LocalPlayerId)
                 {
                     activeAssignment = record;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveBunkerOwnerAssignment(
+            ShelteredMultiplayerSessionContext context,
+            int bunkerOwnerId,
+            out ShelteredMultiplayerBunkerAssignmentRecord assignment)
+        {
+            assignment = null;
+            if (context == null || context.BunkerAssignments == null)
+                return false;
+
+            for (int i = 0; i < context.BunkerAssignments.Length; i++)
+            {
+                ShelteredMultiplayerBunkerAssignmentRecord record = context.BunkerAssignments[i];
+                if (record != null && record.BunkerOwnerId == bunkerOwnerId)
+                {
+                    assignment = record;
                     return true;
                 }
             }
@@ -289,6 +336,9 @@ namespace ShelteredAPI.Networking.Diagnostics
             if (report == null || warnings == null || !report.HasExpeditionMap)
                 return;
             if (!report.AnchorValid)
+                return;
+            if (report.CanonicalMapBunkerOwnerId >= 0
+                && report.ActiveBunkerOwnerId != report.CanonicalMapBunkerOwnerId)
                 return;
 
             MapRegion region = ExpeditionMap.Instance.GetRegionOnMap(new ExpeditionMap.GridRef(report.GridX, report.GridY));

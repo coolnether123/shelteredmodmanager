@@ -16,10 +16,14 @@ namespace ShelteredAPI.Networking
         private static Vector2 _lastLoggedShelterWorldPosition = new Vector2(float.MinValue, float.MinValue);
         private static Vector3 _lastLoggedShelterMapPosition = new Vector3(float.MinValue, float.MinValue, float.MinValue);
         private static Vector2 _lastLoggedRedirectedWorldPosition = new Vector2(float.MinValue, float.MinValue);
+        private static Vector2 _lastLoggedMapGenerationWorldPosition = new Vector2(float.MinValue, float.MinValue);
         private static bool _hasValidatedAnchor;
         private static ShelteredMultiplayerMapAnchorValidationResult _validatedAnchor;
         private static bool _anchorOverrideDisabled;
         private static string _lastValidationLogKey = string.Empty;
+        private static int _mapGenerationDepth;
+        private static Vector2 _cachedMapGenerationWorldPosition;
+        private static bool _hasCachedMapGenerationWorldPosition;
 
         public static void CacheActiveBunkerPosition(string reason)
         {
@@ -70,6 +74,38 @@ namespace ShelteredAPI.Networking
             _validatedAnchor = null;
             _anchorOverrideDisabled = false;
             _lastValidationLogKey = string.Empty;
+            _mapGenerationDepth = 0;
+            _hasCachedMapGenerationWorldPosition = false;
+        }
+
+        public static void BeginMapGeneration(string reason)
+        {
+            if (!IsMultiplayerAnchorActive())
+                return;
+
+            _mapGenerationDepth++;
+
+            Vector2 worldPosition;
+            if (!TryGetCanonicalMapBunkerWorldPosition(out worldPosition))
+                return;
+
+            _cachedMapGenerationWorldPosition = worldPosition;
+            _hasCachedMapGenerationWorldPosition = true;
+
+            if (Vector2.Distance(_lastLoggedMapGenerationWorldPosition, worldPosition) > 0.001f)
+            {
+                _lastLoggedMapGenerationWorldPosition = worldPosition;
+                MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                    "Using canonical multiplayer map-generation bunker world position ("
+                    + worldPosition.x.ToString("F1") + ", " + worldPosition.y.ToString("F1")
+                    + "). Reason=" + (reason ?? string.Empty) + ".");
+            }
+        }
+
+        public static void EndMapGeneration(string reason)
+        {
+            if (_mapGenerationDepth > 0)
+                _mapGenerationDepth--;
         }
 
         public static void RedirectShelterOriginWorldPosition(ref Vector2 worldPosition)
@@ -82,6 +118,34 @@ namespace ShelteredAPI.Networking
 
             if (_anchorOverrideDisabled)
                 return;
+
+            if (_mapGenerationDepth > 0)
+            {
+                Vector2 mapGenerationWorldPosition;
+                if (_hasCachedMapGenerationWorldPosition)
+                {
+                    mapGenerationWorldPosition = _cachedMapGenerationWorldPosition;
+                }
+                else if (!TryGetCanonicalMapBunkerWorldPosition(out mapGenerationWorldPosition))
+                {
+                    return;
+                }
+
+                if (mapGenerationWorldPosition.sqrMagnitude <= 0.0001f)
+                    return;
+
+                worldPosition = mapGenerationWorldPosition;
+                if (Vector2.Distance(_lastLoggedRedirectedWorldPosition, mapGenerationWorldPosition) > 0.001f)
+                {
+                    _lastLoggedRedirectedWorldPosition = mapGenerationWorldPosition;
+                    MMLog.WriteWithSource(MMLog.LogLevel.Info, MMLog.LogCategory.Network, LogSource,
+                        "Redirected vanilla shelter origin to canonical multiplayer map-generation bunker world position ("
+                        + mapGenerationWorldPosition.x.ToString("F1") + ", "
+                        + mapGenerationWorldPosition.y.ToString("F1") + ").");
+                }
+
+                return;
+            }
 
             if (_hasValidatedAnchor && _validatedAnchor != null && _validatedAnchor.IsValid)
             {
@@ -165,6 +229,37 @@ namespace ShelteredAPI.Networking
             return worldPosition.sqrMagnitude > 0.0001f;
         }
 
+        internal static bool TryGetCanonicalMapBunkerWorldPosition(out Vector2 worldPosition)
+        {
+            worldPosition = Vector2.zero;
+
+            if (ModRuntime.IsQuitting)
+                return false;
+
+            ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
+            if (context == null || !context.IsMultiplayerActive || context.BunkerAssignments.Length == 0)
+                return false;
+
+            for (int i = 0; i < context.BunkerAssignments.Length; i++)
+            {
+                ShelteredMultiplayerBunkerAssignmentRecord record = context.BunkerAssignments[i];
+                if (record != null && record.BunkerOwnerId == 0)
+                {
+                    worldPosition = record.Position;
+                    return true;
+                }
+            }
+
+            BunkerDefinition primary = ShelteredBunkers.GetBunker(0) ?? ShelteredBunkers.GetPrimaryBunker();
+            if (primary != null)
+            {
+                worldPosition = primary.Position;
+                return true;
+            }
+
+            return TryGetActiveBunkerWorldPosition(out worldPosition);
+        }
+
         internal static bool TryGetValidatedActiveBunkerAnchor(
             out ShelteredMultiplayerMapAnchorValidationResult validation,
             string reason)
@@ -196,7 +291,7 @@ namespace ShelteredAPI.Networking
             return true;
         }
 
-        private static bool IsMultiplayerAnchorActive()
+        internal static bool IsMultiplayerAnchorActive()
         {
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
             return context != null && context.IsMultiplayerActive;

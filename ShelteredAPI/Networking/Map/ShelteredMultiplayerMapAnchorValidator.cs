@@ -1,4 +1,6 @@
 using System;
+using System.Reflection;
+using HarmonyLib;
 using ShelteredAPI.Bunkers;
 using UnityEngine;
 
@@ -300,17 +302,18 @@ namespace ShelteredAPI.Networking
             gridX = 0;
             gridY = 0;
 
-            if (map == null || manager == null || manager.worldWidth <= 0 || manager.worldHeight <= 0)
+            if (map == null || manager == null)
                 return false;
 
-            float scaleX = (float)map.width / (float)manager.worldWidth;
-            float scaleY = (float)map.height / (float)manager.worldHeight;
-            gridX = (int)((worldPosition.x + (float)manager.worldWidth * 0.5f) * scaleX);
-            gridY = (int)((worldPosition.y + (float)manager.worldHeight * 0.5f) * scaleY);
-            if (gridX >= map.width)
-                gridX = map.width - 1;
-            if (gridY >= map.height)
-                gridY = map.height - 1;
+            float worldWidth = (float)manager.worldWidth;
+            float worldHeight = (float)manager.worldHeight;
+            if (worldWidth <= 0f || worldHeight <= 0f || map.width <= 0 || map.height <= 0)
+                return false;
+
+            gridX = (int)((worldPosition.x + worldWidth * 0.5f) * map.width / worldWidth);
+            gridY = (int)((worldPosition.y + worldHeight * 0.5f) * map.height / worldHeight);
+            gridX = Mathf.Min(gridX, map.width - 1);
+            gridY = Mathf.Min(gridY, map.height - 1);
             return true;
         }
 
@@ -347,27 +350,35 @@ namespace ShelteredAPI.Networking
 
         private sealed class ExpeditionMapRegionSource : IShelteredMultiplayerMapRegionSource
         {
+            private static readonly FieldInfo MapRegionsField =
+                AccessTools.Field(typeof(ExpeditionMap), "m_mapRegions");
+
             private readonly ExpeditionMap _map;
+            private readonly MapRegion[,] _regions;
 
             public ExpeditionMapRegionSource(ExpeditionMap map)
             {
                 _map = map;
+                _regions = MapRegionsField != null ? MapRegionsField.GetValue(map) as MapRegion[,] : null;
             }
 
             public int Width
             {
-                get { return _map != null ? _map.width : 0; }
+                get { return _regions != null ? _regions.GetLength(0) : (_map != null ? _map.width : 0); }
             }
 
             public int Height
             {
-                get { return _map != null ? _map.height : 0; }
+                get { return _regions != null ? _regions.GetLength(1) : (_map != null ? _map.height : 0); }
             }
 
             public bool HasRegion(int gridX, int gridY)
             {
                 if (_map == null || gridX < 0 || gridX >= Width || gridY < 0 || gridY >= Height)
                     return false;
+
+                if (_regions != null)
+                    return _regions[gridX, gridY] != null;
 
                 return _map.GetRegionOnMap(new ExpeditionMap.GridRef(gridX, gridY)) != null;
             }
@@ -377,7 +388,9 @@ namespace ShelteredAPI.Networking
                 if (_map == null || gridX < 0 || gridX >= Width || gridY < 0 || gridY >= Height)
                     return false;
 
-                MapRegion region = _map.GetRegionOnMap(new ExpeditionMap.GridRef(gridX, gridY));
+                MapRegion region = _regions != null
+                    ? _regions[gridX, gridY]
+                    : _map.GetRegionOnMap(new ExpeditionMap.GridRef(gridX, gridY));
                 return region != null && region.topography == MapRegion.Topography.Shelter;
             }
         }

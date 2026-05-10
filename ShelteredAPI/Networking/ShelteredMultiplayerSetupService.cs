@@ -94,6 +94,14 @@ namespace ShelteredAPI.Networking
                 _session.StablePeerId,
                 20,
                 "setup-begin-host");
+            coordinator.UpdateWorldStartGate(
+                ShelteredMultiplayerWorldStartGate.Blocked(
+                    "starting multiplayer setup",
+                    0,
+                    new byte[0],
+                    false),
+                "starting multiplayer setup",
+                "setup-begin-host-gate");
             coordinator.UpdateRoster(_session, "setup-begin-host");
 
             _currentSetup = MultiplayerSetupMessage.CreateDefault(coordinator.Context.SessionId, hostAbsoluteSlot);
@@ -657,7 +665,8 @@ namespace ShelteredAPI.Networking
             _currentSetup.LocalPlayerId = context.LocalPlayerId;
             WriteLog(MMLog.LogLevel.Info, "Prepared " + context.BunkerAssignments.Length
                 + " bunker assignment(s) for multiplayer setup. session='" + LoadingText(_currentSetup.SessionId)
-                + "', reason=" + LoadingText(reason) + ".");
+                + "', anchors=[" + ShelteredMultiplayerBunkerAssignments.FormatAssignmentSummary(context.BunkerAssignments) + "]"
+                + ", reason=" + LoadingText(reason) + ".");
         }
 
         private void RememberConnectedPeers()
