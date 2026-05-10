@@ -200,8 +200,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 case ScenarioAuthoringTool.WinLoss:
                     title = "Win/Loss";
+                    ScenarioScoringAuthoringSummary.Summary scoring = ScenarioScoringAuthoringSummary.Build(definition);
                     items.Add(Item.Property("Win Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.WinConditions.Count.ToString() : "0"));
                     items.Add(Item.Property("Loss Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.LossConditions.Count.ToString() : "0"));
+                    items.Add(Item.Property("Scoring", scoring.IsEnabled ? "Enabled" : "Disabled"));
+                    items.Add(Item.Property("Score Label", scoring.ScoreLabel));
+                    items.Add(Item.Property("Score Categories", scoring.CategoryCount.ToString()));
+                    items.Add(Item.Property("Score Rules", scoring.RuleCount.ToString()));
                     items.Add(Item.Text("Win and loss conditions run against the active scenario quest during playtest and runtime."));
                     break;
 
