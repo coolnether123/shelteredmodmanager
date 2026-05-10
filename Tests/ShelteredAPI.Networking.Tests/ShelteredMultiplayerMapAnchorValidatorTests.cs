@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using ModAPI.Networking;
+using ShelteredAPI.Bunkers;
 using ShelteredAPI.Networking.Knowledge;
 using ShelteredAPI.Networking.Map;
 using ShelteredAPI.Networking.World;
@@ -16,6 +17,10 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("MapAnchorValidator_TieBreakIsDeterministic", TieBreakIsDeterministic));
             tests.Add(new TestCase("MapAnchorValidator_NoValidRegionsReturnsSafeFailure", NoValidRegionsReturnsSafeFailure));
             tests.Add(new TestCase("MapAnchorValidator_FogKnowledgeMarkerDoesNotRequireValidRegion", FogKnowledgeMarkerDoesNotRequireValidRegion));
+            tests.Add(new TestCase("BunkerAssignments_CreateForHostIsDeterministic", BunkerAssignmentsCreateForHostIsDeterministic));
+            tests.Add(new TestCase("BunkerAssignments_ClientUsesHostSnapshotAssignment", BunkerAssignmentsClientUsesHostSnapshotAssignment));
+            tests.Add(new TestCase("BunkerAnchorRuntime_CanonicalMapAnchorUsesHostAssignment", CanonicalMapAnchorUsesHostAssignment));
+            tests.Add(new TestCase("BunkerAnchorRuntime_InactiveContextDoesNotExposeAnchors", InactiveContextDoesNotExposeAnchors));
         }
 
         private static void ValidAnchorPassesUnchanged()
@@ -109,6 +114,183 @@ namespace ShelteredAPI.Networking.Tests
 
             ShelteredMapEntities.Clear("anchor-validator-test-end");
             ShelteredMapKnowledgeService.Instance.Clear("anchor-validator-test-end");
+        }
+
+        private static void BunkerAssignmentsCreateForHostIsDeterministic()
+        {
+            ShelteredMultiplayerSessionContext firstContext = CreateHostContext("anchor-determinism-session");
+            ShelteredMultiplayerSessionContext secondContext = CreateHostContext("anchor-determinism-session");
+
+            ShelteredMultiplayerBunkerAssignmentSnapshot first =
+                ShelteredMultiplayerBunkerAssignments.CreateForHost(firstContext);
+            ShelteredMultiplayerBunkerAssignmentSnapshot second =
+                ShelteredMultiplayerBunkerAssignments.CreateForHost(secondContext);
+
+            TestAssert.Equal(first.Records.Count, second.Records.Count, "Same session and roster should produce the same assignment count.");
+            for (int i = 0; i < first.Records.Count; i++)
+                AssertAssignmentEqual(first.Records[i], second.Records[i], "Assignment " + i + " should be deterministic.");
+        }
+
+        private static void BunkerAssignmentsClientUsesHostSnapshotAssignment()
+        {
+            ResetAnchorState("client-snapshot-start");
+
+            try
+            {
+                ShelteredMultiplayerBunkerAssignmentSnapshot hostSnapshot =
+                    ShelteredMultiplayerBunkerAssignments.CreateForHost(CreateHostContext("anchor-client-snapshot-session"));
+                ShelteredMultiplayerBunkerAssignmentRecord clientRecord = FindByPeer(hostSnapshot.Records, 5);
+                TestAssert.True(clientRecord != null, "Host snapshot should include the test client peer.");
+
+                ShelteredMultiplayerSessionCoordinator.Instance.ActivateClient(
+                    hostSnapshot.SessionId,
+                    clientRecord.PlayerId,
+                    clientRecord.NetworkPeerId,
+                    "client-a",
+                    20,
+                    "anchor-client-snapshot");
+                ShelteredMultiplayerSessionCoordinator.Instance.SetBunkerAssignments(
+                    hostSnapshot.Records.ToArray(),
+                    clientRecord.PlayerId,
+                    "anchor-client-snapshot");
+                ShelteredMultiplayerBunkerAssignments.Apply(
+                    hostSnapshot.Records.ToArray(),
+                    clientRecord.PlayerId,
+                    "anchor-client-snapshot");
+
+                Vector2 activeWorldPosition;
+                TestAssert.True(
+                    ShelteredMultiplayerBunkerAnchorRuntime.TryGetActiveBunkerWorldPosition(out activeWorldPosition),
+                    "Client should resolve its active bunker from the host-authored assignment snapshot.");
+                TestAssert.Near(clientRecord.Position.x, activeWorldPosition.x, 0.0001f, "Client active bunker X should match host snapshot.");
+                TestAssert.Near(clientRecord.Position.y, activeWorldPosition.y, 0.0001f, "Client active bunker Y should match host snapshot.");
+            }
+            finally
+            {
+                ResetAnchorState("client-snapshot-end");
+            }
+        }
+
+        private static void CanonicalMapAnchorUsesHostAssignment()
+        {
+            ResetAnchorState("canonical-anchor-start");
+
+            try
+            {
+                ShelteredMultiplayerBunkerAssignmentRecord[] assignments = new ShelteredMultiplayerBunkerAssignmentRecord[]
+                {
+                    new ShelteredMultiplayerBunkerAssignmentRecord(NetworkDefaults.HostPeerId, 1, 0, new Vector2(10f, 20f), "Host", true),
+                    new ShelteredMultiplayerBunkerAssignmentRecord(5, 2, 1, new Vector2(100f, -50f), "Client", true)
+                };
+
+                ShelteredMultiplayerSessionCoordinator.Instance.ActivateClient(
+                    "canonical-anchor-session",
+                    2,
+                    5,
+                    "client",
+                    20,
+                    "canonical-anchor");
+                ShelteredMultiplayerSessionCoordinator.Instance.SetBunkerAssignments(assignments, 2, "canonical-anchor");
+                ShelteredMultiplayerBunkerAssignments.Apply(assignments, 2, "canonical-anchor");
+
+                Vector2 activeWorldPosition;
+                Vector2 canonicalWorldPosition;
+                TestAssert.True(
+                    ShelteredMultiplayerBunkerAnchorRuntime.TryGetActiveBunkerWorldPosition(out activeWorldPosition),
+                    "Active bunker should resolve from the local player assignment.");
+                TestAssert.True(
+                    ShelteredMultiplayerBunkerAnchorRuntime.TryGetCanonicalMapBunkerWorldPosition(out canonicalWorldPosition),
+                    "Canonical map bunker should resolve from the host assignment.");
+                TestAssert.Near(100f, activeWorldPosition.x, 0.0001f, "Client active bunker X should use the local owner.");
+                TestAssert.Near(-50f, activeWorldPosition.y, 0.0001f, "Client active bunker Y should use the local owner.");
+                TestAssert.Near(10f, canonicalWorldPosition.x, 0.0001f, "Canonical map-generation bunker X should use host owner 0.");
+                TestAssert.Near(20f, canonicalWorldPosition.y, 0.0001f, "Canonical map-generation bunker Y should use host owner 0.");
+            }
+            finally
+            {
+                ResetAnchorState("canonical-anchor-end");
+            }
+        }
+
+        private static void InactiveContextDoesNotExposeAnchors()
+        {
+            ResetAnchorState("inactive-anchor");
+
+            Vector3 mapPixels = ShelteredMultiplayerBunkerAnchorRuntime.GetActiveBunkerMapPixels();
+            Vector2 canonicalWorldPosition;
+
+            TestAssert.Near(0f, mapPixels.sqrMagnitude, 0.0001f, "Inactive multiplayer should not expose active bunker map pixels.");
+            TestAssert.False(
+                ShelteredMultiplayerBunkerAnchorRuntime.TryGetCanonicalMapBunkerWorldPosition(out canonicalWorldPosition),
+                "Inactive multiplayer should not expose a canonical map-generation bunker.");
+            TestAssert.False(
+                ShelteredMultiplayerBunkerAnchorRuntime.IsMultiplayerAnchorActive(),
+                "Inactive multiplayer should not activate map-anchor runtime behavior.");
+        }
+
+        private static ShelteredMultiplayerSessionContext CreateHostContext(string sessionId)
+        {
+            return new ShelteredMultiplayerSessionContext(
+                ShelteredMultiplayerSessionMode.Host,
+                sessionId,
+                1,
+                NetworkDefaults.HostPeerId,
+                "host",
+                20,
+                0,
+                0f,
+                ShelteredMultiplayerGameTimeMode.HostAuthoritative,
+                ShelteredMultiplayerSetupPhase.Activated,
+                new ShelteredMultiplayerPeerInfo[]
+                {
+                    new ShelteredMultiplayerPeerInfo(NetworkDefaults.HostPeerId, true, "host", "Host", true),
+                    new ShelteredMultiplayerPeerInfo(5, false, "client-a", "Client A", true),
+                    new ShelteredMultiplayerPeerInfo(6, false, "client-b", "Client B", true)
+                },
+                new ShelteredMultiplayerBunkerAssignmentRecord[0],
+                ShelteredMultiplayerSetupSettings.Empty,
+                "test");
+        }
+
+        private static void AssertAssignmentEqual(
+            ShelteredMultiplayerBunkerAssignmentRecord expected,
+            ShelteredMultiplayerBunkerAssignmentRecord actual,
+            string message)
+        {
+            TestAssert.True(expected != null && actual != null, message + " Records must both exist.");
+            TestAssert.Equal(expected.NetworkPeerId, actual.NetworkPeerId, message + " Peer id mismatch.");
+            TestAssert.Equal(expected.PlayerId, actual.PlayerId, message + " Player id mismatch.");
+            TestAssert.Equal(expected.BunkerOwnerId, actual.BunkerOwnerId, message + " Bunker owner mismatch.");
+            TestAssert.Near(expected.Position.x, actual.Position.x, 0.0001f, message + " Position X mismatch.");
+            TestAssert.Near(expected.Position.y, actual.Position.y, 0.0001f, message + " Position Y mismatch.");
+            TestAssert.Equal(expected.DisplayName, actual.DisplayName, message + " Display name mismatch.");
+            TestAssert.Equal(expected.IsOnline, actual.IsOnline, message + " Online state mismatch.");
+        }
+
+        private static ShelteredMultiplayerBunkerAssignmentRecord FindByPeer(
+            IList<ShelteredMultiplayerBunkerAssignmentRecord> records,
+            byte peerId)
+        {
+            if (records == null)
+                return null;
+
+            for (int i = 0; i < records.Count; i++)
+            {
+                ShelteredMultiplayerBunkerAssignmentRecord record = records[i];
+                if (record != null && record.NetworkPeerId == peerId)
+                    return record;
+            }
+
+            return null;
+        }
+
+        private static void ResetAnchorState(string reason)
+        {
+            ShelteredMultiplayerSessionCoordinator.Instance.Deactivate(reason);
+            ShelteredBunkers.Service.Clear();
+            ShelteredMapEntities.Clear(reason);
+            ShelteredMapKnowledgeService.Instance.Clear(reason);
+            ShelteredMultiplayerBunkerAnchorRuntime.ResetValidatedAnchor(reason);
         }
 
         private sealed class FakeRegionSource : IShelteredMultiplayerMapRegionSource

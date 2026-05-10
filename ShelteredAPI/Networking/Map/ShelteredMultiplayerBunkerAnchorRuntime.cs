@@ -208,7 +208,7 @@ namespace ShelteredAPI.Networking
                 return false;
 
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
-            if (context == null || !context.IsMultiplayerActive || context.BunkerAssignments.Length == 0)
+            if (context == null || !context.IsMultiplayerActive || context.BunkerAssignments == null || context.BunkerAssignments.Length == 0)
                 return false;
 
             int bunkerOwnerId = ShelteredMultiplayerBunkerAssignments.ResolveBunkerOwnerId(
@@ -237,7 +237,7 @@ namespace ShelteredAPI.Networking
                 return false;
 
             ShelteredMultiplayerSessionContext context = ShelteredMultiplayerSessionCoordinator.Instance.Context;
-            if (context == null || !context.IsMultiplayerActive || context.BunkerAssignments.Length == 0)
+            if (context == null || !context.IsMultiplayerActive || context.BunkerAssignments == null || context.BunkerAssignments.Length == 0)
                 return false;
 
             for (int i = 0; i < context.BunkerAssignments.Length; i++)
