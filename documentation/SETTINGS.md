@@ -49,6 +49,8 @@ public class MyMod : ModManagerBase<MySettings>, IModPlugin
 }
 ```
 
+In the in-game settings book, bool fields use explicit `ON` / `OFF` toggle controls instead of arrow cycling. Mods can customize the displayed state text with `TrueLabel` and `FalseLabel`.
+
 ## 2. Settings Pattern B: Manual `ISettingsProvider`
 
 ```csharp

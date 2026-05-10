@@ -90,6 +90,8 @@ Useful UI fields:
 - `ActionLabel`: custom text for method/button settings.
 - `Placeholder`: empty string setting placeholder.
 
+Boolean settings render as explicit two-state controls in the in-game settings book. They do not use arrow cycling; `TrueLabel` and `FalseLabel` replace the default `ON` / `OFF` text when supplied.
+
 Tooltips are shown when hovering labels and interactive controls. Numeric tooltips also include the active range and step behavior.
 
 ### Pattern B: `ISettingsProvider` + `SpineSettingsHelper.Scan` (Manual Control)

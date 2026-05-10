@@ -19,21 +19,27 @@ namespace ShelteredAPI.UI.Internal.Spine
             label.pivot = UIWidget.Pivot.Left;
             SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
 
-            var valueLabel = UIUtil.CreateLabelQuick(container, string.Empty, 16, new Vector3(210, 0, 0));
-            valueLabel.alignment = NGUIText.Alignment.Center;
-            valueLabel.width = 100;
+            UIButton toggleButton = null;
 
-            UIUtil.CreateButton(container, SpineWidgetFactory.ButtonTemplate, "TOGGLE", 100, 40, new Vector3(330, 0, 0), () =>
+            Action refresh = delegate
+            {
+                UpdateBoolButtonLabel(toggleButton, FormatBool(def, SpineWidgetRuntime.GetValue<bool>(def, settingsObject)));
+            };
+
+            toggleButton = UIUtil.CreateButton(container, SpineWidgetFactory.ButtonTemplate, FormatBool(def, SpineWidgetRuntime.GetValue<bool>(def, settingsObject)), 130, 40, new Vector3(330, 0, 0), () =>
             {
                 var value = !SpineWidgetRuntime.GetValue<bool>(def, settingsObject);
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, value))
                 {
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, panel);
-                    UpdateBoolText(valueLabel, value);
+                    refresh();
                 }
             });
 
-            UpdateBoolText(valueLabel, SpineWidgetRuntime.GetValue<bool>(def, settingsObject));
+            if (toggleButton != null)
+                SpineWidgetRuntime.SetTooltip(toggleButton.gameObject, BuildBoolTooltip(def));
+
+            refresh();
             return container;
         }
 
@@ -404,9 +410,32 @@ namespace ShelteredAPI.UI.Internal.Spine
             return snapToInt ? 1f : 0.01f;
         }
 
-        private static void UpdateBoolText(UILabel label, bool value)
+        private static string FormatBool(SettingDefinition def, bool value)
         {
-            label.text = value ? "[C0FFC0]ON[-]" : "[FFC0C0]OFF[-]";
+            if (value)
+                return def != null && !string.IsNullOrEmpty(def.TrueLabel) ? def.TrueLabel : "ON";
+
+            return def != null && !string.IsNullOrEmpty(def.FalseLabel) ? def.FalseLabel : "OFF";
+        }
+
+        private static string BuildBoolTooltip(SettingDefinition def)
+        {
+            string action = "Click to switch " + (def != null && !string.IsNullOrEmpty(def.Label) ? def.Label : "this setting") + " on or off.";
+            string text = def != null ? def.Tooltip : null;
+            return string.IsNullOrEmpty(text) ? action : text + "\n" + action;
+        }
+
+        private static void UpdateBoolButtonLabel(UIButton button, string text)
+        {
+            if (button == null)
+                return;
+
+            var labels = button.GetComponentsInChildren<UILabel>(true);
+            for (int i = 0; i < labels.Length; i++)
+            {
+                if (labels[i] != null)
+                    labels[i].text = text ?? string.Empty;
+            }
         }
     }
 }
