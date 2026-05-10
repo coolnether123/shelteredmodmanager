@@ -13,11 +13,10 @@ namespace Manager.Core.Services
     public sealed class ManagerBooleanOptionsService
     {
         private const string OptionsFileName = "manager_options.json";
-        private const string CustomScenarioEditorOptionId = "ShelteredAPI.PatchCustomScenarioEditor";
         private const string DisableUnityLogSuppressionOptionId = "ModAPI.DisableUnityLogSuppression";
         private readonly string _optionsPath;
         private readonly ManagerBooleanOptionDefinition[] _builtInOptions;
-        private readonly bool _includeShelteredOptions;
+        private readonly HashSet<string> _activeApiOwners;
         private static readonly ManagerBooleanOptionDefinition[] SharedBuiltInOptions = new ManagerBooleanOptionDefinition[]
         {
             new ManagerBooleanOptionDefinition
@@ -31,30 +30,17 @@ namespace Manager.Core.Services
                 sortOrder = 20
             }
         };
-        private static readonly ManagerBooleanOptionDefinition[] ShelteredBuiltInOptions = new ManagerBooleanOptionDefinition[]
-        {
-            new ManagerBooleanOptionDefinition
-            {
-                id = CustomScenarioEditorOptionId,
-                owner = "ShelteredAPI",
-                label = "Custom Scenario Editor",
-                description = "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.",
-                defaultValue = true,
-                requiresRestart = true,
-                sortOrder = 100
-            }
-        };
 
         public ManagerBooleanOptionsService()
-            : this(true)
+            : this(null, null)
         {
         }
 
-        public ManagerBooleanOptionsService(bool includeShelteredOptions)
+        public ManagerBooleanOptionsService(IEnumerable<ManagerBooleanOptionDefinition> profileBuiltInOptions, IEnumerable<string> activeApiOwners)
         {
-            _includeShelteredOptions = includeShelteredOptions;
             _optionsPath = Path.Combine(ResolveBinDirectory(), OptionsFileName);
-            _builtInOptions = BuildBuiltInOptions(includeShelteredOptions);
+            _builtInOptions = BuildBuiltInOptions(profileBuiltInOptions);
+            _activeApiOwners = BuildActiveApiOwners(activeApiOwners);
         }
 
         public IList<ManagerBooleanOptionRecord> Load()
@@ -71,7 +57,7 @@ namespace Manager.Core.Services
                     ManagerBooleanOptionRecord record = file.booleans[i];
                     if (record == null)
                         continue;
-                    if (!_includeShelteredOptions && string.Equals(record.id, CustomScenarioEditorOptionId, StringComparison.OrdinalIgnoreCase))
+                    if (!ShouldShowOption(record))
                         continue;
                     options.Add(record);
                 }
@@ -139,13 +125,61 @@ namespace Manager.Core.Services
             return changed;
         }
 
-        private static ManagerBooleanOptionDefinition[] BuildBuiltInOptions(bool includeShelteredOptions)
+        private static ManagerBooleanOptionDefinition[] BuildBuiltInOptions(IEnumerable<ManagerBooleanOptionDefinition> profileBuiltInOptions)
         {
             List<ManagerBooleanOptionDefinition> options = new List<ManagerBooleanOptionDefinition>();
             options.AddRange(SharedBuiltInOptions);
-            if (includeShelteredOptions)
-                options.AddRange(ShelteredBuiltInOptions);
+            if (profileBuiltInOptions != null)
+            {
+                foreach (ManagerBooleanOptionDefinition option in profileBuiltInOptions)
+                {
+                    if (option != null && !string.IsNullOrEmpty(option.id))
+                        options.Add(option);
+                }
+            }
             return options.ToArray();
+        }
+
+        private static HashSet<string> BuildActiveApiOwners(IEnumerable<string> activeApiOwners)
+        {
+            HashSet<string> owners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            owners.Add("ModAPI");
+            if (activeApiOwners != null)
+            {
+                foreach (string owner in activeApiOwners)
+                {
+                    if (!string.IsNullOrEmpty(owner))
+                        owners.Add(owner);
+                }
+            }
+            return owners;
+        }
+
+        private bool ShouldShowOption(ManagerBooleanOptionRecord record)
+        {
+            if (record == null)
+                return false;
+
+            string owner = record.owner ?? string.Empty;
+            if (owner.Length == 0 || _activeApiOwners.Contains(owner))
+                return true;
+
+            return !IsInactiveApiOwnedOption(record, owner);
+        }
+
+        private static bool IsInactiveApiOwnedOption(ManagerBooleanOptionRecord record, string owner)
+        {
+            if (string.IsNullOrEmpty(owner))
+                return false;
+
+            bool apiOwner = owner.EndsWith("API", StringComparison.OrdinalIgnoreCase) ||
+                owner.IndexOf(".API", StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!apiOwner)
+                return false;
+
+            string id = record != null ? record.id : string.Empty;
+            return string.IsNullOrEmpty(id) ||
+                id.StartsWith(owner + ".", StringComparison.OrdinalIgnoreCase);
         }
 
         private static ManagerBooleanOptionRecord CreateRecord(ManagerBooleanOptionDefinition definition, bool value)

@@ -590,9 +590,7 @@ namespace Manager.Views
             // Resolve local references immediately so details panel can show mapping info.
             var referencesByModId = new Dictionary<string, NexusModReference>(StringComparer.OrdinalIgnoreCase);
             var unresolvedMods = new List<ModItem>();
-            string fallbackDomain = (_settings != null && !string.IsNullOrEmpty(_settings.NexusGameDomain))
-                ? _settings.NexusGameDomain
-                : ((_settings != null && string.Equals(_settings.SelectedGameId, "sheltered", StringComparison.OrdinalIgnoreCase)) ? "sheltered" : string.Empty);
+            string fallbackDomain = GetConfiguredNexusDomain();
 
             foreach (var mod in _allMods)
             {
@@ -890,6 +888,14 @@ namespace Manager.Views
                 return false;
 
             return (DateTime.UtcNow - _lastNexusRemoteSyncUtc) < NexusSyncCooldown;
+        }
+
+        private string GetConfiguredNexusDomain()
+        {
+            if (_settings == null || string.IsNullOrEmpty(_settings.NexusGameDomain))
+                return string.Empty;
+
+            return _settings.NexusGameDomain.Trim().ToLowerInvariant();
         }
 
         private static int CountModsWithUpdates(List<ModItem> mods)

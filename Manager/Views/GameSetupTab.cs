@@ -258,7 +258,7 @@ namespace Manager.Views
             _modsCountLabel.Location = new Point(15, 35);
 
             _modApiVersionLabel = new Label();
-            _modApiVersionLabel.Text = "ModAPI Version: Unknown";
+            _modApiVersionLabel.Text = "API Versions: Unknown";
             _modApiVersionLabel.Font = new Font("Segoe UI", 10f);
             _modApiVersionLabel.AutoSize = true;
             _modApiVersionLabel.Location = new Point(15, 58);
@@ -577,7 +577,7 @@ namespace Manager.Views
         {
             string gameName = _profile != null ? _profile.DisplayName : "game";
             Log("Searching for " + gameName + " installation...");
-            string detected = new GamePathDetector().TryDetect(_profile);
+            string detected = new GamePathDetector().TryDetect(_profile, Log);
             
             if (!string.IsNullOrEmpty(detected) && File.Exists(detected))
             {
@@ -774,7 +774,7 @@ namespace Manager.Views
             }
 
             _modsCountLabel.Text = "Active Mods: " + enabledModCount;
-            _modApiVersionLabel.Text = "ModAPI Version: " + (modApiVersion ?? "Unknown");
+            _modApiVersionLabel.Text = "API Versions: " + (modApiVersion ?? "Unknown");
         }
 
         /// <summary>

@@ -25,9 +25,12 @@ namespace Manager.Core.Games.Services
             lines.Add("DarkMode=" + (settings.DarkMode ? "True" : "False"));
             lines.Add("DevMode=" + (settings.DevMode ? "True" : "False"));
             lines.Add("LogLevel=" + (settings.LogLevel ?? "Info"));
-            lines.Add("AutoCondenseSaves=" + (settings.AutoCondenseSaves ?? "ask"));
             lines.Add("IgnoreOrderChecks=" + (settings.IgnoreOrderChecks ? "True" : "False"));
-            lines.Add("AutoLoadSaveSlot=" + settings.AutoLoadSaveSlot);
+            if (profile.SupportsSaveDiscovery)
+            {
+                lines.Add("AutoCondenseSaves=" + (settings.AutoCondenseSaves ?? "ask"));
+                lines.Add("AutoLoadSaveSlot=" + settings.AutoLoadSaveSlot);
+            }
             File.WriteAllLines(iniPath, lines.ToArray());
         }
     }

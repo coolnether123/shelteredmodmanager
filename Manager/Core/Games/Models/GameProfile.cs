@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Manager.Core.Games.Saves;
+using Manager.Core.Models;
 
 namespace Manager.Core.Games.Models
 {
@@ -37,6 +38,11 @@ namespace Manager.Core.Games.Models
         public GameRuntimeLayout RuntimeLayout { get; set; }
         public GameAboutContent AboutContent { get; set; }
         public ISaveDiscoveryStrategy SaveDiscovery { get; set; }
+        /// <summary>
+        /// Profile-owned runtime toggles that should be seeded into manager_options.json.
+        /// Shared ModAPI toggles are supplied by the generic options service.
+        /// </summary>
+        public ManagerBooleanOptionDefinition[] BuiltInRuntimeOptions { get; set; }
         public bool SupportsSaveDiscovery { get; set; }
         public bool SupportsDoorstopLaunch { get; set; }
 
@@ -55,6 +61,7 @@ namespace Manager.Core.Games.Models
             RuntimeLayout = new GameRuntimeLayout();
             AboutContent = new GameAboutContent();
             SaveDiscovery = new NoOpSaveDiscoveryStrategy();
+            BuiltInRuntimeOptions = new ManagerBooleanOptionDefinition[0];
             SupportsDoorstopLaunch = true;
         }
 

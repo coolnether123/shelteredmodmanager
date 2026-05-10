@@ -1040,9 +1040,7 @@ namespace Manager.Views
         private string GetGameDomain()
         {
             if (_settings == null || string.IsNullOrEmpty(_settings.NexusGameDomain))
-                return _settings != null && string.Equals(_settings.SelectedGameId, "sheltered", StringComparison.OrdinalIgnoreCase)
-                    ? "sheltered"
-                    : string.Empty;
+                return string.Empty;
             return _settings.NexusGameDomain.Trim().ToLowerInvariant();
         }
 

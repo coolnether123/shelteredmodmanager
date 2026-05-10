@@ -14,7 +14,7 @@ namespace Manager.Core.Games.Services
                 return;
 
             string gameDir = Path.GetDirectoryName(settings.GamePath);
-            string dllSearchPath = BuildDllSearchPath(gameDir, assemblySearchPaths);
+            string dllSearchPath = BuildDllSearchPath(gameDir, assemblySearchPaths, log);
             string doorstopTargetRelative = ResolveDoorstopTargetRelative(profile, gameDir, log);
             string iniPath = Path.Combine(gameDir, profile.RuntimeLayout.DoorstopConfigFileName);
 
@@ -55,7 +55,7 @@ namespace Manager.Core.Games.Services
             File.WriteAllLines(doorstopConfigPath, lines.ToArray());
         }
 
-        private static string BuildDllSearchPath(string gameDir, IEnumerable<string> assemblySearchPaths)
+        private static string BuildDllSearchPath(string gameDir, IEnumerable<string> assemblySearchPaths, Action<string> log)
         {
             HashSet<string> uniquePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (assemblySearchPaths != null)
@@ -74,8 +74,10 @@ namespace Manager.Core.Games.Services
                 {
                     relativePaths.Add(GetRelativePath(gameDir, path));
                 }
-                catch
+                catch (Exception ex)
                 {
+                    if (log != null)
+                        log("Using absolute assembly search path for " + path + ": " + ex.Message);
                     relativePaths.Add(path);
                 }
             }
@@ -101,8 +103,17 @@ namespace Manager.Core.Games.Services
 
         private static string FirstDoorstopTargetCandidate(GameProfile profile)
         {
-            string[] candidates = profile.RuntimeLayout.DoorstopTargetAssemblyRelativeCandidates ?? new string[0];
-            return candidates.Length > 0 ? candidates[0] : @"SMM\bin\Doorstop.dll";
+            GameRuntimeLayout defaults = new GameRuntimeLayout();
+            GameRuntimeLayout layout = profile != null && profile.RuntimeLayout != null
+                ? profile.RuntimeLayout
+                : defaults;
+            string[] candidates = layout.DoorstopTargetAssemblyRelativeCandidates ?? new string[0];
+            if (candidates.Length > 0)
+                return candidates[0];
+
+            string runtimeFolder = !string.IsNullOrEmpty(layout.RuntimeFolderName) ? layout.RuntimeFolderName : defaults.RuntimeFolderName;
+            string binFolder = !string.IsNullOrEmpty(layout.BinFolderName) ? layout.BinFolderName : defaults.BinFolderName;
+            return Path.Combine(runtimeFolder, Path.Combine(binFolder, "Doorstop.dll"));
         }
 
         private static void CopyProxyForGame(GameProfile profile, string gamePath, Action<string> log)
@@ -122,7 +133,11 @@ namespace Manager.Core.Games.Services
                 if (log != null)
                     log("Copied " + bitnessDir + " " + profile.RuntimeLayout.DoorstopProxyDllName);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (log != null)
+                    log("Doorstop proxy copy failed: " + ex.Message);
+            }
         }
 
         private static string GetRelativePath(string fromPath, string toPath)

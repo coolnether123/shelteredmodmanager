@@ -90,7 +90,9 @@ namespace Manager.Views
 
             _supportsSaveOptions = profile.SupportsSaveDiscovery;
             _defaultNexusGameDomain = profile.DefaultNexusGameDomain ?? string.Empty;
-            _runtimeOptionsService = new ManagerBooleanOptionsService(profile.UsesApiAssembly("ShelteredAPI"));
+            _runtimeOptionsService = new ManagerBooleanOptionsService(
+                profile.BuiltInRuntimeOptions,
+                profile.GetApiAssemblyNames());
             _autoCondenseLabel.Visible = _supportsSaveOptions;
             _autoCondenseCombo.Visible = _supportsSaveOptions;
             LoadRuntimeOptions();

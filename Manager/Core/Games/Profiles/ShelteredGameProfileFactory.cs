@@ -1,5 +1,6 @@
 using Manager.Core.Games.Models;
 using Manager.Core.Games.Saves;
+using Manager.Core.Models;
 
 namespace Manager.Core.Games.Profiles
 {
@@ -61,8 +62,26 @@ namespace Manager.Core.Games.Profiles
             profile.RuntimeLayout = layout;
             profile.SupportsSaveDiscovery = true;
             profile.SaveDiscovery = new ShelteredSaveDiscoveryStrategy();
+            profile.BuiltInRuntimeOptions = CreateBuiltInRuntimeOptions();
             profile.AboutContent = CreateAboutContent();
             return profile;
+        }
+
+        private static ManagerBooleanOptionDefinition[] CreateBuiltInRuntimeOptions()
+        {
+            return new ManagerBooleanOptionDefinition[]
+            {
+                new ManagerBooleanOptionDefinition
+                {
+                    id = "ShelteredAPI.PatchCustomScenarioEditor",
+                    owner = "ShelteredAPI",
+                    label = "Custom Scenario Editor",
+                    description = "Enables ShelteredAPI's custom scenario editor hooks and the Add New Scenario editor entry.",
+                    defaultValue = true,
+                    requiresRestart = true,
+                    sortOrder = 100
+                }
+            };
         }
 
         private static GameAboutContent CreateAboutContent()

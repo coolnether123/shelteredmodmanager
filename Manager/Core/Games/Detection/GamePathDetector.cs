@@ -11,14 +11,19 @@ namespace Manager.Core.Games.Detection
     {
         public string TryDetect(GameProfile profile)
         {
+            return TryDetect(profile, null);
+        }
+
+        public string TryDetect(GameProfile profile, Action<string> log)
+        {
             if (profile == null)
                 return string.Empty;
 
-            string running = TryDetectRunningProcess(profile);
+            string running = TryDetectRunningProcess(profile, log);
             if (!string.IsNullOrEmpty(running))
                 return running;
 
-            List<string> searchDirs = BuildSearchDirectories(profile);
+            List<string> searchDirs = BuildSearchDirectories(profile, log);
             string found = FindExecutableInDirectories(profile, searchDirs);
             return found ?? string.Empty;
         }
@@ -40,7 +45,7 @@ namespace Manager.Core.Games.Detection
             return allExeFiles.Length == 1 ? allExeFiles[0] : string.Empty;
         }
 
-        private string TryDetectRunningProcess(GameProfile profile)
+        private string TryDetectRunningProcess(GameProfile profile, Action<string> log)
         {
             string[] executableNames = profile.ExecutableNames ?? new string[0];
             for (int i = 0; i < executableNames.Length; i++)
@@ -56,13 +61,16 @@ namespace Manager.Core.Games.Detection
                     if (File.Exists(path))
                         return path;
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    LogDetection(log, "Could not inspect running process for " + executableNames[i] + ": " + ex.Message);
+                }
             }
 
             return string.Empty;
         }
 
-        private List<string> BuildSearchDirectories(GameProfile profile)
+        private List<string> BuildSearchDirectories(GameProfile profile, Action<string> log)
         {
             List<string> searchDirs = new List<string>();
 
@@ -79,9 +87,12 @@ namespace Manager.Core.Games.Detection
                 if (grandparent != null)
                     AddDirectory(searchDirs, grandparent.FullName);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogDetection(log, "Could not add manager-relative search directories: " + ex.Message);
+            }
 
-            AddSteamAndGogHints(searchDirs, profile);
+            AddSteamAndGogHints(searchDirs, profile, log);
 
             string[] commonDirs = profile.CommonInstallDirectories ?? new string[0];
             for (int i = 0; i < commonDirs.Length; i++)
@@ -90,7 +101,7 @@ namespace Manager.Core.Games.Detection
             return searchDirs;
         }
 
-        private static void AddSteamAndGogHints(List<string> searchDirs, GameProfile profile)
+        private static void AddSteamAndGogHints(List<string> searchDirs, GameProfile profile, Action<string> log)
         {
             try
             {
@@ -104,7 +115,10 @@ namespace Manager.Core.Games.Detection
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogDetection(log, "Could not read Steam uninstall registry hint: " + ex.Message);
+            }
 
             try
             {
@@ -118,7 +132,10 @@ namespace Manager.Core.Games.Detection
                     }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LogDetection(log, "Could not read Steam library registry hint: " + ex.Message);
+            }
         }
 
         private static string FindExecutableInDirectories(GameProfile profile, IList<string> searchDirs)
@@ -153,6 +170,12 @@ namespace Manager.Core.Games.Detection
             }
 
             directories.Add(directory);
+        }
+
+        private static void LogDetection(Action<string> log, string message)
+        {
+            if (log != null && !string.IsNullOrEmpty(message))
+                log(message);
         }
     }
 }

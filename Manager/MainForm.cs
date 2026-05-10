@@ -375,7 +375,7 @@ namespace Manager
             this._modApiVersionLabel.Name = "_modApiVersionLabel";
             this._modApiVersionLabel.Size = new System.Drawing.Size(235, 18);
             this._modApiVersionLabel.TabIndex = 0;
-            this._modApiVersionLabel.Text = "ModAPI Version: Unknown";
+            this._modApiVersionLabel.Text = "API Versions: Unknown";
             this._modApiVersionLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // _modsCountLabel
