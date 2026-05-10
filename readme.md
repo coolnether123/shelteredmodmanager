@@ -57,6 +57,12 @@ The 1.3 line is a breaking clean API line. It separates the neutral modding fram
 
 The API is in beta. See the documentation for current capabilities.
 
+### Beta Safety Notes
+
+This release line is a public beta, not stable 1.3. Back up saves before testing, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
+
+Family Expansion and Deep Expansion need rebuilt/tested packages before they should be listed as compatible with Beta.3. Some 1.2.2 mods may need migration because Sheltered-specific APIs moved from `ModAPI.dll` to `ShelteredAPI.dll`.
+
 ### Assembly Rule
 
 - Always reference `ModAPI.dll`.
@@ -158,6 +164,34 @@ Press **F9** in-game.
 - Object picker
 - Component and field inspection
 - Bounds visualization
+
+### Building From Source
+
+Use Visual Studio 2022 MSBuild for this legacy solution, not `dotnet build`.
+
+Prerequisites:
+
+- Visual Studio 2022 with .NET desktop build tools.
+- .NET Framework 3.5 targeting support for the Manager, Doorstop, ModAPI, and ShelteredAPI projects.
+- .NET 8 SDK for the decompiler helper project in the solution.
+- A local Sheltered install that provides `Assembly-CSharp.dll`, `UnityEngine.dll`, and `UnityEngine.UI.dll`.
+
+Current project files contain local `HintPath` fallbacks for the maintainer's Steam/Epic installs. If your Sheltered install is elsewhere, retarget those references locally before building.
+
+Build command used for Dev/1.3 verification:
+
+```powershell
+& "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" ShelteredModManager.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU" /v:minimal
+```
+
+Before publishing, also run:
+
+```cmd
+tools\verify-modapi-boundary.cmd
+tools\verify-shelteredapi-public-surface.cmd
+tools\test-shelteredapi-contracts.cmd
+tools\verify-runtimecompat-rect.cmd
+```
 
 ## Mod Structure
 

@@ -57,6 +57,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Local Sheltered/Unity runtime references are developer-machine fallbacks.
+         If your install differs, retarget these HintPath values to equivalent game assemblies. -->
     <Reference Include="0Harmony, Version=2.4.1.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
