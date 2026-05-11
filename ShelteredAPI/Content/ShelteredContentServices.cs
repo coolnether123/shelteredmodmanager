@@ -97,11 +97,13 @@ namespace ShelteredAPI.Content
     {
         public RegistrationResult RegisterItem(ItemDefinition definition)
         {
+            ContentOwnerAssemblyResolver.EnsureOwner(definition);
             return ContentRegistry.RegisterItem(definition);
         }
 
         public RegistrationResult RegisterItem(string modId, string itemId, ItemDefinition definition)
         {
+            ContentOwnerAssemblyResolver.EnsureOwner(definition);
             return ContentRegistry.RegisterItemWithFixedId(modId, itemId, definition);
         }
 

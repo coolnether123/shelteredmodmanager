@@ -230,10 +230,7 @@ namespace ShelteredAPI.Content
         {
             if (def == null) return RegistrationResult.Failed("ItemDefinition cannot be null");
             def.NormalizeLegacyFields();
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(def);
             if (string.IsNullOrEmpty(def.Id))
             {
                 TryAssignLegacyItemId(def);
@@ -250,6 +247,7 @@ namespace ShelteredAPI.Content
             }
             catch (Exception ex)
             {
+                MMLog.WriteWarning("[ContentRegistry] Failed to register item '" + (def.Id ?? string.Empty) + "': " + ex.Message);
                 return RegistrationResult.Failed(ex.Message);
             }
         }
@@ -267,10 +265,7 @@ namespace ShelteredAPI.Content
             if (!def.HasDisplayNameValue()) return RegistrationResult.Failed("DisplayName is required (key or text)");
 
             def.Id = string.IsNullOrEmpty(def.Id) ? itemId : def.Id;
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(def);
             if (IsItemIdAlreadyRegistered(def.Id)) return RegistrationResult.Failed("Item ID already registered: " + def.Id);
 
             try
@@ -282,6 +277,7 @@ namespace ShelteredAPI.Content
             }
             catch (Exception ex)
             {
+                MMLog.WriteWarning("[ContentRegistry] Failed to register fixed-id item '" + itemId + "' for mod '" + modId + "': " + ex.Message);
                 return RegistrationResult.Failed(ex.Message);
             }
         }
@@ -390,17 +386,14 @@ namespace ShelteredAPI.Content
 
         internal static int EnsureCustomTypeId(ItemDefinition def)
         {
-            if (def.OwnerAssembly == null)
-            {
-                try { def.OwnerAssembly = System.Reflection.Assembly.GetCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(def);
             if (def.CustomTypeId.HasValue)
             {
                 ReserveExplicitCustomTypeId(def.CustomTypeId.Value, def.Id);
                 return def.CustomTypeId.Value;
             }
 
-            var modId = ResolveModId(def.OwnerAssembly);
+            var modId = ContentOwnerAssemblyResolver.ResolveModId(def.OwnerAssembly);
             var itemKey = !string.IsNullOrEmpty(def.Id) ? def.Id : def.DisplayName ?? Guid.NewGuid().ToString("N");
             var id = ClaimCustomItemId(modId, itemKey);
             def.CustomTypeId = id;
@@ -427,7 +420,7 @@ namespace ShelteredAPI.Content
             if (string.IsNullOrEmpty(legacyKey))
                 return;
 
-            var modId = ResolveModId(def.OwnerAssembly);
+            var modId = ContentOwnerAssemblyResolver.ResolveModId(def.OwnerAssembly);
             def.Id = $"legacy.{SanitizeIdPart(modId)}.{SanitizeIdPart(legacyKey)}";
             MMLog.WriteWarning($"Item registration used legacy fields without an explicit Id. Generated '{def.Id}'.");
         }
@@ -493,18 +486,6 @@ namespace ShelteredAPI.Content
 
                 return (int)(hash & 0x7fffffff);
             }
-        }
-
-        private static string ResolveModId(System.Reflection.Assembly asm)
-        {
-            try
-            {
-                ModAPI.Core.ModEntry entry;
-                if (ModAPI.Core.ModRegistry.TryGetModByAssembly(asm, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
-                    return entry.Id;
-            }
-            catch { }
-            try { return asm != null ? asm.GetName().Name : "mod"; } catch { return "mod"; }
         }
 
         private static string SanitizeIdPart(string value)

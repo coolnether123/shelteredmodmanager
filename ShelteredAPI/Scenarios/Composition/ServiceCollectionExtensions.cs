@@ -104,6 +104,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new BunkerApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournalRepository(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeStateService(resolver.Get<ScenarioRuntimeExecutionJournalRepository>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioScoreSnapshotService(resolver.Get<ScenarioRuntimeStateService>()); });
+            services.AddSingleton<IScenarioScoreSnapshotService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioScoreSnapshotService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournal(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpriteStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });

@@ -53,6 +53,8 @@
     <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Local Unity runtime reference is a developer-machine fallback.
+         If your install differs, retarget this HintPath to an equivalent Sheltered managed assembly. -->
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />

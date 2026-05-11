@@ -38,7 +38,7 @@ namespace ShelteredAPI.Content
 
         private static Assembly SafeCaller(ItemDefinition def)
         {
-            try { return Assembly.GetCallingAssembly(); } catch { return null; }
+            try { return ContentOwnerAssemblyResolver.ResolveCallingAssembly(); } catch { return null; }
         }
 
         private static Sprite TryLoadSprite(Assembly asm, string path)
@@ -47,7 +47,7 @@ namespace ShelteredAPI.Content
             var sprite = AssetLoader.LoadSprite(asm, path);
             if (sprite == null)
             {
-                MMLog.WarnOnce("ContentResolver.Icon", $"Failed to load icon at '{path}'");
+                MMLog.WarnOnce("ContentResolver.Icon." + OwnerKey(asm) + "." + path, $"Failed to load icon at '{path}'");
             }
             return sprite;
         }
@@ -71,20 +71,25 @@ namespace ShelteredAPI.Content
                 var bundle = AssetLoader.LoadBundle(asm, bundlePath);
                 if (bundle == null)
                 {
-                    MMLog.WarnOnce("ContentResolver.Bundle", $"Failed to load bundle '{bundlePath}'");
+                    MMLog.WarnOnce("ContentResolver.Bundle." + OwnerKey(asm) + "." + bundlePath, $"Failed to load bundle '{bundlePath}'");
                     return null;
                 }
                 var prefab = AssetLoader.LoadPrefabFromBundle(bundle, assetName);
                 if (prefab == null)
                 {
-                    MMLog.WarnOnce("ContentResolver.Prefab", $"Failed to load prefab '{assetName}' from bundle '{bundlePath}'");
+                    MMLog.WarnOnce("ContentResolver.Prefab." + OwnerKey(asm) + "." + bundlePath + "." + assetName, $"Failed to load prefab '{assetName}' from bundle '{bundlePath}'");
                 }
                 return prefab;
             }
 
             // Direct prefab path (Resources-like) is not supported here; would require AssetDatabase/Resources.
-            MMLog.WarnOnce("ContentResolver.PrefabPath", $"Prefab path '{path}' not recognized. Use 'Assets/Bundles/xxx.bundle|PrefabName'.");
+            MMLog.WarnOnce("ContentResolver.PrefabPath." + OwnerKey(asm) + "." + path, $"Prefab path '{path}' not recognized. Use 'Assets/Bundles/xxx.bundle|PrefabName'.");
             return null;
+        }
+
+        private static string OwnerKey(Assembly asm)
+        {
+            return ContentOwnerAssemblyResolver.ResolveOwnerKey(asm);
         }
     }
 

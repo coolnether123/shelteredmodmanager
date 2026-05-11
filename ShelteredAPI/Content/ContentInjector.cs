@@ -97,10 +97,7 @@ namespace ShelteredAPI.Content
                 throw new ArgumentNullException(nameof(definition));
 
             definition.NormalizeLegacyFields();
-            if (definition.OwnerAssembly == null)
-            {
-                try { definition.OwnerAssembly = Assembly.GetCallingAssembly(); } catch { }
-            }
+            ContentOwnerAssemblyResolver.EnsureOwner(definition);
 
             definition.CustomTypeId = (int)itemType;
             if (string.IsNullOrEmpty(definition.Id))
@@ -818,28 +815,10 @@ namespace ShelteredAPI.Content
 
         private static string BuildGeneratedLocalizationKey(ItemDefinition definition, bool isName)
         {
-            var modId = ResolveModId(definition);
+            var modId = ContentOwnerAssemblyResolver.ResolveModId(definition);
             var itemId = ResolveItemIdSegment(definition);
             var suffix = isName ? "name" : "desc";
             return $"shelteredapi.{SanitizeKeyPart(modId)}.{SanitizeKeyPart(itemId)}.{suffix}";
-        }
-
-        private static string ResolveModId(ItemDefinition definition)
-        {
-            try
-            {
-                ModAPI.Core.ModEntry entry;
-                if (ModAPI.Core.ModRegistry.TryGetModByAssembly(definition.OwnerAssembly, out entry) &&
-                    entry != null &&
-                    !string.IsNullOrEmpty(entry.Id))
-                {
-                    return entry.Id;
-                }
-            }
-            catch { }
-
-            try { return definition.OwnerAssembly != null ? definition.OwnerAssembly.GetName().Name : "mod"; }
-            catch { return "mod"; }
         }
 
         private static string ResolveItemIdSegment(ItemDefinition definition)

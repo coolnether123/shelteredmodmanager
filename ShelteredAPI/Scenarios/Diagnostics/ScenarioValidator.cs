@@ -64,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 new QuestMapValidationRule(),
                 new MapValidationRule(),
                 new SchedulingValidationRule(),
+                new ScoringValidationRule(),
                 new ObjectStartStateValidationRule(),
                 new BunkerDependencyValidationRule(),
                 new GateConditionValidationRule()
@@ -748,6 +749,62 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ScenarioValidationResult legacy = new ScenarioValidationResult();
                 _owner.ValidateDependencies(definition, legacy);
                 CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class ScoringValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                if (definition == null || definition.Scoring == null || summary == null)
+                    return;
+
+                ScenarioScoringDefinition scoring = definition.Scoring;
+                HashSet<string> categoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; scoring.Categories != null && i < scoring.Categories.Count; i++)
+                {
+                    ScenarioScoreCategoryDefinition category = scoring.Categories[i];
+                    if (category == null)
+                        continue;
+
+                    string categoryId = TrimToNull(category.Id);
+                    if (categoryId == null)
+                    {
+                        summary.AddError("scoring.category.id_required", "Score category #" + i.ToString(CultureInfo.InvariantCulture) + " requires an id.");
+                        continue;
+                    }
+
+                    if (!categoryIds.Add(categoryId))
+                        summary.AddError("scoring.category.duplicate", "Score category id is duplicated: " + categoryId);
+                }
+
+                int ruleCount = 0;
+                HashSet<string> ruleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; scoring.Rules != null && i < scoring.Rules.Count; i++)
+                {
+                    ScenarioScoreRuleDefinition rule = scoring.Rules[i];
+                    if (rule == null)
+                        continue;
+
+                    ruleCount++;
+                    string ruleId = TrimToNull(rule.Id);
+                    if (ruleId == null)
+                        summary.AddError("scoring.rule.id_required", "Score rule #" + i.ToString(CultureInfo.InvariantCulture) + " requires an id.");
+                    else if (!ruleIds.Add(ruleId))
+                        summary.AddError("scoring.rule.duplicate", "Score rule id is duplicated: " + ruleId);
+
+                    if (TrimToNull(rule.Source) == null)
+                        summary.AddError("scoring.rule.source_required", "Score rule '" + (ruleId ?? ("#" + i.ToString(CultureInfo.InvariantCulture))) + "' requires a source.");
+                    if (TrimToNull(rule.Operation) == null)
+                        summary.AddError("scoring.rule.operation_required", "Score rule '" + (ruleId ?? ("#" + i.ToString(CultureInfo.InvariantCulture))) + "' requires an operation.");
+
+                    string categoryId = TrimToNull(rule.CategoryId);
+                    if (categoryId != null && categoryIds.Count > 0 && !categoryIds.Contains(categoryId))
+                        summary.AddError("scoring.rule.unknown_category", "Score rule '" + (ruleId ?? ("#" + i.ToString(CultureInfo.InvariantCulture))) + "' references unknown category '" + categoryId + "'.");
+                }
+
+                if (scoring.Enabled && ruleCount == 0)
+                    summary.AddWarning("scoring.enabled_without_rules", "Scoring is enabled but no score rules are defined.");
             }
         }
 

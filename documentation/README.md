@@ -13,6 +13,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Exact API signatures | [API Signatures Reference](API_Signatures_Reference.md) |
 | Common failures and log patterns | [API Troubleshooting](API_Troubleshooting.md) |
 | Host-neutral networking primitives | [ModAPI Networking Guide](ModAPI_Networking_Guide.md) |
+| Build and verify Dev/1.3 locally | [README build section](../readme.md#building-from-source) |
 
 ## Task Guides
 
@@ -40,6 +41,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Public API boundary decisions | [ModAPI Sheltered Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
 | Developer comment style | [Developer Commenting Standard](Developer_Commenting_Standard.md) |
 | Beta.3 release scope | [Beta.3 Release Notes](Release_Beta.3.md) |
+| Local build prerequisites | [README build section](../readme.md#building-from-source) |
 
 ## Assembly Rule
 

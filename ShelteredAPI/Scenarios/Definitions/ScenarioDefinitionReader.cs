@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -68,6 +69,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
             }
             catch (Exception ex)
             {
+                MMLog.WarnOnce(
+                    "ScenarioDefinitionReader.Validate." + (scenarioId ?? string.Empty),
+                    "[ScenarioDefinitionReader] Scenario validation threw for '" + (scenarioId ?? string.Empty) + "' at '" + (scenarioFilePath ?? string.Empty) + "': " + ex.Message);
                 ScenarioValidationResult failed = new ScenarioValidationResult();
                 failed.AddError("Scenario XML could not be loaded: " + ex.Message);
                 return failed;
@@ -96,6 +100,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
             }
             catch (Exception ex)
             {
+                MMLog.WarnOnce(
+                    "ScenarioDefinitionReader.TryLoad." + (scenarioId ?? string.Empty),
+                    "[ScenarioDefinitionReader] Scenario validation threw for '" + (scenarioId ?? string.Empty) + "' at '" + (scenarioFilePath ?? string.Empty) + "': " + ex.Message);
                 validation = new ScenarioValidationResult();
                 validation.AddError("Scenario XML could not be loaded: " + ex.Message);
                 return false;
@@ -127,6 +134,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
             }
             catch (Exception ex)
             {
+                MMLog.WarnOnce(
+                    "ScenarioDefinitionReader.TryLoadUnchecked." + (scenarioId ?? string.Empty),
+                    "[ScenarioDefinitionReader] Scenario XML load failed for '" + (scenarioId ?? string.Empty) + "' at '" + (scenarioFilePath ?? string.Empty) + "': " + ex.Message);
                 errorMessage = "Scenario XML could not be loaded: " + ex.Message;
                 return false;
             }

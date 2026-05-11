@@ -35,6 +35,8 @@
     <DocumentationFile>..\Dist\SMM\bin\ShelteredAPI.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Local Sheltered/Unity runtime references are developer-machine fallbacks.
+         If your install differs, retarget these HintPath values to equivalent game assemblies. -->
     <Reference Include="0Harmony">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
       <Private>False</Private>
@@ -66,6 +68,7 @@
     <Compile Include="Content\ContentRegistry.cs" />
     <Compile Include="Content\ContentResolver.cs" />
     <Compile Include="Content\ContentInjector.cs" />
+    <Compile Include="Content\Ownership\ContentOwnerAssemblyResolver.cs" />
     <Compile Include="Content\ShelteredContent.cs" />
     <Compile Include="Content\ShelteredContentServices.cs" />
     <Compile Include="Content\ShelteredContentResolutionService.cs" />
@@ -485,6 +488,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScoringAuthoringSummary.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioWorkflowAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScheduleFormatter.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringWindowContentBuilder.cs" />
@@ -604,7 +608,9 @@
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserDataSource.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserModels.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPlayStatsBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookSaveMetadataReader.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioSelectionBrowserController.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioValidatorImpl.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioWorldReady.cs" />

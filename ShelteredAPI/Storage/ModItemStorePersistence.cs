@@ -75,6 +75,10 @@ namespace ShelteredAPI.Storage
             data.SaveLoad("capacity", ref entry.Capacity);
             data.SaveLoad("itemId", ref entry.ItemId);
             data.SaveLoad("count", ref entry.Count);
+            data.SaveLoad("reservationId", ref entry.ReservationId);
+            data.SaveLoad("reservationItemId", ref entry.ReservationItemId);
+            data.SaveLoad("reservationQuantity", ref entry.ReservationQuantity);
+            data.SaveLoad("reservationOwnerToken", ref entry.ReservationOwnerToken);
             data.GroupEnd();
         }
 
@@ -102,6 +106,26 @@ namespace ShelteredAPI.Storage
                     });
                 }
 
+                foreach (KeyValuePair<string, ModItemReservation> pair in state.Reservations)
+                {
+                    ModItemReservation reservation = pair.Value;
+                    if (!IsPersistentReservation(reservation))
+                        continue;
+
+                    any = true;
+                    entries.Add(new StoreSaveEntry
+                    {
+                        OwnerId = state.OwnerId,
+                        StoreId = state.StoreId,
+                        DisplayName = state.DisplayName,
+                        Capacity = state.Capacity,
+                        ReservationId = reservation.ReservationId,
+                        ReservationItemId = reservation.ItemId,
+                        ReservationQuantity = reservation.Quantity,
+                        ReservationOwnerToken = reservation.OwnerToken
+                    });
+                }
+
                 if (!any)
                 {
                     entries.Add(new StoreSaveEntry
@@ -114,6 +138,14 @@ namespace ShelteredAPI.Storage
                 }
             }
             return entries;
+        }
+
+        private static bool IsPersistentReservation(ModItemReservation reservation)
+        {
+            return reservation != null
+                && !string.IsNullOrEmpty(reservation.ReservationId)
+                && !string.IsNullOrEmpty(reservation.OwnerToken)
+                && reservation.OwnerToken.StartsWith("assignment.", StringComparison.OrdinalIgnoreCase);
         }
 
         private static List<ModItemStoreState> BuildStates(List<StoreSaveEntry> entries)
@@ -140,6 +172,19 @@ namespace ShelteredAPI.Storage
 
                 if (!string.IsNullOrEmpty(entry.ItemId) && entry.Count > 0)
                     state.Items[entry.ItemId] = entry.Count;
+
+                if (!string.IsNullOrEmpty(entry.ReservationId)
+                    && !string.IsNullOrEmpty(entry.ReservationItemId)
+                    && entry.ReservationQuantity > 0)
+                {
+                    state.Reservations[entry.ReservationId] = new ModItemReservation
+                    {
+                        ReservationId = entry.ReservationId,
+                        ItemId = entry.ReservationItemId,
+                        Quantity = entry.ReservationQuantity,
+                        OwnerToken = entry.ReservationOwnerToken
+                    };
+                }
             }
 
             return new List<ModItemStoreState>(states.Values);
@@ -153,6 +198,10 @@ namespace ShelteredAPI.Storage
             public int Capacity;
             public string ItemId = string.Empty;
             public int Count;
+            public string ReservationId = string.Empty;
+            public string ReservationItemId = string.Empty;
+            public int ReservationQuantity;
+            public string ReservationOwnerToken = string.Empty;
         }
     }
 }

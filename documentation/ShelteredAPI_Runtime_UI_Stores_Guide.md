@@ -130,13 +130,15 @@ CharacterItemAssignment meds = ShelteredCharacterItems.Assign(
     source: inventory,
     itemId: "AntiRad",
     quantity: 2,
-    kind: CharacterItemAssignmentKind.Medical,
+    kind: CharacterItemAssignmentKind.Assigned,
     slot: CharacterItemSlot.Medicine);
 
 ActorId actorId = meds.ActorId;
 ```
 
 The item count remains backed by `inventory`. `Assign(...)` validates that the source store currently has enough unassigned quantity. If the source also implements `IReservableItemStore`, assignment checks respect its available count so queued reservations are not treated as free stock.
+
+Use `CharacterItemAssignmentKind.Reserved` when the assignment should hold stock for a character. Reservable stores receive a real reservation and the returned assignment exposes `ReservationId`; non-reservable stores fall back to assignment metadata. Use `CharacterItemSlot` for medical, food, tool, backpack, or hand placement intent.
 
 Query or release the metadata without mutating storage:
 
@@ -148,7 +150,9 @@ int assignedMeds = ShelteredCharacterItems.GetAssignedCount(actorId, "AntiRad");
 ShelteredCharacterItems.Unassign(meds.AssignmentId);
 ```
 
-Assignment metadata persists with ShelteredAPI save data. `Unassign(...)`, `ReleaseAssignmentsForActor(...)`, and `ReleaseAssignmentsForMember(...)` only remove assignment records; they do not remove items from the backing store. Use this for "reserved for Alice", "carried by Bob", "equipped in main hand", or quest/medical/food classifications, while keeping global shelter storage as the source of truth.
+Assignment metadata persists with ShelteredAPI save data. `Unassign(...)`, `ReleaseAssignmentsForActor(...)`, and `ReleaseAssignmentsForMember(...)` remove assignment records and cancel assignment-owned reservations; they do not remove items from the backing store. Use this for "reserved for Alice", "carried by Bob", "equipped in main hand", or quest/medical/food classifications, while keeping global shelter storage as the source of truth.
+
+Container category filters use vanilla item categories. A `Food` filter also includes vanilla `Meat`/`DesperateMeat` rows so fridge-style panels do not hide freezer food.
 
 ## Container Panel
 

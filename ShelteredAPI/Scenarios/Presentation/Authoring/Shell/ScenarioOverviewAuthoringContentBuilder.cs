@@ -11,6 +11,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
+            ScenarioScoringAuthoringSummary.Summary scoring = ScenarioScoringAuthoringSummary.Build(editorSession != null ? editorSession.WorkingDefinition : null);
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
@@ -26,6 +27,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         Item.Property("Simulation", ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Running (test)" : "Paused for workshop"),
                         Item.Property("Playtest", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"),
                         Item.Property("Applied To World", editorSession != null && editorSession.HasAppliedToCurrentWorld ? "Yes" : "No"),
+                        Item.Property("Scoring", scoring.Status),
+                        Item.Property("Score Rules", scoring.RuleCount.ToString()),
                         Item.Property("Dirty Sections", Item.CountDirtyFlags(editorSession).ToString())
                     }
                 },

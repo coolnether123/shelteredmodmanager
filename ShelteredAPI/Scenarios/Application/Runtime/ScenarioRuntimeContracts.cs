@@ -157,6 +157,13 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         void Tick(ScenarioRuntimeState state);
     }
 
+    internal interface IScenarioScoreSnapshotService
+    {
+        ScenarioScoreSnapshot GetSnapshot();
+        void SetSnapshot(ScenarioScoreSnapshot snapshot);
+        void ClearSnapshot();
+    }
+
     internal interface IScenarioTriggerRuntimeService
     {
         bool Fire(string triggerId, string source, out string message);

@@ -22,6 +22,15 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 - Unity log filtering is severity-aware: errors, asserts, and exceptions are never suppressed, and benign warning/log suppression is counted for diagnostics.
 - Save expansion and save verification for missing mods and version mismatches.
 
+## Beta Safety And Compatibility
+
+- This is a public beta, not stable 1.3.
+- Players should back up saves before testing Beta.3 packages.
+- The custom scenario browser/editor and Stasis/Surrounded expanded saves remain active Beta.3 testing surfaces.
+- Family Expansion and Deep Expansion should be treated as not compatible until rebuilt and smoke tested against ModAPI/ShelteredAPI 1.3 Beta.3.
+- Some 1.2.2 mods may break because Sheltered-specific API surface moved from `ModAPI.dll` to `ShelteredAPI.dll`.
+- Bug reports should include storefront/version, mod list, save type, custom scenario editor toggle state, reproduction steps, and `SMM\mod_manager.log`.
+
 ## Documentation Readiness
 
 - README installation, compatibility, uninstall, mod structure, authoring path, and support links reviewed for Beta.3.
@@ -64,6 +73,8 @@ Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with t
 
 ## Pre-Publish Checklist
 
+- Confirm Visual Studio 2022 MSBuild is used for solution builds; do not use `dotnet build` for this legacy solution.
+- Confirm local Sheltered/Unity reference paths resolve to the intended Steam/GOG or Epic managed assemblies.
 - Build `ShelteredModManager.sln` in Release.
 - Run `tools\verify-modapi-boundary.cmd`.
 - Run `tools\verify-shelteredapi-public-surface.cmd`.

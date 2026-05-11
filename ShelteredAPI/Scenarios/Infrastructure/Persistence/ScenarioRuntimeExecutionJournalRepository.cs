@@ -6,6 +6,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Content;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Objects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
@@ -94,12 +95,190 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             state.LastProcessedHour = lastHour;
             state.LastProcessedMinute = lastMinute;
 
+            SaveLoadScoreSnapshot(data, state);
             SaveLoadExecuted(data, state);
             SaveLoadFlags(data, state);
             SaveLoadFiredTriggers(data, state);
             SaveLoadBunker(data, state);
             SaveLoadObjects(data, state);
             data.GroupEnd();
+        }
+
+        private static void SaveLoadScoreSnapshot(SaveData data, ScenarioRuntimeState state)
+        {
+            bool hasSnapshot = state.ScoreSnapshot != null;
+            data.SaveLoad("HasScoreSnapshot", ref hasSnapshot);
+            if (!hasSnapshot)
+            {
+                if (data.isLoading)
+                    state.ScoreSnapshot = null;
+                return;
+            }
+
+            if (state.ScoreSnapshot == null)
+                state.ScoreSnapshot = new ScenarioScoreSnapshot();
+
+            data.GroupStart("ScoreSnapshot");
+            string scenarioId = state.ScoreSnapshot.ScenarioId ?? string.Empty;
+            string scenarioVersion = state.ScoreSnapshot.ScenarioVersion ?? string.Empty;
+            string runtimeBindingId = state.ScoreSnapshot.RuntimeBindingId ?? string.Empty;
+            string outcome = state.ScoreSnapshot.Outcome ?? string.Empty;
+            string outcomeConditionId = state.ScoreSnapshot.OutcomeConditionId ?? string.Empty;
+            int completionState = (int)state.ScoreSnapshot.CompletionState;
+            bool hasTotalScore = state.ScoreSnapshot.HasTotalScore;
+            int totalScore = state.ScoreSnapshot.TotalScore;
+            int day = state.ScoreSnapshot.Day;
+            int hour = state.ScoreSnapshot.Hour;
+            int minute = state.ScoreSnapshot.Minute;
+
+            data.SaveLoad("ScenarioId", ref scenarioId);
+            data.SaveLoad("ScenarioVersion", ref scenarioVersion);
+            data.SaveLoad("RuntimeBindingId", ref runtimeBindingId);
+            data.SaveLoad("CompletionState", ref completionState);
+            data.SaveLoad("Outcome", ref outcome);
+            data.SaveLoad("OutcomeConditionId", ref outcomeConditionId);
+            data.SaveLoad("HasTotalScore", ref hasTotalScore);
+            data.SaveLoad("TotalScore", ref totalScore);
+            data.SaveLoad("Day", ref day);
+            data.SaveLoad("Hour", ref hour);
+            data.SaveLoad("Minute", ref minute);
+
+            if (!Enum.IsDefined(typeof(ScenarioScoreCompletionState), completionState))
+                completionState = (int)ScenarioScoreCompletionState.Unknown;
+
+            state.ScoreSnapshot.ScenarioId = scenarioId;
+            state.ScoreSnapshot.ScenarioVersion = scenarioVersion;
+            state.ScoreSnapshot.RuntimeBindingId = runtimeBindingId;
+            state.ScoreSnapshot.CompletionState = (ScenarioScoreCompletionState)completionState;
+            state.ScoreSnapshot.Outcome = outcome;
+            state.ScoreSnapshot.OutcomeConditionId = outcomeConditionId;
+            state.ScoreSnapshot.HasTotalScore = hasTotalScore;
+            state.ScoreSnapshot.TotalScore = totalScore;
+            state.ScoreSnapshot.Day = day;
+            state.ScoreSnapshot.Hour = hour;
+            state.ScoreSnapshot.Minute = minute;
+
+            SaveLoadScoreCategories(data, state.ScoreSnapshot);
+            SaveLoadScoreRules(data, state.ScoreSnapshot);
+            SaveLoadScoreMetadata(data, state.ScoreSnapshot);
+            data.GroupEnd();
+        }
+
+        private static void SaveLoadScoreCategories(SaveData data, ScenarioScoreSnapshot snapshot)
+        {
+            ArrayList loaded = new ArrayList();
+            data.SaveLoadList("ScoreCategories", (IList)snapshot.Categories,
+                delegate(int i)
+                {
+                    ScenarioScoreCategorySnapshot category = snapshot.Categories[i];
+                    SaveLoadScoreCategory(data, category);
+                },
+                delegate(int i)
+                {
+                    ScenarioScoreCategorySnapshot category = new ScenarioScoreCategorySnapshot();
+                    SaveLoadScoreCategory(data, category);
+                    loaded.Add(category);
+                });
+
+            if (data.isLoading)
+            {
+                snapshot.Categories.Clear();
+                for (int i = 0; i < loaded.Count; i++)
+                    snapshot.Categories.Add((ScenarioScoreCategorySnapshot)loaded[i]);
+            }
+        }
+
+        private static void SaveLoadScoreCategory(SaveData data, ScenarioScoreCategorySnapshot category)
+        {
+            string categoryId = category.CategoryId ?? string.Empty;
+            string displayName = category.DisplayName ?? string.Empty;
+            int score = category.Score;
+            data.SaveLoad("CategoryId", ref categoryId);
+            data.SaveLoad("DisplayName", ref displayName);
+            data.SaveLoad("Score", ref score);
+            category.CategoryId = categoryId;
+            category.DisplayName = displayName;
+            category.Score = score;
+        }
+
+        private static void SaveLoadScoreRules(SaveData data, ScenarioScoreSnapshot snapshot)
+        {
+            ArrayList loaded = new ArrayList();
+            data.SaveLoadList("ScoreRules", (IList)snapshot.Rules,
+                delegate(int i)
+                {
+                    ScenarioScoreRuleSnapshot rule = snapshot.Rules[i];
+                    SaveLoadScoreRule(data, rule);
+                },
+                delegate(int i)
+                {
+                    ScenarioScoreRuleSnapshot rule = new ScenarioScoreRuleSnapshot();
+                    SaveLoadScoreRule(data, rule);
+                    loaded.Add(rule);
+                });
+
+            if (data.isLoading)
+            {
+                snapshot.Rules.Clear();
+                for (int i = 0; i < loaded.Count; i++)
+                    snapshot.Rules.Add((ScenarioScoreRuleSnapshot)loaded[i]);
+            }
+        }
+
+        private static void SaveLoadScoreRule(SaveData data, ScenarioScoreRuleSnapshot rule)
+        {
+            string ruleId = rule.RuleId ?? string.Empty;
+            string categoryId = rule.CategoryId ?? string.Empty;
+            string displayName = rule.DisplayName ?? string.Empty;
+            string source = rule.Source ?? string.Empty;
+            float value = rule.Value;
+            int score = rule.Score;
+            data.SaveLoad("RuleId", ref ruleId);
+            data.SaveLoad("CategoryId", ref categoryId);
+            data.SaveLoad("DisplayName", ref displayName);
+            data.SaveLoad("Source", ref source);
+            data.SaveLoad("Value", ref value);
+            data.SaveLoad("Score", ref score);
+            rule.RuleId = ruleId;
+            rule.CategoryId = categoryId;
+            rule.DisplayName = displayName;
+            rule.Source = source;
+            rule.Value = value;
+            rule.Score = score;
+        }
+
+        private static void SaveLoadScoreMetadata(SaveData data, ScenarioScoreSnapshot snapshot)
+        {
+            ArrayList loaded = new ArrayList();
+            data.SaveLoadList("ScoreMetadata", (IList)snapshot.Metadata,
+                delegate(int i)
+                {
+                    ScenarioProperty property = snapshot.Metadata[i];
+                    SaveLoadScoreProperty(data, property);
+                },
+                delegate(int i)
+                {
+                    ScenarioProperty property = new ScenarioProperty();
+                    SaveLoadScoreProperty(data, property);
+                    loaded.Add(property);
+                });
+
+            if (data.isLoading)
+            {
+                snapshot.Metadata.Clear();
+                for (int i = 0; i < loaded.Count; i++)
+                    snapshot.Metadata.Add((ScenarioProperty)loaded[i]);
+            }
+        }
+
+        private static void SaveLoadScoreProperty(SaveData data, ScenarioProperty property)
+        {
+            string key = property.Key ?? string.Empty;
+            string value = property.Value ?? string.Empty;
+            data.SaveLoad("Key", ref key);
+            data.SaveLoad("Value", ref value);
+            property.Key = key;
+            property.Value = value;
         }
 
         private static void SaveLoadExecuted(SaveData data, ScenarioRuntimeState state)

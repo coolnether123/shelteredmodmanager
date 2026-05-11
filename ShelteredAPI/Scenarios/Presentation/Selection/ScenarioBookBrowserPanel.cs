@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserPanel : MonoBehaviour
     {
         internal const int RowsPerPage = 5;
+        internal const int SaveRowsPerPage = 4;
         private const int OverlayDepth = 50200;
         private const string OverlayName = "ShelteredAPI_ScenarioBookBrowser";
 
@@ -200,6 +201,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             else
             {
                 int pageCount = GetPageCount();
+                ScenarioBookPlayStatsModel playStats = BuildCurrentPlayStats();
                 string cacheKey = BuildPageCacheKey(_pageIndex);
                 if (!animate && _renderer.TryRenderPreparedPage(cacheKey, _pageIndex, pageCount))
                 {
@@ -210,6 +212,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _renderer.Render(
                     _view,
                     _selectedScenario,
+                    playStats,
                     _rows,
                     _pageIndex,
                     pageCount,
@@ -545,7 +548,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             int rowCount = Math.Max(1, _rows != null ? _rows.Count : 0);
             if (_view == ScenarioBookBrowserViewKind.Saves)
-                return rowCount;
+                return Math.Max(1, (rowCount + SaveRowsPerPage - 1) / SaveRowsPerPage);
 
             return Math.Max(1, (rowCount + RowsPerPage - 1) / RowsPerPage);
         }
@@ -575,6 +578,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 BuildPageCacheKey(pageIndex),
                 _view,
                 _selectedScenario,
+                BuildCurrentPlayStats(),
                 _rows,
                 pageIndex,
                 pageCount,
@@ -599,6 +603,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_renderer != null)
                 _renderer.ClearPreparedPages();
             _lastRenderScopeKey = null;
+        }
+
+        private ScenarioBookPlayStatsModel BuildCurrentPlayStats()
+        {
+            if (_view != ScenarioBookBrowserViewKind.Saves || _dataSource == null)
+                return null;
+
+            IList<ScenarioBookRowModel> statRows = _rows;
+            if (!string.IsNullOrEmpty(GetSearchFilter()))
+                statRows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario, null);
+
+            return ScenarioBookPlayStatsBuilder.Build(_selectedScenario, statRows);
         }
 
         private string BuildPageCacheKey(int pageIndex)

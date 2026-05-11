@@ -5,6 +5,7 @@ using System.Linq;
 using ModAPI.Spine;
 using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI.FieldManual.Panels;
+using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.Internal.Spine;
 using ShelteredAPI.UI.Spine;
 using UnityEngine;
@@ -26,6 +27,14 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private static readonly Color ColorInputValue = new Color(0.93f, 0.88f, 0.80f, 1f);
         private static readonly Color ColorInputBackground = new Color(0.18f, 0.13f, 0.09f, 0.52f);
         private static readonly Color ColorSwatchBorder = new Color(0.18f, 0.11f, 0.06f, 0.82f);
+        private static readonly Color ColorBoolOnActive = new Color(0.20f, 0.39f, 0.22f, 0.96f);
+        private static readonly Color ColorBoolOnHover = new Color(0.25f, 0.47f, 0.27f, 1f);
+        private static readonly Color ColorBoolOffActive = new Color(0.47f, 0.18f, 0.12f, 0.92f);
+        private static readonly Color ColorBoolOffHover = new Color(0.55f, 0.22f, 0.15f, 1f);
+        private static readonly Color ColorBoolInactive = new Color(0.68f, 0.57f, 0.39f, 0.54f);
+        private static readonly Color ColorBoolInactiveHover = new Color(0.78f, 0.66f, 0.46f, 0.72f);
+        private static readonly Color ColorBoolActiveText = new Color(0.97f, 0.92f, 0.79f, 1f);
+        private static readonly Color ColorBoolInactiveText = new Color(0.16f, 0.11f, 0.07f, 1f);
 
         private const int ColumnWidth = 980;
         private const int LabelWidth = 430;
@@ -51,6 +60,10 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private const float IncreaseX = 930f;
         private const float CyclePreviousX = 630f;
         private const float CycleNextX = 870f;
+        private const int BoolSegmentWidth = 112;
+        private const int BoolSegmentHeight = 36;
+        private const float BoolSegmentGap = 6f;
+        private const string BoolSegmentLabelName = "BoolSegmentLabel";
 
         private readonly FieldManualWindowChrome _chrome;
         private readonly Texture2D _whiteTexture;
@@ -65,6 +78,18 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             public UITexture Fill;
             public UILabel ValueLabel;
             public UIInput ValueInput;
+        }
+
+        private sealed class BoolToggleVisual
+        {
+            public GameObject OnRoot;
+            public GameObject OffRoot;
+            public UITexture OnBackground;
+            public UITexture OffBackground;
+            public UILabel OnLabel;
+            public UILabel OffLabel;
+            public HoverVisualState OnHover;
+            public HoverVisualState OffHover;
         }
 
         public ModSettingsBookWidgetRenderer(
@@ -184,24 +209,25 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private void BuildBoolControl(GameObject row, SettingDefinition def, object settingsObject)
         {
             Func<bool> read = delegate { return SpineWidgetRuntime.GetValue<bool>(def, settingsObject); };
-            GameObject valueButton = null;
-            Action toggle = delegate
+            BoolToggleVisual visual = null;
+
+            Action<bool> apply = delegate(bool next)
             {
-                bool next = !read();
+                if (read() == next)
+                {
+                    UpdateBoolToggleVisual(visual, next);
+                    return;
+                }
+
                 if (SpineWidgetRuntime.TryApplyValue(def, settingsObject, next))
                 {
-                    UpdateButtonLabel(valueButton, FormatBool(def, next));
+                    UpdateBoolToggleVisual(visual, next);
                     SpineWidgetRuntime.NotifyChange(def, settingsObject, _panel);
                 }
             };
 
-            GameObject previousButton = CreateButton(row, "PrevToggle", "<", new Vector3(CyclePreviousX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, toggle);
-            valueButton = CreateButton(row, "Toggle", FormatBool(def, read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, CycleValueWidth, CycleValueHeight, toggle);
-            GameObject nextButton = CreateButton(row, "NextToggle", ">", new Vector3(CycleNextX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, toggle);
-
-            SpineWidgetRuntime.SetTooltip(previousButton, def.Tooltip);
-            SpineWidgetRuntime.SetTooltip(valueButton, def.Tooltip);
-            SpineWidgetRuntime.SetTooltip(nextButton, def.Tooltip);
+            visual = CreateBoolToggle(row, def, apply);
+            UpdateBoolToggleVisual(visual, read());
         }
 
         private void BuildNumericControl(GameObject row, SettingDefinition def, object settingsObject, bool snapToInt)
@@ -554,6 +580,93 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             return _chrome.Buttons.Build(parent, name, text, position, width, height, fontSize, onClick);
         }
 
+        private BoolToggleVisual CreateBoolToggle(GameObject row, SettingDefinition def, Action<bool> apply)
+        {
+            float offset = (BoolSegmentWidth + BoolSegmentGap) * 0.5f;
+            BoolToggleVisual visual = new BoolToggleVisual();
+            visual.OnRoot = CreateBoolSegment(
+                row,
+                "BoolOn",
+                FormatBool(def, true),
+                new Vector3(TrackCenterX - offset, LabelY, 0f),
+                delegate { if (apply != null) apply(true); },
+                out visual.OnBackground,
+                out visual.OnLabel,
+                out visual.OnHover);
+            visual.OffRoot = CreateBoolSegment(
+                row,
+                "BoolOff",
+                FormatBool(def, false),
+                new Vector3(TrackCenterX + offset, LabelY, 0f),
+                delegate { if (apply != null) apply(false); },
+                out visual.OffBackground,
+                out visual.OffLabel,
+                out visual.OffHover);
+
+            AttachTooltip(visual.OnRoot, BuildBoolTooltip(def, true));
+            AttachTooltip(visual.OffRoot, BuildBoolTooltip(def, false));
+            return visual;
+        }
+
+        private GameObject CreateBoolSegment(
+            GameObject parent,
+            string name,
+            string text,
+            Vector3 position,
+            Action onClick,
+            out UITexture background,
+            out UILabel label,
+            out HoverVisualState hover)
+        {
+            GameObject root = _chrome.Ui.CreateChild(parent, name, position);
+            background = _chrome.Ui.CreateQuad(root, name + "Bg", _whiteTexture, Vector3.zero,
+                BoolSegmentWidth, BoolSegmentHeight, ColorBoolInactive, _chrome.Ui.NextDepth());
+            label = _chrome.Ui.CreateLabel(root, BoolSegmentLabelName, text,
+                Vector3.zero, ControlFontSize, ColorBoolInactiveText,
+                BoolSegmentWidth - 16, BoolSegmentHeight - 6, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _chrome.Ui.NextDepth());
+            label.overflowMethod = UILabel.Overflow.ShrinkContent;
+            _chrome.Ui.AddClickCollider(root, BoolSegmentWidth, BoolSegmentHeight, onClick);
+
+            hover = root.AddComponent<HoverVisualState>();
+            hover.Widgets = new UIWidget[] { background, label };
+            hover.ScaleTarget = root.transform;
+            hover.RestScale = 1f;
+            hover.HoverScale = 1.025f;
+            return root;
+        }
+
+        private static void UpdateBoolToggleVisual(BoolToggleVisual visual, bool value)
+        {
+            if (visual == null)
+                return;
+
+            ApplyBoolSegmentVisual(visual.OnBackground, visual.OnLabel, visual.OnHover, value, true);
+            ApplyBoolSegmentVisual(visual.OffBackground, visual.OffLabel, visual.OffHover, !value, false);
+        }
+
+        private static void ApplyBoolSegmentVisual(UITexture background, UILabel label, HoverVisualState hover, bool active, bool trueSegment)
+        {
+            Color restBackground = active
+                ? (trueSegment ? ColorBoolOnActive : ColorBoolOffActive)
+                : ColorBoolInactive;
+            Color hoverBackground = active
+                ? (trueSegment ? ColorBoolOnHover : ColorBoolOffHover)
+                : ColorBoolInactiveHover;
+            Color restText = active ? ColorBoolActiveText : ColorBoolInactiveText;
+            Color hoverText = active ? ColorBoolActiveText : ColorText;
+
+            if (background != null)
+                background.color = restBackground;
+            if (label != null)
+                label.color = restText;
+
+            if (hover == null)
+                return;
+
+            hover.RestColors = new Color[] { restBackground, restText };
+            hover.HoverColors = new Color[] { hoverBackground, hoverText };
+        }
+
         private static void UpdateSliderVisual(NumericSliderVisual visual, float min, float max, float value, string displayText)
         {
             if (visual == null)
@@ -751,6 +864,13 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             return text;
         }
 
+        private static string BuildBoolTooltip(SettingDefinition def, bool targetValue)
+        {
+            string action = "Set " + SafeLabel(def) + " to " + FormatBool(def, targetValue) + ".";
+            string text = def != null ? def.Tooltip : null;
+            return string.IsNullOrEmpty(text) ? action : text + "\n" + action;
+        }
+
         private static void AttachTooltip(GameObject target, string text)
         {
             SpineWidgetRuntime.SetTooltip(target, text);
@@ -763,6 +883,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
             if (label.name == NumericInputValueLabelName)
                 return ColorInputValue;
+            if (label.name == BoolSegmentLabelName)
+                return label.color;
 
             return label.name == "Value" ? ColorValue : ColorText;
         }

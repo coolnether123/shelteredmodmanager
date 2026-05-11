@@ -37,6 +37,8 @@
     <DocumentationFile>..\Dist\SMM\ModAPI.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Local Sheltered/Unity runtime references are developer-machine fallbacks.
+         If your install differs, retarget these HintPath values to equivalent game assemblies. -->
     <Reference Include="0Harmony">
       <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
       <Private>False</Private>

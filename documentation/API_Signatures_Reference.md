@@ -746,7 +746,7 @@ Task guide: [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_S
 
 ```csharp
 public enum ItemStoreKind { Unknown, Inventory, Freezer, Mod }
-public enum CharacterItemAssignmentKind { Assigned, Reserved, Equipped, Carried, Medical, Food, Tool, Quest }
+public enum CharacterItemAssignmentKind { Assigned, Reserved, Equipped, Carried, Quest }
 public enum CharacterItemSlot { None, MainHand, OffHand, Backpack, Medicine, Food, Tool }
 
 public interface IItemStore
@@ -825,6 +825,7 @@ public sealed class CharacterItemAssignment
     public ItemStoreKind SourceStoreKind { get; set; }
     public string ItemId { get; set; }
     public int Quantity { get; set; }
+    public string ReservationId { get; set; }
     public CharacterItemAssignmentKind Kind { get; set; }
     public CharacterItemSlot Slot { get; set; }
 }
@@ -1454,6 +1455,9 @@ public static class ShelteredScenarioRuntime
 {
     public static bool FireTrigger(string triggerId);
     public static bool FireTrigger(string triggerId, string source, out string message);
+    public static ScenarioScoreSnapshot GetScoreSnapshot();
+    public static void SetScoreSnapshot(ScenarioScoreSnapshot snapshot);
+    public static void ClearScoreSnapshot();
 }
 
 public interface IShelteredCustomScenario
@@ -1493,7 +1497,87 @@ public class ScenarioDefinition
     public FamilySetupDefinition FamilySetup { get; set; }
     public StartingInventoryDefinition StartingInventory { get; set; }
     public BunkerEditsDefinition BunkerEdits { get; set; }
+    public WinLossConditionsDefinition WinLossConditions { get; set; }
+    public ScenarioScoringDefinition Scoring { get; set; }
     public AssetReferencesDefinition AssetReferences { get; set; }
+}
+
+public class ScenarioScoringDefinition
+{
+    public bool Enabled { get; set; }
+    public string ScoreLabel { get; set; }
+    public bool HigherIsBetter { get; set; }
+    public string LeaderboardKey { get; set; }
+    public List<ScenarioScoreCategoryDefinition> Categories { get; }
+    public List<ScenarioScoreRuleDefinition> Rules { get; }
+    public List<ScenarioProperty> Metadata { get; }
+}
+
+public class ScenarioScoreCategoryDefinition
+{
+    public string Id { get; set; }
+    public string DisplayName { get; set; }
+    public string Description { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public class ScenarioScoreRuleDefinition
+{
+    public string Id { get; set; }
+    public string CategoryId { get; set; }
+    public string DisplayName { get; set; }
+    public string Description { get; set; }
+    public string Source { get; set; }
+    public string Operation { get; set; }
+    public string OutcomeFilter { get; set; }
+    public float Weight { get; set; }
+    public List<ScenarioProperty> Properties { get; }
+}
+
+public enum ScenarioScoreCompletionState
+{
+    Unknown = 0,
+    InProgress = 1,
+    Won = 2,
+    Lost = 3,
+    Completed = 4,
+    Failed = 5,
+    Abandoned = 6
+}
+
+public class ScenarioScoreSnapshot
+{
+    public string ScenarioId { get; set; }
+    public string ScenarioVersion { get; set; }
+    public string RuntimeBindingId { get; set; }
+    public ScenarioScoreCompletionState CompletionState { get; set; }
+    public string Outcome { get; set; }
+    public string OutcomeConditionId { get; set; }
+    public bool HasTotalScore { get; set; }
+    public int TotalScore { get; set; }
+    public int Day { get; set; }
+    public int Hour { get; set; }
+    public int Minute { get; set; }
+    public List<ScenarioScoreCategorySnapshot> Categories { get; }
+    public List<ScenarioScoreRuleSnapshot> Rules { get; }
+    public List<ScenarioProperty> Metadata { get; }
+}
+
+public class ScenarioScoreCategorySnapshot
+{
+    public string CategoryId { get; set; }
+    public string DisplayName { get; set; }
+    public int Score { get; set; }
+}
+
+public class ScenarioScoreRuleSnapshot
+{
+    public string RuleId { get; set; }
+    public string CategoryId { get; set; }
+    public string DisplayName { get; set; }
+    public string Source { get; set; }
+    public float Value { get; set; }
+    public int Score { get; set; }
 }
 ```
 

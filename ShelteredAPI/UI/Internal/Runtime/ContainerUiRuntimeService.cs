@@ -195,7 +195,7 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
         private static bool IsAllowedByCategory(ContainerUiRequest request, ContainerUiItem item, ItemCategory? selectedCategory)
         {
-            if (selectedCategory.HasValue && item.Category != selectedCategory.Value)
+            if (selectedCategory.HasValue && !CategoriesMatch(selectedCategory.Value, item.Category))
                 return false;
 
             if (request.Categories == null || request.Categories.Length == 0)
@@ -203,11 +203,19 @@ namespace ShelteredAPI.UI.Internal.Runtime{
 
             for (int i = 0; i < request.Categories.Length; i++)
             {
-                if (request.Categories[i] == item.Category)
+                if (CategoriesMatch(request.Categories[i], item.Category))
                     return true;
             }
 
             return false;
+        }
+
+        private static bool CategoriesMatch(ItemCategory filter, ItemCategory itemCategory)
+        {
+            if (filter == itemCategory)
+                return true;
+
+            return filter == ItemCategory.Food && itemCategory == ItemCategory.Meat;
         }
 
         private static bool IsAllowedById(ContainerUiRequest request, ContainerUiItem item)

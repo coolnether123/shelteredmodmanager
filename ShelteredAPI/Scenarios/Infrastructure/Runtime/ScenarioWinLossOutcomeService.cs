@@ -111,9 +111,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             state.ScenarioOutcome = success ? "Win" : "Loss";
             state.ScenarioOutcomeConditionId = condition != null ? condition.Id : null;
+            UpdateScoreSnapshotOutcome(state, success);
             MMLog.WriteInfo("[ScenarioWinLoss] Resolved scenario QuestInstance " + instance.id.ToString()
                 + " as " + state.ScenarioOutcome
                 + " via condition '" + (state.ScenarioOutcomeConditionId ?? string.Empty) + "'.");
+        }
+
+        private static void UpdateScoreSnapshotOutcome(ScenarioRuntimeState state, bool success)
+        {
+            if (state == null || state.ScoreSnapshot == null)
+                return;
+
+            state.ScoreSnapshot.CompletionState = success ? ScenarioScoreCompletionState.Won : ScenarioScoreCompletionState.Lost;
+            state.ScoreSnapshot.Outcome = state.ScenarioOutcome;
+            state.ScoreSnapshot.OutcomeConditionId = state.ScenarioOutcomeConditionId;
+            try
+            {
+                state.ScoreSnapshot.Day = GameTime.Day;
+                state.ScoreSnapshot.Hour = GameTime.Hour;
+                state.ScoreSnapshot.Minute = GameTime.Minute;
+            }
+            catch
+            {
+            }
         }
 
         private void LogBlocked(string reason)

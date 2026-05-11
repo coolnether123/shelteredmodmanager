@@ -177,6 +177,51 @@ XML packs are refreshed when the custom scenario UI opens. If a code registratio
 
 Quests with `startTriggerId` are now scheduled behind a `CustomTrigger` condition and start after the referenced trigger fires. To avoid ambiguous starts, omit `<ScheduledStart>` on trigger-started quests.
 
+### Scoring Metadata And Snapshots
+
+Custom scenario scoring is authoring metadata plus an optional per-save runtime snapshot. The v1.3 foundation does not reuse Sheltered's Survival EOS leaderboard or the Surrounded/Stasis result panels; those are mode-specific vanilla implementations, not a generic scenario scoring API.
+
+Use `<Scoring>` to declare the score label, ordering preference, categories, and neutral rules that an editor or future detail/leaderboard UI can display:
+
+```xml
+<Scoring enabled="true" scoreLabel="Points" higherIsBetter="true" leaderboardKey="longroad">
+  <Categories>
+    <Category id="survival" displayName="Survival" sortOrder="10" />
+  </Categories>
+  <Rules>
+    <Rule id="days-survived" categoryId="survival" displayName="Days Survived" source="daysSurvived" operation="Add" weight="1">
+      <Properties>
+        <Property key="metric" value="GameTime.Day" />
+      </Properties>
+    </Rule>
+  </Rules>
+  <Metadata>
+    <Property key="notes" value="Scenario code supplies the runtime score snapshot." />
+  </Metadata>
+</Scoring>
+```
+
+Rules are deliberately neutral. `source`, `operation`, `weight`, and rule properties describe how scenario code should evaluate the score, but ShelteredAPI does not guess at vanilla formulas or run a generic score calculator yet.
+
+Scenario runtime code can persist a score snapshot in the active save:
+
+```csharp
+ScenarioScoreSnapshot snapshot = new ScenarioScoreSnapshot();
+snapshot.HasTotalScore = true;
+snapshot.TotalScore = 1200;
+snapshot.CompletionState = ScenarioScoreCompletionState.InProgress;
+snapshot.Categories.Add(new ScenarioScoreCategorySnapshot
+{
+    CategoryId = "survival",
+    DisplayName = "Survival",
+    Score = 1200
+});
+
+ShelteredScenarioRuntime.SetScoreSnapshot(snapshot);
+```
+
+`SetScoreSnapshot` fills missing scenario identity/version/runtime binding fields from the active custom scenario state and stamps the current game time when no snapshot time is supplied. `GetScoreSnapshot` returns a defensive copy, and `ClearScoreSnapshot` removes the persisted snapshot. When win/loss conditions resolve an active custom scenario, an existing snapshot is marked `Won` or `Lost` and receives the outcome condition id.
+
 ## Scenario Book Browser
 
 The scenario book adds a `Custom Scenarios` button. Selecting it replaces the vanilla scenario buttons with:
@@ -297,6 +342,8 @@ When a custom scenario successfully spawns, the runtime stores a `ScenarioRuntim
 - `IsConvertedToNormalSave = false`
 - `DayCreated`
 - `ScenarioQuestInstanceId` after the `ScenarioDef` is spawned successfully
+
+If scenario code publishes a score snapshot through `ShelteredScenarioRuntime.SetScoreSnapshot`, the save also stores `HasScoreSnapshot` and a nested `ScoreSnapshot` with completion state, outcome, optional total score, category rows, rule rows, and metadata. Existing saves without these fields continue loading as unscored saves.
 
 Failed spawns, dependency failures, and canceled startup flows clear pending scenario state and do not write a new binding. On later loads, active bindings let ShelteredAPI re-load the XML definition by `ScenarioId` and apply supported scenario data after the world is ready. Code-only scenarios still keep identity/version metadata in the save, but reload-time XML application requires a matching `scenario.xml` pack.
 
