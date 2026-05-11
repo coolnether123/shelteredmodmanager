@@ -15,9 +15,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             container.name = "Bool_" + def.Id;
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             UIButton toggleButton = null;
 
@@ -49,9 +49,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             container.name = "String_" + def.Id;
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             var inputObject = NGUITools.AddChild(container);
             inputObject.transform.localPosition = new Vector3(200, 0, 0);
@@ -139,9 +139,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             container.name = "Numeric_" + def.Id;
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             var valueLabel = UIUtil.CreateLabelQuick(container, "0", 16, new Vector3(200, 0, 0));
             valueLabel.alignment = NGUIText.Alignment.Center;
@@ -182,9 +182,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             container.name = (snapToInt ? "Int_" : "Float_") + def.Id;
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, new Vector3(0, 5, 0));
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, new Vector3(0, 5, 0));
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             var valueLabel = UIUtil.CreateLabelQuick(container, string.Empty, 16, new Vector3(210, -20, 0));
             valueLabel.alignment = NGUIText.Alignment.Right;
@@ -420,8 +420,12 @@ namespace ShelteredAPI.UI.Internal.Spine
 
         private static string BuildBoolTooltip(SettingDefinition def)
         {
-            string action = "Click to switch " + (def != null && !string.IsNullOrEmpty(def.Label) ? def.Label : "this setting") + " on or off.";
-            string text = def != null ? def.Tooltip : null;
+            string label = def != null && !string.IsNullOrEmpty(SpineWidgetRuntime.GetLabel(def)) ? SpineWidgetRuntime.GetLabel(def) : "this setting";
+            string action = SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Bool.Toggle",
+                "Click to switch {0} on or off.",
+                label);
+            string text = def != null ? SpineWidgetRuntime.GetTooltip(def) : null;
             return string.IsNullOrEmpty(text) ? action : text + "\n" + action;
         }
 

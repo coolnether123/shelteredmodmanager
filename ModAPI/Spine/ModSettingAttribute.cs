@@ -20,6 +20,9 @@ namespace ModAPI.Spine
         /// <summary>Text shown when hovering over the setting name/widget.</summary>
         public string Tooltip;
 
+        /// <summary>Tooltip text key supplied by the active runtime. If provided, Tooltip is used as fallback.</summary>
+        public string TooltipKey;
+
         /// <summary>Where this setting is stored (Global vs PerSave).</summary>
         public SettingsScope Scope = SettingsScope.Global;
         

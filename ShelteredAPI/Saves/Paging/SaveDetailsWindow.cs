@@ -62,6 +62,9 @@ namespace ShelteredAPI.Saves.Paging
         private const int WINDOW_HEIGHT = 860;
         private const int COLUMN_WIDTH = 400;
         private const int ROW_HEIGHT = 42;
+        private const int LIST_VIEWPORT_WIDTH = WINDOW_WIDTH - 100;
+        private const int LIST_VIEWPORT_HEIGHT = 320;
+        private const int LIST_TOP_PADDING = 18;
         
         public static void Show(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, bool isAttemptingLoad, Action onLoadAnyway = null, Action onCancel = null)
         {
@@ -217,122 +220,110 @@ namespace ShelteredAPI.Saves.Paging
             CreateTexturedBox(root, "HeaderDivider", new Vector3(0, headerY - 25, 0),
                 WINDOW_WIDTH - 200, 2, new Color(0, 0, 0, 0.2f), 50, false);
             
+            var warnings = BuildMissingModWarnings(savedMods, comparison, discovered);
+
             // === MOD LISTS (SCROLLABLE) ===
             int listStartY = headerY - 55;
-            int listAreaHeight = 320; // Available height for mod list (before buttons/warnings)
-            int maxVisibleRows = listAreaHeight / ROW_HEIGHT;
+            int maxVisibleRows = LIST_VIEWPORT_HEIGHT / ROW_HEIGHT;
             
-            // Create container for scroll content
+            var modListViewport = CreateClippedViewport(root, "ModListViewport",
+                new Vector3(0, listStartY - (LIST_VIEWPORT_HEIGHT * 0.5f), 0),
+                LIST_VIEWPORT_WIDTH, LIST_VIEWPORT_HEIGHT, 10050);
+
             var modListContainer = new GameObject("ModListContainer");
-            modListContainer.transform.SetParent(root, false);
-            modListContainer.layer = root.gameObject.layer;
+            modListContainer.transform.SetParent(modListViewport.transform, false);
+            modListContainer.layer = modListViewport.layer;
             modListContainer.transform.localPosition = Vector3.zero;
             
             // Track all mod row GameObjects for scrolling
             var modRowObjects = new List<GameObject>();
             int totalRows = Math.Max(activeMods.Count, savedMods.Length);
-            
-            int rowIndex = 0;
-            
-            // Active mods column (left)
-            foreach (var mod in activeMods)
+
+            for (int rowIndex = 0; rowIndex < totalRows; rowIndex++)
             {
-                int y = listStartY - (rowIndex * ROW_HEIGHT);
-                var status = comparison.Find(c => c.activeId == mod.Id);
-                SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
-                Color color = GetStatusColor(compareStatus);
-                
-                string iconPrefix = STATUS_MATCH;
-                string suffix = "";
-                
-                switch (compareStatus)
-                {
-                    case SaveVerification.ModCompareStatus.Extra: iconPrefix = STATUS_VERSION_DIFF; suffix = " [NEW]"; break;
-                    case SaveVerification.ModCompareStatus.VersionDiff: iconPrefix = STATUS_VERSION_DIFF; break;
-                }
-                
-                // Create a row container to group name and version labels
-                var rowGO = new GameObject($"ActiveRow_{rowIndex}");
+                int y = (LIST_VIEWPORT_HEIGHT / 2) - LIST_TOP_PADDING - (rowIndex * ROW_HEIGHT);
+                var rowGO = new GameObject($"ModRow_{rowIndex}");
                 rowGO.transform.SetParent(modListContainer.transform, false);
                 rowGO.layer = modListContainer.layer;
-                rowGO.transform.localPosition = new Vector3(-WINDOW_WIDTH/4, y, 0);
-                
-                var nameLabel = CreateLabel(rowGO.transform, $"Name", $"{iconPrefix} {mod.Name}{suffix}",
-                    Vector3.zero, 18, color, uiFont, ttfFont, 100);
-                nameLabel.alignment = NGUIText.Alignment.Center;
-                
-                var verLabel = CreateLabel(rowGO.transform, $"Version", $"   v{mod.Version}",
-                    new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
-                verLabel.alignment = NGUIText.Alignment.Center;
-                
-                modRowObjects.Add(rowGO);
-                rowIndex++;
-            }
-            
-            // Saved mods column (right)
-            rowIndex = 0;
-            var warnings = new List<string>();
-            
-            foreach (var saved in savedMods)
-            {
-                int y = listStartY - (rowIndex * ROW_HEIGHT);
-                // LoadedModInfo has .modId, .version (camelCase)
-                var status = comparison.Find(c => c.savedId == saved.modId);
-                SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
-                Color color = GetStatusColor(compareStatus);
-                
-                string icon = STATUS_MATCH;
-                string suffix = "";
-                
-                switch (compareStatus)
-                {
-                    case SaveVerification.ModCompareStatus.Missing:
-                        icon = STATUS_MISSING;
-                        suffix = " [MISSING]";
-                        break;
-                    case SaveVerification.ModCompareStatus.VersionDiff: icon = STATUS_VERSION_DIFF; suffix = " [VER DIFF]"; break;
-                }
-                
-                var diskMod = discovered.Find(d => d.Id.Equals(saved.modId, StringComparison.OrdinalIgnoreCase));
-                string displayName = diskMod != null ? diskMod.Name : saved.modId;
+                rowGO.transform.localPosition = new Vector3(0, y, 0);
 
-                // Create a row container
-                var rowGO = new GameObject($"SavedRow_{rowIndex}");
-                rowGO.transform.SetParent(modListContainer.transform, false);
-                rowGO.layer = modListContainer.layer;
-                rowGO.transform.localPosition = new Vector3(WINDOW_WIDTH/4, y, 0);
-
-                var savedName = CreateLabel(rowGO.transform, $"Name", $"{icon} {displayName}{suffix}",
-                    Vector3.zero, 18, color, uiFont, ttfFont, 100);
-                savedName.alignment = NGUIText.Alignment.Center;
-                
-                // Collect warnings from missing mods using the display name
-                if (compareStatus == SaveVerification.ModCompareStatus.Missing && saved.warnings != null && saved.warnings.Length > 0)
+                if (rowIndex < activeMods.Count && activeMods[rowIndex] != null)
                 {
-                    foreach (var w in saved.warnings)
+                    var mod = activeMods[rowIndex];
+                    var status = comparison.Find(c => c.activeId == mod.Id);
+                    SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
+                    Color color = GetStatusColor(compareStatus);
+
+                    string iconPrefix = STATUS_MATCH;
+                    string suffix = "";
+
+                    switch (compareStatus)
                     {
-                        if (!string.IsNullOrEmpty(w)) warnings.Add($"[{displayName}] {w}");
+                        case SaveVerification.ModCompareStatus.Extra: iconPrefix = STATUS_VERSION_DIFF; suffix = " [NEW]"; break;
+                        case SaveVerification.ModCompareStatus.VersionDiff: iconPrefix = STATUS_VERSION_DIFF; break;
                     }
+
+                    var nameLabel = CreateLabel(rowGO.transform, "ActiveName", $"{iconPrefix} {mod.Name}{suffix}",
+                        new Vector3(-WINDOW_WIDTH/4, 0, 0), 18, color, uiFont, ttfFont, 100);
+                    nameLabel.alignment = NGUIText.Alignment.Center;
+                    nameLabel.width = COLUMN_WIDTH;
+                    nameLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+                    var verLabel = CreateLabel(rowGO.transform, "ActiveVersion", $"   v{mod.Version}",
+                        new Vector3(-WINDOW_WIDTH/4, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                    verLabel.alignment = NGUIText.Alignment.Center;
+                    verLabel.width = COLUMN_WIDTH;
+                    verLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
                 }
-                
-                string verText = compareStatus == SaveVerification.ModCompareStatus.VersionDiff && status != null
-                    ? $"   (required: v{saved.version}, active: v{status.activeVersion})"
-                    : (string.IsNullOrEmpty(saved.version) ? "   any version" : $"   v{saved.version}");
-                var savedVer = CreateLabel(rowGO.transform, $"Version", verText,
-                    new Vector3(0, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
-                savedVer.alignment = NGUIText.Alignment.Center;
-                
+
+                if (rowIndex < savedMods.Length && savedMods[rowIndex] != null)
+                {
+                    var saved = savedMods[rowIndex];
+                    var status = comparison.Find(c => c.savedId == saved.modId);
+                    SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
+                    Color color = GetStatusColor(compareStatus);
+
+                    string icon = STATUS_MATCH;
+                    string suffix = "";
+
+                    switch (compareStatus)
+                    {
+                        case SaveVerification.ModCompareStatus.Missing:
+                            icon = STATUS_MISSING;
+                            suffix = " [MISSING]";
+                            break;
+                        case SaveVerification.ModCompareStatus.VersionDiff: icon = STATUS_VERSION_DIFF; suffix = " [VER DIFF]"; break;
+                    }
+
+                    var diskMod = discovered.Find(d => string.Equals(d.Id, saved.modId, StringComparison.OrdinalIgnoreCase));
+                    string displayName = diskMod != null ? diskMod.Name : saved.modId;
+
+                    var savedName = CreateLabel(rowGO.transform, "SavedName", $"{icon} {displayName}{suffix}",
+                        new Vector3(WINDOW_WIDTH/4, 0, 0), 18, color, uiFont, ttfFont, 100);
+                    savedName.alignment = NGUIText.Alignment.Center;
+                    savedName.width = COLUMN_WIDTH;
+                    savedName.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+                    string verText = compareStatus == SaveVerification.ModCompareStatus.VersionDiff && status != null
+                        ? $"   (required: v{saved.version}, active: v{status.activeVersion})"
+                        : (string.IsNullOrEmpty(saved.version) ? "   any version" : $"   v{saved.version}");
+                    var savedVer = CreateLabel(rowGO.transform, "SavedVersion", verText,
+                        new Vector3(WINDOW_WIDTH/4, -18, 0), 14, COLOR_SUBTEXT, uiFont, ttfFont, 100);
+                    savedVer.alignment = NGUIText.Alignment.Center;
+                    savedVer.width = COLUMN_WIDTH;
+                    savedVer.overflowMethod = UILabel.Overflow.ShrinkContent;
+                }
+
                 modRowObjects.Add(rowGO);
-                rowIndex++;
             }
-            
+
             // Add scroll helper if content exceeds visible area
             if (totalRows > maxVisibleRows)
             {
                 var scrollHelper = modListContainer.AddComponent<ModListScrollHelper>();
-                scrollHelper.Initialize(modRowObjects, listStartY, ROW_HEIGHT, 
-                    listStartY - listAreaHeight, listStartY, 
-                    -WINDOW_WIDTH/2, WINDOW_WIDTH/2); // Full width for scroll input
+                scrollHelper.Initialize(modRowObjects, ROW_HEIGHT, LIST_VIEWPORT_HEIGHT,
+                    -LIST_VIEWPORT_WIDTH/2, LIST_VIEWPORT_WIDTH/2,
+                    listStartY - LIST_VIEWPORT_HEIGHT, listStartY);
             }
             
             // === WARNINGS SECTION ===
@@ -377,7 +368,8 @@ namespace ShelteredAPI.Saves.Paging
                 
                 // Add scroll helper for the label
                 var scrollHelper = warnClippedGO.AddComponent<WarningScrollHelper>();
-                scrollHelper.Initialize(warnLabel, boxHeight);
+                scrollHelper.Initialize(warnLabel, boxHeight, -boxWidth/2, boxWidth/2,
+                    warningY - 60 - (boxHeight/2), warningY - 60 + (boxHeight/2));
             }
             
             // === BUTTON ROW ===
@@ -557,6 +549,54 @@ namespace ShelteredAPI.Saves.Paging
             }
             
             return go;
+        }
+
+        private GameObject CreateClippedViewport(Transform parent, string name, Vector3 pos, int width, int height, int depth)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.layer = parent.gameObject.layer;
+            go.transform.localPosition = pos;
+
+            var panel = go.AddComponent<UIPanel>();
+            panel.depth = depth;
+            panel.clipping = UIDrawCall.Clipping.SoftClip;
+            panel.baseClipRegion = new Vector4(0f, 0f, width, height);
+            panel.clipSoftness = new Vector2(8f, 8f);
+
+            return go;
+        }
+
+        private static List<string> BuildMissingModWarnings(LoadedModInfo[] savedMods, List<SaveVerification.ModCompareEntry> comparison, List<ModEntry> discovered)
+        {
+            var warnings = new List<string>();
+            if (savedMods == null || comparison == null)
+                return warnings;
+
+            for (int i = 0; i < savedMods.Length; i++)
+            {
+                var saved = savedMods[i];
+                if (saved == null || string.IsNullOrEmpty(saved.modId))
+                    continue;
+
+                var status = comparison.Find(c => c.savedId == saved.modId);
+                if (status == null || status.status != SaveVerification.ModCompareStatus.Missing || saved.warnings == null)
+                    continue;
+
+                var diskMod = discovered != null
+                    ? discovered.Find(d => string.Equals(d.Id, saved.modId, StringComparison.OrdinalIgnoreCase))
+                    : null;
+                string displayName = diskMod != null ? diskMod.Name : saved.modId;
+
+                for (int warningIndex = 0; warningIndex < saved.warnings.Length; warningIndex++)
+                {
+                    string warning = saved.warnings[warningIndex];
+                    if (!string.IsNullOrEmpty(warning))
+                        warnings.Add($"[{displayName}] {warning}");
+                }
+            }
+
+            return warnings;
         }
         
         private UILabel CreateLabel(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int depth)
@@ -777,19 +817,17 @@ namespace ShelteredAPI.Saves.Paging
         private float _minOffset;  // Minimum scroll offset (0 = at top)
         private float _maxOffset;  // Maximum scroll offset (positive = scrolled down)
         private float _rowHeight;
-        private float _minX;
-        private float _maxX;
+        private UiScrollRegion _region;
         
         /// <summary>
         /// Initialize the scroll helper with row items and bounds.
         /// </summary>
-        public void Initialize(List<GameObject> items, float startY, float rowHeight, 
-            float minY, float maxY, float minX, float maxX)
+        public void Initialize(List<GameObject> items, float rowHeight, float visibleHeight,
+            float minX, float maxX, float minY, float maxY)
         {
             _items = items;
             _rowHeight = rowHeight;
-            _minX = minX;
-            _maxX = maxX;
+            _region = new UiScrollRegion(minX, maxX, minY, maxY);
             
             // Store original Y positions for each item
             foreach (var item in items)
@@ -801,7 +839,6 @@ namespace ShelteredAPI.Saves.Paging
             }
             
             // Calculate scroll limits based on content vs visible area
-            float visibleHeight = maxY - minY;
             float contentHeight = items.Count * rowHeight;
             
             _minOffset = 0f;
@@ -814,9 +851,10 @@ namespace ShelteredAPI.Saves.Paging
         {
             if (_items == null || _items.Count == 0) return;
             if (_maxOffset <= 0) return; // No scrolling needed
+            if (!_region.ContainsPointer()) return;
             
             float scroll;
-            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_minX, _maxX), out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_region.MinX, _region.MaxX), out scroll))
             {
                 if (UnityEngine.Input.GetKeyDown(KeyCode.UpArrow) || UnityEngine.Input.GetKeyDown(KeyCode.W) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -839,7 +877,7 @@ namespace ShelteredAPI.Saves.Paging
                 var pos = item.transform.localPosition;
                 
                 // Offset the item Y position by the scroll amount
-                item.transform.localPosition = new Vector3(pos.x, originalY - _scrollOffset, pos.z);
+                item.transform.localPosition = new Vector3(pos.x, originalY + _scrollOffset, pos.z);
             }
         }
     }
@@ -852,12 +890,14 @@ namespace ShelteredAPI.Saves.Paging
         private UILabel _label;
         private float _clipHeight;
         private float _scrollY = 0f;
+        private UiScrollRegion _region;
         
-        public void Initialize(UILabel label, float clipHeight)
+        public void Initialize(UILabel label, float clipHeight, float minX, float maxX, float minY, float maxY)
         {
             _label = label;
             _clipHeight = clipHeight;
             _scrollY = 0f;
+            _region = new UiScrollRegion(minX, maxX, minY, maxY);
         }
         
         void Update()
@@ -866,9 +906,10 @@ namespace ShelteredAPI.Saves.Paging
             
             float contentHeight = _label.height;
             if (contentHeight <= _clipHeight) return;
+            if (!_region.ContainsPointer()) return;
             
             float scroll;
-            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(-400f, 400f), out scroll))
+            if (!ScrollInputService.TryGetVerticalScroll(ScrollInputQuery.ForUiRange(_region.MinX, _region.MaxX), out scroll))
             {
                 if (UnityEngine.Input.GetKeyDown(KeyCode.UpArrow) || UnityEngine.Input.GetKeyDown(KeyCode.W) || UnityEngine.Input.GetKeyDown(KeyCode.PageUp))
                     scroll = 1f;
@@ -885,6 +926,30 @@ namespace ShelteredAPI.Saves.Paging
             _scrollY = Mathf.Clamp(_scrollY, -maxScroll, maxScroll);
             
             _label.transform.localPosition = new Vector3(0, _scrollY, -1);
+        }
+    }
+
+    internal struct UiScrollRegion
+    {
+        public readonly float MinX;
+        public readonly float MaxX;
+        private readonly float _minY;
+        private readonly float _maxY;
+
+        public UiScrollRegion(float minX, float maxX, float minY, float maxY)
+        {
+            MinX = minX;
+            MaxX = maxX;
+            _minY = minY;
+            _maxY = maxY;
+        }
+
+        public bool ContainsPointer()
+        {
+            Vector3 pointerPosition = UnityEngine.Input.mousePosition;
+            float uiX = pointerPosition.x - (Screen.width * 0.5f);
+            float uiY = pointerPosition.y - (Screen.height * 0.5f);
+            return uiX >= MinX && uiX <= MaxX && uiY >= _minY && uiY <= _maxY;
         }
     }
 }

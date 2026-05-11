@@ -20,7 +20,7 @@ namespace ShelteredAPI.UI.Internal.Spine
 
             if (def.RequiresRestart)
             {
-                MMLog.WriteInfo($"[Settings] {def.Label} requires restart.");
+                MMLog.WriteInfo($"[Settings] {GetLabel(def)} requires restart.");
             }
 
             if (panel == null)
@@ -61,6 +61,70 @@ namespace ShelteredAPI.UI.Internal.Spine
 
             var label = go.GetComponent<UILabel>();
             UIHelper.AddTooltip(go, tooltipRoot, text, label != null ? label.bitmapFont : null, label != null ? label.trueTypeFont : null);
+        }
+
+        public static void SetTooltip(GameObject go, SettingDefinition def)
+        {
+            if (def == null)
+            {
+                return;
+            }
+
+            SetTooltip(go, GetTooltip(def));
+        }
+
+        public static string GetLabel(SettingDefinition def)
+        {
+            if (def == null)
+            {
+                return string.Empty;
+            }
+
+            string fallback = !string.IsNullOrEmpty(def.Label) ? def.Label : def.Id;
+            return ResolveLocalizedText(def.LabelKey, fallback);
+        }
+
+        public static string GetTooltip(SettingDefinition def)
+        {
+            if (def == null)
+            {
+                return string.Empty;
+            }
+
+            return ResolveLocalizedText(def.TooltipKey, def.Tooltip);
+        }
+
+        public static string ResolveLocalizedText(string key, string fallback)
+        {
+            if (!string.IsNullOrEmpty(key))
+            {
+                string localized = TryGetLocalizedText(key);
+                if (!string.IsNullOrEmpty(localized))
+                {
+                    return localized;
+                }
+            }
+
+            return fallback ?? string.Empty;
+        }
+
+        public static string ResolveLocalizedText(string key, string fallbackFormat, params object[] args)
+        {
+            string text = ResolveLocalizedText(key, fallbackFormat);
+            if (args == null || args.Length == 0 || string.IsNullOrEmpty(text))
+            {
+                return text;
+            }
+
+            try
+            {
+                return string.Format(text, args);
+            }
+            catch (FormatException ex)
+            {
+                MMLog.WriteError("[Settings] Invalid localized format for '" + key + "': " + ex.Message);
+                return string.Format(fallbackFormat ?? string.Empty, args);
+            }
         }
 
         public static T GetValue<T>(SettingDefinition def, object obj)
@@ -125,6 +189,32 @@ namespace ShelteredAPI.UI.Internal.Spine
             if (uiRoot != null) return uiRoot.transform;
 
             return go.transform != null ? go.transform.root : null;
+        }
+
+        private static string TryGetLocalizedText(string key)
+        {
+            try
+            {
+                string localized = Localization.Get(key, true);
+                if (string.IsNullOrEmpty(localized))
+                {
+                    return null;
+                }
+
+                string missingValue = key.ToLowerInvariant();
+                if (!string.Equals(localized, missingValue, StringComparison.Ordinal) ||
+                    Localization.Exists(key) ||
+                    Localization.Exists(missingValue))
+                {
+                    return localized;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[Settings] Failed to localize '" + key + "': " + ex.Message);
+            }
+
+            return null;
         }
 
         private static void SetValue(SettingDefinition def, object obj, object value)

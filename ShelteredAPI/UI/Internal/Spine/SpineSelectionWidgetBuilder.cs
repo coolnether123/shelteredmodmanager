@@ -15,9 +15,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             var container = NGUITools.AddChild(parent.gameObject);
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             var valueLabel = UIUtil.CreateLabelQuick(container, string.Empty, 16, new Vector3(210, 0, 0));
             valueLabel.alignment = NGUIText.Alignment.Center;
@@ -68,9 +68,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             var container = NGUITools.AddChild(parent.gameObject);
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             var valueLabel = UIUtil.CreateLabelQuick(container, string.Empty, 16, new Vector3(210, 0, 0));
             valueLabel.alignment = NGUIText.Alignment.Center;
@@ -108,9 +108,9 @@ namespace ShelteredAPI.UI.Internal.Spine
             container.name = "Keybind_" + def.Id;
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def), 16, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(label.gameObject, def);
 
             var valueLabel = UIUtil.CreateLabelQuick(container, string.Empty, 16, new Vector3(210, 0, 0));
             valueLabel.alignment = NGUIText.Alignment.Center;

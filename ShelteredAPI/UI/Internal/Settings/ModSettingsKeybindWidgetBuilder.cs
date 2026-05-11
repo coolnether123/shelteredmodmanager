@@ -84,8 +84,9 @@ namespace ShelteredAPI.UI.Internal.Settings{
         {
             GameObject container = CreateContainer("SectionHeader_" + (def != null ? def.Id : "Unknown"));
 
-            string title = def != null && !string.IsNullOrEmpty(def.Label)
-                ? def.Label.ToUpperInvariant()
+            string labelText = def != null ? SpineWidgetRuntime.GetLabel(def) : null;
+            string title = !string.IsNullOrEmpty(labelText)
+                ? labelText.ToUpperInvariant()
                 : "SECTION";
 
             UILabel label = _createLabel(
@@ -120,7 +121,7 @@ namespace ShelteredAPI.UI.Internal.Settings{
             label.width = ActionLabelWidth;
             label.overflowMethod = UILabel.Overflow.ClampContent;
             label.multiLine = false;
-            SpineWidgetRuntime.SetTooltip(label.gameObject, primaryDef != null ? primaryDef.Tooltip : (secondaryDef != null ? secondaryDef.Tooltip : null));
+            SpineWidgetRuntime.SetTooltip(label.gameObject, primaryDef != null ? SpineWidgetRuntime.GetTooltip(primaryDef) : (secondaryDef != null ? SpineWidgetRuntime.GetTooltip(secondaryDef) : null));
 
             KeybindCaptureListener primaryCapture = null;
             KeybindCaptureListener secondaryCapture = null;
@@ -195,7 +196,10 @@ namespace ShelteredAPI.UI.Internal.Settings{
                         Report(actionLabel + " is already unbound.", true);
                     }
                 });
-            SpineWidgetRuntime.SetTooltip(clearButton, "Clear both primary and alternate bindings for " + actionLabel + ".");
+            SpineWidgetRuntime.SetTooltip(clearButton, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Keybind.ClearBoth",
+                "Clear both primary and alternate bindings for {0}.",
+                actionLabel));
 
             GameObject resetButton = _createButton(
                 container.transform,
@@ -221,7 +225,10 @@ namespace ShelteredAPI.UI.Internal.Settings{
                         Report("Could not reset " + actionLabel + ".", true);
                     }
                 });
-            SpineWidgetRuntime.SetTooltip(resetButton, "Restore only " + actionLabel + " to its default primary and alternate keys.");
+            SpineWidgetRuntime.SetTooltip(resetButton, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Keybind.ResetAction",
+                "Restore only {0} to its default primary and alternate keys.",
+                actionLabel));
 
             return container;
         }
@@ -234,9 +241,10 @@ namespace ShelteredAPI.UI.Internal.Settings{
             if (labels == null || labels.Length == 0) return;
 
             bool isHeader = ModSettingsKeybindLayout.IsSectionHeaderEntry(entry);
+            string primaryLabel = entry.Primary != null ? SpineWidgetRuntime.GetLabel(entry.Primary) : null;
             string target = isHeader
-                ? ((entry.Primary != null && !string.IsNullOrEmpty(entry.Primary.Label))
-                    ? entry.Primary.Label.ToUpperInvariant()
+                ? (!string.IsNullOrEmpty(primaryLabel)
+                    ? primaryLabel.ToUpperInvariant()
                     : "SECTION")
                 : ModSettingsKeybindLayout.GetActionLabel(entry.Primary, entry.Secondary);
 
@@ -373,11 +381,14 @@ namespace ShelteredAPI.UI.Internal.Settings{
 
         private static string BuildKeySlotTooltip(string actionLabel, string slotName, SettingDefinition def)
         {
-            string description = def != null ? def.Tooltip : null;
+            string description = def != null ? SpineWidgetRuntime.GetTooltip(def) : null;
             string prefix = string.IsNullOrEmpty(description) ? string.Empty : description + "\n\n";
-            return prefix
-                + "Click to change the " + slotName + " key for " + actionLabel + ". "
-                + "Press Escape to cancel capture. Use RESET to restore reserved default keys.";
+            string body = SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Keybind.Slot",
+                "Click to change the {0} key for {1}. Press Escape to cancel capture. Use RESET to restore reserved default keys.",
+                slotName,
+                actionLabel);
+            return prefix + body;
         }
     }
 }

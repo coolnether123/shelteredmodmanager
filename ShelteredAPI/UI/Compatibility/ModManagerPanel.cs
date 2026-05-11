@@ -51,7 +51,9 @@ namespace ShelteredAPI.UI.Compatibility
         private const int ModButtonFontSize = 22;
         private const int ScrollButtonWidth = 112;
         private const int ScrollButtonHeight = 42;
-        private const int ScrollButtonFontSize = 18;
+        private const int ScrollButtonFontSize = 30;
+        private const string PreviousScrollButtonText = "<";
+        private const string NextScrollButtonText = ">";
         private static readonly Color BookButtonColor = new Color(0.88f, 0.76f, 0.63f, 1f);
         private static readonly Color BookButtonHoverColor = new Color(0.97f, 0.85f, 0.70f, 1f);
         private static readonly Color BookButtonPressedColor = new Color(0.74f, 0.61f, 0.49f, 1f);
@@ -227,7 +229,7 @@ namespace ShelteredAPI.UI.Compatibility
             _scrollUpButton = CreatePanelButton(
                 template,
                 "ModScrollUpButton",
-                "UP",
+                PreviousScrollButtonText,
                 new Vector3(ModListX - 115f, ModScrollControlsY, 0f),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
@@ -239,7 +241,7 @@ namespace ShelteredAPI.UI.Compatibility
             _scrollDownButton = CreatePanelButton(
                 template,
                 "ModScrollDownButton",
-                "DOWN",
+                NextScrollButtonText,
                 new Vector3(ModListX + 115f, ModScrollControlsY, 0f),
                 ScrollButtonWidth,
                 ScrollButtonHeight,
@@ -276,8 +278,8 @@ namespace ShelteredAPI.UI.Compatibility
             if (!canScroll)
                 return;
 
-            SetScrollButtonState(_scrollUpButton, _scrollHelper.CanScrollUp);
-            SetScrollButtonState(_scrollDownButton, _scrollHelper.CanScrollDown);
+            SetScrollButtonState(_scrollUpButton, _scrollHelper.CanScrollUp, PreviousScrollButtonText);
+            SetScrollButtonState(_scrollDownButton, _scrollHelper.CanScrollDown, NextScrollButtonText);
 
             int first = _scrollHelper.CurrentOffset + 1;
             int last = Math.Min(_scrollHelper.ItemCount, _scrollHelper.CurrentOffset + _scrollHelper.MaxVisibleItems);
@@ -292,7 +294,7 @@ namespace ShelteredAPI.UI.Compatibility
                 button.gameObject.SetActive(visible);
         }
 
-        private static void SetScrollButtonState(UIButton button, bool enabled)
+        private static void SetScrollButtonState(UIButton button, bool enabled, string text)
         {
             if (button == null || button.gameObject == null)
                 return;
@@ -305,6 +307,7 @@ namespace ShelteredAPI.UI.Compatibility
                 ScrollButtonFontSize,
                 enabled ? BookLabelColor : BookDisabledLabelColor,
                 enabled ? PanelButtonVisualStyle.ScrollEnabled : PanelButtonVisualStyle.ScrollDisabled);
+            SetPrimaryButtonText(button.gameObject, text);
         }
 
         private void CreateDetailLabels(Color textColor)
@@ -595,6 +598,20 @@ namespace ShelteredAPI.UI.Compatibility
             }
 
             return best;
+        }
+
+        private static void SetPrimaryButtonText(GameObject buttonObject, string text)
+        {
+            if (buttonObject == null)
+                return;
+
+            UILabel primaryLabel = GetPrimaryLabel(buttonObject.GetComponentsInChildren<UILabel>(true));
+            if (primaryLabel == null)
+                return;
+
+            primaryLabel.text = text ?? string.Empty;
+            primaryLabel.ProcessText();
+            primaryLabel.MarkAsChanged();
         }
 
         private static void ResolvePanelButtonVisualStyle(

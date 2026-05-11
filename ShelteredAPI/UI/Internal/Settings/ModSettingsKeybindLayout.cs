@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using ModAPI.Spine;
+using ShelteredAPI.UI.Internal.Spine;
 using UnityEngine;
 namespace ShelteredAPI.UI.Internal.Settings{
     internal sealed class ModSettingsKeybindDisplayEntry
@@ -141,11 +142,13 @@ namespace ShelteredAPI.UI.Internal.Settings{
 
         internal static string GetActionLabel(SettingDefinition primaryDef, SettingDefinition secondaryDef)
         {
-            if (primaryDef != null && !string.IsNullOrEmpty(primaryDef.Label))
-                return primaryDef.Label.Replace(" (Alt)", string.Empty);
+            string primaryLabel = primaryDef != null ? SpineWidgetRuntime.GetLabel(primaryDef) : null;
+            if (!string.IsNullOrEmpty(primaryLabel))
+                return primaryLabel.Replace(" (Alt)", string.Empty);
 
-            if (secondaryDef != null && !string.IsNullOrEmpty(secondaryDef.Label))
-                return secondaryDef.Label.Replace(" (Alt)", string.Empty);
+            string secondaryLabel = secondaryDef != null ? SpineWidgetRuntime.GetLabel(secondaryDef) : null;
+            if (!string.IsNullOrEmpty(secondaryLabel))
+                return secondaryLabel.Replace(" (Alt)", string.Empty);
 
             return "UNNAMED ACTION";
         }

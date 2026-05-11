@@ -418,7 +418,9 @@ public class ModConfigurationAttribute : Attribute
 public class ModSettingAttribute : Attribute
 {
     public string Label;
+    public string LabelKey;
     public string Tooltip;
+    public string TooltipKey;
     public SettingMode Mode; // default: Advanced
     public float MinValue;
     public float MaxValue;

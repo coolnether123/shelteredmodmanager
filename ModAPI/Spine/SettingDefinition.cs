@@ -14,7 +14,9 @@ namespace ModAPI.Spine
         public string FieldName;
         public string ParentId;
         public string Label;
+        public string LabelKey;
         public string Tooltip;
+        public string TooltipKey;
         public int SortOrder;
 
         public SettingType Type;

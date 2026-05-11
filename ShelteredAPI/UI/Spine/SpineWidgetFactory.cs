@@ -14,7 +14,7 @@ namespace ShelteredAPI.UI.Spine
 
         public static GameObject CreateWidget(SettingDefinition def, Transform parent, object settingsObject, ModSettingsPanel panel = null)
         {
-            MMLog.WriteDebug($"CreateWidget() - Id={def.Id}, Type={def.Type}, Label='{def.Label}'");
+            MMLog.WriteDebug($"CreateWidget() - Id={def.Id}, Type={def.Type}, Label='{SpineWidgetRuntime.GetLabel(def)}'");
 
             try
             {
@@ -37,7 +37,7 @@ namespace ShelteredAPI.UI.Spine
                         result = SpineSelectionWidgetBuilder.CreateEnumWidget(def, parent, settingsObject, panel);
                         break;
                     case SettingType.Color:
-                        result = UIUtil.CreateLabelQuick(parent.gameObject, $"{def.Label}: Color Picker Disabled", 14, Vector3.zero).gameObject;
+                        result = UIUtil.CreateLabelQuick(parent.gameObject, $"{SpineWidgetRuntime.GetLabel(def)}: Color Picker Disabled", 14, Vector3.zero).gameObject;
                         break;
                     case SettingType.Button:
                         result = SpineActionWidgetBuilder.CreateButtonWidget(def, parent, settingsObject);

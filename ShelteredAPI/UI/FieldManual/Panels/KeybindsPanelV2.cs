@@ -13,6 +13,7 @@ using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 using ShelteredAPI.UI.FieldManual.Widgets;
+using ShelteredAPI.UI.Internal.Spine;
 
 
 using ShelteredAPI.Content;
@@ -226,7 +227,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
                 if (ModSettingsKeybindLayout.IsSectionHeaderEntry(entry))
                 {
-                    GameObject stamp = stampFactory.Build(_pagedList.ContentRoot, entry.Primary.Label);
+                    GameObject stamp = stampFactory.Build(_pagedList.ContentRoot, SpineWidgetRuntime.GetLabel(entry.Primary));
                     _pagedList.AddRow(stamp, _metrics.SectionStampHeight);
                 }
                 else
@@ -304,9 +305,9 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             if (string.IsNullOrEmpty(filter))
                 return true;
 
-            return ContainsSearch(def.Label, filter)
+            return ContainsSearch(SpineWidgetRuntime.GetLabel(def), filter)
                 || ContainsSearch(def.Id, filter)
-                || ContainsSearch(def.Tooltip, filter)
+                || ContainsSearch(SpineWidgetRuntime.GetTooltip(def), filter)
                 || ContainsSearch(def.Category, filter)
                 || ContainsSearch(def.FieldName, filter);
         }

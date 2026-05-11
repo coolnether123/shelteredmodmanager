@@ -8,6 +8,7 @@ using ShelteredAPI.UI.FieldManual.Primitives;
 using ShelteredAPI.UI.FieldManual.Textures;
 using ShelteredAPI.UI.FieldManual.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
+using ShelteredAPI.UI.Internal.Spine;
 
 
 using ShelteredAPI.UI.Internal.Settings;
@@ -177,9 +178,15 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
         {
             if (_tooltipBus == null) return;
 
-            string actionBody = entry.Primary != null && !string.IsNullOrEmpty(entry.Primary.Tooltip)
-                ? entry.Primary.Tooltip
-                : (entry.Secondary != null && !string.IsNullOrEmpty(entry.Secondary.Tooltip) ? entry.Secondary.Tooltip : "Click a binding to change it. Use CLR or RST to clear or restore it.");
+            string primaryTooltip = entry.Primary != null ? SpineWidgetRuntime.GetTooltip(entry.Primary) : null;
+            string secondaryTooltip = entry.Secondary != null ? SpineWidgetRuntime.GetTooltip(entry.Secondary) : null;
+            string actionBody = !string.IsNullOrEmpty(primaryTooltip)
+                ? primaryTooltip
+                : (!string.IsNullOrEmpty(secondaryTooltip)
+                    ? secondaryTooltip
+                    : SpineWidgetRuntime.ResolveLocalizedText(
+                        "Spine.Settings.Tooltip.Keybind.Row",
+                        "Click a binding to change it. Use CLR or RST to clear or restore it."));
 
             HoverTooltipTrigger.Attach(row, _tooltipBus,
                 TooltipMessage.Info(actionLabel, actionBody));

@@ -86,13 +86,35 @@ Useful UI fields:
 - `LargeStepSize`: +/- button step while Shift is held.
 - `ShowValueInput`: set false to hide exact numeric text entry.
 - `ShowStepperButtons`: set false to hide +/- buttons.
+- `LabelKey`: localization key for the setting label. `Label` remains the fallback.
+- `TooltipKey`: localization key for the setting tooltip. `Tooltip` remains the fallback.
 - `TrueLabel` / `FalseLabel`: custom labels for bool toggles.
 - `ActionLabel`: custom text for method/button settings.
 - `Placeholder`: empty string setting placeholder.
 
 Boolean settings render as explicit two-state controls in the in-game settings book. They do not use arrow cycling; `TrueLabel` and `FalseLabel` replace the default `ON` / `OFF` text when supplied.
 
-Tooltips are shown when hovering labels and interactive controls. Numeric tooltips also include the active range and step behavior.
+Tooltips are shown when hovering labels and interactive controls. Numeric tooltips also include the active range and step behavior. Prefer `TooltipKey` for translated mods and keep `Tooltip` populated with an English fallback:
+
+```csharp
+[ModSetting("Enable Alerts",
+    LabelKey = "mymod.settings.alerts.label",
+    TooltipKey = "mymod.settings.alerts.tooltip",
+    Tooltip = "Show an alert when shelter resources become critical.")]
+public bool EnableAlerts = true;
+```
+
+Spine also resolves these built-in tooltip keys before falling back to English:
+`Spine.Settings.Tooltip.Defaults`, `Spine.Settings.Tooltip.SaveClose`,
+`Spine.Settings.Tooltip.Bool.Toggle`, `Spine.Settings.Tooltip.Bool.Set`,
+`Spine.Settings.Tooltip.Numeric.Range`, `Spine.Settings.Tooltip.Numeric.Step`,
+`Spine.Settings.Tooltip.Numeric.FineDrag`, `Spine.Settings.Tooltip.Numeric.ValueInput`,
+`Spine.Settings.Tooltip.Step.Increase`, `Spine.Settings.Tooltip.Step.Decrease`,
+`Spine.Settings.Tooltip.Step.LargeStep`, `Spine.Settings.Tooltip.Option.Previous`,
+`Spine.Settings.Tooltip.Option.Next`, `Spine.Settings.Tooltip.Keybind.Change`,
+`Spine.Settings.Tooltip.Keybind.Row`, `Spine.Settings.Tooltip.Keybind.Slot`,
+`Spine.Settings.Tooltip.Keybind.ClearBoth`, `Spine.Settings.Tooltip.Keybind.ResetAction`,
+`Spine.Settings.Tooltip.Color.Choose`, and `Spine.Settings.Tooltip.Text.Apply`.
 
 ### Pattern B: `ISettingsProvider` + `SpineSettingsHelper.Scan` (Manual Control)
 

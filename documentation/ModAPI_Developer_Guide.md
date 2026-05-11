@@ -121,6 +121,11 @@ Use explicit APIs when possible:
 
 Avoid ambiguous display-name helpers in new 1.3 code. Prefer explicit key/text methods so future content migrations can happen behind the facade.
 
+Spine settings follow the same key-plus-fallback pattern for user-facing metadata:
+- `LabelKey` localizes the setting label while `Label` remains the fallback.
+- `TooltipKey` localizes hover text while `Tooltip` remains the fallback.
+- Runtime-generated Spine tooltip text also looks up `Spine.Settings.Tooltip.*` keys before using built-in English fallbacks.
+
 ### 3.4 Registration Timing and Lifecycle
 
 Use this ordering:

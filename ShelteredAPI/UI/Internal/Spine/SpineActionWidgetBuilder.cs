@@ -12,17 +12,18 @@ namespace ShelteredAPI.UI.Internal.Spine
             var container = NGUITools.AddChild(parent.gameObject);
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var isFullWidth = def.Label.StartsWith("=") || def.Label.Length > 25;
+            string labelText = SpineWidgetRuntime.GetLabel(def);
+            var isFullWidth = labelText.StartsWith("=") || labelText.Length > 25;
             if (isFullWidth)
             {
-                UIUtil.CreateButton(container, SpineWidgetFactory.ButtonTemplate, def.Label, 380, 45, new Vector3(190, 0, 0), () =>
+                UIUtil.CreateButton(container, SpineWidgetFactory.ButtonTemplate, labelText, 380, 45, new Vector3(190, 0, 0), () =>
                 {
                     if (def.OnChanged != null) def.OnChanged(settingsObject);
                 });
             }
             else
             {
-                var label = UIUtil.CreateLabelQuick(container, def.Label, 16, Vector3.zero);
+                var label = UIUtil.CreateLabelQuick(container, labelText, 16, Vector3.zero);
                 label.pivot = UIWidget.Pivot.Left;
                 UIUtil.CreateButton(container, SpineWidgetFactory.ButtonTemplate, "EXECUTE", 100, 40, new Vector3(330, 0, 0), () =>
                 {
@@ -30,7 +31,7 @@ namespace ShelteredAPI.UI.Internal.Spine
                 });
             }
 
-            SpineWidgetRuntime.SetTooltip(container, def.Tooltip);
+            SpineWidgetRuntime.SetTooltip(container, def);
             return container;
         }
 
@@ -39,7 +40,7 @@ namespace ShelteredAPI.UI.Internal.Spine
             var container = NGUITools.AddChild(parent.gameObject);
             NGUITools.SetLayer(container, parent.gameObject.layer);
 
-            var label = UIUtil.CreateLabelQuick(container, def.Label.ToUpper(), 17, Vector3.zero);
+            var label = UIUtil.CreateLabelQuick(container, SpineWidgetRuntime.GetLabel(def).ToUpper(), 17, Vector3.zero);
             label.pivot = UIWidget.Pivot.Left;
             label.alignment = NGUIText.Alignment.Left;
             label.transform.localPosition = Vector3.zero;

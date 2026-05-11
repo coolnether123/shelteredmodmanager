@@ -183,7 +183,8 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         private GameObject CreateHeaderWidget(GameObject contentRoot, SettingDefinition def)
         {
             GameObject row = _chrome.Ui.CreateChild(contentRoot, "BookHeader_" + (def != null ? def.Id : "Settings"), Vector3.zero);
-            string label = def != null && !string.IsNullOrEmpty(def.Label) ? def.Label.ToUpperInvariant() : "SETTINGS";
+            string labelText = def != null ? SpineWidgetRuntime.GetLabel(def) : null;
+            string label = !string.IsNullOrEmpty(labelText) ? labelText.ToUpperInvariant() : "SETTINGS";
             Color color = def != null && def.HeaderColor.HasValue ? def.HeaderColor.Value : ColorHeader;
             UILabel header = _chrome.Ui.CreateLabel(row, "HeaderLabel", label, new Vector3(0f, 6f, 0f), HeaderFontSize, color, ColumnWidth, 34, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _chrome.Ui.NextDepth());
             header.overflowMethod = UILabel.Overflow.ShrinkContent;
@@ -198,11 +199,11 @@ namespace ShelteredAPI.UI.Compatibility.Settings
 
         private UILabel CreateSettingLabel(GameObject row, SettingDefinition def)
         {
-            string text = def != null && !string.IsNullOrEmpty(def.Label) ? def.Label : (def != null ? def.Id : string.Empty);
+            string text = def != null ? SpineWidgetRuntime.GetLabel(def) : string.Empty;
             UILabel label = _chrome.Ui.CreateLabel(row, "Label", text, new Vector3(0f, LabelY, 0f), LabelFontSize, ColorText, LabelWidth, 34, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _chrome.Ui.NextDepth());
             label.overflowMethod = UILabel.Overflow.ShrinkContent;
             if (def != null)
-                SpineWidgetRuntime.SetTooltip(label.gameObject, def.Tooltip);
+                SpineWidgetRuntime.SetTooltip(label.gameObject, def);
             return label;
         }
 
@@ -322,9 +323,9 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             GameObject previousButton = CreateButton(row, "PrevEnum", "<", new Vector3(CyclePreviousX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
             valueButton = CreateButton(row, "EnumValue", FormatObjectValue(read()), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, CycleValueWidth, CycleValueHeight, delegate { cycle(1); });
             GameObject nextButton = CreateButton(row, "NextEnum", ">", new Vector3(CycleNextX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
-            AttachTooltip(previousButton, "Show the previous option for " + SafeLabel(def) + ".");
-            AttachTooltip(valueButton, "Show the next option for " + SafeLabel(def) + ".");
-            AttachTooltip(nextButton, "Show the next option for " + SafeLabel(def) + ".");
+            AttachTooltip(previousButton, BuildPreviousOptionTooltip(def));
+            AttachTooltip(valueButton, BuildNextOptionTooltip(def));
+            AttachTooltip(nextButton, BuildNextOptionTooltip(def));
         }
 
         private void BuildChoiceControl(GameObject row, SettingDefinition def, object settingsObject)
@@ -355,9 +356,9 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             GameObject previousButton = CreateButton(row, "PrevChoice", "<", new Vector3(CyclePreviousX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(-1); });
             valueButton = CreateButton(row, "ChoiceValue", read(), new Vector3(TrackCenterX, LabelY, 0f), ControlFontSize, CycleValueWidth, CycleValueHeight, delegate { cycle(1); });
             GameObject nextButton = CreateButton(row, "NextChoice", ">", new Vector3(CycleNextX, LabelY, 0f), 18, SmallButtonWidth, SmallButtonHeight, delegate { cycle(1); });
-            AttachTooltip(previousButton, "Show the previous option for " + SafeLabel(def) + ".");
-            AttachTooltip(valueButton, "Show the next option for " + SafeLabel(def) + ".");
-            AttachTooltip(nextButton, "Show the next option for " + SafeLabel(def) + ".");
+            AttachTooltip(previousButton, BuildPreviousOptionTooltip(def));
+            AttachTooltip(valueButton, BuildNextOptionTooltip(def));
+            AttachTooltip(nextButton, BuildNextOptionTooltip(def));
         }
 
         private void BuildStringControl(GameObject row, SettingDefinition def, object settingsObject)
@@ -375,7 +376,7 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                     def.OnChanged(settingsObject);
                 _panel.OnSettingChanged();
             });
-            AttachTooltip(button, def.Tooltip);
+            AttachTooltip(button, SpineWidgetRuntime.GetTooltip(def));
         }
 
         private void BuildSingleKeybindControl(GameObject row, SettingDefinition def, object settingsObject)
@@ -397,7 +398,10 @@ namespace ShelteredAPI.UI.Compatibility.Settings
             };
 
             GameObject button = CreateButton(row, "Rebind", "Rebind", new Vector3(ColumnWidth - 48f, ControlY, 0f), 14, 96, SmallButtonHeight, capture.StartCapture);
-            AttachTooltip(button, "Change " + SafeLabel(def) + ".");
+            AttachTooltip(button, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Keybind.Change",
+                "Change {0}.",
+                SafeLabel(def)));
         }
 
         private void BuildColorControl(GameObject row, SettingDefinition def, object settingsObject)
@@ -423,8 +427,11 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 });
             });
 
-            AttachTooltip(swatchRoot, def.Tooltip);
-            AttachTooltip(edit, "Choose a color for " + SafeLabel(def) + ".");
+            AttachTooltip(swatchRoot, SpineWidgetRuntime.GetTooltip(def));
+            AttachTooltip(edit, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Color.Choose",
+                "Choose a color for {0}.",
+                SafeLabel(def)));
         }
 
         private void BuildReadOnlyValue(GameObject row, string text)
@@ -475,8 +482,11 @@ namespace ShelteredAPI.UI.Compatibility.Settings
                 input.RemoveFocus();
             });
 
-            AttachTooltip(value.gameObject, def.Tooltip);
-            AttachTooltip(ok, "Apply text for " + SafeLabel(def) + ".");
+            AttachTooltip(value.gameObject, SpineWidgetRuntime.GetTooltip(def));
+            AttachTooltip(ok, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Text.Apply",
+                "Apply text for {0}.",
+                SafeLabel(def)));
         }
 
         private UILabel CreateValueLabel(GameObject parent, string text, Vector3 position, int width)
@@ -833,41 +843,84 @@ namespace ShelteredAPI.UI.Compatibility.Settings
         {
             if (def == null)
                 return "this setting";
-            if (!string.IsNullOrEmpty(def.Label))
-                return def.Label;
+            string label = SpineWidgetRuntime.GetLabel(def);
+            if (!string.IsNullOrEmpty(label))
+                return label;
             return string.IsNullOrEmpty(def.Id) ? "this setting" : def.Id;
         }
 
         private static string BuildNumericTooltip(SettingDefinition def, float min, float max, bool snapToInt)
         {
-            string text = def != null ? def.Tooltip : null;
-            string range = "Range: " + FormatNumeric(def, min, snapToInt) + " to " + FormatNumeric(def, max, snapToInt) + ".";
+            string text = def != null ? SpineWidgetRuntime.GetTooltip(def) : null;
+            string range = SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Numeric.Range",
+                "Range: {0} to {1}.",
+                FormatNumeric(def, min, snapToInt),
+                FormatNumeric(def, max, snapToInt));
             string step = def != null && def.SliderStepMode == SliderStepMode.Stepped
-                ? " Slider snaps to " + FormatNumeric(def, ResolveSliderStep(def, snapToInt), snapToInt) + " increments."
-                : " Drag for fine adjustment.";
+                ? SpineWidgetRuntime.ResolveLocalizedText(
+                    "Spine.Settings.Tooltip.Numeric.Step",
+                    " Slider snaps to {0} increments.",
+                    FormatNumeric(def, ResolveSliderStep(def, snapToInt), snapToInt))
+                : SpineWidgetRuntime.ResolveLocalizedText(
+                    "Spine.Settings.Tooltip.Numeric.FineDrag",
+                    " Drag for fine adjustment.");
 
             return string.IsNullOrEmpty(text) ? range + step : text + "\n" + range + step;
         }
 
         private static string BuildValueInputTooltip(SettingDefinition def, float min, float max, bool snapToInt)
         {
-            return BuildNumericTooltip(def, min, max, snapToInt) + "\nClick the value to type an exact number.";
+            return BuildNumericTooltip(def, min, max, snapToInt) + "\n" +
+                SpineWidgetRuntime.ResolveLocalizedText(
+                    "Spine.Settings.Tooltip.Numeric.ValueInput",
+                    "Click the value to type an exact number.");
+        }
+
+        private static string BuildPreviousOptionTooltip(SettingDefinition def)
+        {
+            return SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Option.Previous",
+                "Show the previous option for {0}.",
+                SafeLabel(def));
+        }
+
+        private static string BuildNextOptionTooltip(SettingDefinition def)
+        {
+            return SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Option.Next",
+                "Show the next option for {0}.",
+                SafeLabel(def));
         }
 
         private static string BuildStepTooltip(SettingDefinition def, float min, float max, bool snapToInt, bool increase)
         {
             float step = ResolveButtonStep(def, min, max, snapToInt);
-            string direction = increase ? "Increase" : "Decrease";
-            string text = direction + " by " + FormatNumeric(def, step, snapToInt) + ".";
+            string text = increase
+                ? SpineWidgetRuntime.ResolveLocalizedText(
+                    "Spine.Settings.Tooltip.Step.Increase",
+                    "Increase by {0}.",
+                    FormatNumeric(def, step, snapToInt))
+                : SpineWidgetRuntime.ResolveLocalizedText(
+                    "Spine.Settings.Tooltip.Step.Decrease",
+                    "Decrease by {0}.",
+                    FormatNumeric(def, step, snapToInt));
             if (def != null && def.LargeStepSize.HasValue && def.LargeStepSize.Value > 0f)
-                text += " Hold Shift for " + FormatNumeric(def, def.LargeStepSize.Value, snapToInt) + ".";
+                text += " " + SpineWidgetRuntime.ResolveLocalizedText(
+                    "Spine.Settings.Tooltip.Step.LargeStep",
+                    "Hold Shift for {0}.",
+                    FormatNumeric(def, def.LargeStepSize.Value, snapToInt));
             return text;
         }
 
         private static string BuildBoolTooltip(SettingDefinition def, bool targetValue)
         {
-            string action = "Set " + SafeLabel(def) + " to " + FormatBool(def, targetValue) + ".";
-            string text = def != null ? def.Tooltip : null;
+            string action = SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Bool.Set",
+                "Set {0} to {1}.",
+                SafeLabel(def),
+                FormatBool(def, targetValue));
+            string text = def != null ? SpineWidgetRuntime.GetTooltip(def) : null;
             return string.IsNullOrEmpty(text) ? action : text + "\n" + action;
         }
 

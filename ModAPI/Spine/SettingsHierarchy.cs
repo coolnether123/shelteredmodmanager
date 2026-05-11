@@ -166,7 +166,9 @@ namespace ModAPI.Spine
             string needle = query.ToLowerInvariant();
             return ordered.Where(def =>
                 (!string.IsNullOrEmpty(def.Label) && def.Label.ToLowerInvariant().Contains(needle)) ||
+                (!string.IsNullOrEmpty(def.LabelKey) && def.LabelKey.ToLowerInvariant().Contains(needle)) ||
                 (!string.IsNullOrEmpty(def.Tooltip) && def.Tooltip.ToLowerInvariant().Contains(needle)) ||
+                (!string.IsNullOrEmpty(def.TooltipKey) && def.TooltipKey.ToLowerInvariant().Contains(needle)) ||
                 (!string.IsNullOrEmpty(def.Id) && def.Id.ToLowerInvariant().Contains(needle)));
         }
 

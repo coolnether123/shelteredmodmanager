@@ -200,10 +200,14 @@ namespace ShelteredAPI.UI.Compatibility
             ModSettingsKeybindStatusReporter.Attach(_keybindStatusController.Report);
             
             var defaultsButton = CreateButton(_chrome.Regions.FooterRoot.transform, "BtnReset", "Defaults", new Vector3(-460f, bottomY, 0), 18, Color.white, uiFont, ttfFont, 160, 58, () => OnResetClicked());
-            SpineWidgetRuntime.SetTooltip(defaultsButton, "Restore every setting on this page to its default value.");
+            SpineWidgetRuntime.SetTooltip(defaultsButton, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.Defaults",
+                "Restore every setting on this page to its default value."));
 
             var saveButton = CreateButton(_chrome.Regions.FooterRoot.transform, "BtnSaveAndClose", "Save & Close", new Vector3(420f, bottomY, 0), 18, Color.white, uiFont, ttfFont, 220, 58, () => OnClose());
-            SpineWidgetRuntime.SetTooltip(saveButton, "Save changes and return to the previous settings screen.");
+            SpineWidgetRuntime.SetTooltip(saveButton, SpineWidgetRuntime.ResolveLocalizedText(
+                "Spine.Settings.Tooltip.SaveClose",
+                "Save changes and return to the previous settings screen."));
 
             MMLog.WriteDebug("UI Initial Construction Complete. Building Menu Content...");
             BuildMenu(uiFont, ttfFont);
@@ -880,9 +884,9 @@ namespace ShelteredAPI.UI.Compatibility
             if (string.IsNullOrEmpty(filter))
                 return true;
 
-            return ContainsSearch(def.Label, filter)
+            return ContainsSearch(SpineWidgetRuntime.GetLabel(def), filter)
                 || ContainsSearch(def.Id, filter)
-                || ContainsSearch(def.Tooltip, filter)
+                || ContainsSearch(SpineWidgetRuntime.GetTooltip(def), filter)
                 || ContainsSearch(def.Category, filter)
                 || ContainsSearch(def.FieldName, filter);
         }
@@ -911,8 +915,9 @@ namespace ShelteredAPI.UI.Compatibility
             if (entry == null || entry.Primary == null)
                 return "Settings";
 
-            if (!string.IsNullOrEmpty(entry.Primary.Label) && IsSectionHeaderEntry(entry))
-                return entry.Primary.Label;
+            string label = SpineWidgetRuntime.GetLabel(entry.Primary);
+            if (!string.IsNullOrEmpty(label) && IsSectionHeaderEntry(entry))
+                return label;
 
             if (!string.IsNullOrEmpty(entry.Primary.Category))
                 return entry.Primary.Category;
