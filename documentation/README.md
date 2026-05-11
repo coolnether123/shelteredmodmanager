@@ -35,6 +35,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 |-------|----------|
 | Patch metadata and cooperative patching rules | [Patch Governance](Patch_Governance.md) |
 | Host-neutral networking assembly boundaries | [ModAPI Networking Guide](ModAPI_Networking_Guide.md) |
+| Networking threat model and priority security fixes | [Networking Security Review](Networking_Security_Review_2026-05-10.md) |
 | Transpiler safety flags | [Transpiler Safety Settings](Transpiler_Safety_Settings.md) |
 | Public API boundary decisions | [ModAPI Sheltered Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
 | Developer comment style | [Developer Commenting Standard](Developer_Commenting_Standard.md) |
