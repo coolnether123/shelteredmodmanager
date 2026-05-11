@@ -67,7 +67,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(loaded.Scoring != null, "Scenario scoring definition was not initialized.", result);
             Assert(loaded.Scoring.Categories.Count == 1, "Score category was not parsed.", result);
             Assert(loaded.Scoring.Rules.Count == 1, "Score rule was not parsed.", result);
-            Assert(string.Equals(loaded.Scoring.Rules[0].Source, "daysSurvived", StringComparison.OrdinalIgnoreCase), "Score rule source was not parsed.", result);
+            Assert(loaded.Scoring.Rules.Count > 0 && string.Equals(loaded.Scoring.Rules[0].Source, "daysSurvived", StringComparison.OrdinalIgnoreCase), "Score rule source was not parsed.", result);
 
             ScenarioDefinition missingScoring = serializer.FromXml("<Scenario><Meta><Id>Scenario.NoScoring</Id><DisplayName>No Scoring</DisplayName></Meta></Scenario>");
             Assert(missingScoring.Scoring != null, "Missing <Scoring> did not create a default scoring definition.", result);
