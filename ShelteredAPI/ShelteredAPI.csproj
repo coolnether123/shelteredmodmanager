@@ -173,7 +173,6 @@
     <Compile Include="Networking\Setup\MultiplayerAutoLoadFlow.cs" />
     <Compile Include="Networking\Setup\MultiplayerAutoLoadState.cs" />
     <Compile Include="Networking\ShelteredMultiplayerSetupService.cs" />
-    <Compile Include="Networking\ShelteredMultiplayerSaveSyncService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerEventSyncService.cs" />
     <Compile Include="Networking\ShelteredMultiplayerNetworkEvents.cs" />
     <Compile Include="Networking\ShelteredNetworkEventContext.cs" />

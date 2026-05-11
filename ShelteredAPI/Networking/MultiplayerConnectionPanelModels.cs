@@ -61,8 +61,6 @@ namespace ShelteredAPI.Networking
         public string DiscoveryFallbackText = string.Empty;
         public string LocalPeerIdText = string.Empty;
         public string ConfigurationSummary = string.Empty;
-        public string SaveSyncStatus = string.Empty;
-        public string SaveSyncLastError = string.Empty;
         public string SetupStatus = string.Empty;
         public string SetupLastError = string.Empty;
         public MultiplayerAutoLoadStatus AutoLoadFlowStatus;

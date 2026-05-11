@@ -28,6 +28,7 @@ namespace ShelteredAPI.Networking.Tests
             tests.Add(new TestCase("Architecture_NetworkingCatchBlocksMustBeLoggedOrDocumented", NetworkingHasNoUnsafeSilentCatches));
             tests.Add(new TestCase("Architecture_SetupDtosPopulateCoordinatorContext", SetupDtosPopulateCoordinatorContext));
             tests.Add(new TestCase("Architecture_EventRegistriesKeepIdempotencyIndexes", EventRegistriesKeepIdempotencyIndexes));
+            tests.Add(new TestCase("Architecture_RawShelterSaveSyncStaysRemoved", RawShelterSaveSyncStaysRemoved));
         }
 
         private static void PublicSurfaceMatchesBaseline()
@@ -97,8 +98,6 @@ namespace ShelteredAPI.Networking.Tests
             allowed["ShelteredAPI/Networking/Diagnostics/ShelteredMultiplayerTimeline.cs"] = 1;
             // Persistence timestamps describe snapshot metadata, not simulation time.
             allowed["ShelteredAPI/Networking/Persistence/ShelteredMultiplayerWorldSnapshot.cs"] = 1;
-            // Save sync timestamps identify files/messages and must not drive shared world ticks.
-            allowed["ShelteredAPI/Networking/ShelteredMultiplayerSaveSyncService.cs"] = 3;
             // Temporary Dev-1.4 bridge: clock samples carry diagnostic UTC metadata only, never tick authority.
             allowed["ShelteredAPI/Networking/World/ShelteredMultiplayerWorldClock.cs"] = 4;
             // Temporary Dev-1.4 bridge: missing sample timestamps are normalized for diagnostics only.
@@ -260,6 +259,30 @@ namespace ShelteredAPI.Networking.Tests
             AssertNoFindings(
                 findings,
                 "Authoritative event journals and state registries must keep event/correlation id indexes so duplicate network delivery cannot apply dangerous mutations twice.");
+        }
+
+        private static void RawShelterSaveSyncStaysRemoved()
+        {
+            string repoRoot = FindRepoRoot();
+            List<string> findings = new List<string>();
+
+            string legacyService = Path.Combine(repoRoot, Path.Combine(Path.Combine("ShelteredAPI", "Networking"), "ShelteredMultiplayerSaveSyncService.cs"));
+            if (File.Exists(legacyService))
+                findings.Add("ShelteredMultiplayerSaveSyncService.cs must stay removed. Shelters are local; multiplayer sync should target shared-world/map state.");
+
+            string connectionServicePath = Path.Combine(repoRoot, Path.Combine(Path.Combine("ShelteredAPI", "Networking"), "MultiplayerConnectionTestService.cs"));
+            string connectionService = File.ReadAllText(connectionServicePath);
+            if (connectionService.IndexOf("SaveSync", StringComparison.OrdinalIgnoreCase) >= 0)
+                findings.Add("MultiplayerConnectionTestService.cs must not compose or route raw save-sync messages.");
+
+            string projectPath = Path.Combine(repoRoot, Path.Combine("ShelteredAPI", "ShelteredAPI.csproj"));
+            string projectText = File.ReadAllText(projectPath);
+            if (projectText.IndexOf("ShelteredMultiplayerSaveSyncService.cs", StringComparison.OrdinalIgnoreCase) >= 0)
+                findings.Add("ShelteredAPI.csproj must not compile raw shelter save-sync service code.");
+
+            AssertNoFindings(
+                findings,
+                "Shelter saves are player-local. Future save-backed multiplayer data must be narrow shared-world/map state, not raw slot or vanilla save snapshots.");
         }
 
         private static Dictionary<string, string> ReadPublicSurfaceBaseline(string baselinePath)

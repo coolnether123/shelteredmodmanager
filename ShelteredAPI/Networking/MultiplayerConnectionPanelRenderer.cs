@@ -128,8 +128,6 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawSubHeader("Setup / Auto-load");
             MultiplayerDiagnosticsWidgets.DrawValue("Setup", model.SetupReadiness.StatusText);
             MultiplayerDiagnosticsWidgets.DrawHint(model.SetupReadiness.DetailText);
-            MultiplayerDiagnosticsWidgets.DrawValue("Save sync", model.SaveSyncStatus);
-            MultiplayerDiagnosticsWidgets.DrawOptionalError("Save sync error", model.SaveSyncLastError);
             MultiplayerDiagnosticsWidgets.DrawOptionalError("Setup error", model.SetupLastError);
             DrawAutoLoadStatus(model);
         }
@@ -204,8 +202,6 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawSubHeader("Setup Gate");
             MultiplayerDiagnosticsWidgets.DrawValue("Status", model.SetupReadiness.StatusText);
             MultiplayerDiagnosticsWidgets.DrawHint(model.SetupReadiness.DetailText);
-            MultiplayerDiagnosticsWidgets.DrawValue("Save sync", model.SaveSyncStatus);
-            MultiplayerDiagnosticsWidgets.DrawOptionalError("Save sync error", model.SaveSyncLastError);
             MultiplayerDiagnosticsWidgets.DrawOptionalError("Setup error", model.SetupLastError);
             DrawAutoLoadStatus(model);
         }

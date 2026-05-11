@@ -36,7 +36,6 @@ namespace ShelteredAPI.Networking
         private readonly List<string> _discoveryResults = new List<string>();
 
         private NetworkSession _session;
-        private ShelteredMultiplayerSaveSyncService _saveSync;
         private ShelteredMultiplayerSetupService _setup;
         private ShelteredMultiplayerEventSyncService _eventSync;
         private string _lastError = string.Empty;
@@ -124,16 +123,6 @@ namespace ShelteredAPI.Networking
                 return string.Empty;
 
             return GetCachedLanEndpoint(validation.Port);
-        }
-
-        public string SaveSyncStatus
-        {
-            get { return _saveSync != null ? _saveSync.Status : "inactive"; }
-        }
-
-        public string SaveSyncLastError
-        {
-            get { return _saveSync != null ? _saveSync.LastError : string.Empty; }
         }
 
         public string SetupStatus
@@ -410,8 +399,6 @@ namespace ShelteredAPI.Networking
             try
             {
                 session.Update();
-                if (_saveSync != null)
-                    _saveSync.Update();
                 if (_setup != null)
                     _setup.Update();
                 RefreshLocalEndpoint();
@@ -687,12 +674,6 @@ namespace ShelteredAPI.Networking
             CancelPendingJoin();
             NetworkSession session = _session;
             _session = null;
-            if (_saveSync != null)
-            {
-                _saveSync.HandleLocalSessionEnding(reason);
-                _saveSync.Dispose();
-                _saveSync = null;
-            }
             if (_setup != null)
             {
                 _setup.HandleLocalSessionEnding(reason);
@@ -879,8 +860,6 @@ namespace ShelteredAPI.Networking
         private void OnPeerConnected(object sender, NetworkPeerEventArgs e)
         {
             NetworkPeer peer = e != null ? e.Peer : null;
-            if (_saveSync != null)
-                _saveSync.HandlePeerConnected(peer);
             if (_setup != null)
                 _setup.HandlePeerConnected(peer);
             if (_session != null && _session.Mode == NetworkSessionMode.Client)
@@ -896,8 +875,6 @@ namespace ShelteredAPI.Networking
         private void OnPeerDisconnected(object sender, NetworkPeerDisconnectedEventArgs e)
         {
             string message = e != null ? e.Message : string.Empty;
-            if (_saveSync != null)
-                _saveSync.HandlePeerDisconnected(e != null ? e.Peer : null);
             if (_setup != null)
             {
                 _setup.HandlePeerDisconnected(e != null ? e.Peer : null);
@@ -978,8 +955,6 @@ namespace ShelteredAPI.Networking
             if (e == null)
                 return;
 
-            if (_saveSync != null && _saveSync.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
-                return;
             if (_setup != null && _setup.TryHandleMessage(e.Peer, e.MessageType, e.Payload))
                 return;
 

@@ -52,8 +52,6 @@ namespace ShelteredAPI.Networking
                 : string.Empty;
             model.LocalPeerIdText = snapshot != null ? snapshot.LocalPeerId.ToString() : "unassigned";
             model.ConfigurationSummary = service.ConfigurationSummary;
-            model.SaveSyncStatus = service.SaveSyncStatus;
-            model.SaveSyncLastError = service.SaveSyncLastError;
             model.SetupStatus = service.SetupStatus;
             model.SetupLastError = service.SetupLastError;
             model.AutoLoadFlowStatus = service.AutoLoadStatus;

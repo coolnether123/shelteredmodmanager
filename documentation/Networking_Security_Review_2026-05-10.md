@@ -4,6 +4,8 @@ Date: 2026-05-10
 
 Reviewer: Codex
 
+Follow-up status: the raw shelter save-sync service discussed below has been removed from active source after the multiplayer boundary was clarified. Private shelter saves should stay local; future save-backed sync must be narrow shared-world/map state.
+
 Scope:
 - `ModAPI.Networking`: host-neutral UDP transport, session, discovery, reliability, event, and snapshot helpers.
 - `ShelteredAPI/Networking`: Sheltered-specific multiplayer menu, setup, save sync, event sync, world clock, travel, trade, location, bunker, raid, and persistence integration.
@@ -204,14 +206,13 @@ Non-standard or risky:
 
 ## Priority Fix List
 
-1. Block remote save snapshot chunks on hosts and require clients to accept chunks only from the host.
-2. Block remote authoritative envelopes from non-host peers.
-3. Block `ReleaseStartMessageType` on hosts and require clients to accept release only from the host.
-4. Add transfer size/count/time limits for save snapshot assembly.
-5. Add receive queue caps and pre-handshake rate limiting.
-6. Replace machine-name reconnect tokens with random per-session bearer tokens.
-7. Add an optional join code and packet HMAC before considering internet or untrusted LAN use.
-8. Add tests for the three role-confusion cases: client save chunk to host, client release to host, client authoritative event to host.
+1. Block remote authoritative envelopes from non-host peers.
+2. Block `ReleaseStartMessageType` on hosts and require clients to accept release only from the host.
+3. Add receive queue caps and pre-handshake rate limiting.
+4. Replace machine-name reconnect tokens with random per-session bearer tokens.
+5. Add an optional join code and packet HMAC before considering internet or untrusted LAN use.
+6. Keep raw shelter save transfer removed; reconnect/catchup should use explicit shared-world/map snapshots and events only.
+7. Add tests for the remaining role-confusion cases: client release to host and client authoritative event to host.
 
 ## Bottom Line
 

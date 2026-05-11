@@ -29,13 +29,11 @@ namespace ShelteredAPI.Networking
             MultiplayerDiagnosticsWidgets.DrawValue("Snapshot age", model.SnapshotAgeText);
 
             MultiplayerDiagnosticsWidgets.DrawSectionHeader("Systems");
-            MultiplayerDiagnosticsWidgets.DrawValue("Save sync", model.SaveSyncStatus);
             MultiplayerDiagnosticsWidgets.DrawValue("Setup", model.SetupStatus);
             MultiplayerDiagnosticsWidgets.DrawValue("Auto-load", model.AutoLoadDisplayStatus != null ? model.AutoLoadDisplayStatus.StatusText : "unknown");
             if (model.AutoLoadFlowStatus != null)
                 MultiplayerDiagnosticsWidgets.DrawValue("Auto-load state", model.AutoLoadFlowStatus.CurrentState + ": " + model.AutoLoadFlowStatusText);
             MultiplayerDiagnosticsWidgets.DrawValue("Timeline", model.TimelineStatus != null ? model.TimelineStatus.StatusText : "unknown");
-            MultiplayerDiagnosticsWidgets.DrawOptionalError("Sync error", model.SaveSyncLastError);
             MultiplayerDiagnosticsWidgets.DrawOptionalError("Setup error", model.SetupLastError);
             MultiplayerDiagnosticsWidgets.DrawOptionalError("Auto-load error", model.AutoLoadFlowLastError);
 
