@@ -47,7 +47,25 @@ namespace ShelteredAPI.Saves.Paging
 
             SlotPagingScope scope = CreateScenarioScope(selectedScenario);
             if (scope != null)
+            {
                 RememberedScenarioScopes[panel] = scope;
+                return;
+            }
+
+            ForgetScenarioSelection(panel);
+        }
+
+        public static void ForgetScenarioSelection(SlotSelectionPanel panel)
+        {
+            if (panel == null)
+                return;
+
+            RememberedScenarioScopes.Remove(panel);
+        }
+
+        public static void ClearRememberedScenarioSelections()
+        {
+            RememberedScenarioScopes.Clear();
         }
 
         private static ScenarioSelectionPanel FindActiveScenarioPanel(SlotSelectionPanel panel)

@@ -97,11 +97,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             switch (type)
             {
-                case ScenarioBookType.Surrounded: return "Surrounded Scenarios";
-                case ScenarioBookType.Stasis: return "Stasis Scenarios";
+                case ScenarioBookType.Surrounded: return "Surrounded";
+                case ScenarioBookType.Stasis: return "Stasis";
                 case ScenarioBookType.Draft: return "Draft Scenarios";
                 default: return "Published Scenarios";
             }
+        }
+
+        public bool TryGetSingleScenarioForType(ScenarioBookType type, out ScenarioCatalogEntry entry)
+        {
+            entry = null;
+            ScenarioCatalogEntry[] entries = ListEntries(type);
+            if (entries.Length != 1)
+                return false;
+
+            entry = entries[0];
+            return entry != null;
         }
 
         private List<ScenarioBookRowModel> BuildTypeRows()
@@ -110,8 +121,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 rows.Add(BuildTypeRow(ScenarioBookType.Draft, "Draft Scenarios", "Authoring workspace for unfinished scenarios, not normal play content."));
 
-            rows.Add(BuildTypeRow(ScenarioBookType.Surrounded, "Surrounded Scenarios", "Custom scenarios built on the Surrounded rule set."));
-            rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis Scenarios", "Custom scenarios built on the Stasis rule set."));
+            rows.Add(BuildTypeRow(ScenarioBookType.Surrounded, "Surrounded", "Scenario saves and custom content built on the Surrounded rule set."));
+            rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
             AddPublishedScenarioRows(rows);
             return rows;
         }
@@ -136,9 +147,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 rows.Add(new ScenarioBookRowModel
                 {
                     Kind = ScenarioBookRowKind.CreateDraft,
-                    Title = "Add New Scenario",
+                    Title = "+ Add New Scenario",
                     Detail = "Create a new authoring draft for scenario-building work.",
-                    Badge = "Authoring"
+                    Badge = "New Draft"
                 });
             }
 
@@ -331,6 +342,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (left == null) return 1;
             if (right == null) return -1;
 
+            int leftScore;
+            int rightScore;
+            bool leftHasScore = ScenarioBookScoreDisplayReader.TryGetScoreTotal(left, out leftScore);
+            bool rightHasScore = ScenarioBookScoreDisplayReader.TryGetScoreTotal(right, out rightScore);
+            if (leftHasScore && rightHasScore)
+            {
+                int score = rightScore.CompareTo(leftScore);
+                if (score != 0) return score;
+            }
+            else if (leftHasScore)
+                return -1;
+            else if (rightHasScore)
+                return 1;
+
             int days = right.DaysSurvived.CompareTo(left.DaysSurvived);
             if (days != 0) return days;
 
@@ -361,17 +386,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 : "Unknown family";
             string days = detail != null ? detail.DaysSurvived.ToString() + " day(s)" : "no day info";
             string result = BuildOutcomeLabel(detail);
-            string score = BuildScoreLabel(detail);
-            return family + ", " + days + " - " + BuildStatusLabel(detail) + "\n" + result + " - " + score;
-        }
+            string score = ScenarioBookScoreDisplayReader.BuildSaveScoreLabel(detail);
+            string secondLine = result;
+            if (!string.IsNullOrEmpty(score))
+                secondLine += " - " + score;
 
-        private static string BuildScoreLabel(ScenarioBookSaveDetailModel detail)
-        {
-            if (detail == null || !detail.HasScoreSnapshot)
-                return "Score: not available yet";
-            if (!detail.ScoreHasTotal)
-                return "Score: snapshot present";
-            return "Score: " + detail.ScoreTotal.ToString(CultureInfo.InvariantCulture);
+            return family + ", " + days + " - " + BuildStatusLabel(detail) + "\n" + secondLine;
         }
 
         private static string BuildSaveSlotTitle(ScenarioBookSaveDetailModel detail, int rank)

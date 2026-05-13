@@ -213,17 +213,6 @@ namespace ShelteredAPI.Input
                 return false;
 
             value *= ShelteredInputTuning.MouseScrollSpeed;
-            if (IsMapPanPanelOpen())
-            {
-                if (!UnityIndirectScrollClassifier.IsCurrentFramePinchZoom())
-                {
-                    value = 0f;
-                    return true;
-                }
-
-                value *= ShelteredInputTuning.ZoomSpeed;
-            }
-
             return true;
         }
 

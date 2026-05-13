@@ -62,7 +62,7 @@ namespace ShelteredAPI.Saves.Paging
         private const int WINDOW_HEIGHT = 860;
         private const int COLUMN_WIDTH = 400;
         private const int ROW_HEIGHT = 42;
-        private const int LIST_VIEWPORT_WIDTH = WINDOW_WIDTH - 100;
+        private const int LIST_VIEWPORT_WIDTH = WINDOW_WIDTH - 20;
         private const int LIST_VIEWPORT_HEIGHT = 320;
         private const int LIST_TOP_PADDING = 18;
         
@@ -228,7 +228,7 @@ namespace ShelteredAPI.Saves.Paging
             
             var modListViewport = CreateClippedViewport(root, "ModListViewport",
                 new Vector3(0, listStartY - (LIST_VIEWPORT_HEIGHT * 0.5f), 0),
-                LIST_VIEWPORT_WIDTH, LIST_VIEWPORT_HEIGHT, 10050);
+                LIST_VIEWPORT_WIDTH, LIST_VIEWPORT_HEIGHT, 10050, Vector2.zero);
 
             var modListContainer = new GameObject("ModListContainer");
             modListContainer.transform.SetParent(modListViewport.transform, false);
@@ -237,21 +237,22 @@ namespace ShelteredAPI.Saves.Paging
             
             // Track all mod row GameObjects for scrolling
             var modRowObjects = new List<GameObject>();
-            int totalRows = Math.Max(activeMods.Count, savedMods.Length);
+            var displayRows = BuildModDisplayRows(activeMods, savedMods, comparison, options.IncludeExtraMods);
+            int totalRows = displayRows.Count;
 
             for (int rowIndex = 0; rowIndex < totalRows; rowIndex++)
             {
+                var row = displayRows[rowIndex];
                 int y = (LIST_VIEWPORT_HEIGHT / 2) - LIST_TOP_PADDING - (rowIndex * ROW_HEIGHT);
                 var rowGO = new GameObject($"ModRow_{rowIndex}");
                 rowGO.transform.SetParent(modListContainer.transform, false);
                 rowGO.layer = modListContainer.layer;
                 rowGO.transform.localPosition = new Vector3(0, y, 0);
 
-                if (rowIndex < activeMods.Count && activeMods[rowIndex] != null)
+                if (row.ActiveMod != null)
                 {
-                    var mod = activeMods[rowIndex];
-                    var status = comparison.Find(c => c.activeId == mod.Id);
-                    SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
+                    var mod = row.ActiveMod;
+                    SaveVerification.ModCompareStatus compareStatus = row.ActiveStatus;
                     Color color = GetStatusColor(compareStatus);
 
                     string iconPrefix = STATUS_MATCH;
@@ -276,11 +277,11 @@ namespace ShelteredAPI.Saves.Paging
                     verLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
                 }
 
-                if (rowIndex < savedMods.Length && savedMods[rowIndex] != null)
+                if (row.SavedMod != null)
                 {
-                    var saved = savedMods[rowIndex];
-                    var status = comparison.Find(c => c.savedId == saved.modId);
-                    SaveVerification.ModCompareStatus compareStatus = status?.status ?? SaveVerification.ModCompareStatus.Match;
+                    var saved = row.SavedMod;
+                    var status = row.Comparison;
+                    SaveVerification.ModCompareStatus compareStatus = row.SavedStatus;
                     Color color = GetStatusColor(compareStatus);
 
                     string icon = STATUS_MATCH;
@@ -295,7 +296,7 @@ namespace ShelteredAPI.Saves.Paging
                         case SaveVerification.ModCompareStatus.VersionDiff: icon = STATUS_VERSION_DIFF; suffix = " [VER DIFF]"; break;
                     }
 
-                    var diskMod = discovered.Find(d => string.Equals(d.Id, saved.modId, StringComparison.OrdinalIgnoreCase));
+                    var diskMod = discovered.Find(d => d != null && string.Equals(d.Id, saved.modId, StringComparison.OrdinalIgnoreCase));
                     string displayName = diskMod != null ? diskMod.Name : saved.modId;
 
                     var savedName = CreateLabel(rowGO.transform, "SavedName", $"{icon} {displayName}{suffix}",
@@ -551,7 +552,7 @@ namespace ShelteredAPI.Saves.Paging
             return go;
         }
 
-        private GameObject CreateClippedViewport(Transform parent, string name, Vector3 pos, int width, int height, int depth)
+        private GameObject CreateClippedViewport(Transform parent, string name, Vector3 pos, int width, int height, int depth, Vector2 clipSoftness)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent, false);
@@ -562,7 +563,7 @@ namespace ShelteredAPI.Saves.Paging
             panel.depth = depth;
             panel.clipping = UIDrawCall.Clipping.SoftClip;
             panel.baseClipRegion = new Vector4(0f, 0f, width, height);
-            panel.clipSoftness = new Vector2(8f, 8f);
+            panel.clipSoftness = clipSoftness;
 
             return go;
         }
@@ -597,6 +598,74 @@ namespace ShelteredAPI.Saves.Paging
             }
 
             return warnings;
+        }
+
+        private static List<ModDisplayRow> BuildModDisplayRows(List<ModEntry> activeMods, LoadedModInfo[] savedMods,
+            List<SaveVerification.ModCompareEntry> comparison, bool markExtraMods)
+        {
+            var rows = new List<ModDisplayRow>();
+            var pairedActiveIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (activeMods == null)
+                activeMods = new List<ModEntry>();
+            if (savedMods == null)
+                savedMods = new LoadedModInfo[0];
+            if (comparison == null)
+                comparison = new List<SaveVerification.ModCompareEntry>();
+
+            for (int i = 0; i < savedMods.Length; i++)
+            {
+                var saved = savedMods[i];
+                if (saved == null || string.IsNullOrEmpty(saved.modId))
+                    continue;
+
+                var compare = comparison.Find(c => string.Equals(c.savedId, saved.modId, StringComparison.OrdinalIgnoreCase));
+                var active = activeMods.Find(m => m != null && string.Equals(m.Id, saved.modId, StringComparison.OrdinalIgnoreCase));
+                var status = compare != null ? compare.status : SaveVerification.ModCompareStatus.Match;
+
+                if (active != null && !string.IsNullOrEmpty(active.Id))
+                    pairedActiveIds.Add(active.Id);
+
+                rows.Add(new ModDisplayRow
+                {
+                    ActiveMod = active,
+                    SavedMod = saved,
+                    Comparison = compare,
+                    ActiveStatus = active != null ? status : SaveVerification.ModCompareStatus.Missing,
+                    SavedStatus = status
+                });
+            }
+
+            for (int i = 0; i < activeMods.Count; i++)
+            {
+                var active = activeMods[i];
+                if (active == null || string.IsNullOrEmpty(active.Id) || pairedActiveIds.Contains(active.Id))
+                    continue;
+
+                var compare = comparison.Find(c => string.Equals(c.activeId, active.Id, StringComparison.OrdinalIgnoreCase));
+                var status = compare != null
+                    ? compare.status
+                    : (markExtraMods ? SaveVerification.ModCompareStatus.Extra : SaveVerification.ModCompareStatus.Match);
+
+                rows.Add(new ModDisplayRow
+                {
+                    ActiveMod = active,
+                    SavedMod = null,
+                    Comparison = compare,
+                    ActiveStatus = status,
+                    SavedStatus = status
+                });
+            }
+
+            return rows;
+        }
+
+        private sealed class ModDisplayRow
+        {
+            public ModEntry ActiveMod;
+            public LoadedModInfo SavedMod;
+            public SaveVerification.ModCompareEntry Comparison;
+            public SaveVerification.ModCompareStatus ActiveStatus;
+            public SaveVerification.ModCompareStatus SavedStatus;
         }
         
         private UILabel CreateLabel(Transform parent, string name, string text, Vector3 pos, int fontSize, Color color, UIFont uiFont, Font ttfFont, int depth)

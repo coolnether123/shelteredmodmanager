@@ -376,6 +376,7 @@ namespace ShelteredAPI.Saves.Paging{
             if (loadingGraphic != null)
                 loadingGraphic.SetActive(true);
 
+            SaveProtectionPatches.LoadGamePatch._forceLoad = true;
             SaveManager.instance.SetSlotToLoad(scope.GetTransportSlotNumber(chosenSlotIndex));
         }
 

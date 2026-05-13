@@ -19,7 +19,7 @@ namespace ShelteredAPI.Saves.Paging
         private static Dictionary<SaveSlotButton, GameObject> _slotIcons = new Dictionary<SaveSlotButton, GameObject>();
         
         // Colors for status indicators (brighter for dark brown background)
-        private static readonly Color COLOR_MATCH = new Color(0.15f, 1.0f, 0.05f);
+        private static readonly Color COLOR_MATCH = new Color(0.45f, 1.0f, 0.2f);
         private static readonly Color COLOR_VERSION_DIFF = new Color(1.0f, 1.0f, 0.2f);
         private static readonly Color COLOR_MISSING = new Color(1.0f, 0.3f, 0.3f);
         private static readonly Color COLOR_UNKNOWN = new Color(1.0f, 0.6f, 0.2f);
@@ -332,6 +332,7 @@ namespace ShelteredAPI.Saves.Paging
                             var virtualSaveType = capScope.GetTransportSaveType(capUiSlotIndex);
                             // For custom saves, set the redirect target
                             PlatformSaveProxy.SetNextLoad(virtualSaveType, capScope.StorageScenarioId, capTarget.id);
+                            SaveProtectionPatches.LoadGamePatch._forceLoad = true;
                             slotToLoad = capScope.GetTransportSlotNumber(capUiSlotIndex);
 
                             // Transfer difficulty settings from the manifest/save info

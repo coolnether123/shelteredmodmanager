@@ -31,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private List<ScenarioBookRowModel> _rows = new List<ScenarioBookRowModel>();
         private int _pageIndex;
         private string _lastRenderScopeKey;
+        private bool _selectedScenarioOpenedDirectlyFromType;
         private bool _isClosing;
         private bool _deletePromptActive;
         private List<Collider> _deletePromptDisabledColliders;
@@ -63,6 +64,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_instance != null)
                 Destroy(_instance);
 
+            // Known limitation: this browser currently stacks a second full
+            // FieldManualWindowChrome over the vanilla scenario book. The
+            // intended future architecture is to reuse or replace the content
+            // inside the existing scenario book so underlying vanilla controls
+            // such as Back are not visible behind this overlay.
             GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
             _instance = root;
 
@@ -84,7 +90,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _pageTurn = FieldManualBookPageTurn.Attach(root, _renderer.Chrome, pageTurnAssets);
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
-            SetStatus("Choose a scenario type.");
+            SetStatus(null);
             RenderCurrentView(false);
         }
 
@@ -249,6 +255,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     break;
                 case ScenarioBookRowKind.Scenario:
                     _selectedType = row.Type;
+                    _selectedScenarioOpenedDirectlyFromType = false;
                     SelectScenario(row.Scenario);
                     break;
                 case ScenarioBookRowKind.StartScenario:
@@ -389,10 +396,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             _selectedType = type;
             _selectedScenario = null;
+            _selectedScenarioOpenedDirectlyFromType = false;
+
+            ScenarioCatalogEntry singleScenario;
+            if (type != ScenarioBookType.Draft && _dataSource.TryGetSingleScenarioForType(type, out singleScenario))
+            {
+                _selectedScenarioOpenedDirectlyFromType = true;
+                SelectScenario(singleScenario);
+                return;
+            }
+
             _view = ScenarioBookBrowserViewKind.Scenarios;
             _pageIndex = 0;
             ClearPreparedPages();
-            SetStatus("Choose a scenario.");
+            SetStatus(null);
             RenderCurrentView(true);
         }
 
@@ -407,9 +424,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 : ScenarioBookBrowserViewKind.Saves;
             _pageIndex = 0;
             ClearPreparedPages();
-            SetStatus(_view == ScenarioBookBrowserViewKind.DraftDetails
-                ? "Edit draft details or open " + Safe(scenario.DisplayName, scenario.ScenarioId) + "."
-                : "Choose a save slot for " + Safe(scenario.DisplayName, scenario.ScenarioId) + ".");
+            SetStatus(null);
             RenderCurrentView(true);
         }
 
@@ -472,12 +487,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
             {
                 _selectedScenario = null;
-                _view = _selectedType == ScenarioBookType.Published
+                _view = _selectedType == ScenarioBookType.Published || _selectedScenarioOpenedDirectlyFromType
                     ? ScenarioBookBrowserViewKind.Types
                     : ScenarioBookBrowserViewKind.Scenarios;
+                _selectedScenarioOpenedDirectlyFromType = false;
                 _pageIndex = 0;
                 ClearPreparedPages();
-                SetStatus(_view == ScenarioBookBrowserViewKind.Types ? "Choose a scenario category." : "Choose a scenario.");
+                SetStatus(null);
                 RenderCurrentView(true);
                 return;
             }
@@ -487,7 +503,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _view = ScenarioBookBrowserViewKind.Types;
                 _pageIndex = 0;
                 ClearPreparedPages();
-                SetStatus("Choose a scenario type.");
+                SetStatus(null);
                 RenderCurrentView(true);
                 return;
             }

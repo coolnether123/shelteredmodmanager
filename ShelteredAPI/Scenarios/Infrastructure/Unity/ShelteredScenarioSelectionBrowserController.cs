@@ -188,11 +188,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (hubButton == null)
                     return;
 
-                // Do not place the cloned hub on top of a vanilla scenario button.
-                // Sheltered's cloned NGUI buttons can still inherit surprising click behavior
-                // through the scene/prefab wiring, so the custom hub must live in its own space.
                 hubButton.transform.localPosition = state.LayoutMetrics.HubButtonPosition;
-                ConfigureButton(hubButton.gameObject, HubLabel, ScenarioButtonVisualStyle.Hub, state.LayoutMetrics);
+                ConfigureButtonLikeScenarioTemplate(hubButton.gameObject, HubLabel);
                 LogUiElementLayout(panel, "HubButton", hubButton.gameObject, "hub");
                 BindPressGuard(panel, hubButton.gameObject);
                 UIEventListener.Get(hubButton.gameObject).onClick = delegate(GameObject go)
@@ -250,8 +247,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                         scenarioDescLabel,
                         scenarioHighScore,
                         stasisScoreLabelsRoot,
-                        HubLabel,
-                        "Browse custom scenarios registered by loaded mods and XML scenario packs.");
+                        string.Empty,
+                        string.Empty);
                     return false;
                 }
 
@@ -385,6 +382,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             {
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Cancel passed through to vanilla flow. panel="
                     + (panel != null ? panel.GetInstanceID().ToString() : "<null>") + ".");
+                SlotPagingScopeResolver.ForgetScenarioSelection(panel != null ? panel.selectionPanel : null);
                 return true;
             }
 
@@ -486,11 +484,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
                 button.transform.localPosition = GetScenarioSlotPosition(metrics, i);
                 bool locked = ShelteredCustomScenarioService.Instance.VerifyDependencies(scenario) != ScenarioDependencyVerificationState.Match;
-                ConfigureButton(
-                    button.gameObject,
-                    locked ? entry.Label + " [LOCKED]" : entry.Label,
-                    locked ? ScenarioButtonVisualStyle.Locked : ScenarioButtonVisualStyle.Available,
-                    metrics);
+                if (locked)
+                {
+                    ConfigureButton(
+                        button.gameObject,
+                        entry.Label + " [LOCKED]",
+                        ScenarioButtonVisualStyle.Locked,
+                        metrics);
+                }
+                else
+                {
+                    ConfigureButtonLikeScenarioTemplate(button.gameObject, entry.Label);
+                }
                 BindPressGuard(panel, button.gameObject);
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Created scenario button. panel=" + panel.GetInstanceID()
                     + " slot=" + i + " scenarioId=" + scenario.Id + " locked=" + locked + ".");
@@ -1039,7 +1044,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (addNewButton != null)
                 {
                     addNewButton.transform.localPosition = metrics.AddNewButtonPosition;
-                    ConfigureButton(addNewButton.gameObject, AddNewLabel, ScenarioButtonVisualStyle.Action, metrics);
+                    ConfigureButtonLikeScenarioTemplate(addNewButton.gameObject, AddNewLabel);
                     BindPressGuard(panel, addNewButton.gameObject);
                     UIEventListener.Get(addNewButton.gameObject).onClick = delegate(GameObject go)
                     {
@@ -1316,19 +1321,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (button != null && button.onClick != null)
                 button.onClick.Clear();
 
-            UIButtonMessage[] messages = buttonObject.GetComponentsInChildren<UIButtonMessage>(true);
-            for (int i = 0; i < messages.Length; i++)
-            {
-                if (messages[i] != null)
-                    UnityEngine.Object.Destroy(messages[i]);
-            }
-
-            UILocalize[] localizers = buttonObject.GetComponentsInChildren<UILocalize>(true);
-            for (int i = 0; i < localizers.Length; i++)
-            {
-                if (localizers[i] != null)
-                    UnityEngine.Object.Destroy(localizers[i]);
-            }
+            ClearClonedButtonBindings(buttonObject);
 
             UILabel[] labels = buttonObject.GetComponentsInChildren<UILabel>(true);
             Color labelColor;
@@ -1536,10 +1529,65 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             metrics.FooterPreviousPosition = SnapLocalPosition(footerCenter + new Vector3(-footerOffsetX, 0f, 0f));
             metrics.FooterNextPosition = SnapLocalPosition(footerCenter + new Vector3(footerOffsetX, 0f, 0f));
 
-            // Keep the browse hub away from the cloned vanilla scenario button positions.
-            // The Add New button still uses the original lower action slot once we are in custom mode.
-            metrics.HubButtonPosition = metrics.FooterCenterPosition;
+            // The browse hub is part of the stock scenario-button stack, not the
+            // paging footer, so it inherits the next full-size scenario row.
+            metrics.HubButtonPosition = metrics.AddNewButtonPosition;
             return metrics;
+        }
+
+        private static void ConfigureButtonLikeScenarioTemplate(GameObject buttonObject, string label)
+        {
+            if (buttonObject == null)
+                return;
+
+            UIButton button = buttonObject.GetComponent<UIButton>();
+            if (button != null)
+            {
+                button.isEnabled = true;
+                if (button.onClick != null)
+                    button.onClick.Clear();
+            }
+
+            ClearClonedButtonBindings(buttonObject);
+
+            UILabel[] labels = buttonObject.GetComponentsInChildren<UILabel>(true);
+            for (int i = 0; i < labels.Length; i++)
+            {
+                UILabel candidate = labels[i];
+                if (candidate == null || !candidate.enabled)
+                    continue;
+
+                candidate.text = label ?? string.Empty;
+                candidate.overflowMethod = UILabel.Overflow.ShrinkContent;
+                candidate.alignment = NGUIText.Alignment.Center;
+                candidate.ProcessText();
+                candidate.MarkAsChanged();
+            }
+
+            if (button != null)
+                button.SetState(button.isEnabled ? UIButtonColor.State.Normal : UIButtonColor.State.Disabled, true);
+
+            NGUITools.UpdateWidgetCollider(buttonObject, true);
+        }
+
+        private static void ClearClonedButtonBindings(GameObject buttonObject)
+        {
+            if (buttonObject == null)
+                return;
+
+            UIButtonMessage[] messages = buttonObject.GetComponentsInChildren<UIButtonMessage>(true);
+            for (int i = 0; i < messages.Length; i++)
+            {
+                if (messages[i] != null)
+                    UnityEngine.Object.Destroy(messages[i]);
+            }
+
+            UILocalize[] localizers = buttonObject.GetComponentsInChildren<UILocalize>(true);
+            for (int i = 0; i < localizers.Length; i++)
+            {
+                if (localizers[i] != null)
+                    UnityEngine.Object.Destroy(localizers[i]);
+            }
         }
 
         private static void ResolveButtonVisualStyle(

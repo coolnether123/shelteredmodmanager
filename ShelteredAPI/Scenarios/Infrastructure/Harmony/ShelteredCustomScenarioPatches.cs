@@ -205,14 +205,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         {
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Survival mode chosen; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
+            SlotPagingScopeResolver.ClearRememberedScenarioSelections();
         }
 
         [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]
         [HarmonyPostfix]
-        private static void SlotSelectionCancelPostfix()
+        private static void SlotSelectionCancelPostfix(SlotSelectionPanel __instance)
         {
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Slot selection cancelled; checking for stale pending custom scenario state.");
             ShelteredCustomScenarioRuntimeState.ClearPendingCustomScenario();
+            SlotPagingScopeResolver.ForgetScenarioSelection(__instance);
         }
 
         [HarmonyPatch(typeof(CustomisationPanel), "OnCancel")]

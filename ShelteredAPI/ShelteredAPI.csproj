@@ -463,6 +463,7 @@
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserModels.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookPlayStatsBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookScoreDisplayReader.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookSaveMetadataReader.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioSelectionBrowserController.cs" />

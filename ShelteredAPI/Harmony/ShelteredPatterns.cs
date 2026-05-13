@@ -84,7 +84,13 @@ namespace ShelteredAPI.Harmony
 
         public static FluentTranspiler MatchUILocalization(this FluentTranspiler t, string key = null)
         {
-             return t.MatchCall(typeof(Localization), "Get");
+            var localizationType = AccessTools.TypeByName("Localization");
+            if (localizationType == null)
+            {
+                return t;
+            }
+
+            return t.MatchCall(localizationType, "Get");
         }
 
         public static FluentTranspiler MatchCoroutineStart(this FluentTranspiler t)
@@ -119,8 +125,14 @@ namespace ShelteredAPI.Harmony
 
         public static FluentTranspiler MatchBunkerLocation(this FluentTranspiler t)
         {
-            return t.MatchManager(typeof(GameModeManager))
-                    .MatchFieldLoad(typeof(GameModeManager), "m_bunkerPos");
+            var gameModeManagerType = AccessTools.TypeByName("GameModeManager");
+            if (gameModeManagerType == null)
+            {
+                return t;
+            }
+
+            return t.MatchManager(gameModeManagerType)
+                    .MatchFieldLoad(gameModeManagerType, "m_bunkerPos");
         }
     }
 }

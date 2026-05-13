@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Selection;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
@@ -76,6 +77,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
     internal sealed class ScenarioBookPlayStatsModel
     {
+        public ScenarioBookPlayStatsModel()
+        {
+            ScoreLines = new List<ScenarioBookStatLine>();
+        }
+
         public int SaveCount;
         public int ActiveSaveCount;
         public int ConvertedSaveCount;
@@ -83,9 +89,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public int WinCount;
         public int LossCount;
         public int BestDaySurvived;
+        public int ScoredSaveCount;
+        public int BestScoreTotal;
+        public bool HasBestScoreTotal;
         public bool HasBindingData;
         public bool HasOutcomeData;
         public bool HasScoreData;
         public string ScoreSummary;
+        public List<ScenarioBookStatLine> ScoreLines;
+    }
+
+    internal sealed class ScenarioBookStatLine
+    {
+        public string Label;
+        public string Value;
     }
 }

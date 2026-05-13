@@ -8,7 +8,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public static ScenarioBookPlayStatsModel Build(ScenarioCatalogEntry scenario, IList<ScenarioBookRowModel> rows)
         {
             ScenarioBookPlayStatsModel stats = new ScenarioBookPlayStatsModel();
-            stats.ScoreSummary = "Score not available yet";
 
             for (int i = 0; rows != null && i < rows.Count; i++)
             {
@@ -21,8 +20,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             if (stats.SaveCount == 0 && scenario != null && scenario.SaveCount > 0)
                 stats.SaveCount = scenario.SaveCount;
-            if (stats.HasScoreData)
-                stats.ScoreSummary = stats.ScoreSummary ?? "Score snapshot present";
+
+            ScenarioBookScoreDisplayReader.ApplyScoreDisplay(scenario, stats);
 
             return stats;
         }
@@ -74,12 +73,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             stats.HasScoreData = true;
             if (!detail.ScoreHasTotal)
-            {
-                stats.ScoreSummary = "Score snapshot present";
                 return;
-            }
 
-            stats.ScoreSummary = "Scored save data present";
+            stats.ScoredSaveCount++;
+            if (!stats.HasBestScoreTotal || detail.ScoreTotal > stats.BestScoreTotal)
+            {
+                stats.HasBestScoreTotal = true;
+                stats.BestScoreTotal = detail.ScoreTotal;
+            }
         }
     }
 }
