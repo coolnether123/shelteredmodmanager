@@ -8,10 +8,6 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
-    /// <summary>
-    /// Loop shape to search for while navigating IL.
-    /// This is a hint for diagnostics; loop detection still operates on branch structure.
-    /// </summary>
     public enum LoopType
     {
         For,
@@ -20,8 +16,8 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Semantic navigation extensions for <see cref="FluentTranspiler"/>.
-    /// Use these when a patch should move by control-flow intent instead of raw instruction offsets.
+    /// Semantic navigation extensions for FluentTranspiler.
+    /// Allows finding high-level code structures like loops and if-statements.
     /// </summary>
     public static class ControlFlowExtensions
     {
@@ -45,7 +41,8 @@ namespace ModAPI.Harmony
                 }
             }
 
-            t.AddWarning($"FindLoop: No backward jumps found for loop type {type} starting from {currentPos}.");
+            t.AddSoftFailure(TranspilerDiagnosticCategory.Match,
+                $"FindLoop: No backward jumps found for loop type {type} starting from {currentPos}.");
             return t; 
         }
 
@@ -110,7 +107,8 @@ namespace ModAPI.Harmony
                 }
             }
             
-            t.AddWarning("AtThenBlockStart: Current instruction is not a conditional branch.");
+            t.AddSoftFailure(TranspilerDiagnosticCategory.Match,
+                "AtThenBlockStart: Current instruction is not a conditional branch.");
             return t;
         }
 

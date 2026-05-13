@@ -8,10 +8,6 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
-    /// <summary>
-    /// Additional feature methods for <see cref="FluentTranspiler"/>.
-    /// This partial class keeps advanced operations separate from core matching/navigation.
-    /// </summary>
     public partial class FluentTranspiler
     {
         /// <summary>
@@ -35,13 +31,13 @@ namespace ModAPI.Harmony
             if (!_matcher.IsValid) return this;
             
             int startPos = _matcher.Pos;
-            MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] MatchIntent: Attempting '{intent}'...");
+            LogTrace($"[FluentTranspiler:{_callerMod}] MatchIntent: Attempting '{intent}'...");
             _matcher.MatchStartForward(matches);
             
             if (!_matcher.IsValid)
             {
                 var message = $"MatchIntent Failed: {intent}. Could not find specified IL sequence in method {_originalMethod.Name}.";
-                _warnings.Add(message);
+                AddSoftFailure(message);
                 
                 // Heuristic: Try to find partially matching anchors to guide the developer.
                 try 
@@ -55,7 +51,7 @@ namespace ModAPI.Harmony
                             
                         if (nearest != null)
                         {
-                            _warnings.Add($"  - HINT: Potential nearby anchor found at index {nearest.Index}: {nearest.Instruction}");
+                            AddNote($"Potential nearby anchor found at index {nearest.Index}: {nearest.Instruction}");
                         }
                     }
                 }
@@ -63,7 +59,7 @@ namespace ModAPI.Harmony
             }
             else
             {
-                MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] MatchIntent Success: '{intent}' at index {_matcher.Pos}");
+                LogTrace($"[FluentTranspiler:{_callerMod}] MatchIntent Success: '{intent}' at index {_matcher.Pos}");
             }
             
             return this;
@@ -109,7 +105,7 @@ namespace ModAPI.Harmony
             // For simplicity, we convert this to an absolute expectation if possible, or record for later validation.
             if (_lastStackCheckPos == -1)
             {
-                _warnings.Add("EnsureStack: No previous operation to calculate delta from. Use ExpectStack for absolute anchoring.");
+                AddNote("EnsureStack: No previous operation to calculate delta from. Use ExpectStack for absolute anchoring.");
                 return this;
             }
 
@@ -234,7 +230,7 @@ namespace ModAPI.Harmony
                 }
             }
             
-            _warnings.Add($"MatchWithGap: End pattern not found within {maxGap} instructions of start.");
+            AddSoftFailure($"MatchWithGap: End pattern not found within {maxGap} instructions of start.");
             _matcher.Start().Advance(entryPos);
             return this;
         }
@@ -264,9 +260,10 @@ namespace ModAPI.Harmony
                     // Assuming FluentTranspiler was created with 'instructions', those ARE the current instructions.
                     // We can check if _matcher.IsInvalid or if we have warnings.
                     
-                    if (_warnings.Count > 0)
+                    if (Warnings.Count > 0 || SoftFailures.Count > 0 || Notes.Count > 0)
                     {
-                        report.Modifications.Add($"{_warnings.Count} warnings generated so far.");
+                        report.Modifications.Add(
+                            $"Warnings={Warnings.Count}, SoftFailures={SoftFailures.Count}, Notes={Notes.Count}");
                     }
                     
                     // Count potential issues like unmatched labels
@@ -291,10 +288,6 @@ namespace ModAPI.Harmony
             return report;
         }
 
-        /// <summary>
-        /// Dry-run summary of a transpiler operation.
-        /// Use this in tooling to preview instruction counts, label shifts, and stack impact.
-        /// </summary>
         public class TranspilerReport
         {
             public int InstructionCount { get; set; }
@@ -325,9 +318,10 @@ namespace ModAPI.Harmony
         #region Linting
 
         /// <summary>
-        /// Scans instructions for suspicious patterns and antipatterns.
-        /// Warning: Replacing a 'callvirt' with 'call' on instance method
-        /// Warning: Modifying instructions inside a 'try' block (exception handling)
+        /// Scans the current instruction stream for patterns that usually deserve another look.
+        /// These checks are meant to support patch authors during development and can be
+        /// selectively suppressed when a known game method shape would otherwise create
+        /// repeated noise in the log.
         /// </summary>
         private void Lint(List<CodeInstruction> instructions)
         {
@@ -350,7 +344,7 @@ namespace ModAPI.Harmony
                      instr.opcode.OperandType == OperandType.InlineField || 
                      instr.opcode.OperandType == OperandType.InlineType))
                 {
-                    _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} has NULL operand (Expected {instr.opcode.OperandType})");
+                    AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} has NULL operand (Expected {instr.opcode.OperandType})");
                 }
 
                 // Check for Callvirt vs Call correctness
@@ -361,9 +355,12 @@ namespace ModAPI.Harmony
                          if (!mi.IsStatic)
                          {
                              // Instance methods usually need Callvirt unless specific optimization
-                             if (instr.opcode == OpCodes.Call && mi.IsVirtual && !mi.IsFinal)
+                             if (instr.opcode == OpCodes.Call
+                                 && mi.IsVirtual
+                                 && !mi.IsFinal
+                                 && TranspilerSafetyPolicy.WarnOnVirtualCallMismatch)
                              {
-                                 _warnings.Add($"Lint: Suspicious 'call' on virtual method {mi.Name} at {i}. Should probably be 'callvirt'.");
+                                 AddNote($"Lint: Suspicious 'call' on virtual method {mi.Name} at {i}. Should probably be 'callvirt'.");
                              }
                          }
                      }
@@ -376,7 +373,7 @@ namespace ModAPI.Harmony
                     targetedLabels.Add(label);
                     if (!found)
                     {
-                        _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} refers to label that is not attached to any instruction in this method body.");
+                        AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} refers to label that is not attached to any instruction in this method body.");
                     }
                 }
                 else if (instr.operand is Label[] labels)
@@ -386,7 +383,7 @@ namespace ModAPI.Harmony
                         targetedLabels.Add(labels[l]);
                         if (!labelAnchors.ContainsKey(labels[l]))
                         {
-                            _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} contains switch/branch label not attached to any instruction.");
+                            AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} contains switch/branch label not attached to any instruction.");
                             break;
                         }
                     }
@@ -396,25 +393,25 @@ namespace ModAPI.Harmony
                     // Catch common mistake: using integer instead of Label for branch operand
                     if (instr.operand != null && !(instr.operand is Label) && !(instr.operand is Label[]))
                     {
-                        _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} has invalid operand type '{instr.operand.GetType().Name}'. Branch instructions MUST use a 'Label' as their operand. Using an integer (e.g. 2) is a common error that causes native crashes.");
+                        AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} has invalid operand type '{instr.operand.GetType().Name}'. Branch instructions MUST use a 'Label' as their operand. Using an integer (e.g. 2) is a common error that causes native crashes.");
                     }
                 }
 
                 int localIndex;
                 if (TryGetLocalIndex(instr, out localIndex) && localCount >= 0 && (localIndex < 0 || localIndex >= localCount))
                 {
-                    _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} targets local {localIndex}, but method declares {localCount} locals.");
+                    AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} targets local {localIndex}, but method declares {localCount} locals.");
                 }
 
                 int argumentIndex;
                 if (TryGetArgumentIndex(instr, out argumentIndex) && (argumentIndex < 0 || argumentIndex >= argumentCount))
                 {
-                    _warnings.Add($"[CRITICAL LINT] {instr.opcode} at index {i} targets argument {argumentIndex}, but method argument range is 0..{argumentCount - 1}.");
+                    AddWarning($"[CRITICAL LINT] {instr.opcode} at index {i} targets argument {argumentIndex}, but method argument range is 0..{argumentCount - 1}.");
                 }
 
                 if (instr.opcode == OpCodes.Castclass && !(instr.operand is Type))
                 {
-                    _warnings.Add($"[CRITICAL LINT] castclass at index {i} has invalid operand type '{(instr.operand != null ? instr.operand.GetType().Name : "null")}'.");
+                    AddWarning($"[CRITICAL LINT] castclass at index {i} has invalid operand type '{(instr.operand != null ? instr.operand.GetType().Name : "null")}'.");
                 }
             }
 
@@ -424,7 +421,7 @@ namespace ModAPI.Harmony
                 if (kv.Value == 0) continue;
                 if (!targetedLabels.Contains(kv.Key))
                 {
-                    _warnings.Add($"Lint: label at instruction index {kv.Value} is never targeted by any branch instruction.");
+                    AddNote($"Lint: label at instruction index {kv.Value} is never targeted by any branch instruction.");
                 }
             }
 
@@ -437,9 +434,11 @@ namespace ModAPI.Harmony
             try
             {
                 var methodBody = _originalMethod.GetMethodBody();
-                if (methodBody != null && methodBody.ExceptionHandlingClauses.Count > 0)
+                if (methodBody != null
+                    && methodBody.ExceptionHandlingClauses.Count > 0
+                    && TranspilerSafetyPolicy.WarnOnExceptionHandlerMethods)
                 {
-                    _warnings.Add("Lint: Method contains exception handlers; use exact index-aligned replacements and avoid structural IL edits.");
+                    AddNote("Lint: Method contains exception handlers; use exact index-aligned replacements and avoid structural IL edits.");
                 }
             }
             catch {}

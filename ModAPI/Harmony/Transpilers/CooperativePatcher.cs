@@ -2,15 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
-    /// <summary>
-    /// Ordering level for cooperative transpilers that target the same method.
-    /// Lower values run earlier.
-    /// </summary>
     public enum PatchPriority
     {
         First = 0,
@@ -23,8 +20,8 @@ namespace ModAPI.Harmony
     }
 
     /// <summary>
-    /// Orchestrates multiple transpilers on the same method through a managed pipeline.
-    /// Use this when mods need explicit ordering, dependencies, or conflict declarations around shared IL anchors.
+    /// Orchestrates multiple transpilers on the same method to ensure compatibility.
+    /// Replaces the "wild west" of conflicting Harmony patches with a managed pipeline.
     /// </summary>
     public static class CooperativePatcher
     {
@@ -45,9 +42,24 @@ namespace ModAPI.Harmony
         private static readonly HashSet<string> _quarantinedOwners = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Registers a cooperative transpiler for a target method.
-        /// Registration does not apply the patch immediately; call Apply() or rely on ModAPI's master patcher.
+        /// Registers a cooperative transpiler.
+        /// NOTE: This does not apply the patch immediately. You must call Apply() or ensure ModAPI's master patcher is running.
         /// </summary>
+        /// <example>
+        /// <code>
+        /// CooperativePatcher.RegisterTranspiler(
+        ///     target,
+        ///     "MyMod.ReplaceOriginalCall",
+        ///     PatchPriority.High,
+        ///     t =>
+        ///     {
+        ///         t.ForCall(typeof(SomeType), "Original")
+        ///          .ReplaceWith(typeof(MyHooks), "Replacement");
+        ///         return t;
+        ///     },
+        ///     conflictsWith: new[] { "Legacy.RawIlPatch" });
+        /// </code>
+        /// </example>
         public static void RegisterTranspiler(
             MethodBase target,
             string anchorId,
@@ -110,14 +122,22 @@ namespace ModAPI.Harmony
         /// </summary>
         public static IEnumerable<CodeInstruction> RunPipeline(MethodBase original, IEnumerable<CodeInstruction> instructions)
         {
+            return RunPipeline(original, instructions, null);
+        }
+
+        /// <summary>
+        /// Runs the cooperative pipeline with an optional ILGenerator so registrations
+        /// can declare locals and labels just like a normal Harmony transpiler.
+        /// </summary>
+        public static IEnumerable<CodeInstruction> RunPipeline(MethodBase original, IEnumerable<CodeInstruction> instructions, ILGenerator generator)
+        {
             List<PatcherRegistration> sortedPatches;
             lock (_lock)
             {
                 if (!_registrations.ContainsKey(original))
                     return instructions;
-                
-                // TODO: Implement topological sort based on DependsOn if needed. For now, Priority is primary.
-                sortedPatches = _registrations[original].OrderBy(p => p.Priority).ToList();
+
+                sortedPatches = OrderRegistrationsForExecution(_registrations[original]);
             }
 
             var currentInstructions = instructions.ToList();
@@ -165,20 +185,29 @@ namespace ModAPI.Harmony
 
                     // Create transpiler wrapper on the CURRENT instructions
                     // We use valid COPY of the instructions to ensure isolation
-                    var t = FluentTranspiler.For(currentInstructions, original);
-                    
+                    var t = FluentTranspiler.For(currentInstructions, original, generator);
+
                     // Run logic
                     t = patch.PatchLogic(t);
-                    
-                    // Build strictness is policy-driven so safer defaults can be enforced globally.
-                    bool strictBuild = TranspilerSafetyPolicy.CooperativeStrictBuild;
-                    var nextInstructions = t.Build(strict: strictBuild, validateStack: true);
+                    if (t == null)
+                    {
+                        throw new InvalidOperationException($"Patch logic returned null for {patch.OwnerMod}:{patch.AnchorId}");
+                    }
 
-                    if (t.Warnings.Any(w => !w.StartsWith("DeclareLocal"))) // Filter informational
+                    // Build strictness is policy-driven so safer defaults can be enforced globally.
+                    var nextInstructions = t.Build(TranspilerSafetyPolicy.DefaultCooperativeProfile);
+                    if (t.Diagnostics.Any(TranspilerSafetyPolicy.IsCriticalDiagnostic))
+                    {
+                        throw new InvalidOperationException(
+                            $"Critical transpiler warnings for {patch.OwnerMod}:{patch.AnchorId}: " +
+                            string.Join("; ", BuildDiagnosticLines(t).ToArray()));
+                    }
+
+                    if (t.Warnings.Count > 0)
                     {
                          MMLog.WriteWarning(
                             $"[CooperativePatcher] {patch.OwnerMod}:{patch.AnchorId} resulted in warnings: " +
-                            string.Join("; ", t.Warnings.ToArray()));
+                            string.Join("; ", BuildDiagnosticLines(t).ToArray()));
                     }
                     
                     // If successful, update current instructions and mark anchored
@@ -191,16 +220,20 @@ namespace ModAPI.Harmony
                     var stepName = original != null && original.DeclaringType != null
                         ? original.DeclaringType.FullName + "." + original.Name
                         : (original != null ? original.Name : "UnknownMethod");
-                    TranspilerDebugger.RecordSnapshot(
-                        patch.OwnerMod,
-                        stepName,
-                        beforeInstructions,
-                        currentInstructions,
-                        sw.Elapsed.TotalMilliseconds,
-                        t.Warnings != null ? t.Warnings.Count : 0,
-                        original,
-                        origin);
-                    MMLog.WriteDebug("[CooperativePatcher] Snapshot recorded for patch origin: " + origin);
+                    if (TranspilerSafetyPolicy.ShouldRecordDebugSnapshot(t.Warnings.Count, t.SoftFailures.Count, t.Notes.Count))
+                    {
+                        TranspilerDebugger.RecordSnapshot(
+                            patch.OwnerMod,
+                            stepName,
+                            beforeInstructions,
+                            currentInstructions,
+                            sw.Elapsed.TotalMilliseconds,
+                            t.Warnings.Count,
+                            original,
+                            origin,
+                            warnings: BuildDiagnosticLines(t));
+                        MMLog.WriteDebug("[CooperativePatcher] Snapshot recorded for patch origin: " + origin);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -213,6 +246,83 @@ namespace ModAPI.Harmony
             return currentInstructions;
         }
 
+        private static List<PatcherRegistration> OrderRegistrationsForExecution(List<PatcherRegistration> registrations)
+        {
+            var ordered = new List<PatcherRegistration>();
+            if (registrations == null || registrations.Count == 0) return ordered;
+
+            var all = registrations.ToList();
+            var canonicalProviders = all
+                .OrderBy(SortKey)
+                .GroupBy(r => r.AnchorId ?? string.Empty, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+            var indegree = new Dictionary<PatcherRegistration, int>();
+            var outgoing = new Dictionary<PatcherRegistration, List<PatcherRegistration>>();
+            for (int i = 0; i < all.Count; i++)
+            {
+                indegree[all[i]] = 0;
+                outgoing[all[i]] = new List<PatcherRegistration>();
+            }
+
+            for (int i = 0; i < all.Count; i++)
+            {
+                var patch = all[i];
+                var dependencies = patch.DependsOn ?? new string[0];
+                for (int d = 0; d < dependencies.Length; d++)
+                {
+                    var dependency = dependencies[d];
+                    if (string.IsNullOrEmpty(dependency)) continue;
+                    if (!canonicalProviders.TryGetValue(dependency, out var provider)) continue;
+                    if (ReferenceEquals(provider, patch)) continue;
+
+                    outgoing[provider].Add(patch);
+                    indegree[patch]++;
+                }
+            }
+
+            var ready = all.Where(p => indegree[p] == 0).OrderBy(SortKey).ToList();
+            while (ready.Count > 0)
+            {
+                var next = ready[0];
+                ready.RemoveAt(0);
+                ordered.Add(next);
+
+                var dependents = outgoing[next];
+                for (int i = 0; i < dependents.Count; i++)
+                {
+                    var dependent = dependents[i];
+                    indegree[dependent]--;
+                    if (indegree[dependent] == 0)
+                    {
+                        ready.Add(dependent);
+                    }
+                }
+
+                ready = ready.OrderBy(SortKey).ToList();
+            }
+
+            if (ordered.Count != all.Count)
+            {
+                var unresolved = all.Except(ordered).OrderBy(SortKey).ToList();
+                MMLog.WriteWarning(
+                    "[CooperativePatcher] Dependency cycle or ambiguous dependency ordering detected. " +
+                    "Falling back to priority order for: " +
+                    string.Join(", ", unresolved.Select(p => p.OwnerMod + ":" + p.AnchorId).ToArray()));
+                ordered.AddRange(unresolved);
+            }
+
+            return ordered;
+        }
+
+        private static string SortKey(PatcherRegistration registration)
+        {
+            if (registration == null) return string.Empty;
+            return ((int)registration.Priority).ToString("D4") + "|" +
+                   (registration.AnchorId ?? string.Empty) + "|" +
+                   (registration.OwnerMod ?? string.Empty);
+        }
+
         private static bool IsOwnerQuarantined(string ownerMod)
         {
             if (string.IsNullOrEmpty(ownerMod)) return false;
@@ -220,6 +330,19 @@ namespace ModAPI.Harmony
             {
                 return _quarantinedOwners.Contains(ownerMod);
             }
+        }
+
+        private static List<string> BuildDiagnosticLines(FluentTranspiler transpiler)
+        {
+            var lines = new List<string>();
+            if (transpiler == null)
+            {
+                return lines;
+            }
+
+            lines.AddRange(transpiler.PatchDiagnostics.Select(diagnostic => diagnostic.ToSingleLine()));
+            lines.AddRange(transpiler.Diagnostics.Select(diagnostic => diagnostic.ToString()));
+            return lines.Distinct().ToList();
         }
 
         private static void QuarantineOwnerIfEnabled(string ownerMod, string anchorId)

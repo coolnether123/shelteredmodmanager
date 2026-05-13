@@ -29,7 +29,7 @@ namespace ModAPI.Harmony
                 instr.opcode.FlowControl == FlowControl.Cond_Branch));
             
             if (!_matcher.IsValid)
-                _warnings.Add("No branch instruction found");
+                AddSoftFailure("No branch instruction found");
                 
             return this;
         }
@@ -53,7 +53,7 @@ namespace ModAPI.Harmony
             
             if (!_matcher.IsValid)
             {
-                _warnings.Add($"Branch target label not found in method");
+                AddSoftFailure("Branch target label not found in method");
             }
             
             return this;

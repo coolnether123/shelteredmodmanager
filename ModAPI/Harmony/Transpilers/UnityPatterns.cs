@@ -127,7 +127,7 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// Replace generic GetComponent<T> calls with custom factory.
+        /// Replace generic GetComponent&lt;T&gt; calls with custom factory.
         /// </summary>
         public static FluentTranspiler ReplaceGetComponentGeneric<T>(
             this FluentTranspiler t,

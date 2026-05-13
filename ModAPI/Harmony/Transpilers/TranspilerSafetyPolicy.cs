@@ -17,6 +17,21 @@ namespace ModAPI.Harmony
         public static bool FailFastOnCritical => ModPrefs.TranspilerFailFastCritical;
         public static bool CooperativeStrictBuild => ModPrefs.TranspilerCooperativeStrictBuild;
         public static bool QuarantineOwnerOnFailure => ModPrefs.TranspilerQuarantineOnFailure;
+        public static bool LogValidationWarnings => ModPrefs.TranspilerLogValidationWarnings;
+        public static bool WarnOnVirtualCallMismatch => ModPrefs.TranspilerWarnOnVirtualCallMismatch;
+        public static bool WarnOnExceptionHandlerMethods => ModPrefs.TranspilerWarnOnExceptionHandlerMethods;
+        public static bool VerboseTracingEnabled => ModPrefs.DebugTranspilers;
+        public static FluentTranspiler.BuildProfile DefaultExecuteProfile =>
+            FluentTranspiler.BuildProfile.Runtime;
+        public static FluentTranspiler.BuildProfile DefaultCooperativeProfile =>
+            CooperativeStrictBuild ? FluentTranspiler.BuildProfile.Strict : DefaultExecuteProfile;
+
+        internal struct BuildOptions
+        {
+            public bool Strict;
+            public bool ValidateStack;
+            public bool ForceSnapshot;
+        }
 
         /// <summary>
         /// Resolves the effective preserve-count mode for pattern replacement.
@@ -57,6 +72,45 @@ namespace ModAPI.Harmony
             if (string.IsNullOrEmpty(warning)) return false;
             return warning.IndexOf("[CRITICAL", StringComparison.OrdinalIgnoreCase) >= 0
                    || warning.IndexOf("Stack Error:", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool IsCriticalDiagnostic(TranspilerDiagnostic diagnostic)
+        {
+            return diagnostic != null
+                   && diagnostic.Severity == TranspilerDiagnosticSeverity.Warning
+                   && IsCriticalWarning(diagnostic.Message);
+        }
+
+        public static BuildOptions ResolveBuildOptions(FluentTranspiler.BuildProfile profile)
+        {
+            switch (profile)
+            {
+                case FluentTranspiler.BuildProfile.Strict:
+                    return new BuildOptions { Strict = true, ValidateStack = true, ForceSnapshot = true };
+                case FluentTranspiler.BuildProfile.Debug:
+                    return new BuildOptions { Strict = false, ValidateStack = true, ForceSnapshot = true };
+                default:
+                    return new BuildOptions { Strict = false, ValidateStack = true, ForceSnapshot = false };
+            }
+        }
+
+        /// <summary>
+        /// Controls when FluentTranspiler should emit expensive debug snapshots.
+        /// Clean builds stay quiet unless explicit transpiler debugging is enabled.
+        /// </summary>
+        public static bool ShouldRecordDebugSnapshot(int warningCount, int softFailureCount, int noteCount)
+        {
+            if (DebugTranspilerTracingEnabled())
+            {
+                return true;
+            }
+
+            return warningCount > 0;
+        }
+
+        private static bool DebugTranspilerTracingEnabled()
+        {
+            return ModPrefs.DebugTranspilers;
         }
     }
 }

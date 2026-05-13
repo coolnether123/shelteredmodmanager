@@ -9,10 +9,6 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
-    /// <summary>
-    /// Candidate IL anchor found by transpiler cartography.
-    /// Higher uniqueness scores indicate safer patch positions.
-    /// </summary>
     public class Anchor
     {
         public int Index;
@@ -27,9 +23,6 @@ namespace ModAPI.Harmony
         }
     }
 
-    /// <summary>
-    /// Anchor analysis result with safe-anchor candidates and suggestions.
-    /// </summary>
     public class AnchorReport
     {
         public List<Anchor> SafeAnchors = new List<Anchor>();
@@ -56,10 +49,6 @@ namespace ModAPI.Harmony
         }
     }
 
-    /// <summary>
-    /// Diagnostic extensions for finding stable IL anchors before editing a transpiler.
-    /// Use these during patch development to avoid brittle instruction offsets.
-    /// </summary>
     public static class CartographerExtensions 
     {
         /// <summary>
@@ -148,7 +137,8 @@ namespace ModAPI.Harmony
             }
             else
             {
-                t.AddWarning($"FindNextAnchor: No anchor with score >= {minUniqueness} found after index {t.CurrentIndex}");
+                t.AddSoftFailure(TranspilerDiagnosticCategory.Match,
+                    $"FindNextAnchor: No anchor with score >= {minUniqueness} found after index {t.CurrentIndex}");
             }
             return t;
         }
@@ -202,7 +192,7 @@ namespace ModAPI.Harmony
             {
                 string msg = $"Fuzzy match suggestions for {opcode} {operand}: Lines " + 
                              string.Join(", ", suggestions.Select(s => s.ToString()).ToArray());
-                t.AddWarning(msg);
+                t.AddNote(TranspilerDiagnosticCategory.Trace, msg);
                 MMLog.WriteWarning("[Cartographer] " + msg);
             }
         }

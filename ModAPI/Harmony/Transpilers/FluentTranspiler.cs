@@ -8,10 +8,6 @@ using ModAPI.Core;
 
 namespace ModAPI.Harmony
 {
-    /// <summary>
-    /// Starting point for the next fluent IL search.
-    /// Use <see cref="Current"/> or <see cref="Next"/> for sequential matching inside one patch.
-    /// </summary>
     public enum SearchMode
     {
         Start,   // Resets to beginning before searching
@@ -19,25 +15,135 @@ namespace ModAPI.Harmony
         Next     // Advances 1 then searches forward (for sequential matching)
     }
 
+    public enum TranspilerDiagnosticSeverity
+    {
+        Note,
+        SoftFailure,
+        Warning
+    }
+
+    public enum TranspilerDiagnosticCategory
+    {
+        General,
+        Match,
+        Validation,
+        Safety,
+        Trace
+    }
+
+    public enum FluentPatchSeverity
+    {
+        Info,
+        Warning,
+        Critical
+    }
+
+    public sealed class TranspilerDiagnostic
+    {
+        public TranspilerDiagnosticSeverity Severity { get; set; }
+        public TranspilerDiagnosticCategory Category { get; set; }
+        public string Message { get; set; }
+
+        public override string ToString()
+        {
+            return $"[{Severity}:{Category}] {Message}";
+        }
+    }
+
+    public sealed class FluentPatchDiagnostic
+    {
+        public string RecipeName { get; set; }
+        public string TargetMethod { get; set; }
+        public string ExpectedShape { get; set; }
+        public string FoundShape { get; set; }
+        public string ActionTaken { get; set; }
+        public FluentPatchSeverity Severity { get; set; }
+        public string OwnerMod { get; set; }
+        public string EditLabel { get; set; }
+
+        public string ToSingleLine()
+        {
+            return Compact(ToString());
+        }
+
+        public override string ToString()
+        {
+            var lines = new List<string>();
+            string target = string.IsNullOrEmpty(TargetMethod) ? "<unknown method>" : TargetMethod;
+            lines.Add("Could not patch " + target + ".");
+
+            if (!string.IsNullOrEmpty(EditLabel))
+            {
+                lines.Add("Patch: " + EditLabel);
+            }
+
+            if (!string.IsNullOrEmpty(RecipeName))
+            {
+                lines.Add("Recipe: " + RecipeName);
+            }
+
+            if (!string.IsNullOrEmpty(ExpectedShape))
+            {
+                lines.Add("Expected: " + ExpectedShape);
+            }
+
+            if (!string.IsNullOrEmpty(FoundShape))
+            {
+                lines.Add("Found: " + FoundShape);
+            }
+
+            if (!string.IsNullOrEmpty(ActionTaken))
+            {
+                lines.Add("Action: " + ActionTaken);
+            }
+
+            if (!string.IsNullOrEmpty(OwnerMod))
+            {
+                lines.Add("Owner: " + OwnerMod + ".");
+            }
+
+            return string.Join("\n", lines.ToArray());
+        }
+
+        private static string Compact(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return string.Empty;
+            }
+
+            return value.Replace("\r", string.Empty).Replace("\n", " ");
+        }
+    }
+
     /// <summary>
-    /// Fluent API for writing Harmony transpilers with safer matching, diagnostics, and label handling.
-    /// Build patches from intent-based operations instead of raw index edits whenever possible.
+    /// Fluent wrapper around Harmony transpilers for game and mod patch code.
     /// </summary>
     /// <remarks>
-    /// <b>Why use FluentTranspiler?</b>
     /// <para>
-    /// Writing raw IL is slow and dangerous. Standard patches break silently when the game updates, 
-    /// and debugging them requires deep IL knowledge. This API is designed to maximize your development speed:
+    /// The framework is built around a short lifecycle: open a session for the Harmony IL stream,
+    /// find a stable anchor in the target method, apply a focused edit, and finish through
+    /// <see cref="Build"/> so validation and diagnostics happen in one place.
     /// </para>
-    /// <list type="bullet">
-    /// <item><b>Safety:</b> Automatically handles label preservation and branch target fixups.</item>
-    /// <item><b>Diagnostics:</b> Provides intent-based logging so you know exactly WHERE a patch failed.</item>
-    /// <item><b>Validation:</b> Includes a real-time Stack Sentinel that catches "Stack Mismatch" crashes during the build phase.</item>
-    /// <item><b>Threading:</b> FluentTranspiler instances are not thread-safe and should not be shared across threads.</item>
-    /// </list>
+    /// <para>
+    /// Most patches should use <see cref="Execute"/> because it wraps that lifecycle in the
+    /// normal Harmony transpiler shape. Use <see cref="For"/> when a patch needs explicit
+    /// control over when <see cref="Build"/> runs or which validation mode is used.
+    /// </para>
+    /// <para>
+    /// The goal is to keep patch intent readable to developers who understand the target game
+    /// logic, without forcing every patch to manually manage labels, branch targets, and stack checks.
+    /// </para>
     /// </remarks>
     public partial class FluentTranspiler
     {
+        public enum BuildProfile
+        {
+            Runtime,
+            Strict,
+            Debug
+        }
+
         private struct StackExpectation
         {
             public int index;
@@ -45,7 +151,8 @@ namespace ModAPI.Harmony
         }
 
         private readonly CodeMatcher _matcher;
-        private readonly List<string> _warnings = new List<string>();
+        private readonly List<TranspilerDiagnostic> _diagnostics = new List<TranspilerDiagnostic>();
+        private readonly List<FluentPatchDiagnostic> _patchDiagnostics = new List<FluentPatchDiagnostic>();
         private readonly List<StackExpectation> _stackExpectations = new List<StackExpectation>();
         private readonly MethodBase _originalMethod;
         private readonly ILGenerator _generator;
@@ -54,6 +161,8 @@ namespace ModAPI.Harmony
         private readonly List<CodeInstruction> _initialInstructions;
         private readonly List<TranspilerDebugger.PatchEdit> _patchEdits = new List<TranspilerDebugger.PatchEdit>();
         private readonly Dictionary<Label, int> _labelIndexCache = new Dictionary<Label, int>();
+        private readonly List<string> _traceMessages = new List<string>();
+        private BuildProfile _buildProfile = BuildProfile.Runtime;
         private bool _labelIndexCacheDirty = true;
 
         private FluentTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase originalMethod = null, ILGenerator generator = null)
@@ -73,12 +182,12 @@ namespace ModAPI.Harmony
         }
 
         /// <summary>
-        /// The fluent factory method. Initializes a new transpiler session for the given instruction stream.
+        /// Creates a fluent transpiler session for a Harmony instruction stream.
         /// </summary>
         /// <remarks>
-        /// This is the standard way to begin a transpiler logic chain if you are not using <see cref="Execute"/>.
-        /// It creates a deep copy of the instructions to ensure that any diagnostic failures can report a diff 
-        /// against the literal original state.
+        /// Use this entry point when a patch needs manual control over the session lifetime, such as
+        /// choosing strict validation rules or building in multiple stages. For ordinary game patches,
+        /// <see cref="Execute"/> is the simpler entry point.
         /// </remarks>
         /// <param name="instructions">The raw IL instructions provided by the Harmony transpiler delegate.</param>
         /// <param name="originalMethod">The method being patched. Providing this enables advanced <see cref="StackSentinel"/> validation.</param>
@@ -100,14 +209,17 @@ namespace ModAPI.Harmony
         public new bool Equals(object obj) => base.Equals(obj);
 
         /// <summary>
-        /// The primary entry point for a Fluent Transpiler. 
-        /// Wraps the entire lifecycle of a patch: initialization, transformation, and terminal validation.
+        /// Runs the standard fluent transpiler lifecycle for a Harmony patch.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// This method abstracts away the boilerplate of manually creating a <see cref="FluentTranspiler"/> instance
-        /// and calling <see cref="Build"/>. It automatically captures the calling mod's identity for debugging,
-        /// performs a <see cref="StackSentinel"/> validation, and records a snapshot for the Transpiler Inspector.
+        /// This is the normal entry point for fluent transpilers. It creates the session, runs the
+        /// caller's transform, and then finishes through <see cref="Build"/> with the framework's default
+        /// non-strict validation policy.
+        /// </para>
+        /// <para>
+        /// The callback should stay focused on IL intent: find a stable anchor in the target method,
+        /// assert the match, and apply the smallest safe edit that redirects or replaces that behavior.
         /// </para>
         /// <para>
         /// <b>Usage Example:</b>
@@ -123,10 +235,22 @@ namespace ModAPI.Harmony
         /// </code>
         /// </para>
         /// </remarks>
-        /// <param name="instructions">The stream of IL instructions provided by Harmony.</param>
-        /// <param name="original">The original method being patched (required for stack analysis).</param>
-        /// <param name="generator">The ILGenerator (required if using labels or locals).</param>
-        /// <param name="transformer">A lambda containing your patching logic.</param>
+        /// <param name="instructions">
+        /// The IL instruction stream supplied by Harmony for the method currently being patched.
+        /// This is the method body that the fluent session will search and rewrite.
+        /// </param>
+        /// <param name="original">
+        /// The game or mod method that produced <paramref name="instructions"/>.
+        /// This is used for stack analysis, safety checks, diagnostics, and debug snapshots.
+        /// </param>
+        /// <param name="generator">
+        /// The <see cref="ILGenerator"/> passed into the Harmony transpiler signature.
+        /// Provide this when the patch needs to define labels or declare locals; otherwise <c>null</c> is valid.
+        /// </param>
+        /// <param name="transformer">
+        /// The callback that receives the active <see cref="FluentTranspiler"/> session.
+        /// Place all matching, insertion, replacement, and validation calls inside this lambda.
+        /// </param>
         /// <returns>A modified instruction stream ready for Harmony consumption.</returns>
         public static IEnumerable<CodeInstruction> Execute(
             IEnumerable<CodeInstruction> instructions,
@@ -134,9 +258,30 @@ namespace ModAPI.Harmony
             ILGenerator generator,
             Action<FluentTranspiler> transformer)
         {
+            return Execute(
+                instructions,
+                original,
+                generator,
+                TranspilerSafetyPolicy.DefaultExecuteProfile,
+                transformer);
+        }
+
+        /// <summary>
+        /// Runs the fluent transpiler lifecycle with an explicit build profile.
+        /// Use <see cref="BuildProfile.Debug"/> only for deliberate troubleshooting; runtime patches
+        /// should stay on <see cref="BuildProfile.Runtime"/> so successful patches do not log noise.
+        /// </summary>
+        public static IEnumerable<CodeInstruction> Execute(
+            IEnumerable<CodeInstruction> instructions,
+            MethodBase original,
+            ILGenerator generator,
+            BuildProfile profile,
+            Action<FluentTranspiler> transformer)
+        {
             var transpiler = For(instructions, original, generator);
+            transpiler._buildProfile = profile;
             transformer(transpiler);
-            return transpiler.Build();
+            return transpiler.Build(profile);
         }
         /// <summary>
         /// Power-search for a method call using a high-level API.
@@ -188,11 +333,11 @@ namespace ModAPI.Harmony
             {
                 string details = (genericArguments != null ? $"<{string.Join(", ", genericArguments.Select(t => t.Name).ToArray())}>" : "") +
                                  (parameterTypes != null ? $"({string.Join(", ", parameterTypes.Select(t => t.Name).ToArray())})" : "");
-                _warnings.Add($"No match for call {type.Name}.{methodName}{details}");
+                AddSoftFailure($"No match for call {type.Name}.{methodName}{details}");
             }
             else
             {
-                MMLog.WriteDebug($"[FluentTranspiler] MatchCall: Found {type.Name}.{methodName} at index {_matcher.Pos}");
+                LogTrace($"[FluentTranspiler] MatchCall: Found {type.Name}.{methodName} at index {_matcher.Pos}");
             }
             return this;
         }
@@ -254,7 +399,7 @@ namespace ModAPI.Harmony
             
             if (!_matcher.IsValid)
             {
-                _warnings.Add($"No match for opcode {opcode}");
+                AddSoftFailure($"No match for opcode {opcode}");
             }
             
             return this;
@@ -284,10 +429,84 @@ namespace ModAPI.Harmony
             
             if (!_matcher.IsValid)
             {
-                _warnings.Add($"Sequence not found: {string.Join(" -> ", opcodes.Select(o => o.Name).ToArray())}");
+                AddSoftFailure($"Sequence not found: {string.Join(" -> ", opcodes.Select(o => o.Name).ToArray())}");
             }
-            
+
             return this;
+        }
+
+        /// <summary>
+        /// Finds a sequence using instruction predicates. Use this for IL patterns that depend
+        /// on operand semantics, local loads/stores, or mixed opcode forms.
+        /// </summary>
+        public FluentTranspiler FindSequence(SearchMode mode, params Func<CodeInstruction, bool>[] predicates)
+        {
+            if (!TryFindSequence(mode, predicates))
+            {
+                int length = predicates != null ? predicates.Length : 0;
+                AddSoftFailure($"Predicate sequence not found: length {length}");
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Attempts to find a predicate sequence without adding diagnostics when absent.
+        /// This is useful for optional compatibility patterns where another patch shape is valid.
+        /// </summary>
+        public bool TryFindSequence(SearchMode mode, params Func<CodeInstruction, bool>[] predicates)
+        {
+            if (predicates == null || predicates.Length == 0)
+            {
+                AddWarning("TryFindSequence received an empty predicate sequence.");
+                return false;
+            }
+
+            var instructions = _matcher.Instructions();
+            int startIndex = 0;
+            if (mode == SearchMode.Current)
+            {
+                startIndex = _matcher.IsValid ? _matcher.Pos : 0;
+            }
+            else if (mode == SearchMode.Next)
+            {
+                startIndex = _matcher.IsValid ? _matcher.Pos + 1 : 0;
+            }
+
+            for (int i = Math.Max(0, startIndex); i <= instructions.Count - predicates.Length; i++)
+            {
+                bool matched = true;
+                for (int j = 0; j < predicates.Length; j++)
+                {
+                    Func<CodeInstruction, bool> predicate = predicates[j];
+                    if (predicate == null || !predicate(instructions[i + j]))
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+
+                if (!matched)
+                {
+                    continue;
+                }
+
+                _matcher.Start();
+                if (i > 0)
+                {
+                    _matcher.Advance(i);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Match a sequence using instruction predicates.</summary>
+        public FluentTranspiler MatchSequence(params Func<CodeInstruction, bool>[] predicates)
+        {
+            return FindSequence(SearchMode.Start, predicates);
         }
 
         /// <summary>Match a sequence of opcodes (pattern matching).</summary>
@@ -310,7 +529,7 @@ namespace ModAPI.Harmony
                 f.Name == fieldName;
 
             _matcher.MatchStartForward(new CodeMatch(predicate));
-            if (!_matcher.IsValid) _warnings.Add($"No match for field load {type.Name}.{fieldName}");
+            if (!_matcher.IsValid) AddSoftFailure($"No match for field load {type.Name}.{fieldName}");
             return this;
         }
 
@@ -336,11 +555,11 @@ namespace ModAPI.Harmony
             _matcher.MatchStartForward(new CodeMatch(predicate));
             if (!_matcher.IsValid) 
             {
-                _warnings.Add($"No match for field store {type.Name}.{fieldName}");
+                AddSoftFailure($"No match for field store {type.Name}.{fieldName}");
             }
             else
             {
-                MMLog.WriteDebug($"[FluentTranspiler] FindFieldStore: Found {type.Name}.{fieldName} at index {_matcher.Pos}");
+                LogTrace($"[FluentTranspiler] FindFieldStore: Found {type.Name}.{fieldName} at index {_matcher.Pos}");
             }
             return this;
         }
@@ -359,7 +578,7 @@ namespace ModAPI.Harmony
 
             _matcher.MatchStartForward(new CodeMatch(OpCodes.Ldstr, value));
             if (!_matcher.IsValid)
-                _warnings.Add($"No match for string \"{value}\"");
+                AddSoftFailure($"No match for string \"{value}\"");
             return this;
         }
 
@@ -386,7 +605,7 @@ namespace ModAPI.Harmony
             _matcher.MatchStartForward(new CodeMatch(instr =>
                 instr.IsLdcI4(value)));
             if (!_matcher.IsValid)
-                _warnings.Add($"No match for int constant {value}");
+                AddSoftFailure($"No match for int constant {value}");
             return this;
         }
 
@@ -406,7 +625,7 @@ namespace ModAPI.Harmony
             _matcher.MatchStartForward(new CodeMatch(instr =>
                 instr.IsLdcR4(value)));
             if (!_matcher.IsValid)
-                _warnings.Add($"No match for float constant {value}");
+                AddSoftFailure($"No match for float constant {value}");
             return this;
         }
 
@@ -550,12 +769,13 @@ namespace ModAPI.Harmony
         public FluentTranspiler ReplaceAssignment(CodeInstruction[] newExpression)
         {
             // Backtrack to find the start of the expression that leads to the current stloc
-            // In Unity game IL, this is usually a ldarg.0 or a sequence starting with a load.
-            int startIdx = BacktrackToExpressionStart(_matcher.Pos);
-            int count = _matcher.Pos - startIdx;
-            
-            _matcher.Advance(-(count));
-            ReplaceSequence(count, newExpression);
+            // In Sheltered's IL, this is usually a ldarg.0 or a sequence starting with a load.
+            int endIdx = _matcher.Pos;
+            int startIdx = BacktrackToExpressionStart(endIdx);
+            int removeCount = endIdx - startIdx + 1;
+
+            MoveTo(startIdx);
+            ReplaceSequence(removeCount, newExpression);
             return this;
         }
 
@@ -568,7 +788,7 @@ namespace ModAPI.Harmony
             
             if (stackAnalysis == null || !stackAnalysis.TryGetValue(currentPos, out var targetStack))
             {
-                 _warnings.Add($"Backtrack failed: Could not analyze stack at index {currentPos}. Falling back to conservative match.");
+                 AddNote($"Backtrack failed: Could not analyze stack at index {currentPos}. Falling back to conservative match.");
                  return currentPos;
             }
 
@@ -605,7 +825,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("ReplaceWith: No valid match.");
+                AddSoftFailure("ReplaceWith: No valid match.");
                 return this;
             }
             var beforeIndex = _matcher.Pos;
@@ -637,12 +857,6 @@ namespace ModAPI.Harmony
         /// <param name="parameterTypes">Optional parameter types for overload resolution.</param>
         public FluentTranspiler ReplaceWithCall(Type type, string methodName, Type[] parameterTypes = null)
         {
-            if (!_matcher.IsValid)
-            {
-                _warnings.Add("ReplaceWithCall: No valid match.");
-                return this;
-            }
-            
             MethodInfo method;
             if (parameterTypes != null)
             {
@@ -655,27 +869,59 @@ namespace ModAPI.Harmony
                 method = type.GetMethod(methodName,
                     BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
             }
-            
+
             if (method == null)
             {
-                _warnings.Add($"Method {type.Name}.{methodName} not found");
+                AddWarning($"Method {type.Name}.{methodName} not found");
                 return this;
             }
-            
-            // Transpiler replacements replace an instance or static call with a static call. 
-            // Replacing an instance call with a non-static method would lead to an invalid 
-            // stack state (missing 'this' pointer).
-            if (!method.IsStatic)
+
+            return ReplaceWithCall(method);
+        }
+
+        /// <summary>
+        /// Replaces the current instruction with a static method call.
+        /// </summary>
+        public FluentTranspiler ReplaceWithCall(MethodInfo method)
+        {
+            if (!_matcher.IsValid)
             {
-                _warnings.Add($"Method {type.Name}.{methodName} must be static for transpiler replacement");
+                AddSoftFailure("ReplaceWithCall: No valid match.");
                 return this;
             }
-            
+
+            if (method == null)
+            {
+                AddWarning("ReplaceWithCall received a null method.");
+                return this;
+            }
+
             var beforeIndex = _matcher.Pos;
             var oldInstr = _matcher.Instruction;
+            var originalCall = oldInstr != null ? oldInstr.operand as MethodInfo : null;
+            if (originalCall != null)
+            {
+                if (!FluentTranspilerRecipeValidation.ValidateReplacementCallSignature(
+                    this,
+                    originalCall,
+                    method,
+                    nameof(ReplaceWithCall)))
+                {
+                    return this;
+                }
+            }
+            else
+            {
+                if (!FluentTranspilerRecipeValidation.ValidateStaticMethod(this, method, nameof(ReplaceWithCall)) ||
+                    !FluentTranspilerRecipeValidation.ValidateParameterCount(this, method, 0, nameof(ReplaceWithCall)))
+                {
+                    return this;
+                }
+            }
+
             var newInstr = new CodeInstruction(OpCodes.Call, method);
             SetInstructionSafe(newInstr);
-            RecordPatchEdit("ReplaceWithCall", beforeIndex, new[] { oldInstr }, beforeIndex, new[] { newInstr }, $"{type.Name}.{methodName}", "exact");
+            RecordPatchEdit("ReplaceWithCall", beforeIndex, new[] { oldInstr }, beforeIndex, new[] { newInstr }, $"{method.DeclaringType?.Name}.{method.Name}", "exact");
             return this;
         }
 
@@ -702,7 +948,7 @@ namespace ModAPI.Harmony
                 _matcher.Advance(instructions.Length + 1); // Skip what we just added + the ret
                 count++;
             }
-            if (count == 0) _warnings.Add("InsertAtExit: No return instructions found.");
+            if (count == 0) AddSoftFailure("InsertAtExit: No return instructions found.");
             return this;
         }
 
@@ -711,7 +957,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("InsertBefore: No valid match.");
+                AddSoftFailure("InsertBefore: No valid match.");
                 return this;
             }
 
@@ -723,6 +969,12 @@ namespace ModAPI.Harmony
             {
                 newInstr.labels.AddRange(existingLabels);
                 existingLabels.Clear();
+            }
+            var existingBlocks = _matcher.Instruction.blocks;
+            if (existingBlocks.Count > 0)
+            {
+                newInstr.blocks.AddRange(existingBlocks);
+                existingBlocks.Clear();
             }
 
             var insertIndex = _matcher.Pos;
@@ -745,12 +997,12 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("InsertBefore: No valid match.");
+                AddSoftFailure("InsertBefore: No valid match.");
                 return this;
             }
             if (instructions == null)
             {
-                _warnings.Add("InsertBefore: instruction array cannot be null.");
+                AddWarning("InsertBefore: instruction array cannot be null.");
                 return this;
             }
 
@@ -763,6 +1015,12 @@ namespace ModAPI.Harmony
             {
                 toInsert[0].labels.AddRange(existingLabels);
                 existingLabels.Clear();
+            }
+            var existingBlocks = _matcher.Instruction.blocks;
+            if (existingBlocks.Count > 0 && toInsert.Length > 0)
+            {
+                toInsert[0].blocks.AddRange(existingBlocks);
+                existingBlocks.Clear();
             }
 
             var insertIndex = _matcher.Pos;
@@ -782,7 +1040,7 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("InsertAfter: No valid match.");
+                AddSoftFailure("InsertAfter: No valid match.");
                 return this;
             }
 
@@ -809,12 +1067,12 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("InsertAfter: No valid match.");
+                AddSoftFailure("InsertAfter: No valid match.");
                 return this;
             }
             if (instructions == null)
             {
-                _warnings.Add("InsertAfter: instruction array cannot be null.");
+                AddWarning("InsertAfter: instruction array cannot be null.");
                 return this;
             }
 
@@ -838,16 +1096,11 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("Remove: No valid match.");
+                AddSoftFailure("Remove: No valid match.");
                 return this;
             }
-            
-            var beforeIndex = _matcher.Pos;
-            var removed = _matcher.Instruction;
-            _matcher.RemoveInstruction();
-            InvalidateLabelIndexCache();
-            RecordPatchEdit("Remove", beforeIndex, new[] { removed }, beforeIndex, null, "Remove current instruction", "exact");
-            return this;
+
+            return ReplaceSequence(1, new CodeInstruction[0]);
         }
 
         #endregion
@@ -870,7 +1123,7 @@ namespace ModAPI.Harmony
             }
 
             local = _generator.DeclareLocal(typeof(T));
-            _warnings.Add($"DeclareLocal<{typeof(T).FullName}>() -> LocalIndex {local.LocalIndex}");
+            AddNote($"DeclareLocal<{typeof(T).FullName}>() -> LocalIndex {local.LocalIndex}");
             return this;
         }
 
@@ -930,7 +1183,7 @@ namespace ModAPI.Harmony
                 catch { }
             }
 
-            _warnings.Add($"CaptureLocal: Could not resolve variable '{localIndexOrName}' by name. Use numeric index instead.");
+            AddNote($"CaptureLocal: Could not resolve variable '{localIndexOrName}' by name. Use numeric index instead.");
             return this;
         }
 
@@ -982,13 +1235,12 @@ namespace ModAPI.Harmony
             
             if (targetMethodInfo == null)
             {
-                _warnings.Add($"Target method {targetType.Name}.{targetMethod} not found");
+                AddWarning($"Target method {targetType.Name}.{targetMethod} not found");
                 return this;
             }
             
-            if (!targetMethodInfo.IsStatic)
+            if (!FluentTranspilerRecipeValidation.ValidateStaticMethod(this, targetMethodInfo, nameof(ReplaceAllCalls)))
             {
-                _warnings.Add($"Target method {targetType.Name}.{targetMethod} must be static");
                 return this;
             }
             
@@ -1004,6 +1256,17 @@ namespace ModAPI.Harmony
                 {
                     var beforeIndex = _matcher.Pos;
                     var oldInstr = _matcher.Instruction;
+                    var sourceMethodInfo = oldInstr != null ? oldInstr.operand as MethodInfo : null;
+                    if (!FluentTranspilerRecipeValidation.ValidateReplacementCallSignature(
+                        this,
+                        sourceMethodInfo,
+                        targetMethodInfo,
+                        nameof(ReplaceAllCalls)))
+                    {
+                        _matcher.Advance(1);
+                        continue;
+                    }
+
                     var newInstr = new CodeInstruction(OpCodes.Call, targetMethodInfo);
                     SetInstructionSafe(newInstr);
                     RecordPatchEdit("ReplaceAllCalls", beforeIndex, new[] { oldInstr }, beforeIndex, new[] { newInstr }, $"{sourceType.Name}.{sourceMethod} -> {targetType.Name}.{targetMethod}", "exact");
@@ -1014,7 +1277,7 @@ namespace ModAPI.Harmony
             
             if (replacements == 0)
             {
-                _warnings.Add($"No instances of {sourceType.Name}.{sourceMethod} found");
+                AddSoftFailure($"No instances of {sourceType.Name}.{sourceMethod} found");
             }
             
             return this;
@@ -1024,14 +1287,17 @@ namespace ModAPI.Harmony
 
         #region Navigation & Debugging
 
-        /// <summary>True when the current matcher position is valid.</summary>
+        /// <summary>Check if current position is valid.</summary>
         public bool HasMatch => _matcher.IsValid;
 
-        /// <summary>Current instruction, or null when the matcher is invalid.</summary>
+        /// <summary>Get current instruction (or null).</summary>
         public CodeInstruction Current => _matcher.IsValid ? _matcher.Instruction : null;
 
-        /// <summary>Current instruction index.</summary>
+        /// <summary>Get current index.</summary>
         public int CurrentIndex => _matcher.Pos;
+
+        /// <summary>The method whose IL is being patched, when supplied by the Harmony transpiler.</summary>
+        public MethodBase OriginalMethod => _originalMethod;
 
         /// <summary>Move to next instruction.</summary>
         public FluentTranspiler Next()
@@ -1047,19 +1313,163 @@ namespace ModAPI.Harmony
             return this;
         }
 
-        /// <summary>Warnings recorded by previous matching or editing operations.</summary>
-        public IList<string> Warnings { get { return _warnings.AsReadOnly(); } }
+        /// <summary>Get all warnings that occurred.</summary>
+        public IList<string> Warnings
+        {
+            get
+            {
+                return _diagnostics
+                    .Where(d => d.Severity == TranspilerDiagnosticSeverity.Warning)
+                    .Select(d => d.Message)
+                    .ToList()
+                    .AsReadOnly();
+            }
+        }
+
+        /// <summary>Non-fatal match failures and probe misses captured during patch construction.</summary>
+        public IList<string> SoftFailures
+        {
+            get
+            {
+                return _diagnostics
+                    .Where(d => d.Severity == TranspilerDiagnosticSeverity.SoftFailure)
+                    .Select(d => d.Message)
+                    .ToList()
+                    .AsReadOnly();
+            }
+        }
+
+        /// <summary>Diagnostic notes collected during patch construction.</summary>
+        public IList<string> Notes
+        {
+            get
+            {
+                return _diagnostics
+                    .Where(d => d.Severity == TranspilerDiagnosticSeverity.Note)
+                    .Select(d => d.Message)
+                    .ToList()
+                    .AsReadOnly();
+            }
+        }
+
+        /// <summary>Structured diagnostics for callers that need severity/category instead of raw strings.</summary>
+        public IList<TranspilerDiagnostic> Diagnostics { get { return _diagnostics.AsReadOnly(); } }
+
+        /// <summary>Patch-recipe diagnostics captured during this transpiler run.</summary>
+        public IList<FluentPatchDiagnostic> PatchDiagnostics { get { return _patchDiagnostics.AsReadOnly(); } }
+
+        /// <summary>The most recent high-level patch diagnostic, useful for fail-safe fallback logging.</summary>
+        public FluentPatchDiagnostic LatestPatchDiagnostic
+        {
+            get
+            {
+                return _patchDiagnostics.Count > 0 ? _patchDiagnostics[_patchDiagnostics.Count - 1] : null;
+            }
+        }
+
+        internal string OwnerModName { get { return string.IsNullOrEmpty(_callerMod) ? "Unknown" : _callerMod; } }
+
+        internal string TargetMethodName
+        {
+            get
+            {
+                return _originalMethod != null && _originalMethod.DeclaringType != null
+                    ? _originalMethod.DeclaringType.FullName + "." + _originalMethod.Name
+                    : (_originalMethod != null ? _originalMethod.Name : "<unknown method>");
+            }
+        }
 
         /// <summary>Add a warning to the transpiler state.</summary>
-        public void AddWarning(string message) => _warnings.Add(message);
+        public void AddWarning(string message)
+        {
+            AddDiagnostic(TranspilerDiagnosticSeverity.Warning, ClassifyDiagnostic(message, TranspilerDiagnosticSeverity.Warning), message);
+        }
+
+        /// <summary>Add a warning with an explicit category.</summary>
+        public void AddWarning(TranspilerDiagnosticCategory category, string message)
+        {
+            AddDiagnostic(TranspilerDiagnosticSeverity.Warning, category, message);
+        }
+
+        /// <summary>Add a soft failure that should not be treated as a build warning by default.</summary>
+        public void AddSoftFailure(string message)
+        {
+            AddDiagnostic(TranspilerDiagnosticSeverity.SoftFailure, ClassifyDiagnostic(message, TranspilerDiagnosticSeverity.SoftFailure), message);
+        }
+
+        /// <summary>Add a soft failure with an explicit category.</summary>
+        public void AddSoftFailure(TranspilerDiagnosticCategory category, string message)
+        {
+            AddDiagnostic(TranspilerDiagnosticSeverity.SoftFailure, category, message);
+        }
+
+        /// <summary>Add a diagnostic note that should only surface in verbose/debug tooling.</summary>
+        public void AddNote(string message)
+        {
+            AddDiagnostic(TranspilerDiagnosticSeverity.Note, ClassifyDiagnostic(message, TranspilerDiagnosticSeverity.Note), message);
+        }
+
+        /// <summary>Add a diagnostic note with an explicit category.</summary>
+        public void AddNote(TranspilerDiagnosticCategory category, string message)
+        {
+            AddDiagnostic(TranspilerDiagnosticSeverity.Note, category, message);
+        }
+
+        /// <summary>Centralized typed diagnostic writer used by all helper entry points.</summary>
+        public void AddDiagnostic(TranspilerDiagnosticSeverity severity, TranspilerDiagnosticCategory category, string message)
+        {
+            if (string.IsNullOrEmpty(message)) return;
+            _diagnostics.Add(new TranspilerDiagnostic
+            {
+                Severity = severity,
+                Category = category,
+                Message = message
+            });
+        }
+
+        public void AddPatchDiagnostic(FluentPatchDiagnostic diagnostic)
+        {
+            if (diagnostic == null)
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(diagnostic.TargetMethod))
+            {
+                diagnostic.TargetMethod = TargetMethodName;
+            }
+
+            if (string.IsNullOrEmpty(diagnostic.OwnerMod))
+            {
+                diagnostic.OwnerMod = OwnerModName;
+            }
+
+            _patchDiagnostics.Add(diagnostic);
+
+            string message = diagnostic.ToString();
+            if (diagnostic.Severity == FluentPatchSeverity.Critical)
+            {
+                AddWarning(TranspilerDiagnosticCategory.Safety, "[CRITICAL PATCH] " + message);
+            }
+            else if (diagnostic.Severity == FluentPatchSeverity.Warning)
+            {
+                AddWarning(TranspilerDiagnosticCategory.Match, message);
+            }
+            else
+            {
+                AddNote(TranspilerDiagnosticCategory.Match, message);
+            }
+        }
 
         /// <summary>Throw an exception immediately if the current operation has no match.</summary>
         public FluentTranspiler AssertValid()
         {
             if (!_matcher.IsValid)
             {
-                string lastWarning = _warnings.LastOrDefault() ?? "Unknown error";
-                throw new InvalidOperationException($"[{_callerMod}] AssertValid failed: {lastWarning} in method {_originalMethod?.DeclaringType.Name}.{_originalMethod?.Name}");
+                string failure = SoftFailures.LastOrDefault()
+                    ?? Warnings.LastOrDefault()
+                    ?? "Unknown error";
+                throw new InvalidOperationException($"[{_callerMod}] AssertValid failed: {failure} in method {_originalMethod?.DeclaringType.Name}.{_originalMethod?.Name}");
             }
             return this;
         }
@@ -1067,15 +1477,21 @@ namespace ModAPI.Harmony
         /// <summary>Log current state to console.</summary>
         public FluentTranspiler Log(string label = "")
         {
-            MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] {label}");
-            MMLog.WriteDebug($"  Position: {_matcher.Pos}, Valid: {_matcher.IsValid}");
+            var warnings = Warnings;
+            var softFailures = SoftFailures;
+            LogTrace($"[FluentTranspiler:{_callerMod}] {label}");
+            LogTrace($"  Position: {_matcher.Pos}, Valid: {_matcher.IsValid}");
             if (_matcher.IsValid)
             {
-                MMLog.WriteDebug($"  Current: {_matcher.Instruction}");
+                LogTrace($"  Current: {_matcher.Instruction}");
             }
-            if (_warnings.Count > 0)
+            if (warnings.Count > 0)
             {
-                MMLog.WriteDebug($"  Warnings: {_warnings.Count}");
+                LogTrace($"  Warnings: {warnings.Count}");
+            }
+            if (softFailures.Count > 0)
+            {
+                LogTrace($"  SoftFailures: {softFailures.Count}");
             }
             return this;
         }
@@ -1084,16 +1500,16 @@ namespace ModAPI.Harmony
         public FluentTranspiler DumpAll(string label = "")
         {
             var instructions = _matcher.Instructions();
-            MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] {label} ({instructions.Count} instructions):");
+            LogTrace($"[FluentTranspiler:{_callerMod}] {label} ({instructions.Count} instructions):");
             for (int i = 0; i < instructions.Count; i++)
             {
                 string marker = (i == _matcher.Pos) ? " >>>" : "    ";
-                MMLog.WriteDebug($"{marker}{i:D3}: {instructions[i]}");
+                LogTrace($"{marker}{i:D3}: {instructions[i]}");
             }
             return this;
         }
 
-        /// <summary>Returns the current instruction list.</summary>
+        /// <summary>Get copy of current instructions.</summary>
         public IEnumerable<CodeInstruction> Instructions()
         {
             return _matcher.Instructions();
@@ -1113,7 +1529,7 @@ namespace ModAPI.Harmony
             var instructions = _matcher.Instructions().ToList();
             if (absolutePosition < 0 || absolutePosition >= instructions.Count)
             {
-                _warnings.Add($"MoveTo: Position {absolutePosition} out of range.");
+                AddSoftFailure($"MoveTo: Position {absolutePosition} out of range.");
                 return this;
             }
             
@@ -1146,25 +1562,27 @@ namespace ModAPI.Harmony
         {
             if (!_matcher.IsValid)
             {
-                _warnings.Add("ReplaceSequence: No valid match.");
+                AddSoftFailure("ReplaceSequence: No valid match.");
                 return this;
             }
             if (removeCount < 0)
             {
-                _warnings.Add("ReplaceSequence: removeCount cannot be negative.");
+                AddWarning("ReplaceSequence: removeCount cannot be negative.");
                 return this;
             }
             if (newInstructions == null)
             {
-                _warnings.Add("ReplaceSequence: replacement instructions cannot be null.");
+                AddWarning("ReplaceSequence: replacement instructions cannot be null.");
                 return this;
             }
 
             var beforeIndex = _matcher.Pos;
             var originalInstructions = _matcher.Instructions().ToList();
+            var snapshot = originalInstructions.Select(i => new CodeInstruction(i)).ToList();
+            int snapshotPos = _matcher.IsValid ? _matcher.Pos : 0;
             if (beforeIndex < 0 || beforeIndex + removeCount > originalInstructions.Count)
             {
-                _warnings.Add($"[CRITICAL SAFETY] ReplaceSequence range out of bounds (start={beforeIndex}, removeCount={removeCount}, methodLength={originalInstructions.Count}). Aborting.");
+                AddWarning($"[CRITICAL SAFETY] ReplaceSequence range out of bounds (start={beforeIndex}, removeCount={removeCount}, methodLength={originalInstructions.Count}). Aborting.");
                 return this;
             }
             
@@ -1184,38 +1602,68 @@ namespace ModAPI.Harmony
                 return this; // Aborted due to safety check
             }
 
-            // 2. Mutate: Remove the old instructions
-            for (int i = 0; i < removeCount && _matcher.IsValid; i++)
+            try
             {
-                _matcher.RemoveInstruction();
-            }
-            
-            // 3. Reconstruct: Insert new instructions and apply labels
-            ApplyReplacementInstructions(newInstructions, capturedLabels, capturedBlocksByOffset);
-            if (newInstructions.Length == 0 && _matcher.IsValid)
-            {
-                // Preserve label/block anchors when removing without replacement.
-                for (int i = 0; i < capturedLabels.Count; i++)
+                // 2. Mutate: Remove the old instructions
+                for (int i = 0; i < removeCount && _matcher.IsValid; i++)
                 {
-                    var label = capturedLabels[i];
-                    if (!_matcher.Instruction.labels.Contains(label))
+                    _matcher.RemoveInstruction();
+                }
+
+                // 3. Reconstruct: Insert new instructions and apply labels
+                ApplyReplacementInstructions(newInstructions, capturedLabels, capturedBlocksByOffset);
+                if (newInstructions.Length == 0)
+                {
+                    if (_matcher.IsValid)
                     {
-                        _matcher.Instruction.labels.Add(label);
+                        // Preserve label/block anchors when removing without replacement.
+                        for (int i = 0; i < capturedLabels.Count; i++)
+                        {
+                            var label = capturedLabels[i];
+                            if (!_matcher.Instruction.labels.Contains(label))
+                            {
+                                _matcher.Instruction.labels.Add(label);
+                            }
+                        }
+
+                        for (int i = 0; i < capturedBlocksByOffset.Count; i++)
+                        {
+                            var blocks = capturedBlocksByOffset[i];
+                            if (blocks == null) continue;
+                            for (int b = 0; b < blocks.Count; b++)
+                            {
+                                _matcher.Instruction.blocks.Add(blocks[b]);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        bool hasAnchorsToPreserve = capturedLabels.Count > 0
+                            || capturedBlocksByOffset.Any(blocks => blocks != null && blocks.Count > 0);
+                        if (hasAnchorsToPreserve)
+                        {
+                            RestoreInstructionSnapshot(snapshot, snapshotPos);
+                            AddWarning("[CRITICAL SAFETY] ReplaceSequence removed a labeled or exception-block-anchored suffix without replacement. Aborting.");
+                            return this;
+                        }
+
+                        var current = _matcher.Instructions();
+                        if (current.Count > 0)
+                        {
+                            _matcher.Start().Advance(Math.Min(beforeIndex, current.Count - 1));
+                        }
                     }
                 }
 
-                for (int i = 0; i < capturedBlocksByOffset.Count; i++)
-                {
-                    var blocks = capturedBlocksByOffset[i];
-                    if (blocks == null) continue;
-                    for (int b = 0; b < blocks.Count; b++)
-                    {
-                        _matcher.Instruction.blocks.Add(blocks[b]);
-                    }
-                }
+                InvalidateLabelIndexCache();
             }
-            InvalidateLabelIndexCache();
-            
+            catch (Exception ex)
+            {
+                RestoreInstructionSnapshot(snapshot, snapshotPos);
+                AddWarning("[CRITICAL SAFETY] ReplaceSequence failed and rolled back: " + ex.Message);
+                return this;
+            }
+
             // 4. Record
             if (recordPatchEdit)
             {
@@ -1259,7 +1707,7 @@ namespace ModAPI.Harmony
                         incomingBranchMap.TryGetValue(label, out jumper);
                         if (jumper != null)
                         {
-                            _warnings.Add($"[CRITICAL SAFETY] Unsafe Jump Detected: Instruction @IL_{methodScope.IndexOf(jumper):X4} ({jumper.opcode}) targets the middle of your replacement block at offset {r} (Label: {label}). Aborting.");
+                            AddWarning($"[CRITICAL SAFETY] Unsafe Jump Detected: Instruction @IL_{methodScope.IndexOf(jumper):X4} ({jumper.opcode}) targets the middle of your replacement block at offset {r} (Label: {label}). Aborting.");
                             return false;
                         }
                     }
@@ -1271,7 +1719,7 @@ namespace ModAPI.Harmony
             {
                 if (newInstructions == null || newInstructions.Length != removeCount)
                 {
-                    _warnings.Add("[CRITICAL SAFETY] ReplaceSequence on EH methods requires exact index-aligned replacement (removeCount == insertCount). Aborting.");
+                    AddWarning("[CRITICAL SAFETY] ReplaceSequence on EH methods requires exact index-aligned replacement (removeCount == insertCount). Aborting.");
                     return false;
                 }
 
@@ -1284,7 +1732,7 @@ namespace ModAPI.Harmony
                     bool canMapToEntry = newInstructions != null && newInstructions.Length > 0 && r == 0;
                     if (!canMapByIndex && !canMapToEntry)
                     {
-                        _warnings.Add("[CRITICAL SAFETY] ReplaceSequence would relocate exception boundary markers without a safe mapping. Aborting.");
+                        AddWarning("[CRITICAL SAFETY] ReplaceSequence would relocate exception boundary markers without a safe mapping. Aborting.");
                         return false;
                     }
                 }
@@ -1301,7 +1749,7 @@ namespace ModAPI.Harmony
                         if (!incomingBranchMap.ContainsKey(originalEntry.labels[i])) continue;
                         if (!AreLabelEntryStackBehaviorsCompatible(originalEntry, replacementEntry))
                         {
-                            _warnings.Add("[CRITICAL SAFETY] Label-targeted entry instruction replacement changed stack behavior. Aborting.");
+                            AddWarning("[CRITICAL SAFETY] Label-targeted entry instruction replacement changed stack behavior. Aborting.");
                             return false;
                         }
                     }
@@ -1402,12 +1850,12 @@ namespace ModAPI.Harmony
         {
             if (MethodHasExceptionHandlingClauses())
             {
-                _warnings.Add("[CRITICAL SAFETY] ReplaceAll is blocked for methods with exception handlers. Use exact index-aligned replacements instead.");
+                AddWarning("[CRITICAL SAFETY] ReplaceAll is blocked for methods with exception handlers. Use exact index-aligned replacements instead.");
                 return this;
             }
             if (newInstructions == null)
             {
-                _warnings.Add("[CRITICAL SAFETY] ReplaceAll received null replacement instruction sequence. Aborting.");
+                AddWarning("[CRITICAL SAFETY] ReplaceAll received null replacement instruction sequence. Aborting.");
                 return this;
             }
 
@@ -1466,7 +1914,7 @@ namespace ModAPI.Harmony
                     // No instructions exist; matcher-driven insertion is invalid in this state.
                     oldList.Clear();
                     oldList.AddRange(newCode);
-                    _warnings.Add($"[CRITICAL SAFETY] ReplaceAll used direct instruction-list fallback on {methodName} because CodeMatcher cannot insert into an empty body. oldCount={oldCount}, newCount={newCount}. oldOps={oldPreview}. newOps={newPreview}");
+                    AddWarning($"[CRITICAL SAFETY] ReplaceAll used direct instruction-list fallback on {methodName} because CodeMatcher cannot insert into an empty body. oldCount={oldCount}, newCount={newCount}. oldOps={oldPreview}. newOps={newPreview}");
                 }
 
                 InvalidateLabelIndexCache();
@@ -1474,9 +1922,9 @@ namespace ModAPI.Harmony
                 // Safety check: Verify the replacement took
                 if (_matcher.Instructions().Count != newCount)
                 {
-                    _warnings.Add($"[CRITICAL SAFETY] ReplaceAll internal list mismatch on {methodName}. oldCount={oldCount}, newCount={newCount}, actualCount={_matcher.Instructions().Count}. oldOps={oldPreview}. newOps={newPreview}");
+                    AddWarning($"[CRITICAL SAFETY] ReplaceAll internal list mismatch on {methodName}. oldCount={oldCount}, newCount={newCount}, actualCount={_matcher.Instructions().Count}. oldOps={oldPreview}. newOps={newPreview}");
                     RestoreInstructionSnapshot(snapshot, snapshotPos);
-                    _warnings.Add($"[CRITICAL SAFETY] ReplaceAll rolled back on {methodName} after internal list mismatch.");
+                    AddWarning($"[CRITICAL SAFETY] ReplaceAll rolled back on {methodName} after internal list mismatch.");
                     return this;
                 }
 
@@ -1488,7 +1936,7 @@ namespace ModAPI.Harmony
             catch (Exception ex)
             {
                 RestoreInstructionSnapshot(snapshot, snapshotPos);
-                _warnings.Add($"[CRITICAL SAFETY] ReplaceAll failed and rolled back on {methodName}. oldCount={oldCount}, newCount={newCount}. oldOps={oldPreview}. newOps={newPreview}. Error={ex.Message}");
+                AddWarning($"[CRITICAL SAFETY] ReplaceAll failed and rolled back on {methodName}. oldCount={oldCount}, newCount={newCount}. oldOps={oldPreview}. newOps={newPreview}. Error={ex.Message}");
                 return this;
             }
 
@@ -1550,7 +1998,7 @@ namespace ModAPI.Harmony
         {
             string methodName = _originalMethod != null ? _originalMethod.Name : "<unknown-method>";
             bool effectivePreserveInstructionCount = ResolvePatternPreserveMode(preserveInstructionCount, patternPredicates != null ? patternPredicates.Length : 0);
-            MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Searching for pattern (length {patternPredicates.Length}) in {methodName}. Preserve count: requested={preserveInstructionCount}, effective={effectivePreserveInstructionCount}.");
+            LogTrace($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Searching for pattern (length {patternPredicates.Length}) in {methodName}. Preserve count: requested={preserveInstructionCount}, effective={effectivePreserveInstructionCount}.");
 
             var instructions = _matcher.Instructions().ToList();
             
@@ -1571,14 +2019,14 @@ namespace ModAPI.Harmony
                 if (matches)
                 {
                     matchPositions.Add(i);
-                    MMLog.WriteDebug($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Found match at index {i}.");
+                    LogTrace($"[FluentTranspiler:{_callerMod}] ReplaceAllPatterns: Found match at index {i}.");
                     i += patternPredicates.Length - 1;
                 }
             }
 
             if (matchPositions.Count == 0)
             {
-                _warnings.Add($"ReplaceAllPatterns: No valid matches found for pattern in method {methodName}. Verified opcodes: {string.Join(", ", patternPredicates.Select(p => "predicate").ToArray())}");
+                AddSoftFailure($"ReplaceAllPatterns: No valid matches found for pattern in method {methodName}. Verified opcodes: {string.Join(", ", patternPredicates.Select(p => "predicate").ToArray())}");
                 return this;
             }
 
@@ -1589,11 +2037,11 @@ namespace ModAPI.Harmony
 
             if (effectivePreserveInstructionCount && !CanSafelyPadWithNops(instructions, matchPositions, patternPredicates.Length, replaceWith.Length))
             {
-                _warnings.Add($"[CRITICAL SAFETY] ReplaceAllPatterns cannot preserve instruction count safely in {methodName}. Removed tail instructions are not stack-neutral; aborting replacement.");
+                AddWarning($"[CRITICAL SAFETY] ReplaceAllPatterns cannot preserve instruction count safely in {methodName}. Removed tail instructions are not stack-neutral; aborting replacement.");
                 return this;
             }
             
-            MMLog.WriteDebug($"[FluentTranspiler] ReplaceAllPatterns: Found {matchPositions.Count} occurrences in {methodName}. Applying replacements...");
+            LogTrace($"[FluentTranspiler] ReplaceAllPatterns: Found {matchPositions.Count} occurrences in {methodName}. Applying replacements...");
             
             // Apply replacements in reverse order to maintain indices
             for (int idx = matchPositions.Count - 1; idx >= 0; idx--)
@@ -1698,7 +2146,7 @@ namespace ModAPI.Harmony
 
             if (replaceLength != patternLength)
             {
-                _warnings.Add($"[CRITICAL SAFETY] ReplaceAllPatterns on EH method {methodName} requires exact index-aligned replacement (patternLength == replaceLength). Aborting.");
+                AddWarning($"[CRITICAL SAFETY] ReplaceAllPatterns on EH method {methodName} requires exact index-aligned replacement (patternLength == replaceLength). Aborting.");
                 return false;
             }
 
@@ -1809,7 +2257,7 @@ namespace ModAPI.Harmony
             catch (Exception ex)
             {
                 RestoreInstructionSnapshot(snapshot, snapshotPos);
-                _warnings.Add("Transaction rollback applied: " + ex.Message);
+                AddNote("Transaction rollback applied: " + ex.Message);
                 return this;
             }
         }
@@ -1849,96 +2297,151 @@ namespace ModAPI.Harmony
         #region Build
 
         /// <summary>
-        /// Returns the modified instructions. This is a terminal operation.
-        /// ⚠️ Stack validation is a BEST-EFFORT sanity check. It now tracks TYPES.
+        /// Finalizes the current session and returns the rewritten instruction stream.
         /// </summary>
-        /// <param name="strict">If true, throws an exception if any warnings occurred.</param>
-        /// <param name="validateStack">If true, performs a basic stack depth and type analysis.</param>
+        /// <remarks>
+        /// <para>
+        /// <see cref="Build"/> is where the framework runs stack validation, linting, debug snapshots,
+        /// and warning escalation. When a patch uses <see cref="Execute"/>, this happens automatically.
+        /// </para>
+        /// <para>
+        /// Use <paramref name="strict"/> for development or for patches that should abort on any warning.
+        /// Leave it disabled for routine production patches that need diagnostics without failing on every
+        /// non-critical game IL quirk.
+        /// </para>
+        /// </remarks>
+        /// <param name="strict">If true, any validation warning aborts the build with an exception.</param>
+        /// <param name="validateStack">If true, runs stack and lint validation before returning instructions.</param>
+        public IEnumerable<CodeInstruction> Build(BuildProfile profile)
+        {
+            _buildProfile = profile;
+            var options = TranspilerSafetyPolicy.ResolveBuildOptions(profile);
+            return Build(options.Strict, options.ValidateStack, options.ForceSnapshot);
+        }
+
         public IEnumerable<CodeInstruction> Build(bool strict = true, bool validateStack = true)
         {
+            _buildProfile = strict ? BuildProfile.Strict : BuildProfile.Runtime;
+            return Build(strict, validateStack, forceSnapshot: false);
+        }
+
+        private IEnumerable<CodeInstruction> Build(bool strict, bool validateStack, bool forceSnapshot)
+        {
             var instructions = _matcher.Instructions().ToList();
+            bool skipStackValidationForExceptionHandlers = validateStack && MethodHasExceptionHandlingClauses();
             if (validateStack)
             {
-                if (!StackSentinel.Validate(instructions, _originalMethod, out string stackError))
+                if (!skipStackValidationForExceptionHandlers)
                 {
-                    _warnings.Add($"Stack Error: {stackError}");
-                }
-
-                // Validate explicit stack expectations
-                if (_stackExpectations.Count > 0)
-                {
-                    Dictionary<int, List<Type>> stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
-                    if (stackAnalysis != null)
+                    if (!StackSentinel.Validate(instructions, _originalMethod, out string stackError))
                     {
-                        foreach (var expectation in _stackExpectations)
-                        {
-                            int index = expectation.index;
-                            int expectedDepth = expectation.expectedDepth;
+                        AddWarning($"Stack Error: {stackError}");
+                    }
 
-                            if (stackAnalysis.TryGetValue(index, out var stack))
+                    // Validate explicit stack expectations
+                    if (_stackExpectations.Count > 0)
+                    {
+                        Dictionary<int, List<Type>> stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
+                        if (stackAnalysis != null)
+                        {
+                            foreach (var expectation in _stackExpectations)
                             {
-                                int actualDepth = stack.Count;
-                                if (actualDepth != expectedDepth)
+                                int index = expectation.index;
+                                int expectedDepth = expectation.expectedDepth;
+
+                                if (stackAnalysis.TryGetValue(index, out var stack))
                                 {
-                                    _warnings.Add($"Stack expectation failed at index {index}: Expected {expectedDepth}, got {actualDepth}");
+                                    int actualDepth = stack.Count;
+                                    if (actualDepth != expectedDepth)
+                                    {
+                                        AddWarning($"Stack expectation failed at index {index}: Expected {expectedDepth}, got {actualDepth}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Validate stack delta expectations
+                    if (_stackDeltaExpectations.Count > 0)
+                    {
+                        Dictionary<int, List<Type>> stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
+                        if (stackAnalysis != null)
+                        {
+                            foreach (var expectation in _stackDeltaExpectations)
+                            {
+                                if (stackAnalysis.TryGetValue(expectation.startIndex, out var startStack) &&
+                                    stackAnalysis.TryGetValue(expectation.endIndex, out var endStack))
+                                {
+                                    int actualDelta = endStack.Count - startStack.Count;
+                                    if (actualDelta != expectation.expectedDelta)
+                                    {
+                                        AddWarning($"Stack delta expectation failed between {expectation.startIndex} and {expectation.endIndex}: Expected {expectation.expectedDelta:+#;-#;0}, got {actualDelta:+#;-#;0}");
+                                    }
                                 }
                             }
                         }
                     }
                 }
-
-                // Validate stack delta expectations
-                if (_stackDeltaExpectations.Count > 0)
+                else
                 {
-                    Dictionary<int, List<Type>> stackAnalysis = StackSentinel.Analyze(instructions, _originalMethod, out _);
-                    if (stackAnalysis != null)
-                    {
-                        foreach (var expectation in _stackDeltaExpectations)
-                        {
-                            if (stackAnalysis.TryGetValue(expectation.startIndex, out var startStack) &&
-                                stackAnalysis.TryGetValue(expectation.endIndex, out var endStack))
-                            {
-                                int actualDelta = endStack.Count - startStack.Count;
-                                if (actualDelta != expectation.expectedDelta)
-                                {
-                                    _warnings.Add($"Stack delta expectation failed between {expectation.startIndex} and {expectation.endIndex}: Expected {expectation.expectedDelta:+#;-#;0}, got {actualDelta:+#;-#;0}");
-                                }
-                            }
-                        }
-                    }
+                    AddNote($"StackSentinel validation skipped for EH method {_originalMethod?.DeclaringType?.FullName}.{_originalMethod?.Name}.");
                 }
 
                 // Run Linter
                 Lint(instructions);
             }
 
+            var warnings = Warnings;
+            var softFailures = SoftFailures;
+            var notes = Notes;
+            bool hasCriticalWarning = warnings.Any(TranspilerSafetyPolicy.IsCriticalWarning);
+
             _stopwatch.Stop();
             double duration = _stopwatch.Elapsed.TotalMilliseconds;
-            
-            // Auto-record snapshot for debugger with explicit origin metadata.
-            TranspilerDebugger.RecordSnapshot(
-                _callerMod,
-                null,
-                _initialInstructions,
-                _matcher.Instructions(),
-                duration,
-                _warnings.Count,
-                _originalMethod,
-                BuildPatchOrigin(),
-                patchEdits: _patchEdits,
-                warnings: _warnings);
 
-            if (_warnings.Count > 0)
+            bool shouldRecordSnapshot =
+                forceSnapshot ||
+                hasCriticalWarning ||
+                (_buildProfile == BuildProfile.Debug &&
+                 TranspilerSafetyPolicy.ShouldRecordDebugSnapshot(warnings.Count, softFailures.Count, notes.Count));
+
+            if (shouldRecordSnapshot)
             {
-                var message = $"[{_callerMod}] Transpiler failed validation:\n" + string.Join("\n", _warnings.Select(w => "  - " + w).ToArray());
-                bool hasCriticalWarning = _warnings.Any(TranspilerSafetyPolicy.IsCriticalWarning);
+                TranspilerDebugger.RecordSnapshot(
+                    _callerMod,
+                    null,
+                    _initialInstructions,
+                    _matcher.Instructions(),
+                    duration,
+                    warnings.Count,
+                    _originalMethod,
+                    BuildPatchOrigin(),
+                    patchEdits: _patchEdits,
+                    warnings: _diagnostics.Select(d => d.ToString()));
+            }
+
+            if (warnings.Count > 0)
+            {
+                var heading = hasCriticalWarning
+                    ? $"[{_callerMod}] Transpiler validation failed:"
+                    : $"[{_callerMod}] Transpiler validation warnings:";
+                var message = heading + "\n" + string.Join("\n", warnings.Select(w => "  - " + w).ToArray());
                 if (strict || (hasCriticalWarning && TranspilerSafetyPolicy.FailFastOnCritical))
                 {
                     throw new InvalidOperationException(message);
                 }
-                MMLog.WriteWarning(message);
+
+                if (hasCriticalWarning)
+                {
+                    MMLog.WriteError(message);
+                }
+                else if (_buildProfile == BuildProfile.Debug && TranspilerSafetyPolicy.LogValidationWarnings)
+                {
+                    MMLog.WriteWarning(message);
+                }
             }
 
+            FlushTraceLog(duration, warnings.Count, softFailures.Count, notes.Count);
             return _matcher.Instructions().ToList();
         }
 
@@ -1986,6 +2489,70 @@ namespace ModAPI.Harmony
             return "FluentTranspiler|Owner:" + (_callerMod ?? "Unknown") + "|Method:" + methodId;
         }
 
+        private void LogTrace(string message)
+        {
+            if (_buildProfile != BuildProfile.Debug || !TranspilerSafetyPolicy.VerboseTracingEnabled)
+            {
+                return;
+            }
+
+            _traceMessages.Add(message);
+        }
+
+        private void FlushTraceLog(double durationMilliseconds, int warningCount, int softFailureCount, int noteCount)
+        {
+            if (_traceMessages.Count == 0)
+            {
+                return;
+            }
+
+            string methodName = _originalMethod?.DeclaringType != null
+                ? _originalMethod.DeclaringType.FullName + "." + _originalMethod.Name
+                : _originalMethod?.Name ?? "<unknown method>";
+
+            var lines = new List<string>
+            {
+                "Method: " + methodName,
+                "Duration: " + durationMilliseconds.ToString("F2") + " ms",
+                "Diagnostics: warnings=" + warningCount + ", softFailures=" + softFailureCount + ", notes=" + noteCount
+            };
+            lines.AddRange(_traceMessages);
+            _traceMessages.Clear();
+
+            MMLog.WriteDebugBlock("[FluentTranspiler:" + (_callerMod ?? "Unknown") + "] Trace", lines);
+        }
+
+        private static TranspilerDiagnosticCategory ClassifyDiagnostic(string message, TranspilerDiagnosticSeverity severity)
+        {
+            if (string.IsNullOrEmpty(message))
+            {
+                return TranspilerDiagnosticCategory.General;
+            }
+
+            if (message.IndexOf("match", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("found", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return TranspilerDiagnosticCategory.Match;
+            }
+
+            if (message.IndexOf("stack", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("validate", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return TranspilerDiagnosticCategory.Validation;
+            }
+
+            if (message.IndexOf("[CRITICAL", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("unsafe", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                message.IndexOf("rollback", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return TranspilerDiagnosticCategory.Safety;
+            }
+
+            return severity == TranspilerDiagnosticSeverity.Note
+                ? TranspilerDiagnosticCategory.Trace
+                : TranspilerDiagnosticCategory.General;
+        }
+
         /// <summary>
         /// Resolves preserve mode for pattern replacement.
         /// In safe mode we can automatically force preserve=true to avoid branch targets
@@ -2001,7 +2568,7 @@ namespace ModAPI.Harmony
 
             if (!effective && patternLength > 1)
             {
-                _warnings.Add("[CRITICAL SAFETY] ReplaceAllPatterns requested preserveInstructionCount=false for a multi-instruction pattern. This can invalidate branch targets.");
+                AddWarning("[CRITICAL SAFETY] ReplaceAllPatterns requested preserveInstructionCount=false for a multi-instruction pattern. This can invalidate branch targets.");
             }
             return effective;
         }

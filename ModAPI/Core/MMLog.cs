@@ -226,6 +226,12 @@ namespace ModAPI.Core
             WriteInternal(LogLevel.Debug, category, GetLightweightCallerInfo(), message);
         }
 
+        public static void WriteDebugBlock(string heading, IEnumerable<string> lines, LogCategory category = LogCategory.General)
+        {
+            if (!ShouldLog(LogLevel.Debug, category)) return;
+            WriteInternal(LogLevel.Debug, category, GetLightweightCallerInfo(), BuildBlock(heading, lines));
+        }
+
         public static void WriteInfo(string message, LogCategory category = LogCategory.General)
         {
             if (!ShouldLog(LogLevel.Info, category)) return;
@@ -273,6 +279,24 @@ namespace ModAPI.Core
                 _warnOnceKeys.Add(key);
             }
             try { logAction(); } catch { }
+        }
+
+        private static string BuildBlock(string heading, IEnumerable<string> lines)
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrEmpty(heading))
+                parts.Add(heading);
+
+            if (lines != null)
+            {
+                foreach (var line in lines)
+                {
+                    if (!string.IsNullOrEmpty(line))
+                        parts.Add(line);
+                }
+            }
+
+            return string.Join(Environment.NewLine, parts.ToArray());
         }
 
         public static void WriteException(Exception ex, string context = "", LogCategory category = LogCategory.General)

@@ -69,6 +69,33 @@ namespace ModAPI.Core
             set => SetBool("TranspilerQuarantineOnFailure", value);
         }
 
+        /// <summary>
+        /// Emits warning-level validation diagnostics from transpiler safety checks.
+        /// </summary>
+        public static bool TranspilerLogValidationWarnings
+        {
+            get => GetBool("TranspilerLogValidationWarnings", false);
+            set => SetBool("TranspilerLogValidationWarnings", value);
+        }
+
+        /// <summary>
+        /// Warns when call replacement may change virtual dispatch behavior.
+        /// </summary>
+        public static bool TranspilerWarnOnVirtualCallMismatch
+        {
+            get => GetBool("TranspilerWarnOnVirtualCallMismatch", true);
+            set => SetBool("TranspilerWarnOnVirtualCallMismatch", value);
+        }
+
+        /// <summary>
+        /// Warns when a transpiler targets a method with exception-handler regions.
+        /// </summary>
+        public static bool TranspilerWarnOnExceptionHandlerMethods
+        {
+            get => GetBool("TranspilerWarnOnExceptionHandlerMethods", true);
+            set => SetBool("TranspilerWarnOnExceptionHandlerMethods", value);
+        }
+
 
         private static void EnsureLoaded()
         {
