@@ -1358,6 +1358,8 @@ namespace Manager
                 changes.Add("IgnoreOrderChecks");
             if (previous.SkipHarmonyDependencyCheck != current.SkipHarmonyDependencyCheck)
                 changes.Add("SkipHarmonyDependencyCheck");
+            if (previous.IncludeNexusPrereleaseFiles != current.IncludeNexusPrereleaseFiles)
+                changes.Add("IncludeNexusPrereleaseFiles");
             if (!string.Equals(previous.AutoCondenseSaves, current.AutoCondenseSaves, StringComparison.OrdinalIgnoreCase))
                 changes.Add("AutoCondenseSaves");
             if (previous.AutoLoadSaveSlot != current.AutoLoadSaveSlot)

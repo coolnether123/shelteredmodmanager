@@ -160,6 +160,14 @@ namespace Manager.Core.Services
                     settings.SkipHarmonyDependencyCheck = sh;
             }
 
+            string includeNexusPrerelease;
+            if (raw.TryGetValue("IncludeNexusPrereleaseFiles", out includeNexusPrerelease))
+            {
+                bool include;
+                if (bool.TryParse(includeNexusPrerelease, out include))
+                    settings.IncludeNexusPrereleaseFiles = include;
+            }
+
             string bitness;
             if (raw.TryGetValue("GameBitness", out bitness))
                 settings.GameBitness = bitness;
@@ -291,6 +299,7 @@ namespace Manager.Core.Services
             
             data["IgnoreOrderChecks"] = settings.IgnoreOrderChecks.ToString();
             data["SkipHarmonyDependencyCheck"] = settings.SkipHarmonyDependencyCheck.ToString();
+            data["IncludeNexusPrereleaseFiles"] = settings.IncludeNexusPrereleaseFiles.ToString();
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;

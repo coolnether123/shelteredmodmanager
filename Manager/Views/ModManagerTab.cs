@@ -53,6 +53,7 @@ namespace Manager.Views
         private int _cachedUpdateCount = 0;
         private string _cachedNexusError = null;
         private bool _hasNexusSyncCache = false;
+        private bool _lastIncludeNexusPrereleaseFiles = false;
         private readonly Dictionary<string, NexusSyncCacheEntry> _nexusStateByModId = new Dictionary<string, NexusSyncCacheEntry>(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan NexusSyncCooldown = TimeSpan.FromMinutes(5);
 
@@ -89,6 +90,11 @@ namespace Manager.Views
             _orderService = orderService;
             _settings = settings;
             _nexusService = nexusService;
+
+            bool includeNexusPrereleaseFiles = settings != null && settings.IncludeNexusPrereleaseFiles;
+            if (_hasNexusSyncCache && _lastIncludeNexusPrereleaseFiles != includeNexusPrereleaseFiles)
+                InvalidateNexusCache();
+            _lastIncludeNexusPrereleaseFiles = includeNexusPrereleaseFiles;
             
             _detailsPanel.InstalledModApiVersion = settings.InstalledModApiVersion;
         }
@@ -662,6 +668,7 @@ namespace Manager.Views
             {
                 string error;
                 var remoteByRef = _nexusService.GetModsByReferences(requestRefs, out error);
+                var prereleaseFilesByRef = GetPrereleaseFilesByReference(referencesByModId, remoteByRef, _settings != null && _settings.IncludeNexusPrereleaseFiles, ref error);
 
                 if (unresolvedMods.Count > 0)
                 {
@@ -712,6 +719,7 @@ namespace Manager.Views
 
                             referencesByModId[local.Id] = inferredRef;
                             remoteByRef[inferredRef.Key] = inferred;
+                            TryAddPrereleaseFile(prereleaseFilesByRef, inferredRef, inferred, _settings != null && _settings.IncludeNexusPrereleaseFiles, ref error);
                             TryPersistNexusSidecar(local, inferredRef);
                         }
                     }
@@ -762,6 +770,7 @@ namespace Manager.Views
 
                         referencesByModId[local.Id] = inferred;
                         remoteByRef[inferred.Key] = exact;
+                        TryAddPrereleaseFile(prereleaseFilesByRef, inferred, exact, _settings != null && _settings.IncludeNexusPrereleaseFiles, ref error);
                         TryPersistNexusSidecar(local, inferred);
                     }
                 }
@@ -799,12 +808,15 @@ namespace Manager.Views
                                 continue;
                             }
 
-                            mod.NexusRemoteVersion = remote.Version ?? string.Empty;
+                            NexusRemoteModFile prereleaseFile;
+                            prereleaseFilesByRef.TryGetValue(reference.Key, out prereleaseFile);
+
+                            mod.NexusRemoteVersion = GetEffectiveRemoteVersion(mod, remote, prereleaseFile);
                             mod.NexusRemoteSummary = remote.Summary ?? string.Empty;
-                            mod.NexusRemoteUpdatedAtUtc = remote.UpdatedAtUtc;
+                            mod.NexusRemoteUpdatedAtUtc = GetEffectiveRemoteUpdatedAt(remote, prereleaseFile, mod.NexusRemoteVersion);
                             mod.NexusPageUrl = remote.GetPageUrl();
 
-                            bool updateAvailable = NexusVersionComparer.IsRemoteNewer(mod.Version, remote.Version);
+                            bool updateAvailable = NexusVersionComparer.IsRemoteNewer(mod.Version, mod.NexusRemoteVersion);
                             mod.HasUpdateAvailable = updateAvailable;
                             if (updateAvailable)
                             {
@@ -829,6 +841,112 @@ namespace Manager.Views
                     // UI already gone, ignore.
                 }
             });
+        }
+
+        private Dictionary<string, NexusRemoteModFile> GetPrereleaseFilesByReference(
+            Dictionary<string, NexusModReference> referencesByModId,
+            Dictionary<string, NexusRemoteMod> remoteByRef,
+            bool includePrereleaseFiles,
+            ref string error)
+        {
+            var result = new Dictionary<string, NexusRemoteModFile>(StringComparer.OrdinalIgnoreCase);
+            if (!includePrereleaseFiles || referencesByModId == null || remoteByRef == null || _nexusService == null)
+                return result;
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var reference in referencesByModId.Values)
+            {
+                if (reference == null || !reference.IsValid || seen.Contains(reference.Key))
+                    continue;
+
+                seen.Add(reference.Key);
+
+                NexusRemoteMod remote;
+                if (!remoteByRef.TryGetValue(reference.Key, out remote))
+                    continue;
+
+                TryAddPrereleaseFile(result, reference, remote, includePrereleaseFiles, ref error);
+            }
+
+            return result;
+        }
+
+        private void TryAddPrereleaseFile(
+            Dictionary<string, NexusRemoteModFile> prereleaseFilesByRef,
+            NexusModReference reference,
+            NexusRemoteMod remote,
+            bool includePrereleaseFiles,
+            ref string error)
+        {
+            if (!includePrereleaseFiles || prereleaseFilesByRef == null || reference == null || !reference.IsValid || remote == null || _nexusService == null)
+                return;
+
+            if (prereleaseFilesByRef.ContainsKey(reference.Key) || remote.GameId <= 0)
+                return;
+
+            string fileError;
+            var files = _nexusService.GetModFiles(remote.GameId, remote.ModId, out fileError);
+            if (!string.IsNullOrEmpty(fileError))
+            {
+                if (string.IsNullOrEmpty(error))
+                    error = fileError;
+                return;
+            }
+
+            var prereleaseFile = _nexusService.SelectPreferredPrereleaseInstallFile(files);
+            if (prereleaseFile != null)
+                prereleaseFilesByRef[reference.Key] = prereleaseFile;
+        }
+
+        private static string GetEffectiveRemoteVersion(ModItem mod, NexusRemoteMod remote, NexusRemoteModFile prereleaseFile)
+        {
+            string remoteVersion = remote != null ? (remote.Version ?? string.Empty) : string.Empty;
+            if (!ShouldPreferPrereleaseFile(mod, remoteVersion, prereleaseFile))
+                return remoteVersion;
+
+            return prereleaseFile.Version ?? string.Empty;
+        }
+
+        private static DateTime? GetEffectiveRemoteUpdatedAt(NexusRemoteMod remote, NexusRemoteModFile prereleaseFile, string effectiveVersion)
+        {
+            DateTime? remoteUpdatedAt = remote != null ? remote.UpdatedAtUtc : null;
+            if (prereleaseFile == null || string.IsNullOrEmpty(prereleaseFile.Version))
+                return remoteUpdatedAt;
+
+            if (!string.Equals(NexusVersionComparer.Normalize(prereleaseFile.Version), NexusVersionComparer.Normalize(effectiveVersion), StringComparison.OrdinalIgnoreCase))
+                return remoteUpdatedAt;
+
+            DateTime? fileDate = ConvertUnixDate(prereleaseFile.UnixDate);
+            return fileDate ?? remoteUpdatedAt;
+        }
+
+        private static bool ShouldPreferPrereleaseFile(ModItem mod, string remoteVersion, NexusRemoteModFile prereleaseFile)
+        {
+            if (mod == null || prereleaseFile == null || string.IsNullOrEmpty(prereleaseFile.Version))
+                return false;
+
+            if (!NexusVersionComparer.IsRemoteNewer(mod.Version, prereleaseFile.Version))
+                return false;
+
+            if (!string.IsNullOrEmpty(remoteVersion) && NexusVersionComparer.CompareVersions(prereleaseFile.Version, remoteVersion) < 0)
+                return false;
+
+            return true;
+        }
+
+        private static DateTime? ConvertUnixDate(int unixDate)
+        {
+            if (unixDate <= 0)
+                return null;
+
+            try
+            {
+                return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(unixDate);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private void NotifyNexusSync(int mappedMods, int updateCount, string errorMessage)

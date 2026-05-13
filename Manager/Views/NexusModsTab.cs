@@ -18,7 +18,7 @@ namespace Manager.Views
     {
         private enum NexusViewMode { Updates, Installed, Discover }
         private enum NexusItemState { UpdateAvailable, InstalledCurrent, InstalledUnlinked, Available }
-        private enum NexusInstallFileChoice { Stable, Prerelease, Cancel }
+        private enum NexusInstallFileChoice { Auto, Stable, Prerelease, Cancel }
 
         private sealed class NexusBrowserItem
         {
@@ -224,6 +224,7 @@ namespace Manager.Views
             _detailsPanel.Dock = DockStyle.Fill;
             _detailsPanel.Padding = new Padding(12);
             _detailsPanel.MinimumSize = new Size(340, 380);
+            _detailsPanel.ShowNexusActionButtons = true;
 
             Controls.Add(_detailsPanel);
             Controls.Add(_leftPanel);
@@ -246,6 +247,8 @@ namespace Manager.Views
             _primaryList.DrawItem += PrimaryList_DrawItem;
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
             _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
+            _detailsPanel.NexusUpdateRequested += DetailsPanel_NexusUpdateRequested;
+            _detailsPanel.NexusStableRequested += DetailsPanel_NexusStableRequested;
             _topPanel.Resize += delegate { LayoutTopPanel(); };
         }
 
@@ -598,6 +601,26 @@ namespace Manager.Views
 
         private void InstallSelectedButton_Click(object sender, EventArgs e)
         {
+            InstallSelectedRemote(NexusInstallFileChoice.Auto);
+        }
+
+        private void DetailsPanel_NexusUpdateRequested(object sender, EventArgs e)
+        {
+            var item = GetSelectedItem();
+            ModItem local = item != null ? item.LocalMod : null;
+            NexusInstallFileChoice choice = NexusInstallFileChoice.Stable;
+            if (local != null && NexusReleaseClassifier.IsPrerelease(local.NexusRemoteVersion))
+                choice = NexusInstallFileChoice.Prerelease;
+            InstallSelectedRemote(choice);
+        }
+
+        private void DetailsPanel_NexusStableRequested(object sender, EventArgs e)
+        {
+            InstallSelectedRemote(NexusInstallFileChoice.Stable);
+        }
+
+        private void InstallSelectedRemote(NexusInstallFileChoice requestedChoice)
+        {
             if (_settings == null || _nexusService == null)
                 return;
             if (!_settings.EnableNexusIntegration)
@@ -647,25 +670,16 @@ namespace Manager.Views
                 }
 
                 var stableFile = _nexusService.SelectPreferredInstallFile(files, false);
-                var prereleaseFile = _nexusService.SelectPreferredPrereleaseInstallFile(files);
-                var file = stableFile ?? prereleaseFile;
-
-                if (prereleaseFile != null &&
-                    (stableFile == null || prereleaseFile.FileId != stableFile.FileId))
-                {
-                    NexusInstallFileChoice choice = PromptForPrereleaseInstall(selected, prereleaseFile, stableFile);
-                    if (choice == NexusInstallFileChoice.Cancel)
-                    {
-                        FinishInstallWithError("Install canceled.");
-                        return;
-                    }
-
-                    file = choice == NexusInstallFileChoice.Prerelease ? prereleaseFile : stableFile;
-                }
+                bool includePrereleaseFiles = _settings != null && _settings.IncludeNexusPrereleaseFiles;
+                var prereleaseFile = includePrereleaseFiles ? _nexusService.SelectPreferredPrereleaseInstallFile(files) : null;
+                NexusInstallFileChoice resolvedChoice = requestedChoice;
+                NexusRemoteModFile file = SelectInstallFile(selected, stableFile, prereleaseFile, ref resolvedChoice);
+                if (resolvedChoice == NexusInstallFileChoice.Cancel)
+                    return;
 
                 if (file == null)
                 {
-                    FinishInstallWithError("Install failed: No stable installable file was returned.");
+                    FinishInstallWithError(BuildMissingFileMessage(resolvedChoice, includePrereleaseFiles));
                     return;
                 }
 
@@ -699,6 +713,49 @@ namespace Manager.Views
                 }
                 catch { }
             });
+        }
+
+        private NexusRemoteModFile SelectInstallFile(
+            NexusRemoteMod selected,
+            NexusRemoteModFile stableFile,
+            NexusRemoteModFile prereleaseFile,
+            ref NexusInstallFileChoice requestedChoice)
+        {
+            if (requestedChoice == NexusInstallFileChoice.Stable)
+                return stableFile;
+
+            if (requestedChoice == NexusInstallFileChoice.Prerelease)
+                return prereleaseFile;
+
+            if (prereleaseFile != null &&
+                (stableFile == null || prereleaseFile.FileId != stableFile.FileId))
+            {
+                requestedChoice = PromptForPrereleaseInstall(selected, prereleaseFile, stableFile);
+                if (requestedChoice == NexusInstallFileChoice.Cancel)
+                {
+                    FinishInstallWithError("Install canceled.");
+                    return null;
+                }
+
+                return requestedChoice == NexusInstallFileChoice.Prerelease ? prereleaseFile : stableFile;
+            }
+
+            return stableFile ?? prereleaseFile;
+        }
+
+        private static string BuildMissingFileMessage(NexusInstallFileChoice requestedChoice, bool includePrereleaseFiles)
+        {
+            if (requestedChoice == NexusInstallFileChoice.Prerelease)
+                return includePrereleaseFiles
+                    ? "Install failed: No beta/prerelease installable file was returned."
+                    : "Install failed: Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
+
+            if (requestedChoice == NexusInstallFileChoice.Stable)
+                return "Install failed: No stable installable file was returned.";
+
+            return includePrereleaseFiles
+                ? "Install failed: No installable file was returned."
+                : "Install failed: No stable installable file was returned. Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
         }
 
         private NexusInstallFileChoice PromptForPrereleaseInstall(NexusRemoteMod mod, NexusRemoteModFile prereleaseFile, NexusRemoteModFile stableFile)
@@ -802,7 +859,7 @@ namespace Manager.Views
             string url = GetSelectedPageUrl();
             _openPageButton.Enabled = !string.IsNullOrEmpty(url);
 
-            bool canInstall = remote != null && _settings != null && _settings.EnableNexusIntegration && _settings.IsModsPathValid && !string.IsNullOrEmpty(_settings.NexusApiKey);
+            bool canInstall = remote != null && _settings != null && _settings.EnableNexusIntegration && _settings.IsModsPathValid;
             _installSelectedButton.Enabled = canInstall;
             _installSelectedButton.Text = "Install from Nexus";
             if (item != null && item.LocalMod != null && item.LocalMod.HasUpdateAvailable)

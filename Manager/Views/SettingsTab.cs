@@ -41,6 +41,7 @@ namespace Manager.Views
         private CheckBox _verboseLoggingCheckBox;
         private CheckBox _skipHarmonyCheckBox;
         private CheckBox _ignoreOrderCheckBox;
+        private CheckBox _includeNexusPrereleaseCheckBox;
         private Button _resetButton;
         private Button _resetWindowButton;
         private Timer _saveDebounceTimer;
@@ -235,7 +236,7 @@ namespace Manager.Views
             _devSettingsGroup = new GroupBox();
             _devSettingsGroup.Text = "Developer Options";
             _devSettingsGroup.Font = new Font("Segoe UI", 10f);
-            _devSettingsGroup.Size = new Size(500, 130);
+            _devSettingsGroup.Size = new Size(500, 160);
             _devSettingsGroup.Visible = false;
 
             _verboseLoggingCheckBox = new CheckBox();
@@ -256,9 +257,17 @@ namespace Manager.Views
             _ignoreOrderCheckBox.AutoSize = true;
             _ignoreOrderCheckBox.Location = new Point(15, 85);
 
+            _includeNexusPrereleaseCheckBox = new CheckBox();
+            _includeNexusPrereleaseCheckBox.Text = "Include Nexus beta/prerelease files";
+            _includeNexusPrereleaseCheckBox.Font = new Font("Segoe UI", 10f);
+            _includeNexusPrereleaseCheckBox.AutoSize = true;
+            _includeNexusPrereleaseCheckBox.Location = new Point(15, 115);
+            _helpToolTip.SetToolTip(_includeNexusPrereleaseCheckBox, "Also inspect Nexus file versions so beta/prerelease uploads can appear as updates.");
+
             _devSettingsGroup.Controls.Add(_verboseLoggingCheckBox);
             _devSettingsGroup.Controls.Add(_skipHarmonyCheckBox);
             _devSettingsGroup.Controls.Add(_ignoreOrderCheckBox);
+            _devSettingsGroup.Controls.Add(_includeNexusPrereleaseCheckBox);
 
             _resetButton = new Button();
             _resetButton.Text = "Reset to Defaults";
@@ -312,6 +321,7 @@ namespace Manager.Views
             _verboseLoggingCheckBox.CheckedChanged += VerboseLoggingCheckBox_CheckedChanged;
             _skipHarmonyCheckBox.CheckedChanged += SkipHarmonyCheckBox_CheckedChanged;
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
+            _includeNexusPrereleaseCheckBox.CheckedChanged += IncludeNexusPrereleaseCheckBox_CheckedChanged;
             _autoCondenseCombo.SelectedIndexChanged += AutoCondenseCombo_SelectedIndexChanged;
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
@@ -519,6 +529,7 @@ namespace Manager.Views
                 _verboseLoggingCheckBox.Checked = string.Equals(_settings.LogLevel, "Debug", StringComparison.OrdinalIgnoreCase);
                 _skipHarmonyCheckBox.Checked = _settings.SkipHarmonyDependencyCheck;
                 _ignoreOrderCheckBox.Checked = _settings.IgnoreOrderChecks;
+                _includeNexusPrereleaseCheckBox.Checked = _settings.IncludeNexusPrereleaseFiles;
 
                 string condensePref = (_settings.AutoCondenseSaves ?? "ask").ToLowerInvariant();
                 if (condensePref == "yes" || condensePref == "true") _autoCondenseCombo.SelectedIndex = 1;
@@ -551,6 +562,7 @@ namespace Manager.Views
             _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
             _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
             _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
+            _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
 
             string choice = "ask";
             if (_autoCondenseCombo.SelectedIndex == 1) choice = "yes";
@@ -689,6 +701,13 @@ namespace Manager.Views
         {
             if (_settings != null)
                 _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
+            TriggerSave();
+        }
+
+        private void IncludeNexusPrereleaseCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_settings != null)
+                _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
             TriggerSave();
         }
 
@@ -905,6 +924,7 @@ namespace Manager.Views
                 _verboseLoggingCheckBox.ForeColor = Color.White;
                 _skipHarmonyCheckBox.ForeColor = Color.White;
                 _ignoreOrderCheckBox.ForeColor = Color.White;
+                _includeNexusPrereleaseCheckBox.ForeColor = Color.White;
                 ApplyButtonTheme(_nexusApiHelpButton, true);
                 ApplyButtonTheme(_nexusApiRevealButton, true);
                 ApplyButtonTheme(_resetButton, true);
@@ -942,6 +962,7 @@ namespace Manager.Views
                 _verboseLoggingCheckBox.ForeColor = SystemColors.ControlText;
                 _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
                 _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
+                _includeNexusPrereleaseCheckBox.ForeColor = SystemColors.ControlText;
                 ApplyButtonTheme(_nexusApiHelpButton, false);
                 ApplyButtonTheme(_nexusApiRevealButton, false);
                 ApplyButtonTheme(_resetButton, false);

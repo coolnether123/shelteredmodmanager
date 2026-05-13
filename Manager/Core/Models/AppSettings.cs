@@ -18,6 +18,7 @@ namespace Manager.Core.Models
         private HashSet<string> _logCategories;
         private bool _ignoreOrderChecks = false;
         private bool _skipHarmonyDependencyCheck = false;
+        private bool _includeNexusPrereleaseFiles = false;
         private string _gameBitness;
         private string _installedModApiVersion;
         private string _installedShelteredApiVersion;
@@ -93,6 +94,12 @@ namespace Manager.Core.Models
         { 
             get { return _skipHarmonyDependencyCheck; } 
             set { _skipHarmonyDependencyCheck = value; } 
+        }
+
+        public bool IncludeNexusPrereleaseFiles
+        {
+            get { return _includeNexusPrereleaseFiles; }
+            set { _includeNexusPrereleaseFiles = value; }
         }
         
         public string GameBitness 
