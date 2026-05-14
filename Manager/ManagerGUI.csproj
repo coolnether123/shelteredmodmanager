@@ -149,6 +149,14 @@
     <Compile Include="Views\SettingsTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
+    <Compile Include="Views\SettingsTab.Layout.cs">
+      <SubType>UserControl</SubType>
+      <DependentUpon>SettingsTab.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Views\SettingsTab.Theme.cs">
+      <SubType>UserControl</SubType>
+      <DependentUpon>SettingsTab.cs</DependentUpon>
+    </Compile>
     <Compile Include="Views\AboutTab.cs">
       <SubType>UserControl</SubType>
     </Compile>

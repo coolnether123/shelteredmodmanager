@@ -417,11 +417,11 @@ namespace Manager
             // 
             // _settingsTab
             // 
-            this._settingsTab.AutoScroll = true;
+            this._settingsTab.AutoScroll = false;
             this._settingsTab.Dock = System.Windows.Forms.DockStyle.Fill;
             this._settingsTab.Location = new System.Drawing.Point(0, 0);
             this._settingsTab.Name = "_settingsTab";
-            this._settingsTab.Padding = new System.Windows.Forms.Padding(20);
+            this._settingsTab.Padding = new System.Windows.Forms.Padding(0);
             this._settingsTab.Size = new System.Drawing.Size(1174, 562);
             this._settingsTab.TabIndex = 0;
             // 
