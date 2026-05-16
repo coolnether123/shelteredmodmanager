@@ -21,6 +21,12 @@ namespace ModAPI.Core
         public string GameRoot { get; set; }
         public string ModsRoot { get; set; }
         public bool IsModernUnity { get { return PluginRunner.IsModernUnity; } }
+        private readonly EventRegistry _frameworkEvents = new EventRegistry();
+
+        internal EventRegistry FrameworkEvents
+        {
+            get { return _frameworkEvents; }
+        }
 
         /// <summary>
         /// Main-thread scheduler provided by <see cref="PluginManager"/>.
@@ -71,6 +77,15 @@ namespace ModAPI.Core
             {
                 if (Log != null) Log.Error("AddComponentToPanel<" + typeof(T).Name + "> failed: " + ex.Message);
                 return null;
+            }
+        }
+
+        internal void DisposeFrameworkEvents()
+        {
+            try { _frameworkEvents.Dispose(); }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("PluginContextImpl.FrameworkEvents.Dispose." + (Mod != null ? Mod.Id : "<unknown>"), "Event cleanup failed: " + ex.Message);
             }
         }
     }

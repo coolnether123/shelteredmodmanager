@@ -82,6 +82,7 @@
     <Compile Include="Core\LoggerExtensions.cs" />
     <Compile Include="Core\ContextExtensions.cs" />
     <Compile Include="Core\SettingsProviderRegistration.cs" />
+    <Compile Include="Core\SettingsProviderLifecycle.cs" />
     <Compile Include="Scenarios\Contracts\CustomScenarioContracts.cs" />
     <Compile Include="Scenarios\Contracts\ICustomScenarioService.cs" />
     <Compile Include="Scenarios\Models\ScenarioCatalog.cs" />

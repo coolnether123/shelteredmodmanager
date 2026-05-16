@@ -75,47 +75,19 @@ namespace ModAPI.Core
             {
                 var controller = new SettingsController(context, this);
                 Config = this;
-                
-                // IMMEDIATE ASSIGNMENT (Prevents UI Null Checks)
-                SettingsProviderRegistration.Register(context.Mod, context, controller);
-                
-                // Load (Safe to happen now)
-                controller.Load();
 
-                // 2. SUBSCRIBE: Per-Save re-load catch
-                Action sessionStartedHandler = delegate
-                {
-                    try {
-                        SettingsController sc = context.Mod.SettingsProvider as SettingsController;
-                        if (sc != null) sc.Load();
-                    } catch (Exception ex) {
-                        MMLog.WriteError("[ModManagerBase] Session-started settings re-load failed: " + ex.Message);
-                    }
-                };
-                Events.Bind(
-                    delegate { PluginManager.OnSessionStartedEvent += sessionStartedHandler; },
-                    delegate { PluginManager.OnSessionStartedEvent -= sessionStartedHandler; });
+                SettingsProviderLifecycle.RegisterFrameworkOwnedController(
+                    context.Mod,
+                    context,
+                    controller,
+                    Events,
+                    "inline Spine settings",
+                    "[ModManagerBase]");
             }
 
             if (Log != null) Log.Info(string.Format("{0} initialized. Settings Mode: {1}", GetType().Name, Config != null ? "Active" : "None"));
 
-            // Persist Spine settings on every game save boundary (including Save & Exit).
-            // This ensures in-session changes are flushed even if the settings UI was left open.
-            Action<object> beforeSaveHandler = delegate(object _)
-            {
-                try
-                {
-                    var provider = context.Mod != null ? context.Mod.SettingsProvider as ISettingsProvider2 : null;
-                    if (provider != null) provider.Save();
-                }
-                catch (Exception ex)
-                {
-                    MMLog.WriteError("[ModManagerBase] Pre-save settings flush failed: " + ex.Message);
-                }
-            };
-            Events.Bind(
-                delegate { GameLifecycleSources.AddBeforeSave(beforeSaveHandler); },
-                delegate { GameLifecycleSources.RemoveBeforeSave(beforeSaveHandler); });
+            SettingsProviderLifecycle.BindProviderSaveOnBeforeSave(context, Events, "[ModManagerBase]");
             
             ScanForPersistence();
         }
@@ -127,22 +99,13 @@ namespace ModAPI.Core
             var config = new T();
             Config = config;
             var controller = new SettingsController(Context, config);
-            SettingsProviderRegistration.Register(Context.Mod, Context, controller);
-            controller.Load();
-
-            // SUBSCRIBE: Per-Save re-load catch for manual Config
-            Action sessionStartedHandler = delegate
-            {
-                try {
-                    SettingsController sc = Context.Mod.SettingsProvider as SettingsController;
-                    if (sc != null) sc.Load();
-                } catch (Exception ex) {
-                    MMLog.WriteError("[ModManagerBase] Manual config session-started re-load failed: " + ex.Message);
-                }
-            };
-            Events.Bind(
-                delegate { PluginManager.OnSessionStartedEvent += sessionStartedHandler; },
-                delegate { PluginManager.OnSessionStartedEvent -= sessionStartedHandler; });
+            SettingsProviderLifecycle.RegisterFrameworkOwnedController(
+                Context.Mod,
+                Context,
+                controller,
+                Events,
+                "manual Spine settings",
+                "[ModManagerBase]");
         }
 
         protected virtual void ScanForPersistence()

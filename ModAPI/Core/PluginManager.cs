@@ -24,6 +24,7 @@ namespace ModAPI.Core
         private readonly List<IModShutdown> _shutdown;
         private readonly List<IModSceneEvents> _sceneEvents;
         private readonly List<IModSessionEvents> _sessionEvents;
+        private readonly List<PluginContextImpl> _pluginContexts;
         private readonly HashSet<string> _initializedGameRuntimeBootstraps;
         private int _loadErrors;
         private Stopwatch _startupStopwatch;
@@ -71,6 +72,7 @@ namespace ModAPI.Core
             _shutdown = new List<IModShutdown>();
             _sceneEvents = new List<IModSceneEvents>();
             _sessionEvents = new List<IModSessionEvents>();
+            _pluginContexts = new List<PluginContextImpl>();
             _initializedGameRuntimeBootstraps = new HashSet<string>(StringComparer.Ordinal);
             LoadedMods = new List<ModEntry>();
         }
@@ -899,9 +901,18 @@ namespace ModAPI.Core
 
                     var settingsProvider = plugin as ISettingsProvider;
                     if (entry != null && entry.SettingsProvider == null && settingsProvider != null)
+                    {
                         RegisterSettingsProvider(entry, ctx, settingsProvider, "ISettingsProvider");
+                        if (settingsProvider is ISettingsProvider2 && !(plugin is ModManagerBase))
+                            SettingsProviderLifecycle.BindProviderSaveOnBeforeSave(ctx, GetFrameworkEvents(ctx), "[PluginManager]");
+                    }
                     else if (entry != null && entry.SettingsProvider != null)
+                    {
+                        bool providerWasRegisteredByThisPlugin = object.ReferenceEquals(ctx.Settings, entry.SettingsProvider);
                         SettingsProviderRegistration.SetContextSettings(ctx, entry.SettingsProvider);
+                        if (providerWasRegisteredByThisPlugin && entry.SettingsProvider is ISettingsProvider2 && !(plugin is ModManagerBase))
+                            SettingsProviderLifecycle.BindProviderSaveOnBeforeSave(ctx, GetFrameworkEvents(ctx), "[PluginManager]");
+                    }
 
                     if (entry != null && entry.SettingsProvider == null)
                         TryRegisterDiscoveredSettingsProvider(entry, ctx, plugin);
@@ -929,16 +940,14 @@ namespace ModAPI.Core
             try
             {
                 SettingsController controller = new SettingsController(context, settingsObject, plugin);
-                RegisterSettingsProvider(entry, context, controller, "auto-discovered " + sourceName);
-
-                try
-                {
-                    controller.Load();
-                }
-                catch (Exception ex)
-                {
-                    MMLog.WriteError("[PluginManager] Auto-discovered settings load failed for " + entry.Id + ": " + ex.Message);
-                }
+                SettingsProviderLifecycle.RegisterFrameworkOwnedController(
+                    entry,
+                    context,
+                    controller,
+                    GetFrameworkEvents(context),
+                    "auto-discovered " + sourceName,
+                    "[PluginManager]");
+                SettingsProviderLifecycle.BindProviderSaveOnBeforeSave(context, GetFrameworkEvents(context), "[PluginManager]");
 
                 MMLog.WriteInfo("[PluginManager] Auto-registered Spine settings for " + entry.Id + " from " + plugin.GetType().Name + "." + sourceName + ".");
                 return true;
@@ -1246,6 +1255,14 @@ namespace ModAPI.Core
                 }
                 catch (Exception ex) { MMLog.Write($"Shutdown() failed for {s.GetType().FullName}: {ex.Message}"); }
             }
+            for (int i = _pluginContexts.Count - 1; i >= 0; i--)
+            {
+                PluginContextImpl context = _pluginContexts[i];
+                if (context != null)
+                    context.DisposeFrameworkEvents();
+            }
+
+            _pluginContexts.Clear();
             MMLog.WriteInfo("ShutdownAll complete.");
         }
 
@@ -1276,7 +1293,7 @@ namespace ModAPI.Core
             ISettingsProvider settings = null;
             // Legacy AutoSettings support? Replaced by newer auto-scan in ModManagerBase
 
-            return new PluginContextImpl
+            PluginContextImpl context = new PluginContextImpl
             {
                 LoaderRoot = _loaderRoot,
                 PluginRoot = pluginRoot,
@@ -1290,6 +1307,15 @@ namespace ModAPI.Core
                 ModsRoot = _modsRoot,
                 Scheduler = (Action a) => EnqueueNextFrame(a)
             };
+
+            _pluginContexts.Add(context);
+            return context;
+        }
+
+        private static EventRegistry GetFrameworkEvents(IPluginContext context)
+        {
+            PluginContextImpl impl = context as PluginContextImpl;
+            return impl != null ? impl.FrameworkEvents : null;
         }
 
         private static IGameHelper ResolveGameHelper()
