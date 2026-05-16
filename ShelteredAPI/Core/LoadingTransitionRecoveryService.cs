@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using ModAPI.Core;
 using ShelteredAPI.UI;
 using UnityEngine;
@@ -18,6 +19,9 @@ namespace ShelteredAPI.Core
         private LoadingTransitionRecoveryNotice _pendingRecovery;
         private float _nextDialogAttemptAt;
         private bool _recoveryInProgress;
+        private EventInfo _sceneLoadedEvent;
+        private Delegate _sceneLoadedHandler;
+        private bool _sceneEventsSubscribed;
 
         public static void EnsureInstalled(GameObject host)
         {
@@ -86,7 +90,7 @@ namespace ShelteredAPI.Core
             _instance = this;
             DontDestroyOnLoad(gameObject);
             Application.logMessageReceived += OnUnityLog;
-            SceneManager.sceneLoaded += OnSceneLoaded;
+            TrySubscribeSceneLoaded();
         }
 
         private void OnDestroy()
@@ -95,12 +99,18 @@ namespace ShelteredAPI.Core
                 _instance = null;
 
             Application.logMessageReceived -= OnUnityLog;
-            SceneManager.sceneLoaded -= OnSceneLoaded;
+            TryUnsubscribeSceneLoaded();
         }
 
         private void Update()
         {
             TryShowPendingRecoveryDialog();
+            PollActiveSceneIfNeeded();
+        }
+
+        private void OnLevelWasLoaded(int level)
+        {
+            ObserveActiveScene("OnLevelWasLoaded");
         }
 
         private void OnGUI()
@@ -152,6 +162,35 @@ namespace ShelteredAPI.Core
             _diagnostics.MarkBreadcrumb("Target scene entered");
             MMLog.WriteInfo("[LoadingTransitionRecovery] Transition reached target scene " + activeScene + ".");
             _transition = null;
+        }
+
+        private void PollActiveSceneIfNeeded()
+        {
+            if (_sceneEventsSubscribed || _transition == null)
+                return;
+
+            ObserveActiveScene("legacy scene poll");
+        }
+
+        private void ObserveActiveScene(string reason)
+        {
+            if (_transition == null)
+                return;
+
+            string activeScene = LoadingTransitionRuntime.GetActiveSceneName();
+            if (string.IsNullOrEmpty(activeScene) || string.Equals(activeScene, "<scene-error>", StringComparison.Ordinal))
+                return;
+
+            TrackSceneChange(activeScene);
+
+            if (LoadingTransitionRecoveryConstants.IsLoadingScene(activeScene))
+            {
+                EnterLoadingSceneIfActive(reason);
+                return;
+            }
+
+            if (_transition.IsTargetScene(activeScene))
+                CompleteTransition(activeScene);
         }
 
         private void EnterLoadingSceneIfActive(string reason)
@@ -245,6 +284,65 @@ namespace ShelteredAPI.Core
 
             if (_transition.IsTargetScene(sceneName))
                 CompleteTransition(sceneName);
+        }
+
+        private void TrySubscribeSceneLoaded()
+        {
+            if (!RuntimeCompat.IsModernSceneApi)
+            {
+                MMLog.WriteDebug("[LoadingTransitionRecovery] Modern SceneManager events unavailable; using legacy scene observation.");
+                return;
+            }
+
+            try
+            {
+                Type sceneManagerType = Type.GetType("UnityEngine.SceneManagement.SceneManager, UnityEngine");
+                EventInfo sceneLoaded = sceneManagerType != null
+                    ? sceneManagerType.GetEvent("sceneLoaded", BindingFlags.Public | BindingFlags.Static)
+                    : null;
+
+                if (sceneLoaded == null)
+                {
+                    MMLog.WriteDebug("[LoadingTransitionRecovery] SceneManager.sceneLoaded unavailable; using legacy scene observation.");
+                    return;
+                }
+
+                MethodInfo handlerMethod = GetType().GetMethod("OnSceneLoaded", BindingFlags.Instance | BindingFlags.NonPublic);
+                Delegate handler = Delegate.CreateDelegate(sceneLoaded.EventHandlerType, this, handlerMethod);
+                sceneLoaded.GetAddMethod().Invoke(null, new object[] { handler });
+
+                _sceneLoadedEvent = sceneLoaded;
+                _sceneLoadedHandler = handler;
+                _sceneEventsSubscribed = true;
+            }
+            catch (Exception ex)
+            {
+                _sceneLoadedEvent = null;
+                _sceneLoadedHandler = null;
+                _sceneEventsSubscribed = false;
+                MMLog.WriteWarning("[LoadingTransitionRecovery] Failed to subscribe to SceneManager.sceneLoaded; using legacy scene observation. " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        private void TryUnsubscribeSceneLoaded()
+        {
+            if (_sceneLoadedEvent == null || _sceneLoadedHandler == null)
+                return;
+
+            try
+            {
+                _sceneLoadedEvent.GetRemoveMethod().Invoke(null, new object[] { _sceneLoadedHandler });
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[LoadingTransitionRecovery] Failed to unsubscribe from SceneManager.sceneLoaded: " + ex.Message);
+            }
+            finally
+            {
+                _sceneLoadedEvent = null;
+                _sceneLoadedHandler = null;
+                _sceneEventsSubscribed = false;
+            }
         }
 
         private void OnUnityLog(string condition, string stackTrace, LogType type)
