@@ -59,6 +59,7 @@ namespace ModAPI.Core
         /// Mods that were discovered and accepted by load-order filtering for this session.
         /// </summary>
         public static List<ModEntry> LoadedMods { get; private set; }
+        public static bool PluginsActivated { get; private set; }
 
         public static event Action OnSessionStartedEvent;
         public static event Action OnNewGameEvent;
@@ -104,6 +105,7 @@ namespace ModAPI.Core
         {
             _startupStopwatch = Stopwatch.StartNew();
             _loadErrors = 0;
+            PluginsActivated = false;
 
             MeasureStartupPhase("InitializeLoader", delegate { InitializeLoader(doorstepGameObject); });
             MeasureStartupPhase("LogAssemblyResolution", LogAssemblyResolution);
@@ -705,6 +707,12 @@ namespace ModAPI.Core
 
         private void LogPluginActivationComplete()
         {
+            if (!PluginsActivated)
+            {
+                PluginsActivated = true;
+                ModRuntime.NotifyPluginsActivated();
+            }
+
             MMLog.Write(string.Format("LoadAndInitializePlugins complete. Total plugins loaded: {0}", _plugins.Count));
         }
 
@@ -1115,11 +1123,11 @@ namespace ModAPI.Core
         /// </summary>
         public void OnSessionStarted()
         {
-            var h = OnSessionStartedEvent; if (h != null) h();
+            InvokeStaticLifecycleSubscribers("OnSessionStarted", OnSessionStartedEvent);
             for (int i = 0; i < _sessionEvents.Count; i++)
             {
-                try { _sessionEvents[i].OnSessionStarted(); }
-                catch (Exception ex) { MMLog.Write($"OnSessionStarted failed: {ex.Message}"); }
+                IModSessionEvents listener = _sessionEvents[i];
+                InvokePluginLifecycleCallback("OnSessionStarted", listener, delegate { listener.OnSessionStarted(); });
             }
         }
 
@@ -1128,16 +1136,98 @@ namespace ModAPI.Core
         /// </summary>
         public void OnNewGame()
         {
-            var h = OnNewGameEvent; if (h != null) h();
+            InvokeStaticLifecycleSubscribers("OnNewGame", OnNewGameEvent);
             // Initialize ModRandom for the new world
             ModRandom.Initialize(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
             ModRandom.NotifySeedChanged();
 
             for (int i = 0; i < _sessionEvents.Count; i++)
             {
-                try { _sessionEvents[i].OnNewGame(); }
-                catch (Exception ex) { MMLog.Write($"OnNewGame failed: {ex.Message}"); }
+                IModSessionEvents listener = _sessionEvents[i];
+                InvokePluginLifecycleCallback("OnNewGame", listener, delegate { listener.OnNewGame(); });
             }
+        }
+
+        private static void InvokeStaticLifecycleSubscribers(string eventName, Action subscribers)
+        {
+            if (subscribers == null)
+                return;
+
+            Delegate[] invocationList = subscribers.GetInvocationList();
+            for (int i = 0; i < invocationList.Length; i++)
+            {
+                Delegate subscriber = invocationList[i];
+                Action action = subscriber as Action;
+                if (action == null)
+                    continue;
+
+                InvokeLifecycleCallback(eventName, SafeDelegateLabel(subscriber), action);
+            }
+        }
+
+        private static void InvokePluginLifecycleCallback(string eventName, object plugin, Action callback)
+        {
+            InvokeLifecycleCallback(eventName, SafePluginLabel(plugin), callback);
+        }
+
+        private static void InvokeLifecycleCallback(string eventName, string callbackOwner, Action callback)
+        {
+            if (callback == null)
+                return;
+
+            Stopwatch timer = Stopwatch.StartNew();
+            try
+            {
+                callback();
+            }
+            catch (Exception ex)
+            {
+                string owner = string.IsNullOrEmpty(callbackOwner) ? "<unknown>" : callbackOwner;
+                MMLog.WritePluginError(owner, eventName, ex);
+            }
+            finally
+            {
+                timer.Stop();
+                if (timer.ElapsedMilliseconds >= 100)
+                {
+                    MMLog.WriteDebug(
+                        "Lifecycle callback " + eventName + " for " +
+                        (string.IsNullOrEmpty(callbackOwner) ? "<unknown>" : callbackOwner) +
+                        " took " + timer.ElapsedMilliseconds + "ms.");
+                }
+            }
+        }
+
+        private static string SafePluginLabel(object plugin)
+        {
+            if (plugin == null)
+                return "<unknown>";
+
+            Type type = plugin.GetType();
+            ModEntry entry;
+            if (ModRegistry.TryGetModByAssembly(type.Assembly, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+                return entry.Id + " (" + type.FullName + ")";
+
+            return type.FullName ?? type.Name;
+        }
+
+        private static string SafeDelegateLabel(Delegate callback)
+        {
+            if (callback == null)
+                return "<unknown>";
+
+            MethodInfo method = callback.Method;
+            Type declaringType = method != null ? method.DeclaringType : null;
+            Type ownerType = declaringType ?? (callback.Target != null ? callback.Target.GetType() : null);
+
+            if (ownerType == null)
+                return "<unknown>";
+
+            ModEntry entry;
+            if (ModRegistry.TryGetModByAssembly(ownerType.Assembly, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+                return entry.Id + " (" + ownerType.FullName + "." + (method != null ? method.Name : "<unknown>") + ")";
+
+            return ownerType.FullName + "." + (method != null ? method.Name : "<unknown>");
         }
 
         /// <summary>
