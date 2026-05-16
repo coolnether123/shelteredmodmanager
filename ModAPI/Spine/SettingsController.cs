@@ -132,36 +132,144 @@ namespace ModAPI.Spine
 
             if (target == SettingsWriteTarget.GlobalDefaults)
             {
-                _loadedGlobalValues[def.Id] = converted;
-                if (def.Scope == SettingsScope.Global)
-                {
-                    ApplySettingValue(def, converted);
-                    NotifySettingChanged(def);
-                }
-
-                WriteToDisk(SettingsScope.Global);
-                return true;
+                return def.Scope == SettingsScope.Global
+                    ? TryApplyAndPersist(def, converted, SettingsScope.Global)
+                    : TryPersistGlobalDefault(def, converted);
             }
 
             if (target == SettingsWriteTarget.ActiveSave)
             {
-                ApplySettingValue(def, converted);
-                NotifySettingChanged(def);
-
-                if (def.Scope == SettingsScope.PerSave)
-                {
-                    if (WriteToDisk(SettingsScope.PerSave))
-                        _loadedPerSaveValues[def.Id] = converted;
-                }
-                else if (WriteToDisk(SettingsScope.Global))
-                {
-                    _loadedGlobalValues[def.Id] = converted;
-                }
-
-                return true;
+                return def.Scope == SettingsScope.PerSave
+                    ? TryApplyAndPersist(def, converted, SettingsScope.PerSave)
+                    : TryApplyAndPersist(def, converted, SettingsScope.Global);
             }
 
             return false;
+        }
+
+        private bool TryPersistGlobalDefault(SettingDefinition def, object value)
+        {
+            if (def == null)
+                return false;
+
+            object previous;
+            bool hadPrevious = _loadedGlobalValues.TryGetValue(def.Id, out previous);
+            _loadedGlobalValues[def.Id] = value;
+
+            if (TryWriteScope(SettingsScope.Global, def.Id))
+                return true;
+
+            if (hadPrevious)
+                _loadedGlobalValues[def.Id] = previous;
+            else
+                _loadedGlobalValues.Remove(def.Id);
+
+            return false;
+        }
+
+        private bool TryApplyAndPersist(SettingDefinition def, object value, SettingsScope scope)
+        {
+            if (def == null)
+                return false;
+
+            if (!CanResolvePath(scope))
+                return false;
+
+            object previous = null;
+            bool hadPrevious = false;
+            if (def.Getter != null)
+            {
+                try
+                {
+                    previous = def.Getter(_owner);
+                    hadPrevious = true;
+                }
+                catch
+                {
+                    hadPrevious = false;
+                }
+            }
+
+            try
+            {
+                ApplySettingValue(def, value);
+                if (!DidApplySettingValue(def, value))
+                {
+                    RestoreSettingValue(def, previous, hadPrevious);
+                    return false;
+                }
+
+                if (!TryWriteScope(scope, def.Id))
+                {
+                    RestoreSettingValue(def, previous, hadPrevious);
+                    return false;
+                }
+
+                CapturePersistedValue(def, scope, value);
+                NotifySettingChanged(def);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                RestoreSettingValue(def, previous, hadPrevious);
+                MMLog.WriteError("Failed to persist setting '" + def.Id + "': " + ex.Message);
+                return false;
+            }
+        }
+
+        private bool CanResolvePath(SettingsScope scope)
+        {
+            try
+            {
+                return !string.IsNullOrEmpty(GetPath(scope));
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("Failed to resolve settings path for " + scope + ": " + ex.Message);
+                return false;
+            }
+        }
+
+        private bool TryWriteScope(SettingsScope scope, string settingId)
+        {
+            try
+            {
+                return WriteToDisk(scope);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("Failed to write setting '" + settingId + "' to " + scope + " settings: " + ex.Message);
+                return false;
+            }
+        }
+
+        private void CapturePersistedValue(SettingDefinition def, SettingsScope scope, object value)
+        {
+            if (scope == SettingsScope.Global)
+                _loadedGlobalValues[def.Id] = value;
+            else if (scope == SettingsScope.PerSave)
+                _loadedPerSaveValues[def.Id] = value;
+        }
+
+        private void RestoreSettingValue(SettingDefinition def, object previous, bool hasPrevious)
+        {
+            if (hasPrevious)
+                ApplySettingValue(def, previous);
+        }
+
+        private bool DidApplySettingValue(SettingDefinition def, object value)
+        {
+            if (def == null || def.Getter == null)
+                return true;
+
+            try
+            {
+                return ValuesEqual(def.Getter(_owner), value);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public void OnSettingsLoaded()
@@ -310,10 +418,14 @@ namespace ModAPI.Spine
 
         private string GetPath(SettingsScope scope)
         {
+            string modId = GetModId();
+            if (string.IsNullOrEmpty(modId))
+                return null;
+
             if (scope == SettingsScope.Global)
             {
                 // UserRoot is already Mods/ModAPI/User
-                string modFolder = Path.Combine(ModPrefs.UserRoot, _mod.Id);
+                string modFolder = Path.Combine(ModPrefs.UserRoot, modId);
                 if (!Directory.Exists(modFolder)) Directory.CreateDirectory(modFolder);
                 return Path.Combine(modFolder, "settings.json");
             }
@@ -324,10 +436,15 @@ namespace ModAPI.Spine
                 string slotPath = _context.SaveSystem.GetCurrentSlotPath();
                 if (string.IsNullOrEmpty(slotPath)) return null;
 
-                string modDataFolder = Path.Combine(Path.Combine(slotPath, "mods"), _mod.Id);
+                string modDataFolder = Path.Combine(Path.Combine(slotPath, "mods"), modId);
                 if (!Directory.Exists(modDataFolder)) Directory.CreateDirectory(modDataFolder);
                 return Path.Combine(modDataFolder, "settings.json");
             }
+        }
+
+        private string GetModId()
+        {
+            return _mod != null ? _mod.Id : null;
         }
 
 
