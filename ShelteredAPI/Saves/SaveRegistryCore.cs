@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
-using System.Text.RegularExpressions;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.Util;
 
 namespace ShelteredAPI.Saves
 {
@@ -518,100 +517,8 @@ namespace ShelteredAPI.Saves
         // REMOVED: SaveManifestFile() - no longer using global manifest
         
 
-        // REMOVED: SerializeManifest() - no longer needed without global manifest
-        
-        private static string EscapeJson(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return "";
-            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
-        }
-        
-
-        // REMOVED: DeserializeManifest(), ParseSaveEntry(), ParseSaveInfo() - no longer needed
-        
-        private static int FindMatchingBracket(string s, int start, char open, char close)
-        {
-            int depth = 0;
-            for (int i = start; i < s.Length; i++)
-            {
-                if (s[i] == open) depth++;
-                else if (s[i] == close) depth--;
-                if (depth == 0) return i;
-            }
-            return -1;
-        }
-        
-        private static string ParseStringField(string json, string field)
-        {
-            string pattern = $"\"{field}\"";
-            int pos = json.IndexOf(pattern);
-            if (pos < 0) return "";
-            int colonPos = json.IndexOf(':', pos + pattern.Length);
-            if (colonPos < 0) return "";
-            int quoteStart = json.IndexOf('"', colonPos + 1);
-            if (quoteStart < 0) return "";
-            int quoteEnd = quoteStart + 1;
-            while (quoteEnd < json.Length)
-            {
-                if (json[quoteEnd] == '"' && json[quoteEnd - 1] != '\\')
-                    break;
-                quoteEnd++;
-            }
-            if (quoteEnd >= json.Length) return "";
-            string value = json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
-            // Unescape
-            return value.Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\\"", "\"").Replace("\\\\", "\\");
-        }
-        
-        private static int ParseIntField(string json, string field, int defaultValue)
-        {
-            string pattern = $"\"{field}\"";
-            int pos = json.IndexOf(pattern);
-            if (pos < 0) return defaultValue;
-            int colonPos = json.IndexOf(':', pos + pattern.Length);
-            if (colonPos < 0) return defaultValue;
-            int valStart = colonPos + 1;
-            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
-            int valEnd = valStart;
-            while (valEnd < json.Length && (char.IsDigit(json[valEnd]) || json[valEnd] == '-')) valEnd++;
-            if (valEnd <= valStart) return defaultValue;
-            if (int.TryParse(json.Substring(valStart, valEnd - valStart), out int result))
-                return result;
-            return defaultValue;
-        }
-        
-        private static long ParseLongField(string json, string field, long defaultValue)
-        {
-            string pattern = $"\"{field}\"";
-            int pos = json.IndexOf(pattern);
-            if (pos < 0) return defaultValue;
-            int colonPos = json.IndexOf(':', pos + pattern.Length);
-            if (colonPos < 0) return defaultValue;
-            int valStart = colonPos + 1;
-            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
-            int valEnd = valStart;
-            while (valEnd < json.Length && (char.IsDigit(json[valEnd]) || json[valEnd] == '-')) valEnd++;
-            if (valEnd <= valStart) return defaultValue;
-            if (long.TryParse(json.Substring(valStart, valEnd - valStart), out long result))
-                return result;
-            return defaultValue;
-        }
-        
-        private static bool ParseBoolField(string json, string field, bool defaultValue)
-        {
-            string pattern = $"\"{field}\"";
-            int pos = json.IndexOf(pattern);
-            if (pos < 0) return defaultValue;
-            int colonPos = json.IndexOf(':', pos + pattern.Length);
-            if (colonPos < 0) return defaultValue;
-            int valStart = colonPos + 1;
-            while (valStart < json.Length && char.IsWhiteSpace(json[valStart])) valStart++;
-            if (valStart + 4 <= json.Length && json.Substring(valStart, 4).ToLower() == "true")
-                return true;
-            if (valStart + 5 <= json.Length && json.Substring(valStart, 5).ToLower() == "false")
-                return false;
-            return defaultValue;
-        }
+        // REMOVED: SerializeManifest(), DeserializeManifest(), ParseSaveEntry(), ParseSaveInfo()
+        // Global manifests are no longer used; per-slot JSON is handled by SerializeSlotManifest().
 
         private void WriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
         {
@@ -637,24 +544,16 @@ namespace ShelteredAPI.Saves
         {
             try
             {
-                // SAFETY FIX: Avoid using 'new SaveData(bytes)' which relies on Unity serialization.
-                // During shutdown, referencing Unity objects can cause Access Violations.
-                // Instead, we parse the XML string directly using Regex.
-                
-                string xml = Encoding.UTF8.GetString(xmlBytes);
+                if (entry.saveInfo == null)
+                {
+                    entry.saveInfo = new SaveInfo();
+                }
 
-                entry.saveInfo.familyName = ExtractXmlValue(xml, "familyName", "Unknown");
-                entry.saveInfo.daysSurvived = ExtractXmlInt(xml, "daysSurvived", 0);
-                entry.saveInfo.difficulty = ExtractXmlInt(xml, "difficultySetting", 1);
-                entry.saveInfo.saveTime = ExtractXmlValue(xml, "timestamp", "");
-
-                entry.saveInfo.mapSize = ExtractXmlInt(xml, "mapSize", 0);
-                entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", false);
-                entry.saveInfo.rainDiff = ExtractXmlInt(xml, "rainDifficulty", 1);
-                entry.saveInfo.resourceDiff = ExtractXmlInt(xml, "resourcesDifficulty", 1);
-                entry.saveInfo.breachDiff = ExtractXmlInt(xml, "breachDifficulty", 1);
-                entry.saveInfo.factionDiff = ExtractXmlInt(xml, "factionDifficulty", 1);
-                entry.saveInfo.moodDiff = ExtractXmlInt(xml, "moodDifficulty", 1);
+                string error;
+                if (!SaveInfoXmlMetadataReader.TryRead(xmlBytes, entry.saveInfo, out error))
+                {
+                    MMLog.WriteWarning("Could not parse save metadata XML: " + error);
+                }
             }
             catch (Exception ex)
             {
@@ -662,40 +561,12 @@ namespace ShelteredAPI.Saves
             }
         }
 
-        private static string ExtractXmlValue(string xml, string tag, string defaultValue)
-        {
-            // Case-insensitive match, handling potential attributes inside the opening tag
-            var match = Regex.Match(xml, $"<{tag}[^>]*>(.*?)</{tag}>", RegexOptions.Singleline);
-            return match.Success ? match.Groups[1].Value : defaultValue;
-        }
-
-        private static int ExtractXmlInt(string xml, string tag, int defaultValue)
-        {
-            var val = ExtractXmlValue(xml, tag, null);
-            if (val != null && int.TryParse(val, out int result)) return result;
-            return defaultValue;
-        }
-
-        private static float ExtractXmlFloat(string xml, string tag, float defaultValue)
-        {
-            var val = ExtractXmlValue(xml, tag, null);
-            if (val != null && float.TryParse(val, out float result)) return result;
-            return defaultValue;
-        }
-
-        private static bool ExtractXmlBool(string xml, string tag, bool defaultValue)
-        {
-            var val = ExtractXmlValue(xml, tag, null);
-            if (val != null && bool.TryParse(val, out bool result)) return result;
-            return defaultValue;
-        }
-
 
 
         // REMOVED: UniqueName() - no longer needed, names come from XML
 
         /// <summary>
-        /// Serializes a SlotManifest to JSON using manual StringBuilder formatting.
+        /// Serializes a SlotManifest to JSON without Unity JsonUtility.
         /// </summary>
         /// <remarks>
         /// IMPORTANT: Unity's JsonUtility.ToJson() has a critical limitation - it CANNOT serialize
@@ -703,51 +574,50 @@ namespace ShelteredAPI.Saves
         /// a SlotManifest, it will silently omit the 'lastLoadedMods' field from the output JSON,
         /// even though the array is populated in memory. This causes saves to appear as having 0 mods.
         /// 
-        /// We must use manual StringBuilder formatting to ensure the mod list is actually written.
-        /// The companion DeserializeSlotManifest() method uses custom parsing to read this format.
+        /// We map the DTO through ModAPI.Util.ManualJson so escaping/parsing stays centralized.
         /// </remarks>
         internal static string SerializeSlotManifest(SlotManifest manifest)
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("{");
-            sb.AppendLine($"    \"manifestVersion\": {manifest.manifestVersion},");
-            sb.AppendLine($"    \"lastModified\": \"{manifest.lastModified}\",");
-            sb.Append($"    \"family_name\": \"{manifest.family_name}\"");
-            
+            if (manifest == null)
+            {
+                manifest = new SlotManifest();
+            }
+
+            ManualJsonObject root = new ManualJsonObject();
+            root.Set("manifestVersion", ManualJsonValue.Number(manifest.manifestVersion));
+            root.Set("lastModified", ManualJsonValue.String(manifest.lastModified));
+            root.Set("family_name", ManualJsonValue.String(manifest.family_name));
+
+            ManualJsonArray mods = new ManualJsonArray();
             if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
             {
-                sb.AppendLine(",");
-                sb.AppendLine("    \"lastLoadedMods\": [");
                 for (int i = 0; i < manifest.lastLoadedMods.Length; i++)
                 {
                     var mod = manifest.lastLoadedMods[i];
-                    sb.Append("        { ");
-                    sb.Append($"\"modId\": \"{mod.modId}\", ");
-                    sb.Append($"\"version\": \"{mod.version}\", ");
-                    sb.Append("\"warnings\": [");
-                    
-                    if (mod.warnings != null && mod.warnings.Length > 0)
+                    if (mod == null)
+                    {
+                        continue;
+                    }
+
+                    ManualJsonObject modJson = new ManualJsonObject();
+                    modJson.Set("modId", ManualJsonValue.String(mod.modId));
+                    modJson.Set("version", ManualJsonValue.String(mod.version));
+                    ManualJsonArray warnings = new ManualJsonArray();
+                    if (mod.warnings != null)
                     {
                         for (int w = 0; w < mod.warnings.Length; w++)
                         {
-                            sb.Append($"\"{mod.warnings[w]}\"");
-                            if (w < mod.warnings.Length - 1) sb.Append(", ");
+                            warnings.Add(ManualJsonValue.String(mod.warnings[w]));
                         }
                     }
-                    
-                    sb.Append("] }");
-                    if (i < manifest.lastLoadedMods.Length - 1) sb.AppendLine(",");
-                    else sb.AppendLine();
+
+                    modJson.Set("warnings", ManualJsonValue.Array(warnings));
+                    mods.Add(ManualJsonValue.Object(modJson));
                 }
-                sb.AppendLine("    ]");
             }
-            else
-            {
-                sb.AppendLine();
-            }
-            
-            sb.Append("}");
-            return sb.ToString();
+
+            root.Set("lastLoadedMods", ManualJsonValue.Array(mods));
+            return ManualJson.Serialize(root, true);
         }
 
         internal static bool TryWriteSlotManifest(string scenarioId, int absoluteSlot, SlotManifest manifest, out string manifestPath, out string error)
@@ -784,287 +654,77 @@ namespace ShelteredAPI.Saves
         /// IMPORTANT: Unity's JsonUtility.FromJson fails to deserialize arrays of objects when 
         /// they are written in compact/inline format like: { "modId": "...", "version": "..." }
         /// 
-        /// This happens because early versions used StringBuilder to serialize manifests with 
-        /// inline object formatting. JsonUtility is extremely strict about whitespace and only
-        /// reliably deserializes the multi-line format it produces itself.
+        /// This happened because early versions used handwritten manifest JSON. JsonUtility is
+        /// extremely strict about some manually written formats.
         /// 
-        /// To maintain backward compatibility with existing save files, we manually parse the
-        /// lastLoadedMods array while letting JsonUtility handle simple scalar fields.
+        /// To maintain backward compatibility with existing save files, we parse the complete
+        /// manifest through ModAPI.Util.ManualJson instead of splitting scalar and array handling.
         /// </remarks>
         internal static SlotManifest DeserializeSlotManifest(string json)
         {
             if (string.IsNullOrEmpty(json)) return new SlotManifest();
-            
-            var result = new SlotManifest();
-            
-            try
+            ManualJsonObject root;
+            string error;
+            if (!ManualJson.TryParseObject(json, out root, out error))
             {
-                // Parse basic fields with JsonUtility (it handles these fine)
-                result = JsonUtility.FromJson<SlotManifest>(json) ?? new SlotManifest();
-                
-                // Manual parse for lastLoadedMods array since JsonUtility struggles with inline objects
-                var mods = new List<LoadedModInfo>();
-                
-                // Find the lastLoadedMods array content
-                int arrayStart = json.IndexOf("\"lastLoadedMods\"");
-                if (arrayStart >= 0)
-                {
-                    int bracketStart = json.IndexOf('[', arrayStart);
-                    if (bracketStart >= 0)
-                    {
-                        int bracketEnd = FindMatchingBracketIgnoringStrings(json, bracketStart, '[', ']');
-
-                        if (bracketEnd > bracketStart)
-                        {
-                            string arrayContent = json.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
-
-                            var objects = ExtractTopLevelJsonObjects(arrayContent);
-                            for (int i = 0; i < objects.Count; i++)
-                            {
-                                var mod = ParseLoadedModInfo(objects[i]);
-                                if (mod != null) mods.Add(mod);
-                            }
-                        }
-                    }
-                }
-                
-                result.lastLoadedMods = mods.ToArray();
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError($"DeserializeSlotManifest: Parse error: {ex.Message}");
-            }
-            
-            return result;
-        }
-        
-        private static LoadedModInfo ParseLoadedModInfo(string objJson)
-        {
-            try
-            {
-                var info = new LoadedModInfo();
-                
-                // Extract modId
-                info.modId = ExtractJsonStringValue(objJson, "modId");
-                
-                // Extract version
-                info.version = ExtractJsonStringValue(objJson, "version");
-                
-                // Extract warnings array (simple case - just get string values)
-                var warnings = new List<string>();
-                int warningsStart = objJson.IndexOf("\"warnings\"");
-                if (warningsStart >= 0)
-                {
-                    int arrStart = objJson.IndexOf('[', warningsStart);
-                    int arrEnd = FindMatchingBracketIgnoringStrings(objJson, arrStart, '[', ']');
-                    if (arrStart >= 0 && arrEnd > arrStart)
-                    {
-                        string arrContent = objJson.Substring(arrStart + 1, arrEnd - arrStart - 1).Trim();
-                        if (!string.IsNullOrEmpty(arrContent))
-                        {
-                            warnings.AddRange(ParseJsonStringArray(arrContent));
-                        }
-                    }
-                }
-                info.warnings = warnings.ToArray();
-                
-                return info;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-        
-        private static string ExtractJsonStringValue(string json, string key)
-        {
-            string pattern = "\"" + key + "\"";
-            int keyIndex = json.IndexOf(pattern);
-            if (keyIndex < 0) return "";
-            
-            int colonIndex = json.IndexOf(':', keyIndex + pattern.Length);
-            if (colonIndex < 0) return "";
-
-            int quoteStart = -1;
-            for (int i = colonIndex + 1; i < json.Length; i++)
-            {
-                if (!char.IsWhiteSpace(json[i]))
-                {
-                    if (json[i] != '"') return "";
-                    quoteStart = i;
-                    break;
-                }
-            }
-            if (quoteStart < 0) return "";
-
-            string value;
-            int nextIndex;
-            if (!TryReadJsonString(json, quoteStart, out value, out nextIndex)) return "";
-            return value;
-        }
-
-        private static int FindMatchingBracketIgnoringStrings(string s, int start, char open, char close)
-        {
-            if (string.IsNullOrEmpty(s) || start < 0 || start >= s.Length || s[start] != open) return -1;
-
-            int depth = 0;
-            bool inString = false;
-            bool escaping = false;
-            for (int i = start; i < s.Length; i++)
-            {
-                char c = s[i];
-
-                if (inString)
-                {
-                    if (escaping) escaping = false;
-                    else if (c == '\\') escaping = true;
-                    else if (c == '"') inString = false;
-                    continue;
-                }
-
-                if (c == '"') inString = true;
-                else if (c == open) depth++;
-                else if (c == close)
-                {
-                    depth--;
-                    if (depth == 0) return i;
-                }
+                MMLog.WriteError("DeserializeSlotManifest: Parse error: " + error);
+                return new SlotManifest();
             }
 
-            return -1;
-        }
-
-        private static List<string> ExtractTopLevelJsonObjects(string arrayContent)
-        {
-            var objects = new List<string>();
-            if (string.IsNullOrEmpty(arrayContent)) return objects;
-
-            bool inString = false;
-            bool escaping = false;
-            int depth = 0;
-            int objectStart = -1;
-
-            for (int i = 0; i < arrayContent.Length; i++)
-            {
-                char c = arrayContent[i];
-
-                if (inString)
-                {
-                    if (escaping) escaping = false;
-                    else if (c == '\\') escaping = true;
-                    else if (c == '"') inString = false;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    inString = true;
-                    continue;
-                }
-
-                if (c == '{')
-                {
-                    if (depth == 0) objectStart = i;
-                    depth++;
-                    continue;
-                }
-
-                if (c == '}')
-                {
-                    depth--;
-                    if (depth == 0 && objectStart >= 0)
-                    {
-                        objects.Add(arrayContent.Substring(objectStart, i - objectStart + 1));
-                        objectStart = -1;
-                    }
-                }
-            }
-
-            return objects;
-        }
-
-        private static List<string> ParseJsonStringArray(string arrayContent)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrEmpty(arrayContent)) return result;
-
-            int i = 0;
-            while (i < arrayContent.Length)
-            {
-                while (i < arrayContent.Length && (char.IsWhiteSpace(arrayContent[i]) || arrayContent[i] == ',')) i++;
-                if (i >= arrayContent.Length) break;
-
-                if (arrayContent[i] != '"')
-                {
-                    while (i < arrayContent.Length && arrayContent[i] != ',') i++;
-                    continue;
-                }
-
-                string value;
-                int nextIndex;
-                if (!TryReadJsonString(arrayContent, i, out value, out nextIndex))
-                {
-                    break;
-                }
-
-                result.Add(value);
-                i = nextIndex;
-            }
-
+            SlotManifest result = new SlotManifest();
+            result.manifestVersion = root.GetInt("manifestVersion", result.manifestVersion);
+            result.lastModified = root.GetString("lastModified", result.lastModified);
+            result.family_name = root.GetString("family_name", result.family_name);
+            result.lastLoadedMods = ReadLoadedMods(root.GetArray("lastLoadedMods"));
             return result;
         }
 
-        private static bool TryReadJsonString(string source, int quoteStart, out string value, out int nextIndex)
+        private static LoadedModInfo[] ReadLoadedMods(ManualJsonArray modsJson)
         {
-            value = string.Empty;
-            nextIndex = quoteStart;
-            if (string.IsNullOrEmpty(source) || quoteStart < 0 || quoteStart >= source.Length || source[quoteStart] != '"')
+            if (modsJson == null)
             {
-                return false;
+                return new LoadedModInfo[0];
             }
 
-            var sb = new StringBuilder();
-            bool escaping = false;
-
-            for (int i = quoteStart + 1; i < source.Length; i++)
+            List<LoadedModInfo> mods = new List<LoadedModInfo>();
+            for (int i = 0; i < modsJson.Items.Count; i++)
             {
-                char c = source[i];
-
-                if (escaping)
+                ManualJsonValue value = modsJson.Items[i];
+                ManualJsonObject modJson = value != null && value.Type == ManualJsonValueType.Object ? value.ObjectValue : null;
+                if (modJson == null)
                 {
-                    switch (c)
-                    {
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case '/': sb.Append('/'); break;
-                        case 'b': sb.Append('\b'); break;
-                        case 'f': sb.Append('\f'); break;
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        default: sb.Append(c); break;
-                    }
-                    escaping = false;
                     continue;
                 }
 
-                if (c == '\\')
+                mods.Add(new LoadedModInfo
                 {
-                    escaping = true;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    value = sb.ToString();
-                    nextIndex = i + 1;
-                    return true;
-                }
-
-                sb.Append(c);
+                    modId = modJson.GetString("modId", string.Empty),
+                    version = modJson.GetString("version", string.Empty),
+                    warnings = ReadStringArray(modJson.GetArray("warnings"))
+                });
             }
 
-            return false;
+            return mods.ToArray();
+        }
+
+        private static string[] ReadStringArray(ManualJsonArray array)
+        {
+            if (array == null)
+            {
+                return new string[0];
+            }
+
+            List<string> values = new List<string>();
+            for (int i = 0; i < array.Items.Count; i++)
+            {
+                ManualJsonValue value = array.Items[i];
+                if (value != null && value.Type == ManualJsonValueType.String)
+                {
+                    values.Add(value.StringValue);
+                }
+            }
+
+            return values.ToArray();
         }
 
         /// <summary>
@@ -1073,32 +733,11 @@ namespace ShelteredAPI.Saves
         /// </summary>
         public static SaveInfo ReadSaveInfoFromXml(byte[] xmlBytes)
         {
-            var info = new SaveInfo();
-            if (xmlBytes == null || xmlBytes.Length == 0) return info;
-
-            try
+            SaveInfo info = new SaveInfo();
+            string error;
+            if (!SaveInfoXmlMetadataReader.TryRead(xmlBytes, info, out error))
             {
-                var sd = new SaveData(xmlBytes);
-                var gameInfo = sd.info;
-                info.familyName = gameInfo.m_familyName;
-                info.daysSurvived = gameInfo.m_daysSurvived;
-                info.difficulty = gameInfo.m_diffSetting;
-                info.saveTime = gameInfo.m_saveTime;
-                
-                // Extract all difficulty settings for proper game loading
-                info.rainDiff = gameInfo.m_rainDiff;
-                info.resourceDiff = gameInfo.m_resourceDiff;
-                info.breachDiff = gameInfo.m_breachDiff;
-                info.factionDiff = gameInfo.m_factionDiff;
-                info.moodDiff = gameInfo.m_moodDiff;
-                info.mapSize = gameInfo.m_mapSize;
-                info.fog = gameInfo.m_fog;
-                
-                sd.Finished();
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError($"Failed to read SaveInfo from XML: {ex.Message}");
+                MMLog.WriteError("Failed to read SaveInfo from XML: " + error);
             }
 
             return info;

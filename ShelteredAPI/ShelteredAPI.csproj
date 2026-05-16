@@ -156,6 +156,7 @@
     <Compile Include="Saves\PreviewCapture.cs" />
     <Compile Include="Saves\SaveManagerInspector.cs" />
     <Compile Include="Saves\Runtime\SaveManager_SaveGlobalData_Patch.cs" />
+    <Compile Include="Saves\SaveInfoXmlMetadataReader.cs" />
     <Compile Include="Saves\SaveRegistryCore.cs" />
     <Compile Include="Saves\ScenarioSaveIdGuards.cs" />
     <Compile Include="Saves\ScenarioRegistry.cs" />

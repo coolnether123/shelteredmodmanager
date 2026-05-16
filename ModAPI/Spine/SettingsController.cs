@@ -5,15 +5,15 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using UnityEngine;
 using ModAPI.Core;
+using ModAPI.Util;
 
 namespace ModAPI.Spine
 {
     /// <summary>
     /// Core manager for ModAPI settings. Replaces ModSettings and AutoSettingsProvider.
-    /// Handles manual JSON serialization, delegate caching, and New Game+ logic.
+    /// Handles runtime-safe JSON serialization, delegate caching, and New Game+ logic.
     /// </summary>
     public class SettingsController : ISettingsProvider, ISettingsProvider2, ISettingsProvider3
     {
@@ -333,30 +333,24 @@ namespace ModAPI.Spine
 
         #endregion
 
-        #region Manual JSON Serialization
+        #region Settings JSON
 
         private string SerializeJsonInternal()
         {
-            var sb = new StringBuilder();
-            sb.Append("{");
-            bool first = true;
+            ManualJsonObject root = new ManualJsonObject();
             foreach (var def in _definitions)
             {
                 if (def.Type == SettingType.Button) continue;
-                if (!first) sb.Append(",");
-                sb.Append("\"").Append(Escape(def.Id)).Append("\":").Append(ValueToJson(def.Getter(_owner)));
-                first = false;
+                root.Set(def.Id, ToJsonValue(def.Getter(_owner), new HashSet<object>()));
             }
-            sb.Append("}");
-            return sb.ToString();
+
+            return ManualJson.Serialize(root, false);
         }
 
 
         private string SerializeScope(SettingsScope scope)
         {
-            var sb = new StringBuilder();
-            sb.Append("{");
-            bool first = true;
+            ManualJsonObject root = new ManualJsonObject();
             foreach (var def in _definitions)
             {
                 if (def.Type == SettingType.Button) continue;
@@ -365,12 +359,10 @@ namespace ModAPI.Spine
                 if (!TryGetValueForPersistedScope(def, scope, out value))
                     continue;
 
-                if (!first) sb.Append(",");
-                sb.Append("\"").Append(Escape(def.Id)).Append("\":").Append(ValueToJson(value));
-                first = false;
+                root.Set(def.Id, ToJsonValue(value, new HashSet<object>()));
             }
-            sb.Append("}");
-            return sb.ToString();
+
+            return ManualJson.Serialize(root, false);
         }
 
         private bool TryGetValueForPersistedScope(SettingDefinition def, SettingsScope scope, out object value)
@@ -399,61 +391,54 @@ namespace ModAPI.Spine
 
         private string ValueToJson(object val)
         {
-            if (val == null) return "null";
-            if (val is bool b) return b ? "true" : "false";
-            if (val is string s) return $"\"{Escape(s)}\"";
-            if (val is float f) return f.ToString("R", CultureInfo.InvariantCulture);
-            if (val is double d) return d.ToString("R", CultureInfo.InvariantCulture);
-            if (val is int i) return i.ToString(CultureInfo.InvariantCulture);
-            if (val is long l) return l.ToString(CultureInfo.InvariantCulture);
-            if (val.GetType().IsEnum) return $"\"{val}\"";
-            
-            // Complex types fallback to simple recursive JSON
-            return SerializeComplex(val, new HashSet<object>());
+            return ManualJson.Serialize(ToJsonValue(val, new HashSet<object>()), false);
         }
 
-        private string SerializeComplex(object obj, HashSet<object> seen)
+        private ManualJsonValue ToJsonValue(object val, HashSet<object> seen)
         {
-            if (obj == null) return "null";
-            if (seen.Contains(obj)) throw new InvalidOperationException("Circular reference detected in settings.");
-            seen.Add(obj);
+            if (val == null) return ManualJsonValue.Null();
+            if (val is bool b) return ManualJsonValue.Boolean(b);
+            if (val is string s) return ManualJsonValue.String(s);
+            if (val is float f) return ManualJsonValue.Number(f.ToString("R", CultureInfo.InvariantCulture));
+            if (val is double d) return ManualJsonValue.Number(d.ToString("R", CultureInfo.InvariantCulture));
+            if (val is int i) return ManualJsonValue.Number(i);
+            if (val is long l) return ManualJsonValue.Number(l);
+            if (val.GetType().IsEnum) return ManualJsonValue.String(val.ToString());
 
-            var type = obj.GetType();
-            if (obj is IEnumerable en && !(obj is string))
+            if (seen.Contains(val)) throw new InvalidOperationException("Circular reference detected in settings.");
+            seen.Add(val);
+
+            try
             {
-                var sb = new StringBuilder("[");
-                bool first = true;
-                foreach (var item in en)
+                if (val is IEnumerable en && !(val is string))
                 {
-                    if (!first) sb.Append(",");
-                    sb.Append(ValueToJson(item));
-                    first = false;
+                    ManualJsonArray array = new ManualJsonArray();
+                    foreach (var item in en)
+                    {
+                        array.Add(ToJsonValue(item, seen));
+                    }
+
+                    return ManualJsonValue.Array(array);
                 }
-                sb.Append("]");
-                return sb.ToString();
-            }
 
-            var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
-            var res = new StringBuilder("{");
-            bool f1 = true;
-            foreach (var f in fields)
+                Type type = val.GetType();
+                ManualJsonObject obj = new ManualJsonObject();
+                FieldInfo[] fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public);
+                for (int fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
+                {
+                    FieldInfo field = fields[fieldIndex];
+                    obj.Set(field.Name, ToJsonValue(field.GetValue(val), seen));
+                }
+
+                return ManualJsonValue.Object(obj);
+            }
+            finally
             {
-                if (!f1) res.Append(",");
-                res.Append("\"").Append(Escape(f.Name)).Append("\":").Append(ValueToJson(f.GetValue(obj)));
-                f1 = false;
+                seen.Remove(val);
             }
-            res.Append("}");
-            return res.ToString();
-        }
-
-        private string Escape(string s)
-        {
-            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
         }
 
         #endregion
-
-        #region Manual JSON Deserialization (Simple Regex/Recursive Descent)
 
         private void ApplyJson(string json, SettingsScope scope)
         {
@@ -522,145 +507,22 @@ namespace ModAPI.Spine
 
         private Dictionary<string, object> ParseJson(string json)
         {
-            int i = 0;
-            object root = ReadValue(json, ref i);
+            object root = ParseJsonValue(json);
             Dictionary<string, object> result = root as Dictionary<string, object>;
             return result ?? new Dictionary<string, object>();
         }
 
-        private string ReadString(string json, ref int i)
+        private object ParseJsonValue(string json)
         {
-            if (i < json.Length && json[i] == '\"')
-                i++;
-
-            var sb = new StringBuilder();
-            while (i < json.Length)
+            ManualJsonValue value;
+            string error;
+            if (!ManualJson.TryParse(json, out value, out error))
             {
-                char c = json[i++];
-                if (c == '\"')
-                    break;
-
-                if (c == '\\' && i < json.Length)
-                {
-                    char escaped = json[i++];
-                    switch (escaped)
-                    {
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case '"': sb.Append('"'); break;
-                        default: sb.Append(escaped); break;
-                    }
-                }
-                else
-                {
-                    sb.Append(c);
-                }
-            }
-            return sb.ToString();
-        }
-
-        private Dictionary<string, object> ReadObject(string json, ref int i)
-        {
-            var result = new Dictionary<string, object>();
-            if (i < json.Length && json[i] == '{')
-                i++;
-
-            while (i < json.Length)
-            {
-                SkipWhitespace(json, ref i);
-                if (i >= json.Length)
-                    break;
-                if (json[i] == '}')
-                {
-                    i++;
-                    break;
-                }
-
-                string key = ReadString(json, ref i);
-                SkipWhitespace(json, ref i);
-                if (i < json.Length && json[i] == ':')
-                    i++;
-
-                result[key] = ReadValue(json, ref i);
-
-                SkipWhitespace(json, ref i);
-                if (i < json.Length && json[i] == ',')
-                    i++;
+                MMLog.WriteWarning("Settings JSON parse failed: " + error);
+                return null;
             }
 
-            return result;
-        }
-
-        private List<object> ReadArray(string json, ref int i)
-        {
-            var result = new List<object>();
-            if (i < json.Length && json[i] == '[')
-                i++;
-
-            while (i < json.Length)
-            {
-                SkipWhitespace(json, ref i);
-                if (i >= json.Length)
-                    break;
-                if (json[i] == ']')
-                {
-                    i++;
-                    break;
-                }
-
-                result.Add(ReadValue(json, ref i));
-                SkipWhitespace(json, ref i);
-                if (i < json.Length && json[i] == ',')
-                    i++;
-            }
-
-            return result;
-        }
-
-        private static void SkipWhitespace(string json, ref int i)
-        {
-            while (i < json.Length && char.IsWhiteSpace(json[i]))
-                i++;
-        }
-
-        private static bool MatchLiteral(string json, ref int i, string literal, object value, out object result)
-        {
-            result = null;
-            if (i + literal.Length > json.Length)
-                return false;
-
-            for (int j = 0; j < literal.Length; j++)
-            {
-                if (json[i + j] != literal[j])
-                    return false;
-            }
-
-            i += literal.Length;
-            result = value;
-            return true;
-        }
-
-        private object ReadValue(string json, ref int i)
-        {
-            SkipWhitespace(json, ref i);
-            if (i >= json.Length) return null;
-
-            if (json[i] == '\"') return ReadString(json, ref i);
-            if (json[i] == '{') return ReadObject(json, ref i);
-            if (json[i] == '[') return ReadArray(json, ref i);
-
-            object literal;
-            if (MatchLiteral(json, ref i, "true", true, out literal)) return literal;
-            if (MatchLiteral(json, ref i, "false", false, out literal)) return literal;
-            if (MatchLiteral(json, ref i, "null", null, out literal)) return literal;
-            
-            // Number
-            int start = i;
-            while (i < json.Length && (char.IsDigit(json[i]) || json[i] == '.' || json[i] == '-' || json[i] == '+' || json[i] == 'e' || json[i] == 'E')) i++;
-            string s = json.Substring(start, i - start);
-            return s;
+            return ManualJson.ToObjectGraph(value);
         }
 
         private object ConvertValue(object val, Type targetType)
@@ -777,8 +639,6 @@ namespace ModAPI.Spine
             return left.Equals(right);
         }
 
-        #endregion
-
         #region New Game+ Math Engine
 
         public Dictionary<string, string> GetCarryOverData()
@@ -800,8 +660,7 @@ namespace ModAPI.Spine
                     try
                     {
                         var carryJson = kvp.Value;
-                        int index = 0;
-                        var rawValue = ReadValue(carryJson, ref index);
+                        var rawValue = ParseJsonValue(carryJson);
                         double carryVal = Convert.ToDouble(ConvertValue(rawValue, typeof(double)), CultureInfo.InvariantCulture);
                         
                         MergeSetting(def, carryVal);

@@ -161,6 +161,7 @@
     <Compile Include="Core\RuntimeApiCompatibility.cs" />
     <Compile Include="Core\RuntimeCompat.cs" />
     <Compile Include="Util\CollectionCompatibility.cs" />
+    <Compile Include="Util\ManualJson.cs" />
     <Compile Include="Loading\ModLoadPlanBuilder.cs" />
     <Compile Include="Persistence\ModPersistenceStore.cs" />
     <Compile Include="Persistence\SaveSystemImpl.cs" />

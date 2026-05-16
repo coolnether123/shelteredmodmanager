@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using ModAPI.Util;
 using UnityEngine;
 
 namespace ModAPI.Core
@@ -247,27 +247,36 @@ namespace ModAPI.Core
         }
 
         // Unity 5.6 JsonUtility silently omits arrays of custom classes, so this
-        // manager-owned file uses a small explicit serializer for its fixed shape.
+        // manager-owned file maps its schema through the shared manual JSON utility.
         private static ManagerBooleanOptionsFile DeserializeFile(string json)
         {
             ManagerBooleanOptionsFile file = new ManagerBooleanOptionsFile();
             if (string.IsNullOrEmpty(json))
                 return file;
 
-            file.version = ExtractJsonInt(json, "version", 1);
+            ManualJsonObject root;
+            string error;
+            if (!ManualJson.TryParseObject(json, out root, out error))
+            {
+                MMLog.WriteWarning("[ManagerBooleanOptions] Invalid manager options JSON: " + error);
+                file.booleans = new ManagerBooleanOptionRecord[0];
+                return file;
+            }
 
-            string booleansJson = ExtractJsonArrayContent(json, "booleans");
-            if (booleansJson == null)
+            file.version = root.GetInt("version", 1);
+            List<ManagerBooleanOptionRecord> records = new List<ManagerBooleanOptionRecord>();
+            ManualJsonArray booleans = root.GetArray("booleans");
+            if (booleans == null)
             {
                 file.booleans = new ManagerBooleanOptionRecord[0];
                 return file;
             }
 
-            List<ManagerBooleanOptionRecord> records = new List<ManagerBooleanOptionRecord>();
-            List<string> objectBodies = SplitJsonObjectBodies(booleansJson);
-            for (int i = 0; i < objectBodies.Count; i++)
+            for (int i = 0; i < booleans.Items.Count; i++)
             {
-                ManagerBooleanOptionRecord record = DeserializeRecord(objectBodies[i]);
+                ManualJsonValue value = booleans.Items[i];
+                ManualJsonObject recordJson = value != null && value.Type == ManualJsonValueType.Object ? value.ObjectValue : null;
+                ManagerBooleanOptionRecord record = DeserializeRecord(recordJson);
                 if (record != null && !string.IsNullOrEmpty(record.id))
                     records.Add(record);
             }
@@ -276,21 +285,21 @@ namespace ModAPI.Core
             return file;
         }
 
-        private static ManagerBooleanOptionRecord DeserializeRecord(string json)
+        private static ManagerBooleanOptionRecord DeserializeRecord(ManualJsonObject json)
         {
-            if (string.IsNullOrEmpty(json))
+            if (json == null)
                 return null;
 
             return new ManagerBooleanOptionRecord
             {
-                id = ExtractJsonString(json, "id", string.Empty),
-                owner = ExtractJsonString(json, "owner", string.Empty),
-                label = ExtractJsonString(json, "label", string.Empty),
-                description = ExtractJsonString(json, "description", string.Empty),
-                value = ExtractJsonBool(json, "value", false),
-                defaultValue = ExtractJsonBool(json, "defaultValue", false),
-                requiresRestart = ExtractJsonBool(json, "requiresRestart", true),
-                sortOrder = ExtractJsonInt(json, "sortOrder", 0)
+                id = json.GetString("id", string.Empty),
+                owner = json.GetString("owner", string.Empty),
+                label = json.GetString("label", string.Empty),
+                description = json.GetString("description", string.Empty),
+                value = json.GetBool("value", false),
+                defaultValue = json.GetBool("defaultValue", false),
+                requiresRestart = json.GetBool("requiresRestart", true),
+                sortOrder = json.GetInt("sortOrder", 0)
             };
         }
 
@@ -298,312 +307,29 @@ namespace ModAPI.Core
         {
             NormalizeFile(file);
 
-            StringBuilder builder = new StringBuilder();
-            builder.AppendLine("{");
-            builder.AppendLine("    \"version\": " + file.version.ToString() + ",");
-            builder.AppendLine("    \"booleans\": [");
-
-            bool wroteRecord = false;
+            ManualJsonObject root = new ManualJsonObject();
+            root.Set("version", ManualJsonValue.Number(file.version));
+            ManualJsonArray booleans = new ManualJsonArray();
             for (int i = 0; i < file.booleans.Length; i++)
             {
                 ManagerBooleanOptionRecord record = file.booleans[i];
                 if (record == null)
                     continue;
 
-                if (wroteRecord)
-                    builder.AppendLine(",");
-
-                builder.AppendLine("        {");
-                AppendJsonString(builder, "id", record.id, true);
-                AppendJsonString(builder, "owner", record.owner, true);
-                AppendJsonString(builder, "label", record.label, true);
-                AppendJsonString(builder, "description", record.description, true);
-                AppendJsonBool(builder, "value", record.value, true);
-                AppendJsonBool(builder, "defaultValue", record.defaultValue, true);
-                AppendJsonBool(builder, "requiresRestart", record.requiresRestart, true);
-                builder.Append("            \"sortOrder\": ");
-                builder.Append(record.sortOrder.ToString());
-                builder.AppendLine();
-                builder.Append("        }");
-                wroteRecord = true;
+                ManualJsonObject recordJson = new ManualJsonObject();
+                recordJson.Set("id", ManualJsonValue.String(record.id));
+                recordJson.Set("owner", ManualJsonValue.String(record.owner));
+                recordJson.Set("label", ManualJsonValue.String(record.label));
+                recordJson.Set("description", ManualJsonValue.String(record.description));
+                recordJson.Set("value", ManualJsonValue.Boolean(record.value));
+                recordJson.Set("defaultValue", ManualJsonValue.Boolean(record.defaultValue));
+                recordJson.Set("requiresRestart", ManualJsonValue.Boolean(record.requiresRestart));
+                recordJson.Set("sortOrder", ManualJsonValue.Number(record.sortOrder));
+                booleans.Add(ManualJsonValue.Object(recordJson));
             }
 
-            if (wroteRecord)
-                builder.AppendLine();
-            builder.AppendLine("    ]");
-            builder.AppendLine("}");
-            return builder.ToString();
-        }
-
-        private static void AppendJsonString(StringBuilder builder, string name, string value, bool trailingComma)
-        {
-            builder.Append("            \"");
-            builder.Append(name);
-            builder.Append("\": \"");
-            builder.Append(EscapeJsonString(value));
-            builder.Append("\"");
-            if (trailingComma)
-                builder.Append(",");
-            builder.AppendLine();
-        }
-
-        private static void AppendJsonBool(StringBuilder builder, string name, bool value, bool trailingComma)
-        {
-            builder.Append("            \"");
-            builder.Append(name);
-            builder.Append("\": ");
-            builder.Append(value ? "true" : "false");
-            if (trailingComma)
-                builder.Append(",");
-            builder.AppendLine();
-        }
-
-        private static string EscapeJsonString(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            StringBuilder builder = new StringBuilder(value.Length + 8);
-            for (int i = 0; i < value.Length; i++)
-            {
-                char c = value[i];
-                switch (c)
-                {
-                    case '\\': builder.Append("\\\\"); break;
-                    case '"': builder.Append("\\\""); break;
-                    case '\b': builder.Append("\\b"); break;
-                    case '\f': builder.Append("\\f"); break;
-                    case '\n': builder.Append("\\n"); break;
-                    case '\r': builder.Append("\\r"); break;
-                    case '\t': builder.Append("\\t"); break;
-                    default:
-                        if (c < 32 || c > 126)
-                        {
-                            builder.Append("\\u");
-                            builder.Append(((int)c).ToString("x4"));
-                        }
-                        else
-                        {
-                            builder.Append(c);
-                        }
-                        break;
-                }
-            }
-
-            return builder.ToString();
-        }
-
-        private static int ExtractJsonInt(string json, string name, int defaultValue)
-        {
-            string value = ExtractJsonRawValue(json, name);
-            if (string.IsNullOrEmpty(value))
-                return defaultValue;
-
-            int parsed;
-            return int.TryParse(value, out parsed) ? parsed : defaultValue;
-        }
-
-        private static bool ExtractJsonBool(string json, string name, bool defaultValue)
-        {
-            string value = ExtractJsonRawValue(json, name);
-            if (string.IsNullOrEmpty(value))
-                return defaultValue;
-
-            bool parsed;
-            return bool.TryParse(value, out parsed) ? parsed : defaultValue;
-        }
-
-        private static string ExtractJsonString(string json, string name, string defaultValue)
-        {
-            int valueIndex = FindJsonValueStart(json, name);
-            if (valueIndex < 0 || valueIndex >= json.Length || json[valueIndex] != '"')
-                return defaultValue;
-
-            int index = valueIndex + 1;
-            StringBuilder builder = new StringBuilder();
-            while (index < json.Length)
-            {
-                char c = json[index++];
-                if (c == '"')
-                    return builder.ToString();
-
-                if (c != '\\' || index >= json.Length)
-                {
-                    builder.Append(c);
-                    continue;
-                }
-
-                char escaped = json[index++];
-                switch (escaped)
-                {
-                    case '"': builder.Append('"'); break;
-                    case '\\': builder.Append('\\'); break;
-                    case '/': builder.Append('/'); break;
-                    case 'b': builder.Append('\b'); break;
-                    case 'f': builder.Append('\f'); break;
-                    case 'n': builder.Append('\n'); break;
-                    case 'r': builder.Append('\r'); break;
-                    case 't': builder.Append('\t'); break;
-                    case 'u':
-                        if (index + 4 <= json.Length)
-                        {
-                            string hex = json.Substring(index, 4);
-                            int charCode;
-                            if (int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out charCode))
-                            {
-                                builder.Append((char)charCode);
-                                index += 4;
-                            }
-                        }
-                        break;
-                    default:
-                        builder.Append(escaped);
-                        break;
-                }
-            }
-
-            return defaultValue;
-        }
-
-        private static string ExtractJsonRawValue(string json, string name)
-        {
-            int valueIndex = FindJsonValueStart(json, name);
-            if (valueIndex < 0)
-                return null;
-
-            int end = valueIndex;
-            while (end < json.Length && json[end] != ',' && json[end] != '}' && json[end] != ']')
-                end++;
-
-            return json.Substring(valueIndex, end - valueIndex).Trim();
-        }
-
-        private static int FindJsonValueStart(string json, string name)
-        {
-            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name))
-                return -1;
-
-            string token = "\"" + name + "\"";
-            int propertyIndex = json.IndexOf(token, StringComparison.Ordinal);
-            if (propertyIndex < 0)
-                return -1;
-
-            int colonIndex = json.IndexOf(':', propertyIndex + token.Length);
-            if (colonIndex < 0)
-                return -1;
-
-            int valueIndex = colonIndex + 1;
-            while (valueIndex < json.Length && char.IsWhiteSpace(json[valueIndex]))
-                valueIndex++;
-
-            return valueIndex;
-        }
-
-        private static string ExtractJsonArrayContent(string json, string name)
-        {
-            int valueIndex = FindJsonValueStart(json, name);
-            if (valueIndex < 0 || valueIndex >= json.Length || json[valueIndex] != '[')
-                return null;
-
-            bool inString = false;
-            bool escaped = false;
-            int depth = 0;
-            for (int i = valueIndex; i < json.Length; i++)
-            {
-                char c = json[i];
-                if (escaped)
-                {
-                    escaped = false;
-                    continue;
-                }
-
-                if (c == '\\' && inString)
-                {
-                    escaped = true;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    inString = !inString;
-                    continue;
-                }
-
-                if (inString)
-                    continue;
-
-                if (c == '[')
-                {
-                    depth++;
-                    continue;
-                }
-
-                if (c == ']')
-                {
-                    depth--;
-                    if (depth == 0)
-                        return json.Substring(valueIndex + 1, i - valueIndex - 1);
-                }
-            }
-
-            return null;
-        }
-
-        private static List<string> SplitJsonObjectBodies(string json)
-        {
-            List<string> bodies = new List<string>();
-            if (string.IsNullOrEmpty(json))
-                return bodies;
-
-            bool inString = false;
-            bool escaped = false;
-            int depth = 0;
-            int start = -1;
-
-            for (int i = 0; i < json.Length; i++)
-            {
-                char c = json[i];
-                if (escaped)
-                {
-                    escaped = false;
-                    continue;
-                }
-
-                if (c == '\\' && inString)
-                {
-                    escaped = true;
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    inString = !inString;
-                    continue;
-                }
-
-                if (inString)
-                    continue;
-
-                if (c == '{')
-                {
-                    if (depth == 0)
-                        start = i;
-                    depth++;
-                    continue;
-                }
-
-                if (c == '}')
-                {
-                    depth--;
-                    if (depth == 0 && start >= 0)
-                    {
-                        bodies.Add(json.Substring(start, i - start + 1));
-                        start = -1;
-                    }
-                }
-            }
-
-            return bodies;
+            root.Set("booleans", ManualJsonValue.Array(booleans));
+            return ManualJson.Serialize(root, true);
         }
     }
 
