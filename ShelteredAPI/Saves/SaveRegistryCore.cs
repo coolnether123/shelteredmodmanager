@@ -649,7 +649,7 @@ namespace ShelteredAPI.Saves
                 entry.saveInfo.saveTime = ExtractXmlValue(xml, "timestamp", "");
 
                 entry.saveInfo.mapSize = ExtractXmlInt(xml, "mapSize", 0);
-                entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", true);
+                entry.saveInfo.fog = ExtractXmlBool(xml, "fogSetting", false);
                 entry.saveInfo.rainDiff = ExtractXmlInt(xml, "rainDifficulty", 1);
                 entry.saveInfo.resourceDiff = ExtractXmlInt(xml, "resourcesDifficulty", 1);
                 entry.saveInfo.breachDiff = ExtractXmlInt(xml, "breachDifficulty", 1);

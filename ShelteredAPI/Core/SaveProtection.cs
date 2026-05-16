@@ -148,8 +148,10 @@ namespace ShelteredAPI.Core
                             saveTime = data.info != null ? data.info.m_saveTime : DateTime.Now.ToString()
                         };
                         
-                        MMLog.WriteDebug(string.Format("[SaveGamePatch] Updating manifest for vanilla slot {0}", (int)type));
-                        ShelteredAPI.Saves.ExpandedVanillaSaves.UpdateManifest((int)type, info);
+                        LoadGamePatch.LoadManifestContext context = LoadGamePatch.ResolveVanillaManifestContext(type);
+                        MMLog.WriteDebug(string.Format("[SaveGamePatch] Updating manifest for scenario '{0}' slot {1} (save type={2})",
+                            context.ScenarioId, context.AbsoluteSlot, type));
+                        SaveStorageRouter.UpdateSlotManifest(context.ScenarioId, context.AbsoluteSlot, info);
                     }
                     catch (Exception ex)
                     {
@@ -173,7 +175,7 @@ namespace ShelteredAPI.Core
             internal static bool _forceLoad = false; // Internal so OnSlotChosen can set it
             private static bool _loadingScreenAlreadyManaged = false; // Track if we've handled the loading screen
 
-            private struct LoadManifestContext
+            internal struct LoadManifestContext
             {
                 public bool IsCustom;
                 public string ScenarioId;
@@ -369,14 +371,30 @@ namespace ShelteredAPI.Core
                 });
             }
 
-            private static LoadManifestContext ResolveLoadManifestContext(SaveManager.SaveType type)
+            internal static LoadManifestContext ResolveVanillaManifestContext(SaveManager.SaveType type)
             {
-                LoadManifestContext context = new LoadManifestContext
+                VanillaSaveRoute route;
+                if (VanillaSaveRouting.TryGetRoute(type, out route))
+                {
+                    return new LoadManifestContext
+                    {
+                        IsCustom = false,
+                        ScenarioId = route.StorageScenarioId,
+                        AbsoluteSlot = route.AbsoluteSlot
+                    };
+                }
+
+                return new LoadManifestContext
                 {
                     IsCustom = false,
-                    ScenarioId = "Standard",
-                    AbsoluteSlot = (int)type
+                    ScenarioId = ScenarioSaveIdGuards.StandardStorageScenarioId,
+                    AbsoluteSlot = 0
                 };
+            }
+
+            private static LoadManifestContext ResolveLoadManifestContext(SaveManager.SaveType type)
+            {
+                LoadManifestContext context = ResolveVanillaManifestContext(type);
 
                 if (SaveRuntimeState.HasActiveCustomSave && SaveRuntimeState.ActiveCustomSave != null)
                 {

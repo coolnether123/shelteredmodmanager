@@ -130,6 +130,7 @@
     <Compile Include="Saves\Runtime\SaveDeleteRouter.cs" />
     <Compile Include="Saves\Runtime\SaveRuntimeStatus.cs" />
     <Compile Include="Saves\Runtime\SaveStorageRouter.cs" />
+    <Compile Include="Saves\Runtime\VanillaSaveRouting.cs" />
     <Compile Include="Hooks\SaveExitPanelOnCancelPatch.cs" />
     <Compile Include="Saves\Runtime\SaveManager_Injection_Patch.cs" />
     <Compile Include="Hooks\MainMenuPanel_Quit_Patch.cs" />

@@ -6,8 +6,8 @@ using ShelteredAPI.Saves.Runtime;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSaveLibrary : IScenarioSaveLibrary
     {
-        private const string VanillaSurroundedSaveId = "vanilla_surrounded";
-        private const string VanillaStasisSaveId = "vanilla_stasis";
+        private const string VanillaSurroundedSaveId = ScenarioSaveIdGuards.VanillaSurroundedSaveId;
+        private const string VanillaStasisSaveId = ScenarioSaveIdGuards.VanillaStasisSaveId;
         private const string LegacySurroundedStorageScenarioId = "VanillaSurrounded";
         private const string LegacyStasisStorageScenarioId = "VanillaStasis";
 
@@ -125,10 +125,38 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return false;
 
             string storageScenarioId = ToStorageScenarioId(scenarioId);
-            if (IsBuiltInScenarioStorage(storageScenarioId) && absoluteSlot == 1 && TryReadVanillaScenarioSave(storageScenarioId) != null)
+            if (IsBuiltInScenarioStorage(storageScenarioId))
             {
-                MMLog.WriteInfo("[ScenarioSaveLibrary] Refusing to delete vanilla scenario slot from custom scenario browser. scenarioId="
-                    + storageScenarioId + " slot=" + absoluteSlot + ".");
+                SaveEntry displayEntry = FindBuiltInScenarioSaveByDisplaySlot(storageScenarioId, absoluteSlot);
+                if (displayEntry == null)
+                {
+                    MMLog.WriteWarning("[ScenarioSaveLibrary] Delete slot failed; display slot did not resolve to a scenario save. scenarioId="
+                        + storageScenarioId + " displaySlot=" + absoluteSlot + ".");
+                    return false;
+                }
+
+                if (IsVanillaScenarioSaveEntry(displayEntry))
+                {
+                    MMLog.WriteInfo("[ScenarioSaveLibrary] Refusing to delete vanilla scenario slot from custom scenario browser. scenarioId="
+                        + storageScenarioId + " slot=" + absoluteSlot + ".");
+                    return false;
+                }
+
+                string resolvedStorageScenarioId;
+                SaveEntry storageEntry;
+                if (TryResolveStorageSaveEntry(storageScenarioId, displayEntry, out resolvedStorageScenarioId, out storageEntry))
+                {
+                    bool deletedById = Delete(resolvedStorageScenarioId, storageEntry.id);
+                    MMLog.WriteInfo("[ScenarioSaveLibrary] Delete display slot result=" + deletedById
+                        + ". scenarioId=" + storageScenarioId
+                        + " displaySlot=" + absoluteSlot
+                        + " storageScenarioId=" + resolvedStorageScenarioId
+                        + " storageSlot=" + storageEntry.absoluteSlot + ".");
+                    return deletedById;
+                }
+
+                MMLog.WriteWarning("[ScenarioSaveLibrary] Delete slot failed; display slot could not be mapped to storage. scenarioId="
+                    + storageScenarioId + " displaySlot=" + absoluteSlot + " saveId=" + displayEntry.id + ".");
                 return false;
             }
 
@@ -220,18 +248,54 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             if (save == null || string.IsNullOrEmpty(save.id))
                 return false;
 
-            if (string.Equals(save.id, VanillaSurroundedSaveId, StringComparison.OrdinalIgnoreCase))
+            VanillaSaveRoute route;
+            if (!VanillaSaveRouting.TryGetRouteBySaveId(save.id, out route))
+                return false;
+
+            slotNumber = route.VanillaSlotNumber;
+            return true;
+        }
+
+        internal static bool TryResolveStorageSaveEntry(
+            string requestedStorageScenarioId,
+            SaveEntry save,
+            out string storageScenarioId,
+            out SaveEntry storageEntry)
+        {
+            storageScenarioId = ScenarioSelectionIds.ToStorageScenarioId(requestedStorageScenarioId);
+            storageEntry = null;
+
+            if (save == null || string.IsNullOrEmpty(save.id) || IsVanillaScenarioSaveEntry(save))
+                return false;
+
+            string preferredStorageScenarioId = !string.IsNullOrEmpty(save.scenarioId)
+                ? ScenarioSelectionIds.ToStorageScenarioId(save.scenarioId)
+                : storageScenarioId;
+
+            if (TryGetStorageSave(preferredStorageScenarioId, save.id, out storageEntry))
             {
-                slotNumber = 4;
+                storageScenarioId = preferredStorageScenarioId;
                 return true;
             }
 
-            if (string.Equals(save.id, VanillaStasisSaveId, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(preferredStorageScenarioId, storageScenarioId, StringComparison.OrdinalIgnoreCase)
+                && TryGetStorageSave(storageScenarioId, save.id, out storageEntry))
             {
-                slotNumber = 5;
                 return true;
             }
 
+            if (IsBuiltInScenarioStorage(storageScenarioId))
+            {
+                string legacyStorageScenarioId = GetLegacyStorageScenarioId(storageScenarioId);
+                if (!string.IsNullOrEmpty(legacyStorageScenarioId)
+                    && TryGetStorageSave(legacyStorageScenarioId, save.id, out storageEntry))
+                {
+                    storageScenarioId = legacyStorageScenarioId;
+                    return true;
+                }
+            }
+
+            storageEntry = null;
             return false;
         }
 
@@ -239,6 +303,24 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             return string.Equals(saveId, VanillaSurroundedSaveId, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(saveId, VanillaStasisSaveId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryGetStorageSave(string storageScenarioId, string saveId, out SaveEntry save)
+        {
+            save = null;
+            if (string.IsNullOrEmpty(storageScenarioId) || string.IsNullOrEmpty(saveId))
+                return false;
+
+            try
+            {
+                save = GetRegistry(storageScenarioId).GetSave(saveId);
+                return save != null;
+            }
+            catch
+            {
+                save = null;
+                return false;
+            }
         }
 
         private static bool IsBuiltInScenarioStorage(string storageScenarioId)
@@ -359,11 +441,15 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
         private static SaveEntry TryReadVanillaScenarioSave(string storageScenarioId)
         {
-            if (string.Equals(storageScenarioId, ScenarioSelectionIds.VanillaSurroundedStorageScenarioId, StringComparison.OrdinalIgnoreCase))
-                return SaveRegistryCore.ReadVanillaSaveEntry(4, storageScenarioId, VanillaSurroundedSaveId, 1);
-
-            if (string.Equals(storageScenarioId, ScenarioSelectionIds.VanillaStasisStorageScenarioId, StringComparison.OrdinalIgnoreCase))
-                return SaveRegistryCore.ReadVanillaSaveEntry(5, storageScenarioId, VanillaStasisSaveId, 1);
+            VanillaSaveRoute route;
+            if (VanillaSaveRouting.TryGetRouteByStorageScenarioId(storageScenarioId, out route))
+            {
+                return SaveRegistryCore.ReadVanillaSaveEntry(
+                    route.VanillaSlotNumber,
+                    route.StorageScenarioId,
+                    route.SaveId,
+                    route.AbsoluteSlot);
+            }
 
             return null;
         }

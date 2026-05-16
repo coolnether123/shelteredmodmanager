@@ -49,12 +49,8 @@ namespace ShelteredAPI.Core
             if (currentType == SaveManager.SaveType.Invalid || currentType == SaveManager.SaveType.GlobalData)
                 return null;
 
-            int vanillaSlot = SaveTypeToSlotIndex(currentType);
-            if (vanillaSlot <= 0)
-                return null;
-
-            string slotPath = DirectoryProvider.SlotRoot("Standard", vanillaSlot, false);
-            return new ModSaveContext(slotPath, vanillaSlot, "Standard", currentType.ToString(), null);
+            IModSaveContext vanillaContext;
+            return TryCreateVanillaSaveContext(currentType, out vanillaContext) ? vanillaContext : null;
         }
 
         public void EnsureRuntimeReady()
@@ -146,10 +142,22 @@ namespace ShelteredAPI.Core
             }
         }
 
-        private static int SaveTypeToSlotIndex(SaveManager.SaveType saveType)
+        private static bool TryCreateVanillaSaveContext(SaveManager.SaveType saveType, out IModSaveContext context)
         {
-            int numeric = (int)saveType;
-            return numeric >= 1 && numeric <= 3 ? numeric : -1;
+            context = null;
+
+            VanillaSaveRoute route;
+            if (!VanillaSaveRouting.TryGetRoute(saveType, out route))
+                return false;
+
+            context = CreateVanillaSaveContext(route);
+            return true;
+        }
+
+        private static IModSaveContext CreateVanillaSaveContext(VanillaSaveRoute route)
+        {
+            string slotPath = DirectoryProvider.SlotRoot(route.StorageScenarioId, route.AbsoluteSlot, false);
+            return new ModSaveContext(slotPath, route.AbsoluteSlot, route.StorageScenarioId, route.SaveId, null);
         }
     }
 }

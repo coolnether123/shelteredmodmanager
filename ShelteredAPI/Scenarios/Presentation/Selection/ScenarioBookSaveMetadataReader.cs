@@ -21,7 +21,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string path = null;
             try
             {
-                path = DirectoryProvider.EntryPath(storageScenarioId, save.absoluteSlot);
+                string fileStorageScenarioId = storageScenarioId;
+                SaveEntry fileSave = save;
+                string resolvedStorageScenarioId;
+                SaveEntry resolvedSave;
+                if (ScenarioSaveLibrary.TryResolveStorageSaveEntry(storageScenarioId, save, out resolvedStorageScenarioId, out resolvedSave))
+                {
+                    fileStorageScenarioId = resolvedStorageScenarioId;
+                    fileSave = resolvedSave;
+                }
+
+                path = DirectoryProvider.EntryPath(fileStorageScenarioId, fileSave.absoluteSlot);
                 if (!File.Exists(path))
                     return detail;
 
