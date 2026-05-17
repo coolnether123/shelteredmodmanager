@@ -30,6 +30,7 @@ namespace Manager.Core.Models
         private int _saveBackupRetention = DefaultSaveBackupRetention; // 0 disables, positive keeps N, -1 keeps all
         private bool _enableNexusIntegration = true;
         private bool _enableExperimentalPublishTab = false;
+        private string _lastSeenReleaseNoticeVersion = string.Empty;
         private string _nexusGameDomain = "sheltered";
         private string _nexusApiKey = string.Empty;
         private int _managerNexusModId = 1;
@@ -148,6 +149,12 @@ namespace Manager.Core.Models
         {
             get { return _enableExperimentalPublishTab; }
             set { _enableExperimentalPublishTab = value; }
+        }
+
+        public string LastSeenReleaseNoticeVersion
+        {
+            get { return _lastSeenReleaseNoticeVersion; }
+            set { _lastSeenReleaseNoticeVersion = value; }
         }
 
         public string NexusGameDomain

@@ -38,6 +38,11 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Public API boundary decisions | [ModAPI Sheltered Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
 | Developer comment style | [Developer Commenting Standard](Developer_Commenting_Standard.md) |
 | Beta.1 release scope | [Beta.1 Release Notes](Release_Beta.1.md) |
+| Player upgrade guidance | [SMM 2.0 Beta Migration](SMM_2.0_Beta_Migration.md) |
+| Current known issues | [Known Issues](Known_Issues.md) |
+| Modder migration checklist | [For Modders: 2.0 API Migration](For_Modders_2.0_API_Migration.md) |
+| Player announcement draft | [Player Announcement: SMM 2.0 Beta](Player_Announcement_2.0_Beta.md) |
+| Nexus app registration readiness | [Nexus Official Registration Readiness](Nexus_Official_Readiness.md) |
 | Local build prerequisites | [README build section](../readme.md#building-from-source) |
 
 ## Assembly Rule

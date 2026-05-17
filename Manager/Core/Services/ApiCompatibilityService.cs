@@ -12,6 +12,7 @@ namespace Manager.Core.Services
     {
         private const string ModApiName = "ModAPI";
         private const string ShelteredApiName = "ShelteredAPI";
+        private const int BreakingTwoPointZeroMajor = 2;
 
         private readonly Dictionary<string, string> _installedVersions;
         public ApiCompatibilityService(Dictionary<string, string> installedVersions)
@@ -102,6 +103,13 @@ namespace Manager.Core.Services
             {
                 requirement.Severity = ApiCompatibilitySeverity.Error;
                 requirement.Message = "This mod requires a newer SMM API version. Update SMM before using this mod.";
+                return requirement;
+            }
+
+            if (IsOlderBreakingApiLine(requirement.RequiredVersion, installed))
+            {
+                requirement.Severity = ApiCompatibilitySeverity.Warning;
+                requirement.Message = "This mod was built for the older SMM API line. SMM 2.0 moved Sheltered APIs into ShelteredAPI.dll; use a 2.0 version of the mod before loading important saves.";
                 return requirement;
             }
 
@@ -201,6 +209,33 @@ namespace Manager.Core.Services
             {
                 return string.Compare(left, right, StringComparison.OrdinalIgnoreCase) < 0;
             }
+        }
+
+        private static bool IsOlderBreakingApiLine(string requiredVersion, string installedVersion)
+        {
+            int requiredMajor;
+            int installedMajor;
+            if (!TryGetMajorVersion(requiredVersion, out requiredMajor) || !TryGetMajorVersion(installedVersion, out installedMajor))
+                return false;
+
+            return installedMajor >= BreakingTwoPointZeroMajor && requiredMajor < installedMajor;
+        }
+
+        private static bool TryGetMajorVersion(string version, out int major)
+        {
+            major = 0;
+            string text = (version ?? string.Empty).Trim();
+            if (text.Length == 0)
+                return false;
+
+            int index = 0;
+            while (index < text.Length && char.IsDigit(text[index]))
+                index++;
+
+            if (index == 0)
+                return false;
+
+            return int.TryParse(text.Substring(0, index), out major);
         }
     }
 }

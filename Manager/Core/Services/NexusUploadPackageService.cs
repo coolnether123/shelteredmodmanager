@@ -12,6 +12,7 @@ namespace Manager.Core.Services
         private const uint CentralDirectoryFileHeaderSignature = 0x02014b50;
         private const uint EndOfCentralDirectorySignature = 0x06054b50;
         private const ushort Utf8Flag = 0x0800;
+        private const int MaxZipEntries = ushort.MaxValue;
 
         public NexusUploadPackageResult BuildPackage(ModItem mod, NexusUploadDraft draft, out string errorMessage)
         {
@@ -30,13 +31,32 @@ namespace Manager.Core.Services
 
             try
             {
+                global::Manager.ModTypes.ModAboutInfo about;
+                string normalizedId;
+                if (!ModPackageSafety.ValidateUploadRoot(mod.RootPath, out about, out normalizedId, out errorMessage))
+                {
+                    errorMessage = "Package build refused: " + errorMessage;
+                    return null;
+                }
+
                 string outputDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "nexus_uploads");
                 if (!Directory.Exists(outputDir))
                     Directory.CreateDirectory(outputDir);
 
                 string fileName = SanitizeFileName(draft.Name) + "-" + SanitizeFileName(draft.Version) + ".zip";
-                string packagePath = Path.Combine(outputDir, fileName);
+                string packagePath = CreateUniquePackagePath(outputDir, fileName);
                 List<PackageFile> files = CollectFiles(mod.RootPath);
+                if (files.Count == 0)
+                {
+                    errorMessage = "Package build refused: the mod folder contains no packageable files.";
+                    return null;
+                }
+
+                if (files.Count > MaxZipEntries)
+                {
+                    errorMessage = "Package build refused: the mod has too many files for the current ZIP writer.";
+                    return null;
+                }
 
                 using (FileStream stream = File.Open(packagePath, FileMode.Create, FileAccess.Write, FileShare.None))
                 using (BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8))
@@ -96,8 +116,11 @@ namespace Manager.Core.Services
                 if (ShouldSkip(relative))
                     continue;
 
-                byte[] bytes = File.ReadAllBytes(path);
-                result.Add(new PackageFile(relative.Replace('\\', '/'), bytes, File.GetLastWriteTime(path)));
+                FileInfo fileInfo = new FileInfo(path);
+                if (fileInfo.Length > int.MaxValue)
+                    throw new InvalidOperationException("Package file is too large for the current ZIP writer: " + relative);
+
+                result.Add(new PackageFile(relative.Replace('\\', '/'), path, (int)fileInfo.Length, File.GetLastWriteTime(path)));
             }
 
             return result;
@@ -109,14 +132,15 @@ namespace Manager.Core.Services
                 return true;
 
             string normalized = relativePath.Replace('\\', '/');
-            return string.Equals(normalized, "About/NexusUploadDraft.json", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(normalized, "About/NexusUploadDraft.json", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(normalized, "About/Nexus.json", StringComparison.OrdinalIgnoreCase);
         }
 
         private static CentralDirectoryRecord WriteLocalFile(BinaryWriter writer, PackageFile file, string rootPath)
         {
             long offset = writer.BaseStream.Position;
             byte[] nameBytes = Encoding.UTF8.GetBytes(file.EntryName);
-            uint crc = Crc32.Compute(file.Bytes);
+            uint crc = Crc32.ComputeFile(file.FullPath);
             ushort dosTime;
             ushort dosDate;
             ToDosDateTime(file.LastWriteTime, out dosTime, out dosDate);
@@ -128,14 +152,25 @@ namespace Manager.Core.Services
             writer.Write(dosTime);
             writer.Write(dosDate);
             writer.Write(crc);
-            writer.Write((uint)file.Bytes.Length);
-            writer.Write((uint)file.Bytes.Length);
+            writer.Write((uint)file.Length);
+            writer.Write((uint)file.Length);
             writer.Write((ushort)nameBytes.Length);
             writer.Write((ushort)0);
             writer.Write(nameBytes);
-            writer.Write(file.Bytes);
+            WriteFileBytes(writer, file.FullPath);
 
-            return new CentralDirectoryRecord(file.EntryName, nameBytes, crc, file.Bytes.Length, dosTime, dosDate, offset);
+            return new CentralDirectoryRecord(file.EntryName, nameBytes, crc, file.Length, dosTime, dosDate, offset);
+        }
+
+        private static void WriteFileBytes(BinaryWriter writer, string path)
+        {
+            byte[] buffer = new byte[64 * 1024];
+            using (FileStream input = File.OpenRead(path))
+            {
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                    writer.Write(buffer, 0, read);
+            }
         }
 
         private static void WriteCentralDirectoryRecord(BinaryWriter writer, CentralDirectoryRecord record)
@@ -162,6 +197,9 @@ namespace Manager.Core.Services
 
         private static void WriteEndOfCentralDirectory(BinaryWriter writer, int count, long centralDirectorySize, long centralDirectoryOffset)
         {
+            if (centralDirectorySize > uint.MaxValue || centralDirectoryOffset > uint.MaxValue)
+                throw new InvalidOperationException("Package is too large for the current ZIP writer.");
+
             writer.Write(EndOfCentralDirectorySignature);
             writer.Write((ushort)0);
             writer.Write((ushort)0);
@@ -178,6 +216,29 @@ namespace Manager.Core.Services
             if (!root.EndsWith(Path.DirectorySeparatorChar.ToString()))
                 root += Path.DirectorySeparatorChar;
             return Path.GetFullPath(path).Substring(root.Length);
+        }
+
+        private static string CreateUniquePackagePath(string outputDir, string fileName)
+        {
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+            string extension = Path.GetExtension(fileName);
+            if (string.IsNullOrEmpty(extension))
+                extension = ".zip";
+
+            string candidate = Path.Combine(outputDir, fileName);
+            if (!File.Exists(candidate))
+                return candidate;
+
+            string stamped = baseName + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            candidate = Path.Combine(outputDir, stamped + extension);
+            int suffix = 1;
+            while (File.Exists(candidate))
+            {
+                candidate = Path.Combine(outputDir, stamped + "-" + suffix.ToString() + extension);
+                suffix++;
+            }
+
+            return candidate;
         }
 
         private static string SanitizeFileName(string value)
@@ -200,15 +261,17 @@ namespace Manager.Core.Services
 
         private sealed class PackageFile
         {
-            public PackageFile(string entryName, byte[] bytes, DateTime lastWriteTime)
+            public PackageFile(string entryName, string fullPath, int length, DateTime lastWriteTime)
             {
                 EntryName = entryName;
-                Bytes = bytes;
+                FullPath = fullPath;
+                Length = length;
                 LastWriteTime = lastWriteTime;
             }
 
             public string EntryName;
-            public byte[] Bytes;
+            public string FullPath;
+            public int Length;
             public DateTime LastWriteTime;
         }
 
@@ -246,6 +309,23 @@ namespace Manager.Core.Services
                     for (int i = 0; i < bytes.Length; i++)
                         value = Table[(int)((value ^ bytes[i]) & 0xff)] ^ (value >> 8);
                 }
+                return value ^ 0xffffffff;
+            }
+
+            public static uint ComputeFile(string path)
+            {
+                uint value = 0xffffffff;
+                byte[] buffer = new byte[64 * 1024];
+                using (FileStream stream = File.OpenRead(path))
+                {
+                    int read;
+                    while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        for (int i = 0; i < read; i++)
+                            value = Table[(int)((value ^ buffer[i]) & 0xff)] ^ (value >> 8);
+                    }
+                }
+
                 return value ^ 0xffffffff;
             }
 

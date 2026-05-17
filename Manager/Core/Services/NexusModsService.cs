@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Web.Script.Serialization;
+using Manager.Core;
 using Manager.Core.Models;
 
 namespace Manager.Core.Services
@@ -14,13 +17,40 @@ namespace Manager.Core.Services
     public class NexusModsService
     {
         private const long SinglePartUploadLimitBytes = 100L * 1024L * 1024L;
+        private const string NexusApiBaseUrlV1 = "https://api.nexusmods.com/v1";
+        private static readonly TimeSpan MetadataCacheTtl = TimeSpan.FromMinutes(5);
         private readonly NexusV3RestClient _client;
         private readonly string _apiKey;
+        private readonly object _cacheLock = new object();
+        private readonly Dictionary<string, CacheEntry<NexusRemoteMod>> _modCache = new Dictionary<string, CacheEntry<NexusRemoteMod>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CacheEntry<List<NexusRemoteMod>>> _latestCache = new Dictionary<string, CacheEntry<List<NexusRemoteMod>>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CacheEntry<List<NexusModFileUpdateGroup>>> _groupCache = new Dictionary<string, CacheEntry<List<NexusModFileUpdateGroup>>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CacheEntry<List<NexusRemoteModFile>>> _versionCache = new Dictionary<string, CacheEntry<List<NexusRemoteModFile>>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CacheEntry<List<NexusRemoteModFile>>> _fileListCache = new Dictionary<string, CacheEntry<List<NexusRemoteModFile>>>(StringComparer.OrdinalIgnoreCase);
+        private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer();
+
+        private sealed class CacheEntry<T>
+        {
+            public T Value;
+            public DateTime CreatedUtc;
+        }
 
         public NexusModsService(string apiKey)
         {
             _apiKey = apiKey ?? string.Empty;
             _client = new NexusV3RestClient(apiKey);
+        }
+
+        public void ClearCachedResponses()
+        {
+            lock (_cacheLock)
+            {
+                _modCache.Clear();
+                _latestCache.Clear();
+                _groupCache.Clear();
+                _versionCache.Clear();
+                _fileListCache.Clear();
+            }
         }
 
         public Dictionary<string, NexusRemoteMod> GetModsByReferences(IEnumerable<NexusModReference> references, out string errorMessage)
@@ -57,6 +87,11 @@ namespace Manager.Core.Services
                 return list;
             }
 
+            string cacheKey = "latest:" + NormalizeDomain(gameDomain) + ":" + count.ToString();
+            List<NexusRemoteMod> cachedLatest;
+            if (TryGetCached(_latestCache, cacheKey, out cachedLatest))
+                return cachedLatest;
+
             NexusV3RestResult response = _client.Get("/games/" + Escape(gameDomain) + "/trending-mods");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
@@ -77,6 +112,7 @@ namespace Manager.Core.Services
                     list.Add(mod);
             }
 
+            StoreCached(_latestCache, cacheKey, list);
             return list;
         }
 
@@ -89,6 +125,11 @@ namespace Manager.Core.Services
                 return null;
             }
 
+            string cacheKey = "mod:" + NormalizeDomain(gameDomain) + ":" + modId.ToString();
+            NexusRemoteMod cached;
+            if (TryGetCached(_modCache, cacheKey, out cached))
+                return cached;
+
             NexusV3RestResult response = _client.Get("/games/" + Escape(gameDomain) + "/mods/" + modId);
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
@@ -100,7 +141,11 @@ namespace Manager.Core.Services
             if (mod == null)
                 errorMessage = "Nexus v3 did not return mod details.";
             else
+            {
                 PopulateLatestFileState(mod, ref errorMessage);
+                if (string.IsNullOrEmpty(errorMessage))
+                    StoreCached(_modCache, cacheKey, mod);
+            }
 
             return mod;
         }
@@ -161,6 +206,11 @@ namespace Manager.Core.Services
                 return groups;
             }
 
+            string cacheKey = "groups:" + modUniqueId;
+            List<NexusModFileUpdateGroup> cached;
+            if (TryGetCached(_groupCache, cacheKey, out cached))
+                return cached;
+
             NexusV3RestResult response = _client.Get("/mods/" + Escape(modUniqueId) + "/file-update-groups");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
             {
@@ -187,6 +237,7 @@ namespace Manager.Core.Services
                     groups.Add(group);
             }
 
+            StoreCached(_groupCache, cacheKey, groups);
             return groups;
         }
 
@@ -199,6 +250,11 @@ namespace Manager.Core.Services
                 errorMessage = "File update group id is required.";
                 return files;
             }
+
+            string cacheKey = "versions:" + groupId;
+            List<NexusRemoteModFile> cached;
+            if (TryGetCached(_versionCache, cacheKey, out cached))
+                return cached;
 
             NexusV3RestResult response = _client.Get("/file-update-groups/" + Escape(groupId) + "/versions");
             if (!string.IsNullOrEmpty(response.ErrorMessage))
@@ -220,6 +276,7 @@ namespace Manager.Core.Services
                     files.Add(file);
             }
 
+            StoreCached(_versionCache, cacheKey, files);
             return files;
         }
 
@@ -241,23 +298,67 @@ namespace Manager.Core.Services
         {
             errorMessage = null;
             var files = new List<NexusRemoteModFile>();
-            NexusRemoteMod mod = GetModByDomainAndId(gameDomain, modId, out errorMessage);
-            if (!string.IsNullOrEmpty(errorMessage) || mod == null || string.IsNullOrEmpty(mod.Uid))
-                return files;
 
-            List<NexusModFileUpdateGroup> groups = GetModFileUpdateGroups(mod.Uid, out errorMessage);
-            if (!string.IsNullOrEmpty(errorMessage))
-                return files;
-
-            for (int i = 0; i < groups.Count; i++)
+            if (string.IsNullOrEmpty(gameDomain) || modId <= 0)
             {
-                string versionError;
-                List<NexusRemoteModFile> groupFiles = GetFileUpdateGroupVersions(groups[i].Id, out versionError);
-                if (!string.IsNullOrEmpty(versionError) && string.IsNullOrEmpty(errorMessage))
-                    errorMessage = versionError;
-                files.AddRange(groupFiles);
+                errorMessage = "Invalid Nexus file query.";
+                return files;
             }
 
+            string cacheKey = "files:" + NormalizeDomain(gameDomain) + ":" + modId.ToString();
+            List<NexusRemoteModFile> cached;
+            if (TryGetCached(_fileListCache, cacheKey, out cached))
+                return cached;
+
+            string v3Error = null;
+            NexusRemoteMod mod = GetModByDomainAndId(gameDomain, modId, out v3Error);
+            if (string.IsNullOrEmpty(v3Error) && mod != null && !string.IsNullOrEmpty(mod.Uid))
+            {
+                List<NexusModFileUpdateGroup> groups = GetModFileUpdateGroups(mod.Uid, out v3Error);
+                if (string.IsNullOrEmpty(v3Error))
+                {
+                    for (int i = 0; i < groups.Count; i++)
+                    {
+                        string versionError;
+                        List<NexusRemoteModFile> groupFiles = GetFileUpdateGroupVersions(groups[i].Id, out versionError);
+                        if (!string.IsNullOrEmpty(versionError) && string.IsNullOrEmpty(v3Error))
+                            v3Error = versionError;
+                        files.AddRange(groupFiles);
+                    }
+                }
+            }
+
+            if (HasManagerInstallableFile(files))
+            {
+                StoreCached(_fileListCache, cacheKey, files);
+                return files;
+            }
+
+            string legacyError;
+            List<NexusRemoteModFile> legacyFiles = GetLegacyModFiles(gameDomain, modId, out legacyError);
+            if (legacyFiles.Count > 0)
+            {
+                StoreCached(_fileListCache, cacheKey, legacyFiles);
+                return legacyFiles;
+            }
+
+            if (!string.IsNullOrEmpty(v3Error))
+            {
+                errorMessage = v3Error;
+                if (!string.IsNullOrEmpty(legacyError))
+                    errorMessage += " Legacy file fallback also failed: " + legacyError;
+                return files;
+            }
+
+            if (files.Count > 0)
+            {
+                StoreCached(_fileListCache, cacheKey, files);
+                return files;
+            }
+
+            errorMessage = !string.IsNullOrEmpty(legacyError)
+                ? legacyError
+                : "Nexus did not return any files for this mod.";
             return files;
         }
 
@@ -284,8 +385,12 @@ namespace Manager.Core.Services
 
         public string GetV3DownloadUrl(string gameDomain, int modId, int fileId, string apiKey, out string errorMessage)
         {
-            errorMessage = "Direct download URL resolution is not exposed by the Nexus v3 OpenAPI. Open the Nexus page for manual download.";
-            return null;
+            return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, out errorMessage);
+        }
+
+        public string GetDownloadUrlWithAuthorization(string gameDomain, int modId, int fileId, string apiKey, string downloadKey, long expires, out string errorMessage)
+        {
+            return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, downloadKey, expires, out errorMessage);
         }
 
         public NexusAccountStatus GetAccountStatus(out string errorMessage)
@@ -294,14 +399,161 @@ namespace Manager.Core.Services
             if (string.IsNullOrEmpty(_apiKey))
                 return NexusAccountStatus.CreateNotConfigured();
 
+            Dictionary<string, object> data = SendLegacyGet("/users/validate", null, null, out errorMessage);
+            if (!string.IsNullOrEmpty(errorMessage) || data == null)
+                return NexusAccountStatus.CreateUnavailable(errorMessage);
+
             var status = new NexusAccountStatus();
             status.IsConfigured = true;
             status.IsConnected = true;
-            status.UserName = "Nexus API key";
-            status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Unavailable;
-            status.Summary = "Nexus v3 API key configured.";
-            status.DirectDownloadSummary = "The v3 OpenAPI used by Manager does not expose account profile or direct-download capability endpoints.";
+            status.UserId = ReadInt(data, "user_id");
+            status.UserName = ReadString(data, "name");
+            bool isPremium = ReadBool(data, "is_premium");
+            bool isSupporter = ReadBool(data, "is_supporter");
+            if (isPremium)
+                status.MembershipRoles = new[] { "premium" };
+            else if (isSupporter)
+                status.MembershipRoles = new[] { "supporter" };
+            else
+                status.MembershipRoles = new[] { "member" };
+
+            status.Summary = "Connected to Nexus as " +
+                (!string.IsNullOrEmpty(status.UserName) ? status.UserName : "user " + status.UserId.ToString()) +
+                " (" + status.GetMembershipLabel() + ").";
+
+            if (isPremium || isSupporter)
+            {
+                status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Available;
+                status.DirectDownloadSummary = "Direct installs should usually work, but Nexus can still deny specific files or unapproved app access.";
+            }
+            else
+            {
+                status.DirectDownloadAvailability = NexusDirectDownloadAvailability.Limited;
+                status.DirectDownloadSummary = "Browsing and update checks work. Direct installs may require Nexus mod-manager download authorization for non-premium accounts.";
+            }
+
             return status;
+        }
+
+        private string GetLegacyDownloadUrl(string gameDomain, int modId, int fileId, string apiKey, out string errorMessage)
+        {
+            return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, string.Empty, 0, out errorMessage);
+        }
+
+        private string GetLegacyDownloadUrl(string gameDomain, int modId, int fileId, string apiKey, string downloadKey, long expires, out string errorMessage)
+        {
+            errorMessage = null;
+
+            if (string.IsNullOrEmpty(gameDomain) || modId <= 0 || fileId <= 0)
+            {
+                errorMessage = "Invalid parameters for download URL request.";
+                return null;
+            }
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                errorMessage = "Nexus API key is required for direct Manager download.";
+                return null;
+            }
+
+            var query = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(downloadKey) && expires > 0)
+            {
+                query["key"] = downloadKey;
+                query["expires"] = expires.ToString();
+            }
+
+            Dictionary<string, object> data = SendLegacyGet(
+                "/games/" + NormalizeDomain(gameDomain) + "/mods/" + modId + "/files/" + fileId + "/download_link",
+                apiKey,
+                query,
+                out errorMessage);
+
+            if (!string.IsNullOrEmpty(errorMessage))
+                return null;
+
+            string downloadUrl = ExtractDownloadUrl(data);
+            if (!string.IsNullOrEmpty(downloadUrl))
+                return downloadUrl;
+
+            errorMessage = "Nexus response did not include a usable download URI.";
+            return null;
+        }
+
+        private Dictionary<string, object> SendLegacyGet(
+            string relativePath,
+            string apiKeyOverride,
+            Dictionary<string, string> query,
+            out string errorMessage)
+        {
+            errorMessage = null;
+            try
+            {
+                string url = BuildLegacyUrl(relativePath, query);
+                var request = (HttpWebRequest)WebRequest.Create(url);
+                request.Method = "GET";
+                request.Timeout = 15000;
+                request.ReadWriteTimeout = 15000;
+                request.KeepAlive = false;
+                string key = !string.IsNullOrEmpty(apiKeyOverride) ? apiKeyOverride : _apiKey;
+                NexusRequestHeaders.ApplyJsonHeaders(request, key);
+
+                using (var response = (HttpWebResponse)request.GetResponse())
+                using (Stream stream = response.GetResponseStream())
+                using (StreamReader reader = stream != null ? new StreamReader(stream) : null)
+                {
+                    string json = reader != null ? reader.ReadToEnd() : string.Empty;
+                    if (string.IsNullOrEmpty(json))
+                        return new Dictionary<string, object>();
+
+                    object parsed = _serializer.DeserializeObject(json);
+                    Dictionary<string, object> dict = parsed as Dictionary<string, object>;
+                    if (dict != null)
+                        return dict;
+
+                    object[] array = parsed as object[];
+                    if (array != null)
+                    {
+                        var wrapper = new Dictionary<string, object>();
+                        wrapper["data"] = array;
+                        return wrapper;
+                    }
+
+                    return new Dictionary<string, object>();
+                }
+            }
+            catch (WebException ex)
+            {
+                var response = ex.Response as HttpWebResponse;
+                if (response != null)
+                {
+                    if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        errorMessage = "Unauthorized Nexus request. Check the API key.";
+                        return null;
+                    }
+
+                    if (response.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        errorMessage = "Nexus denied this request for the current account, file, or app.";
+                        return null;
+                    }
+
+                    if ((int)response.StatusCode == 429)
+                    {
+                        errorMessage = "Nexus rate limited the request. Wait and try again.";
+                        return null;
+                    }
+                }
+
+                errorMessage = "Nexus request failed: " + ex.Message;
+                return null;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "Nexus request failed: " + ex.Message;
+                return null;
+            }
         }
 
         public NexusUploadPublishResult PublishPackage(NexusUploadDraft draft, out string errorMessage)
@@ -573,6 +825,8 @@ namespace Manager.Core.Services
             {
                 if (file == null)
                     continue;
+                if (!IsManagerDownloadEnabled(file))
+                    continue;
 
                 bool isPrerelease = NexusReleaseClassifier.IsPrerelease(file);
                 if (!includePrerelease && isPrerelease)
@@ -599,6 +853,61 @@ namespace Manager.Core.Services
             }
 
             return best;
+        }
+
+        private List<NexusRemoteModFile> GetLegacyModFiles(string gameDomain, int modId, out string errorMessage)
+        {
+            errorMessage = null;
+            var files = new List<NexusRemoteModFile>();
+            if (string.IsNullOrEmpty(gameDomain) || modId <= 0)
+            {
+                errorMessage = "Invalid Nexus v1 file query.";
+                return files;
+            }
+
+            Dictionary<string, object> data = SendLegacyGet(
+                "/games/" + NormalizeDomain(gameDomain) + "/mods/" + modId + "/files",
+                null,
+                null,
+                out errorMessage);
+
+            if (!string.IsNullOrEmpty(errorMessage) || data == null)
+                return files;
+
+            object[] rawFiles = AsArray(data, "files");
+            if (rawFiles == null)
+                rawFiles = AsArray(data, "data");
+            if (rawFiles == null)
+                return files;
+
+            for (int i = 0; i < rawFiles.Length; i++)
+            {
+                var node = rawFiles[i] as Dictionary<string, object>;
+                NexusRemoteModFile file = ParseLegacyFile(node);
+                if (file != null)
+                    files.Add(file);
+            }
+
+            return files;
+        }
+
+        private static bool HasManagerInstallableFile(List<NexusRemoteModFile> files)
+        {
+            if (files == null)
+                return false;
+
+            for (int i = 0; i < files.Count; i++)
+            {
+                if (IsManagerDownloadEnabled(files[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsManagerDownloadEnabled(NexusRemoteModFile file)
+        {
+            return file != null && file.FileId > 0 && file.Manager > 0;
         }
 
         private static List<NexusModReference> GetDistinctReferences(IEnumerable<NexusModReference> references)
@@ -666,9 +975,27 @@ namespace Manager.Core.Services
             file.Version = ReadString(node, "version");
             file.Category = ReadString(node, "category");
             file.UploadedAtUtc = ReadDateTime(node, "uploaded_at");
-            file.Primary = ReadBool(node, "is_primary") ? 1 : 0;
-            file.Manager = 1;
+            file.Primary = ReadFirstIntLike(node, "primary", "is_primary");
+            file.Manager = ReadFirstIntLike(node, "manager", "allow_mod_manager_download", "mod_manager_download");
             return file;
+        }
+
+        private static NexusRemoteModFile ParseLegacyFile(Dictionary<string, object> node)
+        {
+            if (node == null)
+                return null;
+
+            var file = new NexusRemoteModFile();
+            file.Id = ReadFirstString(node, "uid", "id");
+            file.FileId = ReadFirstIntLike(node, "file_id", "fileId", "game_scoped_id");
+            file.Name = ReadFirstString(node, "name", "file_name");
+            file.Version = ReadFirstString(node, "version", "mod_version");
+            file.UnixDate = ReadFirstIntLike(node, "uploaded_timestamp", "date");
+            file.Category = ReadFirstString(node, "category_name", "category");
+            file.Primary = ReadFirstIntLike(node, "is_primary", "primary");
+            file.Manager = ReadFirstIntLike(node, "manager", "allow_mod_manager_download", "mod_manager_download");
+            file.Uri = ReadFirstString(node, "uri", "URI", "download_url", "downloadUrl");
+            return file.FileId > 0 ? file : null;
         }
 
         private static Dictionary<string, object> AsDictionary(Dictionary<string, object> parent, string key)
@@ -707,6 +1034,40 @@ namespace Manager.Core.Services
             if (value > int.MaxValue || value < int.MinValue)
                 return 0;
             return (int)value;
+        }
+
+        private static int ReadFirstIntLike(Dictionary<string, object> dict, params string[] keys)
+        {
+            if (dict == null || keys == null)
+                return 0;
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                string key = keys[i];
+                if (string.IsNullOrEmpty(key))
+                    continue;
+
+                object value;
+                if (!dict.TryGetValue(key, out value) || value == null)
+                    continue;
+
+                if (value is bool)
+                    return (bool)value ? 1 : 0;
+
+                int parsed = ReadInt(dict, key);
+                if (parsed != 0)
+                    return parsed;
+
+                string text = Convert.ToString(value);
+                if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "yes", StringComparison.OrdinalIgnoreCase))
+                    return 1;
+                if (string.Equals(text, "false", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(text, "no", StringComparison.OrdinalIgnoreCase))
+                    return 0;
+            }
+
+            return 0;
         }
 
         private static long ReadLong(Dictionary<string, object> dict, string key)
@@ -790,6 +1151,120 @@ namespace Manager.Core.Services
             Match match = Regex.Match(url, @"/mods/(?<id>\d+)", RegexOptions.IgnoreCase);
             int parsed;
             return match.Success && int.TryParse(match.Groups["id"].Value, out parsed) ? parsed : 0;
+        }
+
+        private static string BuildLegacyUrl(string relativePath, Dictionary<string, string> query)
+        {
+            string path = relativePath ?? string.Empty;
+            if (!path.StartsWith("/", StringComparison.Ordinal))
+                path = "/" + path;
+
+            if (query == null || query.Count == 0)
+                return NexusApiBaseUrlV1 + path;
+
+            var sb = new StringBuilder();
+            sb.Append(NexusApiBaseUrlV1);
+            sb.Append(path);
+            bool first = true;
+            foreach (var pair in query)
+            {
+                if (string.IsNullOrEmpty(pair.Key) || string.IsNullOrEmpty(pair.Value))
+                    continue;
+
+                sb.Append(first ? "?" : "&");
+                sb.Append(Uri.EscapeDataString(pair.Key));
+                sb.Append("=");
+                sb.Append(Uri.EscapeDataString(pair.Value));
+                first = false;
+            }
+
+            return sb.ToString();
+        }
+
+        private bool TryGetCached<T>(Dictionary<string, CacheEntry<T>> cache, string key, out T value)
+        {
+            value = default(T);
+            if (cache == null || string.IsNullOrEmpty(key))
+                return false;
+
+            lock (_cacheLock)
+            {
+                CacheEntry<T> entry;
+                if (!cache.TryGetValue(key, out entry) || entry == null)
+                    return false;
+
+                if ((DateTime.UtcNow - entry.CreatedUtc) > MetadataCacheTtl)
+                {
+                    cache.Remove(key);
+                    return false;
+                }
+
+                value = entry.Value;
+                return true;
+            }
+        }
+
+        private void StoreCached<T>(Dictionary<string, CacheEntry<T>> cache, string key, T value)
+        {
+            if (cache == null || string.IsNullOrEmpty(key))
+                return;
+
+            lock (_cacheLock)
+            {
+                cache[key] = new CacheEntry<T>
+                {
+                    Value = value,
+                    CreatedUtc = DateTime.UtcNow
+                };
+            }
+        }
+
+        private static string ExtractDownloadUrl(object parsed)
+        {
+            if (parsed == null)
+                return string.Empty;
+
+            object[] array = parsed as object[];
+            if (array != null)
+            {
+                for (int i = 0; i < array.Length; i++)
+                {
+                    string url = ExtractDownloadUrl(array[i]);
+                    if (!string.IsNullOrEmpty(url))
+                        return url;
+                }
+
+                return string.Empty;
+            }
+
+            Dictionary<string, object> dict = parsed as Dictionary<string, object>;
+            if (dict == null)
+                return string.Empty;
+
+            string direct = ReadFirstString(dict, "URI", "uri", "url", "download_url", "downloadUrl");
+            if (!string.IsNullOrEmpty(direct))
+                return direct;
+
+            object nested;
+            if (dict.TryGetValue("data", out nested))
+                return ExtractDownloadUrl(nested);
+
+            return string.Empty;
+        }
+
+        private static string ReadFirstString(Dictionary<string, object> dict, params string[] keys)
+        {
+            if (dict == null || keys == null)
+                return string.Empty;
+
+            for (int i = 0; i < keys.Length; i++)
+            {
+                string value = ReadString(dict, keys[i]);
+                if (!string.IsNullOrEmpty(value))
+                    return value;
+            }
+
+            return string.Empty;
         }
 
         private static string BuildMultipartCompleteXml(IList<string> etags)

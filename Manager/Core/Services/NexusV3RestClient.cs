@@ -157,17 +157,10 @@ namespace Manager.Core.Services
                 string url = BaseUrl + relativePath;
                 var request = (HttpWebRequest)WebRequest.Create(url);
                 request.Method = method;
-                request.Accept = "application/json";
-                request.UserAgent = AppVersionInfo.UserAgent;
                 request.Timeout = 30000;
                 request.ReadWriteTimeout = 30000;
                 request.KeepAlive = false;
-                request.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                request.Headers["application-name"] = "Sheltered Mod Manager";
-                request.Headers["application-version"] = AppVersionInfo.NexusHeader;
-
-                if (!string.IsNullOrEmpty(_apiKey))
-                    request.Headers["apikey"] = _apiKey;
+                NexusRequestHeaders.ApplyJsonHeaders(request, _apiKey);
 
                 if (body != null)
                 {

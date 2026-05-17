@@ -750,15 +750,15 @@ namespace Manager.Views
         {
             if (requestedChoice == NexusInstallFileChoice.Prerelease)
                 return includePrereleaseFiles
-                    ? "Install failed: No beta/prerelease installable file was returned."
+                    ? "Install failed: No beta/prerelease manager-downloadable file was returned."
                     : "Install failed: Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
 
             if (requestedChoice == NexusInstallFileChoice.Stable)
-                return "Install failed: No stable installable file was returned.";
+                return "Install failed: No stable manager-downloadable file was returned.";
 
             return includePrereleaseFiles
-                ? "Install failed: No installable file was returned."
-                : "Install failed: No stable installable file was returned. Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
+                ? "Install failed: No manager-downloadable file was returned."
+                : "Install failed: No stable manager-downloadable file was returned. Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
         }
 
         private NexusInstallFileChoice PromptForPrereleaseInstall(NexusRemoteMod mod, NexusRemoteModFile prereleaseFile, NexusRemoteModFile stableFile)

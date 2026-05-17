@@ -77,11 +77,13 @@ Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with t
 
 - Confirm Visual Studio 2022 MSBuild is used for solution builds; do not use `dotnet build` for this legacy solution.
 - Confirm local Sheltered/Unity reference paths resolve to the intended Steam/GOG or Epic managed assemblies.
+- Use `C:\Program Files (x86)\GOG Galaxy\Games\Sheltered` as the current GOG staging install when copying builds for local release verification.
 - Build `ShelteredModManager.sln` in Release.
 - Run `tools\verify-modapi-boundary.cmd`.
 - Run `tools\verify-shelteredapi-public-surface.cmd`.
 - Run `tools\test-shelteredapi-contracts.cmd`.
 - Run `tools\verify-runtimecompat-rect.cmd`.
+- Run `tools\scan-stale-version-references.cmd`.
 - Smoke test Steam/GOG package against `Sheltered.exe`.
 - Smoke test Epic package against `ShelteredWindows64_EOS.exe`.
 - Verify `SMM\Manager.exe` About tab shows `Version 2.0.0-beta.1`.

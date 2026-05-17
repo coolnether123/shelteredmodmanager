@@ -342,7 +342,7 @@ namespace Manager.Views
             _publishPanel.Dock = DockStyle.Fill;
             _publishPanel.Visible = false;
 
-            AddLabel(_publishPanel, "Nexus does not expose a documented mod-file publish mutation in the bundled API reference. Use this handoff after the draft is saved, ownership is checked, and the package is built.", 14, 14, 640, false);
+            AddLabel(_publishPanel, "Experimental Nexus publish tools can prepare a manual handoff package. Live API publishing should only be used after validation passes and you are ready to update the selected Nexus file.", 14, 14, 640, false);
             _openNexusButton.Text = "Open Nexus Upload Page";
             _openNexusButton.Location = new Point(14, 82);
             _openNexusButton.Size = new Size(180, 32);
@@ -493,6 +493,27 @@ namespace Manager.Views
                 return;
 
             SaveCurrentDraft();
+            ReadDraftFields();
+
+            if (_settings == null || !_settings.EnableNexusIntegration || !_settings.EnableExperimentalPublishTab)
+            {
+                EmitActivity("Publish blocked: enable Nexus integration and the experimental Publish tab first.");
+                return;
+            }
+
+            _currentOwnership = _ownershipService.Verify(_currentMod, _currentDraft, _accountStatus, _ownedMods);
+            NexusUploadValidationReport report = _draftService.Validate(_currentMod, _currentDraft, _currentOwnership);
+            _validationBox.Text = FormatValidation(report);
+            _ownershipLabel.Text = "Ownership: " + _currentOwnership.Summary;
+            if (!report.CanPublish)
+            {
+                EmitActivity("Publish blocked: resolve validation errors before using Nexus API publish.");
+                return;
+            }
+
+            if (!ConfirmApiPublish())
+                return;
+
             _publishApiButton.Enabled = false;
             EmitActivity("Publishing through Nexus v3 API.");
 
@@ -521,6 +542,20 @@ namespace Manager.Views
                 }
                 catch { }
             });
+        }
+
+        private bool ConfirmApiPublish()
+        {
+            string message =
+                "Publish this package through the Nexus API?\n\n" +
+                "Mod: " + (_currentDraft.Name ?? string.Empty) + "\n" +
+                "Nexus mod ID: " + _currentDraft.NexusModId + "\n" +
+                "Version: " + (_currentDraft.Version ?? string.Empty) + "\n" +
+                "Package: " + (_currentDraft.PackagePath ?? string.Empty) + "\n\n" +
+                "This experimental action may create or update a public Nexus file.";
+
+            return MessageBox.Show(this, message, "Confirm Experimental Nexus Publish",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
         }
 
         private void RunVerification()

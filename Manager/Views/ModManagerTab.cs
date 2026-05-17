@@ -54,6 +54,7 @@ namespace Manager.Views
         private string _cachedNexusError = null;
         private bool _hasNexusSyncCache = false;
         private bool _lastIncludeNexusPrereleaseFiles = false;
+        private string _lastNexusCacheSignature = string.Empty;
         private readonly Dictionary<string, NexusSyncCacheEntry> _nexusStateByModId = new Dictionary<string, NexusSyncCacheEntry>(StringComparer.OrdinalIgnoreCase);
         private static readonly TimeSpan NexusSyncCooldown = TimeSpan.FromMinutes(5);
 
@@ -92,9 +93,15 @@ namespace Manager.Views
             _nexusService = nexusService;
 
             bool includeNexusPrereleaseFiles = settings != null && settings.IncludeNexusPrereleaseFiles;
-            if (_hasNexusSyncCache && _lastIncludeNexusPrereleaseFiles != includeNexusPrereleaseFiles)
+            string nexusCacheSignature = BuildNexusCacheSignature(settings);
+            if (_hasNexusSyncCache && (
+                _lastIncludeNexusPrereleaseFiles != includeNexusPrereleaseFiles ||
+                !string.Equals(_lastNexusCacheSignature, nexusCacheSignature, StringComparison.Ordinal)))
+            {
                 InvalidateNexusCache();
+            }
             _lastIncludeNexusPrereleaseFiles = includeNexusPrereleaseFiles;
+            _lastNexusCacheSignature = nexusCacheSignature;
             
             _detailsPanel.InstalledModApiVersion = settings.InstalledModApiVersion;
         }
@@ -355,7 +362,7 @@ namespace Manager.Views
 
         private void RefreshNexusButton_Click(object sender, EventArgs e)
         {
-            RefreshNexusStatusAsync();
+            RefreshNexusStatusAsync(true);
         }
 
         private void DetailsPanel_OpenFolderClicked(object sender, string path)
@@ -580,6 +587,11 @@ namespace Manager.Views
 
         private void RefreshNexusStatusAsync()
         {
+            RefreshNexusStatusAsync(false);
+        }
+
+        private void RefreshNexusStatusAsync(bool forceRefresh)
+        {
             if (_allMods == null || _allMods.Count == 0)
             {
                 _nexusStateByModId.Clear();
@@ -591,7 +603,14 @@ namespace Manager.Views
                 return;
             }
 
-            bool withinCooldown = IsWithinNexusSyncCooldown();
+            if (forceRefresh)
+            {
+                InvalidateNexusCache();
+                if (_nexusService != null)
+                    _nexusService.ClearCachedResponses();
+            }
+
+            bool withinCooldown = !forceRefresh && IsWithinNexusSyncCooldown();
 
             // Resolve local references immediately so details panel can show mapping info.
             var referencesByModId = new Dictionary<string, NexusModReference>(StringComparer.OrdinalIgnoreCase);
@@ -1007,6 +1026,17 @@ namespace Manager.Views
                 return false;
 
             return (DateTime.UtcNow - _lastNexusRemoteSyncUtc) < NexusSyncCooldown;
+        }
+
+        private static string BuildNexusCacheSignature(AppSettings settings)
+        {
+            if (settings == null)
+                return string.Empty;
+
+            return settings.EnableNexusIntegration.ToString() + "|" +
+                (settings.NexusGameDomain ?? string.Empty).Trim().ToLowerInvariant() + "|" +
+                settings.IncludeNexusPrereleaseFiles.ToString() + "|" +
+                (settings.NexusApiKey ?? string.Empty).Trim();
         }
 
         private static int CountModsWithUpdates(List<ModItem> mods)

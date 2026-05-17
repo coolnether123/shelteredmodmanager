@@ -121,10 +121,12 @@
     <Compile Include="Core\Services\NexusReferenceResolver.cs" />
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
+    <Compile Include="Core\Services\NexusRequestHeaders.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
     <Compile Include="Core\Services\NexusUploadDraftService.cs" />
     <Compile Include="Core\Services\NexusUploadOwnershipService.cs" />
     <Compile Include="Core\Services\NexusUploadPackageService.cs" />
+    <Compile Include="Core\Services\ModPackageSafety.cs" />
     <Compile Include="Core\Services\ArchiveExtraction.cs" />
     <Compile Include="Core\Services\NexusInstallService.cs" />
     <!-- Custom Controls -->

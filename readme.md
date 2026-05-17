@@ -292,3 +292,7 @@ Use [Documentation Index](documentation/README.md) for the full map. This table 
 | Patch game code with Harmony | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) |
 | Check exact API signatures | [API Signatures Reference](documentation/API_Signatures_Reference.md) |
 | Review this release | [Beta.1 Release Notes](documentation/Release_Beta.1.md) |
+| Upgrade from older SMM | [SMM 2.0 Beta Migration](documentation/SMM_2.0_Beta_Migration.md) |
+| Known issues | [Known Issues](documentation/Known_Issues.md) |
+| Modder migration | [For Modders: 2.0 API Migration](documentation/For_Modders_2.0_API_Migration.md) |
+| Nexus app registration readiness | [Nexus Official Registration Readiness](documentation/Nexus_Official_Readiness.md) |

@@ -71,9 +71,20 @@ namespace Manager.Core.Services
 
             if (string.IsNullOrEmpty(mod.RootPath) || !Directory.Exists(mod.RootPath))
                 report.AddError("The selected mod folder does not exist.");
-
-            if (!File.Exists(Path.Combine(Path.Combine(mod.RootPath ?? string.Empty, "About"), "About.json")))
-                report.AddError("The mod is missing About/About.json.");
+            else
+            {
+                global::Manager.ModTypes.ModAboutInfo about;
+                string normalizedId;
+                string packageError;
+                if (!ModPackageSafety.ValidateUploadRoot(mod.RootPath, out about, out normalizedId, out packageError))
+                {
+                    report.AddError(packageError);
+                }
+                else if (!string.Equals(normalizedId, ModPackageSafety.NormalizeModId(mod.Id), StringComparison.OrdinalIgnoreCase))
+                {
+                    report.AddError("About.json id does not match the selected local mod id.");
+                }
+            }
 
             if (draft == null)
             {
@@ -87,12 +98,12 @@ namespace Manager.Core.Services
                 report.AddError("A mod name is required.");
             if (string.IsNullOrEmpty(draft.Version))
                 report.AddError("A version is required.");
+            if (string.IsNullOrEmpty(draft.PackagePath) || !File.Exists(draft.PackagePath))
+                report.AddError("Build a package before publishing through the Nexus API.");
             if (string.IsNullOrEmpty(draft.Summary))
                 report.AddWarning("Add a short summary before posting to Nexus.");
             if (string.IsNullOrEmpty(draft.Description))
                 report.AddWarning("Add a longer description before posting to Nexus.");
-            if (!string.IsNullOrEmpty(draft.PackagePath) && !File.Exists(draft.PackagePath))
-                report.AddWarning("The saved package path no longer exists. Rebuild the package.");
             if (!IsValidFileCategory(draft.FileCategory))
                 report.AddError("File category must be main, optional, or miscellaneous.");
             if (draft.NexusModId <= 0)

@@ -205,7 +205,7 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Font = new Font("Segoe UI", 9f);
             _nexusDownloadSummaryLabel.AutoSize = false;
             _nexusDownloadSummaryLabel.Size = new Size(680, 38);
-            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and can still be limited by Nexus account and app approval.";
+            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
 
             _nexusAdvancedToggleLink = new LinkLabel();
             _nexusAdvancedToggleLink.Text = "Show Advanced Nexus Options";
@@ -249,7 +249,7 @@ namespace Manager.Views
             _helpToolTip.InitialDelay = 350;
             _helpToolTip.ReshowDelay = 200;
             _helpToolTip.ShowAlways = true;
-            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads; browsing and update checks do not require it.");
+            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads and account validation; browsing and update checks do not require it.");
             _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
             _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
             _helpToolTip.SetToolTip(_enableExperimentalPublishCheckBox, "Shows the experimental Publish tab for preparing Nexus upload drafts and packages.");
@@ -436,6 +436,7 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Enabled = enabled;
             _nexusAdvancedToggleLink.Enabled = enabled;
             _nexusAdvancedPanel.Enabled = enabled;
+            _enableExperimentalPublishCheckBox.Enabled = enabled;
             _nexusDomainLabel.Enabled = enabled;
             _nexusDomainTextBox.Enabled = enabled;
             _managerNexusModIdLabel.Enabled = enabled;
@@ -634,7 +635,7 @@ namespace Manager.Views
             if (_nexusAccountStatus == null)
             {
                 _nexusAccountSummaryLabel.Text = "Nexus account: not checked yet.";
-                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and can still be limited by Nexus account and app approval.";
+                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
                 return;
             }
 

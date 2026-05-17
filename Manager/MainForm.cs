@@ -603,6 +603,28 @@ namespace Manager
 
             // Start restart poll timer
             StartRestartPollTimer();
+
+            BeginInvoke((MethodInvoker)ShowReleaseNoticeIfNeeded);
+        }
+
+        private void ShowReleaseNoticeIfNeeded()
+        {
+            if (_settings == null)
+                return;
+
+            if (string.Equals(_settings.LastSeenReleaseNoticeVersion, APP_VERSION, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string message =
+                "Sheltered Mod Manager 2.0 Beta uses a new mod system.\n\n" +
+                "Mods made for SMM 1.2.2 or the old 1.3 beta line may not work until they are rebuilt for ModAPI/ShelteredAPI 2.0.\n\n" +
+                "Use 2.0 versions of mods when available, back up saves before switching, and check save/mod compatibility warnings before loading old saves.";
+
+            MessageBox.Show(this, message, "SMM 2.0 Beta Compatibility Notice",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+
+            _settings.LastSeenReleaseNoticeVersion = APP_VERSION;
+            SaveSettingsFromUi();
         }
 
         private void NexusTab_InstallCompleted()
@@ -660,7 +682,7 @@ namespace Manager
             if (_tabControl == null || _nexusUploadPage == null)
                 return;
 
-            bool shouldShow = _settings != null && _settings.EnableExperimentalPublishTab;
+            bool shouldShow = _settings != null && _settings.EnableNexusIntegration && _settings.EnableExperimentalPublishTab;
             bool isShown = _tabControl.TabPages.Contains(_nexusUploadPage);
 
             if (shouldShow == isShown)
@@ -1439,6 +1461,8 @@ namespace Manager
                 changes.Add("EnableNexusIntegration");
             if (previous.EnableExperimentalPublishTab != current.EnableExperimentalPublishTab)
                 changes.Add("EnableExperimentalPublishTab");
+            if (!string.Equals(previous.LastSeenReleaseNoticeVersion, current.LastSeenReleaseNoticeVersion, StringComparison.OrdinalIgnoreCase))
+                changes.Add("LastSeenReleaseNoticeVersion");
             if (!string.Equals(previous.NexusGameDomain, current.NexusGameDomain, StringComparison.OrdinalIgnoreCase))
                 changes.Add("NexusGameDomain");
             if (!string.Equals(previous.NexusApiKey, current.NexusApiKey, StringComparison.Ordinal))
