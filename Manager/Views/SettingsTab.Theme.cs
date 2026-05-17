@@ -27,6 +27,14 @@ namespace Manager.Views
             _autoCondenseCombo.BackColor = Color.FromArgb(60, 60, 62);
             _autoCondenseCombo.ForeColor = Color.White;
             _autoCondenseCombo.FlatStyle = FlatStyle.Flat;
+            _saveBackupsLabel.ForeColor = Color.White;
+            _saveBackupRetentionLabel.ForeColor = Color.White;
+            _saveBackupRetentionCombo.BackColor = Color.FromArgb(60, 60, 62);
+            _saveBackupRetentionCombo.ForeColor = Color.White;
+            _saveBackupRetentionCombo.FlatStyle = FlatStyle.Flat;
+            _saveBackupRetentionCountLabel.ForeColor = Color.White;
+            _saveBackupRetentionCountNumeric.BackColor = Color.FromArgb(60, 60, 62);
+            _saveBackupRetentionCountNumeric.ForeColor = Color.White;
 
             _nexusLabel.ForeColor = Color.White;
             _enableNexusCheckBox.ForeColor = Color.White;
@@ -73,6 +81,14 @@ namespace Manager.Views
             _autoCondenseCombo.BackColor = SystemColors.Window;
             _autoCondenseCombo.ForeColor = SystemColors.WindowText;
             _autoCondenseCombo.FlatStyle = FlatStyle.Standard;
+            _saveBackupsLabel.ForeColor = SystemColors.ControlText;
+            _saveBackupRetentionLabel.ForeColor = SystemColors.ControlText;
+            _saveBackupRetentionCombo.BackColor = SystemColors.Window;
+            _saveBackupRetentionCombo.ForeColor = SystemColors.WindowText;
+            _saveBackupRetentionCombo.FlatStyle = FlatStyle.Standard;
+            _saveBackupRetentionCountLabel.ForeColor = SystemColors.ControlText;
+            _saveBackupRetentionCountNumeric.BackColor = SystemColors.Window;
+            _saveBackupRetentionCountNumeric.ForeColor = SystemColors.WindowText;
 
             _nexusLabel.ForeColor = SystemColors.ControlText;
             _enableNexusCheckBox.ForeColor = SystemColors.ControlText;

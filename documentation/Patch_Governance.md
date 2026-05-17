@@ -1,13 +1,13 @@
 # Patch Governance
 
-This document defines how Harmony patches are governed inside SMM during the ModAPI 1.3 Beta.3 line.
+This document defines how Harmony patches are governed inside SMM during the ModAPI 2.0 Beta.1 line.
 
 ## Goals
 
 - keep patch ownership explicit
 - keep invasive behavior routed through owned subsystems
 - make patch activation auditable
-- keep the 1.3 public API routed through explicit ModAPI and ShelteredAPI ownership boundaries
+- keep the 2.0 public API routed through explicit ModAPI and ShelteredAPI ownership boundaries
 
 ## Domains
 
@@ -68,7 +68,7 @@ The registry honors these controls:
 
 ## Compatibility policy
 
-During ModAPI 1.3 Beta.3:
+During ModAPI 2.0 Beta.1:
 
 - keep existing public ModAPI patch-related behavior working
 - prefer internal refactors over public API moves

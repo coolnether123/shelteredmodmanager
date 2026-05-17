@@ -144,6 +144,10 @@
     <Compile Include="Saves\Paging\SaveVerification.cs" />
     <Compile Include="Saves\Paging\SaveDetailsWindow.cs" />
     <Compile Include="Saves\Paging\CondensePromptDialog.cs" />
+    <Compile Include="Saves\SaveBackups\SaveBackupLineageStore.cs" />
+    <Compile Include="Saves\SaveBackups\SaveBackupModels.cs" />
+    <Compile Include="Saves\SaveBackups\SaveBackupRepository.cs" />
+    <Compile Include="Saves\SaveBackups\SaveBackupService.cs" />
     <Compile Include="Saves\CRC32.cs" />
     <Compile Include="Saves\DirectoryProvider.cs" />
     <Compile Include="Saves\Events.cs" />

@@ -1,22 +1,24 @@
-# Beta.3 Release Notes
+# 2.0 Beta.1 Release Notes
 
-This document is the release-facing checklist for Sheltered Mod Manager v1.3 Beta.3.
+This document is the release-facing checklist for Sheltered Mod Manager v2.0 Beta.1.
+It supersedes the previous Beta.3 release checklist for the public 2.0 release-candidate line.
 
 ## Release Identity
 
-- Public release label: `v1.3.0-beta.3`
-- Package/application version: `1.3.0-beta.3`
-- Assembly binding version: `1.3.0.0`
-- File version: `1.3.0.3`
+- Public release label: `v2.0.0-beta.1`
+- Package/application version: `2.0.0-beta.1`
+- Assembly binding version: `2.0.0.0`
+- File version: `2.0.0.1`
 
-`AssemblyVersion` stays at `1.3.0.0` so mods built against the v1.3 API line keep loading. `AssemblyInformationalVersion` and manager-facing strings carry the beta.3 label.
+`AssemblyVersion` moves to `2.0.0.0` for the public major compatibility break. `AssemblyInformationalVersion` and manager-facing strings carry the beta.1 label.
 
 ## User-Facing Scope
 
 - Split API surface: neutral `ModAPI.dll` plus Sheltered-specific `ShelteredAPI.dll`.
-- Custom scenario browser, XML packs, authoring tools, dependency lockout, trigger runtime, scheduled effects, and win/loss support. This surface is experimental for Beta.3 testing.
+- Custom scenario browser, XML packs, authoring tools, dependency lockout, trigger runtime, scheduled effects, and win/loss support. This surface is experimental for Beta.1 testing.
 - Custom-scenario save APIs now reject reserved built-in save ids such as `Standard`, `Vanilla.Surrounded`, `Vanilla.Stasis`, and draft storage. Mods should use the explicit `ShelteredSaves.*Standard` helpers for built-in save buckets.
 - Scenario authoring writes `scenario.xml` through same-directory temp files, parse validation, replace, and `.bak` recovery files so failed writes preserve the previous XML.
+- Save backup lineage support records manager-created save backups so users can recover from failed save writes or compatibility testing regressions.
 - Rebindable vanilla and mod-defined keybindings with conflict handling and persistence.
 - Desktop and in-game mod manager improvements, including mod metadata, load order, Nexus discovery, install file-set verification/rollback, and compatibility status.
 - Unity log filtering is severity-aware: errors, asserts, and exceptions are never suppressed, and benign warning/log suppression is counted for diagnostics.
@@ -24,23 +26,23 @@ This document is the release-facing checklist for Sheltered Mod Manager v1.3 Bet
 
 ## Beta Safety And Compatibility
 
-- This is a public beta, not stable 1.3.
-- Players should back up saves before testing Beta.3 packages.
-- The custom scenario browser/editor and Stasis/Surrounded expanded saves remain active Beta.3 testing surfaces.
-- Family Expansion and Deep Expansion should be treated as not compatible until rebuilt and smoke tested against ModAPI/ShelteredAPI 1.3 Beta.3.
+- This is a public beta, not stable 2.0.
+- Players should back up saves before testing Beta.1 packages.
+- The custom scenario browser/editor and Stasis/Surrounded expanded saves remain active Beta.1 testing surfaces.
+- Family Expansion and Deep Expansion should be treated as not compatible until rebuilt and smoke tested against ModAPI/ShelteredAPI 2.0 Beta.1.
 - Some 1.2.2 mods may break because Sheltered-specific API surface moved from `ModAPI.dll` to `ShelteredAPI.dll`.
 - Bug reports should include storefront/version, mod list, save type, custom scenario editor toggle state, reproduction steps, and `SMM\mod_manager.log`.
 
 ## Documentation Readiness
 
-- README installation, compatibility, uninstall, mod structure, authoring path, and support links reviewed for Beta.3.
-- Developer guides now identify the current surface as v1.3 Beta.3.
-- API signature and architecture docs keep the v1.3 breaking-line warning visible.
+- README installation, compatibility, uninstall, mod structure, authoring path, and support links reviewed for Beta.1.
+- Developer guides now identify the current surface as v2.0 Beta.1.
+- API signature and architecture docs keep the v2.0 breaking-line warning visible.
 - Release-critical guides are linked from the README documentation table.
 
 ## Current All-Mod Launch Timing
 
-Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with the Epic x64 build, ModAPI `1.3.0`, ShelteredAPI `1.3.0.0`, and every mod currently discovered by Sheltered enabled.
+Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with the Epic x64 build, ModAPI `2.0.0.0`, ShelteredAPI `2.0.0.0`, and every mod currently discovered by Sheltered enabled.
 
 - Discovered mods: 17.
 - Loaded plugins: 17.
@@ -82,6 +84,6 @@ Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with t
 - Run `tools\verify-runtimecompat-rect.cmd`.
 - Smoke test Steam/GOG package against `Sheltered.exe`.
 - Smoke test Epic package against `ShelteredWindows64_EOS.exe`.
-- Verify `SMM\Manager.exe` About tab shows `Version 1.3.0-beta.3`.
-- Verify installed API versions show `1.3.0.3` in the manager.
-- Verify the Family Expansion mod package has been rebuilt against ModAPI/ShelteredAPI 1.3 Beta.3 before listing it as compatible.
+- Verify `SMM\Manager.exe` About tab shows `Version 2.0.0-beta.1`.
+- Verify installed API versions show `2.0.0.1` in the manager.
+- Verify the Family Expansion mod package has been rebuilt against ModAPI/ShelteredAPI 2.0 Beta.1 before listing it as compatible.

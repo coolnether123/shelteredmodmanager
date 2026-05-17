@@ -1,6 +1,6 @@
 # Input Keybindings Guide
 
-The 1.3 Beta.3 line is a breaking clean API line.
+The 2.0 Beta.1 line is a breaking clean API line.
 
 ## Assembly Rule
 
@@ -14,7 +14,7 @@ The 1.3 Beta.3 line is a breaking clean API line.
 - Typed Sheltered escape hatches are explicit.
 - Future migrations should happen behind facades.
 
-Sheltered Mod Manager v1.3 Beta.3 exposes rebindable controls through a split runtime:
+Sheltered Mod Manager v2.0 Beta.1 exposes rebindable controls through a split runtime:
 
 - `ModAPI.dll` owns neutral input contracts: `ModInputAction`, `InputBinding`, `InputActionRegistry`, scroll/touch input service contracts, and action query helpers.
 - `ShelteredAPI.dll` owns Sheltered integration: vanilla action registration, `PlatformInput_PC` patches, settings UI, key validation, conflict handling, persistence, and runtime input tuning.

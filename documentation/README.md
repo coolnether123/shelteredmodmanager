@@ -12,7 +12,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Loader and boundary details | [ModAPI Architecture Guide](ModAPI_Architecture_guide.md) |
 | Exact API signatures | [API Signatures Reference](API_Signatures_Reference.md) |
 | Common failures and log patterns | [API Troubleshooting](API_Troubleshooting.md) |
-| Build and verify Dev/1.3 locally | [README build section](../readme.md#building-from-source) |
+| Build and verify Dev/2.0 locally | [README build section](../readme.md#building-from-source) |
 
 ## Task Guides
 
@@ -37,7 +37,7 @@ Use this index to pick the shortest useful guide. For exact callable APIs, use [
 | Transpiler safety flags | [Transpiler Safety Settings](Transpiler_Safety_Settings.md) |
 | Public API boundary decisions | [ModAPI Sheltered Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md) |
 | Developer comment style | [Developer Commenting Standard](Developer_Commenting_Standard.md) |
-| Beta.3 release scope | [Beta.3 Release Notes](Release_Beta.3.md) |
+| Beta.1 release scope | [Beta.1 Release Notes](Release_Beta.1.md) |
 | Local build prerequisites | [README build section](../readme.md#building-from-source) |
 
 ## Assembly Rule

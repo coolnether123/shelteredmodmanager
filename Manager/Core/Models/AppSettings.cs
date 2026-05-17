@@ -8,6 +8,10 @@ namespace Manager.Core.Models
     /// </summary>
     public class AppSettings
     {
+        public const int SaveBackupRetentionAlways = -1;
+        public const int SaveBackupRetentionDisabled = 0;
+        public const int DefaultSaveBackupRetention = 3;
+
         // Paths
         private string _gamePath = string.Empty;
         private string _modsPath = string.Empty;
@@ -23,6 +27,7 @@ namespace Manager.Core.Models
         private string _installedModApiVersion;
         private string _installedShelteredApiVersion;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
+        private int _saveBackupRetention = DefaultSaveBackupRetention; // 0 disables, positive keeps N, -1 keeps all
         private bool _enableNexusIntegration = true;
         private string _nexusGameDomain = "sheltered";
         private string _nexusApiKey = string.Empty;
@@ -126,6 +131,12 @@ namespace Manager.Core.Models
             set { _autoCondenseSaves = value; } 
         }
 
+        public int SaveBackupRetention
+        {
+            get { return _saveBackupRetention; }
+            set { _saveBackupRetention = value; }
+        }
+
         public bool EnableNexusIntegration
         {
             get { return _enableNexusIntegration; }
@@ -204,6 +215,34 @@ namespace Manager.Core.Models
         public bool IsModsPathValid 
         { 
             get { return !string.IsNullOrEmpty(ModsPath) && System.IO.Directory.Exists(ModsPath); } 
+        }
+
+        public static int ParseSaveBackupRetention(string raw, int fallback)
+        {
+            string value = (raw ?? string.Empty).Trim().ToLowerInvariant();
+            if (value.Length == 0)
+                return fallback;
+
+            if (value == "none" || value == "disabled" || value == "disable" || value == "off" || value == "false" || value == "0")
+                return SaveBackupRetentionDisabled;
+
+            if (value == "always" || value == "forever" || value == "all" || value == "unlimited")
+                return SaveBackupRetentionAlways;
+
+            int count;
+            if (int.TryParse(value, out count))
+                return count <= 0 ? SaveBackupRetentionDisabled : count;
+
+            return fallback;
+        }
+
+        public static string FormatSaveBackupRetention(int value)
+        {
+            if (value < 0)
+                return "always";
+            if (value == 0)
+                return "none";
+            return value.ToString();
         }
     }
 }

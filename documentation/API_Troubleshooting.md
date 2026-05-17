@@ -4,7 +4,7 @@ Use this page for common runtime failures and the exact log signatures to check.
 
 ## Compatibility
 
-Applies to the current 1.3 breaking clean API line.
+Applies to the current 2.0 breaking clean API line.
 
 ## Assembly Rule
 

@@ -1,10 +1,10 @@
-# ShelteredAPI Content Guide (v1.3 Beta.3)
+# ShelteredAPI Content Guide (v2.0 Beta.1)
 
-This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 1.3 breaking clean API line.
+This guide covers the current `ShelteredAPI.Content` surface for item, recipe, loot, asset, and content-localization work in the 2.0 breaking clean API line.
 
 Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
-> Dev/API-preview warning: runtime stores and cooking stations are preview behavior in the current 1.3 line. Use them for mod-author testing, but expect small signature or behavior changes before this surface is declared stable.
+> Dev/API-preview warning: runtime stores and cooking stations are preview behavior in the current 2.0 line. Use them for mod-author testing, but expect small signature or behavior changes before this surface is declared stable.
 
 ## Assembly Rule
 

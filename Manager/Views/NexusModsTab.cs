@@ -643,6 +643,9 @@ namespace Manager.Views
             if (selected == null)
                 return;
 
+            var selectedItem = GetSelectedItem();
+            NexusInstallTargetContext targetContext = NexusInstallTargetContext.FromInstalledMod(selectedItem != null ? selectedItem.LocalMod : null);
+
             _installSelectedButton.Enabled = false;
             EmitActivity("Installing from Nexus: " + selected.Name + ".");
 
@@ -690,7 +693,7 @@ namespace Manager.Views
                     return;
                 }
 
-                var result = _installService.DownloadAndInstall(downloadUrl, _settings.ModsPath, selected, file, out error);
+                var result = _installService.DownloadAndInstall(downloadUrl, _settings.ModsPath, selected, file, targetContext, out error);
                 if (result == null || !string.IsNullOrEmpty(error))
                 {
                     FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."));

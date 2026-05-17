@@ -1,6 +1,6 @@
-# ShelteredAPI Actors Guide (v1.3 Beta.3)
+# ShelteredAPI Actors Guide (v2.0 Beta.1)
 
-The 1.3 Beta.3 line is a breaking clean API line.
+The 2.0 Beta.1 line is a breaking clean API line.
 
 ## Assembly Rule
 

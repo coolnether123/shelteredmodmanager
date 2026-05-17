@@ -1,10 +1,10 @@
 ![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
-# Sheltered Mod Manager v1.3 Beta.3
+# Sheltered Mod Manager v2.0 Beta.1
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![ModAPI Version](https://img.shields.io/badge/ModAPI-v1.3_Beta.3-blue)
+![ModAPI Version](https://img.shields.io/badge/ModAPI-v2.0_Beta.1-blue)
 
 > **Credit:** Originally created by benjaminfoo (2019)
 > **Maintained by:** Coolnether123 (2025-Present)
@@ -42,12 +42,12 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 ![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
 *The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
 
-### New in ModAPI v1.3 Beta.3
+### New in ModAPI v2.0 Beta.1
 
-The 1.3 line is a breaking clean API line. It separates the neutral modding framework from Sheltered-specific runtime integrations and expands the in-game authoring surface.
+The 2.0 line is a breaking clean API line. It separates the neutral modding framework from Sheltered-specific runtime integrations and expands the in-game authoring surface.
 
 - **ModAPI/ShelteredAPI split:** `ModAPI.dll` owns neutral contracts; `ShelteredAPI.dll` owns Sheltered content, saves, input, UI, events, actors, and scenarios.
-- **Custom scenarios (experimental):** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes. Beta.3 testers should treat this as an active testing surface.
+- **Custom scenarios (experimental):** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes. Beta.1 testers should treat this as an active testing surface.
 - **Release-gated safety fixes:** custom-scenario save APIs reject built-in save ids, scenario XML saves use temp/validate/replace with backups, Unity log filtering never suppresses errors/asserts/exceptions, and Nexus installs verify copied files before success.
 - **Rebindable controls:** Vanilla Sheltered actions and mod-defined input actions share one keybinding UI with persisted bindings and conflict handling.
 - **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
@@ -59,9 +59,9 @@ The API is in beta. See the documentation for current capabilities.
 
 ### Beta Safety Notes
 
-This release line is a public beta, not stable 1.3. Back up saves before testing, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
+This release line is a public beta, not stable 2.0. Back up saves before testing, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
 
-Family Expansion and Deep Expansion need rebuilt/tested packages before they should be listed as compatible with Beta.3. Some 1.2.2 mods may need migration because Sheltered-specific APIs moved from `ModAPI.dll` to `ShelteredAPI.dll`.
+Family Expansion and Deep Expansion need rebuilt/tested packages before they should be listed as compatible with Beta.1. Some 1.2.2 mods may need migration because Sheltered-specific APIs moved from `ModAPI.dll` to `ShelteredAPI.dll`.
 
 ### Assembly Rule
 
@@ -178,7 +178,7 @@ Prerequisites:
 
 Current project files contain local `HintPath` fallbacks for the maintainer's Steam/Epic installs. If your Sheltered install is elsewhere, retarget those references locally before building.
 
-Build command used for Dev/1.3 verification:
+Build command used for Dev/2.0 verification:
 
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" ShelteredModManager.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU" /v:minimal
@@ -291,4 +291,4 @@ Use [Documentation Index](documentation/README.md) for the full map. This table 
 | Author custom scenarios | [Custom Scenarios Guide](documentation/Custom_Scenarios_Guide.md) |
 | Patch game code with Harmony | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) |
 | Check exact API signatures | [API Signatures Reference](documentation/API_Signatures_Reference.md) |
-| Review this release | [Beta.3 Release Notes](documentation/Release_Beta.3.md) |
+| Review this release | [Beta.1 Release Notes](documentation/Release_Beta.1.md) |

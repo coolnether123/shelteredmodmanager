@@ -1,6 +1,6 @@
-# ModAPI + ShelteredAPI v1.3 Beta.3 API Signatures Reference
+# ModAPI + ShelteredAPI v2.0 Beta.1 API Signatures Reference
 
-This is the source-of-truth signature sheet for the current code in this repo. The 1.3 Beta.3 line is a breaking clean API line.
+This is the source-of-truth signature sheet for the current code in this repo. The 2.0 Beta.1 line is a breaking clean API line.
 
 Use this file for copy/paste signatures and type names. For workflow guidance, start with [Documentation Index](README.md).
 
@@ -24,7 +24,7 @@ Use this file for copy/paste signatures and type names. For workflow guidance, s
 - Always reference `ModAPI.dll`.
 - Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
 
-> Dev/API-preview warning: the runtime UI store and cooking station contracts are preview APIs in this 1.3 line. Treat the signatures below as the current copy/paste reference, but allow for small changes before this surface is declared stable.
+> Dev/API-preview warning: the runtime UI store and cooking station contracts are preview APIs in this 2.0 line. Treat the signatures below as the current copy/paste reference, but allow for small changes before this surface is declared stable.
 
 ## API Stability Rules
 
@@ -1041,7 +1041,7 @@ ShelteredCooking.RegisterStation(new CookingStationRegistration
 
 `ForFreezer(...)` and `FindNearestFreezer(...)` are adapters over vanilla `Obj_Freezer` data and preserve vanilla limits: meat and desperate meat only. `ForObject(...)` and `FindNearestObjectStore(...)` create mod-owned stores keyed to world objects, which is the supported path for fridge-like custom storage. ShelteredAPI avoids patching `Obj_Freezer` to accept custom item types.
 
-`ItemDefinition` fluent localization APIs (ShelteredAPI v1.3):
+`ItemDefinition` fluent localization APIs (ShelteredAPI v2.0):
 
 ```csharp
 public ItemDefinition WithDisplayName(string name);           // legacy key-or-text auto-detection
@@ -1052,7 +1052,7 @@ public ItemDefinition WithDisplayNameText(string text);       // explicit litera
 public ItemDefinition WithDescriptionText(string text);       // explicit literal text
 ```
 
-Localization behavior for content injection (ShelteredAPI v1.3):
+Localization behavior for content injection (ShelteredAPI v2.0):
 - `m_NameLocalizationKey` / `m_DescLocalizationKey` are always set to keys (never raw text).
 - For `...Text(...)`, ShelteredAPI auto-generates keys like `shelteredapi.<modid>.<itemid>.name|desc` and registers values in its custom table.
 - Legacy `WithDisplayName/WithDescription` values are interpreted as `key` if they look like keys (`.` and no spaces), otherwise as literal text.
@@ -1454,7 +1454,7 @@ public static class GameHelperExtensions
 }
 ```
 
-## Background Processing (v1.3)
+## Background Processing (v2.0)
 
 ```csharp
 // ModAPI.Core.ModThreads

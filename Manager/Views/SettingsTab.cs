@@ -19,6 +19,11 @@ namespace Manager.Views
         private CheckBox _darkModeCheckBox;
         private Label _autoCondenseLabel;
         private ComboBox _autoCondenseCombo;
+        private Label _saveBackupsLabel;
+        private Label _saveBackupRetentionLabel;
+        private ComboBox _saveBackupRetentionCombo;
+        private Label _saveBackupRetentionCountLabel;
+        private NumericUpDown _saveBackupRetentionCountNumeric;
         private Label _nexusLabel;
         private CheckBox _enableNexusCheckBox;
         private Label _nexusApiKeyLabel;
@@ -123,6 +128,34 @@ namespace Manager.Views
             _autoCondenseCombo.Items.AddRange(new object[] { "Ask each time", "Always organize", "Never organize" });
             _autoCondenseCombo.SelectedIndex = 0;
 
+            _saveBackupsLabel = new Label();
+            _saveBackupsLabel.Text = "Save Backups";
+            _saveBackupsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            _saveBackupsLabel.AutoSize = true;
+
+            _saveBackupRetentionLabel = new Label();
+            _saveBackupRetentionLabel.Text = "Backup Retention:";
+            _saveBackupRetentionLabel.Font = new Font("Segoe UI", 10f);
+            _saveBackupRetentionLabel.AutoSize = true;
+
+            _saveBackupRetentionCombo = new ComboBox();
+            _saveBackupRetentionCombo.Font = new Font("Segoe UI", 10f);
+            _saveBackupRetentionCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+            _saveBackupRetentionCombo.Items.AddRange(new object[] { "Keep limited snapshots", "No automatic backups", "Keep all snapshots" });
+            _saveBackupRetentionCombo.SelectedIndex = 0;
+
+            _saveBackupRetentionCountLabel = new Label();
+            _saveBackupRetentionCountLabel.Text = "Snapshots per save:";
+            _saveBackupRetentionCountLabel.Font = new Font("Segoe UI", 10f);
+            _saveBackupRetentionCountLabel.AutoSize = true;
+
+            _saveBackupRetentionCountNumeric = new NumericUpDown();
+            _saveBackupRetentionCountNumeric.Font = new Font("Segoe UI", 10f);
+            _saveBackupRetentionCountNumeric.Minimum = 1;
+            _saveBackupRetentionCountNumeric.Maximum = 999;
+            _saveBackupRetentionCountNumeric.Value = 3;
+            _saveBackupRetentionCountNumeric.Width = 80;
+
             _nexusLabel = new Label();
             _nexusLabel.Text = "Nexus";
             _nexusLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -214,6 +247,8 @@ namespace Manager.Views
             _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
             _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
             _helpToolTip.SetToolTip(_nexusAdvancedToggleLink, "Show internal Nexus settings that most players should never need to edit.");
+            _helpToolTip.SetToolTip(_saveBackupRetentionCombo, "Controls automatic pre-overwrite save snapshots stored under Mods/ModAPI/Backups/Saves.");
+            _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
 
             _separator = new Panel();
             _separator.Height = 1;
@@ -300,6 +335,11 @@ namespace Manager.Views
             _contentPanel.Controls.Add(_darkModeCheckBox);
             _contentPanel.Controls.Add(_autoCondenseLabel);
             _contentPanel.Controls.Add(_autoCondenseCombo);
+            _contentPanel.Controls.Add(_saveBackupsLabel);
+            _contentPanel.Controls.Add(_saveBackupRetentionLabel);
+            _contentPanel.Controls.Add(_saveBackupRetentionCombo);
+            _contentPanel.Controls.Add(_saveBackupRetentionCountLabel);
+            _contentPanel.Controls.Add(_saveBackupRetentionCountNumeric);
             _contentPanel.Controls.Add(_nexusLabel);
             _contentPanel.Controls.Add(_enableNexusCheckBox);
             _contentPanel.Controls.Add(_nexusApiKeyLabel);
@@ -343,6 +383,8 @@ namespace Manager.Views
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
             _includeNexusPrereleaseCheckBox.CheckedChanged += IncludeNexusPrereleaseCheckBox_CheckedChanged;
             _autoCondenseCombo.SelectedIndexChanged += AutoCondenseCombo_SelectedIndexChanged;
+            _saveBackupRetentionCombo.SelectedIndexChanged += SaveBackupRetentionCombo_SelectedIndexChanged;
+            _saveBackupRetentionCountNumeric.ValueChanged += SaveBackupRetentionCountNumeric_ValueChanged;
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
@@ -483,6 +525,7 @@ namespace Manager.Views
                 else if (condensePref == "no" || condensePref == "false") _autoCondenseCombo.SelectedIndex = 2;
                 else _autoCondenseCombo.SelectedIndex = 0;
 
+                ApplySaveBackupRetentionToUi(_settings.SaveBackupRetention);
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
                 _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
@@ -515,6 +558,7 @@ namespace Manager.Views
             if (_autoCondenseCombo.SelectedIndex == 1) choice = "yes";
             else if (_autoCondenseCombo.SelectedIndex == 2) choice = "no";
             _settings.AutoCondenseSaves = choice;
+            _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
 
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
@@ -526,6 +570,52 @@ namespace Manager.Views
                 _settings.ManagerNexusModId = managerModId;
             else
                 _settings.ManagerNexusModId = 0;
+        }
+
+        private void ApplySaveBackupRetentionToUi(int retention)
+        {
+            bool previousSuppress = _suppressEvents;
+            _suppressEvents = true;
+            try
+            {
+                if (retention == AppSettings.SaveBackupRetentionDisabled)
+                {
+                    _saveBackupRetentionCombo.SelectedIndex = 1;
+                }
+                else if (retention < 0)
+                {
+                    _saveBackupRetentionCombo.SelectedIndex = 2;
+                }
+                else
+                {
+                    _saveBackupRetentionCombo.SelectedIndex = 0;
+                    _saveBackupRetentionCountNumeric.Value = Math.Max(
+                        _saveBackupRetentionCountNumeric.Minimum,
+                        Math.Min(_saveBackupRetentionCountNumeric.Maximum, retention));
+                }
+
+                UpdateSaveBackupRetentionInputs();
+            }
+            finally
+            {
+                _suppressEvents = previousSuppress;
+            }
+        }
+
+        private int ReadSaveBackupRetentionFromUi()
+        {
+            if (_saveBackupRetentionCombo.SelectedIndex == 1)
+                return AppSettings.SaveBackupRetentionDisabled;
+            if (_saveBackupRetentionCombo.SelectedIndex == 2)
+                return AppSettings.SaveBackupRetentionAlways;
+            return (int)_saveBackupRetentionCountNumeric.Value;
+        }
+
+        private void UpdateSaveBackupRetentionInputs()
+        {
+            bool limited = _saveBackupRetentionCombo.SelectedIndex == 0;
+            _saveBackupRetentionCountLabel.Enabled = limited;
+            _saveBackupRetentionCountNumeric.Enabled = limited;
         }
 
         private void UpdateNexusStatusLabels()
@@ -667,6 +757,25 @@ namespace Manager.Views
             if (_autoCondenseCombo.SelectedIndex == 1) choice = "yes";
             else if (_autoCondenseCombo.SelectedIndex == 2) choice = "no";
             _settings.AutoCondenseSaves = choice;
+            TriggerSave();
+        }
+
+        private void SaveBackupRetentionCombo_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            UpdateSaveBackupRetentionInputs();
+            if (_suppressEvents || _settings == null)
+                return;
+
+            _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
+            TriggerSave();
+        }
+
+        private void SaveBackupRetentionCountNumeric_ValueChanged(object sender, EventArgs e)
+        {
+            if (_suppressEvents || _settings == null)
+                return;
+
+            _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
             TriggerSave();
         }
 

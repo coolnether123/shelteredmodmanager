@@ -4,6 +4,7 @@ using System.IO;
 using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Util;
+using ShelteredAPI.Saves.Backups;
 
 namespace ShelteredAPI.Saves
 {
@@ -303,14 +304,17 @@ namespace ShelteredAPI.Saves
             var entry = GetSave(saveId);
             if (entry == null) return null;
 
+            SaveBackupService.BackupCustomEntryBeforeOverwrite(entry);
 
-            if (opts != null && !string.IsNullOrEmpty(opts.name)) 
+            if (opts != null && !string.IsNullOrEmpty(opts.name))
                 entry.name = NameSanitizer.SanitizeName(opts.name);
             entry.updatedAt = DateTime.UtcNow.ToString("o");
             
             if (xmlBytes != null)
             {
-                WriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc);
+                if (!TryWriteEntryFile(entry.absoluteSlot, xmlBytes, out long size, out uint crc))
+                    return null;
+
                 entry.fileSize = size;
                 entry.crc32 = crc;
 
@@ -520,7 +524,7 @@ namespace ShelteredAPI.Saves
         // REMOVED: SerializeManifest(), DeserializeManifest(), ParseSaveEntry(), ParseSaveInfo()
         // Global manifests are no longer used; per-slot JSON is handled by SerializeSlotManifest().
 
-        private void WriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
+        private bool TryWriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
         {
             var path = DirectoryProvider.EntryPath(_scenarioId, absoluteSlot);
             var tmp = path + ".tmp";
@@ -532,10 +536,12 @@ namespace ShelteredAPI.Saves
                 crc = CRC32.Compute(xmlBytes);
                 try { File.Replace(tmp, path, null); }
                 catch { File.Copy(tmp, path, true); File.Delete(tmp); }
+                return true;
             }
             catch (Exception ex)
             {
                 MMLog.WriteError($"FAILED writing entry file for Slot_{absoluteSlot}: {ex.Message}");
+                return false;
             }
         }
 

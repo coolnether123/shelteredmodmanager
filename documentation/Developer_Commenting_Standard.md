@@ -1,4 +1,4 @@
-# ModAPI Developer Commenting Standard (v1.3 Beta.3)
+# ModAPI Developer Commenting Standard (v2.0 Beta.1)
 
 This project is shipped as a developer-facing platform. Comments should optimize for onboarding speed.
 

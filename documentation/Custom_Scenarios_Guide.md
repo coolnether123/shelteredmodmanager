@@ -1,6 +1,6 @@
-# Custom Scenarios Guide (v1.3 Beta.3, Experimental)
+# Custom Scenarios Guide (v2.0 Beta.1, Experimental)
 
-The 1.3 Beta.3 line is a breaking clean API line. Custom scenarios are experimental in Beta.3 and should be tested with disposable saves before being used in long-running playthroughs.
+The 2.0 Beta.1 line is a breaking clean API line. Custom scenarios are experimental in Beta.1 and should be tested with disposable saves before being used in long-running playthroughs.
 
 Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior.
 
@@ -179,7 +179,7 @@ Quests with `startTriggerId` are now scheduled behind a `CustomTrigger` conditio
 
 ### Scoring Metadata And Snapshots
 
-Custom scenario scoring is authoring metadata plus an optional per-save runtime snapshot. The v1.3 foundation does not reuse Sheltered's Survival EOS leaderboard or the Surrounded/Stasis result panels; those are mode-specific vanilla implementations, not a generic scenario scoring API.
+Custom scenario scoring is authoring metadata plus an optional per-save runtime snapshot. The v2.0 foundation does not reuse Sheltered's Survival EOS leaderboard or the Surrounded/Stasis result panels; those are mode-specific vanilla implementations, not a generic scenario scoring API.
 
 Use `<Scoring>` to declare the score label, ordering preference, categories, and neutral rules that an editor or future detail/leaderboard UI can display:
 

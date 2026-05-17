@@ -38,6 +38,26 @@ namespace ShelteredAPI.Saves
             }
         }
 
+        public static string BackupsRoot
+        {
+            get
+            {
+                var root = Path.Combine(ModApiRoot, "Backups");
+                EnsureDir(root);
+                return root;
+            }
+        }
+
+        public static string SaveBackupsRoot
+        {
+            get
+            {
+                var root = Path.Combine(BackupsRoot, "Saves");
+                EnsureDir(root);
+                return root;
+            }
+        }
+
         public static string ScenarioRoot(string scenarioId, bool create = true)
         {
             scenarioId = NameSanitizer.SanitizeId(scenarioId);

@@ -29,7 +29,7 @@ using System.Runtime.InteropServices;
 //      Build Number
 //      Revision
 //
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.3")]
-[assembly: AssemblyInformationalVersion("1.3.0-beta.3")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.1")]
+[assembly: AssemblyInformationalVersion("2.0.0-beta.1")]
 [assembly: InternalsVisibleTo("ModAPI")]

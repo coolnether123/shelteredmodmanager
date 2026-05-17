@@ -1,4 +1,4 @@
-# How to Develop a Harmony Patch | Sheltered Mod Manager v1.3 Beta.3
+# How to Develop a Harmony Patch | Sheltered Mod Manager v2.0 Beta.1
 
 This guide covers practical Harmony usage with the current ModAPI stack.
 

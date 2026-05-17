@@ -5,6 +5,7 @@ using System.Reflection;
 using UnityEngine;
 using ModAPI.Harmony;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Backups;
 using ShelteredAPI.Saves.Runtime;
 
 
@@ -88,6 +89,7 @@ namespace ShelteredAPI.Events
             _beforeSaveRaised = false;
             _beforeLoadSceneContentsRaised = false;
             _afterLoadRaised = false;
+            SaveBackupService.ClearCurrentSavePass();
         }
 
         internal static void CaptureLoadStartState(SaveManager mgr)
@@ -105,6 +107,7 @@ namespace ShelteredAPI.Events
             if (!TryGetField(mgr, "m_data", out data) || data == null)
                 return;
 
+            SaveBackupService.BackupCurrentSlotBeforeSave(mgr);
             _beforeSaveRaised = true;
             if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
 

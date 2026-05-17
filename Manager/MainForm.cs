@@ -718,6 +718,7 @@ namespace Manager
                     lines.Add("DevMode=" + (_settings.DevMode ? "True" : "False"));
                     lines.Add("LogLevel=" + (_settings.LogLevel ?? "Info"));
                     lines.Add("AutoCondenseSaves=" + (_settings.AutoCondenseSaves ?? "ask"));
+                    lines.Add("SaveBackupRetention=" + AppSettings.FormatSaveBackupRetention(_settings.SaveBackupRetention));
                     
                     // LogCategories disabled in v1.0 - category filtering not currently used
                     // var catList = new System.Collections.Generic.List<string>();
@@ -1362,6 +1363,8 @@ namespace Manager
                 changes.Add("IncludeNexusPrereleaseFiles");
             if (!string.Equals(previous.AutoCondenseSaves, current.AutoCondenseSaves, StringComparison.OrdinalIgnoreCase))
                 changes.Add("AutoCondenseSaves");
+            if (previous.SaveBackupRetention != current.SaveBackupRetention)
+                changes.Add("SaveBackupRetention");
             if (previous.AutoLoadSaveSlot != current.AutoLoadSaveSlot)
                 changes.Add("AutoLoadSaveSlot");
             if (previous.EnableNexusIntegration != current.EnableNexusIntegration)

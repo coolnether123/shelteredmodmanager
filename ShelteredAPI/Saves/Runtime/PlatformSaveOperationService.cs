@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Core;
+using ShelteredAPI.Saves.Backups;
 
 namespace ShelteredAPI.Saves.Runtime
 {
@@ -49,6 +50,10 @@ namespace ShelteredAPI.Saves.Runtime
 
                 MMLog.Flush();
                 throw;
+            }
+            finally
+            {
+                SaveBackupService.ClearCurrentSavePass();
             }
         }
 
@@ -135,6 +140,7 @@ namespace ShelteredAPI.Saves.Runtime
                 ModRuntime.MarkSaveExit("PlatformSave.FallbackVanilla", "type=" + type);
             }
 
+            SaveBackupService.BackupVanillaBeforeOverwrite(type);
             bool success = _inner.PlatformSave(type, data);
             if (success)
             {

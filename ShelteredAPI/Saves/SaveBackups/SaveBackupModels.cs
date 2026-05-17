@@ -1,0 +1,82 @@
+using System;
+using System.Collections.Generic;
+
+namespace ShelteredAPI.Saves.Backups
+{
+    internal enum SaveBackupRetentionMode
+    {
+        Disabled = 0,
+        Limited = 1,
+        Forever = 2
+    }
+
+    internal enum SaveBackupReason
+    {
+        BeforeOverwrite = 0,
+        Manual = 1
+    }
+
+    internal enum SaveBackupSourceKind
+    {
+        File = 0,
+        Directory = 1
+    }
+
+    internal sealed class SaveBackupRetentionPolicy
+    {
+        public SaveBackupRetentionMode Mode;
+        public int SnapshotLimit;
+
+        public bool IsEnabled
+        {
+            get { return Mode != SaveBackupRetentionMode.Disabled; }
+        }
+
+        public static SaveBackupRetentionPolicy Default()
+        {
+            return new SaveBackupRetentionPolicy
+            {
+                Mode = SaveBackupRetentionMode.Limited,
+                SnapshotLimit = 3
+            };
+        }
+    }
+
+    internal sealed class SaveBackupTarget
+    {
+        public string TimelineKey;
+        public string SaveKind;
+        public string ScenarioId;
+        public int AbsoluteSlot;
+        public string SaveId;
+        public SaveManager.SaveType SaveType;
+        public readonly List<SaveBackupSource> Sources = new List<SaveBackupSource>();
+    }
+
+    internal sealed class SaveBackupSource
+    {
+        public string Id;
+        public string Path;
+        public SaveBackupSourceKind Kind;
+    }
+
+    internal sealed class SaveBackupFileRecord
+    {
+        public string SourceId;
+        public string RelativePath;
+        public string Hash;
+        public long Size;
+        public uint Crc32;
+        public string BlobPath;
+        public string Compression;
+    }
+
+    internal sealed class SaveBackupSnapshotRef
+    {
+        public string SnapshotId;
+        public string TimelineKey;
+        public string ManifestPath;
+        public DateTime CreatedAtUtc;
+        public bool IsPinned;
+    }
+}

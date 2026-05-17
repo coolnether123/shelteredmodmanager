@@ -1,10 +1,10 @@
-# ModAPI Project Map (v1.3 Beta.3)
+# ModAPI Project Map (v2.0 Beta.1)
 
 This document is the current high-level map of the codebase. It is intentionally module-oriented rather than a stale file-by-file dump.
 
 For exact callable signatures, use [API Signatures Reference](API_Signatures_Reference.md).
 
-The 1.3 Beta.3 line is a breaking clean API line.
+The 2.0 Beta.1 line is a breaking clean API line.
 
 ## Assembly Rule
 
@@ -74,7 +74,7 @@ Primary areas:
 - `ModAPI/Actors`
 - `ShelteredAPI/Actors`
 
-Current 1.3 model:
+Current 2.0 model:
 - public contracts live in `ModAPI.Actors`
 - the default runtime implementation is supplied by `ShelteredAPI`
 - `IPluginContext.Actors` is the main entry point
@@ -93,7 +93,7 @@ Related guide:
 
 ## 3. Public Facades
 
-Preferred 1.3 entry points:
+Preferred 2.0 entry points:
 - `ShelteredContent` for content registration, assets, localization, loot, recipes, and runtime item resolution
 - `ShelteredSaves` and `ShelteredSaveEvents` for Sheltered save slots and save lifecycle
 - `ShelteredEvents` for Sheltered game, UI, faction, and time events

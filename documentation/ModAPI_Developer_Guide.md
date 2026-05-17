@@ -1,4 +1,4 @@
-# ModAPI Developer Guide (v1.3 Beta.3)
+# ModAPI Developer Guide (v2.0 Beta.1)
 
 Start here for the current authoring model. For exact signatures, use [API Signatures Reference](API_Signatures_Reference.md); for the full doc map, use [Documentation Index](README.md).
 
@@ -11,7 +11,7 @@ Start here for the current authoring model. For exact signatures, use [API Signa
 | Sheltered content, saves, UI, input, events, actors, and scenarios | `ShelteredAPI.dll` | Current |
 | Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Internal unless exposed by a facade |
 
-The 1.3 Beta.3 line is a breaking clean API line: `ModAPI.dll` is host-neutral, and Sheltered behavior comes from `ShelteredAPI.dll` facades plus neutral `GameRuntime.*` services.
+The 2.0 Beta.1 line is a breaking clean API line: `ModAPI.dll` is host-neutral, and Sheltered behavior comes from `ShelteredAPI.dll` facades plus neutral `GameRuntime.*` services.
 
 ## Assembly Rule
 
@@ -111,7 +111,7 @@ public void Start(IPluginContext ctx)
 }
 ```
 
-### 3.3 Localization Keys vs Text (ShelteredAPI v1.3)
+### 3.3 Localization Keys vs Text (ShelteredAPI v2.0)
 
 Use explicit APIs when possible:
 - `.WithDisplayNameKey("mymod.items.power_cell.name")`
@@ -119,7 +119,7 @@ Use explicit APIs when possible:
 - `.WithDisplayNameText("Power Cell")`
 - `.WithDescriptionText("A high-capacity energy cell")`
 
-Avoid ambiguous display-name helpers in new 1.3 code. Prefer explicit key/text methods so future content migrations can happen behind the facade.
+Avoid ambiguous display-name helpers in new 2.0 code. Prefer explicit key/text methods so future content migrations can happen behind the facade.
 
 Spine settings follow the same key-plus-fallback pattern for user-facing metadata:
 - `LabelKey` localizes the setting label while `Label` remains the fallback.

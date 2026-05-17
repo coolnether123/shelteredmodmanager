@@ -87,6 +87,19 @@ namespace Manager.Views
 
             _autoCondenseCombo.Location = new Point(x + 10, y);
             _autoCondenseCombo.Width = 240;
+            y += 52;
+
+            _saveBackupsLabel.Location = new Point(x, y);
+            y += 30;
+
+            _saveBackupRetentionLabel.Location = new Point(x + 10, y);
+            y += 24;
+
+            _saveBackupRetentionCombo.Location = new Point(x + 10, y);
+            _saveBackupRetentionCombo.Width = 240;
+
+            _saveBackupRetentionCountLabel.Location = new Point(x + 270, y + 4);
+            _saveBackupRetentionCountNumeric.Location = new Point(x + 405, y);
 
             return y + 52;
         }

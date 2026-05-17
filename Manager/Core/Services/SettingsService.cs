@@ -176,6 +176,10 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("AutoCondenseSaves", out autoCondense))
                 settings.AutoCondenseSaves = autoCondense;
 
+            string saveBackupRetention;
+            if (raw.TryGetValue("SaveBackupRetention", out saveBackupRetention))
+                settings.SaveBackupRetention = AppSettings.ParseSaveBackupRetention(saveBackupRetention, settings.SaveBackupRetention);
+
             string apiVersion;
             if (raw.TryGetValue("InstalledModApiVersion", out apiVersion))
                 settings.InstalledModApiVersion = apiVersion;
@@ -302,6 +306,7 @@ namespace Manager.Core.Services
             data["IncludeNexusPrereleaseFiles"] = settings.IncludeNexusPrereleaseFiles.ToString();
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
+            data["SaveBackupRetention"] = AppSettings.FormatSaveBackupRetention(settings.SaveBackupRetention);
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["InstalledShelteredApiVersion"] = settings.InstalledShelteredApiVersion ?? string.Empty;
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();

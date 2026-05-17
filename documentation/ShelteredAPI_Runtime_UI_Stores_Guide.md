@@ -4,7 +4,7 @@ This guide covers the supported path for mod-owned panels and object-linked item
 
 Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
-> Dev/API-preview warning: runtime UI stores and cooking stations are part of the current ShelteredAPI preview surface. Names and behavior are intended for mod-author testing in the 1.3 line, but may still change before the API is declared stable.
+> Dev/API-preview warning: runtime UI stores and cooking stations are part of the current ShelteredAPI preview surface. Names and behavior are intended for mod-author testing in the 2.0 line, but may still change before the API is declared stable.
 
 ## Assembly Rule
 

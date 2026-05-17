@@ -26,6 +26,6 @@ using System.Runtime.InteropServices;
 //
 // You can use "*" for the build and revision numbers.
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.3")]
-[assembly: AssemblyInformationalVersion("1.3.0-beta.3")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.1")]
+[assembly: AssemblyInformationalVersion("2.0.0-beta.1")]
