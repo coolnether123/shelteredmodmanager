@@ -290,11 +290,13 @@ namespace Manager.Views
             _openNexusButton.Text = "Open Nexus Upload Page";
             _openNexusButton.Location = new Point(14, 82);
             _openNexusButton.Size = new Size(180, 32);
+            _publishPanel.Controls.Add(_openNexusButton);
         }
 
         private void WireEvents()
         {
             _localList.SelectionChanged += LocalList_SelectionChanged;
+            _ownedList.SelectedIndexChanged += OwnedList_SelectedIndexChanged;
             _authorFilter.SelectedIndexChanged += delegate { RefreshLocalList(); };
             _refreshOwnedButton.Click += delegate { RefreshOwnedModsAsync(); };
             _saveDraftButton.Click += delegate { SaveCurrentDraft(); };
@@ -315,6 +317,31 @@ namespace Manager.Views
             _currentOwnership = null;
             PopulateDraftFields();
             RunVerification();
+        }
+
+        private void OwnedList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_currentDraft == null || _ownedList.SelectedIndex < 0 || _ownedList.SelectedIndex >= _ownedMods.Count)
+                return;
+
+            NexusRemoteMod remote = _ownedMods[_ownedList.SelectedIndex];
+            if (remote == null)
+                return;
+
+            _currentDraft.GameDomain = remote.GameDomain;
+            _currentDraft.NexusModId = remote.ModId;
+            if (!string.IsNullOrEmpty(remote.Name))
+                _currentDraft.Name = remote.Name;
+            if (!string.IsNullOrEmpty(remote.Version))
+                _currentDraft.Version = remote.Version;
+            if (!string.IsNullOrEmpty(remote.Summary))
+                _currentDraft.Summary = remote.Summary;
+            if (!string.IsNullOrEmpty(remote.Description))
+                _currentDraft.Description = remote.Description;
+
+            PopulateDraftFields();
+            RunVerification();
+            SwitchStage(PublishStage.Details);
         }
 
         private void RefreshOwnedModsAsync()
