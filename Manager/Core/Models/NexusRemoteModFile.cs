@@ -7,6 +7,10 @@ namespace Manager.Core.Models
     /// </summary>
     public class NexusRemoteModFile
     {
+        private DateTime? _uploadedAtUtc;
+
+        public string Id { get; set; }
+        public string UpdateGroupId { get; set; }
         public int FileId { get; set; }
         public string Name { get; set; }
         public string Version { get; set; }
@@ -20,6 +24,9 @@ namespace Manager.Core.Models
         {
             get
             {
+                if (_uploadedAtUtc.HasValue)
+                    return _uploadedAtUtc;
+
                 if (UnixDate <= 0) return null;
                 try
                 {
@@ -31,6 +38,7 @@ namespace Manager.Core.Models
                     return null;
                 }
             }
+            set { _uploadedAtUtc = value; }
         }
     }
 }

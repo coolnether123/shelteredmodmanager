@@ -18,7 +18,7 @@ namespace Manager.Core.Services
             NexusRemoteMod match = FindBestMatch(localMod, draft, ownedMods);
             if (match == null)
             {
-                result.Summary = "No matching Nexus mod was found for this local mod.";
+                result.Summary = "No owned-mod list is available from Nexus v3; publish requests are server-authorized by Nexus.";
                 return result;
             }
 

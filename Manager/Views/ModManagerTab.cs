@@ -881,11 +881,11 @@ namespace Manager.Views
             if (!includePrereleaseFiles || prereleaseFilesByRef == null || reference == null || !reference.IsValid || remote == null || _nexusService == null)
                 return;
 
-            if (prereleaseFilesByRef.ContainsKey(reference.Key) || remote.GameId <= 0)
+            if (prereleaseFilesByRef.ContainsKey(reference.Key))
                 return;
 
             string fileError;
-            var files = _nexusService.GetModFiles(remote.GameId, remote.ModId, out fileError);
+            var files = _nexusService.GetModFiles(reference.GameDomain, reference.ModId, out fileError);
             if (!string.IsNullOrEmpty(fileError))
             {
                 if (string.IsNullOrEmpty(error))
@@ -916,8 +916,7 @@ namespace Manager.Views
             if (!string.Equals(NexusVersionComparer.Normalize(prereleaseFile.Version), NexusVersionComparer.Normalize(effectiveVersion), StringComparison.OrdinalIgnoreCase))
                 return remoteUpdatedAt;
 
-            DateTime? fileDate = ConvertUnixDate(prereleaseFile.UnixDate);
-            return fileDate ?? remoteUpdatedAt;
+            return prereleaseFile.UploadedAtUtc ?? remoteUpdatedAt;
         }
 
         private static bool ShouldPreferPrereleaseFile(ModItem mod, string remoteVersion, NexusRemoteModFile prereleaseFile)

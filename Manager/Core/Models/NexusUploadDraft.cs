@@ -32,6 +32,12 @@ namespace Manager.Core.Models
         public string AuthorsText { get; set; }
         public string TagsText { get; set; }
         public string PackagePath { get; set; }
+        public string FileCategory { get; set; }
+        public string UpdateGroupId { get; set; }
+        public bool PrimaryModManagerDownload { get; set; }
+        public bool AllowModManagerDownload { get; set; }
+        public bool ShowRequirementsPopup { get; set; }
+        public bool ArchiveExistingFile { get; set; }
         public DateTime SavedAtUtc { get; set; }
         public NexusUploadStage Stage { get; set; }
 
@@ -47,6 +53,9 @@ namespace Manager.Core.Models
             AuthorsText = string.Empty;
             TagsText = string.Empty;
             PackagePath = string.Empty;
+            FileCategory = "main";
+            UpdateGroupId = string.Empty;
+            AllowModManagerDownload = true;
             SavedAtUtc = DateTime.MinValue;
             Stage = NexusUploadStage.Details;
         }
@@ -95,5 +104,23 @@ namespace Manager.Core.Models
         public string PackagePath { get; set; }
         public int FileCount { get; set; }
         public long SizeBytes { get; set; }
+    }
+
+    public class NexusUploadPublishResult
+    {
+        public string UploadId { get; set; }
+        public string ModFileId { get; set; }
+        public string ModFileGameScopedId { get; set; }
+        public string State { get; set; }
+        public string Summary { get; set; }
+    }
+
+    public class NexusModFileUpdateGroup
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime? LastFileUploadedAtUtc { get; set; }
+        public int VersionsCount { get; set; }
     }
 }

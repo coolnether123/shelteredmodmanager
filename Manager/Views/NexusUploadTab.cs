@@ -33,6 +33,8 @@ namespace Manager.Views
         private TextBox _versionBox;
         private TextBox _gameDomainBox;
         private TextBox _nexusModIdBox;
+        private TextBox _updateGroupIdBox;
+        private ComboBox _fileCategoryBox;
         private TextBox _authorsBox;
         private TextBox _tagsBox;
         private TextBox _summaryBox;
@@ -45,6 +47,7 @@ namespace Manager.Views
         private Button _verifyButton;
         private Button _openPackageButton;
         private Button _openNexusButton;
+        private Button _publishApiButton;
 
         private NexusModsService _nexusService;
         private AppSettings _settings;
@@ -142,6 +145,7 @@ namespace Manager.Views
             _verifyButton = new Button();
             _openPackageButton = new Button();
             _openNexusButton = new Button();
+            _publishApiButton = new Button();
 
             topPanel.Dock = DockStyle.Top;
             topPanel.Height = 54;
@@ -231,10 +235,20 @@ namespace Manager.Views
             _versionBox = AddTextField(_detailsPanel, "Version", 14, 62, 180);
             _gameDomainBox = AddTextField(_detailsPanel, "Game Domain", 210, 62, 150);
             _nexusModIdBox = AddTextField(_detailsPanel, "Nexus Mod ID", 380, 62, 120);
-            _authorsBox = AddTextField(_detailsPanel, "Authors", 14, 114, 486);
-            _tagsBox = AddTextField(_detailsPanel, "Tags", 14, 166, 486);
-            _summaryBox = AddMultilineField(_detailsPanel, "Summary", 14, 218, 486, 72);
-            _descriptionBox = AddMultilineField(_detailsPanel, "Description", 14, 316, 486, 150);
+            _updateGroupIdBox = AddTextField(_detailsPanel, "Update Group ID", 520, 62, 160);
+            AddFieldLabel(_detailsPanel, "File Category", 14, 114);
+            _fileCategoryBox = new ComboBox();
+            _fileCategoryBox.DropDownStyle = ComboBoxStyle.DropDownList;
+            _fileCategoryBox.Items.Add("main");
+            _fileCategoryBox.Items.Add("optional");
+            _fileCategoryBox.Items.Add("miscellaneous");
+            _fileCategoryBox.Location = new Point(14, 134);
+            _fileCategoryBox.Size = new Size(180, 24);
+            _detailsPanel.Controls.Add(_fileCategoryBox);
+            _authorsBox = AddTextField(_detailsPanel, "Authors", 210, 114, 470);
+            _tagsBox = AddTextField(_detailsPanel, "Tags", 14, 166, 666);
+            _summaryBox = AddMultilineField(_detailsPanel, "Summary", 14, 218, 666, 72);
+            _descriptionBox = AddMultilineField(_detailsPanel, "Description", 14, 316, 666, 150);
 
             _saveDraftButton.Text = "Save Draft";
             _saveDraftButton.Location = new Point(14, 482);
@@ -290,7 +304,11 @@ namespace Manager.Views
             _openNexusButton.Text = "Open Nexus Upload Page";
             _openNexusButton.Location = new Point(14, 82);
             _openNexusButton.Size = new Size(180, 32);
+            _publishApiButton.Text = "Publish via Nexus API";
+            _publishApiButton.Location = new Point(204, 82);
+            _publishApiButton.Size = new Size(170, 32);
             _publishPanel.Controls.Add(_openNexusButton);
+            _publishPanel.Controls.Add(_publishApiButton);
         }
 
         private void WireEvents()
@@ -304,6 +322,7 @@ namespace Manager.Views
             _verifyButton.Click += delegate { RunVerification(); };
             _openPackageButton.Click += delegate { OpenPackageFolder(); };
             _openNexusButton.Click += delegate { OpenNexusUploadPage(); };
+            _publishApiButton.Click += delegate { PublishViaApiAsync(); };
             _detailsStageButton.Click += delegate { SwitchStage(PublishStage.Details); };
             _filesStageButton.Click += delegate { SwitchStage(PublishStage.Files); };
             _verifyStageButton.Click += delegate { SwitchStage(PublishStage.Verify); };
@@ -330,6 +349,7 @@ namespace Manager.Views
 
             _currentDraft.GameDomain = remote.GameDomain;
             _currentDraft.NexusModId = remote.ModId;
+            _currentDraft.UpdateGroupId = string.Empty;
             if (!string.IsNullOrEmpty(remote.Name))
                 _currentDraft.Name = remote.Name;
             if (!string.IsNullOrEmpty(remote.Version))
@@ -425,6 +445,42 @@ namespace Manager.Views
             RunVerification();
         }
 
+        private void PublishViaApiAsync()
+        {
+            if (_currentMod == null || _currentDraft == null || _nexusService == null)
+                return;
+
+            SaveCurrentDraft();
+            _publishApiButton.Enabled = false;
+            EmitActivity("Publishing through Nexus v3 API.");
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                NexusUploadPublishResult result = _nexusService.PublishPackage(_currentDraft, out error);
+
+                if (IsDisposed || Disposing)
+                    return;
+
+                try
+                {
+                    BeginInvoke((MethodInvoker)delegate
+                    {
+                        _publishApiButton.Enabled = true;
+                        if (!string.IsNullOrEmpty(error) || result == null)
+                        {
+                            EmitActivity("Publish failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown Nexus v3 publish error."));
+                            return;
+                        }
+
+                        EmitActivity(result.Summary);
+                        _validationBox.Text = result.Summary + Environment.NewLine + _validationBox.Text;
+                    });
+                }
+                catch { }
+            });
+        }
+
         private void RunVerification()
         {
             if (_currentMod == null || _currentDraft == null)
@@ -471,6 +527,10 @@ namespace Manager.Views
             _versionBox.Text = draft != null ? draft.Version : string.Empty;
             _gameDomainBox.Text = draft != null ? draft.GameDomain : string.Empty;
             _nexusModIdBox.Text = draft != null && draft.NexusModId > 0 ? draft.NexusModId.ToString() : string.Empty;
+            _updateGroupIdBox.Text = draft != null ? draft.UpdateGroupId : string.Empty;
+            _fileCategoryBox.SelectedItem = draft != null && !string.IsNullOrEmpty(draft.FileCategory) ? draft.FileCategory : "main";
+            if (_fileCategoryBox.SelectedIndex < 0)
+                _fileCategoryBox.SelectedItem = "main";
             _authorsBox.Text = draft != null ? draft.AuthorsText : string.Empty;
             _tagsBox.Text = draft != null ? draft.TagsText : string.Empty;
             _summaryBox.Text = draft != null ? draft.Summary : string.Empty;
@@ -490,6 +550,8 @@ namespace Manager.Views
             _currentDraft.Version = _versionBox.Text.Trim();
             _currentDraft.GameDomain = _gameDomainBox.Text.Trim().ToLowerInvariant();
             _currentDraft.NexusModId = int.TryParse(_nexusModIdBox.Text.Trim(), out modId) ? modId : 0;
+            _currentDraft.UpdateGroupId = _updateGroupIdBox.Text.Trim();
+            _currentDraft.FileCategory = Convert.ToString(_fileCategoryBox.SelectedItem);
             _currentDraft.AuthorsText = _authorsBox.Text.Trim();
             _currentDraft.TagsText = _tagsBox.Text.Trim();
             _currentDraft.Summary = _summaryBox.Text.Trim();

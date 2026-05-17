@@ -91,10 +91,14 @@ namespace Manager.Core.Services
                 report.AddWarning("Add a short summary before posting to Nexus.");
             if (string.IsNullOrEmpty(draft.Description))
                 report.AddWarning("Add a longer description before posting to Nexus.");
-            if (ownership == null || !ownership.IsVerified)
-                report.AddWarning("Ownership has not been verified against the connected Nexus account.");
             if (!string.IsNullOrEmpty(draft.PackagePath) && !File.Exists(draft.PackagePath))
                 report.AddWarning("The saved package path no longer exists. Rebuild the package.");
+            if (!IsValidFileCategory(draft.FileCategory))
+                report.AddError("File category must be main, optional, or miscellaneous.");
+            if (draft.NexusModId <= 0)
+                report.AddWarning("Nexus v3 API publishing requires an existing Nexus mod ID.");
+            if (ownership == null || !ownership.IsVerified)
+                report.AddWarning("Nexus v3 will verify ownership when the file publish request is submitted.");
 
             return report;
         }
@@ -144,6 +148,7 @@ namespace Manager.Core.Services
             if (string.IsNullOrEmpty(draft.Summary)) draft.Summary = BuildSummary(mod.Description);
             if (string.IsNullOrEmpty(draft.AuthorsText)) draft.AuthorsText = Join(mod.Authors);
             if (string.IsNullOrEmpty(draft.TagsText)) draft.TagsText = Join(mod.Tags);
+            if (string.IsNullOrEmpty(draft.FileCategory)) draft.FileCategory = "main";
         }
 
         private static string BuildSummary(string description)
@@ -164,6 +169,13 @@ namespace Manager.Core.Services
                 return string.Empty;
 
             return string.Join(", ", values);
+        }
+
+        private static bool IsValidFileCategory(string value)
+        {
+            return string.Equals(value, "main", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "optional", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "miscellaneous", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

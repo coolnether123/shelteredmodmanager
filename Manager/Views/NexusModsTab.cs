@@ -665,7 +665,7 @@ namespace Manager.Views
                     gameId = selected.GameId;
                 }
 
-                var files = _nexusService.GetModFiles(gameId, selected.ModId, out error);
+                var files = _nexusService.GetModFiles(selected.GameDomain, selected.ModId, out error);
                 if (!string.IsNullOrEmpty(error) || files == null || files.Count == 0)
                 {
                     FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "No installable file was returned."));
@@ -686,7 +686,7 @@ namespace Manager.Views
                     return;
                 }
 
-                string downloadUrl = _nexusService.GetV1DownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
+                string downloadUrl = _nexusService.GetV3DownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
                     FinishInstallWithError(RewriteDirectDownloadError(error));
