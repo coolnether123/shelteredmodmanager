@@ -115,6 +115,9 @@ namespace Manager.Views
             _enableNexusCheckBox.Location = new Point(x + 10, y);
             y += 32;
 
+            _enableExperimentalPublishCheckBox.Location = new Point(x + 10, y);
+            y += 32;
+
             _nexusApiKeyLabel.Location = new Point(x + 10, y + 4);
             _nexusApiKeyTextBox.Location = new Point(x + 155, y);
             _nexusApiHelpButton.Location = new Point(x + 395, y - 1);

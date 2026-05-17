@@ -584,6 +584,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            ApplyPublishTabVisibility();
             RefreshNexusAccountStatusAsync(true);
 
             // Apply initial theme
@@ -652,6 +653,34 @@ namespace Manager
             {
                 _modManagerTab.RefreshMods();
             }
+        }
+
+        private void ApplyPublishTabVisibility()
+        {
+            if (_tabControl == null || _nexusUploadPage == null)
+                return;
+
+            bool shouldShow = _settings != null && _settings.EnableExperimentalPublishTab;
+            bool isShown = _tabControl.TabPages.Contains(_nexusUploadPage);
+
+            if (shouldShow == isShown)
+                return;
+
+            if (shouldShow)
+            {
+                int settingsIndex = _tabControl.TabPages.Contains(_settingsPage)
+                    ? _tabControl.TabPages.IndexOf(_settingsPage)
+                    : _tabControl.TabPages.Count;
+                _tabControl.TabPages.Insert(settingsIndex, _nexusUploadPage);
+                return;
+            }
+
+            if (_tabControl.SelectedTab == _nexusUploadPage)
+                _tabControl.SelectedTab = _settingsPage != null && _tabControl.TabPages.Contains(_settingsPage)
+                    ? _settingsPage
+                    : _gameSetupPage;
+
+            _tabControl.TabPages.Remove(_nexusUploadPage);
         }
 
         private void GameSetupTab_GamePathChanged(string newPath)
@@ -1264,6 +1293,7 @@ namespace Manager
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
+            ApplyPublishTabVisibility();
             SaveSettingsFromUi();
 
             LogSettingsChanges(previous, _settings, "Settings updated");
@@ -1316,6 +1346,7 @@ namespace Manager
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
             _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
+            ApplyPublishTabVisibility();
             
             // Re-apply theme
             ApplyTheme(_settings.DarkMode);
@@ -1406,6 +1437,8 @@ namespace Manager
                 changes.Add("AutoLoadSaveSlot");
             if (previous.EnableNexusIntegration != current.EnableNexusIntegration)
                 changes.Add("EnableNexusIntegration");
+            if (previous.EnableExperimentalPublishTab != current.EnableExperimentalPublishTab)
+                changes.Add("EnableExperimentalPublishTab");
             if (!string.Equals(previous.NexusGameDomain, current.NexusGameDomain, StringComparison.OrdinalIgnoreCase))
                 changes.Add("NexusGameDomain");
             if (!string.Equals(previous.NexusApiKey, current.NexusApiKey, StringComparison.Ordinal))

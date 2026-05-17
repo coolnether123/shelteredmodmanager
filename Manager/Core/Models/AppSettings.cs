@@ -29,6 +29,7 @@ namespace Manager.Core.Models
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
         private int _saveBackupRetention = DefaultSaveBackupRetention; // 0 disables, positive keeps N, -1 keeps all
         private bool _enableNexusIntegration = true;
+        private bool _enableExperimentalPublishTab = false;
         private string _nexusGameDomain = "sheltered";
         private string _nexusApiKey = string.Empty;
         private int _managerNexusModId = 1;
@@ -141,6 +142,12 @@ namespace Manager.Core.Models
         {
             get { return _enableNexusIntegration; }
             set { _enableNexusIntegration = value; }
+        }
+
+        public bool EnableExperimentalPublishTab
+        {
+            get { return _enableExperimentalPublishTab; }
+            set { _enableExperimentalPublishTab = value; }
         }
 
         public string NexusGameDomain

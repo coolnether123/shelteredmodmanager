@@ -196,6 +196,14 @@ namespace Manager.Core.Services
                     settings.EnableNexusIntegration = enabled;
             }
 
+            string enableExperimentalPublishTab;
+            if (raw.TryGetValue("EnableExperimentalPublishTab", out enableExperimentalPublishTab))
+            {
+                bool enabled;
+                if (bool.TryParse(enableExperimentalPublishTab, out enabled))
+                    settings.EnableExperimentalPublishTab = enabled;
+            }
+
             string nexusDomain;
             if (raw.TryGetValue("NexusGameDomain", out nexusDomain))
                 settings.NexusGameDomain = nexusDomain;
@@ -310,6 +318,7 @@ namespace Manager.Core.Services
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["InstalledShelteredApiVersion"] = settings.InstalledShelteredApiVersion ?? string.Empty;
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
+            data["EnableExperimentalPublishTab"] = settings.EnableExperimentalPublishTab.ToString();
             data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
             string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;
             string protectedNexusApiKeyValue = NexusApiKeyProtector.Protect(plaintextNexusApiKey);

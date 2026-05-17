@@ -48,6 +48,7 @@ namespace Manager.Views
         private Button _openPackageButton;
         private Button _openNexusButton;
         private Button _publishApiButton;
+        private ToolTip _helpToolTip;
 
         private NexusModsService _nexusService;
         private AppSettings _settings;
@@ -107,6 +108,7 @@ namespace Manager.Views
             ForeColor = isDark ? Color.White : SystemColors.ControlText;
             _stagePanel.BackColor = BackColor;
             _localList.ApplyTheme(isDark);
+            ApplyComboBoxTheme(_authorFilter);
             _ownedList.BackColor = isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window;
             _ownedList.ForeColor = isDark ? Color.White : SystemColors.WindowText;
             ApplyPanelTheme(_detailsPanel);
@@ -146,6 +148,7 @@ namespace Manager.Views
             _openPackageButton = new Button();
             _openNexusButton = new Button();
             _publishApiButton = new Button();
+            _helpToolTip = new ToolTip();
 
             topPanel.Dock = DockStyle.Top;
             topPanel.Height = 54;
@@ -157,7 +160,7 @@ namespace Manager.Views
             topPanel.Controls.Add(_statusLabel);
 
             leftPanel.Dock = DockStyle.Left;
-            leftPanel.Width = 430;
+            leftPanel.Width = 380;
             leftPanel.Padding = new Padding(12);
 
             authorLabel.Text = "Author";
@@ -168,6 +171,7 @@ namespace Manager.Views
             _authorFilter.Dock = DockStyle.Top;
             _authorFilter.DropDownStyle = ComboBoxStyle.DropDownList;
             _authorFilter.Height = 28;
+            ConfigureThemedComboBox(_authorFilter);
 
             _localList.Dock = DockStyle.Fill;
             _localList.Title = "Local Mods";
@@ -197,15 +201,23 @@ namespace Manager.Views
             rightPanel.Padding = new Padding(12);
 
             _stagePanel.Dock = DockStyle.Top;
-            _stagePanel.Height = 42;
+            _stagePanel.Height = 44;
+            var stageLayout = new TableLayoutPanel();
+            stageLayout.Dock = DockStyle.Fill;
+            stageLayout.ColumnCount = 4;
+            stageLayout.RowCount = 1;
+            stageLayout.Padding = new Padding(0, 2, 0, 4);
+            for (int i = 0; i < 4; i++)
+                stageLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
             ConfigureStageButton(_detailsStageButton, "1 Details", 0);
             ConfigureStageButton(_filesStageButton, "2 Files", 112);
             ConfigureStageButton(_verifyStageButton, "3 Verify", 224);
             ConfigureStageButton(_publishStageButton, "4 Publish", 336);
-            _stagePanel.Controls.Add(_detailsStageButton);
-            _stagePanel.Controls.Add(_filesStageButton);
-            _stagePanel.Controls.Add(_verifyStageButton);
-            _stagePanel.Controls.Add(_publishStageButton);
+            stageLayout.Controls.Add(_detailsStageButton, 0, 0);
+            stageLayout.Controls.Add(_filesStageButton, 1, 0);
+            stageLayout.Controls.Add(_verifyStageButton, 2, 0);
+            stageLayout.Controls.Add(_publishStageButton, 3, 0);
+            _stagePanel.Controls.Add(stageLayout);
 
             ConfigureDetailsPanel();
             ConfigureFilesPanel();
@@ -222,6 +234,7 @@ namespace Manager.Views
             Controls.Add(leftPanel);
             Controls.Add(topPanel);
             Name = "NexusUploadTab";
+            ConfigureToolTips();
             ResumeLayout(false);
             RefreshStage();
         }
@@ -229,31 +242,60 @@ namespace Manager.Views
         private void ConfigureDetailsPanel()
         {
             _detailsPanel.Dock = DockStyle.Fill;
-            _detailsPanel.AutoScroll = true;
+            _detailsPanel.AutoScroll = false;
+            _detailsPanel.Padding = new Padding(0, 4, 0, 0);
 
-            _nameBox = AddTextField(_detailsPanel, "Name", 14, 10, 360);
-            _versionBox = AddTextField(_detailsPanel, "Version", 14, 62, 180);
-            _gameDomainBox = AddTextField(_detailsPanel, "Game Domain", 210, 62, 150);
-            _nexusModIdBox = AddTextField(_detailsPanel, "Nexus Mod ID", 380, 62, 120);
-            _updateGroupIdBox = AddTextField(_detailsPanel, "Update Group ID", 520, 62, 160);
-            AddFieldLabel(_detailsPanel, "File Category", 14, 114);
+            var detailsLayout = new TableLayoutPanel();
+            detailsLayout.Dock = DockStyle.Fill;
+            detailsLayout.ColumnCount = 4;
+            detailsLayout.RowCount = 6;
+            detailsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30f));
+            detailsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+            detailsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+            detailsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 54f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+            detailsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42f));
+
+            _nameBox = CreateTextBox();
+            _versionBox = CreateTextBox();
+            _gameDomainBox = CreateTextBox();
+            _nexusModIdBox = CreateTextBox();
+            _updateGroupIdBox = CreateTextBox();
             _fileCategoryBox = new ComboBox();
             _fileCategoryBox.DropDownStyle = ComboBoxStyle.DropDownList;
             _fileCategoryBox.Items.Add("main");
             _fileCategoryBox.Items.Add("optional");
             _fileCategoryBox.Items.Add("miscellaneous");
-            _fileCategoryBox.Location = new Point(14, 134);
-            _fileCategoryBox.Size = new Size(180, 24);
-            _detailsPanel.Controls.Add(_fileCategoryBox);
-            _authorsBox = AddTextField(_detailsPanel, "Authors", 210, 114, 470);
-            _tagsBox = AddTextField(_detailsPanel, "Tags", 14, 166, 666);
-            _summaryBox = AddMultilineField(_detailsPanel, "Summary", 14, 218, 666, 72);
-            _descriptionBox = AddMultilineField(_detailsPanel, "Description", 14, 316, 666, 150);
+            ConfigureThemedComboBox(_fileCategoryBox);
+            _fileCategoryBox.DropDownHeight = 72;
+            _authorsBox = CreateTextBox();
+            _tagsBox = CreateTextBox();
+            _summaryBox = CreateMultilineTextBox();
+            _descriptionBox = CreateMultilineTextBox();
+
+            AddLabeledControl(detailsLayout, "Name", _nameBox, 0, 0, 2);
+            AddLabeledControl(detailsLayout, "Version", _versionBox, 2, 0, 1);
+            AddLabeledControl(detailsLayout, "File Category", _fileCategoryBox, 3, 0, 1);
+            AddLabeledControl(detailsLayout, "Game Domain", _gameDomainBox, 0, 1, 1);
+            AddLabeledControl(detailsLayout, "Nexus Mod ID", _nexusModIdBox, 1, 1, 1);
+            AddLabeledControl(detailsLayout, "Update Group ID", _updateGroupIdBox, 2, 1, 1);
+            AddLabeledControl(detailsLayout, "Authors", _authorsBox, 3, 1, 1);
+            AddLabeledControl(detailsLayout, "Tags", _tagsBox, 0, 2, 4);
+            AddLabeledControl(detailsLayout, "Summary", _summaryBox, 0, 3, 4);
+            AddLabeledControl(detailsLayout, "Description", _descriptionBox, 0, 4, 4);
 
             _saveDraftButton.Text = "Save Draft";
-            _saveDraftButton.Location = new Point(14, 482);
+            _saveDraftButton.Dock = DockStyle.Left;
+            _saveDraftButton.Margin = new Padding(4, 5, 4, 4);
             _saveDraftButton.Size = new Size(120, 32);
-            _detailsPanel.Controls.Add(_saveDraftButton);
+            detailsLayout.Controls.Add(_saveDraftButton, 0, 5);
+            detailsLayout.SetColumnSpan(_saveDraftButton, 4);
+
+            _detailsPanel.Controls.Add(detailsLayout);
         }
 
         private void ConfigureFilesPanel()
@@ -289,7 +331,7 @@ namespace Manager.Views
             _validationBox.Location = new Point(14, 92);
             _validationBox.Size = new Size(640, 260);
             _validationBox.Multiline = true;
-            _validationBox.ScrollBars = ScrollBars.Vertical;
+            _validationBox.ScrollBars = ScrollBars.None;
             _validationBox.ReadOnly = true;
             _verifyPanel.Controls.Add(_verifyButton);
             _verifyPanel.Controls.Add(_validationBox);
@@ -706,8 +748,8 @@ namespace Manager.Views
         private static void ConfigureStageButton(Button button, string text, int x)
         {
             button.Text = text;
-            button.Location = new Point(x, 4);
-            button.Size = new Size(104, 32);
+            button.Dock = DockStyle.Fill;
+            button.Margin = new Padding(4, 2, 4, 2);
             button.FlatStyle = FlatStyle.Flat;
         }
 
@@ -733,11 +775,144 @@ namespace Manager.Views
                     control.BackColor = _isDark ? Color.FromArgb(58, 60, 64) : SystemColors.Control;
                     control.ForeColor = _isDark ? Color.White : SystemColors.ControlText;
                 }
+                else if (control is ComboBox)
+                {
+                    ApplyComboBoxTheme((ComboBox)control);
+                }
                 else
                 {
                     control.ForeColor = ForeColor;
                 }
+
+                if (control.HasChildren)
+                    ApplyPanelTheme(control);
             }
+        }
+
+        private void ConfigureThemedComboBox(ComboBox comboBox)
+        {
+            comboBox.Dock = DockStyle.Top;
+            comboBox.Height = 24;
+            comboBox.FlatStyle = FlatStyle.Flat;
+            comboBox.DrawMode = DrawMode.OwnerDrawFixed;
+            comboBox.ItemHeight = 22;
+            comboBox.IntegralHeight = false;
+            comboBox.DropDownHeight = 180;
+            comboBox.DrawItem += ThemedComboBox_DrawItem;
+        }
+
+        private void ApplyComboBoxTheme(ComboBox comboBox)
+        {
+            if (comboBox == null)
+                return;
+
+            comboBox.BackColor = _isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window;
+            comboBox.ForeColor = _isDark ? Color.White : SystemColors.WindowText;
+            comboBox.Invalidate();
+        }
+
+        private void ThemedComboBox_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            ComboBox comboBox = sender as ComboBox;
+            if (comboBox == null)
+                return;
+
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            bool editArea = (e.State & DrawItemState.ComboBoxEdit) == DrawItemState.ComboBoxEdit;
+            if (e.Index < 0)
+                editArea = true;
+            bool highlightItem = selected && comboBox.DroppedDown && !editArea;
+            Color backColor = highlightItem
+                ? Color.FromArgb(0, 122, 204)
+                : (_isDark ? Color.FromArgb(38, 40, 44) : SystemColors.Window);
+            Color foreColor = highlightItem
+                ? Color.White
+                : (_isDark ? Color.White : SystemColors.WindowText);
+
+            using (var brush = new SolidBrush(backColor))
+                e.Graphics.FillRectangle(brush, e.Bounds);
+
+            string text = editArea ? comboBox.Text : Convert.ToString(comboBox.Items[e.Index]);
+            TextRenderer.DrawText(
+                e.Graphics,
+                text,
+                e.Font != null ? e.Font : comboBox.Font,
+                new Rectangle(e.Bounds.Left + 4, e.Bounds.Top, e.Bounds.Width - 8, e.Bounds.Height),
+                foreColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        private static TextBox CreateTextBox()
+        {
+            var box = new TextBox();
+            box.Dock = DockStyle.Top;
+            box.Height = 24;
+            return box;
+        }
+
+        private static TextBox CreateMultilineTextBox()
+        {
+            var box = new TextBox();
+            box.Dock = DockStyle.Fill;
+            box.Multiline = true;
+            box.ScrollBars = ScrollBars.None;
+            box.WordWrap = true;
+            return box;
+        }
+
+        private static void AddLabeledControl(TableLayoutPanel parent, string labelText, Control editor, int column, int row, int columnSpan)
+        {
+            var container = new Panel();
+            container.Dock = DockStyle.Fill;
+            container.Margin = new Padding(4);
+
+            var label = new Label();
+            label.Text = labelText;
+            label.Dock = DockStyle.Top;
+            label.Height = 18;
+            label.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
+
+            editor.Margin = new Padding(0);
+            container.Controls.Add(editor);
+            container.Controls.Add(label);
+            parent.Controls.Add(container, column, row);
+            if (columnSpan > 1)
+                parent.SetColumnSpan(container, columnSpan);
+        }
+
+        private void ConfigureToolTips()
+        {
+            _helpToolTip.AutoPopDelay = 12000;
+            _helpToolTip.InitialDelay = 350;
+            _helpToolTip.ReshowDelay = 200;
+            _helpToolTip.ShowAlways = true;
+
+            _helpToolTip.SetToolTip(_statusLabel, "Shows the Nexus game domain and whether the configured API key is connected to an account.");
+            _helpToolTip.SetToolTip(_authorFilter, "Filter local mods by author before checking Nexus ownership.");
+            _helpToolTip.SetToolTip(_localList, "Pick the local mod whose Nexus draft you want to prepare.");
+            _helpToolTip.SetToolTip(_refreshOwnedButton, "Loads Nexus mods owned by the selected author so the draft can be linked to the right Nexus page.");
+            _helpToolTip.SetToolTip(_ownedList, "Selecting an owned Nexus mod copies its known Nexus details into the draft.");
+            _helpToolTip.SetToolTip(_detailsStageButton, "Review metadata that will be saved into the upload draft.");
+            _helpToolTip.SetToolTip(_filesStageButton, "Build or open the ZIP package prepared from the selected local mod.");
+            _helpToolTip.SetToolTip(_verifyStageButton, "Check ownership, required fields, and package readiness before publishing.");
+            _helpToolTip.SetToolTip(_publishStageButton, "Open Nexus handoff actions once the draft and package are ready.");
+            _helpToolTip.SetToolTip(_nameBox, "Display name for the Nexus file draft.");
+            _helpToolTip.SetToolTip(_versionBox, "Version string Nexus users will see for this upload.");
+            _helpToolTip.SetToolTip(_fileCategoryBox, "Nexus file bucket: main for primary releases, optional for add-ons, miscellaneous for supporting files.");
+            _helpToolTip.SetToolTip(_gameDomainBox, "Nexus game domain used in upload URLs. Sheltered uses 'sheltered'.");
+            _helpToolTip.SetToolTip(_nexusModIdBox, "Numeric Nexus mod page ID. Pick an owned Nexus mod to fill this automatically.");
+            _helpToolTip.SetToolTip(_updateGroupIdBox, "Optional Nexus update group ID for grouping files in the same update stream.");
+            _helpToolTip.SetToolTip(_authorsBox, "Comma-separated authors saved with the draft.");
+            _helpToolTip.SetToolTip(_tagsBox, "Comma-separated tags saved with the draft.");
+            _helpToolTip.SetToolTip(_summaryBox, "Short changelog-style summary for the upload.");
+            _helpToolTip.SetToolTip(_descriptionBox, "Longer description or release notes for the Nexus file.");
+            _helpToolTip.SetToolTip(_saveDraftButton, "Save these details to the mod's local Nexus upload draft.");
+            _helpToolTip.SetToolTip(_buildPackageButton, "Create the Nexus-ready ZIP using the current draft and selected mod folder.");
+            _helpToolTip.SetToolTip(_openPackageButton, "Open the folder containing the generated upload ZIP.");
+            _helpToolTip.SetToolTip(_verifyButton, "Refresh validation results for ownership, metadata, and package state.");
+            _helpToolTip.SetToolTip(_validationBox, "Shows publish blockers and warnings for the selected mod draft.");
+            _helpToolTip.SetToolTip(_openNexusButton, "Open the Nexus upload page for manual handoff.");
+            _helpToolTip.SetToolTip(_publishApiButton, "Attempt publishing through the configured Nexus API service.");
         }
 
         private static Label AddLabel(Control parent, string text, int x, int y, int width, bool autoEllipsis)
@@ -751,36 +926,5 @@ namespace Manager.Views
             return label;
         }
 
-        private static TextBox AddTextField(Control parent, string label, int x, int y, int width)
-        {
-            AddFieldLabel(parent, label, x, y);
-            var box = new TextBox();
-            box.Location = new Point(x, y + 20);
-            box.Size = new Size(width, 24);
-            parent.Controls.Add(box);
-            return box;
-        }
-
-        private static TextBox AddMultilineField(Control parent, string label, int x, int y, int width, int height)
-        {
-            AddFieldLabel(parent, label, x, y);
-            var box = new TextBox();
-            box.Location = new Point(x, y + 20);
-            box.Size = new Size(width, height);
-            box.Multiline = true;
-            box.ScrollBars = ScrollBars.Vertical;
-            parent.Controls.Add(box);
-            return box;
-        }
-
-        private static void AddFieldLabel(Control parent, string text, int x, int y)
-        {
-            var label = new Label();
-            label.Text = text;
-            label.Location = new Point(x, y);
-            label.Size = new Size(160, 18);
-            label.Font = new Font("Segoe UI", 8.5f, FontStyle.Bold);
-            parent.Controls.Add(label);
-        }
     }
 }

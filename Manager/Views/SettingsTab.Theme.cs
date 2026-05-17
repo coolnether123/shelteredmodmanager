@@ -38,6 +38,7 @@ namespace Manager.Views
 
             _nexusLabel.ForeColor = Color.White;
             _enableNexusCheckBox.ForeColor = Color.White;
+            _enableExperimentalPublishCheckBox.ForeColor = Color.White;
             _nexusApiKeyLabel.ForeColor = Color.White;
             _nexusApiKeyTextBox.BackColor = Color.FromArgb(60, 60, 62);
             _nexusApiKeyTextBox.ForeColor = Color.White;
@@ -92,6 +93,7 @@ namespace Manager.Views
 
             _nexusLabel.ForeColor = SystemColors.ControlText;
             _enableNexusCheckBox.ForeColor = SystemColors.ControlText;
+            _enableExperimentalPublishCheckBox.ForeColor = SystemColors.ControlText;
             _nexusApiKeyLabel.ForeColor = SystemColors.ControlText;
             _nexusApiKeyTextBox.BackColor = SystemColors.Window;
             _nexusApiKeyTextBox.ForeColor = SystemColors.WindowText;
