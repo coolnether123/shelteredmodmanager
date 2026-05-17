@@ -14,8 +14,12 @@ namespace Manager.Core.Models
         public string Name { get; set; }
         public string Author { get; set; }
         public string UploaderName { get; set; }
+        public int UploaderId { get; set; }
+        public string Category { get; set; }
+        public string Status { get; set; }
         public string Version { get; set; }
         public string Summary { get; set; }
+        public string Description { get; set; }
         public string PictureUrl { get; set; }
         public string ThumbnailUrl { get; set; }
         public DateTime? CreatedAtUtc { get; set; }

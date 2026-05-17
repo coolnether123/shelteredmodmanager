@@ -74,9 +74,12 @@ query latestMods($filter: ModsFilter, $sort: [ModsSort!], $count: Int){
       uid
       name
       author
-      uploader { name }
+      uploader { memberId name }
+      category
+      status
       version
       summary
+      description
       createdAt
       updatedAt
       downloads
@@ -179,9 +182,12 @@ query findModsByName($filter: ModsFilter, $sort: [ModsSort!], $count: Int){
       uid
       name
       author
-      uploader { name }
+      uploader { memberId name }
+      category
+      status
       version
       summary
+      description
       createdAt
       updatedAt
       downloads
@@ -237,6 +243,56 @@ query findModsByName($filter: ModsFilter, $sort: [ModsSort!], $count: Int){
             }
 
             return list;
+        }
+
+        public List<NexusRemoteMod> GetModsByUploader(string gameDomain, int uploaderId, int count, out string errorMessage)
+        {
+            errorMessage = null;
+            if (string.IsNullOrEmpty(gameDomain) || uploaderId <= 0)
+            {
+                errorMessage = "Game domain and Nexus uploader id are required.";
+                return new List<NexusRemoteMod>();
+            }
+
+            if (count <= 0) count = 50;
+            if (count > 100) count = 100;
+
+            var uploaderFilter = new Dictionary<string, object>();
+            uploaderFilter["value"] = uploaderId;
+            uploaderFilter["op"] = "EQUALS";
+
+            return QueryModsByFilter(gameDomain, "uploaderId", uploaderFilter, count, out errorMessage);
+        }
+
+        public List<NexusRemoteMod> GetModsByAuthor(string gameDomain, string authorName, int count, out string errorMessage)
+        {
+            errorMessage = null;
+            if (string.IsNullOrEmpty(gameDomain) || string.IsNullOrEmpty(authorName))
+            {
+                errorMessage = "Game domain and author are required.";
+                return new List<NexusRemoteMod>();
+            }
+
+            if (count <= 0) count = 50;
+            if (count > 100) count = 100;
+
+            var authorFilter = new Dictionary<string, object>();
+            authorFilter["value"] = authorName;
+            authorFilter["op"] = "EQUALS";
+
+            return QueryModsByFilter(gameDomain, "author", authorFilter, count, out errorMessage);
+        }
+
+        public List<NexusRemoteMod> GetModsForUploadOwnership(NexusAccountStatus account, string gameDomain, string authorName, out string errorMessage)
+        {
+            if (account != null && account.UserId > 0)
+                return GetModsByUploader(gameDomain, account.UserId, 100, out errorMessage);
+
+            if (!string.IsNullOrEmpty(authorName))
+                return GetModsByAuthor(gameDomain, authorName, 100, out errorMessage);
+
+            errorMessage = "Connect a Nexus account or choose an author before checking ownership.";
+            return new List<NexusRemoteMod>();
         }
 
         public List<NexusRemoteModFile> GetModFiles(int gameId, int modId, out string errorMessage)
@@ -553,9 +609,12 @@ query legacyModsByDomain($ids: [CompositeDomainWithIdInput!]!, $count: Int){
       uid
       name
       author
-      uploader { name }
+      uploader { memberId name }
+      category
+      status
       version
       summary
+      description
       createdAt
       updatedAt
       downloads
@@ -604,6 +663,78 @@ query legacyModsByDomain($ids: [CompositeDomainWithIdInput!]!, $count: Int){
             }
 
             return results;
+        }
+
+        private List<NexusRemoteMod> QueryModsByFilter(string gameDomain, string filterName, Dictionary<string, object> filterValue, int count, out string errorMessage)
+        {
+            errorMessage = null;
+            var list = new List<NexusRemoteMod>();
+
+            const string query = @"
+query uploadCandidateMods($filter: ModsFilter, $sort: [ModsSort!], $count: Int){
+  mods(viewUploaderHidden: true, filter: $filter, sort: $sort, count: $count){
+    nodes{
+      modId
+      uid
+      name
+      author
+      uploader { memberId name }
+      category
+      status
+      version
+      summary
+      description
+      createdAt
+      updatedAt
+      downloads
+      endorsements
+      pictureUrl
+      thumbnailUrl
+      game { id domainName }
+    }
+  }
+}";
+
+            var gameDomainFilter = new Dictionary<string, object>();
+            gameDomainFilter["value"] = gameDomain;
+            gameDomainFilter["op"] = "EQUALS";
+
+            var filter = new Dictionary<string, object>();
+            filter["op"] = "AND";
+            filter["gameDomainName"] = new object[] { gameDomainFilter };
+            filter[filterName] = new object[] { filterValue };
+
+            var updatedSort = new Dictionary<string, object>();
+            updatedSort["direction"] = "DESC";
+            var sortEntry = new Dictionary<string, object>();
+            sortEntry["updatedAt"] = updatedSort;
+
+            var variables = new Dictionary<string, object>();
+            variables["filter"] = filter;
+            variables["sort"] = new object[] { sortEntry };
+            variables["count"] = count;
+
+            var response = _client.Execute(query, variables);
+            if (!string.IsNullOrEmpty(response.ErrorMessage))
+            {
+                errorMessage = response.ErrorMessage;
+                return list;
+            }
+
+            var page = AsDictionary(response.Data, "mods");
+            var nodes = AsArray(page, "nodes");
+            if (nodes == null) return list;
+
+            foreach (var raw in nodes)
+            {
+                var node = raw as Dictionary<string, object>;
+                if (node == null) continue;
+                var parsed = ParseRemoteMod(node, gameDomain);
+                if (parsed != null)
+                    list.Add(parsed);
+            }
+
+            return list;
         }
 
         private static List<NexusModReference> GetDistinctReferences(IEnumerable<NexusModReference> references)
@@ -673,8 +804,12 @@ query legacyModsByDomain($ids: [CompositeDomainWithIdInput!]!, $count: Int){
             mod.Author = ReadString(node, "author");
             var uploader = AsDictionary(node, "uploader");
             mod.UploaderName = ReadString(uploader, "name");
+            mod.UploaderId = ReadInt(uploader, "memberId");
+            mod.Category = ReadString(node, "category");
+            mod.Status = ReadString(node, "status");
             mod.Version = ReadString(node, "version");
             mod.Summary = ReadString(node, "summary");
+            mod.Description = ReadString(node, "description");
             mod.PictureUrl = ReadString(node, "pictureUrl");
             mod.ThumbnailUrl = ReadString(node, "thumbnailUrl");
             mod.Downloads = ReadInt(node, "downloads");

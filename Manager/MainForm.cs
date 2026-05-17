@@ -25,6 +25,7 @@ namespace Manager
         private TabPage _gameSetupPage;
         private TabPage _modManagerPage;
         private TabPage _nexusPage;
+        private TabPage _nexusUploadPage;
         private TabPage _settingsPage;
         private TabPage _aboutPage;
 
@@ -36,6 +37,7 @@ namespace Manager
         private Panel _headerStatusPanel;
         private ModManagerTab _modManagerTab;
         private NexusModsTab _nexusTab;
+        private NexusUploadTab _nexusUploadTab;
         private SettingsTab _settingsTab;
         private AboutTab _aboutTab;
 
@@ -164,6 +166,8 @@ namespace Manager
                 _settingsTab.SetNexusAccountStatus(status);
             if (_nexusTab != null)
                 _nexusTab.SetAccountStatus(status);
+            if (_nexusUploadTab != null)
+                _nexusUploadTab.SetAccountStatus(status);
         }
 
         private void RefreshNexusAccountStatusAsync(bool showPending)
@@ -240,6 +244,8 @@ namespace Manager
             this._modManagerTab = new Manager.Views.ModManagerTab();
             this._nexusPage = new System.Windows.Forms.TabPage();
             this._nexusTab = new Manager.Views.NexusModsTab();
+            this._nexusUploadPage = new System.Windows.Forms.TabPage();
+            this._nexusUploadTab = new Manager.Views.NexusUploadTab();
             this._settingsPage = new System.Windows.Forms.TabPage();
             this._settingsTab = new Manager.Views.SettingsTab();
             this._aboutPage = new System.Windows.Forms.TabPage();
@@ -252,6 +258,7 @@ namespace Manager
             this._gameSetupPage.SuspendLayout();
             this._modManagerPage.SuspendLayout();
             this._nexusPage.SuspendLayout();
+            this._nexusUploadPage.SuspendLayout();
             this._settingsPage.SuspendLayout();
             this._aboutPage.SuspendLayout();
             this.SuspendLayout();
@@ -350,6 +357,7 @@ namespace Manager
             this._tabControl.Controls.Add(this._gameSetupPage);
             this._tabControl.Controls.Add(this._modManagerPage);
             this._tabControl.Controls.Add(this._nexusPage);
+            this._tabControl.Controls.Add(this._nexusUploadPage);
             this._tabControl.Controls.Add(this._settingsPage);
             this._tabControl.Controls.Add(this._aboutPage);
             this._tabControl.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -406,13 +414,31 @@ namespace Manager
             this._nexusTab.Size = new System.Drawing.Size(1174, 562);
             this._nexusTab.TabIndex = 0;
             // 
+            // _nexusUploadPage
+            // 
+            this._nexusUploadPage.Controls.Add(this._nexusUploadTab);
+            this._nexusUploadPage.Location = new System.Drawing.Point(4, 42);
+            this._nexusUploadPage.Name = "_nexusUploadPage";
+            this._nexusUploadPage.Size = new System.Drawing.Size(1174, 562);
+            this._nexusUploadPage.TabIndex = 3;
+            this._nexusUploadPage.Text = "Publish";
+            // 
+            // _nexusUploadTab
+            // 
+            this._nexusUploadTab.Dock = System.Windows.Forms.DockStyle.Fill;
+            this._nexusUploadTab.Location = new System.Drawing.Point(0, 0);
+            this._nexusUploadTab.Name = "_nexusUploadTab";
+            this._nexusUploadTab.Padding = new System.Windows.Forms.Padding(12);
+            this._nexusUploadTab.Size = new System.Drawing.Size(1174, 562);
+            this._nexusUploadTab.TabIndex = 0;
+            // 
             // _settingsPage
             // 
             this._settingsPage.Controls.Add(this._settingsTab);
             this._settingsPage.Location = new System.Drawing.Point(4, 42);
             this._settingsPage.Name = "_settingsPage";
             this._settingsPage.Size = new System.Drawing.Size(1174, 562);
-            this._settingsPage.TabIndex = 3;
+            this._settingsPage.TabIndex = 4;
             this._settingsPage.Text = "Settings";
             // 
             // _settingsTab
@@ -431,7 +457,7 @@ namespace Manager
             this._aboutPage.Location = new System.Drawing.Point(4, 42);
             this._aboutPage.Name = "_aboutPage";
             this._aboutPage.Size = new System.Drawing.Size(1174, 562);
-            this._aboutPage.TabIndex = 4;
+            this._aboutPage.TabIndex = 5;
             this._aboutPage.Text = "About";
             // 
             // _aboutTab
@@ -472,6 +498,7 @@ namespace Manager
             this._gameSetupPage.ResumeLayout(false);
             this._modManagerPage.ResumeLayout(false);
             this._nexusPage.ResumeLayout(false);
+            this._nexusUploadPage.ResumeLayout(false);
             this._settingsPage.ResumeLayout(false);
             this._aboutPage.ResumeLayout(false);
             this.ResumeLayout(false);
@@ -497,6 +524,7 @@ namespace Manager
             _modManagerTab.NexusSyncCompleted += ModManagerTab_NexusSyncCompleted;
             _nexusTab.InstallCompleted += NexusTab_InstallCompleted;
             _nexusTab.NexusActivity += NexusTab_NexusActivity;
+            _nexusUploadTab.NexusActivity += NexusTab_NexusActivity;
 
             // Settings events
             _settingsTab.SettingsChanged += SettingsTab_SettingsChanged;
@@ -554,6 +582,7 @@ namespace Manager
             _gameSetupTab.Initialize(_settings);
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+            _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             RefreshNexusAccountStatusAsync(true);
 
@@ -619,6 +648,10 @@ namespace Manager
             {
                 _nexusTab.RefreshLatestModsAsync();
             }
+            else if (_tabControl.SelectedTab == _nexusUploadPage && _settings.IsModsPathValid)
+            {
+                _modManagerTab.RefreshMods();
+            }
         }
 
         private void GameSetupTab_GamePathChanged(string newPath)
@@ -635,6 +668,7 @@ namespace Manager
                 _discoveryService = new ModDiscoveryService(installedApiVersions);
                 _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
                 _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+                _nexusUploadTab.Initialize(_nexusService, _settings);
                 
                 // Setup doorstop
                 try
@@ -1198,6 +1232,7 @@ namespace Manager
 
             _nexusTab.SetLastCheckedUtc(_modManagerTab.LastNexusRemoteSyncUtc);
             _nexusTab.UpdateInstalledMods(mods, mappedMods, updateCount, errorMessage);
+            _nexusUploadTab.UpdateInstalledMods(mods);
 
             if (_startupNexusUpdateAnnouncementsPending && string.IsNullOrEmpty(errorMessage))
             {
@@ -1228,6 +1263,7 @@ namespace Manager
             RecreateNexusService();
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+            _nexusUploadTab.Initialize(_nexusService, _settings);
             SaveSettingsFromUi();
 
             LogSettingsChanges(previous, _settings, "Settings updated");
@@ -1278,6 +1314,7 @@ namespace Manager
             _gameSetupTab.Initialize(_settings);
             _modManagerTab.Initialize(_discoveryService, _orderService, _settings, _nexusService);
             _nexusTab.Initialize(_nexusService, _settings, APP_VERSION);
+            _nexusUploadTab.Initialize(_nexusService, _settings);
             _settingsTab.Initialize(_settings);
             
             // Re-apply theme
@@ -1517,6 +1554,7 @@ namespace Manager
             _gameSetupTab.ApplyTheme(isDark);
             _modManagerTab.ApplyTheme(isDark);
             _nexusTab.ApplyTheme(isDark);
+            _nexusUploadTab.ApplyTheme(isDark);
             _settingsTab.ApplyTheme(isDark);
             _aboutTab.ApplyTheme(isDark);
         }
