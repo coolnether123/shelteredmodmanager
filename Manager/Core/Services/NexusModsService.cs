@@ -142,9 +142,11 @@ namespace Manager.Core.Services
                 errorMessage = "Nexus v3 did not return mod details.";
             else
             {
-                PopulateLatestFileState(mod, ref errorMessage);
-                if (string.IsNullOrEmpty(errorMessage))
-                    StoreCached(_modCache, cacheKey, mod);
+                string fileStateWarning;
+                PopulateLatestFileState(mod, out fileStateWarning);
+                if (!string.IsNullOrEmpty(fileStateWarning))
+                    System.Diagnostics.Debug.WriteLine("Nexus file state warning: " + fileStateWarning);
+                StoreCached(_modCache, cacheKey, mod);
             }
 
             return mod;
@@ -777,8 +779,9 @@ namespace Manager.Core.Services
             return request;
         }
 
-        private void PopulateLatestFileState(NexusRemoteMod mod, ref string errorMessage)
+        private void PopulateLatestFileState(NexusRemoteMod mod, out string warningMessage)
         {
+            warningMessage = null;
             if (mod == null || string.IsNullOrEmpty(mod.Uid))
                 return;
 
@@ -786,8 +789,7 @@ namespace Manager.Core.Services
             List<NexusModFileUpdateGroup> groups = GetModFileUpdateGroups(mod.Uid, out groupsError);
             if (!string.IsNullOrEmpty(groupsError))
             {
-                if (string.IsNullOrEmpty(errorMessage))
-                    errorMessage = groupsError;
+                warningMessage = groupsError;
                 return;
             }
 
@@ -798,8 +800,8 @@ namespace Manager.Core.Services
                 List<NexusRemoteModFile> files = GetFileUpdateGroupVersions(groups[i].Id, out versionError);
                 if (!string.IsNullOrEmpty(versionError))
                 {
-                    if (string.IsNullOrEmpty(errorMessage))
-                        errorMessage = versionError;
+                    if (string.IsNullOrEmpty(warningMessage))
+                        warningMessage = versionError;
                     continue;
                 }
 

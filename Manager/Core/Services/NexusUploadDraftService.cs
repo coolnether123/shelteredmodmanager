@@ -107,7 +107,7 @@ namespace Manager.Core.Services
             if (!IsValidFileCategory(draft.FileCategory))
                 report.AddError("File category must be main, optional, or miscellaneous.");
             if (draft.NexusModId <= 0)
-                report.AddWarning("Nexus v3 API publishing requires an existing Nexus mod ID.");
+                report.AddError("Nexus v3 API publishing requires an existing Nexus mod ID.");
             if (ownership == null || !ownership.IsVerified)
                 report.AddWarning("Nexus v3 will verify ownership when the file publish request is submitted.");
 

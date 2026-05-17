@@ -199,9 +199,7 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            string targetFolderName = Path.GetFileName(sourceModRoot);
-            if (string.IsNullOrEmpty(targetFolderName))
-                targetFolderName = "NexusMod_" + mod.ModId;
+            string targetFolderName = ResolveInstallFolderName(sourceModRoot, extractPath, sourceAbout, mod);
 
             string targetPath = ResolveTargetPath(modsPath, targetContext, targetFolderName);
             if (!ModPackageSafety.ValidateInstallTarget(modsPath, targetPath, sourceModId, targetContext, out errorMessage))
@@ -315,6 +313,61 @@ namespace Manager.Core.Services
                 return Path.GetFullPath(targetContext.ExistingInstalledPath);
 
             return Path.Combine(modsPath, fallbackFolderName);
+        }
+
+        private static string ResolveInstallFolderName(
+            string sourceModRoot,
+            string extractPath,
+            global::Manager.ModTypes.ModAboutInfo sourceAbout,
+            NexusRemoteMod mod)
+        {
+            string folderName = Path.GetFileName(sourceModRoot);
+            if (IsSameDirectory(sourceModRoot, extractPath))
+            {
+                folderName = FirstNonEmpty(
+                    sourceAbout != null ? sourceAbout.id : null,
+                    sourceAbout != null ? sourceAbout.name : null,
+                    mod != null ? mod.Name : null,
+                    mod != null && mod.ModId > 0 ? "NexusMod_" + mod.ModId.ToString() : "NexusMod");
+            }
+
+            folderName = SanitizeFolderName(folderName);
+            return string.IsNullOrEmpty(folderName) ? "NexusMod" : folderName;
+        }
+
+        private static bool IsSameDirectory(string left, string right)
+        {
+            if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+                return false;
+
+            return string.Equals(
+                Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            if (values == null)
+                return string.Empty;
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(values[i]))
+                    return values[i].Trim();
+            }
+
+            return string.Empty;
+        }
+
+        private static string SanitizeFolderName(string value)
+        {
+            string text = string.IsNullOrEmpty(value) ? string.Empty : value.Trim();
+            char[] invalid = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < invalid.Length; i++)
+                text = text.Replace(invalid[i], '_');
+
+            return text.Trim(' ', '.');
         }
 
         private static string CreateUniqueBackupPath(string backupRoot, string targetFolderName)
