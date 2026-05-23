@@ -29,6 +29,7 @@ namespace ShelteredAPI.Saves
                 target.daysSurvived = ReadInt(document, "daysSurvived", 0);
                 target.difficulty = ReadInt(document, "difficultySetting", 1);
                 target.saveTime = ReadString(document, "timestamp", string.Empty);
+                target.hasMapSizeMetadata = HasElement(document, "mapSize");
                 target.mapSize = ReadInt(document, "mapSize", 0);
                 target.fog = ReadBool(document, "fogSetting", false);
                 target.rainDiff = ReadInt(document, "rainDifficulty", 1);
@@ -85,6 +86,12 @@ namespace ShelteredAPI.Saves
             return int.TryParse(ReadString(document, elementName, null), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
                 ? value
                 : fallback;
+        }
+
+        private static bool HasElement(XmlDocument document, string elementName)
+        {
+            XmlNodeList nodes = document.GetElementsByTagName(elementName);
+            return nodes != null && nodes.Count > 0 && nodes[0] != null;
         }
 
         private static bool ReadBool(XmlDocument document, string elementName, bool fallback)

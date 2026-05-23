@@ -192,11 +192,22 @@ namespace ShelteredAPI.UI
 
         public UITakeoverSession BindTooltip(string path, string bindingKey, string tooltipText)
         {
-            return BindHover(path, bindingKey, delegate(GameObject go, bool isOver)
+            GameObject go = Resolve(path);
+            if (go == null) return this;
+
+            EnsureCollider(path);
+            Action<GameObject, bool> previous = UIEventBindingRegistry.BindHover(go, bindingKey, delegate(GameObject target, bool isOver)
             {
                 if (isOver) ModTooltip.Show(tooltipText);
                 else ModTooltip.Hide();
             });
+            _restoreActions.Add(delegate
+            {
+                if (go != null)
+                    UIEventBindingRegistry.RestoreHover(go, bindingKey, previous);
+                ModTooltip.Hide();
+            });
+            return this;
         }
 
         public void Restore()
@@ -253,13 +264,22 @@ namespace ShelteredAPI.UI
             relay.BindClick(key, onClick);
         }
 
-        public static void BindHover(GameObject go, string key, Action<GameObject, bool> onHover)
+        public static Action<GameObject, bool> BindHover(GameObject go, string key, Action<GameObject, bool> onHover)
+        {
+            if (go == null) return null;
+            key = string.IsNullOrEmpty(key) ? "__default_hover__" : key;
+            TakeoverEventRelay relay = GetOrAddRelay(go);
+            if (relay == null) return null;
+            return relay.BindHover(key, onHover);
+        }
+
+        public static void RestoreHover(GameObject go, string key, Action<GameObject, bool> prior)
         {
             if (go == null) return;
             key = string.IsNullOrEmpty(key) ? "__default_hover__" : key;
-            TakeoverEventRelay relay = GetOrAddRelay(go);
+            TakeoverEventRelay relay = go.GetComponent<TakeoverEventRelay>();
             if (relay == null) return;
-            relay.BindHover(key, onHover);
+            relay.RestoreHover(key, prior);
         }
 
         private static TakeoverEventRelay GetOrAddRelay(GameObject go)
@@ -283,11 +303,23 @@ namespace ShelteredAPI.UI
             EnsureWired();
         }
 
-        public void BindHover(string key, Action<GameObject, bool> handler)
+        public Action<GameObject, bool> BindHover(string key, Action<GameObject, bool> handler)
         {
             key = string.IsNullOrEmpty(key) ? "__default_hover__" : key;
+            Action<GameObject, bool> previous = null;
+            _hoverHandlers.TryGetValue(key, out previous);
             _hoverHandlers[key] = handler;
             EnsureWired();
+            return previous;
+        }
+
+        public void RestoreHover(string key, Action<GameObject, bool> prior)
+        {
+            key = string.IsNullOrEmpty(key) ? "__default_hover__" : key;
+            if (prior == null)
+                _hoverHandlers.Remove(key);
+            else
+                _hoverHandlers[key] = prior;
         }
 
         private void EnsureWired()

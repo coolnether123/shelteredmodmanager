@@ -38,18 +38,18 @@
     <!-- Local Sheltered/Unity runtime references are developer-machine fallbacks.
          If your install differs, retarget these HintPath values to equivalent game assemblies. -->
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
+      <HintPath>$(SmmHarmonyDll)</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\Assembly-CSharp.dll</HintPath>
+      <HintPath>$(ShelteredManagedDir)Assembly-CSharp.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml" />
     <Reference Include="UnityEngine">
-      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -60,6 +60,13 @@
     <Compile Include="Actors\Internal\ActorSystemImpl.Diagnostics.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.Execution.cs" />
     <Compile Include="Actors\Internal\ActorSystemImpl.LiveSync.cs" />
+    <Compile Include="Map\MapMarkerSnapshots.cs" />
+    <Compile Include="Map\ShelteredMapMarkers.cs" />
+    <Compile Include="Map\ExpeditionMapContext.cs" />
+    <Compile Include="Map\MapGenerationPolicies.cs" />
+    <Compile Include="Map\ShelteredMap.cs" />
+    <Compile Include="Map\Internal\ExpeditionMapContextReader.cs" />
+    <Compile Include="Map\Internal\MapGenerationPolicyRegistry.cs" />
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
     <Compile Include="Content\AssetLoader.cs" />
     <Compile Include="Content\ContentRegistry.cs" />
@@ -95,6 +102,10 @@
     <Compile Include="Characters\Models\CharacterSaveData.cs" />
     <Compile Include="Characters\Models\EffectInstance.cs" />
     <Compile Include="Characters\Models\SyntheticCharacterProxy.cs" />
+    <Compile Include="Queues\PlayerQueueContracts.cs" />
+    <Compile Include="Queues\ShelteredQueues.cs" />
+    <Compile Include="Queues\Internal\PlayerQueuePatches.cs" />
+    <Compile Include="Queues\Internal\PlayerQueueRuntime.cs" />
     <Compile Include="Content\InventoryIntegration.cs" />
     <Compile Include="Content\ModLocalization.cs" />
     <Compile Include="GameState\GameUtil.cs" />
@@ -114,6 +125,7 @@
     <Compile Include="Saves\Runtime\SaveRuntimeState.cs" />
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
+    <Compile Include="Debugging\ShelteredSupportBundle.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\LoadingTransitionRecoveryPatches.cs" />
     <Compile Include="Harmony\ShelteredDeferredPatchTriggers.cs" />
@@ -161,6 +173,7 @@
     <Compile Include="Saves\SaveManagerInspector.cs" />
     <Compile Include="Saves\Runtime\SaveManager_SaveGlobalData_Patch.cs" />
     <Compile Include="Saves\SaveInfoXmlMetadataReader.cs" />
+    <Compile Include="Saves\SaveManifestFacts.cs" />
     <Compile Include="Saves\SaveRegistryCore.cs" />
     <Compile Include="Saves\ScenarioSaveIdGuards.cs" />
     <Compile Include="Saves\ScenarioRegistry.cs" />
@@ -504,6 +517,8 @@
     <Compile Include="UI\UITakeover.cs" />
     <Compile Include="UI\UIPanelTakeover.cs" />
     <Compile Include="UI\ShelteredUI.cs" />
+    <Compile Include="UI\UIExtensionContracts.cs" />
+    <Compile Include="UI\Internal\UIExtensionService.cs" />
     <Compile Include="UI\Runtime\RuntimeUiContracts.cs" />
     <Compile Include="UI\Runtime\ShelteredRuntimeUI.cs" />
     <Compile Include="Storage\ItemStoreContracts.cs" />

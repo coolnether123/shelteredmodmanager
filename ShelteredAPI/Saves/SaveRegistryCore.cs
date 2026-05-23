@@ -444,27 +444,7 @@ namespace ShelteredAPI.Saves
 
         internal static SlotManifest CreateCurrentManifestSnapshot(SaveInfo info)
         {
-            var currentMods = new List<LoadedModInfo>();
-
-            foreach (var mod in ModRuntime.GetLoadedModsSnapshot())
-            {
-                if (mod == null) continue;
-
-                string warning = mod.About?.missingModWarning;
-                currentMods.Add(new LoadedModInfo
-                {
-                    modId = mod.Id,
-                    version = mod.Version,
-                    warnings = string.IsNullOrEmpty(warning) ? new string[0] : new string[] { warning }
-                });
-            }
-
-            return new SlotManifest
-            {
-                lastModified = DateTime.UtcNow.ToString("o"),
-                family_name = info != null ? info.familyName : "Unknown",
-                lastLoadedMods = currentMods.ToArray()
-            };
+            return SaveManifestFacts.CaptureCurrent(info);
         }
 
 
@@ -616,6 +596,24 @@ namespace ShelteredAPI.Saves
             root.Set("manifestVersion", ManualJsonValue.Number(manifest.manifestVersion));
             root.Set("lastModified", ManualJsonValue.String(manifest.lastModified));
             root.Set("family_name", ManualJsonValue.String(manifest.family_name));
+            root.Set("saveScopeId", ManualJsonValue.String(manifest.saveScopeId));
+            root.Set("saveId", ManualJsonValue.String(manifest.saveId));
+            root.Set("customScenarioId", ManualJsonValue.String(manifest.customScenarioId));
+            root.Set("modApiVersion", ManualJsonValue.String(manifest.modApiVersion));
+            root.Set("shelteredApiVersion", ManualJsonValue.String(manifest.shelteredApiVersion));
+            root.Set("mapFactsStatus", ManualJsonValue.String(manifest.mapFactsStatus));
+            root.Set("hasMapSize", ManualJsonValue.Boolean(manifest.hasMapSize));
+            root.Set("mapSize", ManualJsonValue.Number(manifest.mapSize));
+            root.Set("runtimeMapFactsStatus", ManualJsonValue.String(manifest.runtimeMapFactsStatus));
+            root.Set("runtimeMapWidth", ManualJsonValue.Number(manifest.runtimeMapWidth));
+            root.Set("runtimeMapHeight", ManualJsonValue.Number(manifest.runtimeMapHeight));
+            root.Set("runtimeMapScaleFactor", ManualJsonValue.String(manifest.runtimeMapScaleFactor));
+            root.Set("hasMapSeed", ManualJsonValue.Boolean(manifest.hasMapSeed));
+            root.Set("mapSeed", ManualJsonValue.Number(manifest.mapSeed));
+            root.Set("queueFactsStatus", ManualJsonValue.String(manifest.queueFactsStatus));
+            root.Set("queueSummary", ManualJsonValue.String(manifest.queueSummary));
+            root.Set("restoreFactsStatus", ManualJsonValue.String(manifest.restoreFactsStatus));
+            root.Set("restoreLineageId", ManualJsonValue.String(manifest.restoreLineageId));
 
             ManualJsonArray mods = new ManualJsonArray();
             if (manifest.lastLoadedMods != null && manifest.lastLoadedMods.Length > 0)
@@ -631,6 +629,8 @@ namespace ShelteredAPI.Saves
                     ManualJsonObject modJson = new ManualJsonObject();
                     modJson.Set("modId", ManualJsonValue.String(mod.modId));
                     modJson.Set("version", ManualJsonValue.String(mod.version));
+                    modJson.Set("requiredModApiVersion", ManualJsonValue.String(mod.requiredModApiVersion));
+                    modJson.Set("requiredShelteredApiVersion", ManualJsonValue.String(mod.requiredShelteredApiVersion));
                     ManualJsonArray warnings = new ManualJsonArray();
                     if (mod.warnings != null)
                     {
@@ -662,6 +662,7 @@ namespace ShelteredAPI.Saves
 
             try
             {
+                SaveManifestFacts.ApplyStorageIdentityFacts(manifest, scenarioId, absoluteSlot);
                 var slotRoot = DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, true);
                 manifestPath = Path.Combine(slotRoot, "manifest.json");
                 File.WriteAllText(manifestPath, SerializeSlotManifest(manifest));
@@ -704,6 +705,24 @@ namespace ShelteredAPI.Saves
             result.manifestVersion = root.GetInt("manifestVersion", result.manifestVersion);
             result.lastModified = root.GetString("lastModified", result.lastModified);
             result.family_name = root.GetString("family_name", result.family_name);
+            result.saveScopeId = root.GetString("saveScopeId", result.saveScopeId);
+            result.saveId = root.GetString("saveId", result.saveId);
+            result.customScenarioId = root.GetString("customScenarioId", result.customScenarioId);
+            result.modApiVersion = root.GetString("modApiVersion", result.modApiVersion);
+            result.shelteredApiVersion = root.GetString("shelteredApiVersion", result.shelteredApiVersion);
+            result.mapFactsStatus = root.GetString("mapFactsStatus", result.mapFactsStatus);
+            result.hasMapSize = root.GetBool("hasMapSize", result.hasMapSize);
+            result.mapSize = root.GetInt("mapSize", result.mapSize);
+            result.runtimeMapFactsStatus = root.GetString("runtimeMapFactsStatus", result.runtimeMapFactsStatus);
+            result.runtimeMapWidth = root.GetInt("runtimeMapWidth", result.runtimeMapWidth);
+            result.runtimeMapHeight = root.GetInt("runtimeMapHeight", result.runtimeMapHeight);
+            result.runtimeMapScaleFactor = root.GetString("runtimeMapScaleFactor", result.runtimeMapScaleFactor);
+            result.hasMapSeed = root.GetBool("hasMapSeed", result.hasMapSeed);
+            result.mapSeed = root.GetInt("mapSeed", result.mapSeed);
+            result.queueFactsStatus = root.GetString("queueFactsStatus", result.queueFactsStatus);
+            result.queueSummary = root.GetString("queueSummary", result.queueSummary);
+            result.restoreFactsStatus = root.GetString("restoreFactsStatus", result.restoreFactsStatus);
+            result.restoreLineageId = root.GetString("restoreLineageId", result.restoreLineageId);
             result.lastLoadedMods = ReadLoadedMods(root.GetArray("lastLoadedMods"));
             return result;
         }
@@ -729,6 +748,8 @@ namespace ShelteredAPI.Saves
                 {
                     modId = modJson.GetString("modId", string.Empty),
                     version = modJson.GetString("version", string.Empty),
+                    requiredModApiVersion = modJson.GetString("requiredModApiVersion", null),
+                    requiredShelteredApiVersion = modJson.GetString("requiredShelteredApiVersion", null),
                     warnings = ReadStringArray(modJson.GetArray("warnings"))
                 });
             }

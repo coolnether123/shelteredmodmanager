@@ -14,11 +14,11 @@ namespace ShelteredAPI.Saves.Paging
         private static GameObject _instance;
         private static Texture2D _whiteTexture;
 
-        private const int WINDOW_WIDTH = 860;
-        private const int WINDOW_HEIGHT = 520;
-        private const int CONTENT_WIDTH = WINDOW_WIDTH - 120;
+        private const int WINDOW_WIDTH = 920;
+        private const int WINDOW_HEIGHT = 440;
+        private const int CONTENT_WIDTH = WINDOW_WIDTH - 96;
         private const int TITLE_HEIGHT = 48;
-        private const int BODY_HEIGHT = 310;
+        private const int BODY_HEIGHT = 220;
         private const int BUTTON_LABEL_PADDING = 20;
 
         private static readonly Color ColorHeader = new Color(0.9f, 0.85f, 0.7f);
@@ -82,25 +82,25 @@ namespace ShelteredAPI.Saves.Paging
             CreateTexturedBox(root, "Panel", Vector3.zero, WINDOW_WIDTH, WINDOW_HEIGHT, ColorPanel, 10, false);
 
             var title = CreateLabel(root, "Title", "WELCOME TO CUSTOM SAVES",
-                new Vector3(0, WINDOW_HEIGHT / 2 - 60, 0), 34, ColorHeader, uiFont, ttfFont, 20);
+                new Vector3(0, WINDOW_HEIGHT / 2 - 58, 0), 32, ColorHeader, uiFont, ttfFont, 20);
             ConfigureTextBox(title, CONTENT_WIDTH, TITLE_HEIGHT, NGUIText.Alignment.Center, false);
             title.overflowMethod = UILabel.Overflow.ClampContent;
 
             string bodyText =
                 "Pages 2+ contain unlimited custom save slots.\n" +
-                "Use the arrows or keyboard to navigate pages.\n\n" +
-                "Custom saves stay in their slot numbers unless you reorganize them.\n" +
-                "If gaps are detected after deleting saves, you will be asked at startup\n" +
-                "whether to compact slot numbering.\n\n" +
-                "Slots 1-3 are vanilla saves.";
+                "Use arrows or keyboard to navigate pages.\n\n" +
+                "Custom saves keep their slot numbers unless reorganized.\n" +
+                "If deleting saves leaves gaps, startup asks whether to\n" +
+                "compact slot numbering.\n\n" +
+                "Slots 1-3 are still vanilla slots.";
 
             var body = CreateLabel(root, "Body", bodyText,
-                new Vector3(0, 40, 0), 24, ColorText, uiFont, ttfFont, 20);
+                new Vector3(0, 18, 0), 22, ColorText, uiFont, ttfFont, 20);
             ConfigureTextBox(body, CONTENT_WIDTH, BODY_HEIGHT, NGUIText.Alignment.Center, true);
-            body.overflowMethod = UILabel.Overflow.ResizeHeight;
-            body.spacingY = 6;
+            body.overflowMethod = UILabel.Overflow.ShrinkContent;
+            body.spacingY = 4;
 
-            int buttonY = -WINDOW_HEIGHT / 2 + 68;
+            int buttonY = -WINDOW_HEIGHT / 2 + 58;
             var ok = CreateButton(root, "OkayBtn", "OKAY", new Vector3(0, buttonY, 0),
                 26, Color.white, uiFont, ttfFont, 240, 58, Close);
             var okTex = ok.GetComponent<UITexture>();

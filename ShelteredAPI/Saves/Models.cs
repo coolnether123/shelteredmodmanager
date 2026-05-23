@@ -15,6 +15,7 @@ namespace ShelteredAPI.Saves
         public int difficulty; // 0-4 mirrors game diff setting
         public bool fog;
         public int mapSize;
+        public bool hasMapSizeMetadata;
         public int rainDiff = 1;
         public int resourceDiff = 1;
         public int breachDiff = 1;
@@ -191,6 +192,8 @@ namespace ShelteredAPI.Saves
     {
         public string modId;
         public string version;
+        public string requiredModApiVersion;
+        public string requiredShelteredApiVersion;
         public string[] warnings = new string[0];
     }
 
@@ -203,6 +206,24 @@ namespace ShelteredAPI.Saves
         public int manifestVersion = 1;
         public string lastModified;
         public string family_name;
+        public string saveScopeId;
+        public string saveId;
+        public string customScenarioId;
+        public string modApiVersion;
+        public string shelteredApiVersion;
+        public string mapFactsStatus = "unknown";
+        public bool hasMapSize;
+        public int mapSize;
+        public string runtimeMapFactsStatus = "unavailable";
+        public int runtimeMapWidth;
+        public int runtimeMapHeight;
+        public string runtimeMapScaleFactor;
+        public bool hasMapSeed;
+        public int mapSeed;
+        public string queueFactsStatus = "unavailable";
+        public string queueSummary;
+        public string restoreFactsStatus = "unknown";
+        public string restoreLineageId;
         public LoadedModInfo[] lastLoadedMods = new LoadedModInfo[0];
     }
 }
