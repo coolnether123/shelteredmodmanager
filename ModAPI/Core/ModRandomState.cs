@@ -66,7 +66,7 @@ namespace ModAPI.Core
                     // Per-save stable seed mode: reuse the save's master seed on every load.
                     // This avoids re-rolling RNG identity between loads while still not restoring step history.
                     RandomnessMode mode = data.mode == (int)RandomnessMode.Legacy ? RandomnessMode.Legacy : RandomnessMode.XorShift;
-                    ModRandom.Initialize(data.masterSeed, mode);
+                    ModRandom.ResetForSaveSeed(data.masterSeed, mode);
                     MMLog.WriteInfo(string.Format("[ModRandom] Session Started (Seed Reused): Seed {0}, Mode {1}.", data.masterSeed, mode));
                 }
             }
@@ -74,12 +74,15 @@ namespace ModAPI.Core
             {
                 // No seed.json: Default behavior (Randomized on load)
                 int newSeed = GenerateFreshSeed();
-                ModRandom.Initialize(newSeed);
+                ModRandom.ResetForSaveSeed(newSeed);
                 MMLog.WriteInfo(string.Format("[ModRandom] Session Started (Randomized): New Seed {0}. (No seed.json found)", newSeed));
             }
 
-            // Notify mods that the seed is ready/changed
-            ModRandom.NotifySeedChanged();
+            if (data != null && ModRandom.IsDeterministic)
+            {
+                // Exact-state restores do not reset; listeners must rebind to restored named streams.
+                ModRandom.NotifySeedChanged();
+            }
         }
 
         public static void Save(object payload)

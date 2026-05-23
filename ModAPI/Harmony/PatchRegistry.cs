@@ -108,6 +108,7 @@ namespace ModAPI.Harmony
             IncludedStartupTimings = new HashSet<PatchStartupTiming>();
             IncludeOptionalPatches = true;
             SourceName = string.Empty;
+            TriggerName = string.Empty;
         }
 
         /// <summary>Harmony safety/configuration options applied to discovered patches.</summary>
@@ -120,6 +121,8 @@ namespace ModAPI.Harmony
         public bool IncludeOptionalPatches { get; set; }
         /// <summary>Human-readable source label used in patch registry logging.</summary>
         public string SourceName { get; set; }
+        /// <summary>Human-readable runtime trigger that requested this patch scan.</summary>
+        public string TriggerName { get; set; }
     }
 
     /// <summary>
@@ -178,6 +181,95 @@ namespace ModAPI.Harmony
         public readonly List<PatchRecord> Skipped = new List<PatchRecord>();
         /// <summary>Patch hosts missing explicit governance metadata.</summary>
         public readonly List<PatchRecord> MissingPolicy = new List<PatchRecord>();
+        /// <summary>Non-blocking duplicate target diagnostics detected while building the report.</summary>
+        public readonly List<PatchConflictReportDto> Conflicts = new List<PatchConflictReportDto>();
+        /// <summary>Stable support-bundle-oriented snapshot of this application attempt.</summary>
+        public PatchReportDto DiagnosticSnapshot { get; internal set; }
+    }
+
+    /// <summary>
+    /// Diagnostic classification for multiple patch hosts resolved to one target method.
+    /// </summary>
+    public enum PatchConflictSeverity
+    {
+        Informational,
+        Warning
+    }
+
+    /// <summary>
+    /// Serialization-friendly description of one governed patch host.
+    /// </summary>
+    public sealed class PatchHostReportDto
+    {
+        /// <summary>Assembly containing the patch host.</summary>
+        public string PatchAssemblyName { get; set; }
+        /// <summary>Fully qualified patch host type name.</summary>
+        public string PatchHostName { get; set; }
+        /// <summary>Registry source name used when the host was discovered.</summary>
+        public string SourceName { get; set; }
+        /// <summary>Governance domain for the patch host.</summary>
+        public PatchDomain Domain { get; set; }
+        /// <summary>Feature that owns the patch host.</summary>
+        public string OwningFeature { get; set; }
+        /// <summary>Declared or inferred target behavior description.</summary>
+        public string TargetBehavior { get; set; }
+        /// <summary>Declared or inferred failure behavior.</summary>
+        public string FailureMode { get; set; }
+        /// <summary>Declared or inferred rollback guidance.</summary>
+        public string RollbackStrategy { get; set; }
+        /// <summary>Earliest timing group in which the host may be applied.</summary>
+        public PatchStartupTiming StartupTiming { get; set; }
+        /// <summary>Resolved stable target method signatures, when resolution ran for this timing group.</summary>
+        public string[] TargetMethods { get; set; }
+        /// <summary>Whether the host explicitly declares <see cref="PatchPolicyAttribute"/> metadata.</summary>
+        public bool HasExplicitPolicy { get; set; }
+        /// <summary>Whether the host declares itself optional.</summary>
+        public bool IsOptional { get; set; }
+        /// <summary>Whether the host is developer/debug-only.</summary>
+        public bool DeveloperOnly { get; set; }
+        /// <summary>Whether the host is marked dangerous.</summary>
+        public bool IsDangerous { get; set; }
+    }
+
+    /// <summary>
+    /// Serialization-friendly description of multiple patch hosts sharing a target.
+    /// This is a diagnostic only and does not suppress patch application.
+    /// </summary>
+    public sealed class PatchConflictReportDto
+    {
+        /// <summary>Stable target method signature shared by the patch hosts.</summary>
+        public string TargetMethod { get; set; }
+        /// <summary>Diagnostic severity based on declared ownership metadata.</summary>
+        public PatchConflictSeverity Severity { get; set; }
+        /// <summary>Reason for the severity classification.</summary>
+        public string Reason { get; set; }
+        /// <summary>Patch hosts currently known to target the method.</summary>
+        public PatchHostReportDto[] PatchHosts { get; set; }
+    }
+
+    /// <summary>
+    /// Stable report snapshot retained for diagnostics and support-bundle collection.
+    /// </summary>
+    public sealed class PatchReportDto
+    {
+        /// <summary>UTC timestamp at which this report was retained.</summary>
+        public DateTime CapturedUtc { get; set; }
+        /// <summary>Assembly scanned for patch hosts.</summary>
+        public string AssemblyName { get; set; }
+        /// <summary>Source name supplied to the registry.</summary>
+        public string SourceName { get; set; }
+        /// <summary>Deferred/runtime trigger that initiated the scan, when known.</summary>
+        public string TriggerName { get; set; }
+        /// <summary>All patch hosts discovered during this scan.</summary>
+        public PatchHostReportDto[] Discovered { get; set; }
+        /// <summary>Patch hosts successfully applied during this scan.</summary>
+        public PatchHostReportDto[] Applied { get; set; }
+        /// <summary>Patch hosts skipped or producing no patch operation during this scan.</summary>
+        public PatchHostReportDto[] Skipped { get; set; }
+        /// <summary>Patch hosts without explicit policy metadata.</summary>
+        public PatchHostReportDto[] MissingPolicy { get; set; }
+        /// <summary>Non-blocking duplicate target diagnostics detected by this scan.</summary>
+        public PatchConflictReportDto[] Conflicts { get; set; }
     }
 
     /// <summary>
@@ -185,6 +277,43 @@ namespace ModAPI.Harmony
     /// </summary>
     public static class PatchRegistry
     {
+        private const int MaxRetainedReports = 64;
+        private static readonly object DiagnosticsSync = new object();
+        private static readonly List<PatchReportDto> RetainedReports = new List<PatchReportDto>();
+        private static readonly Dictionary<string, List<PatchHostReportDto>> KnownTargetHosts =
+            new Dictionary<string, List<PatchHostReportDto>>(StringComparer.Ordinal);
+        private static readonly HashSet<string> LoggedInformationalConflicts =
+            new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Returns stable diagnostic snapshots retained from registry application attempts in this process.
+        /// The oldest snapshots are removed after the bounded history reaches capacity.
+        /// </summary>
+        public static PatchReportDto[] GetReportHistory()
+        {
+            lock (DiagnosticsSync)
+            {
+                var history = new PatchReportDto[RetainedReports.Count];
+                for (int i = 0; i < RetainedReports.Count; i++)
+                    history[i] = CloneReport(RetainedReports[i]);
+                return history;
+            }
+        }
+
+        /// <summary>
+        /// Returns the most recently retained diagnostic report, or null before patch discovery runs.
+        /// </summary>
+        public static PatchReportDto GetLatestReport()
+        {
+            lock (DiagnosticsSync)
+            {
+                if (RetainedReports.Count == 0)
+                    return null;
+
+                return CloneReport(RetainedReports[RetainedReports.Count - 1]);
+            }
+        }
+
         /// <summary>
         /// Discovers and applies Harmony patch hosts from the provided assembly.
         /// </summary>
@@ -202,6 +331,7 @@ namespace ModAPI.Harmony
                 bool includedByTiming = IsStartupTimingIncluded(startupTiming, options);
                 var record = CreateRecord(type, includedByTiming);
                 report.Discovered.Add(record);
+                DetectTargetConflicts(record, options, report.Conflicts);
 
                 if (!record.HasExplicitPolicy)
                 {
@@ -234,6 +364,7 @@ namespace ModAPI.Harmony
             }
 
             LogSummary(report, options);
+            RetainReport(report, assembly, options);
             return report;
         }
 
@@ -245,23 +376,35 @@ namespace ModAPI.Harmony
             if (harmony == null || moduleType == null || applyAction == null) return false;
             if (options == null) options = new PatchRegistryOptions();
 
+            var report = new PatchApplyReport();
             var record = CreateRecord(moduleType);
+            report.Discovered.Add(record);
+            DetectTargetConflicts(record, options, report.Conflicts);
+            if (!record.HasExplicitPolicy)
+                report.MissingPolicy.Add(record);
+
             if (!ShouldApply(record, options))
             {
+                report.Skipped.Add(record);
                 LogSkip(record, options);
+                RetainReport(report, moduleType.Assembly, options);
                 return false;
             }
 
             try
             {
                 applyAction();
+                report.Applied.Add(record);
                 LogManualApply(record, options);
+                RetainReport(report, moduleType.Assembly, options);
                 return true;
             }
             catch (Exception ex)
             {
+                report.Skipped.Add(record);
                 MMLog.WriteWarning("[PatchRegistry] Manual patch module failed for "
                     + DescribeType(moduleType) + ": " + ex.Message);
+                RetainReport(report, moduleType.Assembly, options);
                 return false;
             }
         }
@@ -292,6 +435,7 @@ namespace ModAPI.Harmony
                 options.PatchOptions = source.PatchOptions;
                 options.IncludeOptionalPatches = source.IncludeOptionalPatches;
                 options.SourceName = source.SourceName;
+                options.TriggerName = source.TriggerName;
                 foreach (PatchDomain domain in source.DisabledDomains)
                     options.DisabledDomains.Add(domain);
             }
@@ -501,14 +645,333 @@ namespace ModAPI.Harmony
             return string.Join(", ", parts.ToArray());
         }
 
+        private static void DetectTargetConflicts(
+            PatchRecord record,
+            PatchRegistryOptions options,
+            IList<PatchConflictReportDto> currentConflicts)
+        {
+            if (record == null || record.Targets == null || record.Targets.Count == 0)
+                return;
+
+            PatchHostReportDto host = CreateHostReport(record, GetSourceName(options));
+            for (int i = 0; i < record.Targets.Count; i++)
+            {
+                MethodBase target = record.Targets[i];
+                if (target == null)
+                    continue;
+
+                string targetName = DescribeTarget(target);
+                PatchConflictReportDto conflict = null;
+                bool logInformational = false;
+
+                lock (DiagnosticsSync)
+                {
+                    List<PatchHostReportDto> hosts;
+                    if (!KnownTargetHosts.TryGetValue(targetName, out hosts))
+                    {
+                        hosts = new List<PatchHostReportDto>();
+                        KnownTargetHosts[targetName] = hosts;
+                    }
+
+                    if (!ContainsHost(hosts, host))
+                        hosts.Add(CloneHost(host));
+
+                    if (hosts.Count > 1)
+                    {
+                        conflict = CreateConflict(targetName, hosts);
+                        AddOrReplaceConflict(currentConflicts, conflict);
+                        if (conflict.Severity == PatchConflictSeverity.Informational)
+                        {
+                            string informationalKey = targetName + "|" + conflict.Severity;
+                            logInformational = LoggedInformationalConflicts.Add(informationalKey);
+                        }
+                    }
+                }
+
+                if (conflict == null)
+                    continue;
+
+                string message = "[PatchRegistry] " + conflict.Severity
+                    + " duplicate target " + conflict.TargetMethod + ": " + conflict.Reason;
+                if (conflict.Severity == PatchConflictSeverity.Warning)
+                {
+                    MMLog.WarnOnce("PatchRegistry.Conflict." + conflict.Severity + "." + targetName, message);
+                }
+                else if (logInformational)
+                {
+                    MMLog.WriteInfo(message);
+                }
+            }
+        }
+
+        private static bool ContainsHost(IList<PatchHostReportDto> hosts, PatchHostReportDto candidate)
+        {
+            if (hosts == null || candidate == null)
+                return false;
+
+            for (int i = 0; i < hosts.Count; i++)
+            {
+                PatchHostReportDto host = hosts[i];
+                if (host != null
+                    && string.Equals(host.PatchAssemblyName, candidate.PatchAssemblyName, StringComparison.Ordinal)
+                    && string.Equals(host.PatchHostName, candidate.PatchHostName, StringComparison.Ordinal)
+                    && string.Equals(host.SourceName, candidate.SourceName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static PatchConflictReportDto CreateConflict(string targetName, IList<PatchHostReportDto> hosts)
+        {
+            var conflict = new PatchConflictReportDto();
+            conflict.TargetMethod = targetName ?? string.Empty;
+            conflict.PatchHosts = CloneHosts(hosts);
+
+            bool missingPolicy = conflict.PatchHosts.Any(host => host == null || !host.HasExplicitPolicy);
+            bool unknownDomain = conflict.PatchHosts.Any(host => host == null || host.Domain == PatchDomain.Unknown);
+            bool sameDomain = conflict.PatchHosts.Select(host => host.Domain).Distinct().Count() == 1;
+            bool sameFeature = conflict.PatchHosts
+                .Select(host => host.OwningFeature ?? string.Empty)
+                .Distinct(StringComparer.Ordinal)
+                .Count() == 1;
+            bool allOptional = conflict.PatchHosts.All(host => host != null && host.IsOptional);
+
+            if (missingPolicy)
+            {
+                conflict.Severity = PatchConflictSeverity.Warning;
+                conflict.Reason = "At least one target owner is missing explicit patch policy metadata.";
+            }
+            else if (unknownDomain)
+            {
+                conflict.Severity = PatchConflictSeverity.Warning;
+                conflict.Reason = "At least one target owner has an unknown governance domain.";
+            }
+            else if (!sameDomain)
+            {
+                conflict.Severity = PatchConflictSeverity.Warning;
+                conflict.Reason = "Patch hosts from different governance domains share this target.";
+            }
+            else if (!sameFeature && !allOptional)
+            {
+                conflict.Severity = PatchConflictSeverity.Warning;
+                conflict.Reason = "Required patch hosts owned by different features share this target.";
+            }
+            else if (!sameFeature)
+            {
+                conflict.Severity = PatchConflictSeverity.Informational;
+                conflict.Reason = "Optional patch hosts owned by different features share this target.";
+            }
+            else
+            {
+                conflict.Severity = PatchConflictSeverity.Informational;
+                conflict.Reason = "Multiple declared patch hosts belong to the same feature and domain.";
+            }
+
+            return conflict;
+        }
+
+        private static void AddOrReplaceConflict(
+            IList<PatchConflictReportDto> conflicts,
+            PatchConflictReportDto conflict)
+        {
+            if (conflicts == null || conflict == null)
+                return;
+
+            for (int i = 0; i < conflicts.Count; i++)
+            {
+                if (string.Equals(conflicts[i].TargetMethod, conflict.TargetMethod, StringComparison.Ordinal))
+                {
+                    conflicts[i] = CloneConflict(conflict);
+                    return;
+                }
+            }
+
+            conflicts.Add(CloneConflict(conflict));
+        }
+
+        private static void RetainReport(PatchApplyReport report, Assembly assembly, PatchRegistryOptions options)
+        {
+            if (report == null)
+                return;
+
+            string sourceName = GetSourceName(options);
+            var snapshot = new PatchReportDto
+            {
+                CapturedUtc = DateTime.UtcNow,
+                AssemblyName = SafeAssemblyName(assembly),
+                SourceName = sourceName,
+                TriggerName = options != null ? (options.TriggerName ?? string.Empty) : string.Empty,
+                Discovered = CreateHostReports(report.Discovered, sourceName),
+                Applied = CreateHostReports(report.Applied, sourceName),
+                Skipped = CreateHostReports(report.Skipped, sourceName),
+                MissingPolicy = CreateHostReports(report.MissingPolicy, sourceName),
+                Conflicts = CloneConflicts(report.Conflicts)
+            };
+
+            report.DiagnosticSnapshot = CloneReport(snapshot);
+            lock (DiagnosticsSync)
+            {
+                RetainedReports.Add(CloneReport(snapshot));
+                while (RetainedReports.Count > MaxRetainedReports)
+                    RetainedReports.RemoveAt(0);
+            }
+        }
+
+        private static PatchHostReportDto[] CreateHostReports(IEnumerable<PatchRecord> records, string sourceName)
+        {
+            if (records == null)
+                return new PatchHostReportDto[0];
+
+            return records.Select(record => CreateHostReport(record, sourceName)).ToArray();
+        }
+
+        private static PatchHostReportDto CreateHostReport(PatchRecord record, string sourceName)
+        {
+            if (record == null)
+                return null;
+
+            return new PatchHostReportDto
+            {
+                PatchAssemblyName = record.PatchType != null ? SafeAssemblyName(record.PatchType.Assembly) : string.Empty,
+                PatchHostName = DescribeType(record.PatchType),
+                SourceName = sourceName ?? string.Empty,
+                Domain = record.Domain,
+                OwningFeature = record.Feature ?? string.Empty,
+                TargetBehavior = record.TargetBehavior ?? string.Empty,
+                FailureMode = record.FailureMode ?? string.Empty,
+                RollbackStrategy = record.RollbackStrategy ?? string.Empty,
+                StartupTiming = record.StartupTiming,
+                TargetMethods = record.Targets != null
+                    ? record.Targets.Where(target => target != null).Select(DescribeTarget).ToArray()
+                    : new string[0],
+                HasExplicitPolicy = record.HasExplicitPolicy,
+                IsOptional = record.IsOptional,
+                DeveloperOnly = record.DeveloperOnly,
+                IsDangerous = record.IsDangerous
+            };
+        }
+
+        private static PatchReportDto CloneReport(PatchReportDto report)
+        {
+            if (report == null)
+                return null;
+
+            return new PatchReportDto
+            {
+                CapturedUtc = report.CapturedUtc,
+                AssemblyName = report.AssemblyName,
+                SourceName = report.SourceName,
+                TriggerName = report.TriggerName,
+                Discovered = CloneHosts(report.Discovered),
+                Applied = CloneHosts(report.Applied),
+                Skipped = CloneHosts(report.Skipped),
+                MissingPolicy = CloneHosts(report.MissingPolicy),
+                Conflicts = CloneConflicts(report.Conflicts)
+            };
+        }
+
+        private static PatchHostReportDto[] CloneHosts(IEnumerable<PatchHostReportDto> hosts)
+        {
+            if (hosts == null)
+                return new PatchHostReportDto[0];
+
+            return hosts.Select(CloneHost).ToArray();
+        }
+
+        private static PatchHostReportDto CloneHost(PatchHostReportDto host)
+        {
+            if (host == null)
+                return null;
+
+            return new PatchHostReportDto
+            {
+                PatchAssemblyName = host.PatchAssemblyName,
+                PatchHostName = host.PatchHostName,
+                SourceName = host.SourceName,
+                Domain = host.Domain,
+                OwningFeature = host.OwningFeature,
+                TargetBehavior = host.TargetBehavior,
+                FailureMode = host.FailureMode,
+                RollbackStrategy = host.RollbackStrategy,
+                StartupTiming = host.StartupTiming,
+                TargetMethods = host.TargetMethods != null ? host.TargetMethods.ToArray() : new string[0],
+                HasExplicitPolicy = host.HasExplicitPolicy,
+                IsOptional = host.IsOptional,
+                DeveloperOnly = host.DeveloperOnly,
+                IsDangerous = host.IsDangerous
+            };
+        }
+
+        private static PatchConflictReportDto[] CloneConflicts(IEnumerable<PatchConflictReportDto> conflicts)
+        {
+            if (conflicts == null)
+                return new PatchConflictReportDto[0];
+
+            return conflicts.Select(CloneConflict).ToArray();
+        }
+
+        private static PatchConflictReportDto CloneConflict(PatchConflictReportDto conflict)
+        {
+            if (conflict == null)
+                return null;
+
+            return new PatchConflictReportDto
+            {
+                TargetMethod = conflict.TargetMethod,
+                Severity = conflict.Severity,
+                Reason = conflict.Reason,
+                PatchHosts = CloneHosts(conflict.PatchHosts)
+            };
+        }
+
+        private static string GetSourceName(PatchRegistryOptions options)
+        {
+            return options != null && !string.IsNullOrEmpty(options.SourceName)
+                ? options.SourceName
+                : "runtime";
+        }
+
+        private static string DescribeTarget(MethodBase target)
+        {
+            if (target == null)
+                return "<unknown>";
+
+            try
+            {
+                string declaringType = target.DeclaringType != null
+                    ? (target.DeclaringType.FullName ?? target.DeclaringType.Name)
+                    : "<dynamic>";
+                string[] parameterNames = target.GetParameters()
+                    .Select(parameter => parameter.ParameterType != null
+                        ? (parameter.ParameterType.FullName ?? parameter.ParameterType.Name)
+                        : "<unknown>")
+                    .ToArray();
+                return declaringType + "." + target.Name + "(" + string.Join(", ", parameterNames) + ")";
+            }
+            catch
+            {
+                return target.Name ?? "<unknown>";
+            }
+        }
+
+        private static string SafeAssemblyName(Assembly assembly)
+        {
+            try { return assembly != null ? assembly.GetName().Name : "<null>"; }
+            catch { return "<unknown>"; }
+        }
+
         private static void LogSummary(PatchApplyReport report, PatchRegistryOptions options)
         {
-            string source = !string.IsNullOrEmpty(options.SourceName) ? options.SourceName : "runtime";
+            string source = GetSourceName(options);
             MMLog.WriteInfo(source
                 + " discovered=" + report.Discovered.Count
                 + ", applied=" + report.Applied.Count
                 + ", skipped=" + report.Skipped.Count
-                + ", missingPolicy=" + report.MissingPolicy.Count + ".");
+                + ", missingPolicy=" + report.MissingPolicy.Count
+                + ", conflicts=" + report.Conflicts.Count + ".");
 
             if (report.MissingPolicy.Count > 0)
             {

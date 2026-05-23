@@ -40,7 +40,7 @@
     <!-- Local Sheltered/Unity runtime references are developer-machine fallbacks.
          If your install differs, retarget these HintPath values to equivalent game assemblies. -->
     <Reference Include="0Harmony">
-      <HintPath>..\..\..\..\..\Epic Games\Sheltered\SMM\bin\0Harmony.dll</HintPath>
+      <HintPath>$(SmmHarmonyDll)</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="System.Core" />
@@ -48,11 +48,11 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>D:\Epic Games\Sheltered\ShelteredWindows64_EOS_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <HintPath>$(ShelteredManagedDir)UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

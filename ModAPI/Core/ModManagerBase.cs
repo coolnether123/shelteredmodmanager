@@ -41,7 +41,7 @@ namespace ModAPI.Core
 
         /// <summary>
         /// Deterministic random instance scoped to this mod.
-        /// Uses the master seed combined with the mod ID for isolation.
+        /// Uses the canonical ModRandom named-stream registry for isolation and save restoration.
         /// </summary>
         protected ModRandomStream Random { get; private set; }
         private HarmonyLib.Harmony _harmonyInstance;
@@ -210,15 +210,14 @@ namespace ModAPI.Core
         protected virtual void RefreshRandomStream()
         {
             if (Context == null) return;
-            
-            // Each mod gets its own RNG stream derived from master seed.
-            // Branching via Mod ID ensures Mod A and Mod B don't "steal" from each other.
-            int modHash = (Context.Mod != null && !string.IsNullOrEmpty(Context.Mod.Id))
-                ? Context.Mod.Id.GetHashCode()
-                : GetType().FullName.GetHashCode();
-            this.Random = new ModRandomStream(ModRandom.CurrentSeed ^ modHash);
-            
-            if (Log != null) Log.Debug(string.Format("Random stream refreshed. Seed Hash: {0}", modHash));
+
+            string modId = (Context.Mod != null && !string.IsNullOrEmpty(Context.Mod.Id))
+                ? Context.Mod.Id
+                : (GetType().FullName ?? GetType().Name);
+            string featureId = "manager:" + (GetType().FullName ?? GetType().Name);
+            this.Random = ModRandom.GetStream(modId, featureId);
+
+            if (Log != null) Log.Debug(string.Format("Random stream refreshed. StreamId: {0}/{1}", modId, featureId));
         }
 
         protected virtual void OnDestroy()

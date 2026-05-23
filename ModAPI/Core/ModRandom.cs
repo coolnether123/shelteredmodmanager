@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ModAPI.Core;
 
 namespace ModAPI.Core
@@ -64,24 +65,29 @@ namespace ModAPI.Core
         {
             lock (_lock)
             {
-                _seed = seed;
-                _mode = mode;
-                _state = (ulong)(seed == 0 ? 1234567 : seed);
-                _stepCount = 0;
-                _initialized = true;
-                _namedStreams.Clear();
-
-                if (mode == RandomnessMode.Legacy)
-                {
-                    _legacyRandom = new Random(seed);
-                }
-                else
-                {
-                    _legacyRandom = null;
-                }
-                
+                ResetInternal(seed, mode);
                 MMLog.WriteDebug(string.Format("[ModRandom] Initialized with seed {0} in mode {1}", seed, mode));
             }
+        }
+
+        /// <summary>
+        /// Starts a save-seeded sequence from its initial state and clears all named streams.
+        /// This does not change <see cref="IsDeterministic"/>; it notifies seed listeners after reset.
+        /// </summary>
+        public static void ResetForSaveSeed(int seed, RandomnessMode mode = RandomnessMode.XorShift)
+        {
+            int clearedStreamCount;
+            lock (_lock)
+            {
+                clearedStreamCount = ResetInternal(seed, mode);
+                MMLog.WriteInfo(string.Format(
+                    "[ModRandom] Save seed reset. Seed={0}, Mode={1}, ClearedStreams={2}.",
+                    seed,
+                    mode,
+                    clearedStreamCount));
+            }
+
+            NotifySeedChanged();
         }
 
         /// <summary>
@@ -295,8 +301,25 @@ namespace ModAPI.Core
                 int streamSeed = DeriveStreamSeed(_seed, streamName);
                 stream = new ModRandomStream(streamSeed);
                 _namedStreams[streamName] = stream;
+                MMLog.WriteDebug(string.Format(
+                    "[ModRandom] Named stream created. StreamId={0}, Seed={1}, MasterSeed={2}.",
+                    streamName,
+                    streamSeed,
+                    _seed));
                 return stream;
             }
+        }
+
+        /// <summary>
+        /// Returns a deterministic named stream scoped to a mod feature.
+        /// Feature streams are isolated from master-stream and unrelated named-stream draws.
+        /// </summary>
+        public static ModRandomStream GetStream(string modId, string featureId)
+        {
+            if (string.IsNullOrEmpty(modId)) throw new ArgumentException("modId must not be null or empty.", "modId");
+            if (string.IsNullOrEmpty(featureId)) throw new ArgumentException("featureId must not be null or empty.", "featureId");
+
+            return GetStream(BuildScopedStreamId(modId, featureId));
         }
 
         internal static ModRandomStateSnapshot CreateSnapshot()
@@ -323,6 +346,11 @@ namespace ModAPI.Core
                     i++;
                 }
 
+                MMLog.WriteDebug(string.Format(
+                    "[ModRandom] Snapshot captured. Seed={0}, MasterStep={1}, NamedStreams={2}.",
+                    snapshot.MasterSeed,
+                    snapshot.StepCount,
+                    count));
                 return snapshot;
             }
         }
@@ -382,7 +410,25 @@ namespace ModAPI.Core
                         _namedStreams[name] = stream;
                     }
                 }
+
+                MMLog.WriteDebug(string.Format(
+                    "[ModRandom] Snapshot restored. Seed={0}, MasterStep={1}, NamedStreams={2}, Mode={3}.",
+                    _seed,
+                    _stepCount,
+                    _namedStreams.Count,
+                    _mode));
             }
+        }
+
+        private static string BuildScopedStreamId(string modId, string featureId)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "mod:{0}:{1}|feature:{2}:{3}",
+                modId.Length,
+                modId,
+                featureId.Length,
+                featureId);
         }
 
         private static int DeriveStreamSeed(int masterSeed, string streamName)
@@ -402,6 +448,28 @@ namespace ModAPI.Core
                 int seed = (int)hash;
                 return seed == 0 ? 1 : seed;
             }
+        }
+
+        private static int ResetInternal(int seed, RandomnessMode mode)
+        {
+            int clearedStreamCount = _namedStreams.Count;
+            _seed = seed;
+            _mode = mode;
+            _state = (ulong)(seed == 0 ? 1234567 : seed);
+            _stepCount = 0;
+            _initialized = true;
+            _namedStreams.Clear();
+
+            if (mode == RandomnessMode.Legacy)
+            {
+                _legacyRandom = new Random(seed);
+            }
+            else
+            {
+                _legacyRandom = null;
+            }
+
+            return clearedStreamCount;
         }
 
         private static double ValueDoubleInclusive()

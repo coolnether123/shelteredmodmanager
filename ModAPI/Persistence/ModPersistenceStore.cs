@@ -16,12 +16,25 @@ namespace ModAPI.Persistence
             _modId = modId;
         }
 
-        internal string Serialize(Dictionary<string, object> registeredData)
+        internal string Serialize(Dictionary<string, object> registeredData, Action<string, Exception> onEntryFailure)
         {
             var containerObj = new ModPersistenceData();
             foreach (var kv in registeredData)
             {
-                containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
+                try
+                {
+                    containerObj.entries.Add(new ModDataEntry { key = kv.Key, json = JsonUtility.ToJson(kv.Value) });
+                }
+                catch (Exception ex)
+                {
+                    if (onEntryFailure != null)
+                    {
+                        onEntryFailure(kv.Key, ex);
+                        continue;
+                    }
+
+                    throw;
+                }
             }
 
             return SerializeContainer(containerObj);
@@ -43,8 +56,9 @@ namespace ModAPI.Persistence
             if (modFilePath == null) return null;
 
             string json = File.ReadAllText(modFilePath);
-            var container = DeserializeContainer(json);
-            return new ModPersistenceLoadResult(container, Path.GetFileName(modFilePath), IsLegacyFilePath(rootPath, modFilePath));
+            string deserializeError;
+            var container = DeserializeContainer(json, out deserializeError);
+            return new ModPersistenceLoadResult(container, Path.GetFileName(modFilePath), IsLegacyFilePath(rootPath, modFilePath), deserializeError);
         }
 
         internal string GetCurrentFilePath(string rootPath)
@@ -117,8 +131,9 @@ namespace ModAPI.Persistence
             return ManualJson.Serialize(root, true);
         }
 
-        private static ModPersistenceData DeserializeContainer(string json)
+        private static ModPersistenceData DeserializeContainer(string json, out string errorMessage)
         {
+            errorMessage = null;
             ModPersistenceData data = new ModPersistenceData();
             if (string.IsNullOrEmpty(json))
             {
@@ -129,6 +144,7 @@ namespace ModAPI.Persistence
             string error;
             if (!ManualJson.TryParseObject(json, out root, out error))
             {
+                errorMessage = error;
                 MMLog.WriteWarning("[SaveSystem] Could not parse persistence JSON for a mod entry: " + error);
                 return data;
             }
@@ -167,15 +183,17 @@ namespace ModAPI.Persistence
 
     internal sealed class ModPersistenceLoadResult
     {
-        internal ModPersistenceLoadResult(ModPersistenceData data, string fileName, bool isLegacy)
+        internal ModPersistenceLoadResult(ModPersistenceData data, string fileName, bool isLegacy, string deserializeError)
         {
             Data = data;
             FileName = fileName;
             IsLegacy = isLegacy;
+            DeserializeError = deserializeError;
         }
 
         internal ModPersistenceData Data { get; private set; }
         internal string FileName { get; private set; }
         internal bool IsLegacy { get; private set; }
+        internal string DeserializeError { get; private set; }
     }
 }

@@ -108,6 +108,7 @@ namespace ModAPI.Harmony
                     + " trigger=" + (trigger ?? string.Empty) + ".");
 
                 PatchRegistryOptions timingOptions = PatchRegistry.CreateTimingOptions(source.Options, timing);
+                timingOptions.TriggerName = trigger ?? string.Empty;
                 PatchRegistry.ApplyAssembly(source.Harmony, source.Assembly, timingOptions);
                 applied = true;
                 lock (Sync)
