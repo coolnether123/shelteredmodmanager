@@ -1169,7 +1169,7 @@ namespace Manager.Views
                 return "Nexus: not connected";
 
             if (!status.IsConfigured)
-                return "Nexus: no API key";
+                return "Nexus: browse only (no API key)";
 
             if (!status.IsConnected)
                 return string.Equals(status.Summary, "Checking Nexus account...", StringComparison.OrdinalIgnoreCase)

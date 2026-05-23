@@ -63,7 +63,7 @@
     <Reference Include="System.Security" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -117,6 +117,7 @@
     <Compile Include="Core\Services\ModDiscoveryService.cs" />
     <Compile Include="Core\Services\LoadOrderService.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
+    <Compile Include="Core\Services\NexusGraphQlClient.cs" />
     <Compile Include="Core\Services\NexusV3RestClient.cs" />
     <Compile Include="Core\Services\NexusReferenceResolver.cs" />
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />

@@ -57,6 +57,7 @@ namespace Manager
         private DateTime _lastNoChangeSettingsReloadLogUtc = DateTime.MinValue;
         private bool _startupNexusUpdateAnnouncementsPending = true;
         private int _nexusAccountRequestToken;
+        private string _startupPreviousInstalledModApiVersion;
         private const string APP_VERSION = AppVersionInfo.Display;
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -119,6 +120,7 @@ namespace Manager
             
             // Settings loaded first to get ModAPI version path
             _settings = _settingsService.Load();
+            _startupPreviousInstalledModApiVersion = _settings.InstalledModApiVersion;
             
             var installedApiVersions = DetectInstalledApiVersions(_settings);
             ApplyInstalledApiVersions(_settings, installedApiVersions);
@@ -615,16 +617,56 @@ namespace Manager
             if (string.Equals(_settings.LastSeenReleaseNoticeVersion, APP_VERSION, StringComparison.OrdinalIgnoreCase))
                 return;
 
+            if (!IsUpgradeFromModApi122To20(_startupPreviousInstalledModApiVersion, _settings.InstalledModApiVersion))
+                return;
+
             string message =
-                "Sheltered Mod Manager 2.0 Beta uses a new mod system.\n\n" +
+                "Sheltered Mod Manager 2.0 uses a new mod system.\n\n" +
                 "Mods made for SMM 1.2.2 or the old 1.3 beta line may not work until they are rebuilt for ModAPI/ShelteredAPI 2.0.\n\n" +
                 "Use 2.0 versions of mods when available, back up saves before switching, and check save/mod compatibility warnings before loading old saves.";
 
-            MessageBox.Show(this, message, "SMM 2.0 Beta Compatibility Notice",
+            MessageBox.Show(this, message, "SMM 2.0 Compatibility Notice",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
             _settings.LastSeenReleaseNoticeVersion = APP_VERSION;
             SaveSettingsFromUi();
+        }
+
+        private static bool IsUpgradeFromModApi122To20(string previousVersion, string currentVersion)
+        {
+            Version previous;
+            Version current;
+            if (!TryParseVersion(previousVersion, out previous) || !TryParseVersion(currentVersion, out current))
+                return false;
+
+            return previous.Major == 1 &&
+                   previous.Minor == 2 &&
+                   previous.Build == 2 &&
+                   current.Major == 2 &&
+                   current.Minor == 0;
+        }
+
+        private static bool TryParseVersion(string value, out Version version)
+        {
+            version = null;
+
+            string text = (value ?? string.Empty).Trim();
+            if (text.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+                text = text.Substring(1);
+
+            int suffixIndex = text.IndexOfAny(new char[] { '-', '+', ' ' });
+            if (suffixIndex >= 0)
+                text = text.Substring(0, suffixIndex);
+
+            try
+            {
+                version = new Version(text);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void NexusTab_InstallCompleted()
