@@ -2,6 +2,8 @@
 
 Sheltered Mod Manager 2.0 Beta is a breaking mod-system update. Mods built for SMM 1.2.2 or the old 1.3 beta line may not work until rebuilt for ModAPI/ShelteredAPI 2.0.
 
+Mod authors rebuilding packages should use [For Modders: 2.0 API Migration](For_Modders_2.0_API_Migration.md) and the canonical [ModAPI/ShelteredAPI assembly boundary](README.md#assembly-boundary-canonical). This page is the player upgrade checklist.
+
 ## For Players
 
 - Back up saves before switching to SMM 2.0 Beta.

@@ -1,258 +1,100 @@
-# ShelteredAPI Guide (v2.0 Beta.1)
+# When To Use ShelteredAPI (v2.0 Beta.1)
 
-`ShelteredAPI` supplies Sheltered-specific product APIs and runtime implementations while `ModAPI` stays host-neutral. The 2.0 Beta.1 line is a breaking clean API line.
+`ShelteredAPI.dll` is the game-facing layer for mods that operate on Sheltered content, saves, runtime UI/input, gameplay events, actors/characters, or scenarios. Use [Core ModAPI Basics](ModAPI_Developer_Guide.md) first for a plugin that only needs neutral framework behavior.
 
-Reference points:
+Assembly choices and the typed-escape-hatch rule are defined once in the canonical [assembly boundary](README.md#assembly-boundary-canonical). Exact method/type shapes belong in [API Signatures Reference](API_Signatures_Reference.md).
 
-- Exact signatures: [API Signatures Reference](API_Signatures_Reference.md)
-- Full docs map: [Documentation Index](README.md)
-- Content: [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md)
-- Input/keybindings: [Input Keybindings Guide](Input_Keybindings_Guide.md)
-- Runtime UI, stores, and cooking stations: [Runtime UI Stores Guide](ShelteredAPI_Runtime_UI_Stores_Guide.md)
-- Custom scenarios: [Custom Scenarios Guide](Custom_Scenarios_Guide.md)
+## Facade Chooser
 
-## 1. What ShelteredAPI Adds
+| Need | Public Entry Point | Detail Guide |
+|------|--------------------|--------------|
+| Register items, recipes, loot, localization, or assets | `ShelteredContent` | [Content Guide](ShelteredAPI_Content_Guide.md) |
+| Inspect/control Sheltered save slots or listen to save lifecycle | `ShelteredSaves`, `ShelteredSaveEvents` | [Settings and Persistence](SETTINGS.md#5-sheltered-save-slots) and [Events Guide](Events_Guide.md#5-save-lifecycle-events) |
+| Export save/mod/runtime facts for bug reports | `ShelteredSupportBundle` | [API Signatures Reference](API_Signatures_Reference.md#save-manifest--support-bundle-smm-20) |
+| Subscribe to Sheltered gameplay, UI, faction, or scheduled-time events | `ShelteredEvents` | [Events Guide](Events_Guide.md) |
+| Add Sheltered controls or adjust vanilla input tuning | `ShelteredInput` | [Input Keybindings Guide](Input_Keybindings_Guide.md) |
+| Add targeted vanilla UI behavior | `ShelteredUI` | [API Signatures Reference](API_Signatures_Reference.md) |
+| Build mod-owned panels, stores, item assignments, or stations | `ShelteredRuntimeUI`, `ShelteredStores`, `ShelteredCharacterItems`, `ShelteredCooking` | [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md) |
+| Use neutral actors with Sheltered character access when required | `ctx.Actors`, `ShelteredActors`, `ShelteredCharacters` | [Actors Guide](ShelteredAPI_Characters_Guide.md) |
+| Register or author custom scenarios | `ShelteredScenarios`, `ShelteredScenarioAuthoring`, `ShelteredScenarioRuntime` | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
+| Read expedition map geometry or declare map-generation intent | `ShelteredMap` | [API Signatures Reference](API_Signatures_Reference.md#expedition-map-context-smm-20) |
+| Project or register expedition map markers and actor snapshots | `ShelteredMapMarkers` | [API Signatures Reference](API_Signatures_Reference.md#map-markers-smm-20) |
+| Inspect or conservatively restore player job queues | `ShelteredQueues` | [API Signatures Reference](API_Signatures_Reference.md#player-queues-smm-20) |
 
-- `IGameHelper` implementation and `ShelteredAPI.Adapters.GameHelperExtensions`
-- the default implementation behind `IPluginContext.Actors`
-- built-in actor API registrations:
-  - `ShelteredAPI.Actors`
-  - `ShelteredAPI.ActorRegistry`
-  - `ShelteredAPI.ActorComponents`
-  - `ShelteredAPI.ActorBindings`
-  - `ShelteredAPI.ActorAdapters`
-  - `ShelteredAPI.ActorSimulation`
-  - `ShelteredAPI.ActorEvents`
-  - `ShelteredAPI.ActorSerialization`
-- Sheltered-specific UI and input helpers under `ShelteredAPI.*`
-- Sheltered-specific content registration and runtime injection under `ShelteredAPI.Content`
-- Sheltered-specific custom scenario XML definitions, `ShelteredScenarios`, `ShelteredScenarioAuthoring`, `ShelteredScenarioRuntime`, and `ShelteredScenarioDefBuilder` under `ShelteredAPI.Scenarios`
-- Sheltered save integration through `ShelteredSaves`, `ShelteredSaveEvents`, and save descriptor/result DTOs
+## Selection Rules
 
-## API Stability Rules
+- Keep ordinary mod settings and save-scoped state on `ModAPI` (`ModManagerBase<T>` and `ctx.SaveSystem`).
+- Use `ShelteredSaves` only for Sheltered slot/descriptors/lifecycle work, not as an alternative general persistence store.
+- Use `ShelteredSupportBundle.ExportJson(...)` for bug-report diagnostics; absent optional services are reported as `unknown` or `unavailable`.
+- Use `ctx.Actors` and DTO/proxy types for ordinary actor logic. Cross into raw `FamilyMember`, `NpcVisitor`, or other vanilla types only through an explicit typed Sheltered escape hatch when the integration requires it.
+- Use `ShelteredQueues` for copied player-job metadata and guarded pending-job restoration. Queue capacity is observed metadata; capacity changes remain mod policy.
+- Use `ShelteredRuntimeUI` for panels owned by a mod. Do not clone or continually patch vanilla NGUI merely to host custom panel behavior.
+- Use the content facade for item IDs and injection rather than assuming Sheltered enum iteration will recognize custom items.
+- Use `ShelteredMap.Current` for generated expedition-map facts; scenario map DTOs describe authored scenario content and are not a live runtime snapshot.
+- Register runtime features from plugin lifecycle methods, normally `Start(...)`, rather than constructors.
 
-- Public facades are the stable mod-author surface.
-- Implementation classes are internal and may move.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+## Targeted Vanilla UI Helpers
 
-## 2. Assembly Rule
-
-Add assembly references:
-- always: `ModAPI.dll`
-- required for Sheltered hooks: `ShelteredAPI.dll` if you use Sheltered content, scenario, event, party, interaction, save, UI, input, inventory, or game-state helpers
-
-If you only use neutral `IPluginContext` contracts, the public types come from `ModAPI.dll`; Sheltered runtime implementations are still supplied by `ShelteredAPI`.
-
-`ModAPI.dll` no longer references `Assembly-CSharp` or `Manager`. ShelteredAPI owns those game/runtime references and registers its implementations through the neutral `GameRuntime.*` registry IDs.
-
-Common imports:
+Use `ShelteredUI` only when a feature must augment an existing game panel. `CloneElement(...)` reuses a visual template while clearing inherited listeners and button handlers by default; the returned result carries warnings for hierarchy-dependent work.
 
 ```csharp
-using ModAPI.Core;
-using ModAPI.Actors;
-using ModAPI.Scenarios;
-using ShelteredAPI.Adapters;
-using ShelteredAPI.Content;
-using ShelteredAPI.Events;
-using ShelteredAPI.Input;
-using ShelteredAPI.Saves;
-using ShelteredAPI.Scenarios;
-using ShelteredAPI.UI.Runtime;
-```
-
-## 3. Usage Example
-
-```csharp
-using ModAPI.Core;
-using ModAPI.Actors;
-using ModAPI.Scenarios;
-using ShelteredAPI.Adapters;
-using ShelteredAPI.Events;
-using ShelteredAPI.Saves;
-
-public class MyPlugin : IModPlugin
+UICloneResult clone = ShelteredUI.CloneElement(templateButton.gameObject, rowParent);
+if (clone.Success)
 {
-    public void Initialize(IPluginContext ctx) { }
-
-    public void Start(IPluginContext ctx)
-    {
-        int ownedWater = ctx.Game.GetTotalOwned(ItemManager.ItemType.Water);
-        ctx.Log.Info("Owned water: " + ownedWater);
-        FamilyMember firstMember = ctx.Game.FindFamilyMember("Alice");
-
-        var actor = ctx.Actors.Ensure(new ActorCreateRequest
-        {
-            Kind = ActorKind.Custom,
-            Domain = "com.mymod",
-            LifecycleState = ActorLifecycleState.Active,
-            PresenceState = ActorPresenceState.Offscreen,
-            Flags = ActorFlags.Persistent | ActorFlags.Synthetic
-        });
-
-        ShelteredEvents.RegisterTimeTrigger(
-            triggerId: "com.mymod.economy.tick",
-            priority: 50,
-            cadence: TimeTriggerCadence.SixHour,
-            callback: batch => ctx.Log.Info("Tick seq=" + batch.Sequence + " day=" + batch.Day));
-
-        CustomScenarioRegistration registration = new LongRoadScenario().ToRegistration();
-        registration.RequiredMods = new[]
-        {
-            new ScenarioModDependency { modId = "com.mymod.contentpack", version = "1.0.0" }
-        };
-        ShelteredScenarios.Register(registration);
-    }
-}
-
-public sealed class LongRoadScenario : ShelteredCustomScenarioBase
-{
-    public override string Id { get { return "com.mymod.scenario.longroad"; } }
-    public override string DisplayName { get { return "The Long Road"; } }
-    public override string Description { get { return "Gather resources and survive the long road."; } }
-
-    public override ScenarioDef BuildDefinition(CustomScenarioBuildContext context)
-    {
-        return CreateDefinition()
-            .UseInModes(true, false, false)
-            .AddSimpleStage("longroad_intro")
-            .Build();
-    }
+    UIButton button = clone.Clone.GetComponent<UIButton>();
+    ShelteredUI.BindButtonClick(
+        button,
+        item,
+        selected => OpenDetails(selected),
+        UIButtonBindingMode.Replace);
 }
 ```
 
-## 4. Operational Notes
+Capture temporary label/widget/tween colors with `SnapshotColors(...)` and restore them on typed panel close via `SubscribePanelLifecycle(...)`. `UITakeoverSession.BindTooltip(...)` also participates in `Restore()` by hiding its tooltip and reinstating the preceding hover binding.
 
-- use `ShelteredEvents` for game, UI, faction, and time-trigger events
-- use `ShelteredContent` for item, recipe, loot, asset, localization, and inventory helper operations
-- use `ShelteredSaves` and `ShelteredSaveEvents` for custom save operations
-- use `ShelteredUI` for small, targeted changes to vanilla panels and Sheltered keybind UI
-- use `ShelteredRuntimeUI` for mod-owned panels such as custom containers or crafting screens
-- actor contracts live in `ModAPI.Actors`; `ShelteredAPI` provides the default runtime implementation
-- item, recipe, loot, asset, and content-localization APIs live in `ShelteredAPI.Content`
-- custom scenario registration contracts, lifecycle state/events, opaque definition factories, catalog metadata, dependency manifest conversion, and validation result containers live in `ModAPI.Scenarios`
-- Sheltered scenario definitions, `ShelteredScenarios`, `ShelteredScenarioAuthoring`, `ShelteredScenarioRuntime`, and `ShelteredScenarioDefBuilder` live in `ShelteredAPI.Scenarios`; serializers, validators, runtime binding, browser controllers, and apply services are internal
-- Sheltered save APIs live in `ShelteredAPI.dll`; `ModAPI.dll` owns only neutral per-mod persistence contracts and the `GameRuntime.SaveRuntime` port
-- the content injector is manager-scoped and will rebind when a new family/session recreates Sheltered runtime managers
-- register triggers and runtime behavior in `Start(...)`, not constructors
-- use unique IDs for triggers, actor bindings, components, and adapters
+## Expedition Map Context
 
-## 5. Runtime UI Panels
+`ShelteredMap.Current` exposes read-only expedition dimensions, the `40 x 16` vanilla normal-map baseline, result scale, map seed when assigned, home shelter position, coordinate conversion, and route-distance helpers. Check `IsValid` before using coordinate or route operations: startup, scene transitions, and non-shelter scenes return explicit unavailable or not-yet-generated results.
 
-`ShelteredRuntimeUI` is the supported path for mod-owned UI. It keeps NGUI details internal: mod code provides request DTOs, item/recipe DTOs, and callbacks, while ShelteredAPI owns overlay roots, panel depth, refresh, rebind, and close behavior.
+`ShelteredMap` also accepts focused location-density, town-density, quest-placement, faction-zone, home-shelter, and special-item eligibility policies. Policy composition is deterministic and empty registration produces vanilla/no-op intent. This foundation records and resolves intent; it deliberately does not apply speculative Harmony changes to vanilla map generation.
 
-Use `ShelteredUI` when you are taking over a small part of a vanilla panel. Use `ShelteredRuntimeUI` when the panel belongs to your mod. Avoid cloning vanilla NGUI templates directly, and avoid patching panel `Update` loops just to keep custom UI alive.
+## Shared Facade Conventions
 
-Container example:
+New SMM 2.0 service APIs follow the facade pattern represented by `ShelteredSaves`, `ShelteredUI`, `ShelteredRuntimeUI`, `ShelteredCharacters`, `ShelteredStores`, and `ShelteredCooking`.
 
-```csharp
-using ShelteredAPI.Content;
-using ShelteredAPI.UI.Runtime;
+- Sheltered-facing mod-author entry points are small `public static` facade classes named `Sheltered<Domain>`, for example `ShelteredQueues` or `ShelteredMapMarkers`.
+- Host-neutral behavior stays in `ModAPI.dll` under its neutral API name, for example `ModRandom`, `ModThreads`, or `PatchRegistry`. Do not add a Sheltered wrapper or a broad capability registry for neutral functionality.
+- Backend services, manager adapters, patch hosts, persistence repositories, and runtime coordinators remain `internal`. Expose public interfaces only when mod code must implement or interchange a focused contract.
+- Public DTOs carry identifiers, copied values, snapshots, or read-only data. Do not make mutable live vanilla collections or persisted vanilla runtime objects the normal exchange shape.
+- Direct `Assembly-CSharp` types in new public signatures are limited to deliberately typed Sheltered adapters or escape hatches, made visible by names such as `FromFamilyMember`, `FindFamilyMember`, or `ForFreezer`.
 
-RuntimeUiHandle handle = ShelteredRuntimeUI.OpenContainer(new ContainerUiRequest
-{
-    PanelId = "com.example.fridge.panel",
-    Title = "Fridge",
-    OwnerId = "com.example.fridge",
-    Categories = new[] { ItemCategory.Food, ItemCategory.Water },
-    InitialCategory = ItemCategory.Food,
-    EmptyText = "Nothing stored",
-    TransferQuantity = 1,
-    TransferDirection = ContainerUiTransferDirection.OutOfContainer,
-    SortComparison = (left, right) => string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase),
-    CanTransfer = item => item.Count > 0,
-    Items = new[]
-    {
-        new ContainerUiItem("Ration", "Ration", ItemCategory.Food, 3) { Subtitle = "Long-life food" },
-        new ContainerUiItem("Water", "Water", ItemCategory.Water, 8) { CountText = "8L" }
-    },
-    Actions = new[]
-    {
-        new ContainerUiAction
-        {
-            Id = "take_all",
-            Text = "Take All",
-            IsEnabled = () => HasFridgeItems(),
-            Execute = panel => TakeAllFridgeItems(panel)
-        }
-    },
-    OnItemSelected = item => { /* show details or transfer */ },
-    OnTransferRequested = transfer => { /* move one item */ },
-    OnClosed = () => { /* persist panel state if needed */ }
-});
+| Purpose | New Type Name Convention | Notes |
+|---------|--------------------------|-------|
+| Facade | `Sheltered<Domain>` or established neutral `ModAPI` name | Stable mod-author entry point. |
+| Command input | `<Operation>Request`, `<Domain>Options`, or `<Domain>Registration` | Use `Registration` for contributed behavior. |
+| Data transfer | `<Domain>Info`, `<Domain>Descriptor`, `<Domain>Snapshot`, or `<Domain>Context` | Snapshot/context DTOs must not hide mutable live game state. |
+| Operation outcome | `<Operation>Result` or `<Domain>Result` | Include status/success and actionable failure detail. |
+| Unavailable runtime | Normal result with an `Unavailable` status/reason, or an established `TryGet...` pattern | Missing active save/scene/map/service is not an implementation exception. |
+| Lifetime token | `<Domain>Handle` or `<Domain>RegistrationHandle` | Implement `IDisposable` for removable registrations/open resources. |
+| Diagnostic export | `<Domain>DiagnosticsReport` with `<Domain>Diagnostic` or `<Domain>DiagnosticEntry` records | Reports contain concrete facts, not capability discovery. |
 
-handle.Refresh();
-```
+Existing Beta.1 names that predate these rules remain supported, including `SaveEntry` and `PatchApplyReport`. New public `ShelteredAPI` classes, interfaces, structs, and enums require a justified `ShelteredAPI_PublicSurface_Baseline.tsv` row and exact callable signatures in [API Signatures Reference](API_Signatures_Reference.md). Reserved signature sections identify ownership only; they are not callable API promises.
 
-Object-attached panels can register an interaction entry and open the same DTO-driven UI:
+## Status Of Advanced Surfaces
 
-```csharp
-ShelteredRuntimeUI.RegisterObjectPanel(new ObjectPanelRegistration
-{
-    ObjectType = ObjectManager.ObjectType.Freezer,
-    ObjectId = "com.example.fridge",
-    InteractionId = "com.example.fridge.open",
-    InteractionText = "Open Fridge",
-    Open = context => ShelteredRuntimeUI.OpenContainer(new ContainerUiRequest
-    {
-        PanelId = "com.example.fridge.panel",
-        Title = "Fridge",
-        OwnerId = "com.example.fridge",
-        AttachedObject = context.TargetObject,
-        Categories = new[] { ItemCategory.Food, ItemCategory.Water },
-        ItemSource = () => BuildFridgeItems(context.TargetObject)
-    })
-});
-```
+| Surface | Beta.1 Status | Consequence For Authors |
+|---------|---------------|-------------------------|
+| Content, events, input, actors/characters, and save facades | Documented public author surface | Follow the relevant guide and signature reference. |
+| Expedition map context and generation-policy intent | API preview | Query runtime facts safely; generation adapters consuming policy intent remain follow-up work. |
+| Map-marker/expedition-actor snapshots and support bundles | API preview / diagnostics | Use copied facts for integrations and reports; do not treat them as mutable game state. |
+| Player queue snapshots and conservative restore | API preview | Queue capacity is observed metadata, not framework-owned policy. |
+| Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments before stable 2.0. |
+| Custom scenario browser/XML authoring/runtime/scoring snapshots | Experimental | Test using disposable saves and do not promise stable long-running-save behavior yet. |
 
-`InteractionText` is display text; ShelteredAPI maps it into the vanilla context menu localization path for you. `InteractionId` is optional, but using a stable id keeps menu entries deterministic across text changes.
+Back up saves before testing any save-changing or experimental scenario behavior. The public beta status applies even when a particular facade is documented.
 
-## 6. Runtime Stores And Cooking
+## Stable Surface Versus Internals
 
-Use `ShelteredAPI.Storage` for store-backed workflows instead of putting custom item IDs into vanilla objects. `ShelteredStores.ForInventory()` adapts shelter inventory, `ForFreezer(...)` adapts vanilla freezer meat/desperate-meat only, and `ForMod(...)` or `ForObject(...)` creates a mod-owned persisted store for arbitrary mod item IDs.
+Mods should call documented facades and exchange their public DTOs. Serializers, catalog services, storage repositories, runtime binding services, NGUI implementations, patch hosts, and manager adapters are implementation detail and may change without becoming supported mod entry points.
 
-Minimal meat-to-ration cooking flow:
-
-```csharp
-using ShelteredAPI.Content;
-using ShelteredAPI.Storage;
-using ShelteredAPI.Workstations;
-
-ShelteredCooking.RegisterStation(new CookingStationRegistration
-{
-    OwnerId = "com.example.cooking",
-    ObjectType = ObjectManager.ObjectType.Stove,
-    InteractionId = "com.example.cooking.stove.cook",
-    InteractionText = "Cook",
-    IngredientStore = context =>
-        ShelteredStores.FindNearestObjectStore(
-            "com.example.cooking",
-            ObjectManager.ObjectType.Freezer,
-            context.TargetObject.transform.position,
-            "Fridge Storage",
-            24),
-    OutputStore = context => ShelteredStores.ForInventory(),
-    JobOptions = new CookingStationJobOptions
-    {
-        JobType = "cook_food",
-        AnimationTrigger = "Rummage",
-        DurationSeconds = 3f
-    },
-    Recipes = new[]
-    {
-        new CookingStationRecipe
-        {
-            RecipeId = "com.example.cooking.meat_to_ration",
-            DisplayName = "Cook Ration",
-            OutputItemId = VanillaItems.Ration,
-            OutputCount = 1,
-            Ingredients = new[]
-            {
-                new RecipeIngredient { ItemId = VanillaItems.Meat, Count = 1 }
-            }
-        }
-    }
-});
-```
-
-Timed cooking jobs check ingredients before queueing and again on completion. Output add failures roll consumed ingredients back.
+For loader/runtime ownership details, use [ModAPI Architecture Guide](ModAPI_Architecture_guide.md). For the completed implementation split and verifier history, use [ModAPI/ShelteredAPI Boundary Refactor](ModAPI_Sheltered_Boundary_Refactor.md).

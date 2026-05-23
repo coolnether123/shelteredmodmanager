@@ -52,6 +52,29 @@ Startup timing values:
 - Manual patch modules must also register through `PatchRegistry`.
 - Patch classes should stay thin and delegate behavior to coordinators/services.
 
+## Diagnostic reports
+
+`PatchRegistry` retains up to 64 stable `PatchReportDto` snapshots for the current process. These snapshots are intended for support bundles and post-startup diagnostics:
+
+- `PatchRegistry.GetReportHistory()` returns retained snapshots in capture order.
+- `PatchRegistry.GetLatestReport()` returns the most recent snapshot, or `null` before a registry scan runs.
+- `PatchApplyReport.DiagnosticSnapshot` exposes the stable snapshot for the current application attempt.
+
+Each report identifies its assembly, source name, optional deferred trigger, and stable host summaries for discovered, applied, skipped, and missing-policy patch hosts. A `PatchHostReportDto` includes owning feature, domain, startup timing, metadata state, and string-form target method signatures where target discovery ran.
+
+Target resolution remains timing-aware. Deferred patch hosts receive resolved target method signatures when their timing group is scanned, so consumers should aggregate report history rather than relying only on the boot report.
+
+## Conflict diagnostics
+
+When two registry-resolved patch hosts target the same method, the registry adds a `PatchConflictReportDto`. Conflict diagnostics are reporting only: they do not block, reorder, or opt a patch out of application.
+
+- `Warning`: missing policy metadata, an unknown domain, mixed domains, or required hosts owned by different features.
+- `Informational`: hosts share the same declared feature/domain, or only optional hosts from different features share the target.
+
+Warnings use `MMLog.WarnOnce`; informational messages are also emitted once per target and severity to avoid repeated output as deferred groups are scanned.
+
+Manual patch modules are retained in reports, but a module that applies Harmony operations entirely inside its callback can expose only its declared `TargetBehavior` unless it also has registry-resolvable Harmony target metadata.
+
 ## Safety controls
 
 The registry honors these controls:

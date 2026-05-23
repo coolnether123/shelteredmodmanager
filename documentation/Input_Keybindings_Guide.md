@@ -1,18 +1,6 @@
 # Input Keybindings Guide
 
-The 2.0 Beta.1 line is a breaking clean API line.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are stable.
-- Implementation classes are internal.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+The 2.0 Beta.1 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical); this guide covers the input workflow only.
 
 Sheltered Mod Manager v2.0 Beta.1 exposes rebindable controls through a split runtime:
 

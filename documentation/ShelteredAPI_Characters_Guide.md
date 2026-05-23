@@ -1,18 +1,6 @@
 # ShelteredAPI Actors Guide (v2.0 Beta.1)
 
-The 2.0 Beta.1 line is a breaking clean API line.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are stable.
-- Implementation classes are internal.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+The 2.0 Beta.1 line is a breaking clean API line. See the canonical [assembly boundary and typed escape-hatch rule](README.md#assembly-boundary-canonical); this guide covers actor and character usage.
 
 This guide covers the actor system exposed through:
 

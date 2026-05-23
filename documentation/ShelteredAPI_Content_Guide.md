@@ -4,19 +4,9 @@ This guide covers the current `ShelteredAPI.Content` surface for item, recipe, l
 
 Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
+See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical).
+
 > Dev/API-preview warning: runtime stores and cooking stations are preview behavior in the current 2.0 line. Use them for mod-author testing, but expect small signature or behavior changes before this surface is declared stable.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are stable.
-- Implementation classes are internal.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
 
 ## 1. What Lives Here
 

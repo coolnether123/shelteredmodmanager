@@ -1,20 +1,8 @@
 # ModAPI v2.0 Beta.1 Architecture Guide
 
-This document summarizes the current loader/runtime architecture. The 2.0 Beta.1 line is a breaking clean API line.
+This document summarizes loader/runtime architecture for maintainers and advanced integration work. The 2.0 Beta.1 line is a breaking clean API line.
 
-For exact signatures, use [API Signatures Reference](API_Signatures_Reference.md).
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are the stable mod-author surface.
-- Implementation classes are internal and may move.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+Mod authors should use the canonical [assembly boundary](README.md#assembly-boundary-canonical) rather than treating this internal map as setup instructions. For exact public signatures, use [API Signatures Reference](API_Signatures_Reference.md).
 
 ## Compatibility Matrix
 
@@ -99,6 +87,8 @@ Optional interfaces currently recognized:
 - scene lifecycle bridging
 - quit-boundary shutdown
 
+`ModThreads` runs neutral calculations on `ThreadPool` and submits result/error continuations to the same main-thread queue. New keyed options add cooperative cancellation, stale-result suppression, and per-source throttling without introducing another runtime host or dispatch route.
+
 Runtime tooling shortcuts:
 - `F9`: Runtime Inspector
 - `F10`: Runtime IL Inspector
@@ -153,6 +143,16 @@ Per-plugin context exposes:
 Sheltered save-slot APIs are exposed through `ShelteredSaves` and `ShelteredSaveEvents` in `ShelteredAPI.dll`.
 
 `ModManagerBase<T>` adds a strongly typed `Config` surface.
+
+## 7.1 Deterministic Random Ownership
+
+`ModAPI.Core.ModRandom` remains the single game-neutral deterministic random service. It owns the master seed, stable named-stream derivation, stream snapshot/restore, and save-seed reset semantics.
+
+- Use `ModRandom.GetStream(modId, featureId)` to isolate feature decisions from unrelated consumption order.
+- `ModManagerBase.Random` resolves to a manager-type feature stream under `modId`; separate manager types cannot consume each other's sequence, and the stream is included in deterministic save restoration.
+- Save-backed seed files are written by `ModRandomState` under the host-provided neutral save path. Sheltered slot routing remains in `ShelteredAPI`.
+- A save-seed reset clears named streams and notifies listeners to obtain fresh stream instances. An exact deterministic restore retains named-stream state and notifies listeners to rebind to the restored instances.
+- Lifecycle diagnostics are emitted for seed/reset/stream/snapshot events only. Per-draw logging is intentionally excluded.
 
 ## 8. Practical Guidance
 

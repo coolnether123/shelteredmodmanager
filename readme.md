@@ -53,7 +53,7 @@ The 2.0 line is a breaking clean API line. It separates the neutral modding fram
 - **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
 
 > [!TIP]
-> Start with the [Documentation](#documentation) section below. For a first mod, use [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md), then add [ShelteredAPI](documentation/ShelteredAPI_Guide.md) when your mod needs Sheltered content, saves, UI, input, events, actors, or scenarios.
+> Mod authors should start with the [Documentation Index](documentation/README.md), which gives the first-mod path and the canonical ModAPI/ShelteredAPI boundary rule before linking advanced guides.
 
 The API is in beta. See the documentation for current capabilities.
 
@@ -62,18 +62,6 @@ The API is in beta. See the documentation for current capabilities.
 This release line is a public beta, not stable 2.0. Back up saves before testing, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
 
 Family Expansion and Deep Expansion need rebuilt/tested packages before they should be listed as compatible with Beta.1. Some 1.2.2 mods may need migration because Sheltered-specific APIs moved from `ModAPI.dll` to `ShelteredAPI.dll`.
-
-### Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-### API Stability Rules
-
-- Public facades are the stable mod-author surface.
-- Implementation classes are internal and may move.
-- Typed Sheltered escape hatches are explicit, for example methods named `FindFamilyMember`.
-- Future migrations should happen behind facades rather than through mod code.
 
 ## Installation
 
@@ -87,6 +75,10 @@ Epic users: install the 64-bit package named Epic.
 4. Enable mods and launch the game.
 
 If your executable is `Sheltered.exe`, you are on Steam/GOG. If it is `ShelteredWindows64_EOS.exe`, you are on Epic.
+
+### Antivirus Note
+
+SMM uses Unity Doorstop injection through `winhttp.dll` so it can load `SMM\Doorstop.dll` before Sheltered starts. Some antivirus tools may flag this DLL injection pattern even when the file is from the official SMM release. If that happens, verify the archive source, restore the quarantined `winhttp.dll`, and allowlist the Sheltered install folder for SMM.
 
 ### Installing Mods
 
@@ -248,7 +240,7 @@ Sheltered/
 
 ## For Mod Authors
 
-The Developer API is split between the neutral framework (`ModAPI.dll`) and the Sheltered integration layer (`ShelteredAPI.dll`). See the documentation folder for current capabilities.
+Start with the [Documentation Index](documentation/README.md) and its canonical [assembly boundary](documentation/README.md#assembly-boundary-canonical). The API is split between the neutral framework (`ModAPI.dll`) and the Sheltered integration layer (`ShelteredAPI.dll`).
 
 Currently available:
 
@@ -278,12 +270,13 @@ Currently available:
 
 ## Documentation
 
-Use [Documentation Index](documentation/README.md) for the full map. This table covers the most common author tasks.
+Use [Documentation Index](documentation/README.md) for the ordered first-mod, advanced, API reference, and migration paths. This table covers common destinations.
 
 | Task | Start Here |
 |------|------------|
-| Make your first mod | [How to Develop a Plugin](documentation/how%20to%20develop%20a%20plugin.md) |
-| Understand ModAPI/ShelteredAPI split | [ModAPI Developer Guide](documentation/ModAPI_Developer_Guide.md) |
+| Make your first mod | [Start Here / First Mod](documentation/README.md#start-here--first-mod) |
+| Understand ModAPI/ShelteredAPI split | [Canonical Assembly Boundary](documentation/README.md#assembly-boundary-canonical) |
+| Choose a Sheltered-specific facade | [When to Use ShelteredAPI](documentation/ShelteredAPI_Guide.md) |
 | Add items, recipes, loot, or assets | [ShelteredAPI Content Guide](documentation/ShelteredAPI_Content_Guide.md) |
 | Add settings or persisted mod data | [Settings and Persistence](documentation/SETTINGS.md) |
 | Subscribe to game, UI, save, or time events | [Events Guide](documentation/Events_Guide.md) |

@@ -1,8 +1,26 @@
 # Kind	Namespace	Name	Path	Justification
+class	ShelteredAPI.Map	ExpeditionMapContext	ShelteredAPI/Map/ExpeditionMapContext.cs	Read-only expedition map runtime snapshot intentionally exposed through ShelteredMap.
+class	ShelteredAPI.Map	ExpeditionRouteDistance	ShelteredAPI/Map/ExpeditionMapContext.cs	Read-only result for vanilla-compatible expedition route distance queries.
+class	ShelteredAPI.Map	ExpeditionMapGenerationPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Base identity and ordering contract for focused map-generation intent policies.
+class	ShelteredAPI.Map	LocationDensityPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Explicit composable map location-density intent contract.
+class	ShelteredAPI.Map	TownDensityPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Explicit composable town-density intent contract.
+class	ShelteredAPI.Map	QuestPlacementPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Explicit composable quest placement eligibility intent contract.
+class	ShelteredAPI.Map	FactionZonePlacementPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Explicit composable faction-zone placement eligibility intent contract.
+class	ShelteredAPI.Map	HomeShelterPlacementPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Explicit composable home-shelter placement intent contract.
+class	ShelteredAPI.Map	SpecialItemRegionEligibilityPolicy	ShelteredAPI/Map/MapGenerationPolicies.cs	Explicit composable special-item region eligibility intent contract.
+class	ShelteredAPI.Map	MapPolicyRegistrationResult	ShelteredAPI/Map/MapGenerationPolicies.cs	Result DTO for safe policy registration through ShelteredMap.
+class	ShelteredAPI.Map	MapGenerationPolicySnapshot	ShelteredAPI/Map/MapGenerationPolicies.cs	Resolved deterministic no-op-by-default map-generation intent snapshot.
+class	ShelteredAPI.Map	ShelteredMap	ShelteredAPI/Map/ShelteredMap.cs	Public ShelteredAPI expedition map context and policy facade.
+struct	ShelteredAPI.Map	ExpeditionMapGridPosition	ShelteredAPI/Map/ExpeditionMapContext.cs	Detached grid coordinate DTO for expedition map context queries.
+struct	ShelteredAPI.Map	ExpeditionMapWorldPosition	ShelteredAPI/Map/ExpeditionMapContext.cs	Detached world coordinate DTO for expedition map context queries.
 class	ShelteredAPI.Actors	ShelteredActors	ShelteredAPI/Actors/ActorSystem.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Adapters	GameHelperExtensions	ShelteredAPI/Adapters/GameHelperExtensions.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters	PartyChangedEventArgs	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters	ShelteredCharacters	ShelteredAPI/Characters/ShelteredCharacters.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Map	ExpeditionActorSnapshot	ShelteredAPI/Map/MapMarkerSnapshots.cs	Public detached expedition-party projection with actor identities for map integrations.
+class	ShelteredAPI.Map	ExpeditionRouteSnapshot	ShelteredAPI/Map/MapMarkerSnapshots.cs	Public detached route DTO for marker and expedition snapshot APIs.
+class	ShelteredAPI.Map	MapMarkerSnapshot	ShelteredAPI/Map/MapMarkerSnapshots.cs	Public detached marker DTO for vanilla projections and mod-owned marker registration.
+class	ShelteredAPI.Map	ShelteredMapMarkers	ShelteredAPI/Map/ShelteredMapMarkers.cs	Public facade for marker registration and read-only expedition marker projections.
 class	ShelteredAPI.Characters.Models	AttributeModifier	ShelteredAPI/Characters/Models/AttributeModifier.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters.Models	CharacterQuery	ShelteredAPI/Characters/Models/CharacterQuery.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters.Models	EffectInstance	ShelteredAPI/Characters/Models/EffectInstance.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -31,6 +49,10 @@ class	ShelteredAPI.Core	ShelteredApiServices	ShelteredAPI/Core/ShelteredApiIds.c
 class	ShelteredAPI.Core	ShelteredModManagerBase	ShelteredAPI/Core/ShelteredModManagerBase.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Debugging	DebugValueTakeover	ShelteredAPI/Debugging/DebugValueTakeover.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Debugging	DebugValueTakeoverSession	ShelteredAPI/Debugging/DebugValueTakeover.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Debugging	ShelteredSupportBundle	ShelteredAPI/Debugging/ShelteredSupportBundle.cs	Public support-bundle facade exposing concrete diagnostic snapshots without requiring optional services.
+class	ShelteredAPI.Debugging	SupportBundleRequest	ShelteredAPI/Debugging/ShelteredSupportBundle.cs	Public request DTO selecting an optional save manifest and log limit for support capture.
+class	ShelteredAPI.Debugging	SupportBundleSection	ShelteredAPI/Debugging/ShelteredSupportBundle.cs	Public diagnostics-section DTO representing available, unknown, or unavailable support facts.
+class	ShelteredAPI.Debugging	SupportBundleSnapshot	ShelteredAPI/Debugging/ShelteredSupportBundle.cs	Public support report DTO containing concrete runtime, save, mod, and log facts.
 class	ShelteredAPI.Events	ShelteredEvents	ShelteredAPI/Events/ShelteredEvents.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Events	TimeTriggerBatch	ShelteredAPI/Events/GameTimeTriggerHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Events	TimeTriggerInfo	ShelteredAPI/Events/GameTimeTriggerHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -45,6 +67,13 @@ class	ShelteredAPI.Interactions	ObjectButtonTargetBuilder	ShelteredAPI/Interacti
 class	ShelteredAPI.Persistence	ShelteredPersistence	ShelteredAPI/Persistence/ModPersistence.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Persistence	ShelteredPersistentDictionary	ShelteredAPI/Persistence/ModDictionary.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Persistence	ShelteredPersistentList	ShelteredAPI/Persistence/ModList.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.Queues	PlayerQueueChangedEventArgs	ShelteredAPI/Queues/PlayerQueueContracts.cs	Detached queue-change notification DTO intentionally exposed through ShelteredQueues.
+class	ShelteredAPI.Queues	PlayerQueueEntry	ShelteredAPI/Queues/PlayerQueueContracts.cs	Detached queue entry metadata DTO that does not expose live Sheltered jobs.
+class	ShelteredAPI.Queues	PlayerQueueOwnerIdentity	ShelteredAPI/Queues/PlayerQueueContracts.cs	Copied actor/member identity DTO for queue queries and snapshots.
+class	ShelteredAPI.Queues	PlayerQueuePosition	ShelteredAPI/Queues/PlayerQueueContracts.cs	Copied queued-target position DTO for player queue snapshots.
+class	ShelteredAPI.Queues	PlayerQueueRestoreResult	ShelteredAPI/Queues/PlayerQueueContracts.cs	Result DTO for conservative queue restoration through ShelteredQueues.
+class	ShelteredAPI.Queues	PlayerQueueSnapshot	ShelteredAPI/Queues/PlayerQueueContracts.cs	Read-only player queue snapshot DTO intentionally exposed through ShelteredQueues.
+class	ShelteredAPI.Queues	ShelteredQueues	ShelteredAPI/Queues/ShelteredQueues.cs	Public Sheltered-facing facade for queue query, snapshot, restore, and change notification.
 class	ShelteredAPI.Saves	CustomMeta	ShelteredAPI/Saves/Models.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Saves	LoadedModInfo	ShelteredAPI/Saves/Models.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Saves	LoadOptions	ShelteredAPI/Saves/Models.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -152,6 +181,10 @@ class	ShelteredAPI.Scenarios.Public	ShelteredScenarioAuthoring	ShelteredAPI/Scen
 class	ShelteredAPI.Scenarios.Public	ShelteredScenarioRegistration	ShelteredAPI/Scenarios/Public/ShelteredScenarioRegistration.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios.Public	ShelteredScenarioRuntime	ShelteredAPI/Scenarios/Public/ShelteredScenarioRuntime.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Scenarios.Public	ShelteredScenarios	ShelteredAPI/Scenarios/Public/ShelteredScenarios.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+class	ShelteredAPI.UI	UICloneOptions	ShelteredAPI/UI/UIExtensionContracts.cs	Options DTO for focused safe Unity/NGUI visual-template cloning through ShelteredUI.
+class	ShelteredAPI.UI	UICloneResult	ShelteredAPI/UI/UIExtensionContracts.cs	Best-effort clone result DTO exposing the intentional Unity GameObject escape hatch and warnings.
+class	ShelteredAPI.UI	UIColorSnapshot	ShelteredAPI/UI/UIExtensionContracts.cs	Opaque color/tween state token for restoring temporary Sheltered UI visual changes.
+class	ShelteredAPI.UI	UIOperationResult	ShelteredAPI/UI/UIExtensionContracts.cs	Best-effort UI operation result DTO exposing affected counts and warnings.
 class	ShelteredAPI.UI	ShelteredUI	ShelteredAPI/UI/ShelteredUI.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI	UITakeoverSession	ShelteredAPI/UI/UITakeover.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.UI.Runtime	ContainerUiAction	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -194,6 +227,9 @@ enum	ShelteredAPI.Events	TimeTriggerCadence	ShelteredAPI/Events/GameTimeTriggerH
 enum	ShelteredAPI.Events	TimeTriggerKind	ShelteredAPI/Events/GameTimeTriggerHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Input	InputContext	ShelteredAPI/Input/InputContext.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Interactions	ObjectButtonInsertMode	ShelteredAPI/Interactions/ObjectButtonInjector.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+enum	ShelteredAPI.Queues	PlayerQueueCancelState	ShelteredAPI/Queues/PlayerQueueContracts.cs	Copied cancellation state reported for a player queue entry snapshot.
+enum	ShelteredAPI.Queues	PlayerQueueChangeKind	ShelteredAPI/Queues/PlayerQueueContracts.cs	Queue-change classification exposed by ShelteredQueues notifications.
+enum	ShelteredAPI.Queues	PlayerQueueEntryState	ShelteredAPI/Queues/PlayerQueueContracts.cs	Copied lifecycle state reported for a player queue entry snapshot.
 enum	ShelteredAPI.Saves	SaveSlotUsage	ShelteredAPI/Saves/Models.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Storage	CharacterItemAssignmentKind	ShelteredAPI/Storage/CharacterItemAssignmentContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Storage	CharacterItemSlot	ShelteredAPI/Storage/CharacterItemAssignmentContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
@@ -220,6 +256,7 @@ enum	ShelteredAPI.Scenarios.Domain.Objects	ScenarioObjectStartState	ShelteredAPI
 enum	ShelteredAPI.Scenarios.Domain.Stages	ScenarioStageKind	ShelteredAPI/Scenarios/Domain/Stages/ScenarioStageKind.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Scenarios.Domain.Timeline	ScenarioTimelineEntryKind	ShelteredAPI/Scenarios/Domain/Timeline/ScenarioTimelineEntryKind.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 enum	ShelteredAPI.Scenarios.Domain.Timeline	ScenarioTimelineEntryStatus	ShelteredAPI/Scenarios/Domain/Timeline/ScenarioTimelineEntryKind.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
+enum	ShelteredAPI.UI	UIButtonBindingMode	ShelteredAPI/UI/UIExtensionContracts.cs	Explicit replace-or-append policy for mod-owned button click binding.
 enum	ShelteredAPI.UI.Runtime	ContainerUiTransferDirection	ShelteredAPI/UI/Runtime/RuntimeUiContracts.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Characters.Abstractions	ICharacterAttributes	ShelteredAPI/Characters/Abstractions/ICharacterAttributes.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 interface	ShelteredAPI.Characters.Abstractions	ICharacterData	ShelteredAPI/Characters/Abstractions/ICharacterData.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.

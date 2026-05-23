@@ -1,9 +1,6 @@
 # For Modders: 2.0 API Migration
 
-SMM 2.0 splits the API surface into two assemblies:
-
-- `ModAPI.dll` is the host-neutral plugin framework: lifecycle, settings, persistence, event bus, Harmony helpers, runtime compatibility helpers, logging, and common utilities.
-- `ShelteredAPI.dll` owns Sheltered-specific content, saves, UI, input, events, actors, characters, scenarios, game state, and vanilla integration facades.
+SMM 2.0 introduces the ModAPI/ShelteredAPI split. Use the canonical [assembly boundary](README.md#assembly-boundary-canonical) when choosing references; this page covers migration actions for an existing package.
 
 ## Required Manifest Metadata
 

@@ -2,21 +2,9 @@
 
 This document is the current high-level map of the codebase. It is intentionally module-oriented rather than a stale file-by-file dump.
 
-For exact callable signatures, use [API Signatures Reference](API_Signatures_Reference.md).
+For exact callable signatures, use [API Signatures Reference](API_Signatures_Reference.md). Mod authors should make assembly choices from the canonical [assembly boundary](README.md#assembly-boundary-canonical); this project map describes implementation ownership.
 
 The 2.0 Beta.1 line is a breaking clean API line.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are the stable mod-author surface.
-- Implementation classes are internal and may move.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
 
 ## Compatibility Matrix
 
@@ -52,6 +40,7 @@ Key files:
 - `ModLoadPlanBuilder.cs`
 - `PrefixedLogger.cs`
 - `ModRandom.cs`
+- `ModThreads.cs`
 
 ## 1.1 Persistence
 
@@ -67,6 +56,29 @@ Key files:
 - `SaveSystemImpl.cs`
 - `ModPersistenceStore.cs`
 - `IModPersistenceLogic.cs`
+
+## 1.2 Deterministic Random
+
+`ModAPI.Core.ModRandom` is the canonical deterministic random service. Do not create an additional random facade for save-replayable framework or mod behavior.
+
+Rules:
+- Use `ModRandom.GetStream(modId, featureId)` for gameplay features. The same save seed and scoped stream ID produce the same sequence, while draws from other named streams do not alter it.
+- `ModManagerBase.Random` uses a canonical manager-type feature stream under the mod ID and participates in stream snapshot/restore.
+- `ResetForSaveSeed(seed, mode)` restarts the master sequence, clears named streams, and raises `OnSeedChanged` so cached streams can be rebound.
+- With `IsDeterministic == false`, a persisted save seed is reused on load and all streams restart at step zero. With `IsDeterministic == true`, the master state, step count, and named stream states are restored exactly.
+- Diagnostics record initialization, stream creation, reset, snapshot, and restore boundaries; random draws are not logged individually.
+
+## Background Work
+
+`ModAPI.Core.ModThreads` remains the neutral background processing entry point. Its original fire-and-forget and calculated-result overloads are preserved, while overloads accepting `ModThreadOptions` return a `ModThreadHandle`.
+
+Rules:
+- Background delegates run on `ThreadPool` and must not touch Unity objects.
+- Result and error continuations are delivered through `PluginRunner.Enqueue`, using the existing pending callback path until the runner is available.
+- `SourceId` scopes both `WorkKey` matching and `MaxConcurrentPerSource` limits.
+- `SkipIfSuperseded` permits older computation to finish but discards its main-thread continuation once newer keyed work exists.
+- `CancelPreviousAndSkip` additionally requests cooperative cancellation; running work must poll `handle.IsCancellationRequested`.
+- `GetDiagnostics()` exposes lifetime `Queued`, `Running`, `Completed`, `Canceled`, `Failed`, `StaleSkipped`, and `Throttled` counters plus current activity.
 
 ## 2. Actor System
 
@@ -176,6 +188,7 @@ Primary area:
 Responsibilities:
 - Harmony bootstrap
 - patch registration
+- retained patch ownership and conflict diagnostic reports
 - fluent transpiler surface
 - cooperative patching
 - stack validation and debugging

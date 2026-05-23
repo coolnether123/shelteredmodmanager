@@ -1,18 +1,6 @@
 # Settings and Persistence (v2.0 Beta.1)
 
-The 2.0 Beta.1 line is a breaking clean API line.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are stable.
-- Implementation classes are internal.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+The 2.0 Beta.1 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical); this guide covers only settings and persistence choices.
 
 ## Compatibility Matrix
 
@@ -111,6 +99,44 @@ public void Initialize(IPluginContext ctx)
     ctx.SaveSystem.RegisterModData("state", _state);
 }
 ```
+
+### 4.1 Optional Persistence Lifecycle
+
+Implement `IModPersistenceLifecycle` when persisted state must be synchronized with runtime services or validated after restore:
+
+```csharp
+using ModAPI.Core;
+using ModAPI.Persistence;
+
+public class MySaveState : IModPersistenceLifecycle
+{
+    public int Visits;
+
+    public void PrepareForSave(IModSaveContext context)
+    {
+        // Pull runtime state into persisted fields.
+    }
+
+    public void RestoreAfterLoad(IModSaveContext context)
+    {
+        // Push restored fields into runtime services.
+    }
+
+    public bool ValidateAfterLoad(IModSaveContext context, out string diagnosticMessage)
+    {
+        diagnosticMessage = Visits < 0 ? "Visits cannot be negative." : null;
+        return diagnosticMessage == null;
+    }
+}
+```
+
+Lifecycle rules:
+
+- `RegisterModData` keeps its optional legacy migration callback and existing signature.
+- `IModPersistenceLogic.OnLoaded` retains its successfully-deserialized-data behavior.
+- `IModPersistenceLifecycle.RestoreAfterLoad` and `ValidateAfterLoad` apply once per active save context to loaded, successfully migrated, and defaulted keys.
+- A defaulted key is reset to its state at registration, so a missing key in a new save does not retain values from a previous save context.
+- Per-key diagnostics report load/default/migration/validation outcomes, callback or serialization failures, and operations skipped without an active save context.
 
 ## 5. Sheltered Save Slots
 

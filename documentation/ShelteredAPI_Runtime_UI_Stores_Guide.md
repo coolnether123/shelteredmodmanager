@@ -4,19 +4,18 @@ This guide covers the supported path for mod-owned panels and object-linked item
 
 Canonical signatures: [API Signatures Reference](API_Signatures_Reference.md).
 
+See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical).
+
 > Dev/API-preview warning: runtime UI stores and cooking stations are part of the current ShelteredAPI preview surface. Names and behavior are intended for mod-author testing in the 2.0 line, but may still change before the API is declared stable.
 
-## Assembly Rule
-
-- Reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll`.
-- Import the namespaces you use:
+Import the namespaces you use:
 
 ```csharp
 using ShelteredAPI.Content;
 using ModAPI.Actors;
 using ShelteredAPI.Actors;
 using ShelteredAPI.Storage;
+using ShelteredAPI.UI;
 using ShelteredAPI.UI.Runtime;
 using ShelteredAPI.Workstations;
 ```
@@ -33,6 +32,21 @@ Use this instead of:
 For fridge-like custom storage, the important split is:
 - vanilla freezer store: an adapter over `Obj_Freezer`, limited to vanilla freezer food fields
 - mod-owned object store: ShelteredAPI persistence keyed to an object, able to hold string-ID items owned by mods
+
+## Augmenting Existing Panels
+
+Prefer the runtime panel APIs below for mod-owned UI. If an integration must augment an existing Sheltered panel, use `ShelteredAPI.UI.ShelteredUI` for focused template reuse and cleanup:
+
+```csharp
+UICloneResult row = ShelteredUI.CloneElement(template, parent);
+if (row.Success)
+{
+    UIButton remove = row.Clone.GetComponent<UIButton>();
+    ShelteredUI.BindButtonClick(remove, item, selected => Remove(selected), UIButtonBindingMode.Replace);
+}
+```
+
+`CloneElement(...)` clears inherited listener/button callbacks by default and reports best-effort warnings. `SnapshotColors(...)` plus `RestoreColors(...)` handles temporary label/widget/tween color edits, and `SubscribePanelLifecycle(...)` provides a disposable typed close-cleanup hook.
 
 ## Runtime Panel Chrome
 

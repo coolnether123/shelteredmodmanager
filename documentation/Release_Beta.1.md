@@ -89,3 +89,5 @@ Measured from `D:\Epic Games\Sheltered\SMM\mod_manager.log` on 2026-05-05 with t
 - Verify `SMM\Manager.exe` About tab shows `Version 2.0.0-beta.1`.
 - Verify installed API versions show `2.0.0.1` in the manager.
 - Verify the Family Expansion mod package has been rebuilt against ModAPI/ShelteredAPI 2.0 Beta.1 before listing it as compatible.
+- Publish SMM 2.0 Beta.1 before publishing or updating companion mod packages that depend on ModAPI/ShelteredAPI 2.0, so users can install the required framework first.
+- Include the README antivirus false-positive note in release posts because SMM uses `winhttp.dll` / Doorstop injection.

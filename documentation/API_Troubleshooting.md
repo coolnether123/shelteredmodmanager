@@ -4,19 +4,7 @@ Use this page for common runtime failures and the exact log signatures to check.
 
 ## Compatibility
 
-Applies to the current 2.0 breaking clean API line.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are stable.
-- Implementation classes are internal.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+Applies to the current 2.0 breaking clean API line. For reference selection and stability rules, see the canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
 ## 1. Setting Exists in Code but Not Visible in UI
 

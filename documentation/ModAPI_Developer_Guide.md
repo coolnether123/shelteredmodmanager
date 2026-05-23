@@ -1,48 +1,22 @@
-# ModAPI Developer Guide (v2.0 Beta.1)
+# Core ModAPI Basics (v2.0 Beta.1)
 
-Start here for the current authoring model. For exact signatures, use [API Signatures Reference](API_Signatures_Reference.md); for the full doc map, use [Documentation Index](README.md).
+This guide covers the minimum host-neutral plugin model. For a packaged first mod, start with [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md). For exact method shapes, use [API Signatures Reference](API_Signatures_Reference.md).
 
-## Compatibility Matrix
+Read the canonical [ModAPI/ShelteredAPI assembly boundary](README.md#assembly-boundary-canonical) before adding game-facing features. Do not copy Sheltered-specific examples into a neutral plugin unless the mod actually needs that assembly.
 
-| Area | Assembly | Status |
-|------|----------|--------|
-| Core plugin lifecycle, context, settings APIs | `ModAPI.dll` | Current |
-| Neutral input, actor, event-bus, scenario, and persistence contracts | `ModAPI.dll` | Current |
-| Sheltered content, saves, UI, input, events, actors, and scenarios | `ShelteredAPI.dll` | Current |
-| Sheltered-specific adapters and implementations | `ShelteredAPI.dll` | Internal unless exposed by a facade |
+## What ModAPI Provides
 
-The 2.0 Beta.1 line is a breaking clean API line: `ModAPI.dll` is host-neutral, and Sheltered behavior comes from `ShelteredAPI.dll` facades plus neutral `GameRuntime.*` services.
+| Area | Use It For |
+|------|------------|
+| `IModPlugin` and `IPluginContext` | lifecycle, logging, roots, Unity scheduling, neutral runtime access |
+| `ModManagerBase<T>` and Spine settings contracts | common mod configuration setup |
+| `ctx.SaveSystem` | ordinary per-mod persisted state scoped to the active save |
+| `ModEventBus` and `ModAPIRegistry` | mod-to-mod messages and service lookup |
+| Input, actor, Harmony, random, and background-work contracts | host-neutral behavior where the current API exposes it |
 
-## Assembly Rule
+`ShelteredAPI` supplies Sheltered runtime implementations behind some neutral contracts, but a mod that only consumes neutral `ModAPI` types does not compile against those implementation types.
 
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are the stable mod-author surface.
-- Implementation classes are internal and may move.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
-
-## 1. Start Here
-
-For specific tasks:
-
-- Plugin lifecycle and context usage: [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md)
-- Harmony + transpilers: [How to Develop a Harmony Patch](how%20to%20develop%20a%20patch%20with%20harmony.md)
-- Transpiler safety/debugging: [Transpiler and Debugging Guide](Transpiler_and_Debugging_Guide.md)
-- Loader/runtime architecture: [ModAPI Architecture Guide](ModAPI_Architecture_guide.md)
-- Spine settings UI: [Spine Settings Guide](Spine_Settings_Guide.md)
-- Settings + persistence patterns: [Settings and Persistence](SETTINGS.md)
-- ShelteredAPI helper surface: [ShelteredAPI Guide](ShelteredAPI_Guide.md)
-- Input/keybinding registration: [Input Keybindings Guide](Input_Keybindings_Guide.md)
-- Custom scenario registration and authoring: [Custom Scenarios Guide](Custom_Scenarios_Guide.md)
-- Sheltered content registration/runtime: [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md)
-- Actor registry/components/bindings/adapters: [ShelteredAPI Actors Guide](ShelteredAPI_Characters_Guide.md)
-- Failures and log signatures: [API Troubleshooting](API_Troubleshooting.md)
-
-## 2. Minimal Plugin Template
+## Minimal Lifecycle
 
 ```csharp
 using ModAPI.Core;
@@ -61,162 +35,24 @@ public class MyPlugin : IModPlugin
 }
 ```
 
-## 3. Content Registration (Current API)
+Use the lifecycle consistently:
 
-Register via `ShelteredAPI.Content.ShelteredContent` in `Start(...)` (safe lifecycle guidance below).
+1. `Initialize(...)`: cache context, register neutral mod data, and set up lightweight state.
+2. `Start(...)`: subscribe runtime behavior, register game-facing content through the appropriate facade, and apply patches.
+3. `IModShutdown.Shutdown()`: unsubscribe and clean up owned runtime behavior when needed.
 
-### 3.1 Type-Name Collision Warning
+Keep constructors free of runtime side effects. Scene objects may not exist at startup; use `RunNextFrame(...)` or scene callbacks where appropriate.
 
-`ItemDefinition` exists both in game code and in `ShelteredAPI.Content`. Use aliases in mod code:
+## Settings And Ordinary Mod Data
 
-```csharp
-using ShelteredAPI.Content;
-using ContentItemDefinition = ShelteredAPI.Content.ItemDefinition;
-using GameItemDefinition = global::ItemDefinition;
-```
-
-### 3.2 Recommended Registration Example
+For settings, use `ModManagerBase<T>` unless the mod needs explicit `ISettingsProvider` control. For ordinary save-scoped state, stay on the neutral persistence path:
 
 ```csharp
-using ShelteredAPI.Content;
-using ContentItemDefinition = ShelteredAPI.Content.ItemDefinition;
-
-public void Start(IPluginContext ctx)
+public class SaveState
 {
-    var item = new ContentItemDefinition()
-        .WithId("com.mymod.power_cell")
-        .WithDisplayNameText("Power Cell")
-        .WithDescriptionText("A high-capacity energy cell")
-        .WithCategory(ItemCategory.Normal)
-        .WithStackSize(10)
-        .WithScrapValue(5f)
-        .WithIcon("Assets/Icons/power_cell.png");
-
-    var result = ShelteredContent.RegisterItem(item);
-    if (!result.Success)
-    {
-        ctx.Log.Error("Item registration failed: " + result.ErrorMessage);
-        return;
-    }
-
-    ShelteredContent.RegisterRecipe(
-        new RecipeDefinition()
-            .WithId("recipe.power_cell")
-            .WithResultItem("com.mymod.power_cell")
-            .WithStation(CraftStation.Workbench)
-            .WithLevel(1)
-            .WithCraftTime(45f)
-            .WithIngredient(VanillaItems.Component, 3)
-            .WithIngredient(VanillaItems.Metal, 2));
+    public int Counter;
 }
-```
 
-### 3.3 Localization Keys vs Text (ShelteredAPI v2.0)
-
-Use explicit APIs when possible:
-- `.WithDisplayNameKey("mymod.items.power_cell.name")`
-- `.WithDescriptionKey("mymod.items.power_cell.desc")`
-- `.WithDisplayNameText("Power Cell")`
-- `.WithDescriptionText("A high-capacity energy cell")`
-
-Avoid ambiguous display-name helpers in new 2.0 code. Prefer explicit key/text methods so future content migrations can happen behind the facade.
-
-Spine settings follow the same key-plus-fallback pattern for user-facing metadata:
-- `LabelKey` localizes the setting label while `Label` remains the fallback.
-- `TooltipKey` localizes hover text while `Tooltip` remains the fallback.
-- Runtime-generated Spine tooltip text also looks up `Spine.Settings.Tooltip.*` keys before using built-in English fallbacks.
-
-### 3.4 Registration Timing and Lifecycle
-
-Use this ordering:
-1. `Initialize(...)`: cache context, wire events, set up state only.
-2. `Start(...)`: register items/recipes/patches.
-
-Rationale:
-- `ContentInjector` binds against the active manager pair (`ItemManager.Instance` and `CraftingManager.Instance`) and rebinds when the game creates fresh managers for a new family/session.
-- Definitions registered by `Start(...)` are available by the time injector bootstraps.
-- Registering in constructors is unsafe and can race before loader context exists.
-
-Guaranteed-safe recipe:
-- Put all `ShelteredContent.RegisterItem/RegisterRecipe/RegisterCookingRecipe` calls in `Start(...)`.
-- Do not require managers directly in `Start(...)`; let injector consume registry entries.
-
-## 4. Settings Patterns
-
-Two supported patterns:
-- Pattern A: `ModManagerBase<T>` auto-controller and auto-load.
-- Pattern B: `ISettingsProvider` manual provider with `SpineSettingsHelper.Scan`.
-
-Use A unless you explicitly need B. Full examples are in:
-- `documentation/Spine_Settings_Guide.md`
-- `documentation/SETTINGS.md`
-
-## 5. Events (ModAPI + ShelteredAPI)
-
-`ModEventBus` is neutral and lives in `ModAPI.dll`. Sheltered gameplay/UI/faction/time events are exposed through `ShelteredAPI.Events.ShelteredEvents`.
-
-```csharp
-using ShelteredAPI.Events;
-
-public void Start(IPluginContext ctx)
-{
-    ShelteredEvents.NewDay += day => ctx.Log.Info("Day " + day);
-    ShelteredEvents.SixHourTick += batch => ctx.Log.Info("6h tick seq=" + batch.Sequence);
-    ShelteredEvents.StaggeredTick += batch => ctx.Log.Info("Staggered every " + batch.IntervalHours + "h");
-}
-```
-
-## 6. ShelteredAPI-Specific Helpers
-
-Use the Sheltered facades directly:
-- `ShelteredContent` for content registration and item resolution.
-- `ShelteredSaves` and `ShelteredSaveEvents` for Sheltered save slots and lifecycle.
-- `ShelteredUI` for intended UI helpers.
-- `ShelteredInput` for Sheltered input tuning and vanilla action IDs.
-- `ShelteredEvents` for Sheltered events.
-- `ShelteredActors` and `ShelteredCharacters` for actor/character integration.
-- `ShelteredScenarios`, `ShelteredScenarioAuthoring`, and `ShelteredScenarioRuntime` for scenarios.
-
-Example: explicit trigger registration and priority ordering.
-
-```csharp
-using ShelteredAPI.Events;
-
-public void Start(IPluginContext ctx)
-{
-    ShelteredEvents.RegisterTimeTrigger(
-        triggerId: "com.mymod.economy.tick",
-        priority: 50,
-        cadence: TimeTriggerCadence.SixHour,
-        callback: batch => ctx.Log.Info("Economy tick " + batch.TotalHours));
-}
-```
-
-Actor services are exposed through `ctx.Actors`:
-
-```csharp
-using ModAPI.Actors;
-
-public void Start(IPluginContext ctx)
-{
-    var actor = ctx.Actors.Ensure(new ActorCreateRequest
-    {
-        Kind = ActorKind.Faction,
-        Domain = "com.mymod",
-        LifecycleState = ActorLifecycleState.Active,
-        PresenceState = ActorPresenceState.Offscreen,
-        Flags = ActorFlags.Persistent | ActorFlags.Synthetic
-    });
-}
-```
-
-## 7. Persistence
-
-`ModAPI.dll` owns neutral per-mod JSON persistence through `ctx.SaveSystem`.
-The active game supplies slot paths through the `GameRuntime.SaveRuntime` adapter; Sheltered's adapter is hosted by `ShelteredAPI.dll`.
-
-```csharp
-public class SaveState { public int Counter; }
 private readonly SaveState _state = new SaveState();
 
 public void Initialize(IPluginContext ctx)
@@ -225,17 +61,38 @@ public void Initialize(IPluginContext ctx)
 }
 ```
 
-Use `ShelteredSaves` when your mod intentionally works with Sheltered save slots or descriptors. Keep ordinary per-mod state on `ctx.SaveSystem`.
+For data that mirrors runtime services, implement `ModAPI.Persistence.IModPersistenceLifecycle` on the registered object. Its `PrepareForSave` hook runs before serialization, while `RestoreAfterLoad` and `ValidateAfterLoad` run once for loaded, successfully migrated, or registered-default data in each active save context. Existing `IModPersistenceLogic` callers remain supported.
+
+Do not use Sheltered save-slot APIs merely to persist normal mod state. Use them only when a mod needs to inspect or control Sheltered slot/descriptors/lifecycle. Complete settings and persistence examples live in [Settings and Persistence](SETTINGS.md).
+
+## Deterministic Random Streams
+
+Use `ModRandom` for save-replayable choices. It is the canonical neutral random service:
 
 ```csharp
-SaveEntry[] saves = ShelteredSaves.ListStandard(page: 0, pageSize: 20);
-foreach (SaveEntry save in saves)
-{
-    ctx.Log.Info(save.DisplayName);
-}
+ModRandomStream encounterRandom = ModRandom.GetStream("com.mymod", "encounter-rewards");
+int rewardIndex = encounterRandom.Range(0, rewards.Count);
 ```
 
-## 8. Logging
+Use a stable mod ID and feature ID for each decision family. Draws from one named stream do not advance unrelated streams. `ResetForSaveSeed(...)` restarts save-seeded streams, while deterministic save restoration resumes the stored stream states. `ModManagerBase.Random` already uses a scoped canonical stream.
 
-- Preferred for mod logs: `ctx.Log.Info/Warn/Error/Debug`.
-- Internal/static logs: `MMLog.WriteInfo`, `MMLog.WriteWarning`, `MMLog.WriteError`, `MMLog.WriteDebug`.
+## Choose The Next Guide
+
+| Mod requirement | Guide |
+|-----------------|-------|
+| Items, recipes, loot, or content assets | [ShelteredAPI Content Guide](ShelteredAPI_Content_Guide.md) |
+| Sheltered save slots, UI, input, game events, or scenarios | [ShelteredAPI Guide](ShelteredAPI_Guide.md) |
+| Events and time triggers | [Events Guide](Events_Guide.md) |
+| Keybindings | [Input Keybindings Guide](Input_Keybindings_Guide.md) |
+| Actors and Sheltered characters | [Actors Guide](ShelteredAPI_Characters_Guide.md) |
+| Mod-owned panels, stores, or cooking stations | [Runtime UI, Stores, and Cooking Stations](ShelteredAPI_Runtime_UI_Stores_Guide.md) |
+| Custom scenarios | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
+| Harmony and transpilers | [Harmony Patch Guide](how%20to%20develop%20a%20patch%20with%20harmony.md) |
+
+## Practical Rules
+
+- Use stable, namespaced IDs for data keys, actions, components, triggers, and registered content.
+- Prefer the documented facade for a task before patching vanilla behavior.
+- Use `ctx.Log` for mod logs.
+- Treat public facades and DTOs as the author surface; internal manager-binding classes may move.
+- The Beta.1 API is a breaking public-beta line. Back up saves before testing a mod that touches save or scenario behavior.

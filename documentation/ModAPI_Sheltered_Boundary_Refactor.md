@@ -1,17 +1,17 @@
 # ModAPI Sheltered Boundary Refactor
 
-This is the baseline document for the full refactor to remove Sheltered-specific code from `ModAPI`.
+This is the maintainer-facing implementation record for the completed refactor that removed Sheltered-specific code from `ModAPI`. Mod authors should use the canonical [assembly boundary](README.md#assembly-boundary-canonical) for reference decisions and facade rules.
 
 Prompt 8 final state: the hard boundary is complete. `ModAPI.dll` is the neutral framework assembly, `ShelteredAPI.dll` owns Sheltered integrations, and the boundary verifier baseline is empty.
 
 Prompt 1 does not move implementation code. It establishes ownership, visible debt, and a verifier so later phases can move code in small commits without adding hidden exceptions.
 
-## Boundary Rule
+## Implementation Ownership Rule
 
 - `ModAPI` owns only game-neutral modding framework code.
 - `ShelteredAPI` owns Sheltered developer hooks, adapters, Harmony patches, runtime manager integrations, NGUI/UI integrations, content injection, scenario runtime integration, and save/runtime implementations.
 - Pure C# is not enough to stay in `ModAPI`. If it encodes Sheltered vocabulary or Sheltered gameplay rules, it belongs in `ShelteredAPI` or must be split into neutral `ModAPI` contracts plus Sheltered-owned implementations.
-- The 2.0 public API is the clean boundary: neutral framework APIs live in `ModAPI`, and Sheltered-specific APIs live behind `ShelteredAPI.*` facades.
+- The 2.0 public API follows the author-facing boundary in the documentation index: neutral framework APIs live in `ModAPI`, and Sheltered-specific APIs live behind `ShelteredAPI.*` facades.
 
 ## Current Ownership Map
 
@@ -24,6 +24,7 @@ These surfaces are intended to remain in `ModAPI` after Sheltered references are
 | `Core` plugin lifecycle contracts (`IModPlugin`, optional lifecycle interfaces), mod metadata, discovery, logging, registry helpers, and main-thread scheduling contracts | Framework behavior that applies to any game host. |
 | `ModAPIRegistry`, shared assembly resolution, and basic plugin host wiring | Neutral runtime infrastructure. Game-specific runtime assemblies are discovered from shared runtime folders and integrated through `IGameRuntimeBootstrap`, not by compile-time game references. |
 | `ISaveSystem`, `ModPersistenceData`, `SaveLoadDictionary`, neutral persistence callbacks, and `ISaveRuntimeAdapter` | Framework persistence primitives and ports that do not require Sheltered managers. |
+| `ModRandom`, `ModRandomStream`, and seed/stream snapshot persistence | Game-neutral deterministic random primitives. Save adapters provide only the neutral slot path; Sheltered save routing does not belong in the random service. |
 | `Spine` settings metadata, scanning, and neutral settings definitions | Game-neutral settings contract/model layer. ShelteredAPI owns the NGUI rendering pack for those definitions. |
 | `Input` binding models, action registry, scroll query/source contracts | Neutral input description and dispatch contracts. |
 | `UIFlowGuard`, `ScrollInputBridge`, `TouchInputBridge`, `SceneUtil`, and `SceneCompat` | Small Unity-level shims that do not name Sheltered panels, managers, NGUI widgets, or item runtime types. |

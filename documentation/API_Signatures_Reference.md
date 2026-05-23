@@ -1,8 +1,8 @@
 # ModAPI + ShelteredAPI v2.0 Beta.1 API Signatures Reference
 
-This is the source-of-truth signature sheet for the current code in this repo. The 2.0 Beta.1 line is a breaking clean API line.
+This is the signature lookup sheet for public APIs present in the current repo. The 2.0 Beta.1 line is a breaking clean API line.
 
-Use this file for copy/paste signatures and type names. For workflow guidance, start with [Documentation Index](README.md).
+Use this file for type names and method shapes only. For setup, assembly selection, stability rules, and task workflows, start with the [Documentation Index](README.md) and its canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
 ## Signature Map
 
@@ -13,25 +13,23 @@ Use this file for copy/paste signatures and type names. For workflow guidance, s
 | Input actions and Sheltered controls | [Input Actions](#input-actions-modapiinputactions), [Sheltered Input Facade](#sheltered-input-facade-shelteredapiinput) |
 | Actors and characters | [Actor System](#actor-system-modapiactors-shelteredapi), [Sheltered Actors And Characters](#sheltered-actors-and-characters-shelteredapiactors-shelteredapicharacters) |
 | Settings UI | [Spine Settings](#spine-settings-modapispine-modapiattributes) |
-| Harmony and transpilers | [Transpiler Core](#transpiler-core-modapiharmony), [Intent API](#intent-api-modapiharmony), [Cooperative Patching](#cooperative-patching-modapiharmony) |
+| Harmony and transpilers | [Patch Diagnostics](#patch-diagnostics-modapiharmony), [Transpiler Core](#transpiler-core-modapiharmony), [Intent API](#intent-api-modapiharmony), [Cooperative Patching](#cooperative-patching-modapiharmony) |
 | Content and assets | [Content + Assets](#content--assets-shelteredapicontent), [Runtime UI + Stores](#runtime-ui--stores-shelteredapiuiruntime-shelteredapistorage-shelteredapiworkstations) |
 | Events and registries | [Event + Registry APIs](#event--registry-apis), [ShelteredAPI Trigger Scheduler](#shelteredapi-trigger-scheduler-shelteredapievents), [Mod Registry](#mod-registry-modapicore) |
 | Custom scenarios | [Custom Scenarios](#custom-scenarios-modapiscenarios-shelteredapiscenarios) |
-| Background work | [Background Processing](#background-processing-v13) |
+| Save lifecycle expansion | [Save Lifecycle](#save-lifecycle-smm-20) |
+| Deterministic random streams | [ModRandom Deterministic Streams](#modrandom-deterministic-streams-modapicore) |
+| Expedition map context | [Expedition Map Context](#expedition-map-context-smm-20) |
+| Player queues | [Player Queues](#player-queues-smm-20) |
+| Background work | [Background Work](#background-work-smm-20) |
+| UI extension service | [UI Extensions](#ui-extensions-smm-20) |
+| Patch reports and conflicts | [Patch Diagnostics](#patch-diagnostics-modapiharmony) |
+| Expedition markers | [Map Markers](#map-markers-smm-20) |
+| Compatibility exports | [Save Manifest / Support Bundle](#save-manifest--support-bundle-smm-20) |
+| Documentation contract | [Documentation Model](#documentation-model-smm-20) |
 
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-> Dev/API-preview warning: the runtime UI store and cooking station contracts are preview APIs in this 2.0 line. Treat the signatures below as the current copy/paste reference, but allow for small changes before this surface is declared stable.
-
-## API Stability Rules
-
-- Public facades are stable mod-author entry points.
-- Implementation classes are internal and may move.
-- Typed Sheltered escape hatches are explicit in their names and signatures.
-- Future migrations should happen behind facades.
+> Status note: runtime UI/store/cooking signatures are API preview, and custom scenario authoring/runtime/scoring surfaces are experimental in Beta.1. See the linked task guides before publishing against those areas.
+- Shared SMM 2.0 naming and DTO rules are defined in [ShelteredAPI Guide: Shared Facade Conventions](ShelteredAPI_Guide.md#shared-facade-conventions).
 
 ## Plugin Lifecycle (`ModAPI.Core`)
 
@@ -562,7 +560,56 @@ public static class ShelteredUI
     public static IDisposable RegisterPanelTakeover<TPanel>(string key, Action<TPanel, UITakeoverSession> apply, bool applyOnOpened, bool applyOnResumed)
         where TPanel : BasePanel;
     public static void UnregisterPanelTakeover(string key);
+    public static UICloneResult CloneElement(GameObject template, Transform parent);
+    public static UICloneResult CloneElement(GameObject template, Transform parent, UICloneOptions options);
+    public static UIOperationResult StripInheritedEventListeners(GameObject root);
+    public static UIOperationResult StripInheritedEventListeners(GameObject root, bool includeChildren);
+    public static UIOperationResult BindButtonClick(UIButton button, Action onClick, UIButtonBindingMode mode);
+    public static UIOperationResult BindButtonClick<TContext>(UIButton button, TContext context, Action<TContext> onClick, UIButtonBindingMode mode);
+    public static UIColorSnapshot SnapshotColors(GameObject root);
+    public static UIColorSnapshot SnapshotColors(GameObject root, bool includeChildren);
+    public static UIOperationResult RestoreColors(UIColorSnapshot snapshot);
+    public static IDisposable SubscribePanelLifecycle<TPanel>(Action<TPanel> onOpened, Action<TPanel> onClosed, Action<TPanel> onResumed)
+        where TPanel : BasePanel;
     public static void ShowShelteredKeybinds();
+}
+
+public enum UIButtonBindingMode { Replace, Append }
+
+public sealed class UICloneOptions
+{
+    public bool StripInheritedEventListeners { get; set; }
+    public bool ClearButtonClickHandlers { get; set; }
+    public bool IncludeChildren { get; set; }
+    public string CloneName { get; set; }
+}
+
+public sealed class UICloneResult
+{
+    public GameObject Clone { get; }
+    public bool Success { get; }
+    public int AffectedCount { get; }
+    public ReadOnlyCollection<string> Warnings { get; }
+    public bool HasWarnings { get; }
+}
+
+public sealed class UIOperationResult
+{
+    public bool Success { get; }
+    public int AffectedCount { get; }
+    public ReadOnlyCollection<string> Warnings { get; }
+    public bool HasWarnings { get; }
+}
+
+public sealed class UIColorSnapshot
+{
+    public bool Success { get; }
+    public int LabelCount { get; }
+    public int WidgetCount { get; }
+    public int TweenCount { get; }
+    public ReadOnlyCollection<string> Warnings { get; }
+    public bool HasWarnings { get; }
+    public UIOperationResult Restore();
 }
 ```
 
@@ -1454,17 +1501,78 @@ public static class GameHelperExtensions
 }
 ```
 
-## Background Processing (v2.0)
+## Background Work (SMM 2.0)
+
+**Status:** Current neutral API. Background delegates must not touch Unity objects; result and error continuations execute on the Unity main thread through `PluginRunner`.
 
 ```csharp
-// ModAPI.Core.ModThreads
+// ModAPI.Core
+public enum ModThreadStaleResultPolicy
+{
+    DeliverAll = 0,
+    SkipIfSuperseded = 1,
+    CancelPreviousAndSkip = 2
+}
+
+public sealed class ModThreadOptions
+{
+    public string SourceId { get; set; }
+    public string WorkKey { get; set; }
+    public ModThreadStaleResultPolicy StaleResultPolicy { get; set; }
+    public int MaxConcurrentPerSource { get; set; }
+    public ModThreadOptions();
+}
+
+public sealed class ModThreadHandle
+{
+    public string SourceId { get; }
+    public string WorkKey { get; }
+    public bool IsCancellationRequested { get; }
+    public bool IsRunning { get; }
+    public bool IsCompleted { get; }
+    public bool WasCanceled { get; }
+    public bool WasStale { get; }
+    public Exception Error { get; }
+    public void Cancel();
+}
+
+public sealed class ModThreadSourceReport
+{
+    public string SourceId { get; }
+    public int InFlight { get; }
+    public int Waiting { get; }
+}
+
+public sealed class ModThreadDiagnosticsReport
+{
+    public long Queued { get; }
+    public long Running { get; }
+    public long Completed { get; }
+    public long Canceled { get; }
+    public long Failed { get; }
+    public long StaleSkipped { get; }
+    public long Throttled { get; }
+    public int Active { get; }
+    public int Waiting { get; }
+    public ModThreadSourceReport[] Sources { get; }
+}
+
 public static void RunAsync(Action action);
 public static void RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainThread);
 public static void RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError);
+public static ModThreadHandle RunAsync(Action action, ModThreadOptions options);
+public static ModThreadHandle RunAsync(Action<ModThreadHandle> action, ModThreadOptions options);
+public static ModThreadHandle RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainThread, ModThreadOptions options);
+public static ModThreadHandle RunAsync<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError, ModThreadOptions options);
+public static ModThreadHandle RunAsync<TResult>(Func<ModThreadHandle, TResult> work, Action<TResult> onMainThread, ModThreadOptions options);
+public static ModThreadHandle RunAsync<TResult>(Func<ModThreadHandle, TResult> work, Action<TResult> onMainThread, Action<Exception> onError, ModThreadOptions options);
+public static ModThreadDiagnosticsReport GetDiagnostics();
 
 // ModAPI.Core.ModManagerBase
 protected void RunInBackground<TResult>(Func<TResult> work, Action<TResult> onMainThread, Action<Exception> onError = null);
 ```
+
+`SourceId` scopes `WorkKey` and per-source limits. Use the same `SourceId` and `WorkKey` with `SkipIfSuperseded` when only the newest calculated result should apply; use `CancelPreviousAndSkip` when an older delegate can also stop cooperatively by checking its handle. `MaxConcurrentPerSource` is zero for unlimited dispatch and otherwise defers excess submissions until a source slot becomes available.
 
 ## Persistence And Sheltered Saves (`ModAPI.Core`, `ShelteredAPI.Saves`)
 
@@ -1502,3 +1610,518 @@ public static class ShelteredSaves
     public static SaveEntry GetScenario(string scenarioId, string saveId);
 }
 ```
+
+## Save Lifecycle (SMM 2.0)
+
+**Status:** Current neutral API. These optional lifecycle hooks operate on registered mod data; save-slot routing remains host-owned through `ISaveRuntimeAdapter`.
+
+```csharp
+// ModAPI.Persistence
+public interface IModPersistenceLogic
+{
+    void OnLoaded(IModSaveContext context);
+    void OnSaving(IModSaveContext context);
+}
+
+public interface IModPersistenceLifecycle
+{
+    void PrepareForSave(IModSaveContext context);
+    void RestoreAfterLoad(IModSaveContext context);
+    bool ValidateAfterLoad(IModSaveContext context, out string diagnosticMessage);
+}
+```
+
+`IModPersistenceLogic` is retained for compatibility: `OnSaving` runs before normal serialization and `OnLoaded` runs for successfully deserialized registered data. `IModPersistenceLifecycle` is additive: `RestoreAfterLoad` and `ValidateAfterLoad` run once per active save context for data that was loaded, successfully migrated through `RegisterModData`, or reset to its registered defaults. Implementing both interfaces invokes both contracts.
+
+The neutral save system reports per registered key in its diagnostics: loaded, missing, migrated, defaulted, validation passed/failed, skipped because no active save context exists, failed serialization/deserialization, and callback failure. It does not expose mutable Sheltered save-manager state.
+
+## ModRandom Deterministic Streams (`ModAPI.Core`)
+
+**Status:** Current neutral API. `ModRandom` is the canonical deterministic random service; do not introduce a parallel random facade.
+
+```csharp
+public enum RandomnessMode { XorShift, Legacy }
+
+public static class ModRandom
+{
+    public static event Action OnSeedChanged;
+    public static bool IsDeterministic { get; set; }
+    public static int CurrentSeed { get; }
+    public static ulong CurrentStep { get; }
+    public static bool IsInitialized { get; }
+
+    public static void Initialize(int seed, RandomnessMode mode = RandomnessMode.XorShift);
+    public static void ResetForSaveSeed(int seed, RandomnessMode mode = RandomnessMode.XorShift);
+    public static void FastForward(ulong steps);
+    public static int Range(int minInclusive, int maxExclusive);
+    public static float Range(float min, float max);
+    public static int RangeUnbiased(int min, int max);
+    public static float Value();
+    public static double ValueDouble();
+    public static bool Bool(float probability);
+    public static bool Bool();
+    public static T Choose<T>(params T[] items);
+    public static void Shuffle<T>(IList<T> list);
+    public static float Gaussian(float mean, float stdDev);
+    public static T Weighted<T>(T[] items, float[] weights);
+    public static ModRandomStream GetStream(string streamName);
+    public static ModRandomStream GetStream(string modId, string featureId);
+}
+
+public class ModRandomStream
+{
+    public ModRandomStream(int seed);
+    public int Range(int min, int max);
+    public float Range(float min, float max);
+    public float Value();
+    public bool Bool(float probability = 0.5f);
+    public T Choose<T>(params T[] items);
+    public void Shuffle<T>(IList<T> list);
+    public ulong CurrentStep { get; }
+}
+```
+
+`GetStream(modId, featureId)` produces a stable feature stream isolated from unrelated named-stream consumption. `ResetForSaveSeed` restarts the master sequence, clears named streams, and raises `OnSeedChanged`; exact deterministic restoration rebinds listeners to snapshotted stream instances. `ModRandomState` is internal persistence machinery and is not a mod-author contract. Diagnostics log reset, stream creation, snapshot, and restore boundaries rather than individual draws.
+
+## Expedition Map Context (SMM 2.0)
+
+**Status:** Current Sheltered-owned read-only runtime context and deterministic generation-policy intent surface.
+
+```csharp
+// ShelteredAPI.Map
+public struct ExpeditionMapGridPosition
+{
+    public ExpeditionMapGridPosition(int x, int y);
+    public int X { get; }
+    public int Y { get; }
+}
+
+public struct ExpeditionMapWorldPosition
+{
+    public ExpeditionMapWorldPosition(float x, float y);
+    public float X { get; }
+    public float Y { get; }
+}
+
+public sealed class ExpeditionRouteDistance
+{
+    public float WorldUnits { get; }
+    public float Miles { get; }
+    public bool IncludesHomeLegs { get; }
+}
+
+public sealed class ExpeditionMapContext
+{
+    public bool IsAvailable { get; }
+    public bool IsValid { get; }
+    public string UnavailableReason { get; }
+    public int CurrentWidth { get; }
+    public int CurrentHeight { get; }
+    public int VanillaWidth { get; }
+    public int VanillaHeight { get; }
+    public float ScaleFactor { get; }
+    public bool HasScaleFactor { get; }
+    public float DensityMultiplier { get; }
+    public bool HasDensityMultiplier { get; }
+    public int MapSeed { get; }
+    public bool HasMapSeed { get; }
+    public ExpeditionMapWorldPosition HomeShelterWorldPosition { get; }
+    public ExpeditionMapGridPosition HomeShelterGridPosition { get; }
+    public bool HasHomeShelterPosition { get; }
+    public float WorldUnitsPerMile { get; }
+    public bool HasWorldUnitsPerMile { get; }
+    public bool ContainsGridPosition(ExpeditionMapGridPosition position);
+    public bool TryWorldToGrid(ExpeditionMapWorldPosition position, out ExpeditionMapGridPosition gridPosition);
+    public bool TryGridToWorld(ExpeditionMapGridPosition gridPosition, out ExpeditionMapWorldPosition worldPosition);
+    public bool TryGridToWorldCenter(ExpeditionMapGridPosition gridPosition, out ExpeditionMapWorldPosition worldPosition);
+    public bool TryCalculateDistance(ExpeditionMapWorldPosition from, ExpeditionMapWorldPosition to, out ExpeditionRouteDistance distance);
+    public bool TryCalculateRouteDistance(IList<ExpeditionMapWorldPosition> waypoints, bool includeHomeLegs, out ExpeditionRouteDistance distance);
+}
+
+public abstract class ExpeditionMapGenerationPolicy
+{
+    public string SourceId { get; set; }
+    public string PolicyId { get; set; }
+    public int Priority { get; set; }
+}
+
+public sealed class LocationDensityPolicy : ExpeditionMapGenerationPolicy { public LocationDensityPolicy(); public LocationDensityPolicy(string sourceId, string policyId, float multiplier, int priority); public float Multiplier { get; set; } }
+public sealed class TownDensityPolicy : ExpeditionMapGenerationPolicy { public TownDensityPolicy(); public TownDensityPolicy(string sourceId, string policyId, float multiplier, int priority); public float Multiplier { get; set; } }
+public sealed class QuestPlacementPolicy : ExpeditionMapGenerationPolicy { public QuestPlacementPolicy(); public QuestPlacementPolicy(string sourceId, string policyId, int minimumHomeDistanceInCells, int? maximumHomeDistanceInCells, int priority); public int MinimumHomeDistanceInCells { get; set; } public int? MaximumHomeDistanceInCells { get; set; } }
+public sealed class FactionZonePlacementPolicy : ExpeditionMapGenerationPolicy { public FactionZonePlacementPolicy(); public FactionZonePlacementPolicy(string sourceId, string policyId, int minimumHomeDistanceInCells, int? maximumHomeDistanceInCells, int priority); public int MinimumHomeDistanceInCells { get; set; } public int? MaximumHomeDistanceInCells { get; set; } }
+public sealed class HomeShelterPlacementPolicy : ExpeditionMapGenerationPolicy { public HomeShelterPlacementPolicy(); public HomeShelterPlacementPolicy(string sourceId, string policyId, ExpeditionMapGridPosition? preferredGridPosition, int minimumEdgeDistanceInCells, int priority); public ExpeditionMapGridPosition? PreferredGridPosition { get; set; } public int MinimumEdgeDistanceInCells { get; set; } }
+public sealed class SpecialItemRegionEligibilityPolicy : ExpeditionMapGenerationPolicy { public SpecialItemRegionEligibilityPolicy(); public SpecialItemRegionEligibilityPolicy(string sourceId, string policyId, int minimumHomeDistanceInCells, int? maximumHomeDistanceInCells, int priority); public int MinimumHomeDistanceInCells { get; set; } public int? MaximumHomeDistanceInCells { get; set; } }
+
+public sealed class MapPolicyRegistrationResult
+{
+    public bool Success { get; }
+    public bool ReplacedExisting { get; }
+    public string ErrorMessage { get; }
+}
+
+public sealed class MapGenerationPolicySnapshot
+{
+    public int PolicyCount { get; }
+    public float LocationDensityMultiplier { get; }
+    public float TownDensityMultiplier { get; }
+    public int QuestMinimumHomeDistanceInCells { get; }
+    public int? QuestMaximumHomeDistanceInCells { get; }
+    public int FactionZoneMinimumHomeDistanceInCells { get; }
+    public int? FactionZoneMaximumHomeDistanceInCells { get; }
+    public int HomeShelterMinimumEdgeDistanceInCells { get; }
+    public bool HasPreferredHomeShelterGridPosition { get; }
+    public ExpeditionMapGridPosition PreferredHomeShelterGridPosition { get; }
+    public int SpecialItemMinimumHomeDistanceInCells { get; }
+    public int? SpecialItemMaximumHomeDistanceInCells { get; }
+    public bool IsQuestPlacementEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate);
+    public bool IsFactionZonePlacementEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate);
+    public bool IsSpecialItemRegionEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate);
+    public bool IsHomeShelterPlacementEligible(ExpeditionMapGridPosition candidate, int mapWidth, int mapHeight);
+}
+
+public static class ShelteredMap
+{
+    public static ExpeditionMapContext Current { get; }
+    public static ExpeditionMapContext GetCurrentContext();
+    public static MapPolicyRegistrationResult RegisterLocationDensityPolicy(LocationDensityPolicy policy);
+    public static MapPolicyRegistrationResult RegisterTownDensityPolicy(TownDensityPolicy policy);
+    public static MapPolicyRegistrationResult RegisterQuestPlacementPolicy(QuestPlacementPolicy policy);
+    public static MapPolicyRegistrationResult RegisterFactionZonePlacementPolicy(FactionZonePlacementPolicy policy);
+    public static MapPolicyRegistrationResult RegisterHomeShelterPlacementPolicy(HomeShelterPlacementPolicy policy);
+    public static MapPolicyRegistrationResult RegisterSpecialItemRegionEligibilityPolicy(SpecialItemRegionEligibilityPolicy policy);
+    public static int UnregisterPolicy(string sourceId, string policyId);
+    public static int ClearPolicies(string sourceId);
+    public static MapGenerationPolicySnapshot ResolveGenerationPolicies();
+}
+```
+
+`ShelteredMap.Current` reads `ExpeditionMap` and `ExplorationManager` internally and returns an unavailable/invalid snapshot rather than leaking a runtime object or throwing before a generated map exists. `VanillaWidth` and `VanillaHeight` are the vanilla normal-map baseline (`40 x 16`); `DensityMultiplier` is explicitly unavailable because vanilla exposes resource and faction difficulty knobs, not one authoritative generated-location density value.
+
+Policy registrations declare intent and resolve in `Priority`, `SourceId`, then `PolicyId` order. Registration copies the submitted DTO, so later caller mutations cannot reorder or alter registered intent. An empty snapshot is vanilla/no-op behavior. The minimal foundation resolves composable policy intent only; it does not patch map-generation callsites or choose randomized positions. A future targeted adapter that consumes these results must use `ModRandom` deterministic streams.
+
+## Player Queues (SMM 2.0)
+
+**Status:** Current Sheltered-owned queue query, snapshot, conservative restore, and change-notification surface. Capacity is observed metadata only.
+
+```csharp
+// ShelteredAPI.Queues
+public enum PlayerQueueEntryState { Pending, InTransit, Started, Finished, Unknown }
+public enum PlayerQueueCancelState { Active, Cancelled, ForceCancelled, Unknown }
+public enum PlayerQueueChangeKind { Added, Removed, ClearedOrCancelled, Reordered, Restored }
+
+public sealed class PlayerQueueOwnerIdentity
+{
+    public ActorId ActorId { get; }
+    public int UniqueMemberId { get; }
+    public string DisplayName { get; }
+}
+
+public sealed class PlayerQueuePosition
+{
+    public float X { get; }
+    public float Y { get; }
+    public float Z { get; }
+}
+
+public sealed class PlayerQueueEntry
+{
+    public int Index { get; }
+    public string JobType { get; }
+    public string InteractionType { get; }
+    public PlayerQueueEntryState State { get; }
+    public PlayerQueueCancelState CancelState { get; }
+    public PlayerQueuePosition Target { get; }
+    public int TargetObjectId { get; }
+}
+
+public sealed class PlayerQueueSnapshot
+{
+    public bool IsAvailable { get; }
+    public PlayerQueueOwnerIdentity Owner { get; }
+    public int Capacity { get; }
+    public int Count { get; }
+    public bool IsFull { get; }
+    public IList<PlayerQueueEntry> Entries { get; }
+    public string UnavailableReason { get; }
+    public string RestoreBlockReason { get; }
+    public bool CanRestore { get; }
+}
+
+public sealed class PlayerQueueRestoreResult
+{
+    public bool Success { get; }
+    public string Message { get; }
+    public PlayerQueueSnapshot Queue { get; }
+}
+
+public sealed class PlayerQueueChangedEventArgs : EventArgs
+{
+    public PlayerQueueChangeKind ChangeKind { get; }
+    public PlayerQueueSnapshot Queue { get; }
+    public PlayerQueueOwnerIdentity Owner { get; }
+}
+
+public static class ShelteredQueues
+{
+    public static event Action<PlayerQueueChangedEventArgs> QueueChanged;
+    public static PlayerQueueSnapshot GetPlayerQueue(ActorId owner);
+    public static PlayerQueueSnapshot GetPlayerQueue(ICharacterProxy owner);
+    public static PlayerQueueSnapshot GetPlayerQueue(int uniqueMemberId);
+    public static PlayerQueueSnapshot SnapshotQueue(ActorId owner);
+    public static PlayerQueueSnapshot SnapshotQueue(ICharacterProxy owner);
+    public static PlayerQueueSnapshot SnapshotQueue(int uniqueMemberId);
+    public static PlayerQueueRestoreResult RestoreQueue(PlayerQueueSnapshot snapshot);
+}
+```
+
+Snapshots copy entry data and actor identity and do not expose live `Job`, `Obj_Base`, or `FamilyMember` objects. `GetPlayerQueue` is a metadata query; `SnapshotQueue` adds private restore material only for pending base-interaction or movement jobs that do not carry staged external work. `RestoreQueue` requires an empty live player queue and matching observed capacity. It does not set player queue capacity.
+
+## UI Extensions (SMM 2.0)
+
+**Status:** Current focused helper API for deliberate augmentation of existing Sheltered/NGUI objects.
+
+Use `ShelteredUI.CloneElement(...)` when a mod intentionally reuses a vanilla visual template. Safe defaults clear inherited `UIEventListener` delegates and `UIButton.onClick` callbacks without creating a layout framework. Use explicit `UIButtonBindingMode.Replace` or `Append`, and the generic binding overload when each cloned row/button needs its own item context. `UIColorSnapshot` captures label/widget visible colors and `TweenColor` endpoints/current values for later restoration. `SubscribePanelLifecycle(...)` returns an `IDisposable` subscription suitable for restoring state on panel close. Existing `UITakeoverSession.BindTooltip(...)` now releases its hover tooltip binding when `Restore()` is called.
+
+## Patch Diagnostics (`ModAPI.Harmony`)
+
+**Status:** Current neutral patch-registry report surface. Reports are support-bundle-friendly snapshots retained after startup.
+
+```csharp
+public enum PatchDomain
+{
+    Unknown, Bootstrap, SaveFlow, UI, Input, Content, Diagnostics,
+    Events, Interactions, Characters, World, Scenarios
+}
+
+public enum PatchStartupTiming
+{
+    BootCritical, MenuCritical, SaveFlowCritical, GameplayDeferred, EditorDeferred, DebugDeferred
+}
+
+public enum PatchConflictSeverity { Informational, Warning }
+
+public sealed class PatchRegistryOptions
+{
+    public HarmonyUtil.PatchOptions PatchOptions { get; set; }
+    public HashSet<PatchDomain> DisabledDomains { get; }
+    public HashSet<PatchStartupTiming> IncludedStartupTimings { get; }
+    public bool IncludeOptionalPatches { get; set; }
+    public string SourceName { get; set; }
+    public string TriggerName { get; set; }
+}
+
+public sealed class PatchHostReportDto
+{
+    public string PatchAssemblyName { get; set; }
+    public string PatchHostName { get; set; }
+    public string SourceName { get; set; }
+    public PatchDomain Domain { get; set; }
+    public string OwningFeature { get; set; }
+    public string TargetBehavior { get; set; }
+    public string FailureMode { get; set; }
+    public string RollbackStrategy { get; set; }
+    public PatchStartupTiming StartupTiming { get; set; }
+    public string[] TargetMethods { get; set; }
+    public bool HasExplicitPolicy { get; set; }
+    public bool IsOptional { get; set; }
+    public bool DeveloperOnly { get; set; }
+    public bool IsDangerous { get; set; }
+}
+
+public sealed class PatchConflictReportDto
+{
+    public string TargetMethod { get; set; }
+    public PatchConflictSeverity Severity { get; set; }
+    public string Reason { get; set; }
+    public PatchHostReportDto[] PatchHosts { get; set; }
+}
+
+public sealed class PatchReportDto
+{
+    public DateTime CapturedUtc { get; set; }
+    public string AssemblyName { get; set; }
+    public string SourceName { get; set; }
+    public string TriggerName { get; set; }
+    public PatchHostReportDto[] Discovered { get; set; }
+    public PatchHostReportDto[] Applied { get; set; }
+    public PatchHostReportDto[] Skipped { get; set; }
+    public PatchHostReportDto[] MissingPolicy { get; set; }
+    public PatchConflictReportDto[] Conflicts { get; set; }
+}
+
+public static class PatchRegistry
+{
+    public static PatchApplyReport ApplyAssembly(HarmonyLib.Harmony harmony, Assembly assembly, PatchRegistryOptions options);
+    public static bool ApplyManualModule(HarmonyLib.Harmony harmony, Type moduleType, Action applyAction, PatchRegistryOptions options);
+    public static PatchRegistryOptions CreateManagerOptions(HarmonyUtil.PatchOptions patchOptions, string sourceName, Func<string, string> readString);
+    public static PatchRegistryOptions CreateTimingOptions(PatchRegistryOptions source, params PatchStartupTiming[] timings);
+    public static void ApplyDisabledDomains(HashSet<PatchDomain> domains, string raw);
+    public static PatchReportDto[] GetReportHistory();
+    public static PatchReportDto GetLatestReport();
+}
+
+public sealed class PatchApplyReport
+{
+    public readonly List<PatchRecord> Discovered;
+    public readonly List<PatchRecord> Applied;
+    public readonly List<PatchRecord> Skipped;
+    public readonly List<PatchRecord> MissingPolicy;
+    public readonly List<PatchConflictReportDto> Conflicts;
+    public PatchReportDto DiagnosticSnapshot { get; }
+}
+```
+
+`PatchRegistry` retains the latest 64 snapshot reports. Duplicate target conflicts are classified as informational or warning based on declared policy, domain, feature ownership, and optional status; they never block patch application.
+
+## Map Markers (SMM 2.0)
+
+**Status:** Implemented in `ShelteredAPI.Map`. `MapMarkerSnapshot.Kind` reuses `ShelteredAPI.Scenarios.Domain.Map.MapMarkerKind`; this facade does not define map-generation policy.
+
+```csharp
+public sealed class ExpeditionRouteSnapshot
+{
+    public ExpeditionRouteSnapshot(IEnumerable<ExpeditionMapWorldPosition> worldWaypoints);
+    public ReadOnlyCollection<ExpeditionMapWorldPosition> WorldWaypoints { get; }
+}
+
+public sealed class MapMarkerSnapshot
+{
+    public MapMarkerSnapshot();
+    public string MarkerId { get; set; }
+    public string DisplayName { get; set; }
+    public MapMarkerKind Kind { get; set; }
+    public ActorId ActorId { get; set; }
+    public Vector2? MapPosition { get; set; }
+    public ExpeditionMapGridPosition? GridPosition { get; set; }
+    public ExpeditionMapWorldPosition? WorldPosition { get; set; }
+    public bool IsVisible { get; set; }
+    public bool IsDiscovered { get; set; }
+    public string SourceModId { get; set; }
+    public ExpeditionRouteSnapshot Route { get; set; }
+}
+
+public sealed class ExpeditionActorSnapshot
+{
+    public ExpeditionPartyInfo PartyInfo { get; }
+    public ReadOnlyCollection<ActorId> MemberActorIds { get; }
+    public MapMarkerSnapshot Marker { get; }
+    public ExpeditionRouteSnapshot Route { get; }
+}
+
+public static class ShelteredMapMarkers
+{
+    public static bool RegisterModOwnedMarker(MapMarkerSnapshot marker);
+    public static bool UpdateModOwnedMarker(MapMarkerSnapshot marker);
+    public static bool RemoveModOwnedMarker(string markerId, string sourceModId);
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotModOwnedMarkers();
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotModOwnedMarkers(string sourceModId);
+    public static MapMarkerSnapshot SnapshotHomeShelter();
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotDiscoveredLocations();
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotQuestLocations();
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotPlayerPartyMarkers();
+    public static ReadOnlyCollection<ExpeditionActorSnapshot> SnapshotActiveExpeditionParties();
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotFactionPartyMarkers();
+    public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotMobileEncounterMarkers();
+}
+```
+
+Registered markers and returned actor IDs/routes are copied snapshots. `SnapshotFactionPartyMarkers()` and `SnapshotMobileEncounterMarkers()` return empty collections until vanilla exposes a stable enumerable source or a later integration provides one; mods can register owned projections explicitly.
+
+## Save Manifest / Support Bundle (SMM 2.0)
+
+**Status:** Current ShelteredAPI save compatibility and diagnostic export surface. Existing version-1 slot manifests remain readable; newly written manifests include the additive fields below.
+
+```csharp
+// ShelteredAPI.Saves persisted models.
+public class SaveInfo
+{
+    // Existing save summary fields are unchanged.
+    public int mapSize;
+    public bool hasMapSizeMetadata;
+}
+
+public class LoadedModInfo
+{
+    public string modId;
+    public string version;
+    public string requiredModApiVersion;
+    public string requiredShelteredApiVersion;
+    public string[] warnings;
+}
+
+public class SlotManifest
+{
+    public int manifestVersion;
+    public string lastModified;
+    public string family_name;
+    public string saveScopeId;
+    public string saveId;
+    public string customScenarioId;
+    public string modApiVersion;
+    public string shelteredApiVersion;
+    public string mapFactsStatus;
+    public bool hasMapSize;
+    public int mapSize;
+    public string runtimeMapFactsStatus;
+    public int runtimeMapWidth;
+    public int runtimeMapHeight;
+    public string runtimeMapScaleFactor;
+    public bool hasMapSeed;
+    public int mapSeed;
+    public string queueFactsStatus;
+    public string queueSummary;
+    public string restoreFactsStatus;
+    public string restoreLineageId;
+    public LoadedModInfo[] lastLoadedMods;
+}
+
+// ShelteredAPI.Debugging.
+public sealed class SupportBundleRequest
+{
+    public string saveScopeId;
+    public string saveId;
+    public int absoluteSlot;
+    public int maxLogEntries;
+}
+
+public sealed class SupportBundleSection
+{
+    public string id;
+    public string status;
+    public string[] facts;
+}
+
+public sealed class SupportBundleSnapshot
+{
+    public int bundleVersion;
+    public string capturedAtUtc;
+    public string gameVersion;
+    public string unityVersion;
+    public string architecture;
+    public string modApiVersion;
+    public string shelteredApiVersion;
+    public LoadedModInfo[] activeMods;
+    public SlotManifest saveManifest;
+    public SupportBundleSection[] diagnostics;
+    public string[] logs;
+}
+
+public static class ShelteredSupportBundle
+{
+    public static SupportBundleSnapshot Capture();
+    public static SupportBundleSnapshot Capture(SupportBundleRequest request);
+    public static string ExportJson();
+    public static string ExportJson(SupportBundleRequest request);
+}
+```
+
+`ShelteredSupportBundle` records available concrete facts and consumes public map, patch-report, and background-work snapshots when those optional surfaces are present. It emits `unknown` or `unavailable` sections when a report is absent; current queue APIs are owner-scoped and therefore do not provide a save-wide queue fact for manifests. It is not a capability registry.
+
+## Documentation Model (SMM 2.0)
+
+**Status:** Current documentation contract for all shared-service feature agents; this section defines no callable API.
+
+- `Current` sections contain exact implemented public signatures only.
+- `Reserved` sections name the intended landing point and owner while the implementation is absent; they do not promise a callable API.
+- When a feature agent introduces a public `ShelteredAPI` type, it adds exact signatures here and a justified row to `ShelteredAPI_PublicSurface_Baseline.tsv`.
+- Facade naming, DTO/result/handle/report naming, typed escape-hatch policy, and unavailable-runtime behavior follow [Shared Facade Conventions](ShelteredAPI_Guide.md#shared-facade-conventions).

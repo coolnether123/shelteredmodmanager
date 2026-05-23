@@ -2,19 +2,7 @@
 
 The 2.0 Beta.1 line is a breaking clean API line. Custom scenarios are experimental in Beta.1 and should be tested with disposable saves before being used in long-running playthroughs.
 
-Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior.
-
-## Assembly Rule
-
-- Always reference `ModAPI.dll`.
-- Reference `ShelteredAPI.dll` when your mod uses Sheltered content, saves, UI, input, events, actors, or scenarios.
-
-## API Stability Rules
-
-- Public facades are stable.
-- Implementation classes are internal.
-- Typed Sheltered escape hatches are explicit.
-- Future migrations should happen behind facades.
+Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior. Reference choices and facade rules are centralized in the canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
 Custom scenarios can be authored in two ways:
 
