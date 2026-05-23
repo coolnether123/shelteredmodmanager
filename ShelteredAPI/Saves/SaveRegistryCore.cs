@@ -245,26 +245,7 @@ namespace ShelteredAPI.Saves
         public SaveEntry CreateSave(SaveCreateOptions opts)
         {
             SaveCreateOptions normalized = NormalizeCreateOptions(opts);
-            var now = DateTime.UtcNow.ToString("o");
-            var entry = new SaveEntry
-            {
-                id = $"{_scenarioId}_{normalized.absoluteSlot}",
-                absoluteSlot = normalized.absoluteSlot,
-                name = NameSanitizer.SanitizeName(normalized.name) ?? $"Slot {normalized.absoluteSlot}",
-                createdAt = now,
-                updatedAt = now,
-                gameVersion = Application.version,
-                modApiVersion = "1",
-                scenarioId = _scenarioId,
-                scenarioVersion = ScenarioRegistry.GetScenario(_scenarioId)?.version ?? "1.0",
-                saveInfo = new SaveInfo()
-            };
-
-            // Ensure slot directory exists
-            DirectoryProvider.SlotRoot(_scenarioId, normalized.absoluteSlot, true);
-            
-            InvalidateCache();
-            return entry;
+            return CreateTransientEntry(normalized);
         }
 
         private SaveCreateOptions NormalizeCreateOptions(SaveCreateOptions opts)
@@ -302,7 +283,8 @@ namespace ShelteredAPI.Saves
             
             // Normal Flow: Find entry by ID (triggers discovery)
             var entry = GetSave(saveId);
-            if (entry == null) return null;
+            if (entry == null && !TryCreateTransientEntryFromId(saveId, opts, out entry))
+                return null;
 
             SaveBackupService.BackupCustomEntryBeforeOverwrite(entry);
 
@@ -326,6 +308,47 @@ namespace ShelteredAPI.Saves
             
             InvalidateCache();
             return entry;
+        }
+
+        private SaveEntry CreateTransientEntry(SaveCreateOptions normalized)
+        {
+            var now = DateTime.UtcNow.ToString("o");
+            return new SaveEntry
+            {
+                id = $"{_scenarioId}_{normalized.absoluteSlot}",
+                absoluteSlot = normalized.absoluteSlot,
+                name = NameSanitizer.SanitizeName(normalized.name) ?? $"Slot {normalized.absoluteSlot}",
+                createdAt = now,
+                updatedAt = now,
+                gameVersion = Application.version,
+                modApiVersion = "1",
+                scenarioId = _scenarioId,
+                scenarioVersion = ScenarioRegistry.GetScenario(_scenarioId)?.version ?? "1.0",
+                saveInfo = new SaveInfo()
+            };
+        }
+
+        private bool TryCreateTransientEntryFromId(string saveId, SaveOverwriteOptions opts, out SaveEntry entry)
+        {
+            entry = null;
+            if (string.IsNullOrEmpty(saveId))
+                return false;
+
+            string prefix = _scenarioId + "_";
+            if (!saveId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int absoluteSlot;
+            if (!int.TryParse(saveId.Substring(prefix.Length), out absoluteSlot) || absoluteSlot <= 0)
+                return false;
+
+            entry = CreateTransientEntry(new SaveCreateOptions
+            {
+                absoluteSlot = absoluteSlot,
+                name = opts != null ? opts.name : null
+            });
+            entry.id = saveId;
+            return true;
         }
 
         public bool DeleteSave(string saveId)
