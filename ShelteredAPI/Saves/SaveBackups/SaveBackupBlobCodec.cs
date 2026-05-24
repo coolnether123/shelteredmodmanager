@@ -131,10 +131,6 @@ namespace ShelteredAPI.Saves.Backups
                     && input[candidate + length] == input[position + length])
                 {
                     length++;
-                    if (candidate + length >= position && position + length < input.Length)
-                    {
-                        // Overlapping matches are valid during decompression.
-                    }
                 }
 
                 if (length > best.Length && length >= MinMatchLength)
