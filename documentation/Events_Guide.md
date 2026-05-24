@@ -189,7 +189,103 @@ if (ModAPIRegistry.TryGetAPI<IMyApi>("com.mymod.api", out api))
 }
 ```
 
-## 7. Best Practices
+## 7. Home-Shelter Provider Lifecycle
+
+Home-shelter placement is a shared `ShelteredMap` provider pattern, not an event bus contract. ShelteredAPI owns the `ExpeditionMap` generation hooks that consume the winning placement; provider mods should not patch those map-generation callsites directly. A mod that can choose the player home position should register an `IHomeShelterPlacementProvider`; its result must include at least one world, grid, or map-pixel coordinate. RBP is an example provider; consumers should read the shared `ShelteredMap` position snapshots instead of depending on RBP-specific APIs.
+
+Provider sketch:
+
+```csharp
+using ModAPI.Core;
+using ShelteredAPI.Map;
+
+public sealed class MyHomeProvider : IModPlugin, IModShutdown
+{
+    private const string SourceId = "com.mymod.home";
+    private const string ProviderId = "primary-home-shelter";
+    private readonly IHomeShelterPlacementProvider _provider = new MyPlacementProvider();
+
+    public void Initialize(IPluginContext ctx) { }
+
+    public void Start(IPluginContext ctx)
+    {
+        ShelteredMap.RegisterHomeShelterPlacementProvider(new HomeShelterPlacementProviderRegistration
+        {
+            SourceId = SourceId,
+            ProviderId = ProviderId,
+            Priority = 100,
+            Provider = _provider
+        });
+    }
+
+    public void Shutdown()
+    {
+        ShelteredMap.UnregisterHomeShelterPlacementProvider(SourceId, ProviderId);
+        ShelteredMap.ClearHomeShelterPositions(SourceId);
+        ShelteredMap.ClearPolicies(SourceId);
+    }
+
+    private sealed class MyPlacementProvider : IHomeShelterPlacementProvider
+    {
+        public bool TryResolve(HomeShelterPlacementContext context, out HomeShelterPlacementResult result)
+        {
+            ExpeditionMapGridPosition grid = GetProviderChosenGrid(context);
+            if (!context.IsHomeShelterPlacementEligible(grid))
+            {
+                result = null;
+                return false;
+            }
+
+            result = new HomeShelterPlacementResult
+            {
+                GridPosition = grid,
+                GenerateStartingLocations = true,
+                MinimumEdgeDistanceInCells = 1,
+                SourceReason = "resolved by provider"
+            };
+            return true;
+        }
+
+        private static ExpeditionMapGridPosition GetProviderChosenGrid(HomeShelterPlacementContext context)
+        {
+            // Provider-owned placement logic goes here.
+            return new ExpeditionMapGridPosition(context.MapWidth / 2, context.MapHeight / 2);
+        }
+    }
+}
+```
+
+Set `WorldPosition`, `GridPosition`, or `MapPosition` to the coordinate your provider owns; `ShelteredMap` exposes the resolved position to consumers through copied snapshots. Providers that keep save-compatibility state can set `ResolutionListener` on the registration to be notified after ShelteredAPI accepts and publishes their result.
+
+Consumer sketch:
+
+```csharp
+using ShelteredAPI.Map;
+
+HomeShelterPositionSnapshot home;
+if (ShelteredMap.TryGetActiveHomeShelter(out home) ||
+    ShelteredMap.TryGetPrimaryHomeShelter(out home))
+{
+    if (home.HasWorldPosition)
+    {
+        ExpeditionMapWorldPosition world = home.WorldPosition;
+    }
+
+    if (home.HasGridPosition)
+    {
+        ExpeditionMapGridPosition grid = home.GridPosition;
+    }
+
+    if (home.HasMapPosition)
+    {
+        ExpeditionMapPixelPosition map = home.MapPosition;
+    }
+}
+```
+
+Use `SessionStarted`, `NewGame`, `AfterLoad`, or lazy reads from your own map-facing workflow as timing boundaries. Startup and scene transitions can still produce no active home snapshot; treat a failed `TryGet...` call as "not available yet", not as an error.
+
+## 8. Best Practices
 
 - Subscribe in `Start(...)`, not constructors.
 - Unsubscribe in `Shutdown()` if your mod implements `IModShutdown`.
@@ -198,7 +294,7 @@ if (ModAPIRegistry.TryGetAPI<IMyApi>("com.mymod.api", out api))
 - Prefer named callbacks over anonymous lambdas when you need clean unsubscription.
 - Use `ISaveSystem.RegisterModData(...)` for neutral persisted state instead of static globals.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 When events do not fire:
 1. confirm your plugin reached `Start(...)`

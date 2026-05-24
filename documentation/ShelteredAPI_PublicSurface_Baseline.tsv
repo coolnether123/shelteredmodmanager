@@ -11,6 +11,12 @@ class	ShelteredAPI.Map	SpecialItemRegionEligibilityPolicy	ShelteredAPI/Map/MapGe
 class	ShelteredAPI.Map	MapPolicyRegistrationResult	ShelteredAPI/Map/MapGenerationPolicies.cs	Result DTO for safe policy registration through ShelteredMap.
 class	ShelteredAPI.Map	MapGenerationPolicySnapshot	ShelteredAPI/Map/MapGenerationPolicies.cs	Resolved deterministic no-op-by-default map-generation intent snapshot.
 class	ShelteredAPI.Map	ShelteredMap	ShelteredAPI/Map/ShelteredMap.cs	Public ShelteredAPI expedition map context and policy facade.
+interface	ShelteredAPI.Map	IHomeShelterPlacementProvider	ShelteredAPI/Map/HomeShelterPlacementProviders.cs	Public provider contract for mods that choose active home-shelter placement.
+interface	ShelteredAPI.Map	IHomeShelterPlacementResolutionListener	ShelteredAPI/Map/HomeShelterPlacementProviders.cs	Optional callback for providers that need to sync compatibility state after accepted placement.
+class	ShelteredAPI.Map	HomeShelterPlacementProviderRegistration	ShelteredAPI/Map/HomeShelterPlacementProviders.cs	Public registration DTO for home-shelter placement providers.
+class	ShelteredAPI.Map	HomeShelterPlacementContext	ShelteredAPI/Map/HomeShelterPlacementProviders.cs	Public read-only map-generation context passed to home-shelter placement providers.
+class	ShelteredAPI.Map	HomeShelterPlacementResult	ShelteredAPI/Map/HomeShelterPlacementProviders.cs	Public provider result DTO for accepted home-shelter placement.
+class	ShelteredAPI.Map	HomeShelterPlacementResolution	ShelteredAPI/Map/HomeShelterPlacementProviders.cs	Public notification DTO for accepted provider placements.
 class	ShelteredAPI.Map	HomeShelterPositionRegistration	ShelteredAPI/Map/HomeShelterPositions.cs	Public resolved home-shelter/bunker registration DTO for shared map integrations.
 class	ShelteredAPI.Map	HomeShelterPositionSnapshot	ShelteredAPI/Map/HomeShelterPositions.cs	Public detached read-only home-shelter/bunker position snapshot for shared map integrations.
 struct	ShelteredAPI.Map	ExpeditionMapGridPosition	ShelteredAPI/Map/ExpeditionMapContext.cs	Detached grid coordinate DTO for expedition map context queries.

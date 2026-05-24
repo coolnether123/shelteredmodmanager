@@ -20,6 +20,7 @@ Use this file for type names and method shapes only. For setup, assembly selecti
 | Save lifecycle expansion | [Save Lifecycle](#save-lifecycle-smm-20) |
 | Deterministic random streams | [ModRandom Deterministic Streams](#modrandom-deterministic-streams-modapicore) |
 | Expedition map context | [Expedition Map Context](#expedition-map-context-smm-20) |
+| Home-shelter placement providers | [Expedition Map Context](#expedition-map-context-smm-20) |
 | Player queues | [Player Queues](#player-queues-smm-20) |
 | Background work | [Background Work](#background-work-smm-20) |
 | UI extension service | [UI Extensions](#ui-extensions-smm-20) |
@@ -1685,7 +1686,7 @@ public class ModRandomStream
 
 ## Expedition Map Context (SMM 2.0)
 
-**Status:** Current Sheltered-owned read-only runtime context and deterministic generation-policy intent surface.
+**Status:** Current Sheltered-owned read-only runtime context, deterministic generation-policy intent, and home-shelter provider surface.
 
 ```csharp
 // ShelteredAPI.Map
@@ -1782,6 +1783,108 @@ public sealed class MapGenerationPolicySnapshot
     public bool IsPreferredHomeShelterPlacementEligible(int mapWidth, int mapHeight);
 }
 
+public interface IHomeShelterPlacementProvider
+{
+    bool TryResolve(HomeShelterPlacementContext context, out HomeShelterPlacementResult result);
+}
+
+public sealed class HomeShelterPlacementProviderRegistration
+{
+    public HomeShelterPlacementProviderRegistration();
+    public string SourceId { get; set; }
+    public string ProviderId { get; set; }
+    public int Priority { get; set; }
+    public IHomeShelterPlacementProvider Provider { get; set; }
+    public IHomeShelterPlacementResolutionListener ResolutionListener { get; set; }
+}
+
+public interface IHomeShelterPlacementResolutionListener
+{
+    void OnHomeShelterPlacementResolved(HomeShelterPlacementResolution resolution);
+}
+
+public sealed class HomeShelterPlacementResolution
+{
+    public string SourceId { get; }
+    public string ProviderId { get; }
+    public string RequestReason { get; }
+    public HomeShelterPositionSnapshot Snapshot { get; }
+}
+
+public sealed class HomeShelterPlacementContext
+{
+    public int MapWidth { get; }
+    public int MapHeight { get; }
+    public float WorldWidth { get; }
+    public float WorldHeight { get; }
+    public bool FromLiveMap { get; }
+    public MapGenerationPolicySnapshot Policies { get; }
+    public bool IsHomeShelterPlacementEligible(ExpeditionMapGridPosition gridPosition);
+    public bool IsInsideMap(ExpeditionMapGridPosition gridPosition);
+    public bool TryWorldToGrid(ExpeditionMapWorldPosition worldPosition, out ExpeditionMapGridPosition gridPosition);
+    public bool TryGridToWorldCenter(ExpeditionMapGridPosition gridPosition, out ExpeditionMapWorldPosition worldPosition);
+}
+
+public sealed class HomeShelterPlacementResult
+{
+    public HomeShelterPlacementResult();
+    public string HomeId { get; set; }
+    public string DisplayName { get; set; }
+    public int OwnerId { get; set; }
+    public bool IsPrimary { get; set; }
+    public bool IsActive { get; set; }
+    public bool IsVisible { get; set; }
+    public bool IsOnline { get; set; }
+    public bool GenerateStartingLocations { get; set; }
+    public ExpeditionMapWorldPosition? WorldPosition { get; set; }
+    public ExpeditionMapGridPosition? GridPosition { get; set; }
+    public ExpeditionMapPixelPosition? MapPosition { get; set; }
+    public int MinimumEdgeDistanceInCells { get; set; }
+    public string SourceReason { get; set; }
+}
+
+public sealed class HomeShelterPositionRegistration
+{
+    public HomeShelterPositionRegistration();
+    public string SourceId { get; set; }
+    public string HomeId { get; set; }
+    public string DisplayName { get; set; }
+    public int OwnerId { get; set; }
+    public bool IsPrimary { get; set; }
+    public bool IsActive { get; set; }
+    public bool IsVisible { get; set; }
+    public bool IsOnline { get; set; }
+    public bool GenerateStartingLocations { get; set; }
+    public int MinimumEdgeDistanceInCells { get; set; }
+    public int Priority { get; set; }
+    public ExpeditionMapWorldPosition? WorldPosition { get; set; }
+    public ExpeditionMapGridPosition? GridPosition { get; set; }
+    public ExpeditionMapPixelPosition? MapPosition { get; set; }
+    public string SourceReason { get; set; }
+}
+
+public sealed class HomeShelterPositionSnapshot
+{
+    public string SourceId { get; }
+    public string HomeId { get; }
+    public string DisplayName { get; }
+    public int OwnerId { get; }
+    public bool IsPrimary { get; }
+    public bool IsActive { get; }
+    public bool IsVisible { get; }
+    public bool IsOnline { get; }
+    public bool GenerateStartingLocations { get; }
+    public int MinimumEdgeDistanceInCells { get; }
+    public int Priority { get; }
+    public bool HasWorldPosition { get; }
+    public ExpeditionMapWorldPosition WorldPosition { get; }
+    public bool HasGridPosition { get; }
+    public ExpeditionMapGridPosition GridPosition { get; }
+    public bool HasMapPosition { get; }
+    public ExpeditionMapPixelPosition MapPosition { get; }
+    public string SourceReason { get; }
+}
+
 public static class ShelteredMap
 {
     public static ExpeditionMapContext Current { get; }
@@ -1791,6 +1894,19 @@ public static class ShelteredMap
     public static MapPolicyRegistrationResult RegisterQuestPlacementPolicy(QuestPlacementPolicy policy);
     public static MapPolicyRegistrationResult RegisterFactionZonePlacementPolicy(FactionZonePlacementPolicy policy);
     public static MapPolicyRegistrationResult RegisterHomeShelterPlacementPolicy(HomeShelterPlacementPolicy policy);
+    public static MapPolicyRegistrationResult RegisterHomeShelterPlacementProvider(HomeShelterPlacementProviderRegistration registration);
+    public static int UnregisterHomeShelterPlacementProvider(string sourceId, string providerId);
+    public static int ClearHomeShelterPlacementProviders(string sourceId);
+    public static bool TryResolveHomeShelterPlacement(string reason, out HomeShelterPositionSnapshot snapshot);
+    public static MapPolicyRegistrationResult RegisterHomeShelterPosition(HomeShelterPositionRegistration registration);
+    public static int UnregisterHomeShelterPosition(string sourceId, string homeId);
+    public static int ClearHomeShelterPositions(string sourceId);
+    public static bool TryGetPrimaryHomeShelter(out HomeShelterPositionSnapshot snapshot);
+    public static bool TryGetActiveHomeShelter(out HomeShelterPositionSnapshot snapshot);
+    public static bool TryWorldToGrid(ExpeditionMapWorldPosition worldPosition, out ExpeditionMapGridPosition gridPosition);
+    public static bool TryGridToWorldCenter(ExpeditionMapGridPosition gridPosition, out ExpeditionMapWorldPosition worldPosition);
+    public static bool TryWorldToMapPixels(ExpeditionMapWorldPosition worldPosition, out ExpeditionMapPixelPosition mapPosition);
+    public static bool TryMapPixelsToWorld(ExpeditionMapPixelPosition mapPosition, out ExpeditionMapWorldPosition worldPosition);
     public static MapPolicyRegistrationResult RegisterSpecialItemRegionEligibilityPolicy(SpecialItemRegionEligibilityPolicy policy);
     public static int UnregisterPolicy(string sourceId, string policyId);
     public static int ClearPolicies(string sourceId);
@@ -1800,7 +1916,9 @@ public static class ShelteredMap
 
 `ShelteredMap.Current` reads `ExpeditionMap` and `ExplorationManager` internally and returns an unavailable/invalid snapshot rather than leaking a runtime object or throwing before a generated map exists. `VanillaWidth` and `VanillaHeight` are the vanilla normal-map baseline (`40 x 16`); `DensityMultiplier` is explicitly unavailable because vanilla exposes resource and faction difficulty knobs, not one authoritative generated-location density value.
 
-Policy registrations declare intent and resolve in `Priority`, `SourceId`, then `PolicyId` order. Registration copies the submitted DTO, so later caller mutations cannot reorder or alter registered intent. An empty snapshot is vanilla/no-op behavior. The minimal foundation resolves composable policy intent only; it does not patch map-generation callsites or choose randomized positions. A future targeted adapter that consumes these results must use `ModRandom` deterministic streams.
+Policy registrations declare intent and resolve in `Priority`, `SourceId`, then `PolicyId` order. Registration copies the submitted DTO, so later caller mutations cannot reorder or alter registered intent. An empty snapshot is vanilla/no-op behavior. ShelteredAPI owns the shared `ExpeditionMap` generation hooks for active home-shelter placement, shelter cell stamping, starter-location placement, origin-to-home grid conversion, and home-region sanitization; mods provide placement intent instead of patching those callsites directly. Providers that choose randomized positions must use `ModRandom` deterministic streams.
+
+Home-shelter placement providers register `IHomeShelterPlacementProvider` implementations with `RegisterHomeShelterPlacementProvider(...)`. `TryResolveHomeShelterPlacement(...)` asks registered providers to publish generation intent, the primary/active shelter snapshot, and any available world, grid, or map-pixel coordinates through the shared `ShelteredMap` surface. `ResolutionListener` is optional and exists for providers that need to sync save-compatibility state after ShelteredAPI accepts their placement. Direct `RegisterHomeShelterPosition(...)` remains available for integrations that already own a resolved home fact. Consumers should prefer `TryGetPrimaryHomeShelter(...)` for player-home lookups and `TryGetActiveHomeShelter(...)` for current-context integrations, then check `HasWorldPosition`, `HasGridPosition`, or `HasMapPosition` before reading the matching coordinate. RBP is an example provider: other mods should consume the shared `ShelteredMap` snapshot rather than a provider-specific API.
 
 ## Player Queues (SMM 2.0)
 
