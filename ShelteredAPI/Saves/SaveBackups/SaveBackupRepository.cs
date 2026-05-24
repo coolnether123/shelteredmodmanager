@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
 using System.Security.Cryptography;
 using ModAPI.Core;
 using ModAPI.Util;
@@ -11,8 +10,8 @@ namespace ShelteredAPI.Saves.Backups
 {
     internal sealed class SaveBackupRepository
     {
-        private const string BlobCompression = "gzip";
-        private const string BlobExtension = ".bin.gz";
+        private const string BlobCompression = SaveBackupBlobCodec.CompressionName;
+        private const string BlobExtension = ".bin.slz";
         private readonly string _root;
 
         public SaveBackupRepository(string root)
@@ -102,7 +101,7 @@ namespace ShelteredAPI.Saves.Backups
                 string tmp = blobPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 try
                 {
-                    WriteGzip(tmp, bytes);
+                    SaveBackupBlobCodec.WriteCompressed(tmp, bytes);
                     if (File.Exists(blobPath))
                         File.Delete(tmp);
                     else
@@ -430,15 +429,6 @@ namespace ShelteredAPI.Saves.Backups
             }
 
             return new string(chars);
-        }
-
-        private static void WriteGzip(string path, byte[] bytes)
-        {
-            using (FileStream file = File.Create(path))
-            using (GZipStream gzip = new GZipStream(file, CompressionMode.Compress))
-            {
-                gzip.Write(bytes, 0, bytes.Length);
-            }
         }
 
         private static void EnsureDirectory(string path)
