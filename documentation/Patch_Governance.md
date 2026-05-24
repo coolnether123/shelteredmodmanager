@@ -23,6 +23,7 @@ Patches are classified into domains:
 - `Interactions`
 - `Characters`
 - `World`
+- `Scenarios`
 
 ## Required metadata
 

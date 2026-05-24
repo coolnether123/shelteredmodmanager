@@ -1773,10 +1773,13 @@ public sealed class MapGenerationPolicySnapshot
     public ExpeditionMapGridPosition PreferredHomeShelterGridPosition { get; }
     public int SpecialItemMinimumHomeDistanceInCells { get; }
     public int? SpecialItemMaximumHomeDistanceInCells { get; }
+    public bool HasPolicyConflicts { get; }
+    public string PolicyConflictSummary { get; }
     public bool IsQuestPlacementEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate);
     public bool IsFactionZonePlacementEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate);
     public bool IsSpecialItemRegionEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate);
     public bool IsHomeShelterPlacementEligible(ExpeditionMapGridPosition candidate, int mapWidth, int mapHeight);
+    public bool IsPreferredHomeShelterPlacementEligible(int mapWidth, int mapHeight);
 }
 
 public static class ShelteredMap
@@ -1900,6 +1903,25 @@ public enum PatchStartupTiming
 
 public enum PatchConflictSeverity { Informational, Warning }
 
+public sealed class PatchPolicyAttribute : Attribute
+{
+    public PatchPolicyAttribute(PatchDomain domain, string feature);
+    public PatchDomain Domain { get; }
+    public string Feature { get; }
+    public string TargetBehavior { get; set; }
+    public string FailureMode { get; set; }
+    public string RollbackStrategy { get; set; }
+    public bool IsOptional { get; set; }
+    public bool DeveloperOnly { get; set; }
+    public string ManagerToggleId { get; set; }
+    public string ManagerToggleLabel { get; set; }
+    public string ManagerToggleDescription { get; set; }
+    public bool ManagerToggleDefault { get; set; }
+    public bool ManagerToggleRequiresRestart { get; set; }
+    public int ManagerToggleSortOrder { get; set; }
+    public PatchStartupTiming StartupTiming { get; set; }
+}
+
 public sealed class PatchRegistryOptions
 {
     public HarmonyUtil.PatchOptions PatchOptions { get; set; }
@@ -1949,6 +1971,28 @@ public sealed class PatchReportDto
     public PatchConflictReportDto[] Conflicts { get; set; }
 }
 
+public sealed class PatchRecord
+{
+    public Type PatchType;
+    public PatchDomain Domain;
+    public string Feature;
+    public string TargetBehavior;
+    public string FailureMode;
+    public string RollbackStrategy;
+    public bool IsOptional;
+    public bool DeveloperOnly;
+    public bool IsDangerous;
+    public bool HasExplicitPolicy;
+    public PatchStartupTiming StartupTiming;
+    public List<MethodBase> Targets;
+    public string ManagerToggleId;
+    public string ManagerToggleLabel;
+    public string ManagerToggleDescription;
+    public bool ManagerToggleDefault;
+    public bool ManagerToggleRequiresRestart;
+    public int ManagerToggleSortOrder;
+}
+
 public static class PatchRegistry
 {
     public static PatchApplyReport ApplyAssembly(HarmonyLib.Harmony harmony, Assembly assembly, PatchRegistryOptions options);
@@ -1978,6 +2022,13 @@ public sealed class PatchApplyReport
 **Status:** Implemented in `ShelteredAPI.Map`. `MapMarkerSnapshot.Kind` reuses `ShelteredAPI.Scenarios.Domain.Map.MapMarkerKind`; this facade does not define map-generation policy.
 
 ```csharp
+public struct ExpeditionMapPixelPosition
+{
+    public ExpeditionMapPixelPosition(float x, float y);
+    public float X { get; }
+    public float Y { get; }
+}
+
 public sealed class ExpeditionRouteSnapshot
 {
     public ExpeditionRouteSnapshot(IEnumerable<ExpeditionMapWorldPosition> worldWaypoints);
@@ -1991,7 +2042,7 @@ public sealed class MapMarkerSnapshot
     public string DisplayName { get; set; }
     public MapMarkerKind Kind { get; set; }
     public ActorId ActorId { get; set; }
-    public Vector2? MapPosition { get; set; }
+    public ExpeditionMapPixelPosition? MapPosition { get; set; }
     public ExpeditionMapGridPosition? GridPosition { get; set; }
     public ExpeditionMapWorldPosition? WorldPosition { get; set; }
     public bool IsVisible { get; set; }

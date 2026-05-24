@@ -11,8 +11,11 @@ class	ShelteredAPI.Map	SpecialItemRegionEligibilityPolicy	ShelteredAPI/Map/MapGe
 class	ShelteredAPI.Map	MapPolicyRegistrationResult	ShelteredAPI/Map/MapGenerationPolicies.cs	Result DTO for safe policy registration through ShelteredMap.
 class	ShelteredAPI.Map	MapGenerationPolicySnapshot	ShelteredAPI/Map/MapGenerationPolicies.cs	Resolved deterministic no-op-by-default map-generation intent snapshot.
 class	ShelteredAPI.Map	ShelteredMap	ShelteredAPI/Map/ShelteredMap.cs	Public ShelteredAPI expedition map context and policy facade.
+class	ShelteredAPI.Map	HomeShelterPositionRegistration	ShelteredAPI/Map/HomeShelterPositions.cs	Public resolved home-shelter/bunker registration DTO for shared map integrations.
+class	ShelteredAPI.Map	HomeShelterPositionSnapshot	ShelteredAPI/Map/HomeShelterPositions.cs	Public detached read-only home-shelter/bunker position snapshot for shared map integrations.
 struct	ShelteredAPI.Map	ExpeditionMapGridPosition	ShelteredAPI/Map/ExpeditionMapContext.cs	Detached grid coordinate DTO for expedition map context queries.
 struct	ShelteredAPI.Map	ExpeditionMapWorldPosition	ShelteredAPI/Map/ExpeditionMapContext.cs	Detached world coordinate DTO for expedition map context queries.
+struct	ShelteredAPI.Map	ExpeditionMapPixelPosition	ShelteredAPI/Map/MapMarkerSnapshots.cs	Detached pixel coordinate DTO for expedition map marker projections.
 class	ShelteredAPI.Actors	ShelteredActors	ShelteredAPI/Actors/ActorSystem.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Adapters	GameHelperExtensions	ShelteredAPI/Adapters/GameHelperExtensions.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
 class	ShelteredAPI.Characters	PartyChangedEventArgs	ShelteredAPI/Characters/PartyHelper.cs	Public ShelteredAPI facade, service contract, DTO, or compatibility type intentionally exposed to mods.
