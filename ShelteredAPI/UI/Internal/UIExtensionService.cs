@@ -105,15 +105,26 @@ namespace ShelteredAPI.UI.Internal
             if (targetParent == null)
                 warnings.Add("The cloned object has no parent; UI layer alignment could not be inherited.");
 
+            bool active = template.activeSelf;
+            Vector3 localPosition = template.transform.localPosition;
+            Quaternion localRotation = template.transform.localRotation;
+            Vector3 localScale = template.transform.localScale;
             GameObject clone;
             try
             {
+                if (active)
+                    template.SetActive(false);
                 clone = UnityEngine.Object.Instantiate(template) as GameObject;
             }
             catch (Exception ex)
             {
                 warnings.Add("Clone failed: " + ex.Message);
                 return new UICloneResult(null, 0, warnings);
+            }
+            finally
+            {
+                if (active && template != null)
+                    template.SetActive(true);
             }
 
             if (clone == null)
@@ -122,10 +133,6 @@ namespace ShelteredAPI.UI.Internal
                 return new UICloneResult(null, 0, warnings);
             }
 
-            bool active = template.activeSelf;
-            Vector3 localPosition = template.transform.localPosition;
-            Quaternion localRotation = template.transform.localRotation;
-            Vector3 localScale = template.transform.localScale;
             clone.SetActive(false);
             clone.name = string.IsNullOrEmpty(options.CloneName) ? template.name + "_Clone" : options.CloneName;
 
