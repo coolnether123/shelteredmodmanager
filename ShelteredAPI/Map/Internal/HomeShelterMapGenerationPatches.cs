@@ -38,6 +38,13 @@ namespace ShelteredAPI.Map.Internal
             HomeShelterMapGenerationRuntime.RedirectWorldPosIfHomeOrigin(ref worldPos);
         }
 
+        [HarmonyPatch(typeof(MapRegion), "GetTooltipText")]
+        [HarmonyPostfix]
+        private static void MapRegionGetTooltipTextPostfix(MapRegion __instance, ref string __result)
+        {
+            HomeShelterMapGenerationRuntime.ApplyHomeShelterTooltip(__instance, ref __result);
+        }
+
         [HarmonyPatch(typeof(ExpeditionMap), "PlaceBuildingsNearToShelter")]
         [HarmonyPrefix]
         private static bool PlaceBuildingsNearToShelterPrefix(ExpeditionMap __instance)
@@ -123,6 +130,36 @@ namespace ShelteredAPI.Map.Internal
                 return;
 
             worldPos = target;
+        }
+
+        internal static void ApplyHomeShelterTooltip(MapRegion region, ref string tooltipText)
+        {
+            if (region == null || region.topography != MapRegion.Topography.Shelter || ModRuntime.IsQuitting)
+                return;
+
+            HomeShelterPositionSnapshot snapshot;
+            if (!TryGetRegisteredHomeShelterSnapshot(out snapshot))
+                return;
+
+            Vector2 homeWorld;
+            if (!TryGetWorld(snapshot, out homeWorld))
+                return;
+
+            ExpeditionMap map = ExpeditionMap.Instance;
+            if (map == null)
+                return;
+
+            try
+            {
+                if (!ReferenceEquals(region, map.GetRegionInWorld(homeWorld)))
+                    return;
+
+                tooltipText = "Your Bunker";
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteDebug("[ShelteredMap] Home shelter tooltip resolution failed: " + ex);
+            }
         }
 
         internal static bool PlaceBuildingsNearToShelter(ExpeditionMap map)
