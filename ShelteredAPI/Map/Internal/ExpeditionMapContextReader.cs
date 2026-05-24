@@ -98,13 +98,14 @@ namespace ShelteredAPI.Map.Internal
             out ExpeditionMapGridPosition homeGrid)
         {
             homeWorld = new ExpeditionMapWorldPosition(0f, 0f);
-            if (GameModeManager.instance != null
-                && GameModeManager.instance.currentGameMode == GameModeManager.GameMode.Stasis)
+            Vector2 world;
+            if (!HomeShelterPositionResolver.TryResolveWorldPosition(exploration, out world))
             {
-                Vector3 mapPosition = GameModeManager.instance.shelterMapWorldPosition;
-                Vector2 world = exploration.MapPixelsToWorld(new Vector2(mapPosition.x, mapPosition.y));
-                homeWorld = new ExpeditionMapWorldPosition(world.x, world.y);
+                homeGrid = new ExpeditionMapGridPosition();
+                return false;
             }
+
+            homeWorld = new ExpeditionMapWorldPosition(world.x, world.y);
 
             ExpeditionMap.GridRef grid = map.WorldPosToGridRef(new Vector2(homeWorld.X, homeWorld.Y));
             if (grid == null)

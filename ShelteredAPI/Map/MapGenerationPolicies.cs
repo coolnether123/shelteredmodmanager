@@ -213,6 +213,7 @@ namespace ShelteredAPI.Map
         {
             LocationDensityMultiplier = 1f;
             TownDensityMultiplier = 1f;
+            PolicyConflictSummary = string.Empty;
         }
 
         /// <summary>Number of registrations included in this resolution.</summary>
@@ -239,6 +240,10 @@ namespace ShelteredAPI.Map
         public int SpecialItemMinimumHomeDistanceInCells { get; internal set; }
         /// <summary>Resolved optional maximum special-item region distance from home in cells.</summary>
         public int? SpecialItemMaximumHomeDistanceInCells { get; internal set; }
+        /// <summary>Whether one or more registered policies produced contradictory resolved constraints.</summary>
+        public bool HasPolicyConflicts { get; internal set; }
+        /// <summary>Human-readable conflict summary for diagnostics and support bundles.</summary>
+        public string PolicyConflictSummary { get; internal set; }
 
         /// <summary>Checks whether a quest candidate satisfies combined distance constraints.</summary>
         public bool IsQuestPlacementEligible(ExpeditionMapGridPosition home, ExpeditionMapGridPosition candidate)
@@ -268,6 +273,13 @@ namespace ShelteredAPI.Map
                 Math.Min(candidate.X, mapWidth - candidate.X - 1),
                 Math.Min(candidate.Y, mapHeight - candidate.Y - 1));
             return edgeDistance >= HomeShelterMinimumEdgeDistanceInCells;
+        }
+
+        /// <summary>Checks whether the resolved preferred home location is usable for a generated map size.</summary>
+        public bool IsPreferredHomeShelterPlacementEligible(int mapWidth, int mapHeight)
+        {
+            return HasPreferredHomeShelterGridPosition
+                && IsHomeShelterPlacementEligible(PreferredHomeShelterGridPosition, mapWidth, mapHeight);
         }
 
         private static bool IsDistanceEligible(

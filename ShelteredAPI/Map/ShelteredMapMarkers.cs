@@ -246,7 +246,10 @@ namespace ShelteredAPI.Map
 
         public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotQuestLocations()
         {
-            return SnapshotRegions(delegate(MapRegion region) { return region.hasQuest; });
+            return SnapshotRegions(delegate(MapRegion region)
+            {
+                return region.hasQuest && (region.discovered || region.isVisibleOnMap);
+            });
         }
 
         public static ReadOnlyCollection<MapMarkerSnapshot> SnapshotPlayerPartyMarkers()
@@ -417,7 +420,10 @@ namespace ShelteredAPI.Map
             marker.WorldPosition = worldPosition;
             ExplorationManager manager = ExplorationManager.Instance;
             if (manager != null)
-                marker.MapPosition = manager.WorldToMapPixels(new Vector2(worldPosition.X, worldPosition.Y));
+            {
+                Vector2 mapPixels = manager.WorldToMapPixels(new Vector2(worldPosition.X, worldPosition.Y));
+                marker.MapPosition = new ExpeditionMapPixelPosition(mapPixels.x, mapPixels.y);
+            }
 
             ExpeditionMapContext context = ShelteredMap.Current;
             ExpeditionMapGridPosition gridPosition;
@@ -447,7 +453,8 @@ namespace ShelteredAPI.Map
             }
 
             marker.WorldPosition = worldPosition;
-            marker.MapPosition = manager.WorldToMapPixels(new Vector2(worldPosition.X, worldPosition.Y));
+            Vector2 mapPixels = manager.WorldToMapPixels(new Vector2(worldPosition.X, worldPosition.Y));
+            marker.MapPosition = new ExpeditionMapPixelPosition(mapPixels.x, mapPixels.y);
         }
     }
 }

@@ -49,6 +49,68 @@ namespace ShelteredAPI.Map
             return MapGenerationPolicyRegistry.Register(policy);
         }
 
+        /// <summary>Registers or updates the resolved home shelter/bunker position for map consumers.</summary>
+        public static MapPolicyRegistrationResult RegisterHomeShelterPosition(HomeShelterPositionRegistration registration)
+        {
+            return HomeShelterPositionRegistry.Register(registration);
+        }
+
+        /// <summary>Removes one resolved home shelter/bunker position registration.</summary>
+        public static int UnregisterHomeShelterPosition(string sourceId, string homeId)
+        {
+            return HomeShelterPositionRegistry.Unregister(sourceId, homeId);
+        }
+
+        /// <summary>Removes all resolved home shelter/bunker positions owned by one source.</summary>
+        public static int ClearHomeShelterPositions(string sourceId)
+        {
+            return HomeShelterPositionRegistry.Clear(sourceId);
+        }
+
+        /// <summary>Attempts to get the primary home shelter/bunker position snapshot.</summary>
+        public static bool TryGetPrimaryHomeShelter(out HomeShelterPositionSnapshot snapshot)
+        {
+            return HomeShelterPositionRegistry.TryGetPrimary(out snapshot);
+        }
+
+        /// <summary>Attempts to get the active-context home shelter/bunker position snapshot.</summary>
+        public static bool TryGetActiveHomeShelter(out HomeShelterPositionSnapshot snapshot)
+        {
+            return HomeShelterPositionRegistry.TryGetActive(out snapshot);
+        }
+
+        /// <summary>Converts expedition world coordinates to the active map grid when possible.</summary>
+        public static bool TryWorldToGrid(
+            ExpeditionMapWorldPosition worldPosition,
+            out ExpeditionMapGridPosition gridPosition)
+        {
+            return ExpeditionMapCoordinateConverter.TryWorldToGrid(worldPosition, out gridPosition);
+        }
+
+        /// <summary>Converts expedition grid coordinates to the cell-center world position when possible.</summary>
+        public static bool TryGridToWorldCenter(
+            ExpeditionMapGridPosition gridPosition,
+            out ExpeditionMapWorldPosition worldPosition)
+        {
+            return ExpeditionMapCoordinateConverter.TryGridToWorldCenter(gridPosition, out worldPosition);
+        }
+
+        /// <summary>Converts expedition world coordinates to vanilla map-pixel coordinates when possible.</summary>
+        public static bool TryWorldToMapPixels(
+            ExpeditionMapWorldPosition worldPosition,
+            out ExpeditionMapPixelPosition mapPosition)
+        {
+            return ExpeditionMapCoordinateConverter.TryWorldToMapPixels(worldPosition, out mapPosition);
+        }
+
+        /// <summary>Converts vanilla map-pixel coordinates to expedition world coordinates when possible.</summary>
+        public static bool TryMapPixelsToWorld(
+            ExpeditionMapPixelPosition mapPosition,
+            out ExpeditionMapWorldPosition worldPosition)
+        {
+            return ExpeditionMapCoordinateConverter.TryMapPixelsToWorld(mapPosition, out worldPosition);
+        }
+
         /// <summary>Registers special-item region eligibility intent.</summary>
         public static MapPolicyRegistrationResult RegisterSpecialItemRegionEligibilityPolicy(SpecialItemRegionEligibilityPolicy policy)
         {

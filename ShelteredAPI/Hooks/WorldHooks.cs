@@ -1,21 +1,21 @@
 using System;
 using UnityEngine;
 using ModAPI.Core;
+using ShelteredAPI.Map.Internal;
 
 namespace ShelteredAPI.Hooks
 {
     /// <summary>
     /// Metadata-focused API for world information.
     /// Provides access to the current shelter position as known by the game.
-    /// Mods are responsible for patching GameModeManager.shelterMapWorldPosition
-    /// if they wish to relocate the bunker.
+    /// When Bunker Random Location is active, its read-only authority is preferred
+    /// over the vanilla GameModeManager shelter field.
     /// </summary>
     internal static class WorldHooks
     {
         /// <summary>
         /// Gets the absolute world position of the primary shelter.
-        /// Returns (0,0) if GameModeManager is not available or if the shelter is at the center.
-        /// If a mod patches GameModeManager.shelterMapWorldPosition, this property reflects that change.
+        /// Returns (0,0) if no authoritative shelter position is available.
         /// </summary>
         public static Vector2 ShelterPosition
         {
@@ -23,11 +23,11 @@ namespace ShelteredAPI.Hooks
             {
                 try
                 {
-                    var instance = GameModeManager.instance;
-                    if (instance != null)
-                    {
-                        return (Vector2)instance.shelterMapWorldPosition;
-                    }
+                    Vector2 worldPosition;
+                    if (HomeShelterPositionResolver.TryResolveWorldPosition(
+                        ExplorationManager.Instance,
+                        out worldPosition))
+                        return worldPosition;
                 }
                 catch (Exception ex)
                 {

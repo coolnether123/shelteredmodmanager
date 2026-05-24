@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using ModAPI.Actors;
 using ShelteredAPI.Characters;
 using ShelteredAPI.Scenarios.Domain.Map;
-using UnityEngine;
 
 namespace ShelteredAPI.Map
 {
@@ -41,6 +40,24 @@ namespace ShelteredAPI.Map
     }
 
     /// <summary>
+    /// A detached vanilla expedition-map pixel coordinate.
+    /// </summary>
+    public struct ExpeditionMapPixelPosition
+    {
+        /// <summary>Creates a map-pixel coordinate.</summary>
+        public ExpeditionMapPixelPosition(float x, float y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        /// <summary>Horizontal map-pixel coordinate.</summary>
+        public float X { get; private set; }
+        /// <summary>Vertical map-pixel coordinate.</summary>
+        public float Y { get; private set; }
+    }
+
+    /// <summary>
     /// Detached map marker data for vanilla projections or mod-owned markers.
     /// <see cref="Kind"/> reuses the scenario map marker vocabulary to keep one public marker-kind enum.
     /// </summary>
@@ -64,7 +81,7 @@ namespace ShelteredAPI.Map
         /// <summary>Single actor represented by this marker, when the marker has one stable actor identity.</summary>
         public ActorId ActorId { get; set; }
         /// <summary>Position in vanilla expedition map-pixel coordinates, when available.</summary>
-        public Vector2? MapPosition { get; set; }
+        public ExpeditionMapPixelPosition? MapPosition { get; set; }
         /// <summary>Position in expedition grid coordinates, when a generated map context is available.</summary>
         public ExpeditionMapGridPosition? GridPosition { get; set; }
         /// <summary>Position in vanilla expedition world coordinates, when available.</summary>

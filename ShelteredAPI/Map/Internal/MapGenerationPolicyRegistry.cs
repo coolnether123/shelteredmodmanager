@@ -26,8 +26,8 @@ namespace ShelteredAPI.Map.Internal
                     ExpeditionMapGenerationPolicy existing = Policies[i];
                     if (existing != null
                         && existing.GetType() == ownedPolicy.GetType()
-                        && string.Equals(existing.SourceId, ownedPolicy.SourceId, StringComparison.Ordinal)
-                        && string.Equals(existing.PolicyId, ownedPolicy.PolicyId, StringComparison.Ordinal))
+                        && string.Equals(existing.SourceId, ownedPolicy.SourceId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(existing.PolicyId, ownedPolicy.PolicyId, StringComparison.OrdinalIgnoreCase))
                     {
                         Policies.RemoveAt(i);
                         replaced = true;
@@ -51,8 +51,8 @@ namespace ShelteredAPI.Map.Internal
                 {
                     ExpeditionMapGenerationPolicy policy = Policies[i];
                     if (policy != null
-                        && string.Equals(policy.SourceId, sourceId, StringComparison.Ordinal)
-                        && string.Equals(policy.PolicyId, policyId, StringComparison.Ordinal))
+                        && string.Equals(policy.SourceId, sourceId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(policy.PolicyId, policyId, StringComparison.OrdinalIgnoreCase))
                     {
                         Policies.RemoveAt(i);
                         removed++;
@@ -74,7 +74,7 @@ namespace ShelteredAPI.Map.Internal
                 for (int i = Policies.Count - 1; i >= 0; i--)
                 {
                     ExpeditionMapGenerationPolicy policy = Policies[i];
-                    if (policy != null && string.Equals(policy.SourceId, sourceId, StringComparison.Ordinal))
+                    if (policy != null && string.Equals(policy.SourceId, sourceId, StringComparison.OrdinalIgnoreCase))
                     {
                         Policies.RemoveAt(i);
                         removed++;
@@ -172,6 +172,7 @@ namespace ShelteredAPI.Map.Internal
                 }
             }
 
+            ApplyConflictDiagnostics(result);
             return result;
         }
 
@@ -302,6 +303,30 @@ namespace ShelteredAPI.Map.Internal
             }
         }
 
+        private static void ApplyConflictDiagnostics(MapGenerationPolicySnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+
+            List<string> conflicts = new List<string>();
+            AddDistanceConflict(conflicts, "quest", snapshot.QuestMinimumHomeDistanceInCells, snapshot.QuestMaximumHomeDistanceInCells);
+            AddDistanceConflict(conflicts, "faction-zone", snapshot.FactionZoneMinimumHomeDistanceInCells, snapshot.FactionZoneMaximumHomeDistanceInCells);
+            AddDistanceConflict(conflicts, "special-item", snapshot.SpecialItemMinimumHomeDistanceInCells, snapshot.SpecialItemMaximumHomeDistanceInCells);
+
+            snapshot.HasPolicyConflicts = conflicts.Count > 0;
+            snapshot.PolicyConflictSummary = conflicts.Count == 0
+                ? string.Empty
+                : string.Join("; ", conflicts.ToArray());
+        }
+
+        private static void AddDistanceConflict(List<string> conflicts, string category, int minimum, int? maximum)
+        {
+            if (conflicts == null || !maximum.HasValue || minimum <= maximum.Value)
+                return;
+
+            conflicts.Add(category + " minimum " + minimum + " exceeds maximum " + maximum.Value);
+        }
+
         private static float Multiply(float current, float multiplier)
         {
             float value = current * multiplier;
@@ -318,11 +343,11 @@ namespace ShelteredAPI.Map.Internal
             if (priority != 0)
                 return priority;
 
-            int source = string.Compare(left.SourceId, right.SourceId, StringComparison.Ordinal);
+            int source = string.Compare(left.SourceId, right.SourceId, StringComparison.OrdinalIgnoreCase);
             if (source != 0)
                 return source;
 
-            int id = string.Compare(left.PolicyId, right.PolicyId, StringComparison.Ordinal);
+            int id = string.Compare(left.PolicyId, right.PolicyId, StringComparison.OrdinalIgnoreCase);
             if (id != 0)
                 return id;
 

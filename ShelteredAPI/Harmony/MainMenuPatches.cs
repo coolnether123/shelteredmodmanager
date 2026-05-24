@@ -7,41 +7,14 @@ using ModAPI.Harmony;
 using ShelteredAPI.UI.Compatibility;
 using ShelteredAPI.UI.Internal;
 using ShelteredAPI.Saves;
-using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.Saves.Paging;
+using ShelteredAPI.Saves.Runtime;
 using UnityEngine;
 
 
 using ShelteredAPI.UI.Internal.ModManager;
 namespace ShelteredAPI.Harmony
 {
-    internal static class AutoLoadFlow
-    {
-        // Sentinel value from Manager: AutoLoadSaveSlot=-1 means "start a new game in lowest free slot".
-        public const int NewSaveSentinel = -1;
-
-        public static bool PendingNewSave = false;
-        public static bool ModeChosen = false;
-        public static bool SlotChosen = false;
-        public static bool MainMenuAdvanceIssued = false;
-
-        public static void BeginNewSave()
-        {
-            PendingNewSave = true;
-            ModeChosen = false;
-            SlotChosen = false;
-            MainMenuAdvanceIssued = false;
-        }
-
-        public static void Reset()
-        {
-            PendingNewSave = false;
-            ModeChosen = false;
-            SlotChosen = false;
-            MainMenuAdvanceIssued = false;
-        }
-    }
-
     [PatchPolicy(PatchDomain.UI, "MainMenuModsEntry",
         TargetBehavior = "Main menu mods button injection and manager-driven auto-load/new-save flow",
         FailureMode = "Mods entry or manager-driven auto-load flow fails to start from the main menu.",
@@ -56,12 +29,14 @@ namespace ShelteredAPI.Harmony
         {
             try
             {
+                bool managerDrivenLaunch = false;
                 if (!_autoLoadChecked)
                 {
                     _autoLoadChecked = true;
                     ShelteredDeferredPatchTriggers.ApplyMenuCritical("MainMenu.OnShow");
                     int autoLoadSlot = HarmonyBootstrap.ReadManagerInt("AutoLoadSaveSlot", 0);
-                    if (autoLoadSlot != 0)
+                    managerDrivenLaunch = autoLoadSlot != 0;
+                    if (managerDrivenLaunch)
                     {
                         ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("MainMenu.OnShow auto-load");
                         ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("MainMenu.OnShow auto-load");
@@ -80,12 +55,7 @@ namespace ShelteredAPI.Harmony
                 MMLog.WriteDebug("Postfix triggered.");
                 ModManagerPanelScaffolding.WarmScenarioBookVisualCache();
 
-                // One-time startup check for save slot gaps
-                SaveCondenseManager.CheckOnStartup();
-                if (SaveCondenseManager.NeedsPrompt())
-                {
-                    CondensePromptDialog.Show();
-                }
+                TryShowStartupCondensePrompt(managerDrivenLaunch);
 
                 var tableField = typeof(MainMenu).GetField("m_table", BindingFlags.NonPublic | BindingFlags.Instance);
                 var table = (UITablePivot)tableField?.GetValue(__instance);
@@ -146,6 +116,21 @@ namespace ShelteredAPI.Harmony
                 }
             }
             catch (Exception ex) { MMLog.Write("Exception: " + ex.Message); }
+        }
+
+        private static void TryShowStartupCondensePrompt(bool suppressForManagerLaunch)
+        {
+            SaveCondenseManager.CheckOnStartup();
+            if (!SaveCondenseManager.NeedsPrompt())
+                return;
+
+            if (suppressForManagerLaunch)
+            {
+                MMLog.WriteDebug("[MainMenu_OnShow] Suppressed save condense prompt during manager-driven launch.");
+                return;
+            }
+
+            CondensePromptDialog.Show();
         }
 
         private static void ResetModRuntimeQuitState()
@@ -273,7 +258,7 @@ namespace ShelteredAPI.Harmony
 
         public static void Postfix(MainMenu __instance)
         {
-            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.MainMenuAdvanceIssued)
+            if (!AutoLoadFlow.NeedsMainMenuAdvance)
                 return;
 
             var tweenField = typeof(MainMenu).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -281,22 +266,21 @@ namespace ShelteredAPI.Harmony
             if (tween == null || tween.direction == AnimationOrTween.Direction.Reverse)
                 return;
 
-            if (!IsMainMenuInputEnabled(__instance))
-                return;
-
-            AutoLoadFlow.MainMenuAdvanceIssued = true;
-            MMLog.WriteDebug("[AutoLoad] Main menu ready. Triggering Play for auto-new-save.");
-            __instance.OnPlayButtonPressed();
+            AutoLoadFlow.TryAdvanceMainMenu(__instance);
         }
+    }
 
-        private static bool IsMainMenuInputEnabled(MainMenu instance)
+    [PatchPolicy(PatchDomain.UI, "MainMenuAutoNewSaveRetry",
+        TargetBehavior = "Frame-based retry for manager-driven auto-new-save main menu advancement",
+        FailureMode = "Auto-new-save can stall on the main menu if the tween callback fires before input is enabled.",
+        RollbackStrategy = "Disable the UI patch domain or remove the main menu retry patch.",
+        StartupTiming = PatchStartupTiming.BootCritical)]
+    [HarmonyPatch(typeof(MainMenu), "Update")]
+    internal static class MainMenu_Update_AutoNewSave_Patch
+    {
+        static void Postfix(MainMenu __instance)
         {
-            if (instance == null)
-                return false;
-
-            bool inputEnabled = Traverse.Create(instance).Field("m_inputEnabled").GetValue<bool>();
-            bool userSignedOut = Traverse.Create(instance).Field("m_userSignedOut").GetValue<bool>();
-            return inputEnabled && !userSignedOut;
+            AutoLoadFlow.TryAdvanceMainMenu(__instance);
         }
     }
 
@@ -310,23 +294,21 @@ namespace ShelteredAPI.Harmony
     {
         static void Postfix(GameModeSelectionPanel __instance)
         {
-            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.ModeChosen) return;
+            AutoLoadFlow.TryChooseMode(__instance);
+        }
+    }
 
-            try
-            {
-                var tweenField = typeof(GameModeSelectionPanel).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
-                var tween = (TweenAlpha)tweenField?.GetValue(__instance);
-                if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse) return;
-
-                AutoLoadFlow.ModeChosen = true;
-                MMLog.WriteDebug("[AutoLoad] Auto-selecting Survival mode for New Save.");
-                __instance.OnSurvivalModeChosen();
-            }
-            catch (Exception ex)
-            {
-                AutoLoadFlow.Reset();
-                MMLog.WriteError("[AutoLoad] Failed choosing mode: " + ex.Message);
-            }
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveModeSelectionRetry",
+        TargetBehavior = "Frame-based retry for automatic new-save mode selection",
+        FailureMode = "Auto-new-save can stall on game mode selection if the tween callback fires before input is enabled.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save mode retry patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(GameModeSelectionPanel), "Update")]
+    internal static class GameModeSelectionPanel_Update_AutoNewSave_Patch
+    {
+        static void Postfix(GameModeSelectionPanel __instance)
+        {
+            AutoLoadFlow.TryChooseMode(__instance);
         }
     }
 
@@ -340,78 +322,21 @@ namespace ShelteredAPI.Harmony
     {
         static void Postfix(SlotSelectionPanel __instance)
         {
-            if (!AutoLoadFlow.PendingNewSave || AutoLoadFlow.SlotChosen) return;
-            if (!__instance.m_inputEnabled) return;
-
-            try
-            {
-                var tweenField = typeof(SlotSelectionPanel).GetField("m_tween", BindingFlags.NonPublic | BindingFlags.Instance);
-                var tween = (TweenAlpha)tweenField?.GetValue(__instance);
-                if (tween != null && tween.direction == AnimationOrTween.Direction.Reverse) return;
-
-                AutoLoadFlow.SlotChosen = true;
-
-                int lowestSlot = FindLowestAvailableSurvivalSlot();
-                int targetPage;
-                int targetIndex;
-
-                if (lowestSlot <= 3)
-                {
-                    targetPage = 0;
-                    targetIndex = lowestSlot - 1;
-                }
-                else
-                {
-                    int customOffset = lowestSlot - 4;
-                    targetPage = (customOffset / 3) + 1;
-                    targetIndex = customOffset % 3;
-                }
-
-                int currentPage = PagingManager.GetPage(__instance);
-                while (currentPage < targetPage)
-                {
-                    int before = currentPage;
-                    PagingManager.ChangePage(__instance, +1);
-                    currentPage = PagingManager.GetPage(__instance);
-                    if (currentPage == before) break;
-                }
-
-                while (currentPage > targetPage)
-                {
-                    int before = currentPage;
-                    PagingManager.ChangePage(__instance, -1);
-                    currentPage = PagingManager.GetPage(__instance);
-                    if (currentPage == before) break;
-                }
-
-                Traverse.Create(__instance).Field("m_selectedSlot").SetValue(targetIndex);
-                MMLog.Write($"[AutoLoad] Starting New Save in slot {lowestSlot} (page {targetPage}, index {targetIndex}).");
-
-                __instance.OnSlotChosen();
-                AutoLoadFlow.Reset();
-            }
-            catch (Exception ex)
-            {
-                AutoLoadFlow.Reset();
-                MMLog.WriteError("[AutoLoad] Failed choosing New Save slot: " + ex.Message);
-            }
+            AutoLoadFlow.TryChooseSlot(__instance);
         }
+    }
 
-        private static int FindLowestAvailableSurvivalSlot()
+    [PatchPolicy(PatchDomain.SaveFlow, "AutoNewSaveSlotSelectionRetry",
+        TargetBehavior = "Frame-based retry for automatic slot selection during manager-driven new-save flow",
+        FailureMode = "Auto-new-save can stall on slot selection if save metadata loading or tween timing delays input.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the auto-new-save slot retry patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(SlotSelectionPanel), "Update")]
+    internal static class SlotSelectionPanel_Update_AutoNewSave_Patch
+    {
+        static void Postfix(SlotSelectionPanel __instance)
         {
-            for (int slot = 1; slot <= 3; slot++)
-            {
-                var info = SaveRegistryCore.ReadVanillaSaveInfo(slot);
-                if (info == null) return slot;
-            }
-
-            int customSlot = 4;
-            while (ExpandedVanillaSaves.GetBySlot(customSlot) != null)
-            {
-                customSlot++;
-            }
-
-            return customSlot;
+            AutoLoadFlow.TryChooseSlot(__instance);
         }
     }
 }

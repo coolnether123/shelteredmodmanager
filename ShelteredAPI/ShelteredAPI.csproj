@@ -63,8 +63,12 @@
     <Compile Include="Map\MapMarkerSnapshots.cs" />
     <Compile Include="Map\ShelteredMapMarkers.cs" />
     <Compile Include="Map\ExpeditionMapContext.cs" />
+    <Compile Include="Map\HomeShelterPositions.cs" />
     <Compile Include="Map\MapGenerationPolicies.cs" />
     <Compile Include="Map\ShelteredMap.cs" />
+    <Compile Include="Map\Internal\HomeShelterPositionResolver.cs" />
+    <Compile Include="Map\Internal\HomeShelterPositionRegistry.cs" />
+    <Compile Include="Map\Internal\ExpeditionMapCoordinateConverter.cs" />
     <Compile Include="Map\Internal\ExpeditionMapContextReader.cs" />
     <Compile Include="Map\Internal\MapGenerationPolicyRegistry.cs" />
     <Compile Include="Characters\Models\CharacterDataModel.cs" />
@@ -126,6 +130,7 @@
     <Compile Include="Core\SaveProtection.cs" />
     <Compile Include="Debugging\DebugValueTakeover.cs" />
     <Compile Include="Debugging\ShelteredSupportBundle.cs" />
+    <Compile Include="Harmony\AutoLoadFlow.cs" />
     <Compile Include="Harmony\MainMenuPatches.cs" />
     <Compile Include="Harmony\LoadingTransitionRecoveryPatches.cs" />
     <Compile Include="Harmony\ShelteredDeferredPatchTriggers.cs" />

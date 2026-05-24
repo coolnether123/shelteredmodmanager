@@ -15,12 +15,14 @@ namespace ShelteredAPI.Saves.Paging
     {
         private static readonly Dictionary<SlotSelectionPanel, int> _page = new Dictionary<SlotSelectionPanel, int>();
         private static readonly Dictionary<SlotSelectionPanel, UIElements> _ui = new Dictionary<SlotSelectionPanel, UIElements>();
+        private static bool _suppressWelcomeDialogOnce;
 
         internal class UIElements { public GameObject prev; public GameObject next; public UILabel label; }
 
         public static int GetPage(SlotSelectionPanel p) { int v; _page.TryGetValue(p, out v); return v; }
         private static void SetPage(SlotSelectionPanel p, int v) { _page[p] = Math.Max(0, v); }
         public static void Reset(SlotSelectionPanel p) { _page[p] = 0; }
+        public static void SuppressWelcomeDialogOnce() { _suppressWelcomeDialogOnce = true; }
 
         /// <summary>
         /// Ensures the paging UI is created and visible for a given panel.
@@ -130,9 +132,16 @@ namespace ShelteredAPI.Saves.Paging
                 // Tutorial Check
                 if (newPage == 1 && ModPrefs.GetInt("ModAPI_HasSeenCustomSavesHelp", 0) == 0)
                 {
-                    ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
-                    ModPrefs.Save();
-                    CustomSavesWelcomeDialog.Show();
+                    if (_suppressWelcomeDialogOnce)
+                    {
+                        MMLog.WriteDebug("[PagingManager] Suppressed custom saves welcome dialog for automated page change.");
+                    }
+                    else
+                    {
+                        ModPrefs.SetInt("ModAPI_HasSeenCustomSavesHelp", 1);
+                        ModPrefs.Save();
+                        CustomSavesWelcomeDialog.Show();
+                    }
                 }
 
                 panel.RefreshSaveSlotInfo(); 
@@ -143,6 +152,7 @@ namespace ShelteredAPI.Saves.Paging
             }
             finally
             {
+                _suppressWelcomeDialogOnce = false;
                 // ALWAYS update UI buttons state
                 Update(panel);
             }
