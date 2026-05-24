@@ -57,6 +57,188 @@ namespace ShelteredAPI.Saves.Backups
             }
         }
 
+        public bool RestoreSnapshot(string manifestPath, out string error)
+        {
+            error = null;
+            try
+            {
+                List<RestoreFilePlan> files = BuildRestorePlan(manifestPath);
+                for (int i = 0; i < files.Count; i++)
+                {
+                    RestoreFilePlan file = files[i];
+                    EnsureDirectory(Path.GetDirectoryName(file.DestinationPath));
+                    WriteFileAtomically(file.DestinationPath, file.Bytes);
+                }
+
+                MMLog.WriteInfo("[SaveBackup] Restored snapshot " + Path.GetFileNameWithoutExtension(manifestPath)
+                    + " with " + files.Count + " file(s).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                MMLog.WriteError("[SaveBackup] Restore failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        private List<RestoreFilePlan> BuildRestorePlan(string manifestPath)
+        {
+            if (string.IsNullOrEmpty(manifestPath) || !File.Exists(manifestPath))
+                throw new FileNotFoundException("Backup manifest was not found.", manifestPath);
+
+            ManualJsonObject root;
+            string parseError;
+            if (!ManualJson.TryParseObject(File.ReadAllText(manifestPath), out root, out parseError))
+                throw new InvalidDataException("Backup manifest is invalid: " + parseError);
+
+            Dictionary<string, SaveBackupSource> sources = ReadRestoreSources(root);
+            ManualJsonArray fileArray = root.GetArray("files");
+            if (fileArray == null || fileArray.Items.Count == 0)
+                throw new InvalidDataException("Backup manifest contains no files.");
+
+            List<RestoreFilePlan> plan = new List<RestoreFilePlan>();
+            for (int i = 0; i < fileArray.Items.Count; i++)
+            {
+                ManualJsonObject file = fileArray.Items[i] != null ? fileArray.Items[i].ObjectValue : null;
+                if (file == null)
+                    continue;
+
+                RestoreFilePlan item = BuildRestoreFilePlan(file, sources);
+                plan.Add(item);
+            }
+
+            if (plan.Count == 0)
+                throw new InvalidDataException("Backup manifest contains no restorable files.");
+
+            return plan;
+        }
+
+        private Dictionary<string, SaveBackupSource> ReadRestoreSources(ManualJsonObject root)
+        {
+            Dictionary<string, SaveBackupSource> sources = new Dictionary<string, SaveBackupSource>(StringComparer.OrdinalIgnoreCase);
+            ManualJsonArray sourceArray = root.GetArray("sources");
+            if (sourceArray == null)
+                return sources;
+
+            for (int i = 0; i < sourceArray.Items.Count; i++)
+            {
+                ManualJsonObject source = sourceArray.Items[i] != null ? sourceArray.Items[i].ObjectValue : null;
+                if (source == null)
+                    continue;
+
+                string id = source.GetString("id", string.Empty);
+                string path = source.GetString("path", string.Empty);
+                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(path))
+                    continue;
+
+                sources[id] = new SaveBackupSource
+                {
+                    Id = id,
+                    Path = path,
+                    Kind = ReadSourceKind(source.GetString("kind", string.Empty))
+                };
+            }
+
+            return sources;
+        }
+
+        private RestoreFilePlan BuildRestoreFilePlan(ManualJsonObject file, Dictionary<string, SaveBackupSource> sources)
+        {
+            string sourceId = file.GetString("sourceId", string.Empty);
+            SaveBackupSource source;
+            if (string.IsNullOrEmpty(sourceId) || !sources.TryGetValue(sourceId, out source))
+                throw new InvalidDataException("Backup manifest references an unknown source: " + sourceId);
+
+            string compression = file.GetString("compression", string.Empty);
+            if (!string.Equals(compression, BlobCompression, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Backup blob uses unsupported compression: " + compression);
+
+            string blobPath = file.GetString("blobPath", string.Empty);
+            string fullBlobPath = GetPathUnderRoot(_root, blobPath);
+            byte[] bytes = SaveBackupBlobCodec.ReadDecompressed(fullBlobPath);
+            VerifyRestoreBytes(file, bytes);
+
+            return new RestoreFilePlan
+            {
+                DestinationPath = GetRestoreDestinationPath(source, file.GetString("relativePath", string.Empty)),
+                Bytes = bytes
+            };
+        }
+
+        private static void VerifyRestoreBytes(ManualJsonObject file, byte[] bytes)
+        {
+            long expectedSize = GetLong(file, "size", -1);
+            if (expectedSize >= 0 && bytes.Length != expectedSize)
+                throw new InvalidDataException("Backup blob size check failed.");
+
+            string expectedHash = file.GetString("hash", string.Empty);
+            if (!string.IsNullOrEmpty(expectedHash) && !string.Equals(ComputeSha256(bytes), expectedHash, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Backup blob hash check failed.");
+
+            long expectedCrc = GetLong(file, "crc32", -1);
+            if (expectedCrc >= 0 && CRC32.Compute(bytes) != unchecked((uint)expectedCrc))
+                throw new InvalidDataException("Backup blob CRC check failed.");
+        }
+
+        private static string GetRestoreDestinationPath(SaveBackupSource source, string relativePath)
+        {
+            string root = Path.GetFullPath(source.Path);
+            if (source.Kind == SaveBackupSourceKind.File)
+                return root;
+
+            return GetPathUnderRoot(root, relativePath);
+        }
+
+        private static string GetPathUnderRoot(string root, string relativePath)
+        {
+            if (string.IsNullOrEmpty(root))
+                throw new InvalidDataException("Restore root path is missing.");
+            if (string.IsNullOrEmpty(relativePath))
+                throw new InvalidDataException("Restore relative path is missing.");
+
+            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+            if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Backup manifest path escapes its restore root.");
+
+            return fullPath;
+        }
+
+        private static SaveBackupSourceKind ReadSourceKind(string value)
+        {
+            return string.Equals(value, "File", StringComparison.OrdinalIgnoreCase)
+                ? SaveBackupSourceKind.File
+                : SaveBackupSourceKind.Directory;
+        }
+
+        private static long GetLong(ManualJsonObject obj, string name, long fallback)
+        {
+            ManualJsonValue value = obj != null ? obj.Get(name) : null;
+            if (value == null || value.Type != ManualJsonValueType.Number)
+                return fallback;
+
+            long parsed;
+            return long.TryParse(value.NumberText, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
+        }
+
+        private static void WriteFileAtomically(string path, byte[] bytes)
+        {
+            string tmp = path + "." + Guid.NewGuid().ToString("N") + ".restore.tmp";
+            try
+            {
+                File.WriteAllBytes(tmp, bytes ?? new byte[0]);
+                if (File.Exists(path))
+                    File.Delete(path);
+                File.Move(tmp, path);
+            }
+            finally
+            {
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+            }
+        }
+
         private List<SaveBackupFileRecord> CaptureFiles(SaveBackupTarget target)
         {
             List<SaveBackupFileRecord> records = new List<SaveBackupFileRecord>();
@@ -465,6 +647,12 @@ namespace ShelteredAPI.Saves.Backups
 
             safe = safe.Replace('\\', '_').Replace('/', '_').Replace(':', '_').Replace('|', '_');
             return safe.Length > 96 ? safe.Substring(0, 96) : safe;
+        }
+
+        private sealed class RestoreFilePlan
+        {
+            public string DestinationPath;
+            public byte[] Bytes;
         }
     }
 }
