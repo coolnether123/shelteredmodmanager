@@ -165,18 +165,20 @@ namespace ModAPI.Core
         /// </summary>
         public static int RangeUnbiased(int min, int max)
         {
-            uint range = (uint)(max - min);
+            if (max <= min) return min;
+
+            ulong range = (ulong)((long)max - min);
             if (range == 0) return min;
 
-            uint limit = uint.MaxValue - ((uint.MaxValue % range) + 1) % range;
-            uint result;
+            ulong limit = ulong.MaxValue - (ulong.MaxValue % range);
+            ulong result;
 
             lock (_lock)
             {
-                do { result = (uint)NextULongInternal(); } while (result > limit);
+                do { result = NextULongInternal(); } while (result >= limit);
             }
             
-            return min + (int)(result % range);
+            return (int)((long)min + (long)(result % range));
         }
 
         /// <summary>

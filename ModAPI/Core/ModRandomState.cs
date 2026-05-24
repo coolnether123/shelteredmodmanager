@@ -1,6 +1,7 @@
 using System;
+using System.Globalization;
 using System.IO;
-using UnityEngine;
+using ModAPI.Util;
 
 namespace ModAPI.Core
 {
@@ -34,7 +35,7 @@ namespace ModAPI.Core
                 try
                 {
                     string json = File.ReadAllText(filePath);
-                    data = JsonUtility.FromJson<SeedData>(json);
+                    data = DeserializeSeedData(json);
                 }
                 catch (Exception ex)
                 {
@@ -102,7 +103,7 @@ namespace ModAPI.Core
                 data.streamStates = snapshot.StreamStates;
                 data.streamSteps = snapshot.StreamSteps;
 
-                string json = JsonUtility.ToJson(data, true);
+                string json = SerializeSeedData(data);
                 File.WriteAllText(filePath, json);
                 MMLog.WriteDebug(string.Format("[ModRandom] Saved seed.json. Deterministic={0}", data.isDeterministic));
             }
@@ -125,6 +126,108 @@ namespace ModAPI.Core
         private static int GenerateFreshSeed()
         {
             return Environment.TickCount ^ Guid.NewGuid().GetHashCode();
+        }
+
+        private static string SerializeSeedData(SeedData data)
+        {
+            ManualJsonObject root = new ManualJsonObject();
+            root.Set("version", ManualJsonValue.Number(data.version));
+            root.Set("masterSeed", ManualJsonValue.Number(data.masterSeed));
+            root.Set("mode", ManualJsonValue.Number(data.mode));
+            root.Set("masterState", ManualJsonValue.String(FormatUInt64(data.masterState)));
+            root.Set("stepCount", ManualJsonValue.String(FormatUInt64(data.stepCount)));
+            root.Set("isDeterministic", ManualJsonValue.Boolean(data.isDeterministic));
+            root.Set("streamNames", ManualJsonValue.Array(SerializeStrings(data.streamNames)));
+            root.Set("streamStates", ManualJsonValue.Array(SerializeUInt64Array(data.streamStates)));
+            root.Set("streamSteps", ManualJsonValue.Array(SerializeUInt64Array(data.streamSteps)));
+            return ManualJson.Serialize(root, true);
+        }
+
+        private static SeedData DeserializeSeedData(string json)
+        {
+            ManualJsonObject root;
+            string error;
+            if (!ManualJson.TryParseObject(json, out root, out error))
+                throw new InvalidDataException(error ?? "seed.json root was not an object.");
+
+            SeedData data = new SeedData();
+            data.version = root.GetInt("version", data.version);
+            data.masterSeed = root.GetInt("masterSeed", data.masterSeed);
+            data.mode = root.GetInt("mode", data.mode);
+            data.masterState = ReadUInt64(root.Get("masterState"), data.masterState);
+            data.stepCount = ReadUInt64(root.Get("stepCount"), data.stepCount);
+            data.isDeterministic = root.GetBool("isDeterministic", data.isDeterministic);
+            data.streamNames = ReadStringArray(root.GetArray("streamNames"));
+            data.streamStates = ReadUInt64Array(root.GetArray("streamStates"));
+            data.streamSteps = ReadUInt64Array(root.GetArray("streamSteps"));
+            return data;
+        }
+
+        private static ManualJsonArray SerializeStrings(string[] values)
+        {
+            ManualJsonArray array = new ManualJsonArray();
+            if (values == null)
+                return array;
+
+            for (int i = 0; i < values.Length; i++)
+                array.Add(ManualJsonValue.String(values[i]));
+            return array;
+        }
+
+        private static ManualJsonArray SerializeUInt64Array(ulong[] values)
+        {
+            ManualJsonArray array = new ManualJsonArray();
+            if (values == null)
+                return array;
+
+            for (int i = 0; i < values.Length; i++)
+                array.Add(ManualJsonValue.String(FormatUInt64(values[i])));
+            return array;
+        }
+
+        private static string[] ReadStringArray(ManualJsonArray array)
+        {
+            if (array == null)
+                return null;
+
+            string[] values = new string[array.Items.Count];
+            for (int i = 0; i < array.Items.Count; i++)
+            {
+                ManualJsonValue value = array.Items[i];
+                values[i] = value != null && value.Type == ManualJsonValueType.String ? value.StringValue : string.Empty;
+            }
+            return values;
+        }
+
+        private static ulong[] ReadUInt64Array(ManualJsonArray array)
+        {
+            if (array == null)
+                return null;
+
+            ulong[] values = new ulong[array.Items.Count];
+            for (int i = 0; i < array.Items.Count; i++)
+                values[i] = ReadUInt64(array.Items[i], 0ul);
+            return values;
+        }
+
+        private static ulong ReadUInt64(ManualJsonValue value, ulong fallback)
+        {
+            if (value == null)
+                return fallback;
+
+            string text = null;
+            if (value.Type == ManualJsonValueType.String)
+                text = value.StringValue;
+            else if (value.Type == ManualJsonValueType.Number)
+                text = value.NumberText;
+
+            ulong parsed;
+            return ulong.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
+        }
+
+        private static string FormatUInt64(ulong value)
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
         }
     }
 }
