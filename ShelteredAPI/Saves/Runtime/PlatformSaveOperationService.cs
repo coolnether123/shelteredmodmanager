@@ -54,6 +54,8 @@ namespace ShelteredAPI.Saves.Runtime
             finally
             {
                 SaveBackupService.ClearCurrentSavePass();
+                if (!IsReservedSaveType(type))
+                    SaveRuntimeState.ClearCurrentSaveOperation(type);
             }
         }
 

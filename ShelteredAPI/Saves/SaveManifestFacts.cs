@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Util;
+using ShelteredAPI.Queues;
 
 namespace ShelteredAPI.Saves
 {
@@ -49,12 +50,13 @@ namespace ShelteredAPI.Saves
                 hasMapSize = info != null && info.hasMapSizeMetadata,
                 mapSize = info != null ? info.mapSize : 0,
                 queueFactsStatus = "unavailable",
-                queueSummary = "No queue diagnostic snapshot was registered when this save was written.",
+                queueSummary = "Live family queue facts were unavailable when this save was written.",
                 restoreFactsStatus = "unknown",
                 lastLoadedMods = currentMods.ToArray()
             };
 
             ApplyRuntimeMapFacts(manifest);
+            ApplyRuntimeQueueFacts(manifest);
             return manifest;
         }
 
@@ -78,7 +80,11 @@ namespace ShelteredAPI.Saves
             if (string.IsNullOrEmpty(manifest.queueFactsStatus))
                 manifest.queueFactsStatus = "unavailable";
             if (string.IsNullOrEmpty(manifest.queueSummary))
-                manifest.queueSummary = "No queue diagnostic snapshot was registered when this save was written.";
+                manifest.queueSummary = "Live family queue facts were unavailable when this save was written.";
+            if (string.Equals(manifest.queueFactsStatus, "unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyRuntimeQueueFacts(manifest);
+            }
 
             if (string.IsNullOrEmpty(manifest.runtimeMapFactsStatus)
                 || string.Equals(manifest.runtimeMapFactsStatus, "unavailable", StringComparison.OrdinalIgnoreCase))
@@ -149,6 +155,85 @@ namespace ShelteredAPI.Saves
             {
                 manifest.runtimeMapFactsStatus = "unknown";
             }
+        }
+
+        private static void ApplyRuntimeQueueFacts(SlotManifest manifest)
+        {
+            if (manifest == null)
+                return;
+
+            manifest.queueFactsStatus = "unavailable";
+            manifest.queueSummary = "Live family queue facts were unavailable when this save was written.";
+
+            try
+            {
+                if (FamilyManager.Instance == null)
+                    return;
+
+                List<FamilyMember> members = FamilyManager.Instance.GetAllFamilyMembers();
+                if (members == null || members.Count == 0)
+                {
+                    manifest.queueFactsStatus = "available";
+                    manifest.queueSummary = "owners=0; queuedJobs=0; capacities=none";
+                    return;
+                }
+
+                int ownerCount = 0;
+                int queuedJobs = 0;
+                int unavailableCount = 0;
+                Dictionary<int, int> capacityCounts = new Dictionary<int, int>();
+
+                for (int i = 0; i < members.Count; i++)
+                {
+                    FamilyMember member = members[i];
+                    if (member == null)
+                        continue;
+
+                    PlayerQueueSnapshot queue = ShelteredQueues.GetPlayerQueue(member.GetId());
+                    if (queue == null || !queue.IsAvailable)
+                    {
+                        unavailableCount++;
+                        continue;
+                    }
+
+                    ownerCount++;
+                    queuedJobs += queue.Count;
+                    int capacity = queue.Capacity;
+                    int count;
+                    capacityCounts.TryGetValue(capacity, out count);
+                    capacityCounts[capacity] = count + 1;
+                }
+
+                manifest.queueFactsStatus = unavailableCount == 0 ? "available" : "partial";
+                manifest.queueSummary =
+                    "owners=" + ownerCount +
+                    "; queuedJobs=" + queuedJobs +
+                    "; capacities=" + FormatCapacitySummary(capacityCounts) +
+                    (unavailableCount > 0 ? "; unavailableOwners=" + unavailableCount : string.Empty);
+            }
+            catch
+            {
+                manifest.queueFactsStatus = "unknown";
+                manifest.queueSummary = "Live family queue facts could not be captured.";
+            }
+        }
+
+        private static string FormatCapacitySummary(Dictionary<int, int> capacityCounts)
+        {
+            if (capacityCounts == null || capacityCounts.Count == 0)
+                return "none";
+
+            List<int> capacities = new List<int>(capacityCounts.Keys);
+            capacities.Sort();
+
+            List<string> parts = new List<string>();
+            for (int i = 0; i < capacities.Count; i++)
+            {
+                int capacity = capacities[i];
+                parts.Add(capacity + "x" + capacityCounts[capacity]);
+            }
+
+            return string.Join(",", parts.ToArray());
         }
 
         private static object ReadProperty(object source, string name)

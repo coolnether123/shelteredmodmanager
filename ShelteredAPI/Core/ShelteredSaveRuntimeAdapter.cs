@@ -25,6 +25,11 @@ namespace ShelteredAPI.Core
 
         public IModSaveContext GetCurrentSaveContext()
         {
+            SaveManager.SaveType operationType;
+            SaveEntry operationEntry;
+            if (SaveRuntimeState.TryGetCurrentSaveOperation(out operationType, out operationEntry))
+                return CreateContext(operationEntry);
+
             SaveManager.SaveType currentType = ResolveCurrentSaveType();
             PlatformSaveProxy.Target pending;
             if (currentType != SaveManager.SaveType.Invalid
@@ -40,7 +45,6 @@ namespace ShelteredAPI.Core
             SaveEntry active = SaveRuntimeState.ActiveCustomSave;
             if (active != null
                 && (currentType == SaveManager.SaveType.Invalid
-                    || currentType == SaveManager.SaveType.GlobalData
                     || SaveRuntimeState.HasActiveCustomSessionFor(currentType)))
             {
                 return CreateContext(active);

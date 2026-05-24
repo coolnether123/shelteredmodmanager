@@ -11,6 +11,8 @@ namespace ShelteredAPI.Saves.Runtime
     internal static class SaveRuntimeState
     {
         private static SaveManager.SaveType _activeCustomProxySlot = SaveManager.SaveType.Invalid;
+        private static SaveManager.SaveType _currentSaveOperationProxySlot = SaveManager.SaveType.Invalid;
+        private static SaveEntry _currentSaveOperationEntry;
 
         internal static SaveEntry ActiveCustomSave
         {
@@ -43,6 +45,74 @@ namespace ShelteredAPI.Saves.Runtime
         internal static bool HasActiveCustomSessionFor(SaveManager.SaveType type)
         {
             return ActiveCustomSave != null && _activeCustomProxySlot == type && type != SaveManager.SaveType.Invalid;
+        }
+
+        internal static bool TryBeginSaveOperation(SaveManager.SaveType type)
+        {
+            if (type == SaveManager.SaveType.Invalid || type == SaveManager.SaveType.GlobalData)
+            {
+                ClearCurrentSaveOperation(type);
+                return false;
+            }
+
+            PlatformSaveProxy.Target pending;
+            if (TryGetPendingSave(type, out pending) && pending != null)
+            {
+                SaveEntry pendingEntry = ResolveEntry(pending);
+                if (pendingEntry != null)
+                {
+                    SetCurrentSaveOperation(type, pendingEntry, "pending-custom-save");
+                    return true;
+                }
+            }
+
+            if (HasActiveCustomSessionFor(type))
+            {
+                SetCurrentSaveOperation(type, ActiveCustomSave, "active-custom-session");
+                return true;
+            }
+
+            ClearCurrentSaveOperation(type);
+            return false;
+        }
+
+        internal static bool TryGetCurrentSaveOperation(out SaveManager.SaveType type, out SaveEntry entry)
+        {
+            type = _currentSaveOperationProxySlot;
+            entry = _currentSaveOperationEntry;
+            return entry != null && type != SaveManager.SaveType.Invalid && type != SaveManager.SaveType.GlobalData;
+        }
+
+        internal static void ClearCurrentSaveOperation(SaveManager.SaveType type)
+        {
+            if (_currentSaveOperationEntry == null)
+                return;
+
+            if (type != SaveManager.SaveType.Invalid && _currentSaveOperationProxySlot != type)
+                return;
+
+            _currentSaveOperationEntry = null;
+            _currentSaveOperationProxySlot = SaveManager.SaveType.Invalid;
+        }
+
+        private static void SetCurrentSaveOperation(SaveManager.SaveType type, SaveEntry entry, string reason)
+        {
+            _currentSaveOperationProxySlot = type;
+            _currentSaveOperationEntry = entry;
+            ModAPI.Core.MMLog.WriteDebug("[SaveRuntime] Scoped save operation context. reason=" + reason
+                + ", proxySlot=" + type
+                + ", scenario=" + (entry != null ? entry.scenarioId : "<null>")
+                + ", saveId=" + (entry != null ? entry.id : "<null>")
+                + ", absoluteSlot=" + (entry != null ? entry.absoluteSlot.ToString() : "<null>") + ".");
+        }
+
+        private static SaveEntry ResolveEntry(PlatformSaveProxy.Target target)
+        {
+            if (target == null || string.IsNullOrEmpty(target.saveId))
+                return null;
+
+            string scopeId = SaveStorageRouter.NormalizeScenarioId(target.scenarioId);
+            return SaveStorageRouter.Get(scopeId, target.saveId);
         }
 
         internal static bool HasPendingSave(SaveManager.SaveType type)

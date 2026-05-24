@@ -107,6 +107,7 @@ namespace ShelteredAPI.Events
             if (!TryGetField(mgr, "m_data", out data) || data == null)
                 return;
 
+            EnsureSaveOperationContext(mgr);
             SaveBackupService.BackupCurrentSlotBeforeSave(mgr);
             _beforeSaveRaised = true;
             if (OnBeforeSave != null) SafeInvoke(delegate { OnBeforeSave(data); }, "OnBeforeSave");
@@ -262,9 +263,10 @@ namespace ShelteredAPI.Events
         [HarmonyPatch(typeof(SaveManager), "StartSave")]
         private static class SaveManager_StartSave_Patch
         {
-            private static void Prefix()
+            private static void Prefix(SaveManager.SaveType type)
             {
                 GameEvents.ResetSaveFlags();
+                SaveRuntimeState.TryBeginSaveOperation(type);
             }
         }
 
@@ -299,6 +301,11 @@ namespace ShelteredAPI.Events
         [HarmonyPatch(typeof(SaveManager), "Update_LoadSceneContents")]
         private static class SaveManager_Update_LoadSceneContents_Patch
         {
+            private static void Prefix(SaveManager __instance)
+            {
+                GameEvents.TryRaiseBeforeLoadSceneContents(__instance);
+            }
+
             private static void Postfix(SaveManager __instance)
             {
                 GameEvents.TryRaiseAfterLoad(__instance);
@@ -365,7 +372,11 @@ namespace ShelteredAPI.Events
         {
             try
             {
-                SaveEntry customEntry = PlatformSaveProxy.ActiveCustomSave;
+                SaveManager.SaveType operationType;
+                SaveEntry scopedEntry;
+                SaveEntry customEntry = SaveRuntimeState.TryGetCurrentSaveOperation(out operationType, out scopedEntry)
+                    ? scopedEntry
+                    : PlatformSaveProxy.ActiveCustomSave;
                 if (customEntry == null)
                     return;
 
@@ -379,6 +390,30 @@ namespace ShelteredAPI.Events
             catch (Exception ex)
             {
                 WriteError("[GameEvents] Error raising Custom " + displayName + ": " + ex);
+            }
+        }
+
+        private static void EnsureSaveOperationContext(SaveManager manager)
+        {
+            SaveManager.SaveType operationType;
+            SaveEntry operationEntry;
+            if (SaveRuntimeState.TryGetCurrentSaveOperation(out operationType, out operationEntry))
+                return;
+
+            SaveManager.SaveType type;
+            if (TryGetField(manager, "m_slotInUse", out type)
+                && type != SaveManager.SaveType.Invalid
+                && type != SaveManager.SaveType.GlobalData
+                && SaveRuntimeState.TryBeginSaveOperation(type))
+            {
+                return;
+            }
+
+            if (TryGetField(manager, "m_currentType", out type)
+                && type != SaveManager.SaveType.Invalid
+                && type != SaveManager.SaveType.GlobalData)
+            {
+                SaveRuntimeState.TryBeginSaveOperation(type);
             }
         }
 
