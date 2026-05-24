@@ -49,6 +49,32 @@ namespace ShelteredAPI.Map
             return MapGenerationPolicyRegistry.Register(policy);
         }
 
+        /// <summary>Registers a provider that can resolve the home shelter during map generation.</summary>
+        public static MapPolicyRegistrationResult RegisterHomeShelterPlacementProvider(HomeShelterPlacementProviderRegistration registration)
+        {
+            return HomeShelterPlacementProviderRegistry.Register(registration);
+        }
+
+        /// <summary>Removes one home-shelter placement provider registration.</summary>
+        public static int UnregisterHomeShelterPlacementProvider(string sourceId, string providerId)
+        {
+            return HomeShelterPlacementProviderRegistry.Unregister(sourceId, providerId);
+        }
+
+        /// <summary>Removes all home-shelter placement providers owned by one source.</summary>
+        public static int ClearHomeShelterPlacementProviders(string sourceId)
+        {
+            return HomeShelterPlacementProviderRegistry.Clear(sourceId);
+        }
+
+        /// <summary>
+        /// Asks registered providers to resolve and publish the active home shelter placement.
+        /// </summary>
+        public static bool TryResolveHomeShelterPlacement(string reason, out HomeShelterPositionSnapshot snapshot)
+        {
+            return HomeShelterPlacementProviderRegistry.TryResolve(reason, out snapshot);
+        }
+
         /// <summary>Registers or updates the resolved home shelter/bunker position for map consumers.</summary>
         public static MapPolicyRegistrationResult RegisterHomeShelterPosition(HomeShelterPositionRegistration registration)
         {

@@ -18,6 +18,8 @@ namespace ShelteredAPI.Map
             IsActive = true;
             IsVisible = true;
             IsOnline = true;
+            GenerateStartingLocations = true;
+            MinimumEdgeDistanceInCells = 1;
         }
 
         /// <summary>Owning mod or integration identifier.</summary>
@@ -36,6 +38,10 @@ namespace ShelteredAPI.Map
         public bool IsVisible { get; set; }
         /// <summary>Whether this home owner is currently online/available.</summary>
         public bool IsOnline { get; set; }
+        /// <summary>Whether map generation should create initial nearby locations around this home shelter.</summary>
+        public bool GenerateStartingLocations { get; set; }
+        /// <summary>Minimum cells this home should remain away from the map edge.</summary>
+        public int MinimumEdgeDistanceInCells { get; set; }
         /// <summary>Resolution priority. Higher values win ties across sources.</summary>
         public int Priority { get; set; }
         /// <summary>Optional world-space expedition-map position.</summary>
@@ -77,6 +83,10 @@ namespace ShelteredAPI.Map
         public bool IsVisible { get; internal set; }
         /// <summary>Whether this home owner is currently online/available.</summary>
         public bool IsOnline { get; internal set; }
+        /// <summary>Whether map generation should create initial nearby locations around this home shelter.</summary>
+        public bool GenerateStartingLocations { get; internal set; }
+        /// <summary>Minimum cells this home should remain away from the map edge.</summary>
+        public int MinimumEdgeDistanceInCells { get; internal set; }
         /// <summary>Resolution priority used by the registry.</summary>
         public int Priority { get; internal set; }
         /// <summary>Whether <see cref="WorldPosition"/> contains a resolved value.</summary>
@@ -106,6 +116,8 @@ namespace ShelteredAPI.Map
                 IsActive = IsActive,
                 IsVisible = IsVisible,
                 IsOnline = IsOnline,
+                GenerateStartingLocations = GenerateStartingLocations,
+                MinimumEdgeDistanceInCells = MinimumEdgeDistanceInCells,
                 Priority = Priority,
                 HasWorldPosition = HasWorldPosition,
                 WorldPosition = WorldPosition,

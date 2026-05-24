@@ -64,10 +64,13 @@
     <Compile Include="Map\ShelteredMapMarkers.cs" />
     <Compile Include="Map\ExpeditionMapContext.cs" />
     <Compile Include="Map\HomeShelterPositions.cs" />
+    <Compile Include="Map\HomeShelterPlacementProviders.cs" />
     <Compile Include="Map\MapGenerationPolicies.cs" />
     <Compile Include="Map\ShelteredMap.cs" />
     <Compile Include="Map\Internal\HomeShelterPositionResolver.cs" />
     <Compile Include="Map\Internal\HomeShelterPositionRegistry.cs" />
+    <Compile Include="Map\Internal\HomeShelterMapGenerationPatches.cs" />
+    <Compile Include="Map\Internal\HomeShelterPlacementProviderRegistry.cs" />
     <Compile Include="Map\Internal\ExpeditionMapCoordinateConverter.cs" />
     <Compile Include="Map\Internal\ExpeditionMapContextReader.cs" />
     <Compile Include="Map\Internal\MapGenerationPolicyRegistry.cs" />
