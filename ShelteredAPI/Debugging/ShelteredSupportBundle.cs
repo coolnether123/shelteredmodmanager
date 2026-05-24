@@ -5,6 +5,7 @@ using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Util;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Debugging
 {
@@ -152,6 +153,27 @@ namespace ShelteredAPI.Debugging
                 facts.Add("runtimeProbeError=" + ex.GetType().Name);
             }
 
+            if (absoluteSlot <= 0 && !string.IsNullOrEmpty(scopeId) && !string.IsNullOrEmpty(saveId))
+            {
+                try
+                {
+                    SaveEntry entry = SaveStorageRouter.Get(scopeId, saveId);
+                    if (entry != null && entry.absoluteSlot > 0)
+                    {
+                        absoluteSlot = entry.absoluteSlot;
+                        facts.Add("slotResolvedFromSaveId=true");
+                    }
+                    else
+                    {
+                        facts.Add("slotResolvedFromSaveId=false");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    facts.Add("slotResolveError=" + ex.GetType().Name);
+                }
+            }
+
             facts.Add("selectedScopeId=" + ValueOrUnknown(scopeId));
             facts.Add("selectedSaveId=" + ValueOrUnknown(saveId));
             facts.Add("selectedSlot=" + (absoluteSlot > 0 ? absoluteSlot.ToString() : "unknown"));
@@ -292,6 +314,29 @@ namespace ShelteredAPI.Debugging
             try
             {
                 Type registryType = typeof(MMLog).Assembly.GetType("ModAPI.Harmony.PatchRegistry", false);
+                MethodInfo getHistory = registryType != null
+                    ? registryType.GetMethod("GetReportHistory", BindingFlags.Public | BindingFlags.Static)
+                    : null;
+                if (getHistory != null)
+                {
+                    object[] history = getHistory.Invoke(null, null) as object[];
+                    if (history != null && history.Length > 0)
+                    {
+                        object latestReport = history[history.Length - 1];
+                        return Available("patch-report",
+                            "reports=" + history.Length,
+                            "latestAssemblyName=" + ValueOrUnknown(Convert.ToString(ReadProperty(latestReport, "AssemblyName"))),
+                            "latestSourceName=" + ValueOrUnknown(Convert.ToString(ReadProperty(latestReport, "SourceName"))),
+                            "latestTriggerName=" + ValueOrUnknown(Convert.ToString(ReadProperty(latestReport, "TriggerName"))),
+                            "discovered=" + SumArrayLengths(history, "Discovered"),
+                            "applied=" + SumArrayLengths(history, "Applied"),
+                            "skipped=" + SumArrayLengths(history, "Skipped"),
+                            "missingPolicy=" + SumArrayLengths(history, "MissingPolicy"),
+                            "conflicts=" + SumArrayLengths(history, "Conflicts"),
+                            "warningConflicts=" + CountPatchConflicts(history, "Warning"));
+                    }
+                }
+
                 MethodInfo getLatest = registryType != null
                     ? registryType.GetMethod("GetLatestReport", BindingFlags.Public | BindingFlags.Static)
                     : null;
@@ -475,6 +520,40 @@ namespace ShelteredAPI.Debugging
         {
             Array values = ReadProperty(source, propertyName) as Array;
             return values != null ? values.Length : 0;
+        }
+
+        private static int SumArrayLengths(object[] reports, string propertyName)
+        {
+            if (reports == null)
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < reports.Length; i++)
+                count += ReadArrayLength(reports[i], propertyName);
+            return count;
+        }
+
+        private static int CountPatchConflicts(object[] reports, string severityName)
+        {
+            if (reports == null)
+                return 0;
+
+            int count = 0;
+            for (int i = 0; i < reports.Length; i++)
+            {
+                Array conflicts = ReadProperty(reports[i], "Conflicts") as Array;
+                if (conflicts == null)
+                    continue;
+
+                for (int j = 0; j < conflicts.Length; j++)
+                {
+                    object severity = ReadProperty(conflicts.GetValue(j), "Severity");
+                    if (string.Equals(Convert.ToString(severity), severityName, StringComparison.OrdinalIgnoreCase))
+                        count++;
+                }
+            }
+
+            return count;
         }
 
         private static string ReadStaticPropertyOrUnknown(Type source, string name)
