@@ -13,7 +13,7 @@ namespace ModAPI.Actors
         Faction = 1,
         Citizen = 2,
         Visitor = 3,
-        NeutralShelter = 4,
+        NeutralGroup = 4,
         Synthetic = 5,
         Custom = 6
     }
@@ -34,13 +34,13 @@ namespace ModAPI.Actors
 
     /// <summary>
     /// Coarse location of an actor in the game flow.
-    /// This is intentionally host-neutral so mods can reason about shelter, expedition, and encounter state consistently.
+    /// This is intentionally host-neutral so mods can reason about home, travel, and encounter state consistently.
     /// </summary>
     public enum ActorPresenceState
     {
         Unknown = 0,
-        InShelter = 1,
-        Expedition = 2,
+        Home = 1,
+        Travel = 2,
         Encounter = 3,
         Offscreen = 4
     }

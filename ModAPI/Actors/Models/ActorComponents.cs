@@ -101,12 +101,12 @@ namespace ModAPI.Actors
     }
 
     /// <summary>
-    /// Built-in profile component for Sheltered character identity and visible character stats.
+    /// Built-in profile component for actor identity and visible character stats.
     /// </summary>
     [Serializable]
     public sealed class ActorProfileComponent : IActorComponent
     {
-        public const string DefaultComponentId = "sheltered.actor_profile";
+        public const string DefaultComponentId = "modapi.actor_profile";
 
         public string FirstName;
         public string LastName;
@@ -145,7 +145,7 @@ namespace ModAPI.Actors
     [Serializable]
     public sealed class ActorAttributeSetComponent : IMergeableActorComponent
     {
-        public const string DefaultComponentId = "sheltered.attribute_set";
+        public const string DefaultComponentId = "modapi.attribute_set";
 
         public List<ActorAttributeEntry> Entries = new List<ActorAttributeEntry>();
 

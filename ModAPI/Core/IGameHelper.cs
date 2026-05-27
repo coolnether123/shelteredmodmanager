@@ -59,18 +59,18 @@ namespace ModAPI.Core
         public const string UiLifecycleEvents = "GameRuntime.UiLifecycleEvents";
         /// <summary>Save runtime adapter.</summary>
         public const string SaveRuntime = "GameRuntime.SaveRuntime";
-        /// <summary>Sheltered aggregate content service.</summary>
-        public const string ShelteredContent = "GameRuntime.ShelteredContent";
-        /// <summary>Sheltered content registration service.</summary>
-        public const string ShelteredContentRegistration = "GameRuntime.ShelteredContentRegistration";
-        /// <summary>Sheltered inventory service.</summary>
-        public const string ShelteredInventory = "GameRuntime.ShelteredInventory";
-        /// <summary>Sheltered asset-loading service.</summary>
-        public const string ShelteredAssetLoading = "GameRuntime.ShelteredAssetLoading";
-        /// <summary>Sheltered localization service.</summary>
-        public const string ShelteredLocalization = "GameRuntime.ShelteredLocalization";
-        /// <summary>Sheltered recipe and loot mutation service.</summary>
-        public const string ShelteredRecipeLootMutation = "GameRuntime.ShelteredRecipeLootMutation";
+        /// <summary>Aggregate game content service.</summary>
+        public const string Content = "GameRuntime.Content";
+        /// <summary>Game content registration service.</summary>
+        public const string ContentRegistration = "GameRuntime.ContentRegistration";
+        /// <summary>Game inventory service.</summary>
+        public const string Inventory = "GameRuntime.Inventory";
+        /// <summary>Game asset-loading service.</summary>
+        public const string AssetLoading = "GameRuntime.AssetLoading";
+        /// <summary>Game localization service.</summary>
+        public const string Localization = "GameRuntime.Localization";
+        /// <summary>Game recipe and loot mutation service.</summary>
+        public const string RecipeLootMutation = "GameRuntime.RecipeLootMutation";
         /// <summary>Custom scenario registration and catalog service.</summary>
         public const string CustomScenarios = "GameRuntime.CustomScenarios";
         /// <summary>Scenario authoring service.</summary>

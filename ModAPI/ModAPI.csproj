@@ -37,7 +37,7 @@
     <DocumentationFile>..\Dist\SMM\ModAPI.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Local Sheltered/Unity runtime references are developer-machine fallbacks.
+    <!-- Local game/Unity runtime references are developer-machine fallbacks.
          If your install differs, retarget these HintPath values to equivalent game assemblies. -->
     <Reference Include="0Harmony">
       <HintPath>$(SmmHarmonyDll)</HintPath>
@@ -48,11 +48,11 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
+      <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>$(ShelteredManagedDir)UnityEngine.UI.dll</HintPath>
+      <HintPath>$(GameManagedDir)UnityEngine.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

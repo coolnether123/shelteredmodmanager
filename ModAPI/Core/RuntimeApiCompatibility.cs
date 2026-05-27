@@ -7,7 +7,7 @@ namespace ModAPI.Core
     internal static class RuntimeApiCompatibility
     {
         internal const string ModApiName = "ModAPI";
-        internal const string ShelteredApiName = "Sheltered" + "API";
+        internal const string DefaultRuntimeApiName = "GameRuntime";
 
         public static bool IsRuntimeApiCompatible(
             ModAbout about,
@@ -27,9 +27,10 @@ namespace ModAPI.Core
                 return false;
             }
 
-            if (!IsApiRequirementSatisfied(
-                ShelteredApiName,
-                FirstNonEmpty(about.requiredShelteredApiVersion, about.shelteredApiVersion),
+            string runtimeApiRequirement = FirstNonEmpty(about.requiredRuntimeApiVersion, about.runtimeApiVersion);
+            if (runtimeApiRequirement != null && !IsApiRequirementSatisfied(
+                FirstNonEmpty(about.runtimeApiName, DefaultRuntimeApiName),
+                runtimeApiRequirement,
                 versionResolver,
                 out reason))
             {

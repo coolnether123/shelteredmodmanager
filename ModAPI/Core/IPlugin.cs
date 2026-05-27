@@ -110,7 +110,7 @@ namespace ModAPI.Core
         Coroutine StartCoroutine(IEnumerator routine);
 
         /// <summary>
-        /// Finds a UI panel by name or path (for example, "UI root/ExpeditionMainPanelNew").
+        /// Finds a UI panel by name or path (for example, "UI root/MainPanel").
         /// </summary>
         GameObject FindPanel(string nameOrPath);
 

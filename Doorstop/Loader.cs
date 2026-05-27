@@ -74,7 +74,7 @@ namespace Doorstop
             try
             {
                 string arch = IntPtr.Size == 8 ? "x64" : "x86";
-                LoaderDebugLog.Reset(string.Format("[Doorstop] Sheltered Mod Manager starting ({0})", arch));
+                LoaderDebugLog.Reset(string.Format("[Doorstop] Mod manager starting ({0})", arch));
                 LoaderDebugLog.Write(string.Format("[Doorstop] Process={0}", System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName));
                 LoaderDebugLog.Write(string.Format("[Doorstop] BaseDir={0}", AppDomain.CurrentDomain.BaseDirectory));
                 LoaderDebugLog.Write(string.Format("[Doorstop] CurrentDir={0}", Environment.CurrentDirectory));
@@ -628,8 +628,8 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
                 }
 
                 // Prefer SMM root for core APIs so newly built Dist\SMM outputs are not shadowed by stale SMM\bin copies.
-                bool preferRoot = string.Equals(assemblyName, "ShelteredAPI", StringComparison.OrdinalIgnoreCase)
-                                  || string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase);
+                bool preferRoot = string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase)
+                                  || assemblyName.EndsWith("API", StringComparison.OrdinalIgnoreCase);
 
                 string rootAssemblyPath = System.IO.Path.Combine(smmPath, assemblyName + ".dll");
                 string binAssemblyPath = System.IO.Path.Combine(smmBinPath, assemblyName + ".dll");
