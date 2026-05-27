@@ -3,7 +3,6 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using Manager.Core.Models;
-using Manager.Core.Services;
 
 namespace Manager.Controls
 {
@@ -37,8 +36,6 @@ namespace Manager.Controls
         private LinkLabel _websiteLink;
         private Label _nexusStatusLabel;
         private LinkLabel _nexusLink;
-        private Button _nexusUpdateButton;
-        private Button _nexusStableButton;
         private Label _descLabel;
         private Panel _separator;
 
@@ -53,31 +50,14 @@ namespace Manager.Controls
         private ModItem _currentMod;
         private bool _isDarkMode = false;
         private string _installedModApiVersion;
-        private bool _showNexusActionButtons = false;
 
         public event PathEventHandler OpenFolderClicked;
         public event PathEventHandler WebsiteClicked;
-        public event EventHandler NexusUpdateRequested;
-        public event EventHandler NexusStableRequested;
 
         public string InstalledModApiVersion
         {
             get { return _installedModApiVersion; }
             set { _installedModApiVersion = value; }
-        }
-
-        public bool ShowNexusActionButtons
-        {
-            get { return _showNexusActionButtons; }
-            set
-            {
-                _showNexusActionButtons = value;
-                if (_currentMod != null)
-                {
-                    UpdateNexusStatus(_currentMod);
-                    LayoutDetailContent();
-                }
-            }
         }
 
         public ModDetailsPanel()
@@ -212,24 +192,6 @@ namespace Manager.Controls
             _nexusLink.Visible = false;
             _nexusLink.LinkClicked += NexusLink_LinkClicked;
 
-            _nexusUpdateButton = new Button();
-            _nexusUpdateButton.Text = "Update from Nexus";
-            _nexusUpdateButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _nexusUpdateButton.FlatStyle = FlatStyle.Flat;
-            _nexusUpdateButton.Size = new Size(145, 28);
-            _nexusUpdateButton.Visible = false;
-            _nexusUpdateButton.Cursor = Cursors.Hand;
-            _nexusUpdateButton.Click += NexusUpdateButton_Click;
-
-            _nexusStableButton = new Button();
-            _nexusStableButton.Text = "Revert to Stable";
-            _nexusStableButton.Font = new Font("Segoe UI", 9f, FontStyle.Bold);
-            _nexusStableButton.FlatStyle = FlatStyle.Flat;
-            _nexusStableButton.Size = new Size(135, 28);
-            _nexusStableButton.Visible = false;
-            _nexusStableButton.Cursor = Cursors.Hand;
-            _nexusStableButton.Click += NexusStableButton_Click;
-
             // Description
             _descLabel = new Label();
             _descLabel.Text = "Description";
@@ -274,8 +236,6 @@ namespace Manager.Controls
             this.Controls.Add(_websiteLink);
             this.Controls.Add(_nexusStatusLabel);
             this.Controls.Add(_nexusLink);
-            this.Controls.Add(_nexusUpdateButton);
-            this.Controls.Add(_nexusStableButton);
             this.Controls.Add(_descLabel);
             this.Controls.Add(_descriptionBox);
             this.Controls.Add(_openFolderButton);
@@ -306,18 +266,6 @@ namespace Manager.Controls
 
             if (!string.IsNullOrEmpty(url) && WebsiteClicked != null)
                 WebsiteClicked(this, url);
-        }
-
-        private void NexusUpdateButton_Click(object sender, EventArgs e)
-        {
-            if (NexusUpdateRequested != null)
-                NexusUpdateRequested(this, EventArgs.Empty);
-        }
-
-        private void NexusStableButton_Click(object sender, EventArgs e)
-        {
-            if (NexusStableRequested != null)
-                NexusStableRequested(this, EventArgs.Empty);
         }
 
         private void OpenFolderButton_Click(object sender, EventArgs e)
@@ -496,8 +444,6 @@ namespace Manager.Controls
         private void UpdateNexusStatus(ModItem mod)
         {
             _nexusLink.Visible = false;
-            _nexusUpdateButton.Visible = false;
-            _nexusStableButton.Visible = false;
 
             if (!mod.HasNexusReference)
             {
@@ -518,26 +464,10 @@ namespace Manager.Controls
             if (mod.HasUpdateAvailable)
             {
                 string latest = string.IsNullOrEmpty(mod.NexusRemoteVersion) ? "new release" : mod.NexusRemoteVersion;
-                NexusReleaseChannel channel = NexusReleaseClassifier.ClassifyVersion(mod.NexusRemoteVersion);
-                string channelLabel = channel == NexusReleaseChannel.Stable
-                    ? "Update"
-                    : ToTitleCase(NexusReleaseClassifier.GetDisplayLabel(channel)) + " update";
-                _nexusStatusLabel.Text = "Nexus: " + channelLabel + " available (" + latest + ")";
+                _nexusStatusLabel.Text = "Nexus: Update available (" + latest + ")";
                 _nexusStatusLabel.ForeColor = _isDarkMode ? Color.DeepSkyBlue : Color.RoyalBlue;
-                if (_showNexusActionButtons)
-                {
-                    _nexusUpdateButton.Text = channel == NexusReleaseChannel.Stable
-                        ? "Update from Nexus"
-                        : "Update to " + ToTitleCase(NexusReleaseClassifier.GetDisplayLabel(channel));
-                    _nexusUpdateButton.Visible = true;
-                }
-                if (_showNexusActionButtons && NexusReleaseClassifier.IsPrerelease(mod.Version))
-                    _nexusStableButton.Visible = true;
                 return;
             }
-
-            if (_showNexusActionButtons && NexusReleaseClassifier.IsPrerelease(mod.Version))
-                _nexusStableButton.Visible = true;
 
             bool installedMod = !string.IsNullOrEmpty(mod.RootPath);
             if (!string.IsNullOrEmpty(mod.NexusRemoteVersion) && installedMod)
@@ -556,17 +486,6 @@ namespace Manager.Controls
 
             _nexusStatusLabel.Text = "Nexus: Linked (" + mod.NexusGameDomain + "/" + mod.NexusModId + ")";
             _nexusStatusLabel.ForeColor = _isDarkMode ? Color.LightGray : Color.Gray;
-        }
-
-        private static string ToTitleCase(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
-
-            if (value.Length == 1)
-                return value.ToUpperInvariant();
-
-            return value.Substring(0, 1).ToUpperInvariant() + value.Substring(1);
         }
 
         private static string FormatVersionDisplay(string version)
@@ -615,8 +534,6 @@ namespace Manager.Controls
             _websiteLink.Visible = true;
             _nexusStatusLabel.Visible = true;
             _nexusLink.Visible = true;
-            _nexusUpdateButton.Visible = true;
-            _nexusStableButton.Visible = true;
             _descLabel.Visible = true;
             _descriptionBox.Visible = true;
             _openFolderButton.Visible = !string.IsNullOrEmpty(_currentMod != null ? _currentMod.RootPath : string.Empty);
@@ -736,15 +653,7 @@ namespace Manager.Controls
             if (_nexusLink.Visible)
                 _nexusLink.Location = new Point(left, nexusLinkY);
 
-            int nextY = _nexusLink.Visible ? (nexusLinkY + 28) : (nexusStatusY + 28);
-            if (_nexusUpdateButton.Visible || _nexusStableButton.Visible)
-            {
-                _nexusUpdateButton.Location = new Point(left, nextY);
-                _nexusStableButton.Location = new Point(_nexusUpdateButton.Right + 10, nextY);
-                nextY += 38;
-            }
-
-            int descTitleY = nextY;
+            int descTitleY = _nexusLink.Visible ? (nexusLinkY + 28) : (nexusStatusY + 28);
             _descLabel.Location = new Point(left, descTitleY);
 
             _descriptionBox.Location = new Point(left, descTitleY + 20);
@@ -782,8 +691,6 @@ namespace Manager.Controls
                 _openFolderButton.ForeColor = Color.White;
                 _websiteLink.LinkColor = Color.LightBlue;
                 _nexusLink.LinkColor = Color.LightBlue;
-                ApplyButtonTheme(_nexusUpdateButton, true, true);
-                ApplyButtonTheme(_nexusStableButton, true, false);
             }
             else
             {
@@ -805,8 +712,6 @@ namespace Manager.Controls
                 _openFolderButton.ForeColor = SystemColors.ControlText;
                 _websiteLink.LinkColor = SystemColors.HotTrack;
                 _nexusLink.LinkColor = SystemColors.HotTrack;
-                ApplyButtonTheme(_nexusUpdateButton, false, true);
-                ApplyButtonTheme(_nexusStableButton, false, false);
             }
 
             // Update ModAPI status color if showing mod
@@ -814,26 +719,6 @@ namespace Manager.Controls
             {
                 UpdateModApiStatus(_currentMod);
                 UpdateNexusStatus(_currentMod);
-            }
-        }
-
-        private static void ApplyButtonTheme(Button button, bool isDark, bool primary)
-        {
-            if (button == null)
-                return;
-
-            button.UseVisualStyleBackColor = false;
-            if (isDark)
-            {
-                button.BackColor = primary ? Color.FromArgb(0, 122, 204) : Color.FromArgb(70, 70, 70);
-                button.ForeColor = Color.White;
-                button.FlatAppearance.BorderColor = primary ? Color.FromArgb(0, 92, 164) : Color.FromArgb(100, 100, 100);
-            }
-            else
-            {
-                button.BackColor = primary ? Color.FromArgb(225, 235, 248) : SystemColors.Control;
-                button.ForeColor = SystemColors.ControlText;
-                button.FlatAppearance.BorderColor = SystemColors.ControlDark;
             }
         }
     }

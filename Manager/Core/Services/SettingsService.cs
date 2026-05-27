@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Manager.Core.Games;
+using Manager.Core.Games.Detection;
+using Manager.Core.Games.Models;
 using Manager.Core.Models;
 using Manager.Core.Security;
 
@@ -17,6 +20,8 @@ namespace Manager.Core.Services
         private const string LegacyNexusApiKeyKey = "NexusApiKey";
         private const string ProtectedNexusApiKeyKey = "NexusApiKeyProtected";
         private readonly string _iniPath;
+        private readonly GameProfileRegistry _profileRegistry;
+        private readonly GamePathDetector _pathDetector;
         private FileSystemWatcher _watcher;
         private DateTime _lastRead = DateTime.MinValue;
         private bool _suppressWatcher = false;
@@ -25,7 +30,14 @@ namespace Manager.Core.Services
         public event SettingsChangedHandler SettingsChanged;
 
         public SettingsService()
+            : this(GameProfileRegistry.CreateDefault())
         {
+        }
+
+        public SettingsService(GameProfileRegistry profileRegistry)
+        {
+            _profileRegistry = profileRegistry ?? GameProfileRegistry.CreateDefault();
+            _pathDetector = new GamePathDetector();
             string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             string smmDir = Path.Combine(exeDir, "SMM");
             string binDir;
@@ -80,6 +92,8 @@ namespace Manager.Core.Services
 
         public SettingsService(string customPath)
         {
+            _profileRegistry = GameProfileRegistry.CreateDefault();
+            _pathDetector = new GamePathDetector();
             _iniPath = customPath;
         }
 
@@ -91,6 +105,13 @@ namespace Manager.Core.Services
             var settings = new AppSettings();
             var raw = ReadIniFile();
 
+            string selectedGameId;
+            if (raw.TryGetValue("SelectedGameId", out selectedGameId))
+                settings.SelectedGameId = selectedGameId;
+
+            GameProfile profile = _profileRegistry.Resolve(settings.SelectedGameId);
+            settings.SelectedGameId = profile.Id;
+
             // Game path with auto-detection fallback
             string gamePath;
             if (raw.TryGetValue("GamePath", out gamePath))
@@ -100,7 +121,7 @@ namespace Manager.Core.Services
             
             if (string.IsNullOrEmpty(settings.GamePath) || !File.Exists(settings.GamePath))
             {
-                string detected = TryAutoDetectGamePath();
+                string detected = TryAutoDetectGamePath(profile);
                 if (!string.IsNullOrEmpty(detected))
                     settings.GamePath = detected;
             }
@@ -108,7 +129,7 @@ namespace Manager.Core.Services
             // Mods path derived from game path
             if (!string.IsNullOrEmpty(settings.GamePath) && File.Exists(settings.GamePath))
             {
-                settings.ModsPath = Path.Combine(Path.GetDirectoryName(settings.GamePath), "mods");
+                settings.ModsPath = profile.GetModsPath(settings.GamePath);
             }
 
             // UI settings
@@ -160,14 +181,6 @@ namespace Manager.Core.Services
                     settings.SkipHarmonyDependencyCheck = sh;
             }
 
-            string includeNexusPrerelease;
-            if (raw.TryGetValue("IncludeNexusPrereleaseFiles", out includeNexusPrerelease))
-            {
-                bool include;
-                if (bool.TryParse(includeNexusPrerelease, out include))
-                    settings.IncludeNexusPrereleaseFiles = include;
-            }
-
             string bitness;
             if (raw.TryGetValue("GameBitness", out bitness))
                 settings.GameBitness = bitness;
@@ -175,10 +188,6 @@ namespace Manager.Core.Services
             string autoCondense;
             if (raw.TryGetValue("AutoCondenseSaves", out autoCondense))
                 settings.AutoCondenseSaves = autoCondense;
-
-            string saveBackupRetention;
-            if (raw.TryGetValue("SaveBackupRetention", out saveBackupRetention))
-                settings.SaveBackupRetention = AppSettings.ParseSaveBackupRetention(saveBackupRetention, settings.SaveBackupRetention);
 
             string apiVersion;
             if (raw.TryGetValue("InstalledModApiVersion", out apiVersion))
@@ -188,6 +197,15 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("InstalledShelteredApiVersion", out shelteredApiVersion))
                 settings.InstalledShelteredApiVersion = shelteredApiVersion;
 
+            string installedApiVersions;
+            if (raw.TryGetValue("InstalledApiVersions", out installedApiVersions))
+                settings.InstalledApiVersions = ParseInstalledApiVersions(installedApiVersions);
+
+            if (!string.IsNullOrEmpty(settings.InstalledModApiVersion))
+                settings.InstalledApiVersions["ModAPI"] = settings.InstalledModApiVersion;
+            if (!string.IsNullOrEmpty(settings.InstalledShelteredApiVersion))
+                settings.InstalledApiVersions["ShelteredAPI"] = settings.InstalledShelteredApiVersion;
+
             string enableNexus;
             if (raw.TryGetValue("EnableNexusIntegration", out enableNexus))
             {
@@ -196,21 +214,11 @@ namespace Manager.Core.Services
                     settings.EnableNexusIntegration = enabled;
             }
 
-            string enableExperimentalPublishTab;
-            if (raw.TryGetValue("EnableExperimentalPublishTab", out enableExperimentalPublishTab))
-            {
-                bool enabled;
-                if (bool.TryParse(enableExperimentalPublishTab, out enabled))
-                    settings.EnableExperimentalPublishTab = enabled;
-            }
-
-            string lastSeenReleaseNoticeVersion;
-            if (raw.TryGetValue("LastSeenReleaseNoticeVersion", out lastSeenReleaseNoticeVersion))
-                settings.LastSeenReleaseNoticeVersion = lastSeenReleaseNoticeVersion;
-
             string nexusDomain;
             if (raw.TryGetValue("NexusGameDomain", out nexusDomain))
                 settings.NexusGameDomain = nexusDomain;
+            else
+                settings.NexusGameDomain = profile.DefaultNexusGameDomain ?? string.Empty;
 
             string protectedNexusApiKey;
             bool hasProtectedApiKey = raw.TryGetValue(ProtectedNexusApiKeyKey, out protectedNexusApiKey);
@@ -244,9 +252,10 @@ namespace Manager.Core.Services
             }
 
             if (settings.ManagerNexusModId <= 0 &&
-                string.Equals(settings.NexusGameDomain ?? "sheltered", "sheltered", StringComparison.OrdinalIgnoreCase))
+                profile.DefaultManagerNexusModId > 0 &&
+                string.Equals(settings.NexusGameDomain ?? string.Empty, profile.DefaultNexusGameDomain ?? string.Empty, StringComparison.OrdinalIgnoreCase))
             {
-                settings.ManagerNexusModId = 1;
+                settings.ManagerNexusModId = profile.DefaultManagerNexusModId;
             }
 
             string autoLoadSlot;
@@ -305,6 +314,7 @@ namespace Manager.Core.Services
             var data = ReadIniFile();
             
             data["GamePath"] = settings.GamePath ?? string.Empty;
+            data["SelectedGameId"] = settings.SelectedGameId ?? string.Empty;
             data["DarkMode"] = settings.DarkMode.ToString();
             data["DevMode"] = settings.DevMode.ToString();
             data["LogLevel"] = settings.LogLevel ?? "Info";
@@ -315,16 +325,14 @@ namespace Manager.Core.Services
             
             data["IgnoreOrderChecks"] = settings.IgnoreOrderChecks.ToString();
             data["SkipHarmonyDependencyCheck"] = settings.SkipHarmonyDependencyCheck.ToString();
-            data["IncludeNexusPrereleaseFiles"] = settings.IncludeNexusPrereleaseFiles.ToString();
             data["GameBitness"] = settings.GameBitness ?? string.Empty;
             data["AutoCondenseSaves"] = settings.AutoCondenseSaves ?? "ask";
-            data["SaveBackupRetention"] = AppSettings.FormatSaveBackupRetention(settings.SaveBackupRetention);
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["InstalledShelteredApiVersion"] = settings.InstalledShelteredApiVersion ?? string.Empty;
+            data["InstalledApiVersions"] = SerializeInstalledApiVersions(settings.InstalledApiVersions);
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
-            data["EnableExperimentalPublishTab"] = settings.EnableExperimentalPublishTab.ToString();
-            data["LastSeenReleaseNoticeVersion"] = settings.LastSeenReleaseNoticeVersion ?? string.Empty;
-            data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
+            GameProfile profile = _profileRegistry.Resolve(settings.SelectedGameId);
+            data["NexusGameDomain"] = settings.NexusGameDomain ?? (profile.DefaultNexusGameDomain ?? string.Empty);
             string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;
             string protectedNexusApiKeyValue = NexusApiKeyProtector.Protect(plaintextNexusApiKey);
             if (!string.IsNullOrEmpty(protectedNexusApiKeyValue))
@@ -399,7 +407,7 @@ namespace Manager.Core.Services
                 _suppressWatcher = true;
                 
                 var lines = new List<string>();
-                lines.Add("# Sheltered Mod Manager Configuration");
+                lines.Add("# Mod Manager Configuration");
                 lines.Add("# Last modified: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
                 lines.Add("");
 
@@ -426,85 +434,59 @@ namespace Manager.Core.Services
             }
         }
 
-        private string TryAutoDetectGamePath()
+        private string TryAutoDetectGamePath(GameProfile profile)
         {
             try
             {
-                string[] exeNames = new string[] { "Sheltered.exe", "ShelteredWindows64_EOS.exe" };
-
-                // 1. Check if game is already running
-                try
-                {
-                    foreach (var exeName in exeNames)
-                    {
-                        var procs = System.Diagnostics.Process.GetProcessesByName(Path.GetFileNameWithoutExtension(exeName));
-                        if (procs.Length > 0)
-                        {
-                            string path = procs[0].MainModule.FileName;
-                            if (File.Exists(path)) return path;
-                        }
-                    }
-                }
-                catch { }
-
-                // 2. Check current directory and parents
-                string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                var searchDirs = new List<string>();
-                searchDirs.Add(exeDir);
-                
-                var parent = Directory.GetParent(exeDir);
-                if (parent != null) searchDirs.Add(parent.FullName);
-                
-                DirectoryInfo grandparent = null;
-                if (parent != null) grandparent = parent.Parent;
-                if (grandparent != null) searchDirs.Add(grandparent.FullName);
-
-                // 3. Check common Steam/GOG locations
-                try
-                {
-                    using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 356040"))
-                    {
-                        var installPath = key?.GetValue("InstallLocation") as string;
-                        if (!string.IsNullOrEmpty(installPath)) searchDirs.Add(installPath);
-                    }
-                }
-                catch { }
-
-                try
-                {
-                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
-                    {
-                        var steamPath = key?.GetValue("SteamPath") as string;
-                        if (!string.IsNullOrEmpty(steamPath))
-                        {
-                            searchDirs.Add(Path.Combine(steamPath, @"steamapps\common\Sheltered"));
-                        }
-                    }
-                }
-                catch { }
-
-                // Common C: paths
-                searchDirs.Add(@"C:\Program Files (x86)\Steam\steamapps\common\Sheltered");
-                searchDirs.Add(@"C:\Program Files\Steam\steamapps\common\Sheltered");
-                searchDirs.Add(@"C:\Program Files (x86)\GOG Galaxy\Games\Sheltered");
-                searchDirs.Add(@"C:\Program Files\GOG Galaxy\Games\Sheltered");
-                searchDirs.Add(@"C:\GOG Games\Sheltered");
-
-                foreach (var dir in searchDirs)
-                {
-                    if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
-
-                    foreach (var exeName in exeNames)
-                    {
-                        string path = Path.Combine(dir, exeName);
-                        if (File.Exists(path))
-                            return path;
-                    }
-                }
+                return _pathDetector.TryDetect(profile);
             }
             catch { }
 
             return string.Empty;
+        }
+
+        private static Dictionary<string, string> ParseInstalledApiVersions(string value)
+        {
+            Dictionary<string, string> versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (string.IsNullOrEmpty(value))
+                return versions;
+
+            string[] parts = value.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string[] pair = parts[i].Split(new char[] { '=' }, 2);
+                if (pair.Length != 2)
+                    continue;
+
+                string name = pair[0].Trim();
+                string version = pair[1].Trim();
+                if (!string.IsNullOrEmpty(name) && !string.IsNullOrEmpty(version))
+                    versions[name] = version;
+            }
+
+            return versions;
+        }
+
+        private static string SerializeInstalledApiVersions(Dictionary<string, string> versions)
+        {
+            if (versions == null || versions.Count == 0)
+                return string.Empty;
+
+            List<string> keys = new List<string>(versions.Keys);
+            keys.Sort(StringComparer.OrdinalIgnoreCase);
+
+            List<string> parts = new List<string>();
+            for (int i = 0; i < keys.Count; i++)
+            {
+                string key = keys[i];
+                string value;
+                if (!versions.TryGetValue(key, out value) || string.IsNullOrEmpty(value))
+                    continue;
+
+                parts.Add(key + "=" + value);
+            }
+
+            return string.Join(";", parts.ToArray());
         }
     }
 }

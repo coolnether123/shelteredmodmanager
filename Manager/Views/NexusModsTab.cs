@@ -18,7 +18,7 @@ namespace Manager.Views
     {
         private enum NexusViewMode { Updates, Installed, Discover }
         private enum NexusItemState { UpdateAvailable, InstalledCurrent, InstalledUnlinked, Available }
-        private enum NexusInstallFileChoice { Auto, Stable, Prerelease, Cancel }
+        private enum NexusInstallFileChoice { Stable, Prerelease, Cancel }
 
         private sealed class NexusBrowserItem
         {
@@ -168,7 +168,7 @@ namespace Manager.Views
             _managerStatusLabel.AutoEllipsis = true;
 
             ConfigurePrimaryButton(_refreshButton, "Refresh");
-            ConfigurePrimaryButton(_checkManagerButton, "Check SMM Update");
+            ConfigurePrimaryButton(_checkManagerButton, "Check Manager Update");
             _refreshButton.Size = new Size(120, 32);
             _checkManagerButton.Size = new Size(145, 32);
             _refreshButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
@@ -224,7 +224,6 @@ namespace Manager.Views
             _detailsPanel.Dock = DockStyle.Fill;
             _detailsPanel.Padding = new Padding(12);
             _detailsPanel.MinimumSize = new Size(340, 380);
-            _detailsPanel.ShowNexusActionButtons = true;
 
             Controls.Add(_detailsPanel);
             Controls.Add(_leftPanel);
@@ -247,8 +246,6 @@ namespace Manager.Views
             _primaryList.DrawItem += PrimaryList_DrawItem;
             _detailsPanel.OpenFolderClicked += DetailsPanel_OpenFolderClicked;
             _detailsPanel.WebsiteClicked += DetailsPanel_WebsiteClicked;
-            _detailsPanel.NexusUpdateRequested += DetailsPanel_NexusUpdateRequested;
-            _detailsPanel.NexusStableRequested += DetailsPanel_NexusStableRequested;
             _topPanel.Resize += delegate { LayoutTopPanel(); };
         }
 
@@ -352,23 +349,23 @@ namespace Manager.Views
         {
             if (_settings == null || _nexusService == null || !_settings.EnableNexusIntegration)
             {
-                _managerStatusLabel.Text = "SMM: disabled";
+                _managerStatusLabel.Text = "Manager: disabled";
                 return;
             }
             if (_settings.ManagerNexusModId <= 0)
             {
-                _managerStatusLabel.Text = "SMM: no manager ID";
+                _managerStatusLabel.Text = "Manager: no manager ID";
                 return;
             }
 
             string domain = GetGameDomain();
             if (string.IsNullOrEmpty(domain))
             {
-                _managerStatusLabel.Text = "SMM: no domain";
+                _managerStatusLabel.Text = "Manager: no domain";
                 return;
             }
 
-            _managerStatusLabel.Text = "SMM: checking...";
+            _managerStatusLabel.Text = "Manager: checking...";
             _checkManagerButton.Enabled = false;
 
             ThreadPool.QueueUserWorkItem(delegate
@@ -385,13 +382,13 @@ namespace Manager.Views
                         _checkManagerButton.Enabled = true;
                         if (!string.IsNullOrEmpty(error))
                         {
-                            _managerStatusLabel.Text = "SMM: check failed";
-                            EmitActivity("SMM update check failed: " + error);
+                            _managerStatusLabel.Text = "Manager: check failed";
+                            EmitActivity("Manager update check failed: " + error);
                             return;
                         }
                         if (remote == null)
                         {
-                            _managerStatusLabel.Text = "SMM: not found on Nexus";
+                            _managerStatusLabel.Text = "Manager: not found on Nexus";
                             return;
                         }
 
@@ -401,11 +398,11 @@ namespace Manager.Views
                         string remoteChannel = FormatReleaseChannelSuffix(remote.Version);
                         string localChannel = FormatReleaseChannelSuffix(_managerVersion);
                         if (comparison < 0)
-                            _managerStatusLabel.Text = "SMM: update available (" + remoteVersion + remoteChannel + ")";
+                            _managerStatusLabel.Text = "Manager: update available (" + remoteVersion + remoteChannel + ")";
                         else if (comparison == 0)
-                            _managerStatusLabel.Text = "SMM: current (" + localVersion + localChannel + ")";
+                            _managerStatusLabel.Text = "Manager: current (" + localVersion + localChannel + ")";
                         else
-                            _managerStatusLabel.Text = "SMM: local build newer than Nexus (" + localVersion + localChannel + ")";
+                            _managerStatusLabel.Text = "Manager: local build newer than Nexus (" + localVersion + localChannel + ")";
                     });
                 }
                 catch { }
@@ -601,26 +598,6 @@ namespace Manager.Views
 
         private void InstallSelectedButton_Click(object sender, EventArgs e)
         {
-            InstallSelectedRemote(NexusInstallFileChoice.Auto);
-        }
-
-        private void DetailsPanel_NexusUpdateRequested(object sender, EventArgs e)
-        {
-            var item = GetSelectedItem();
-            ModItem local = item != null ? item.LocalMod : null;
-            NexusInstallFileChoice choice = NexusInstallFileChoice.Stable;
-            if (local != null && NexusReleaseClassifier.IsPrerelease(local.NexusRemoteVersion))
-                choice = NexusInstallFileChoice.Prerelease;
-            InstallSelectedRemote(choice);
-        }
-
-        private void DetailsPanel_NexusStableRequested(object sender, EventArgs e)
-        {
-            InstallSelectedRemote(NexusInstallFileChoice.Stable);
-        }
-
-        private void InstallSelectedRemote(NexusInstallFileChoice requestedChoice)
-        {
             if (_settings == null || _nexusService == null)
                 return;
             if (!_settings.EnableNexusIntegration)
@@ -643,9 +620,6 @@ namespace Manager.Views
             if (selected == null)
                 return;
 
-            var selectedItem = GetSelectedItem();
-            NexusInstallTargetContext targetContext = NexusInstallTargetContext.FromInstalledMod(selectedItem != null ? selectedItem.LocalMod : null);
-
             _installSelectedButton.Enabled = false;
             EmitActivity("Installing from Nexus: " + selected.Name + ".");
 
@@ -665,7 +639,7 @@ namespace Manager.Views
                     gameId = selected.GameId;
                 }
 
-                var files = _nexusService.GetModFiles(selected.GameDomain, selected.ModId, out error);
+                var files = _nexusService.GetModFiles(gameId, selected.ModId, out error);
                 if (!string.IsNullOrEmpty(error) || files == null || files.Count == 0)
                 {
                     FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "No installable file was returned."));
@@ -673,27 +647,36 @@ namespace Manager.Views
                 }
 
                 var stableFile = _nexusService.SelectPreferredInstallFile(files, false);
-                bool includePrereleaseFiles = _settings != null && _settings.IncludeNexusPrereleaseFiles;
-                var prereleaseFile = includePrereleaseFiles ? _nexusService.SelectPreferredPrereleaseInstallFile(files) : null;
-                NexusInstallFileChoice resolvedChoice = requestedChoice;
-                NexusRemoteModFile file = SelectInstallFile(selected, stableFile, prereleaseFile, ref resolvedChoice);
-                if (resolvedChoice == NexusInstallFileChoice.Cancel)
-                    return;
+                var prereleaseFile = _nexusService.SelectPreferredPrereleaseInstallFile(files);
+                var file = stableFile ?? prereleaseFile;
+
+                if (prereleaseFile != null &&
+                    (stableFile == null || prereleaseFile.FileId != stableFile.FileId))
+                {
+                    NexusInstallFileChoice choice = PromptForPrereleaseInstall(selected, prereleaseFile, stableFile);
+                    if (choice == NexusInstallFileChoice.Cancel)
+                    {
+                        FinishInstallWithError("Install canceled.");
+                        return;
+                    }
+
+                    file = choice == NexusInstallFileChoice.Prerelease ? prereleaseFile : stableFile;
+                }
 
                 if (file == null)
                 {
-                    FinishInstallWithError(BuildMissingFileMessage(resolvedChoice, includePrereleaseFiles));
+                    FinishInstallWithError("Install failed: No stable installable file was returned.");
                     return;
                 }
 
-                string downloadUrl = _nexusService.GetV3DownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
+                string downloadUrl = _nexusService.GetV1DownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
                     FinishInstallWithError(RewriteDirectDownloadError(error));
                     return;
                 }
 
-                var result = _installService.DownloadAndInstall(downloadUrl, _settings.ModsPath, selected, file, targetContext, out error);
+                var result = _installService.DownloadAndInstall(downloadUrl, _settings.ModsPath, selected, file, out error);
                 if (result == null || !string.IsNullOrEmpty(error))
                 {
                     FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."));
@@ -716,49 +699,6 @@ namespace Manager.Views
                 }
                 catch { }
             });
-        }
-
-        private NexusRemoteModFile SelectInstallFile(
-            NexusRemoteMod selected,
-            NexusRemoteModFile stableFile,
-            NexusRemoteModFile prereleaseFile,
-            ref NexusInstallFileChoice requestedChoice)
-        {
-            if (requestedChoice == NexusInstallFileChoice.Stable)
-                return stableFile;
-
-            if (requestedChoice == NexusInstallFileChoice.Prerelease)
-                return prereleaseFile;
-
-            if (prereleaseFile != null &&
-                (stableFile == null || prereleaseFile.FileId != stableFile.FileId))
-            {
-                requestedChoice = PromptForPrereleaseInstall(selected, prereleaseFile, stableFile);
-                if (requestedChoice == NexusInstallFileChoice.Cancel)
-                {
-                    FinishInstallWithError("Install canceled.");
-                    return null;
-                }
-
-                return requestedChoice == NexusInstallFileChoice.Prerelease ? prereleaseFile : stableFile;
-            }
-
-            return stableFile ?? prereleaseFile;
-        }
-
-        private static string BuildMissingFileMessage(NexusInstallFileChoice requestedChoice, bool includePrereleaseFiles)
-        {
-            if (requestedChoice == NexusInstallFileChoice.Prerelease)
-                return includePrereleaseFiles
-                    ? "Install failed: No beta/prerelease manager-downloadable file was returned."
-                    : "Install failed: Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
-
-            if (requestedChoice == NexusInstallFileChoice.Stable)
-                return "Install failed: No stable manager-downloadable file was returned.";
-
-            return includePrereleaseFiles
-                ? "Install failed: No manager-downloadable file was returned."
-                : "Install failed: No stable manager-downloadable file was returned. Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
         }
 
         private NexusInstallFileChoice PromptForPrereleaseInstall(NexusRemoteMod mod, NexusRemoteModFile prereleaseFile, NexusRemoteModFile stableFile)
@@ -862,7 +802,7 @@ namespace Manager.Views
             string url = GetSelectedPageUrl();
             _openPageButton.Enabled = !string.IsNullOrEmpty(url);
 
-            bool canInstall = remote != null && _settings != null && _settings.EnableNexusIntegration && _settings.IsModsPathValid;
+            bool canInstall = remote != null && _settings != null && _settings.EnableNexusIntegration && _settings.IsModsPathValid && !string.IsNullOrEmpty(_settings.NexusApiKey);
             _installSelectedButton.Enabled = canInstall;
             _installSelectedButton.Text = "Install from Nexus";
             if (item != null && item.LocalMod != null && item.LocalMod.HasUpdateAvailable)
@@ -917,7 +857,7 @@ namespace Manager.Views
                 _summaryLabel.Text = "Installed " + _installedMods.Count + "   Linked " + _installedByNexusKey.Count + "   Updates " + CountUpdates(_installedMods) + "   Compatibility " + CountApiIssues(_installedMods) + BuildLastCheckedSuffix();
 
             if (string.IsNullOrEmpty(_managerStatusLabel.Text))
-                _managerStatusLabel.Text = "SMM: not checked";
+                _managerStatusLabel.Text = "Manager: not checked";
 
             _downloadLabel.Visible = !string.IsNullOrEmpty(_downloadLabel.Text);
             LayoutTopPanel();
@@ -1100,7 +1040,7 @@ namespace Manager.Views
         private string GetGameDomain()
         {
             if (_settings == null || string.IsNullOrEmpty(_settings.NexusGameDomain))
-                return "sheltered";
+                return string.Empty;
             return _settings.NexusGameDomain.Trim().ToLowerInvariant();
         }
 
@@ -1169,7 +1109,7 @@ namespace Manager.Views
                 return "Nexus: not connected";
 
             if (!status.IsConfigured)
-                return "Nexus: browse only (no API key)";
+                return "Nexus: no API key";
 
             if (!status.IsConnected)
                 return string.Equals(status.Summary, "Checking Nexus account...", StringComparison.OrdinalIgnoreCase)

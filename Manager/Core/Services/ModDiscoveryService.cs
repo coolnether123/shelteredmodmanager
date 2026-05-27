@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Manager.Core.Games.Models;
+using Manager.Core.Games.Profiles;
 using Manager.Core.Models;
 
 namespace Manager.Core.Services
@@ -13,18 +15,24 @@ namespace Manager.Core.Services
     public class ModDiscoveryService
     {
         private readonly ApiCompatibilityService _apiCompatibilityService;
+        private readonly GameProfile _profile;
+        private readonly string[] _knownApiAssemblyNames;
 
         public ModDiscoveryService(string installedModApiVersion)
+            : this(ShelteredGameProfileFactory.Create(), BuildInstalledVersions(installedModApiVersion))
         {
-            var installedVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (!string.IsNullOrEmpty(installedModApiVersion))
-                installedVersions["ModAPI"] = installedModApiVersion;
-            _apiCompatibilityService = new ApiCompatibilityService(installedVersions);
         }
 
         public ModDiscoveryService(Dictionary<string, string> installedApiVersions)
+            : this(ShelteredGameProfileFactory.Create(), installedApiVersions)
         {
-            _apiCompatibilityService = new ApiCompatibilityService(installedApiVersions);
+        }
+
+        public ModDiscoveryService(GameProfile profile, Dictionary<string, string> installedApiVersions)
+        {
+            _profile = profile ?? ShelteredGameProfileFactory.Create();
+            _knownApiAssemblyNames = _profile.GetApiAssemblyNames();
+            _apiCompatibilityService = new ApiCompatibilityService(installedApiVersions, _knownApiAssemblyNames);
         }
 
         /// <summary>
@@ -113,7 +121,7 @@ namespace Manager.Core.Services
         {
             try
             {
-                var assemblies = AssemblyVersionChecker.ScanModAssemblies(mod.RootPath);
+                var assemblies = AssemblyVersionChecker.ScanModAssemblies(mod.RootPath, _knownApiAssemblyNames);
                 var report = _apiCompatibilityService.Evaluate(assemblies, mod.DeclaredModApiVersion, mod.DeclaredShelteredApiVersion);
                 mod.ApiCompatibility = report;
 
@@ -137,18 +145,30 @@ namespace Manager.Core.Services
             catch { }
         }
 
-        private static bool IsReservedFolderName(string folderName)
+        private bool IsReservedFolderName(string folderName)
         {
             if (string.IsNullOrEmpty(folderName))
                 return true;
 
             if (string.Equals(folderName, "disabled", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(folderName, "SMM", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(folderName, "ModAPI", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (_profile != null &&
+                _profile.RuntimeLayout != null &&
+                string.Equals(folderName, _profile.RuntimeLayout.RuntimeFolderName, StringComparison.OrdinalIgnoreCase))
                 return true;
 
             // Manager internal working directories should never appear as mods.
             return folderName.StartsWith("_smm_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static Dictionary<string, string> BuildInstalledVersions(string installedModApiVersion)
+        {
+            Dictionary<string, string> installedVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(installedModApiVersion))
+                installedVersions["ModAPI"] = installedModApiVersion;
+            return installedVersions;
         }
 
     }

@@ -55,9 +55,18 @@ namespace Manager
 
         public static Dictionary<string, string> GetInstalledApiVersions(string smmPath)
         {
+            return GetInstalledApiVersions(smmPath, GetDefaultKnownApiAssemblies());
+        }
+
+        public static Dictionary<string, string> GetInstalledApiVersions(string smmPath, IEnumerable<string> apiNames)
+        {
             var versions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            AddInstalledApiVersion(versions, smmPath, "ModAPI");
-            AddInstalledApiVersion(versions, smmPath, "ShelteredAPI");
+            if (apiNames == null)
+                apiNames = GetDefaultKnownApiAssemblies();
+
+            foreach (string apiName in apiNames)
+                AddInstalledApiVersion(versions, smmPath, apiName);
+
             return versions;
         }
 
@@ -91,7 +100,13 @@ namespace Manager
         /// </summary>
         public static List<ModAssemblyVersion> GetModApiReferences(string modDllPath)
         {
+            return GetModApiReferences(modDllPath, GetDefaultKnownApiAssemblies());
+        }
+
+        public static List<ModAssemblyVersion> GetModApiReferences(string modDllPath, IEnumerable<string> knownApiAssemblies)
+        {
             var results = new List<ModAssemblyVersion>();
+            HashSet<string> knownApis = ToKnownApiSet(knownApiAssemblies);
 
             try
             {
@@ -107,7 +122,7 @@ namespace Manager
 
                 foreach (var reference in references)
                 {
-                    if (!IsKnownApiAssembly(reference.Name))
+                    if (!IsKnownApiAssembly(reference.Name, knownApis))
                         continue;
 
                     results.Add(new ModAssemblyVersion
@@ -159,7 +174,13 @@ namespace Manager
         /// <returns>List of ModAssemblyVersion structs</returns>
         public static List<ModAssemblyVersion> ScanModAssemblies(string modPath)
         {
+            return ScanModAssemblies(modPath, GetDefaultKnownApiAssemblies());
+        }
+
+        public static List<ModAssemblyVersion> ScanModAssemblies(string modPath, IEnumerable<string> knownApiAssemblies)
+        {
             var results = new List<ModAssemblyVersion>();
+            HashSet<string> knownApis = ToKnownApiSet(knownApiAssemblies);
 
             try
             {
@@ -178,13 +199,12 @@ namespace Manager
                     // Skip known framework/dependency DLLs
                     string fileName = Path.GetFileName(dllPath);
                     if (fileName.Equals("0Harmony.dll", StringComparison.OrdinalIgnoreCase) ||
-                        fileName.Equals("ModAPI.dll", StringComparison.OrdinalIgnoreCase) ||
-                        fileName.Equals("ShelteredAPI.dll", StringComparison.OrdinalIgnoreCase))
+                        IsKnownApiAssemblyFile(fileName, knownApis))
                     {
                         continue;
                     }
 
-                    var references = GetModApiReferences(dllPath);
+                    var references = GetModApiReferences(dllPath, knownApis);
                     if (references.Count == 0)
                     {
                         results.Add(new ModAssemblyVersion { DllName = fileName, ApiName = string.Empty, ApiVersion = string.Empty });
@@ -234,10 +254,44 @@ namespace Manager
             return null;
         }
 
-        private static bool IsKnownApiAssembly(string assemblyName)
+        private static IEnumerable<string> GetDefaultKnownApiAssemblies()
         {
-            return string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(assemblyName, "ShelteredAPI", StringComparison.OrdinalIgnoreCase);
+            return new string[] { "ModAPI", "ShelteredAPI", "ModAPI.Networking" };
+        }
+
+        private static HashSet<string> ToKnownApiSet(IEnumerable<string> knownApiAssemblies)
+        {
+            HashSet<string> knownApis = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (knownApiAssemblies != null)
+            {
+                foreach (string api in knownApiAssemblies)
+                {
+                    if (!string.IsNullOrEmpty(api))
+                        knownApis.Add(api);
+                }
+            }
+
+            if (knownApis.Count == 0)
+            {
+                foreach (string api in GetDefaultKnownApiAssemblies())
+                    knownApis.Add(api);
+            }
+
+            return knownApis;
+        }
+
+        private static bool IsKnownApiAssemblyFile(string fileName, HashSet<string> knownApis)
+        {
+            if (string.IsNullOrEmpty(fileName))
+                return false;
+
+            string assemblyName = Path.GetFileNameWithoutExtension(fileName);
+            return IsKnownApiAssembly(assemblyName, knownApis);
+        }
+
+        private static bool IsKnownApiAssembly(string assemblyName, HashSet<string> knownApis)
+        {
+            return !string.IsNullOrEmpty(assemblyName) && knownApis != null && knownApis.Contains(assemblyName);
         }
     }
 }

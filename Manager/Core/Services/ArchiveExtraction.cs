@@ -51,12 +51,6 @@ namespace Manager.Core.Services
                             return false;
 
                         List<ZipEntry> entries = ReadCentralDirectory(reader, centralDirectory);
-                        if (entries.Count == 0)
-                        {
-                            errorMessage = "Archive is empty.";
-                            return false;
-                        }
-
                         string destinationRoot = EnsureTrailingDirectorySeparator(Path.GetFullPath(destinationPath));
 
                         for (int i = 0; i < entries.Count; i++)

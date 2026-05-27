@@ -8,10 +8,6 @@ namespace Manager.Core.Models
     /// </summary>
     public class AppSettings
     {
-        public const int SaveBackupRetentionAlways = -1;
-        public const int SaveBackupRetentionDisabled = 0;
-        public const int DefaultSaveBackupRetention = 3;
-
         // Paths
         private string _gamePath = string.Empty;
         private string _modsPath = string.Empty;
@@ -22,16 +18,14 @@ namespace Manager.Core.Models
         private HashSet<string> _logCategories;
         private bool _ignoreOrderChecks = false;
         private bool _skipHarmonyDependencyCheck = false;
-        private bool _includeNexusPrereleaseFiles = false;
         private string _gameBitness;
         private string _installedModApiVersion;
         private string _installedShelteredApiVersion;
+        private Dictionary<string, string> _installedApiVersions;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
-        private int _saveBackupRetention = DefaultSaveBackupRetention; // 0 disables, positive keeps N, -1 keeps all
         private bool _enableNexusIntegration = true;
-        private bool _enableExperimentalPublishTab = false;
-        private string _lastSeenReleaseNoticeVersion = string.Empty;
         private string _nexusGameDomain = "sheltered";
+        private string _selectedGameId = "sheltered";
         private string _nexusApiKey = string.Empty;
         private int _managerNexusModId = 1;
         private int _windowX = int.MinValue;
@@ -47,6 +41,7 @@ namespace Manager.Core.Models
             _logCategories.Add("Loader");
             _logCategories.Add("Plugin");
             _logCategories.Add("Assembly");
+            _installedApiVersions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
         public string GamePath 
@@ -102,12 +97,6 @@ namespace Manager.Core.Models
             get { return _skipHarmonyDependencyCheck; } 
             set { _skipHarmonyDependencyCheck = value; } 
         }
-
-        public bool IncludeNexusPrereleaseFiles
-        {
-            get { return _includeNexusPrereleaseFiles; }
-            set { _includeNexusPrereleaseFiles = value; }
-        }
         
         public string GameBitness 
         { 
@@ -126,17 +115,17 @@ namespace Manager.Core.Models
             get { return _installedShelteredApiVersion; }
             set { _installedShelteredApiVersion = value; }
         }
+
+        public Dictionary<string, string> InstalledApiVersions
+        {
+            get { return _installedApiVersions; }
+            set { _installedApiVersions = value ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); }
+        }
         
         public string AutoCondenseSaves 
         { 
             get { return _autoCondenseSaves; } 
             set { _autoCondenseSaves = value; } 
-        }
-
-        public int SaveBackupRetention
-        {
-            get { return _saveBackupRetention; }
-            set { _saveBackupRetention = value; }
         }
 
         public bool EnableNexusIntegration
@@ -145,22 +134,16 @@ namespace Manager.Core.Models
             set { _enableNexusIntegration = value; }
         }
 
-        public bool EnableExperimentalPublishTab
-        {
-            get { return _enableExperimentalPublishTab; }
-            set { _enableExperimentalPublishTab = value; }
-        }
-
-        public string LastSeenReleaseNoticeVersion
-        {
-            get { return _lastSeenReleaseNoticeVersion; }
-            set { _lastSeenReleaseNoticeVersion = value; }
-        }
-
         public string NexusGameDomain
         {
             get { return _nexusGameDomain; }
             set { _nexusGameDomain = value; }
+        }
+
+        public string SelectedGameId
+        {
+            get { return _selectedGameId; }
+            set { _selectedGameId = value; }
         }
 
         public string NexusApiKey
@@ -229,34 +212,6 @@ namespace Manager.Core.Models
         public bool IsModsPathValid 
         { 
             get { return !string.IsNullOrEmpty(ModsPath) && System.IO.Directory.Exists(ModsPath); } 
-        }
-
-        public static int ParseSaveBackupRetention(string raw, int fallback)
-        {
-            string value = (raw ?? string.Empty).Trim().ToLowerInvariant();
-            if (value.Length == 0)
-                return fallback;
-
-            if (value == "none" || value == "disabled" || value == "disable" || value == "off" || value == "false" || value == "0")
-                return SaveBackupRetentionDisabled;
-
-            if (value == "always" || value == "forever" || value == "all" || value == "unlimited")
-                return SaveBackupRetentionAlways;
-
-            int count;
-            if (int.TryParse(value, out count))
-                return count <= 0 ? SaveBackupRetentionDisabled : count;
-
-            return fallback;
-        }
-
-        public static string FormatSaveBackupRetention(int value)
-        {
-            if (value < 0)
-                return "always";
-            if (value == 0)
-                return "none";
-            return value.ToString();
         }
     }
 }

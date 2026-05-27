@@ -22,7 +22,7 @@
     <UpdateRequired>false</UpdateRequired>
     <MapFileExtensions>true</MapFileExtensions>
     <ApplicationRevision>0</ApplicationRevision>
-    <ApplicationVersion>2.0.0.1</ApplicationVersion>
+    <ApplicationVersion>1.3.0.3</ApplicationVersion>
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
@@ -63,7 +63,7 @@
     <Reference Include="System.Security" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
+      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -98,6 +98,23 @@
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
+    <!-- Game Profiles -->
+    <Compile Include="Core\Games\GameProfileRegistry.cs" />
+    <Compile Include="Core\Games\Detection\GamePathDetector.cs" />
+    <Compile Include="Core\Games\Models\GameAboutContent.cs" />
+    <Compile Include="Core\Games\Models\GameApiAssembly.cs" />
+    <Compile Include="Core\Games\Models\GameProfile.cs" />
+    <Compile Include="Core\Games\Models\GameRuntimeLayout.cs" />
+    <Compile Include="Core\Games\Models\RuntimeFileRequirement.cs" />
+    <Compile Include="Core\Games\Profiles\GenericUnityGameProfileFactory.cs" />
+    <Compile Include="Core\Games\Profiles\ShelteredGameProfileFactory.cs" />
+    <Compile Include="Core\Games\Saves\ISaveDiscoveryStrategy.cs" />
+    <Compile Include="Core\Games\Saves\NoOpSaveDiscoveryStrategy.cs" />
+    <Compile Include="Core\Games\Saves\ShelteredSaveDiscoveryStrategy.cs" />
+    <Compile Include="Core\Games\Services\DoorstopConfigurationService.cs" />
+    <Compile Include="Core\Games\Services\GameLaunchConfigurationService.cs" />
+    <Compile Include="Core\Games\Services\GamePreflightService.cs" />
+    <Compile Include="Core\Games\Services\GameProcessLauncher.cs" />
     <!-- Core Models -->
     <Compile Include="Core\Models\ModItem.cs" />
     <Compile Include="Core\Models\AppSettings.cs" />
@@ -108,7 +125,6 @@
     <Compile Include="Core\Models\NexusRemoteMod.cs" />
     <Compile Include="Core\Models\NexusRemoteModFile.cs" />
     <Compile Include="Core\Models\NexusAccountStatus.cs" />
-    <Compile Include="Core\Models\NexusUploadDraft.cs" />
     <!-- Core Services -->
     <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
     <Compile Include="Core\Services\SettingsService.cs" />
@@ -118,16 +134,10 @@
     <Compile Include="Core\Services\LoadOrderService.cs" />
     <Compile Include="Core\Services\SaveDiscoveryService.cs" />
     <Compile Include="Core\Services\NexusGraphQlClient.cs" />
-    <Compile Include="Core\Services\NexusV3RestClient.cs" />
     <Compile Include="Core\Services\NexusReferenceResolver.cs" />
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
-    <Compile Include="Core\Services\NexusRequestHeaders.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
-    <Compile Include="Core\Services\NexusUploadDraftService.cs" />
-    <Compile Include="Core\Services\NexusUploadOwnershipService.cs" />
-    <Compile Include="Core\Services\NexusUploadPackageService.cs" />
-    <Compile Include="Core\Services\ModPackageSafety.cs" />
     <Compile Include="Core\Services\ArchiveExtraction.cs" />
     <Compile Include="Core\Services\NexusInstallService.cs" />
     <!-- Custom Controls -->
@@ -153,19 +163,8 @@
     <Compile Include="Views\NexusModsTab.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="Views\NexusUploadTab.cs">
-      <SubType>UserControl</SubType>
-    </Compile>
     <Compile Include="Views\SettingsTab.cs">
       <SubType>UserControl</SubType>
-    </Compile>
-    <Compile Include="Views\SettingsTab.Layout.cs">
-      <SubType>UserControl</SubType>
-      <DependentUpon>SettingsTab.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Views\SettingsTab.Theme.cs">
-      <SubType>UserControl</SubType>
-      <DependentUpon>SettingsTab.cs</DependentUpon>
     </Compile>
     <Compile Include="Views\AboutTab.cs">
       <SubType>UserControl</SubType>
@@ -188,6 +187,14 @@
       <ProductName>.NET Framework 3.5 SP1</ProductName>
       <Install>true</Install>
     </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ModAPI.Networking\ModAPI.Networking.csproj">
+      <Project>{CCA14239-FC04-4AC6-897E-A146595FA893}</Project>
+      <Name>ModAPI.Networking</Name>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>False</Private>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

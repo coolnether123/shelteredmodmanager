@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using Manager.Core.Games.Models;
 using Manager.Core.Models;
 using Manager.Core.Services;
 
@@ -11,22 +12,14 @@ namespace Manager.Views
     public delegate void DarkModeChangedHandler(bool isDark);
     public delegate void ResetWindowRequestedHandler();
 
-    public partial class SettingsTab : UserControl
+    public class SettingsTab : UserControl
     {
-        private Panel _scrollPanel;
-        private Panel _contentPanel;
         private Label _themeLabel;
         private CheckBox _darkModeCheckBox;
         private Label _autoCondenseLabel;
         private ComboBox _autoCondenseCombo;
-        private Label _saveBackupsLabel;
-        private Label _saveBackupRetentionLabel;
-        private ComboBox _saveBackupRetentionCombo;
-        private Label _saveBackupRetentionCountLabel;
-        private NumericUpDown _saveBackupRetentionCountNumeric;
         private Label _nexusLabel;
         private CheckBox _enableNexusCheckBox;
-        private CheckBox _enableExperimentalPublishCheckBox;
         private Label _nexusApiKeyLabel;
         private TextBox _nexusApiKeyTextBox;
         private Button _nexusApiHelpButton;
@@ -49,7 +42,6 @@ namespace Manager.Views
         private CheckBox _verboseLoggingCheckBox;
         private CheckBox _skipHarmonyCheckBox;
         private CheckBox _ignoreOrderCheckBox;
-        private CheckBox _includeNexusPrereleaseCheckBox;
         private Button _resetButton;
         private Button _resetWindowButton;
         private Timer _saveDebounceTimer;
@@ -60,8 +52,10 @@ namespace Manager.Views
         private bool _nexusApiKeyRevealed;
         private bool _skipNextNexusApiAutoHide;
         private bool _showAdvancedNexusOptions;
+        private bool _supportsSaveOptions = true;
+        private string _defaultNexusGameDomain = "sheltered";
         private ToolTip _helpToolTip;
-        private readonly ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
+        private ManagerBooleanOptionsService _runtimeOptionsService = new ManagerBooleanOptionsService();
         private readonly List<CheckBox> _runtimeFeatureCheckBoxes = new List<CheckBox>();
         private IList<ManagerBooleanOptionRecord> _runtimeOptions = new List<ManagerBooleanOptionRecord>();
         private const string NexusApiKeyHelpUrl = "https://www.nexusmods.com/users/myaccount?tab=api";
@@ -89,24 +83,27 @@ namespace Manager.Views
             UpdateNexusStatusLabels();
         }
 
+        public void ApplyGameProfile(GameProfile profile)
+        {
+            if (profile == null)
+                return;
+
+            _supportsSaveOptions = profile.SupportsSaveDiscovery;
+            _defaultNexusGameDomain = profile.DefaultNexusGameDomain ?? string.Empty;
+            _runtimeOptionsService = new ManagerBooleanOptionsService(
+                profile.BuiltInRuntimeOptions,
+                profile.GetApiAssemblyNames());
+            _autoCondenseLabel.Visible = _supportsSaveOptions;
+            _autoCondenseCombo.Visible = _supportsSaveOptions;
+            LoadRuntimeOptions();
+            UpdateDynamicLayout();
+        }
+
         private void InitializeComponent()
         {
             SuspendLayout();
-            Padding = new Padding(0);
-            AutoScroll = false;
-
-            _scrollPanel = new Panel();
-            _scrollPanel.Dock = DockStyle.Fill;
-            _scrollPanel.AutoScroll = true;
-            _scrollPanel.BorderStyle = BorderStyle.None;
-
-            _contentPanel = new Panel();
-            _contentPanel.Location = new Point(0, 0);
-            _contentPanel.Size = new Size(SettingsTabLayout.MinContentWidth, 600);
-            _contentPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-
-            _scrollPanel.SuspendLayout();
-            _contentPanel.SuspendLayout();
+            Padding = new Padding(20);
+            AutoScroll = true;
 
             _themeLabel = new Label();
             _themeLabel.Text = "Appearance";
@@ -129,34 +126,6 @@ namespace Manager.Views
             _autoCondenseCombo.Items.AddRange(new object[] { "Ask each time", "Always organize", "Never organize" });
             _autoCondenseCombo.SelectedIndex = 0;
 
-            _saveBackupsLabel = new Label();
-            _saveBackupsLabel.Text = "Save Backups";
-            _saveBackupsLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
-            _saveBackupsLabel.AutoSize = true;
-
-            _saveBackupRetentionLabel = new Label();
-            _saveBackupRetentionLabel.Text = "Backup Retention:";
-            _saveBackupRetentionLabel.Font = new Font("Segoe UI", 10f);
-            _saveBackupRetentionLabel.AutoSize = true;
-
-            _saveBackupRetentionCombo = new ComboBox();
-            _saveBackupRetentionCombo.Font = new Font("Segoe UI", 10f);
-            _saveBackupRetentionCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-            _saveBackupRetentionCombo.Items.AddRange(new object[] { "Keep limited snapshots", "No automatic backups", "Keep all snapshots" });
-            _saveBackupRetentionCombo.SelectedIndex = 0;
-
-            _saveBackupRetentionCountLabel = new Label();
-            _saveBackupRetentionCountLabel.Text = "Snapshots per save:";
-            _saveBackupRetentionCountLabel.Font = new Font("Segoe UI", 10f);
-            _saveBackupRetentionCountLabel.AutoSize = true;
-
-            _saveBackupRetentionCountNumeric = new NumericUpDown();
-            _saveBackupRetentionCountNumeric.Font = new Font("Segoe UI", 10f);
-            _saveBackupRetentionCountNumeric.Minimum = 1;
-            _saveBackupRetentionCountNumeric.Maximum = 999;
-            _saveBackupRetentionCountNumeric.Value = 3;
-            _saveBackupRetentionCountNumeric.Width = 80;
-
             _nexusLabel = new Label();
             _nexusLabel.Text = "Nexus";
             _nexusLabel.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
@@ -166,11 +135,6 @@ namespace Manager.Views
             _enableNexusCheckBox.Text = "Enable Nexus features";
             _enableNexusCheckBox.Font = new Font("Segoe UI", 10f);
             _enableNexusCheckBox.AutoSize = true;
-
-            _enableExperimentalPublishCheckBox = new CheckBox();
-            _enableExperimentalPublishCheckBox.Text = "Enable Experimental Publish tab";
-            _enableExperimentalPublishCheckBox.Font = new Font("Segoe UI", 10f);
-            _enableExperimentalPublishCheckBox.AutoSize = true;
 
             _nexusApiKeyLabel = new Label();
             _nexusApiKeyLabel.Text = "Personal API Key:";
@@ -205,7 +169,7 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Font = new Font("Segoe UI", 9f);
             _nexusDownloadSummaryLabel.AutoSize = false;
             _nexusDownloadSummaryLabel.Size = new Size(680, 38);
-            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
+            _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and can still be limited by Nexus account and app approval.";
 
             _nexusAdvancedToggleLink = new LinkLabel();
             _nexusAdvancedToggleLink.Text = "Show Advanced Nexus Options";
@@ -249,13 +213,10 @@ namespace Manager.Views
             _helpToolTip.InitialDelay = 350;
             _helpToolTip.ReshowDelay = 200;
             _helpToolTip.ShowAlways = true;
-            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads and account validation; browsing and update checks do not require it.");
+            _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads; browsing and update checks do not require it.");
             _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
             _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
-            _helpToolTip.SetToolTip(_enableExperimentalPublishCheckBox, "Shows the experimental Publish tab for preparing Nexus upload drafts and packages.");
             _helpToolTip.SetToolTip(_nexusAdvancedToggleLink, "Show internal Nexus settings that most players should never need to edit.");
-            _helpToolTip.SetToolTip(_saveBackupRetentionCombo, "Controls automatic pre-overwrite save snapshots stored under Mods/ModAPI/Backups/Saves.");
-            _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
 
             _separator = new Panel();
             _separator.Height = 1;
@@ -293,7 +254,7 @@ namespace Manager.Views
             _devSettingsGroup = new GroupBox();
             _devSettingsGroup.Text = "Developer Options";
             _devSettingsGroup.Font = new Font("Segoe UI", 10f);
-            _devSettingsGroup.Size = new Size(500, 160);
+            _devSettingsGroup.Size = new Size(500, 130);
             _devSettingsGroup.Visible = false;
 
             _verboseLoggingCheckBox = new CheckBox();
@@ -314,17 +275,9 @@ namespace Manager.Views
             _ignoreOrderCheckBox.AutoSize = true;
             _ignoreOrderCheckBox.Location = new Point(15, 85);
 
-            _includeNexusPrereleaseCheckBox = new CheckBox();
-            _includeNexusPrereleaseCheckBox.Text = "Include Nexus beta/prerelease files";
-            _includeNexusPrereleaseCheckBox.Font = new Font("Segoe UI", 10f);
-            _includeNexusPrereleaseCheckBox.AutoSize = true;
-            _includeNexusPrereleaseCheckBox.Location = new Point(15, 115);
-            _helpToolTip.SetToolTip(_includeNexusPrereleaseCheckBox, "Also inspect Nexus file versions so beta/prerelease uploads can appear as updates.");
-
             _devSettingsGroup.Controls.Add(_verboseLoggingCheckBox);
             _devSettingsGroup.Controls.Add(_skipHarmonyCheckBox);
             _devSettingsGroup.Controls.Add(_ignoreOrderCheckBox);
-            _devSettingsGroup.Controls.Add(_includeNexusPrereleaseCheckBox);
 
             _resetButton = new Button();
             _resetButton.Text = "Reset to Defaults";
@@ -338,40 +291,29 @@ namespace Manager.Views
             _resetWindowButton.Size = new Size(190, 35);
             _resetWindowButton.FlatStyle = FlatStyle.Flat;
 
-            _contentPanel.Controls.Add(_themeLabel);
-            _contentPanel.Controls.Add(_darkModeCheckBox);
-            _contentPanel.Controls.Add(_autoCondenseLabel);
-            _contentPanel.Controls.Add(_autoCondenseCombo);
-            _contentPanel.Controls.Add(_saveBackupsLabel);
-            _contentPanel.Controls.Add(_saveBackupRetentionLabel);
-            _contentPanel.Controls.Add(_saveBackupRetentionCombo);
-            _contentPanel.Controls.Add(_saveBackupRetentionCountLabel);
-            _contentPanel.Controls.Add(_saveBackupRetentionCountNumeric);
-            _contentPanel.Controls.Add(_nexusLabel);
-            _contentPanel.Controls.Add(_enableNexusCheckBox);
-            _contentPanel.Controls.Add(_enableExperimentalPublishCheckBox);
-            _contentPanel.Controls.Add(_nexusApiKeyLabel);
-            _contentPanel.Controls.Add(_nexusApiKeyTextBox);
-            _contentPanel.Controls.Add(_nexusApiHelpButton);
-            _contentPanel.Controls.Add(_nexusApiRevealButton);
-            _contentPanel.Controls.Add(_nexusAccountSummaryLabel);
-            _contentPanel.Controls.Add(_nexusDownloadSummaryLabel);
-            _contentPanel.Controls.Add(_nexusAdvancedToggleLink);
-            _contentPanel.Controls.Add(_nexusAdvancedPanel);
-            _contentPanel.Controls.Add(_separator);
-            _contentPanel.Controls.Add(_runtimeFeaturesLabel);
-            _contentPanel.Controls.Add(_runtimeFeaturesRefreshButton);
-            _contentPanel.Controls.Add(_runtimeFeaturesPanel);
-            _contentPanel.Controls.Add(_devModeCheckBox);
-            _contentPanel.Controls.Add(_devSettingsGroup);
-            _contentPanel.Controls.Add(_resetButton);
-            _contentPanel.Controls.Add(_resetWindowButton);
-
-            _scrollPanel.Controls.Add(_contentPanel);
-            Controls.Add(_scrollPanel);
-            _contentPanel.ResumeLayout(false);
-            _scrollPanel.ResumeLayout(false);
-            ResumeLayout(false);
+            Controls.Add(_themeLabel);
+            Controls.Add(_darkModeCheckBox);
+            Controls.Add(_autoCondenseLabel);
+            Controls.Add(_autoCondenseCombo);
+            Controls.Add(_nexusLabel);
+            Controls.Add(_enableNexusCheckBox);
+            Controls.Add(_nexusApiKeyLabel);
+            Controls.Add(_nexusApiKeyTextBox);
+            Controls.Add(_nexusApiHelpButton);
+            Controls.Add(_nexusApiRevealButton);
+            Controls.Add(_nexusAccountSummaryLabel);
+            Controls.Add(_nexusDownloadSummaryLabel);
+            Controls.Add(_nexusAdvancedToggleLink);
+            Controls.Add(_nexusAdvancedPanel);
+            Controls.Add(_separator);
+            Controls.Add(_runtimeFeaturesLabel);
+            Controls.Add(_runtimeFeaturesRefreshButton);
+            Controls.Add(_runtimeFeaturesPanel);
+            Controls.Add(_devModeCheckBox);
+            Controls.Add(_devSettingsGroup);
+            Controls.Add(_resetButton);
+            Controls.Add(_resetWindowButton);
+            ResumeLayout();
             UpdateDynamicLayout();
         }
 
@@ -389,12 +331,8 @@ namespace Manager.Views
             _verboseLoggingCheckBox.CheckedChanged += VerboseLoggingCheckBox_CheckedChanged;
             _skipHarmonyCheckBox.CheckedChanged += SkipHarmonyCheckBox_CheckedChanged;
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
-            _includeNexusPrereleaseCheckBox.CheckedChanged += IncludeNexusPrereleaseCheckBox_CheckedChanged;
             _autoCondenseCombo.SelectedIndexChanged += AutoCondenseCombo_SelectedIndexChanged;
-            _saveBackupRetentionCombo.SelectedIndexChanged += SaveBackupRetentionCombo_SelectedIndexChanged;
-            _saveBackupRetentionCountNumeric.ValueChanged += SaveBackupRetentionCountNumeric_ValueChanged;
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
-            _enableExperimentalPublishCheckBox.CheckedChanged += EnableExperimentalPublishCheckBox_CheckedChanged;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
             _nexusApiKeyTextBox.KeyDown += NexusApiKeyTextBox_KeyDown;
@@ -426,6 +364,88 @@ namespace Manager.Views
                 SettingsChanged(_settings);
         }
 
+        private void UpdateDynamicLayout()
+        {
+            int x = 20;
+            int y = 20;
+            y = LayoutAppearanceSection(x, y);
+            y = LayoutNexusSection(x, y);
+            y = LayoutRuntimeFeaturesSection(x, y);
+            y = LayoutDeveloperSection(x, y);
+            LayoutActionButtons(x, y);
+        }
+
+        private int LayoutAppearanceSection(int x, int y)
+        {
+            _themeLabel.Location = new Point(x, y);
+            y += 30;
+            _darkModeCheckBox.Location = new Point(x + 10, y);
+            y += 42;
+            if (_supportsSaveOptions)
+            {
+                _autoCondenseLabel.Location = new Point(x + 10, y);
+                y += 24;
+                _autoCondenseCombo.Location = new Point(x + 10, y);
+                _autoCondenseCombo.Width = 240;
+                y += 52;
+            }
+            return y;
+        }
+
+        private int LayoutNexusSection(int x, int y)
+        {
+            _nexusLabel.Location = new Point(x, y);
+            y += 30;
+            _enableNexusCheckBox.Location = new Point(x + 10, y);
+            y += 32;
+            _nexusApiKeyLabel.Location = new Point(x + 10, y + 4);
+            _nexusApiKeyTextBox.Location = new Point(x + 155, y);
+            _nexusApiHelpButton.Location = new Point(x + 395, y - 1);
+            _nexusApiRevealButton.Location = new Point(x + 495, y - 1);
+            y += 38;
+            _nexusAccountSummaryLabel.Location = new Point(x + 10, y);
+            y += 24;
+            _nexusDownloadSummaryLabel.Location = new Point(x + 10, y);
+            y += 44;
+            _nexusAdvancedToggleLink.Location = new Point(x + 10, y);
+            y += 24;
+            _nexusAdvancedPanel.Location = new Point(x + 10, y);
+            _nexusAdvancedPanel.Visible = _showAdvancedNexusOptions;
+            if (_showAdvancedNexusOptions)
+                y += _nexusAdvancedPanel.Height + 14;
+            else
+                y += 6;
+            _separator.Location = new Point(x, y);
+            return y + 24;
+        }
+
+        private int LayoutRuntimeFeaturesSection(int x, int y)
+        {
+            _runtimeFeaturesLabel.Location = new Point(x, y);
+            _runtimeFeaturesRefreshButton.Location = new Point(x + 618, y - 2);
+            y += 32;
+            _runtimeFeaturesPanel.Location = new Point(x, y);
+            _runtimeFeaturesPanel.Width = 700;
+            return y + _runtimeFeaturesPanel.Height + 24;
+        }
+
+        private int LayoutDeveloperSection(int x, int y)
+        {
+            _devModeCheckBox.Location = new Point(x, y);
+            y += 36;
+            _devSettingsGroup.Location = new Point(x, y);
+            _devSettingsGroup.Visible = _devModeCheckBox.Checked;
+            if (_devSettingsGroup.Visible)
+                y += _devSettingsGroup.Height + 15;
+            return y;
+        }
+
+        private void LayoutActionButtons(int x, int y)
+        {
+            _resetButton.Location = new Point(x, y);
+            _resetWindowButton.Location = new Point(_resetButton.Right + 10, y);
+        }
+
         private void SetNexusInputsEnabled(bool enabled)
         {
             _nexusApiKeyLabel.Enabled = enabled;
@@ -436,7 +456,6 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Enabled = enabled;
             _nexusAdvancedToggleLink.Enabled = enabled;
             _nexusAdvancedPanel.Enabled = enabled;
-            _enableExperimentalPublishCheckBox.Enabled = enabled;
             _nexusDomainLabel.Enabled = enabled;
             _nexusDomainTextBox.Enabled = enabled;
             _managerNexusModIdLabel.Enabled = enabled;
@@ -455,10 +474,7 @@ namespace Manager.Views
             {
                 CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
                 if (checkBox != null)
-                {
                     _runtimeFeaturesPanel.Controls.Remove(checkBox);
-                    checkBox.Dispose();
-                }
             }
 
             _runtimeFeatureCheckBoxes.Clear();
@@ -476,9 +492,7 @@ namespace Manager.Views
                 checkBox.Text = BuildRuntimeOptionText(option);
                 checkBox.Checked = option.value;
                 checkBox.Tag = option;
-                checkBox.AutoSize = false;
-                checkBox.AutoEllipsis = true;
-                checkBox.Size = new Size(Math.Max(260, _runtimeFeaturesPanel.Width - 24), 24);
+                checkBox.AutoSize = true;
                 checkBox.Font = new Font("Segoe UI", 9.5f);
                 checkBox.Location = new Point(12, y);
                 checkBox.CheckedChanged += RuntimeFeatureCheckBox_CheckedChanged;
@@ -528,17 +542,14 @@ namespace Manager.Views
                 _verboseLoggingCheckBox.Checked = string.Equals(_settings.LogLevel, "Debug", StringComparison.OrdinalIgnoreCase);
                 _skipHarmonyCheckBox.Checked = _settings.SkipHarmonyDependencyCheck;
                 _ignoreOrderCheckBox.Checked = _settings.IgnoreOrderChecks;
-                _includeNexusPrereleaseCheckBox.Checked = _settings.IncludeNexusPrereleaseFiles;
 
                 string condensePref = (_settings.AutoCondenseSaves ?? "ask").ToLowerInvariant();
                 if (condensePref == "yes" || condensePref == "true") _autoCondenseCombo.SelectedIndex = 1;
                 else if (condensePref == "no" || condensePref == "false") _autoCondenseCombo.SelectedIndex = 2;
                 else _autoCondenseCombo.SelectedIndex = 0;
 
-                ApplySaveBackupRetentionToUi(_settings.SaveBackupRetention);
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
-                _enableExperimentalPublishCheckBox.Checked = _settings.EnableExperimentalPublishTab;
-                _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
+                _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? _defaultNexusGameDomain;
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
                 _nexusApiKeyRevealed = false;
                 ApplyNexusApiKeyDisplayMode();
@@ -563,16 +574,13 @@ namespace Manager.Views
             _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
             _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
             _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
-            _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
 
             string choice = "ask";
             if (_autoCondenseCombo.SelectedIndex == 1) choice = "yes";
             else if (_autoCondenseCombo.SelectedIndex == 2) choice = "no";
             _settings.AutoCondenseSaves = choice;
-            _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
 
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
-            _settings.EnableExperimentalPublishTab = _enableExperimentalPublishCheckBox.Checked;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
             if (IsNexusApiKeyEditable())
                 _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
@@ -584,58 +592,12 @@ namespace Manager.Views
                 _settings.ManagerNexusModId = 0;
         }
 
-        private void ApplySaveBackupRetentionToUi(int retention)
-        {
-            bool previousSuppress = _suppressEvents;
-            _suppressEvents = true;
-            try
-            {
-                if (retention == AppSettings.SaveBackupRetentionDisabled)
-                {
-                    _saveBackupRetentionCombo.SelectedIndex = 1;
-                }
-                else if (retention < 0)
-                {
-                    _saveBackupRetentionCombo.SelectedIndex = 2;
-                }
-                else
-                {
-                    _saveBackupRetentionCombo.SelectedIndex = 0;
-                    _saveBackupRetentionCountNumeric.Value = Math.Max(
-                        _saveBackupRetentionCountNumeric.Minimum,
-                        Math.Min(_saveBackupRetentionCountNumeric.Maximum, retention));
-                }
-
-                UpdateSaveBackupRetentionInputs();
-            }
-            finally
-            {
-                _suppressEvents = previousSuppress;
-            }
-        }
-
-        private int ReadSaveBackupRetentionFromUi()
-        {
-            if (_saveBackupRetentionCombo.SelectedIndex == 1)
-                return AppSettings.SaveBackupRetentionDisabled;
-            if (_saveBackupRetentionCombo.SelectedIndex == 2)
-                return AppSettings.SaveBackupRetentionAlways;
-            return (int)_saveBackupRetentionCountNumeric.Value;
-        }
-
-        private void UpdateSaveBackupRetentionInputs()
-        {
-            bool limited = _saveBackupRetentionCombo.SelectedIndex == 0;
-            _saveBackupRetentionCountLabel.Enabled = limited;
-            _saveBackupRetentionCountNumeric.Enabled = limited;
-        }
-
         private void UpdateNexusStatusLabels()
         {
             if (_nexusAccountStatus == null)
             {
                 _nexusAccountSummaryLabel.Text = "Nexus account: not checked yet.";
-                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and may still require Nexus download authorization.";
+                _nexusDownloadSummaryLabel.Text = "Browsing and update checks work without an API key. Direct installs need an API key and can still be limited by Nexus account and app approval.";
                 return;
             }
 
@@ -753,13 +715,6 @@ namespace Manager.Views
             TriggerSave();
         }
 
-        private void IncludeNexusPrereleaseCheckBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (_settings != null)
-                _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
-            TriggerSave();
-        }
-
         private void AutoCondenseCombo_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (_suppressEvents || _settings == null)
@@ -772,37 +727,11 @@ namespace Manager.Views
             TriggerSave();
         }
 
-        private void SaveBackupRetentionCombo_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            UpdateSaveBackupRetentionInputs();
-            if (_suppressEvents || _settings == null)
-                return;
-
-            _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
-            TriggerSave();
-        }
-
-        private void SaveBackupRetentionCountNumeric_ValueChanged(object sender, EventArgs e)
-        {
-            if (_suppressEvents || _settings == null)
-                return;
-
-            _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
-            TriggerSave();
-        }
-
         private void EnableNexusCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_settings != null)
                 _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
             SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
-            TriggerSave();
-        }
-
-        private void EnableExperimentalPublishCheckBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (_settings != null)
-                _settings.EnableExperimentalPublishTab = _enableExperimentalPublishCheckBox.Checked;
             TriggerSave();
         }
 
@@ -964,5 +893,134 @@ namespace Manager.Views
                 ResetWindowRequested();
         }
 
+        public void ApplyTheme(bool isDark)
+        {
+            _isDarkMode = isDark;
+            if (isDark)
+            {
+                BackColor = Color.FromArgb(45, 45, 48);
+                _themeLabel.ForeColor = Color.White;
+                _darkModeCheckBox.ForeColor = Color.White;
+                _autoCondenseLabel.ForeColor = Color.White;
+                _autoCondenseCombo.BackColor = Color.FromArgb(60, 60, 62);
+                _autoCondenseCombo.ForeColor = Color.White;
+                _autoCondenseCombo.FlatStyle = FlatStyle.Flat;
+                _nexusLabel.ForeColor = Color.White;
+                _enableNexusCheckBox.ForeColor = Color.White;
+                _nexusApiKeyLabel.ForeColor = Color.White;
+                _nexusApiKeyTextBox.BackColor = Color.FromArgb(60, 60, 62);
+                _nexusApiKeyTextBox.ForeColor = Color.White;
+                _nexusAccountSummaryLabel.ForeColor = Color.White;
+                _nexusDownloadSummaryLabel.ForeColor = Color.Gainsboro;
+                _nexusAdvancedToggleLink.LinkColor = Color.LightBlue;
+                _nexusAdvancedPanel.BackColor = Color.FromArgb(50, 50, 52);
+                _nexusDomainLabel.ForeColor = Color.White;
+                _nexusDomainTextBox.BackColor = Color.FromArgb(60, 60, 62);
+                _nexusDomainTextBox.ForeColor = Color.White;
+                _managerNexusModIdLabel.ForeColor = Color.White;
+                _managerNexusModIdTextBox.BackColor = Color.FromArgb(60, 60, 62);
+                _managerNexusModIdTextBox.ForeColor = Color.White;
+                _separator.BackColor = Color.FromArgb(92, 92, 96);
+                ApplyRuntimeFeatureTheme(true);
+                _devModeCheckBox.ForeColor = Color.White;
+                _devSettingsGroup.ForeColor = Color.White;
+                _devSettingsGroup.BackColor = Color.FromArgb(50, 50, 52);
+                _verboseLoggingCheckBox.ForeColor = Color.White;
+                _skipHarmonyCheckBox.ForeColor = Color.White;
+                _ignoreOrderCheckBox.ForeColor = Color.White;
+                ApplyButtonTheme(_nexusApiHelpButton, true);
+                ApplyButtonTheme(_nexusApiRevealButton, true);
+                ApplyButtonTheme(_resetButton, true);
+                ApplyButtonTheme(_resetWindowButton, true);
+            }
+            else
+            {
+                BackColor = SystemColors.Control;
+                _themeLabel.ForeColor = SystemColors.ControlText;
+                _darkModeCheckBox.ForeColor = SystemColors.ControlText;
+                _autoCondenseLabel.ForeColor = SystemColors.ControlText;
+                _autoCondenseCombo.BackColor = SystemColors.Window;
+                _autoCondenseCombo.ForeColor = SystemColors.WindowText;
+                _autoCondenseCombo.FlatStyle = FlatStyle.Standard;
+                _nexusLabel.ForeColor = SystemColors.ControlText;
+                _enableNexusCheckBox.ForeColor = SystemColors.ControlText;
+                _nexusApiKeyLabel.ForeColor = SystemColors.ControlText;
+                _nexusApiKeyTextBox.BackColor = SystemColors.Window;
+                _nexusApiKeyTextBox.ForeColor = SystemColors.WindowText;
+                _nexusAccountSummaryLabel.ForeColor = SystemColors.ControlText;
+                _nexusDownloadSummaryLabel.ForeColor = SystemColors.ControlText;
+                _nexusAdvancedToggleLink.LinkColor = SystemColors.HotTrack;
+                _nexusAdvancedPanel.BackColor = SystemColors.Control;
+                _nexusDomainLabel.ForeColor = SystemColors.ControlText;
+                _nexusDomainTextBox.BackColor = SystemColors.Window;
+                _nexusDomainTextBox.ForeColor = SystemColors.WindowText;
+                _managerNexusModIdLabel.ForeColor = SystemColors.ControlText;
+                _managerNexusModIdTextBox.BackColor = SystemColors.Window;
+                _managerNexusModIdTextBox.ForeColor = SystemColors.WindowText;
+                _separator.BackColor = SystemColors.ControlDark;
+                ApplyRuntimeFeatureTheme(false);
+                _devModeCheckBox.ForeColor = SystemColors.ControlText;
+                _devSettingsGroup.ForeColor = SystemColors.ControlText;
+                _devSettingsGroup.BackColor = SystemColors.Control;
+                _verboseLoggingCheckBox.ForeColor = SystemColors.ControlText;
+                _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
+                _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
+                ApplyButtonTheme(_nexusApiHelpButton, false);
+                ApplyButtonTheme(_nexusApiRevealButton, false);
+                ApplyButtonTheme(_resetButton, false);
+                ApplyButtonTheme(_resetWindowButton, false);
+            }
+        }
+
+        private void ApplyRuntimeFeatureTheme(bool isDark)
+        {
+            if (_runtimeFeaturesLabel == null)
+                return;
+
+            if (isDark)
+            {
+                _runtimeFeaturesLabel.ForeColor = Color.White;
+                _runtimeFeaturesPanel.BackColor = Color.FromArgb(50, 50, 52);
+                _runtimeFeaturesEmptyLabel.ForeColor = Color.Gainsboro;
+                ApplyButtonTheme(_runtimeFeaturesRefreshButton, true);
+                for (int i = 0; i < _runtimeFeatureCheckBoxes.Count; i++)
+                {
+                    CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
+                    if (checkBox != null)
+                        checkBox.ForeColor = Color.White;
+                }
+            }
+            else
+            {
+                _runtimeFeaturesLabel.ForeColor = SystemColors.ControlText;
+                _runtimeFeaturesPanel.BackColor = SystemColors.Control;
+                _runtimeFeaturesEmptyLabel.ForeColor = SystemColors.ControlText;
+                ApplyButtonTheme(_runtimeFeaturesRefreshButton, false);
+                for (int i = 0; i < _runtimeFeatureCheckBoxes.Count; i++)
+                {
+                    CheckBox checkBox = _runtimeFeatureCheckBoxes[i];
+                    if (checkBox != null)
+                        checkBox.ForeColor = SystemColors.ControlText;
+                }
+            }
+        }
+
+        private static void ApplyButtonTheme(Button button, bool isDark)
+        {
+            if (button == null)
+                return;
+            if (isDark)
+            {
+                button.BackColor = Color.FromArgb(70, 70, 70);
+                button.ForeColor = Color.White;
+                button.FlatAppearance.BorderColor = Color.FromArgb(100, 100, 100);
+            }
+            else
+            {
+                button.BackColor = SystemColors.Control;
+                button.ForeColor = SystemColors.ControlText;
+                button.FlatAppearance.BorderColor = SystemColors.ControlDark;
+            }
+        }
     }
 }

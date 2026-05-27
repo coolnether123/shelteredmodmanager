@@ -2,11 +2,11 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 // General assembly metadata.
-[assembly: AssemblyTitle("Sheltered Mod Manager")]
-[assembly: AssemblyDescription("Desktop manager for the Sheltered Mod Manager modding framework.")]
+[assembly: AssemblyTitle("Mod Manager")]
+[assembly: AssemblyDescription("Desktop mod manager with game-profile based runtime integration.")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Coolnether123")]
-[assembly: AssemblyProduct("Sheltered Mod Manager")]
+[assembly: AssemblyProduct("Mod Manager")]
 [assembly: AssemblyCopyright("Original loader foundation Copyright 2019 benjaminfoo; maintained 2025-present by Coolnether123")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -26,6 +26,6 @@ using System.Runtime.InteropServices;
 //
 // You can use "*" for the build and revision numbers.
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion("2.0.0.1")]
-[assembly: AssemblyInformationalVersion("2.0.0-beta.1")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.3")]
+[assembly: AssemblyInformationalVersion("1.3.0-beta.3")]

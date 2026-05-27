@@ -260,7 +260,6 @@ namespace Manager.Core.Services
                     var about = new ModTypes.ModAboutInfo();
                     about.id = m.Id;
                     about.name = m.DisplayName;
-                    about.version = m.Version;
                     about.dependsOn = m.DependsOn;
                     about.loadAfter = m.LoadAfter;
                     about.loadBefore = m.LoadBefore;
@@ -291,7 +290,7 @@ namespace Manager.Core.Services
                         if (skipHarmony && errorMsg.ToLowerInvariant().Contains("harmony"))
                             continue;
 
-                        var match = System.Text.RegularExpressions.Regex.Match(errorMsg, @"^Mod '([^']*)'");
+                        var match = System.Text.RegularExpressions.Regex.Match(errorMsg, @"^Mod '([^']*)' has a missing hard dependency:");
                         if (match.Success)
                         {
                             validation.HardIssueModIds.Add(match.Groups[1].Value);

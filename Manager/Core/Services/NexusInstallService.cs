@@ -16,30 +16,6 @@ namespace Manager.Core.Services
         public string VerificationSummary { get; set; }
     }
 
-    public class NexusInstallTargetContext
-    {
-        public string ExpectedLocalModId { get; set; }
-        public string ExistingInstalledPath { get; set; }
-        public string ExpectedVersion { get; set; }
-
-        public static NexusInstallTargetContext FromInstalledMod(ModItem mod)
-        {
-            if (mod == null)
-                return null;
-
-            var context = new NexusInstallTargetContext();
-            context.ExpectedLocalModId = mod.Id;
-            context.ExistingInstalledPath = mod.RootPath;
-            context.ExpectedVersion = mod.NexusRemoteVersion;
-            return context;
-        }
-
-        public bool HasExpectedLocalMod
-        {
-            get { return !string.IsNullOrEmpty(ExpectedLocalModId); }
-        }
-    }
-
     /// <summary>
     /// Handles download/extract/install workflow for Nexus archives.
     /// </summary>
@@ -72,11 +48,6 @@ namespace Manager.Core.Services
                     TryDeleteFile(zip);
                 }
 
-                foreach (var download in Directory.GetFiles(tempRoot, "*.download", SearchOption.TopDirectoryOnly))
-                {
-                    TryDeleteFile(download);
-                }
-
                 // Remove leftover extract folders.
                 foreach (var extractDir in Directory.GetDirectories(tempRoot, "extract_*", SearchOption.TopDirectoryOnly))
                 {
@@ -94,17 +65,6 @@ namespace Manager.Core.Services
             string modsPath,
             NexusRemoteMod mod,
             NexusRemoteModFile file,
-            out string errorMessage)
-        {
-            return DownloadAndInstall(downloadUrl, modsPath, mod, file, null, out errorMessage);
-        }
-
-        public NexusInstallResult DownloadAndInstall(
-            string downloadUrl,
-            string modsPath,
-            NexusRemoteMod mod,
-            NexusRemoteModFile file,
-            NexusInstallTargetContext targetContext,
             out string errorMessage)
         {
             errorMessage = null;
@@ -133,12 +93,6 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            if (!ValidateTargetContext(modsPath, targetContext, out errorMessage))
-                return null;
-
-            if (!CanWriteToDirectory(modsPath, out errorMessage))
-                return null;
-
             string binRoot = GetManagerBinPath();
             var tempRoot = Path.Combine(binRoot, "_smm_temp");
             if (!Directory.Exists(tempRoot))
@@ -146,7 +100,7 @@ namespace Manager.Core.Services
 
             string archivePath = Path.Combine(
                 tempRoot,
-                "nexus_" + mod.ModId + "_" + file.FileId + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".download");
+                "nexus_" + mod.ModId + "_" + file.FileId + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".zip");
 
             string extractPath = Path.Combine(
                 tempRoot,
@@ -166,13 +120,6 @@ namespace Manager.Core.Services
                 return null;
             }
 
-            if (!IsSupportedZipArchive(archivePath))
-            {
-                TryDeleteFile(archivePath);
-                errorMessage = "Unsupported archive format. Direct Nexus install currently supports ZIP archives only; this downloaded file is not a ZIP archive.";
-                return null;
-            }
-
             if (!_archiveExtractor.TryExtract(archivePath, extractPath, out errorMessage))
             {
                 TryDeleteDirectory(extractPath);
@@ -183,34 +130,16 @@ namespace Manager.Core.Services
             string sourceModRoot = FindModRoot(extractPath);
             if (string.IsNullOrEmpty(sourceModRoot) || !Directory.Exists(sourceModRoot))
             {
-                TryDeleteDirectory(extractPath);
-                TryDeleteFile(archivePath);
                 errorMessage = "Downloaded archive did not contain a recognizable mod folder.";
                 return null;
             }
 
-            global::Manager.ModTypes.ModAboutInfo sourceAbout;
-            string sourceModId;
-            if (!ModPackageSafety.TryReadRequiredAbout(sourceModRoot, out sourceAbout, out sourceModId, out errorMessage))
-            {
-                TryDeleteDirectory(extractPath);
-                TryDeleteFile(archivePath);
-                errorMessage = "Downloaded archive is not a valid SMM mod package: " + errorMessage;
-                return null;
-            }
+            string targetFolderName = Path.GetFileName(sourceModRoot);
+            if (string.IsNullOrEmpty(targetFolderName))
+                targetFolderName = "NexusMod_" + mod.ModId;
 
-            string targetFolderName = ResolveInstallFolderName(sourceModRoot, extractPath, sourceAbout, mod);
-
-            string targetPath = ResolveTargetPath(modsPath, targetContext, targetFolderName);
-            if (!ModPackageSafety.ValidateInstallTarget(modsPath, targetPath, sourceModId, targetContext, out errorMessage))
-            {
-                TryDeleteDirectory(extractPath);
-                TryDeleteFile(archivePath);
-                return null;
-            }
-
+            string targetPath = Path.Combine(modsPath, targetFolderName);
             string backupPath = null;
-            bool movedToBackup = false;
             string verificationSummary = string.Empty;
 
             try
@@ -221,19 +150,20 @@ namespace Manager.Core.Services
                     if (!Directory.Exists(backupRoot))
                         Directory.CreateDirectory(backupRoot);
 
-                    backupPath = CreateUniqueBackupPath(backupRoot, targetFolderName);
+                    backupPath = Path.Combine(
+                        backupRoot,
+                        targetFolderName + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss"));
 
                     Directory.Move(targetPath, backupPath);
-                    movedToBackup = true;
                 }
 
                 CopyDirectoryRecursive(sourceModRoot, targetPath);
                 WriteNexusMetadata(targetPath, mod.GameDomain, mod.ModId);
 
-                if (!VerifyInstalledMod(sourceModRoot, targetPath, mod, file, targetContext, out verificationSummary, out errorMessage))
+                if (!VerifyInstalledMod(sourceModRoot, targetPath, mod, file, out verificationSummary, out errorMessage))
                 {
                     errorMessage = "Install verification failed: " + errorMessage;
-                    RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
+                    RestoreBackupAfterFailedInstall(targetPath, backupPath, ref errorMessage);
                     return null;
                 }
 
@@ -242,7 +172,7 @@ namespace Manager.Core.Services
             catch (Exception ex)
             {
                 errorMessage = "Install failed: " + ex.Message;
-                RestoreBackupAfterFailedInstall(targetPath, backupPath, movedToBackup, ref errorMessage);
+                RestoreBackupAfterFailedInstall(targetPath, backupPath, ref errorMessage);
                 return null;
             }
             finally
@@ -259,170 +189,25 @@ namespace Manager.Core.Services
             return result;
         }
 
-        private static bool ValidateTargetContext(string modsPath, NexusInstallTargetContext targetContext, out string errorMessage)
-        {
-            errorMessage = null;
-            if (targetContext == null || string.IsNullOrEmpty(targetContext.ExistingInstalledPath))
-                return true;
-
-            string fullModsPath = EnsureTrailingDirectorySeparator(Path.GetFullPath(modsPath));
-            string fullTargetPath = Path.GetFullPath(targetContext.ExistingInstalledPath);
-            if (!fullTargetPath.StartsWith(fullModsPath, StringComparison.OrdinalIgnoreCase))
-            {
-                errorMessage = "Selected installed mod is outside the configured Mods folder.";
-                return false;
-            }
-
-            if (!Directory.Exists(fullTargetPath))
-            {
-                errorMessage = "Selected installed mod folder no longer exists: " + fullTargetPath;
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool CanWriteToDirectory(string directoryPath, out string errorMessage)
-        {
-            errorMessage = null;
-            try
-            {
-                string testPath = Path.Combine(directoryPath, ".smm_write_test_" + Guid.NewGuid().ToString("N") + ".tmp");
-                using (FileStream stream = File.Open(testPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                {
-                    byte[] marker = System.Text.Encoding.ASCII.GetBytes("SMM");
-                    stream.Write(marker, 0, marker.Length);
-                }
-
-                TryDeleteFile(testPath);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                errorMessage = "Mods folder is not writable. Run SMM with permission to update this Sheltered install or choose a writable test install. " + ex.Message;
-                return false;
-            }
-        }
-
-        private static string ResolveTargetPath(
-            string modsPath,
-            NexusInstallTargetContext targetContext,
-            string fallbackFolderName)
-        {
-            if (targetContext != null && !string.IsNullOrEmpty(targetContext.ExistingInstalledPath))
-                return Path.GetFullPath(targetContext.ExistingInstalledPath);
-
-            return Path.Combine(modsPath, fallbackFolderName);
-        }
-
-        private static string ResolveInstallFolderName(
-            string sourceModRoot,
-            string extractPath,
-            global::Manager.ModTypes.ModAboutInfo sourceAbout,
-            NexusRemoteMod mod)
-        {
-            string folderName = Path.GetFileName(sourceModRoot);
-            if (IsSameDirectory(sourceModRoot, extractPath))
-            {
-                folderName = FirstNonEmpty(
-                    sourceAbout != null ? sourceAbout.id : null,
-                    sourceAbout != null ? sourceAbout.name : null,
-                    mod != null ? mod.Name : null,
-                    mod != null && mod.ModId > 0 ? "NexusMod_" + mod.ModId.ToString() : "NexusMod");
-            }
-
-            folderName = SanitizeFolderName(folderName);
-            return string.IsNullOrEmpty(folderName) ? "NexusMod" : folderName;
-        }
-
-        private static bool IsSameDirectory(string left, string right)
-        {
-            if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
-                return false;
-
-            return string.Equals(
-                Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string FirstNonEmpty(params string[] values)
-        {
-            if (values == null)
-                return string.Empty;
-
-            for (int i = 0; i < values.Length; i++)
-            {
-                if (!string.IsNullOrEmpty(values[i]))
-                    return values[i].Trim();
-            }
-
-            return string.Empty;
-        }
-
-        private static string SanitizeFolderName(string value)
-        {
-            string text = string.IsNullOrEmpty(value) ? string.Empty : value.Trim();
-            char[] invalid = Path.GetInvalidFileNameChars();
-            for (int i = 0; i < invalid.Length; i++)
-                text = text.Replace(invalid[i], '_');
-
-            return text.Trim(' ', '.');
-        }
-
-        private static string CreateUniqueBackupPath(string backupRoot, string targetFolderName)
-        {
-            string safeName = string.IsNullOrEmpty(targetFolderName) ? "NexusMod" : targetFolderName;
-            foreach (char invalid in Path.GetInvalidFileNameChars())
-                safeName = safeName.Replace(invalid, '_');
-
-            string prefix = safeName + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            string candidate = Path.Combine(backupRoot, prefix);
-            int suffix = 1;
-            while (Directory.Exists(candidate) || File.Exists(candidate))
-            {
-                candidate = Path.Combine(backupRoot, prefix + "_" + suffix.ToString());
-                suffix++;
-            }
-
-            return candidate;
-        }
-
-        private static void RestoreBackupAfterFailedInstall(string targetPath, string backupPath, bool movedToBackup, ref string errorMessage)
+        private static void RestoreBackupAfterFailedInstall(string targetPath, string backupPath, ref string errorMessage)
         {
             if (string.IsNullOrEmpty(targetPath))
                 return;
 
             try
             {
-                if (movedToBackup)
+                bool removedFailedInstall = Directory.Exists(targetPath);
+                TryDeleteDirectory(targetPath);
+                if (!string.IsNullOrEmpty(backupPath) && Directory.Exists(backupPath))
                 {
-                    TryDeleteDirectory(targetPath);
-                    if (!string.IsNullOrEmpty(backupPath) && Directory.Exists(backupPath))
-                    {
-                        Directory.Move(backupPath, targetPath);
-                        AppendInstallRollbackMessage(ref errorMessage, "Backup restored after failed install.");
-                    }
-                    else
-                    {
-                        AppendInstallRollbackMessage(ref errorMessage, "Backup was moved but could not be found for restore.");
-                    }
-                    return;
+                    Directory.Move(backupPath, targetPath);
+                    AppendInstallRollbackMessage(ref errorMessage, "Backup restored after failed install.");
                 }
-
-                if (string.IsNullOrEmpty(backupPath))
+                else if (removedFailedInstall)
                 {
-                    bool removedFailedInstall = Directory.Exists(targetPath);
-                    TryDeleteDirectory(targetPath);
-                    if (removedFailedInstall)
-                    {
-                        AppendInstallRollbackMessage(ref errorMessage, "Removed failed install.");
-                        System.Diagnostics.Debug.WriteLine("Nexus install rollback: removed failed install at " + targetPath);
-                    }
-                    return;
+                    AppendInstallRollbackMessage(ref errorMessage, "Removed failed install.");
+                    System.Diagnostics.Debug.WriteLine("Nexus install rollback: removed failed install at " + targetPath);
                 }
-
-                AppendInstallRollbackMessage(ref errorMessage, "Existing install was left in place because backup creation did not complete.");
             }
             catch (Exception restoreEx)
             {
@@ -448,7 +233,6 @@ namespace Manager.Core.Services
             string targetPath,
             NexusRemoteMod mod,
             NexusRemoteModFile file,
-            NexusInstallTargetContext targetContext,
             out string verificationSummary,
             out string errorMessage)
         {
@@ -463,21 +247,17 @@ namespace Manager.Core.Services
 
             global::Manager.ModTypes.ModAboutInfo about;
             string normalizedId;
-            if (!ModPackageSafety.TryReadRequiredAbout(targetPath, out about, out normalizedId, out errorMessage))
-                return false;
-
-            if (targetContext != null && targetContext.HasExpectedLocalMod &&
-                !string.Equals(NormalizeModId(about.id), NormalizeModId(targetContext.ExpectedLocalModId), StringComparison.OrdinalIgnoreCase))
+            string displayName;
+            string previewPath;
+            if (!global::Manager.ModAboutReader.TryLoad(targetPath, out about, out normalizedId, out displayName, out previewPath) || about == null)
             {
-                errorMessage = "Installed mod id '" + about.id + "' does not match selected installed mod id '" + targetContext.ExpectedLocalModId + "'.";
+                errorMessage = "Installed mod is missing a readable About/About.json file.";
                 return false;
             }
 
-            string expectedVersion = GetExpectedInstalledVersion(targetContext, mod, file);
-            if (!string.IsNullOrEmpty(expectedVersion) &&
-                !string.Equals(NexusVersionComparer.Normalize(about.version), NexusVersionComparer.Normalize(expectedVersion), StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrEmpty(about.id) || string.IsNullOrEmpty(about.name) || string.IsNullOrEmpty(about.version))
             {
-                errorMessage = "Installed mod version '" + about.version + "' does not match expected Nexus version '" + expectedVersion + "'.";
+                errorMessage = "Installed About.json is missing required id, name, or version metadata.";
                 return false;
             }
 
@@ -492,59 +272,10 @@ namespace Manager.Core.Services
                 return false;
 
             verificationSummary = "About.json id=" + about.id
-                + ", version=" + about.version
                 + ", copied file set verified"
                 + ", nexusModId=" + (mod != null ? mod.ModId.ToString() : "unknown")
                 + ", fileId=" + (file != null ? file.FileId.ToString() : "unknown") + ".";
             return true;
-        }
-
-        private static string GetExpectedInstalledVersion(NexusInstallTargetContext targetContext, NexusRemoteMod mod, NexusRemoteModFile file)
-        {
-            if (file != null && !string.IsNullOrEmpty(file.Version))
-                return file.Version.Trim();
-
-            if (mod != null && !string.IsNullOrEmpty(mod.Version))
-                return mod.Version.Trim();
-
-            if (targetContext != null && !string.IsNullOrEmpty(targetContext.ExpectedVersion))
-                return targetContext.ExpectedVersion.Trim();
-
-            return string.Empty;
-        }
-
-        private static string NormalizeModId(string modId)
-        {
-            return ModPackageSafety.NormalizeModId(modId);
-        }
-
-        private static bool IsSupportedZipArchive(string archivePath)
-        {
-            if (string.IsNullOrEmpty(archivePath) || !File.Exists(archivePath))
-                return false;
-
-            try
-            {
-                using (FileStream stream = File.Open(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                {
-                    if (stream.Length < 4)
-                        return false;
-
-                    byte[] header = new byte[4];
-                    int read = stream.Read(header, 0, header.Length);
-                    if (read < 4)
-                        return false;
-
-                    return header[0] == 0x50
-                        && header[1] == 0x4b
-                        && (header[2] == 0x03 || header[2] == 0x05 || header[2] == 0x07)
-                        && (header[3] == 0x04 || header[3] == 0x06 || header[3] == 0x08);
-                }
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         private static bool VerifyCopiedFiles(string sourceModRoot, string targetPath, out string errorMessage)
@@ -605,18 +336,6 @@ namespace Manager.Core.Services
             if (fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
                 return fullPath.Substring(fullRoot.Length);
             return Path.GetFileName(path);
-        }
-
-        private static string EnsureTrailingDirectorySeparator(string path)
-        {
-            if (string.IsNullOrEmpty(path))
-                return Path.DirectorySeparatorChar.ToString();
-
-            char last = path[path.Length - 1];
-            if (last == Path.DirectorySeparatorChar || last == Path.AltDirectorySeparatorChar)
-                return path;
-
-            return path + Path.DirectorySeparatorChar;
         }
 
         private static string GetManagerBinPath()
