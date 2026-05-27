@@ -103,6 +103,8 @@ namespace Manager.Core.Games.Detection
 
         private static void AddSteamAndGogHints(List<string> searchDirs, GameProfile profile, Action<string> log)
         {
+            string steamPath = null;
+
             try
             {
                 if (!string.IsNullOrEmpty(profile.SteamAppId))
@@ -126,7 +128,7 @@ namespace Manager.Core.Games.Detection
                 {
                     using (Microsoft.Win32.RegistryKey key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
                     {
-                        string steamPath = key != null ? key.GetValue("SteamPath") as string : null;
+                        steamPath = key != null ? key.GetValue("SteamPath") as string : null;
                         if (!string.IsNullOrEmpty(steamPath))
                             AddDirectory(searchDirs, Path.Combine(steamPath, Path.Combine("steamapps", Path.Combine("common", profile.SteamCommonFolderName))));
                     }
@@ -136,6 +138,90 @@ namespace Manager.Core.Games.Detection
             {
                 LogDetection(log, "Could not read Steam library registry hint: " + ex.Message);
             }
+
+            AddSteamLibraryFolders(searchDirs, profile, steamPath, log);
+        }
+
+        private static void AddSteamLibraryFolders(List<string> searchDirs, GameProfile profile, string steamPath, Action<string> log)
+        {
+            if (profile == null || string.IsNullOrEmpty(steamPath))
+                return;
+
+            string libraryFoldersPath = Path.Combine(Path.Combine(steamPath, "steamapps"), "libraryfolders.vdf");
+            if (!File.Exists(libraryFoldersPath))
+                return;
+
+            try
+            {
+                string[] lines = File.ReadAllLines(libraryFoldersPath);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string libraryPath = TryReadVdfValue(lines[i], "path");
+                    if (string.IsNullOrEmpty(libraryPath))
+                        continue;
+
+                    AddSteamLibraryInstallDirectory(searchDirs, profile, libraryPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogDetection(log, "Could not read Steam library folders: " + ex.Message);
+            }
+        }
+
+        private static void AddSteamLibraryInstallDirectory(List<string> searchDirs, GameProfile profile, string libraryPath)
+        {
+            string steamAppsPath = Path.Combine(libraryPath, "steamapps");
+            string commonPath = Path.Combine(steamAppsPath, "common");
+
+            string installDir = ReadSteamInstallDirFromManifest(Path.Combine(steamAppsPath, "appmanifest_" + profile.SteamAppId + ".acf"));
+            if (!string.IsNullOrEmpty(installDir))
+            {
+                AddDirectory(searchDirs, Path.Combine(commonPath, installDir));
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(profile.SteamCommonFolderName))
+                AddDirectory(searchDirs, Path.Combine(commonPath, profile.SteamCommonFolderName));
+        }
+
+        private static string ReadSteamInstallDirFromManifest(string manifestPath)
+        {
+            if (string.IsNullOrEmpty(manifestPath) || !File.Exists(manifestPath))
+                return string.Empty;
+
+            try
+            {
+                string[] lines = File.ReadAllLines(manifestPath);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string installDir = TryReadVdfValue(lines[i], "installdir");
+                    if (!string.IsNullOrEmpty(installDir))
+                        return installDir;
+                }
+            }
+            catch
+            {
+            }
+
+            return string.Empty;
+        }
+
+        private static string TryReadVdfValue(string line, string key)
+        {
+            if (string.IsNullOrEmpty(line) || string.IsNullOrEmpty(key))
+                return string.Empty;
+
+            string normalized = line.Trim();
+            string prefix = "\"" + key + "\"";
+            if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+
+            string value = normalized.Substring(prefix.Length).Trim();
+            if (value.Length >= 2 && value[0] == '"' && value[value.Length - 1] == '"')
+                value = value.Substring(1, value.Length - 2);
+
+            return value.Replace(@"\\", @"\");
         }
 
         private static string FindExecutableInDirectories(GameProfile profile, IList<string> searchDirs)

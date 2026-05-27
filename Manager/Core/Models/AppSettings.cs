@@ -24,8 +24,8 @@ namespace Manager.Core.Models
         private Dictionary<string, string> _installedApiVersions;
         private string _autoCondenseSaves = "ask"; // yes, no, or ask
         private bool _enableNexusIntegration = true;
-        private string _nexusGameDomain = "sheltered";
-        private string _selectedGameId = "sheltered";
+        private string _nexusGameDomain = string.Empty;
+        private string _selectedGameId = "paralives";
         private string _nexusApiKey = string.Empty;
         private int _managerNexusModId = 1;
         private int _windowX = int.MinValue;

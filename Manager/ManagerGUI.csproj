@@ -8,7 +8,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>Manager</RootNamespace>
     <AssemblyName>Manager</AssemblyName>
-    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <PublishUrl>publish\</PublishUrl>
@@ -54,7 +54,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Local Unity runtime reference is a developer-machine fallback.
-         If your install differs, retarget this HintPath to an equivalent Sheltered managed assembly. -->
+         If your install differs, retarget this HintPath to an equivalent game managed assembly. -->
     <Reference Include="System.Core" />
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
@@ -63,7 +63,15 @@
     <Reference Include="System.Security" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="UnityEngine">
-      <HintPath>..\..\..\..\..\SteamLibrary\steamapps\common\Sheltered\Sheltered_Data\Managed\UnityEngine.dll</HintPath>
+      <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameManagedDir)UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule">
+      <HintPath>$(GameManagedDir)UnityEngine.JSONSerializeModule.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -107,6 +115,7 @@
     <Compile Include="Core\Games\Models\GameRuntimeLayout.cs" />
     <Compile Include="Core\Games\Models\RuntimeFileRequirement.cs" />
     <Compile Include="Core\Games\Profiles\GenericUnityGameProfileFactory.cs" />
+    <Compile Include="Core\Games\Profiles\ParalivesGameProfileFactory.cs" />
     <Compile Include="Core\Games\Profiles\ShelteredGameProfileFactory.cs" />
     <Compile Include="Core\Games\Saves\ISaveDiscoveryStrategy.cs" />
     <Compile Include="Core\Games\Saves\NoOpSaveDiscoveryStrategy.cs" />

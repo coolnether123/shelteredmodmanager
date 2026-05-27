@@ -17,6 +17,7 @@ namespace Manager.Core.Games
         public static GameProfileRegistry CreateDefault()
         {
             GameProfileRegistry registry = new GameProfileRegistry();
+            registry.Register(ParalivesGameProfileFactory.Create());
             registry.Register(ShelteredGameProfileFactory.Create());
             registry.Register(GenericUnityGameProfileFactory.Create());
             return registry;
@@ -36,13 +37,13 @@ namespace Manager.Core.Games
             if (!string.IsNullOrEmpty(profileId) && _profiles.TryGetValue(profileId, out profile))
                 return profile;
 
-            if (_profiles.TryGetValue(ShelteredGameProfileFactory.ProfileId, out profile))
+            if (_profiles.TryGetValue(ParalivesGameProfileFactory.ProfileId, out profile))
                 return profile;
 
             foreach (GameProfile registered in _profiles.Values)
                 return registered;
 
-            return ShelteredGameProfileFactory.Create();
+            return ParalivesGameProfileFactory.Create();
         }
 
         public IList<GameProfile> GetAll()
