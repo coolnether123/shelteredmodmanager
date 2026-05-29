@@ -39,11 +39,83 @@
     <DocumentationFile>..\Dist\SMM\bin\ParalivesAPI.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(SmmHarmonyDll)</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Paralives">
+      <HintPath>$(GameManagedDir)Paralives.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameManagedDir)UnityEngine.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameManagedDir)UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Core\ParalivesActionCompletedEvent.cs" />
+    <Compile Include="Core\ParalivesActionCompletionDispatcher.cs" />
+    <Compile Include="Core\ParalivesAttendancePolicyRegistry.cs" />
+    <Compile Include="Core\ParalivesCharacterFacade.cs" />
+    <Compile Include="Core\ParalivesGameFacade.cs" />
+    <Compile Include="Core\ParalivesGameEvents.cs" />
+    <Compile Include="Core\ParalivesGameEventTypes.cs" />
+    <Compile Include="Core\ParalivesGoalFacade.cs" />
+    <Compile Include="Core\ParalivesGuid.cs" />
+    <Compile Include="Core\ParalivesHarmonyPatcher.cs" />
+    <Compile Include="Core\ParalivesInteractionFactory.cs" />
+    <Compile Include="Core\ParalivesInteractionQueueFacade.cs" />
+    <Compile Include="Core\ParalivesInteractionSelectedEvent.cs" />
+    <Compile Include="Core\ParalivesInteractionSelectionDispatcher.cs" />
+    <Compile Include="Core\ParalivesInteractionContent.cs" />
+    <Compile Include="Core\ParalivesInteractionGroupChildRegistration.cs" />
+    <Compile Include="Core\ParalivesInteractionRegistry.cs" />
+    <Compile Include="Core\ParalivesInteractionRootGroup.cs" />
+    <Compile Include="Core\ParalivesLocalizationEntry.cs" />
+    <Compile Include="Core\ParalivesLocalizationRegistry.cs" />
+    <Compile Include="Core\ParalivesMemoryFacade.cs" />
+    <Compile Include="Core\ParalivesNeedsFacade.cs" />
+    <Compile Include="Core\ParalivesNotificationRegistry.cs" />
+    <Compile Include="Core\ParalivesOccupationFacade.cs" />
+    <Compile Include="Core\ParalivesPeopleFacade.cs" />
+    <Compile Include="Core\ParalivesPersonalityFacade.cs" />
+    <Compile Include="Core\ParalivesPlayerFacade.cs" />
+    <Compile Include="Core\ParalivesReflection.cs" />
+    <Compile Include="Core\ParalivesRelationshipFacade.cs" />
     <Compile Include="Core\ParalivesRuntimeBootstrap.cs" />
+    <Compile Include="Core\ParalivesRuntimeHost.cs" />
     <Compile Include="Core\ParalivesRuntimeInfo.cs" />
+    <Compile Include="Core\ParalivesSettingsFacade.cs" />
+    <Compile Include="Core\ParalivesSkillFacade.cs" />
+    <Compile Include="Core\ParalivesSocialFacade.cs" />
+    <Compile Include="Core\ParalivesStatusFacade.cs" />
+    <Compile Include="Core\ParalivesTogetherFacade.cs" />
+    <Compile Include="Core\ParalivesTimeFacade.cs" />
+    <Compile Include="Core\ParalivesUiFacade.cs" />
+    <Compile Include="Core\ParalivesWantFacade.cs" />
+    <Compile Include="Core\ParalivesWorldFacade.cs" />
+    <Compile Include="Core\SmmLoadOrderStore.cs" />
+    <Compile Include="Core\SmmModScreenBridge.cs" />
+    <Compile Include="Patches\ModManagerSetIsModEnabledPatch.cs" />
+    <Compile Include="Patches\GoalsManagerHooksPatch.cs" />
+    <Compile Include="Patches\MemoryManagerHooksPatch.cs" />
+    <Compile Include="Patches\NeedManagerHooksPatch.cs" />
+    <Compile Include="Patches\OccupationsManagerShouldBeWorkingNowPatch.cs" />
+    <Compile Include="Patches\RelationshipManagerHooksPatch.cs" />
+    <Compile Include="Patches\SkillManagerHooksPatch.cs" />
+    <Compile Include="Patches\StatusEffectManagerHooksPatch.cs" />
+    <Compile Include="Patches\TogetherManagerHooksPatch.cs" />
+    <Compile Include="Patches\UIInteractionsListItemClickedInteractionPatch.cs" />
+    <Compile Include="Patches\UpdateCharacterActionsOnActionEndPatch.cs" />
+    <Compile Include="Patches\UIModsItemInitPatch.cs" />
+    <Compile Include="Patches\UIModsOnShowPatch.cs" />
+    <Compile Include="Patches\WantsManagerHooksPatch.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

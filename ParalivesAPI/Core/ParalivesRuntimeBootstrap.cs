@@ -8,6 +8,10 @@ namespace ParalivesAPI.Core
         {
             if (!ModAPIRegistry.IsAPIRegistered(ParalivesRuntimeInfo.RegistryId))
                 ModAPIRegistry.RegisterAPI(ParalivesRuntimeInfo.RegistryId, ParalivesRuntimeInfo.Current);
+
+            ParalivesHarmonyPatcher.EnsurePatched();
+            ParalivesRuntimeHost.Start();
+            SmmModScreenBridge.Start();
         }
     }
 }
