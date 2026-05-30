@@ -25,6 +25,8 @@ namespace ShelteredAPI.Harmony
         private static readonly HashSet<string> LoggedPanelTypes = new HashSet<string>(StringComparer.Ordinal);
         private static readonly List<GameObject> TemporarilyHiddenObjects = new List<GameObject>();
         private static bool _restoreHooked;
+        private static bool _restoreScheduled;
+        private static int _suppressCancelReleaseFrame = -1;
 
         [HarmonyPatch(typeof(SettingsPCPanel), "OnControlsButtonPressed")]
         [HarmonyPrefix]
@@ -66,6 +68,19 @@ namespace ShelteredAPI.Harmony
             return true;
         }
 
+        [HarmonyPatch(typeof(PlatformInput), "GetButtonUp", new[] { typeof(PlatformInput.MenuInputButton) })]
+        [HarmonyPrefix]
+        private static bool MenuButtonUpPrefix(PlatformInput.MenuInputButton button, ref bool __result)
+        {
+            if (button == PlatformInput.MenuInputButton.UIcancel && ShouldSuppressCancelRelease())
+            {
+                __result = false;
+                return false;
+            }
+
+            return true;
+        }
+
         private static bool AllowVanillaControllerKeybinds(string source)
         {
             MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Allowing vanilla controller keybinds from " + source + ".");
@@ -99,7 +114,28 @@ namespace ShelteredAPI.Harmony
             if (_restoreHooked) return;
             _restoreHooked = true;
             ModSettingsPanel.Closed += RestoreTemporarilyHiddenObjects;
-            ShelteredKeybindsUIV2.Closed += RestoreTemporarilyHiddenObjects;
+            ShelteredKeybindsUIV2.Closed += RestoreTemporarilyHiddenObjectsWhenBackInputReleases;
+        }
+
+        private static void RestoreTemporarilyHiddenObjectsWhenBackInputReleases()
+        {
+            if (TemporarilyHiddenObjects.Count == 0 || _restoreScheduled)
+                return;
+
+            _restoreScheduled = true;
+            GameObject host = new GameObject("ShelteredAPI_KeybindRestoreDelay");
+            UnityEngine.Object.DontDestroyOnLoad(host);
+            host.AddComponent<KeybindRestoreDelay>();
+        }
+
+        private static bool ShouldSuppressCancelRelease()
+        {
+            return _restoreScheduled || Time.frameCount == _suppressCancelReleaseFrame;
+        }
+
+        private static void SuppressCancelReleaseThisFrame()
+        {
+            _suppressCancelReleaseFrame = Time.frameCount;
         }
 
         private static void HidePanelsForKeybindOpen(BasePanel sourcePanel, string source)
@@ -233,6 +269,41 @@ namespace ShelteredAPI.Harmony
 
             MMLog.WriteDebug("[SettingsKeybindsButtonPatches] Restored " + TemporarilyHiddenObjects.Count + " temporarily hidden settings object(s).");
             TemporarilyHiddenObjects.Clear();
+        }
+
+        private sealed class KeybindRestoreDelay : MonoBehaviour
+        {
+            private int _createdFrame;
+
+            private void Awake()
+            {
+                _createdFrame = Time.frameCount;
+            }
+
+            private void Update()
+            {
+                if (Time.frameCount <= _createdFrame)
+                    return;
+                if (UnityEngine.Input.GetKey(KeyCode.Escape))
+                    return;
+
+                _restoreScheduled = false;
+                SuppressCancelReleaseThisFrame();
+                RestoreTemporarilyHiddenObjects();
+                Destroy(gameObject);
+            }
+
+            private void OnDestroy()
+            {
+                if (!_restoreScheduled)
+                    return;
+                if (UnityEngine.Input.GetKey(KeyCode.Escape))
+                    return;
+
+                _restoreScheduled = false;
+                SuppressCancelReleaseThisFrame();
+                RestoreTemporarilyHiddenObjects();
+            }
         }
     }
 }

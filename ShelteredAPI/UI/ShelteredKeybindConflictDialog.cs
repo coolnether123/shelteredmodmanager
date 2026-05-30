@@ -1,46 +1,49 @@
 using System;
 using ModAPI.Core;
 using ShelteredAPI.UI.Compatibility;
+using ShelteredAPI.UI.FieldManual.Primitives;
+using ShelteredAPI.UI.FieldManual.Textures;
+using ShelteredAPI.UI.FieldManual.Theme;
+using ShelteredAPI.UI.FieldManual.Widgets;
 using UnityEngine;
 
 namespace ShelteredAPI.UI
 {
     /// <summary>
-    /// Sheltered-specific modal dialog used by the controls UI when a requested keybind conflicts with another action.
+    /// Sheltered book-style confirmation dialog used by the controls UI.
     /// </summary>
     internal sealed class ShelteredKeybindConflictDialog : MonoBehaviour
     {
         private static GameObject _instance;
+        private static int _lastClosedFrame = -1;
 
-        private const int WindowWidth = 680;
-        private const int WindowHeight = 360;
+        private const int WindowWidth = 760;
+        private const int WindowHeight = 430;
         private const int OverlayDepth = 60000;
-
-        private static readonly Color HeaderColor = new Color(0.9f, 0.85f, 0.7f);
-        private static readonly Color TextColor = Color.white;
-        private static readonly Color BackgroundColor = new Color(0.15f, 0.12f, 0.1f, 0.98f);
-        private static readonly Color BorderColor = new Color(0.5f, 0.4f, 0.3f, 1f);
 
         private Action _onConfirm;
         private Action _onCancel;
         private bool _closed;
+        private bool _disposed;
+        private IThemePalette _palette;
+        private ProceduralTextureLibrary _textures;
+        private UIPrimitiveFactory _ui;
+
+        internal static bool ShouldBlockPanelInput()
+        {
+            return _instance != null || Time.frameCount == _lastClosedFrame;
+        }
 
         /// <summary>
-        /// Displays the conflict dialog on the overlay panel and routes the user's choice to the provided callbacks.
+        /// Displays a modal confirmation dialog and routes the user's choice to the provided callbacks.
         /// </summary>
-        /// <param name="title">Dialog title text shown at the top of the modal.</param>
-        /// <param name="message">Body copy describing the conflict.</param>
-        /// <param name="confirmLabel">Text shown on the confirm button.</param>
-        /// <param name="cancelLabel">Text shown on the cancel button.</param>
-        /// <param name="onConfirm">Callback invoked after the dialog closes when the user confirms.</param>
-        /// <param name="onCancel">Callback invoked after the dialog closes when the user cancels or the dialog cannot be created.</param>
         public static void Show(string title, string message, string confirmLabel, string cancelLabel, Action onConfirm, Action onCancel)
         {
             if (_instance != null)
                 Destroy(_instance);
 
             UIFontCache.RefreshIfMissing();
-            UIPanel panel = UIUtil.EnsureOverlayPanel("ShelteredAPI_KeybindConflictDialog", OverlayDepth);
+            UIPanel panel = UIUtil.EnsureOverlayPanel("ShelteredAPI_KeybindConfirmDialog", OverlayDepth);
             if (panel == null)
             {
                 MMLog.WriteWarning("[ShelteredKeybindConflictDialog] Failed to create overlay panel.");
@@ -48,7 +51,7 @@ namespace ShelteredAPI.UI
                 return;
             }
 
-            GameObject root = new GameObject("ShelteredKeybindConflictDialog");
+            GameObject root = new GameObject("ShelteredKeybindConfirmDialog");
             root.transform.SetParent(panel.transform, false);
             root.transform.localPosition = Vector3.zero;
             root.transform.localScale = Vector3.one;
@@ -64,30 +67,50 @@ namespace ShelteredAPI.UI
         private void BuildUI(string title, string message, string confirmLabel, string cancelLabel)
         {
             UIFontCache.FontResult fonts = UIFontCache.GetFonts();
+            _palette = new FieldManualPalette();
+            _textures = new ProceduralTextureLibrary(_palette);
+            _ui = new UIPrimitiveFactory(fonts.Bitmap, fonts.TTF, OverlayDepth);
 
-            CreateBox(transform, "Blocker", Vector3.zero, 4000, 4000, new Color(0f, 0f, 0f, 0.72f), 0, true);
-            CreateBox(transform, "WindowBackground", Vector3.zero, WindowWidth, WindowHeight, BackgroundColor, 10, false);
-            CreateBox(transform, "WindowBorder", Vector3.zero, WindowWidth + 4, WindowHeight + 4, BorderColor, 9, false);
+            UITexture blocker = _ui.CreateQuad(gameObject, "Blocker", _textures.White, Vector3.zero,
+                4000, 4000, new Color(0f, 0f, 0f, 0.58f), _ui.NextDepth());
+            _ui.AddClickCollider(blocker.gameObject, 4000, 4000, null);
 
-            UILabel titleLabel = CreateLabel(transform, "Title", string.IsNullOrEmpty(title) ? "CONFIRM" : title,
-                new Vector3(0f, WindowHeight / 2f - 42f, 0f), 24, HeaderColor, fonts.Bitmap, fonts.TTF, 100);
-            titleLabel.alignment = NGUIText.Alignment.Center;
-            titleLabel.width = WindowWidth - 60;
-            titleLabel.multiLine = false;
-            titleLabel.overflowMethod = UILabel.Overflow.ClampContent;
+            _ui.CreateQuad(gameObject, "DialogShadow", _textures.White, new Vector3(8f, -8f, 0f),
+                WindowWidth + 28, WindowHeight + 28, _palette.PaperShadow, _ui.NextDepth());
+            _ui.CreateQuad(gameObject, "DialogFrame", _textures.Gunmetal(WindowWidth + 22, WindowHeight + 22),
+                Vector3.zero, WindowWidth + 22, WindowHeight + 22, Color.white, _ui.NextDepth());
+            _ui.CreateQuad(gameObject, "DialogPaper", _textures.Paper(WindowWidth, WindowHeight),
+                Vector3.zero, WindowWidth, WindowHeight, Color.white, _ui.NextDepth());
 
-            UILabel messageLabel = CreateLabel(transform, "Message", message ?? string.Empty,
-                new Vector3(0f, 24f, 0f), 18, TextColor, fonts.Bitmap, fonts.TTF, 100);
-            messageLabel.alignment = NGUIText.Alignment.Center;
-            messageLabel.width = WindowWidth - 80;
-            messageLabel.height = 180;
+            _ui.CreateQuad(gameObject, "TitleTape", _textures.MaskingTape(420, 46),
+                new Vector3(0f, WindowHeight / 2f - 54f, 0f), 420, 46, Color.white, _ui.NextDepth());
+
+            UILabel titleLabel = _ui.CreateLabel(gameObject, "Title",
+                string.IsNullOrEmpty(title) ? "CONFIRM" : title,
+                new Vector3(0f, WindowHeight / 2f - 54f, 0f),
+                26, _palette.Ink, WindowWidth - 96, 42,
+                NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
+            titleLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
+
+            _ui.CreateQuad(gameObject, "Rule", _textures.White,
+                new Vector3(0f, WindowHeight / 2f - 91f, 0f),
+                WindowWidth - 112, 2,
+                new Color(_palette.PaperGrain.r, _palette.PaperGrain.g, _palette.PaperGrain.b, 0.58f),
+                _ui.NextDepth());
+
+            UILabel messageLabel = _ui.CreateLabel(gameObject, "Message", message ?? string.Empty,
+                new Vector3(-WindowWidth / 2f + 64f, 104f, 0f),
+                18, _palette.Ink, WindowWidth - 128, 240,
+                NGUIText.Alignment.Left, UIWidget.Pivot.TopLeft, _ui.NextDepth());
             messageLabel.multiLine = true;
-            messageLabel.overflowMethod = UILabel.Overflow.ResizeHeight;
+            messageLabel.spacingY = 3;
+            messageLabel.overflowMethod = UILabel.Overflow.ShrinkContent;
 
-            CreateButton(transform, "ConfirmButton", string.IsNullOrEmpty(confirmLabel) ? "YES" : confirmLabel,
-                new Vector3(-110f, -WindowHeight / 2f + 54f, 0f), 150, 42, fonts.Bitmap, fonts.TTF, Confirm);
-            CreateButton(transform, "CancelButton", string.IsNullOrEmpty(cancelLabel) ? "NO" : cancelLabel,
-                new Vector3(110f, -WindowHeight / 2f + 54f, 0f), 150, 42, fonts.Bitmap, fonts.TTF, Cancel);
+            BookButtonWidget buttons = new BookButtonWidget(_palette, _textures, _ui);
+            buttons.Build(gameObject, "ConfirmButton", string.IsNullOrEmpty(confirmLabel) ? "YES" : confirmLabel,
+                new Vector3(-125f, -WindowHeight / 2f + 58f, 0f), 190, 54, 18, Confirm);
+            buttons.Build(gameObject, "CancelButton", string.IsNullOrEmpty(cancelLabel) ? "NO" : cancelLabel,
+                new Vector3(125f, -WindowHeight / 2f + 58f, 0f), 190, 54, 18, Cancel);
         }
 
         private void Update()
@@ -126,81 +149,33 @@ namespace ShelteredAPI.UI
         {
             if (_instance == gameObject)
                 _instance = null;
+            _lastClosedFrame = Time.frameCount;
+            DisposeResources();
             Destroy(gameObject);
         }
 
-        private GameObject CreateBox(Transform parent, string name, Vector3 position, int width, int height, Color color, int depth, bool addCollider)
+        private void OnDestroy()
         {
-            GameObject box = new GameObject(name);
-            box.transform.SetParent(parent, false);
-            box.transform.localPosition = position;
-            box.layer = parent.gameObject.layer;
-
-            UITexture texture = box.AddComponent<UITexture>();
-            texture.mainTexture = UIUtil.WhiteTexture;
-            texture.width = width;
-            texture.height = height;
-            texture.depth = depth;
-            texture.color = color;
-
-            if (addCollider)
+            if (_instance == gameObject)
             {
-                BoxCollider collider = box.AddComponent<BoxCollider>();
-                collider.size = new Vector3(width, height, 1f);
+                _instance = null;
+                _lastClosedFrame = Time.frameCount;
             }
 
-            return box;
+            DisposeResources();
         }
 
-        private UILabel CreateLabel(Transform parent, string name, string text, Vector3 position, int fontSize, Color color, UIFont bitmapFont, Font trueTypeFont, int depth)
+        private void DisposeResources()
         {
-            GameObject go = new GameObject(name);
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = position;
-            go.layer = parent.gameObject.layer;
+            if (_disposed)
+                return;
 
-            UILabel label = go.AddComponent<UILabel>();
-            label.text = text;
-            label.fontSize = fontSize;
-            label.color = color;
-            label.depth = depth;
-            label.bitmapFont = bitmapFont;
-            label.trueTypeFont = trueTypeFont;
-            label.overflowMethod = UILabel.Overflow.ResizeFreely;
-            return label;
-        }
-
-        private GameObject CreateButton(Transform parent, string name, string text, Vector3 position, int width, int height, UIFont bitmapFont, Font trueTypeFont, Action onClick)
-        {
-            GameObject button = new GameObject(name);
-            button.transform.SetParent(parent, false);
-            button.transform.localPosition = position;
-            button.layer = parent.gameObject.layer;
-
-            UITexture background = button.AddComponent<UITexture>();
-            background.mainTexture = UIUtil.WhiteTexture;
-            background.width = width;
-            background.height = height;
-            background.depth = 100;
-            background.color = new Color(0.44f, 0.32f, 0.24f, 1f);
-
-            UILabel label = CreateLabel(button.transform, "Label", text, Vector3.zero, 16, TextColor, bitmapFont, trueTypeFont, 101);
-            label.alignment = NGUIText.Alignment.Center;
-            label.width = width - 20;
-            label.height = height - 8;
-            label.multiLine = false;
-            label.overflowMethod = UILabel.Overflow.ShrinkContent;
-
-            BoxCollider collider = button.AddComponent<BoxCollider>();
-            collider.size = new Vector3(width, height, 1f);
-
-            UIEventListener listener = UIEventListener.Get(button);
-            listener.onClick = _ =>
+            _disposed = true;
+            if (_textures != null)
             {
-                if (onClick != null) onClick();
-            };
-
-            return button;
+                _textures.Dispose();
+                _textures = null;
+            }
         }
     }
 }

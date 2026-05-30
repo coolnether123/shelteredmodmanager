@@ -29,8 +29,8 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             clone.name = name;
             clone.transform.SetParent(parent.transform, false);
             clone.transform.localPosition = position;
-            clone.transform.localRotation = Quaternion.identity;
-            clone.transform.localScale = Vector3.one;
+            clone.transform.localRotation = template.transform.localRotation;
+            clone.transform.localScale = NormalizeTemplateScale(template.transform.localScale);
             clone.layer = parent.layer;
             NGUITools.SetLayer(clone, parent.layer);
             clone.SetActive(true);
@@ -39,6 +39,14 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             ConfigureVisuals(clone, width, height);
             ConfigureCollider(clone, width, height, onClick);
             return clone;
+        }
+
+        private static Vector3 NormalizeTemplateScale(Vector3 templateScale)
+        {
+            return new Vector3(
+                templateScale.x < 0f ? -1f : 1f,
+                templateScale.y < 0f ? -1f : 1f,
+                templateScale.z < 0f ? -1f : 1f);
         }
 
         private static void StripTemplateBehaviour(GameObject clone)

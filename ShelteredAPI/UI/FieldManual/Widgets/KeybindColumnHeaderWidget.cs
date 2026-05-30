@@ -35,14 +35,14 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
             CreateHeaderLabel(header, "PrimaryHeader", "PRIMARY",
                 new Vector3(layout.PrimaryCenterX, 2f, 0f), layout.KeySlotWidth,
                 NGUIText.Alignment.Center, UIWidget.Pivot.Center, headerColor);
-            CreateHeaderLabel(header, "AltHeader", "ALT",
+            CreateHeaderLabel(header, "AltHeader", "ALTERNATE",
                 new Vector3(layout.SecondaryCenterX, 2f, 0f), layout.KeySlotWidth,
                 NGUIText.Alignment.Center, UIWidget.Pivot.Center, headerColor);
-            CreateHeaderLabel(header, "ClearHeader", "CLR",
-                new Vector3(layout.ClearCenterX, 2f, 0f), layout.SmallButtonWidth,
+            CreateHeaderLabel(header, "ClearHeader", "CLEAR",
+                new Vector3(layout.ClearCenterX, 2f, 0f), layout.SmallButtonWidth + 12,
                 NGUIText.Alignment.Center, UIWidget.Pivot.Center, headerColor);
-            CreateHeaderLabel(header, "ResetHeader", "RST",
-                new Vector3(layout.ResetCenterX, 2f, 0f), layout.SmallButtonWidth,
+            CreateHeaderLabel(header, "ResetHeader", "RESET",
+                new Vector3(layout.ResetCenterX, 2f, 0f), layout.SmallButtonWidth + 12,
                 NGUIText.Alignment.Center, UIWidget.Pivot.Center, headerColor);
 
             _ui.CreateQuad(header, "Rule", _textures.White, new Vector3(0f, -15f, 0f),

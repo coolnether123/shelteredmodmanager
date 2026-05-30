@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using ModAPI.Core;
 using ModAPI.Spine;
@@ -45,6 +47,7 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private UIPrimitiveFactory _ui;
         private FieldManualWindowChrome _chrome;
         private PaperPagedList _pagedList;
+        private GameObject _columnHeader;
         private GameObject _pageFlipRoot;
         private BookPageNavigatorWidget _pageNavigator;
         private BookSearchBarWidget _searchBar;
@@ -114,15 +117,37 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
         private void BuildPagedList(PanelFrameRegions regions)
         {
-            Rect viewport = new Rect(
+            Rect contentViewport = new Rect(
                 -regions.ContentRectLocal.width * 0.5f,
                 -regions.ContentRectLocal.height * 0.5f,
                 regions.ContentRectLocal.width,
                 regions.ContentRectLocal.height - SearchReservedHeight);
 
+            BuildStaticColumnHeader(regions.ContentRoot, contentViewport);
+
+            float headerReservedHeight = HeaderRowHeight + _metrics.RowSpacing;
+            Rect viewport = new Rect(
+                contentViewport.x,
+                contentViewport.y,
+                contentViewport.width,
+                Mathf.Max(1f, contentViewport.height - headerReservedHeight));
+
             _pagedList = new PaperPagedList(viewport, _ui.NextDepth());
             _pagedList.Build(regions.ContentRoot);
-            _pageItemHeightBudget = (int)Mathf.Max(1f, viewport.height - HeaderRowHeight - _metrics.RowSpacing);
+            _pageItemHeightBudget = (int)Mathf.Max(1f, viewport.height);
+        }
+
+        private void BuildStaticColumnHeader(GameObject parent, Rect contentViewport)
+        {
+            if (_columnHeader != null)
+                return;
+
+            var headerFactory = new KeybindColumnHeaderWidget(_palette, _metrics, _chrome.Textures, _ui);
+            _columnHeader = headerFactory.Build(parent);
+            _columnHeader.transform.localPosition = new Vector3(
+                contentViewport.x + contentViewport.width * 0.5f,
+                contentViewport.y + contentViewport.height - HeaderRowHeight * 0.5f,
+                0f);
         }
 
         private void BuildFooter(PanelFrameRegions regions)
@@ -214,9 +239,6 @@ namespace ShelteredAPI.UI.FieldManual.Panels
             if (entries == null || entries.Count == 0)
                 return;
 
-            var headerFactory = new KeybindColumnHeaderWidget(_palette, _metrics, _chrome.Textures, _ui);
-            _pagedList.AddRow(headerFactory.Build(_pagedList.ContentRoot), HeaderRowHeight);
-
             var rowFactory = new KeybindRowWidget(_palette, _metrics, _chrome.Textures, _ui, _tooltipBus, _settingsProvider, _settingsObject, ApplyValue, OnValueChanged);
             var stampFactory = new SectionStampWidget(_palette, _metrics, _ui);
 
@@ -262,10 +284,80 @@ namespace ShelteredAPI.UI.FieldManual.Panels
         private void ResetAllDefaults()
         {
             if (_mod == null || _mod.SettingsProvider == null) return;
+            if (ShelteredKeybindConflictDialog.ShouldBlockPanelInput()) return;
+
+            if (!HasSettingsChangedFromDefaults())
+                return;
+
+            ShelteredKeybindConflictDialog.Show(
+                "RESTORE DEFAULTS",
+                "Restore all keybinds and input settings to their defaults?\n\nThis will replace your current custom controls.",
+                "RESTORE",
+                "CANCEL",
+                ApplyAllDefaults,
+                null);
+        }
+
+        private void ApplyAllDefaults()
+        {
+            if (_mod == null || _mod.SettingsProvider == null) return;
             _mod.SettingsProvider.ResetToDefaults();
             ISettingsProvider2 sp2 = _mod.SettingsProvider as ISettingsProvider2;
             if (sp2 != null) sp2.Save();
             Rebuild();
+        }
+
+        private bool HasSettingsChangedFromDefaults()
+        {
+            if (_settingsProvider == null)
+                return false;
+
+            object settings = _settingsObject;
+            if (settings == null)
+                settings = _settingsProvider.GetSettingsObject();
+
+            IEnumerable<SettingDefinition> definitions = _settingsProvider.GetSettings();
+            if (definitions == null)
+                return false;
+
+            foreach (SettingDefinition def in definitions)
+            {
+                if (def == null || def.Getter == null)
+                    continue;
+                if (def.Type == SettingType.Button || def.Type == SettingType.Header || def.Type == SettingType.Spacer)
+                    continue;
+
+                object current;
+                try
+                {
+                    current = def.Getter(settings);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (!ValuesEqual(current, def.DefaultValue))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ValuesEqual(object left, object right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null)
+                return false;
+
+            if (left is IConvertible && right is IConvertible)
+                return string.Equals(
+                    Convert.ToString(left, CultureInfo.InvariantCulture),
+                    Convert.ToString(right, CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal);
+
+            return left.Equals(right);
         }
 
         private void Rebuild()
@@ -278,6 +370,9 @@ namespace ShelteredAPI.UI.FieldManual.Panels
 
         private void Update()
         {
+            if (ShelteredKeybindConflictDialog.ShouldBlockPanelInput())
+                return;
+
             if (_searchBar != null)
                 _searchBar.HandleInput(delegate { Rebuild(); });
 

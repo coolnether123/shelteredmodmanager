@@ -652,21 +652,22 @@ namespace ShelteredAPI.Input
         private static string BuildConflictPrompt(string actionId, KeyCode key, KeyConflictDetection detected)
         {
             var sb = new StringBuilder();
-            sb.Append("Key ").Append(key).Append(" conflicts with ");
-            sb.Append(detected.ActionList.Count).Append(" action(s):\n");
+            sb.Append("Key ").Append(FormatKeyForMessage(key)).Append(" is already used by ");
+            sb.Append(detected.ActionList.Count).Append(" action(s):\n\n");
 
             int maxLines = Mathf.Min(4, detected.ActionList.Count);
             for (int i = 0; i < maxLines; i++)
             {
                 KeyConflictEntry c = detected.ActionList[i];
-                sb.Append("- ").Append(c.ActionLabel).Append(" [").Append(c.Context).Append("]\n");
+                sb.Append("  ").Append(c.ActionLabel).Append(" (").Append(c.Context).Append(")\n");
             }
 
             if (detected.ActionList.Count > maxLines)
-                sb.Append("- ...\n");
+                sb.Append("  ...\n");
 
-            sb.Append("\n").Append(detected.Recommendation).Append("\n");
-            sb.Append("Override = clear conflicting bindings\nCancel = keep current binding");
+            sb.Append("\n").Append(detected.Recommendation).Append("\n\n");
+            sb.Append("Override clears the conflicting bindings.\n");
+            sb.Append("Cancel keeps your current binding.");
             return sb.ToString();
         }
 

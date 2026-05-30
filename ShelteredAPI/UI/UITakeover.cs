@@ -329,12 +329,12 @@ namespace ShelteredAPI.UI
             UIEventListener listener = UIEventListener.Get(gameObject);
             if (listener == null) return;
 
-            listener.onClick += OnClick;
-            listener.onHover += OnHover;
+            listener.onClick += RelayClick;
+            listener.onHover += RelayHover;
             _wired = true;
         }
 
-        private void OnClick(GameObject go)
+        private void RelayClick(GameObject go)
         {
             if (_clickHandlers.Count == 0) return;
             List<Action<GameObject>> handlers = new List<Action<GameObject>>(_clickHandlers.Values);
@@ -348,7 +348,7 @@ namespace ShelteredAPI.UI
             }
         }
 
-        private void OnHover(GameObject go, bool isOver)
+        private void RelayHover(GameObject go, bool isOver)
         {
             if (_hoverHandlers.Count == 0) return;
             List<Action<GameObject, bool>> handlers = new List<Action<GameObject, bool>>(_hoverHandlers.Values);
