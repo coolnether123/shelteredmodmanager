@@ -69,7 +69,7 @@ namespace ModAPI.Core
                     if (type == typeof(ModLog) || type == typeof(MMLog)) continue;
 
                     Assembly callingAssembly = type.Assembly;
-                    if (callingAssembly == modAPIAssembly) continue;
+                    if (IsFrameworkAssembly(callingAssembly, modAPIAssembly)) continue;
 
                     // Fast path: check cache
                     lock (_cacheLock)
@@ -100,6 +100,15 @@ namespace ModAPI.Core
                 return "Unknown";
             }
             return "Unknown";
+        }
+
+        private static bool IsFrameworkAssembly(Assembly assembly, Assembly modAPIAssembly)
+        {
+            if (assembly == null) return true;
+            if (assembly == modAPIAssembly) return true;
+
+            string assemblyName = assembly.GetName().Name;
+            return string.Equals(assemblyName, "ModAPI", StringComparison.OrdinalIgnoreCase);
         }
     }
 }
