@@ -22,6 +22,12 @@ namespace ShelteredAPI.Saves.Backups
         Directory = 1
     }
 
+    internal enum SaveBackupSnapshotSortOrder
+    {
+        NewestFirst = 0,
+        OldestFirst = 1
+    }
+
     internal sealed class SaveBackupRetentionPolicy
     {
         public SaveBackupRetentionMode Mode;
@@ -78,5 +84,22 @@ namespace ShelteredAPI.Saves.Backups
         public string ManifestPath;
         public DateTime CreatedAtUtc;
         public bool IsPinned;
+    }
+
+    internal sealed class SaveBackupSnapshotInfo
+    {
+        public SaveBackupSnapshotRef Ref;
+        public SaveEntry Entry;
+        public SlotManifest SlotManifest;
+        public string SaveKind;
+        public string ScenarioId;
+        public int AbsoluteSlot;
+        public string SaveId;
+        public SaveManager.SaveType SaveType;
+
+        public bool IsVanilla
+        {
+            get { return string.Equals(SaveKind, "VanillaSlot", StringComparison.OrdinalIgnoreCase); }
+        }
     }
 }

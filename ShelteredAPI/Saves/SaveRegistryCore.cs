@@ -823,6 +823,15 @@ namespace ShelteredAPI.Saves
             }
         }
 
+        internal static SaveInfo ReadVanillaSaveInfoFromEncryptedBytes(byte[] encryptedData)
+        {
+            if (encryptedData == null || encryptedData.Length == 0)
+                return null;
+
+            byte[] decryptedData = DecryptVanillaSave(encryptedData);
+            return ReadSaveInfoFromXml(decryptedData);
+        }
+
         internal static string GetVanillaSavePath(int slotNumber)
         {
             try

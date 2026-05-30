@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
+using System.Text;
 using ModAPI.Core;
 using ModAPI.Util;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Saves.Backups
 {
@@ -82,20 +84,148 @@ namespace ShelteredAPI.Saves.Backups
             }
         }
 
+        public bool DeleteSnapshot(string manifestPath, out string error)
+        {
+            error = null;
+            try
+            {
+                if (string.IsNullOrEmpty(manifestPath))
+                {
+                    error = "Snapshot manifest path was missing.";
+                    return false;
+                }
+
+                string fullManifestPath = Path.GetFullPath(manifestPath);
+                if (!IsPathUnderRoot(_root, fullManifestPath))
+                {
+                    error = "Snapshot manifest path is outside backup storage.";
+                    return false;
+                }
+
+                if (!File.Exists(fullManifestPath))
+                {
+                    error = "Snapshot manifest was not found.";
+                    return false;
+                }
+
+                SaveBackupSnapshotRef snapshot;
+                TryReadSnapshotRef(fullManifestPath, out snapshot);
+
+                File.Delete(fullManifestPath);
+                WriteIndex();
+                PruneUnreferencedBlobs();
+
+                MMLog.WriteInfo("[SaveBackup] Deleted snapshot "
+                    + (snapshot != null ? snapshot.SnapshotId : Path.GetFileNameWithoutExtension(fullManifestPath)) + ".");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                MMLog.WriteError("[SaveBackup] Delete snapshot failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        public List<SaveBackupSnapshotInfo> ListSnapshots(string timelineKey, SaveBackupSnapshotSortOrder sortOrder)
+        {
+            List<SaveBackupSnapshotInfo> snapshots = new List<SaveBackupSnapshotInfo>();
+            if (string.IsNullOrEmpty(timelineKey))
+                return snapshots;
+
+            List<SaveBackupSnapshotRef> refs = ReadTimelineSnapshotRefs(GetTimelinePath(timelineKey));
+            refs.Sort(CompareSnapshotRefs);
+            if (sortOrder == SaveBackupSnapshotSortOrder.NewestFirst)
+                refs.Reverse();
+
+            for (int i = 0; i < refs.Count; i++)
+            {
+                SaveBackupSnapshotInfo snapshot;
+                if (TryReadSnapshotInfo(refs[i].ManifestPath, out snapshot))
+                    snapshots.Add(snapshot);
+            }
+
+            return snapshots;
+        }
+
+        public int CountSnapshots(string timelineKey)
+        {
+            if (string.IsNullOrEmpty(timelineKey))
+                return 0;
+
+            return ReadTimelineSnapshotRefs(GetTimelinePath(timelineKey)).Count;
+        }
+
+        public int CountSnapshotsAfter(string timelineKey, DateTime createdAtUtc, string snapshotId)
+        {
+            if (string.IsNullOrEmpty(timelineKey))
+                return 0;
+
+            List<SaveBackupSnapshotRef> refs = ReadTimelineSnapshotRefs(GetTimelinePath(timelineKey));
+            int count = 0;
+            for (int i = 0; i < refs.Count; i++)
+            {
+                if (IsSnapshotAfter(refs[i], createdAtUtc, snapshotId))
+                    count++;
+            }
+
+            return count;
+        }
+
+        public int PruneSnapshotsAfter(string timelineKey, DateTime createdAtUtc, string snapshotId)
+        {
+            if (string.IsNullOrEmpty(timelineKey))
+                return 0;
+
+            List<SaveBackupSnapshotRef> refs = ReadTimelineSnapshotRefs(GetTimelinePath(timelineKey));
+            int deleted = 0;
+            for (int i = 0; i < refs.Count; i++)
+            {
+                SaveBackupSnapshotRef snapshot = refs[i];
+                if (!IsSnapshotAfter(snapshot, createdAtUtc, snapshotId))
+                    continue;
+
+                try
+                {
+                    File.Delete(snapshot.ManifestPath);
+                    deleted++;
+                    MMLog.WriteDebug("[SaveBackup] Pruned future snapshot " + snapshot.SnapshotId
+                        + " from timeline " + timelineKey + ".");
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteWarning("[SaveBackup] Failed to prune future snapshot "
+                        + snapshot.SnapshotId + ": " + ex.Message);
+                }
+            }
+
+            if (deleted > 0)
+            {
+                WriteIndex();
+                PruneUnreferencedBlobs();
+            }
+
+            return deleted;
+        }
+
         private List<RestoreFilePlan> BuildRestorePlan(string manifestPath)
         {
             if (string.IsNullOrEmpty(manifestPath) || !File.Exists(manifestPath))
                 throw new FileNotFoundException("Backup manifest was not found.", manifestPath);
 
+            string fullManifestPath = Path.GetFullPath(manifestPath);
+            if (!IsPathUnderRoot(_root, fullManifestPath))
+                throw new IOException("Backup manifest path is outside backup storage.");
+
             ManualJsonObject root;
             string parseError;
-            if (!ManualJson.TryParseObject(File.ReadAllText(manifestPath), out root, out parseError))
-                throw new InvalidDataException("Backup manifest is invalid: " + parseError);
+            if (!ManualJson.TryParseObject(File.ReadAllText(fullManifestPath), out root, out parseError))
+                throw new IOException("Backup manifest is invalid: " + parseError);
 
-            Dictionary<string, SaveBackupSource> sources = ReadRestoreSources(root);
+            Dictionary<string, SaveBackupSource> sources = ResolveCurrentRestoreSources(root);
             ManualJsonArray fileArray = root.GetArray("files");
             if (fileArray == null || fileArray.Items.Count == 0)
-                throw new InvalidDataException("Backup manifest contains no files.");
+                throw new IOException("Backup manifest contains no files.");
 
             List<RestoreFilePlan> plan = new List<RestoreFilePlan>();
             for (int i = 0; i < fileArray.Items.Count; i++)
@@ -109,9 +239,180 @@ namespace ShelteredAPI.Saves.Backups
             }
 
             if (plan.Count == 0)
-                throw new InvalidDataException("Backup manifest contains no restorable files.");
+                throw new IOException("Backup manifest contains no restorable files.");
 
             return plan;
+        }
+
+        private bool TryReadSnapshotInfo(string manifestPath, out SaveBackupSnapshotInfo snapshot)
+        {
+            snapshot = null;
+            try
+            {
+                if (string.IsNullOrEmpty(manifestPath) || !File.Exists(manifestPath))
+                    return false;
+
+                ManualJsonObject root;
+                string error;
+                if (!ManualJson.TryParseObject(File.ReadAllText(manifestPath), out root, out error))
+                    return false;
+
+                SaveBackupSnapshotRef snapshotRef = BuildSnapshotRef(root, manifestPath);
+                string saveKind = root.GetString("saveKind", string.Empty);
+                string scenarioId = root.GetString("scenarioId", string.Empty);
+                int absoluteSlot = root.GetInt("absoluteSlot", 0);
+                string saveId = root.GetString("saveId", string.Empty);
+                SaveManager.SaveType saveType = ReadSaveType(root.GetString("saveType", string.Empty));
+
+                SaveBackupFileRecord saveRecord;
+                byte[] saveBytes = ReadSnapshotSaveBytes(root, saveKind, out saveRecord);
+                SaveInfo saveInfo = ReadSnapshotSaveInfo(saveKind, saveBytes);
+                if (saveInfo == null)
+                    saveInfo = new SaveInfo();
+                if (string.IsNullOrEmpty(saveInfo.familyName))
+                    saveInfo.familyName = "Unknown";
+                saveInfo.saveTime = snapshotRef.CreatedAtUtc.ToString("o", CultureInfo.InvariantCulture);
+
+                SaveEntry entry = new SaveEntry
+                {
+                    id = snapshotRef.SnapshotId,
+                    absoluteSlot = absoluteSlot,
+                    name = saveInfo.familyName,
+                    createdAt = snapshotRef.CreatedAtUtc.ToString("o", CultureInfo.InvariantCulture),
+                    updatedAt = snapshotRef.CreatedAtUtc.ToString("o", CultureInfo.InvariantCulture),
+                    fileSize = saveRecord != null ? saveRecord.Size : 0,
+                    crc32 = saveRecord != null ? saveRecord.Crc32 : 0,
+                    scenarioId = scenarioId,
+                    saveInfo = saveInfo
+                };
+
+                snapshot = new SaveBackupSnapshotInfo
+                {
+                    Ref = snapshotRef,
+                    Entry = entry,
+                    SlotManifest = ReadSnapshotSlotManifest(root),
+                    SaveKind = saveKind,
+                    ScenarioId = scenarioId,
+                    AbsoluteSlot = absoluteSlot,
+                    SaveId = saveId,
+                    SaveType = saveType
+                };
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[SaveBackup] Failed to read snapshot metadata: " + ex.Message);
+                return false;
+            }
+        }
+
+        private SaveBackupSnapshotRef BuildSnapshotRef(ManualJsonObject root, string manifestPath)
+        {
+            DateTime createdAt;
+            string created = root.GetString("createdAtUtc", string.Empty);
+            if (!DateTime.TryParse(created, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out createdAt))
+                createdAt = File.GetCreationTimeUtc(manifestPath);
+
+            return new SaveBackupSnapshotRef
+            {
+                SnapshotId = root.GetString("snapshotId", Path.GetFileNameWithoutExtension(manifestPath)),
+                TimelineKey = root.GetString("timelineKey", string.Empty),
+                ManifestPath = manifestPath,
+                CreatedAtUtc = createdAt.ToUniversalTime(),
+                IsPinned = root.GetBool("isPinned", false)
+            };
+        }
+
+        private SaveInfo ReadSnapshotSaveInfo(string saveKind, byte[] saveBytes)
+        {
+            if (saveBytes == null || saveBytes.Length == 0)
+                return null;
+
+            if (string.Equals(saveKind, "VanillaSlot", StringComparison.OrdinalIgnoreCase))
+                return SaveRegistryCore.ReadVanillaSaveInfoFromEncryptedBytes(saveBytes);
+
+            return SaveRegistryCore.ReadSaveInfoFromXml(saveBytes);
+        }
+
+        private SlotManifest ReadSnapshotSlotManifest(ManualJsonObject root)
+        {
+            SaveBackupFileRecord record;
+            byte[] manifestBytes = ReadSnapshotFileBytes(root, "slot", "manifest.json", out record);
+            if (manifestBytes == null || manifestBytes.Length == 0)
+                manifestBytes = ReadSnapshotFileBytes(root, "slotSidecar", "manifest.json", out record);
+            if (manifestBytes == null || manifestBytes.Length == 0)
+                return null;
+
+            try
+            {
+                return SaveRegistryCore.DeserializeSlotManifest(Encoding.UTF8.GetString(manifestBytes));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private byte[] ReadSnapshotSaveBytes(ManualJsonObject root, string saveKind, out SaveBackupFileRecord record)
+        {
+            if (string.Equals(saveKind, "VanillaSlot", StringComparison.OrdinalIgnoreCase))
+                return ReadSnapshotFileBytes(root, "vanillaFile", null, out record);
+
+            return ReadSnapshotFileBytes(root, "slot", "SaveData.xml", out record);
+        }
+
+        private byte[] ReadSnapshotFileBytes(ManualJsonObject root, string sourceId, string relativeFileName, out SaveBackupFileRecord record)
+        {
+            record = null;
+            ManualJsonArray files = root.GetArray("files");
+            if (files == null)
+                return null;
+
+            for (int i = 0; i < files.Items.Count; i++)
+            {
+                ManualJsonObject file = files.Items[i] != null ? files.Items[i].ObjectValue : null;
+                if (file == null || !MatchesSnapshotFile(file, sourceId, relativeFileName))
+                    continue;
+
+                string compression = file.GetString("compression", string.Empty);
+                if (!string.Equals(compression, BlobCompression, StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                string blobPath = file.GetString("blobPath", string.Empty);
+                if (string.IsNullOrEmpty(blobPath))
+                    return null;
+
+                record = new SaveBackupFileRecord
+                {
+                    SourceId = file.GetString("sourceId", string.Empty),
+                    RelativePath = file.GetString("relativePath", string.Empty),
+                    Hash = file.GetString("hash", string.Empty),
+                    Size = GetLong(file, "size", 0),
+                    Crc32 = unchecked((uint)GetLong(file, "crc32", 0)),
+                    BlobPath = blobPath,
+                    Compression = compression
+                };
+
+                return SaveBackupBlobCodec.ReadDecompressed(GetPathUnderRoot(_root, blobPath));
+            }
+
+            return null;
+        }
+
+        private static bool MatchesSnapshotFile(ManualJsonObject file, string sourceId, string relativeFileName)
+        {
+            string actualSourceId = file.GetString("sourceId", string.Empty);
+            if (!string.IsNullOrEmpty(sourceId) && !string.Equals(actualSourceId, sourceId, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (string.IsNullOrEmpty(relativeFileName))
+                return true;
+
+            string relativePath = NormalizeManifestPath(file.GetString("relativePath", string.Empty));
+            string expected = NormalizeManifestPath(relativeFileName);
+            return string.Equals(relativePath, expected, StringComparison.OrdinalIgnoreCase)
+                || relativePath.EndsWith("/" + expected, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(Path.GetFileName(relativePath), expected, StringComparison.OrdinalIgnoreCase);
         }
 
         private Dictionary<string, SaveBackupSource> ReadRestoreSources(ManualJsonObject root)
@@ -129,7 +430,7 @@ namespace ShelteredAPI.Saves.Backups
 
                 string id = source.GetString("id", string.Empty);
                 string path = source.GetString("path", string.Empty);
-                if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(path))
+                if (string.IsNullOrEmpty(id))
                     continue;
 
                 sources[id] = new SaveBackupSource
@@ -143,16 +444,84 @@ namespace ShelteredAPI.Saves.Backups
             return sources;
         }
 
+        private Dictionary<string, SaveBackupSource> ResolveCurrentRestoreSources(ManualJsonObject root)
+        {
+            Dictionary<string, SaveBackupSource> manifestSources = ReadRestoreSources(root);
+            Dictionary<string, SaveBackupSource> resolved = new Dictionary<string, SaveBackupSource>(StringComparer.OrdinalIgnoreCase);
+
+            string saveKind = root.GetString("saveKind", string.Empty);
+            string scenarioId = SaveStorageRouter.NormalizeScenarioId(root.GetString("scenarioId", string.Empty));
+            int absoluteSlot = root.GetInt("absoluteSlot", 0);
+            SaveManager.SaveType saveType = ReadSaveType(root.GetString("saveType", string.Empty));
+
+            if (string.Equals(saveKind, "CustomSlot", StringComparison.OrdinalIgnoreCase))
+            {
+                if (absoluteSlot <= 0)
+                    throw new IOException("Backup manifest custom slot number is invalid.");
+
+                AddResolvedSourceIfPresent(
+                    manifestSources,
+                    resolved,
+                    "slot",
+                    DirectoryProvider.SlotRoot(scenarioId, absoluteSlot, false),
+                    SaveBackupSourceKind.Directory);
+                return resolved;
+            }
+
+            if (string.Equals(saveKind, "VanillaSlot", StringComparison.OrdinalIgnoreCase))
+            {
+                VanillaSaveRoute route;
+                if (!VanillaSaveRouting.TryGetRoute(saveType, out route))
+                    throw new IOException("Backup manifest vanilla save route is invalid.");
+
+                AddResolvedSourceIfPresent(
+                    manifestSources,
+                    resolved,
+                    "vanillaFile",
+                    SaveRegistryCore.GetVanillaSavePath(route.VanillaSlotNumber),
+                    SaveBackupSourceKind.File);
+                AddResolvedSourceIfPresent(
+                    manifestSources,
+                    resolved,
+                    "slotSidecar",
+                    DirectoryProvider.SlotRoot(route.StorageScenarioId, route.AbsoluteSlot, false),
+                    SaveBackupSourceKind.Directory);
+                return resolved;
+            }
+
+            throw new IOException("Backup manifest save kind is unsupported: " + saveKind);
+        }
+
+        private static void AddResolvedSourceIfPresent(
+            Dictionary<string, SaveBackupSource> manifestSources,
+            Dictionary<string, SaveBackupSource> resolved,
+            string id,
+            string path,
+            SaveBackupSourceKind kind)
+        {
+            if (!manifestSources.ContainsKey(id))
+                return;
+            if (string.IsNullOrEmpty(path))
+                throw new IOException("Current restore path is missing for backup source: " + id);
+
+            resolved[id] = new SaveBackupSource
+            {
+                Id = id,
+                Path = path,
+                Kind = kind
+            };
+        }
+
         private RestoreFilePlan BuildRestoreFilePlan(ManualJsonObject file, Dictionary<string, SaveBackupSource> sources)
         {
             string sourceId = file.GetString("sourceId", string.Empty);
             SaveBackupSource source;
             if (string.IsNullOrEmpty(sourceId) || !sources.TryGetValue(sourceId, out source))
-                throw new InvalidDataException("Backup manifest references an unknown source: " + sourceId);
+                throw new IOException("Backup manifest references an unknown source: " + sourceId);
 
             string compression = file.GetString("compression", string.Empty);
             if (!string.Equals(compression, BlobCompression, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Backup blob uses unsupported compression: " + compression);
+                throw new IOException("Backup blob uses unsupported compression: " + compression);
 
             string blobPath = file.GetString("blobPath", string.Empty);
             string fullBlobPath = GetPathUnderRoot(_root, blobPath);
@@ -170,15 +539,15 @@ namespace ShelteredAPI.Saves.Backups
         {
             long expectedSize = GetLong(file, "size", -1);
             if (expectedSize >= 0 && bytes.Length != expectedSize)
-                throw new InvalidDataException("Backup blob size check failed.");
+                throw new IOException("Backup blob size check failed.");
 
             string expectedHash = file.GetString("hash", string.Empty);
             if (!string.IsNullOrEmpty(expectedHash) && !string.Equals(ComputeSha256(bytes), expectedHash, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Backup blob hash check failed.");
+                throw new IOException("Backup blob hash check failed.");
 
             long expectedCrc = GetLong(file, "crc32", -1);
             if (expectedCrc >= 0 && CRC32.Compute(bytes) != unchecked((uint)expectedCrc))
-                throw new InvalidDataException("Backup blob CRC check failed.");
+                throw new IOException("Backup blob CRC check failed.");
         }
 
         private static string GetRestoreDestinationPath(SaveBackupSource source, string relativePath)
@@ -193,15 +562,15 @@ namespace ShelteredAPI.Saves.Backups
         private static string GetPathUnderRoot(string root, string relativePath)
         {
             if (string.IsNullOrEmpty(root))
-                throw new InvalidDataException("Restore root path is missing.");
+                throw new IOException("Restore root path is missing.");
             if (string.IsNullOrEmpty(relativePath))
-                throw new InvalidDataException("Restore relative path is missing.");
+                throw new IOException("Restore relative path is missing.");
 
             string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 + Path.DirectorySeparatorChar;
             string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
             if (!fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Backup manifest path escapes its restore root.");
+                throw new IOException("Backup manifest path escapes its restore root.");
 
             return fullPath;
         }
@@ -445,20 +814,7 @@ namespace ShelteredAPI.Saves.Backups
                 string error;
                 if (!ManualJson.TryParseObject(File.ReadAllText(manifestPath), out root, out error))
                     return false;
-
-                DateTime createdAt;
-                string created = root.GetString("createdAtUtc", string.Empty);
-                if (!DateTime.TryParse(created, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out createdAt))
-                    createdAt = File.GetCreationTimeUtc(manifestPath);
-
-                snapshot = new SaveBackupSnapshotRef
-                {
-                    SnapshotId = root.GetString("snapshotId", Path.GetFileNameWithoutExtension(manifestPath)),
-                    TimelineKey = root.GetString("timelineKey", string.Empty),
-                    ManifestPath = manifestPath,
-                    CreatedAtUtc = createdAt.ToUniversalTime(),
-                    IsPinned = root.GetBool("isPinned", false)
-                };
+                snapshot = BuildSnapshotRef(root, manifestPath);
                 return true;
             }
             catch
@@ -580,6 +936,35 @@ namespace ShelteredAPI.Saves.Backups
             return date != 0 ? date : string.Compare(left.SnapshotId, right.SnapshotId, StringComparison.Ordinal);
         }
 
+        private static bool IsSnapshotAfter(SaveBackupSnapshotRef snapshot, DateTime createdAtUtc, string snapshotId)
+        {
+            if (snapshot == null)
+                return false;
+
+            SaveBackupSnapshotRef boundary = new SaveBackupSnapshotRef
+            {
+                SnapshotId = snapshotId ?? string.Empty,
+                CreatedAtUtc = createdAtUtc.ToUniversalTime()
+            };
+
+            return CompareSnapshotRefs(snapshot, boundary) > 0;
+        }
+
+        private static SaveManager.SaveType ReadSaveType(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return SaveManager.SaveType.Invalid;
+
+            try
+            {
+                return (SaveManager.SaveType)Enum.Parse(typeof(SaveManager.SaveType), value, true);
+            }
+            catch
+            {
+                return SaveManager.SaveType.Invalid;
+            }
+        }
+
         private static string BuildSnapshotId(DateTime createdAt)
         {
             return createdAt.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture)
@@ -631,6 +1016,17 @@ namespace ShelteredAPI.Saves.Backups
                 return fullPath.Substring(fullRoot.Length);
 
             return Path.GetFileName(path);
+        }
+
+        private static bool IsPathUnderRoot(string root, string path)
+        {
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(path))
+                return false;
+
+            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                + Path.DirectorySeparatorChar;
+            string fullPath = Path.GetFullPath(path);
+            return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string NormalizeManifestPath(string path)

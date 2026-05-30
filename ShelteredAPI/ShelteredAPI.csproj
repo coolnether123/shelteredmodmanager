@@ -159,6 +159,10 @@
     <Compile Include="Saves\Paging\CustomSavesWelcomeDialog.cs" />
     <Compile Include="Saves\Paging\SlotPagingScope.cs" />
     <Compile Include="Saves\Paging\SlotPagingScopeResolver.cs" />
+    <Compile Include="Saves\Paging\SlotSelectionSaveEntryResolver.cs" />
+    <Compile Include="Saves\Paging\SaveSnapshotBrowserState.cs" />
+    <Compile Include="Saves\Paging\SaveSnapshotSlotControls.cs" />
+    <Compile Include="Saves\Paging\SnapshotLoadWarningDialog.cs" />
     <Compile Include="Saves\Paging\SlotSelectionPatchCoordinator.cs" />
     <Compile Include="Saves\Paging\SlotSelectionPatches.cs" />
     <Compile Include="Saves\Paging\SaveVerification.cs" />

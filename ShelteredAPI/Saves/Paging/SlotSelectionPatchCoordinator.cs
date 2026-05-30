@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Backups;
 using ShelteredAPI.Saves.Runtime;
 using UnityEngine;
 namespace ShelteredAPI.Saves.Paging{
@@ -16,6 +18,9 @@ namespace ShelteredAPI.Saves.Paging{
 
         internal static bool RefreshSaveSlotInfoPrefix(SlotSelectionPanel panel)
         {
+            if (SaveSnapshotBrowserState.IsActive(panel))
+                return RefreshSnapshotSaveSlotInfoPrefix(panel);
+
             int page = PagingManager.GetPage(panel);
             if (page == 0)
             {
@@ -26,7 +31,6 @@ namespace ShelteredAPI.Saves.Paging{
                         btn.gameObject.SetActive(true);
                 }
 
-                SaveVerification.UpdateIcons(panel);
                 return true;
             }
 
@@ -100,7 +104,7 @@ namespace ShelteredAPI.Saves.Paging{
                 }
 
                 t.Method("RefreshSlotLabels").GetValue();
-                SaveVerification.UpdateIcons(panel);
+                UpdateSaveSlotAuxiliaryControls(panel);
             }
             catch (Exception ex)
             {
@@ -141,6 +145,7 @@ namespace ShelteredAPI.Saves.Paging{
                 }
 
                 t.Method("RefreshSlotLabels").GetValue();
+                UpdateSaveSlotAuxiliaryControls(panel);
             }
             catch (Exception ex)
             {
@@ -150,6 +155,12 @@ namespace ShelteredAPI.Saves.Paging{
 
         internal static void RefreshSlotLabelsPostfix(SlotSelectionPanel panel)
         {
+            if (SaveSnapshotBrowserState.IsActive(panel))
+            {
+                RefreshSnapshotSlotLabels(panel);
+                return;
+            }
+
             int page = PagingManager.GetPage(panel);
             if (page <= 0)
                 return;
@@ -182,12 +193,29 @@ namespace ShelteredAPI.Saves.Paging{
 
         internal static bool OnSlotChosenPrefix(SlotSelectionPanel panel)
         {
+            if (SaveSnapshotBrowserState.IsActive(panel))
+                return HandleSnapshotSlotChosen(panel);
+
             int page = PagingManager.GetPage(panel);
             return page == 0 ? HandleVanillaSlotChosen(panel) : HandleCustomSlotChosen(panel, page);
         }
 
+        internal static bool OnCancelPrefix(SlotSelectionPanel panel)
+        {
+            if (!SaveSnapshotBrowserState.IsActive(panel))
+                return true;
+
+            SaveSnapshotBrowserState.Exit(panel);
+            panel.RefreshSaveSlotInfo();
+            PagingManager.Update(panel);
+            return false;
+        }
+
         internal static bool OnDeleteMessageBoxPrefix(SlotSelectionPanel panel, int response)
         {
+            if (SaveSnapshotBrowserState.IsActive(panel))
+                return HandleSnapshotDeleteMessageBox(panel, response);
+
             int page = PagingManager.GetPage(panel);
             if (page == 0)
             {
@@ -244,6 +272,81 @@ namespace ShelteredAPI.Saves.Paging{
             }
         }
 
+        private static bool HandleSnapshotDeleteMessageBox(SlotSelectionPanel panel, int response)
+        {
+            if (response != 1)
+                return false;
+
+            try
+            {
+                var t = Traverse.Create(panel);
+                int selectedSlotIndex = t.Field("m_selectedSlot").GetValue<int>();
+                if (selectedSlotIndex < 0 || selectedSlotIndex > 2)
+                    return false;
+
+                SaveBackupSnapshotInfo snapshot = SaveSnapshotBrowserState.GetSnapshotAt(panel, selectedSlotIndex);
+                if (snapshot == null)
+                {
+                    MMLog.WriteWarning("[SnapshotBrowser] Could not find snapshot to delete at physical slot "
+                        + (selectedSlotIndex + 1) + " page " + PagingManager.GetPage(panel) + ".");
+                    return false;
+                }
+
+                string error;
+                if (!SaveBackupService.DeleteSnapshot(snapshot, out error))
+                {
+                    MessageBox.Show(MessageBoxButtons.Okay_Button,
+                        "Failed to delete backup snapshot:\n" + (error ?? "Unknown error"),
+                        null,
+                        null,
+                        null,
+                        false);
+                    return false;
+                }
+
+                MMLog.WriteInfo("[SnapshotBrowser] Deleted snapshot " + snapshot.Ref.SnapshotId
+                    + " from timeline " + snapshot.Ref.TimelineKey + ".");
+                RefreshSnapshotBrowserAfterDelete(panel);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[SnapshotBrowser] Snapshot delete error: " + ex);
+                MessageBox.Show(MessageBoxButtons.Okay_Button,
+                    "Failed to delete backup snapshot:\n" + ex.Message,
+                    null,
+                    null,
+                    null,
+                    false);
+            }
+
+            return false;
+        }
+
+        private static void RefreshSnapshotBrowserAfterDelete(SlotSelectionPanel panel)
+        {
+            SaveSnapshotBrowserSession session;
+            if (!SaveSnapshotBrowserState.TryGet(panel, out session))
+                return;
+
+            session.Reload();
+            if (session.Count <= 0)
+            {
+                SaveSnapshotBrowserState.Exit(panel);
+                Traverse.Create(panel).Field("m_infoNeedsRefresh").SetValue(true);
+                panel.RefreshSaveSlotInfo();
+                PagingManager.Update(panel);
+                return;
+            }
+
+            int maxPage = Math.Max(0, session.PageCount - 1);
+            if (PagingManager.GetPage(panel) > maxPage)
+                PagingManager.SetPageDirect(panel, maxPage);
+
+            Traverse.Create(panel).Field("m_infoNeedsRefresh").SetValue(true);
+            panel.RefreshSaveSlotInfo();
+            PagingManager.Update(panel);
+        }
+
         internal static void UpdatePostfix(SlotSelectionPanel panel)
         {
             if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow))
@@ -254,6 +357,236 @@ namespace ShelteredAPI.Saves.Paging{
             {
                 PagingManager.ChangePage(panel, -1);
             }
+        }
+
+        private static bool RefreshSnapshotSaveSlotInfoPrefix(SlotSelectionPanel panel)
+        {
+            try
+            {
+                SaveSnapshotBrowserSession session;
+                if (!SaveSnapshotBrowserState.TryGet(panel, out session))
+                    return true;
+
+                int page = PagingManager.GetPage(panel);
+                var t = Traverse.Create(panel);
+                var slotInfoList = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
+
+                var buttons = panel.GetComponentsInChildren<SaveSlotButton>(true);
+                foreach (var btn in buttons)
+                {
+                    if (btn != null && (btn.slotNumber == 3 || btn.slotNumber == 4))
+                        btn.gameObject.SetActive(false);
+                }
+
+                for (int i = 0; i < 3 && i < slotInfoList.Count; i++)
+                {
+                    var slotInfo = slotInfoList[i];
+                    SaveBackupSnapshotInfo snapshot = session.GetSnapshotAt(page, i);
+                    if (snapshot != null && snapshot.Entry != null)
+                    {
+                        ApplySlotInfo(slotInfo, snapshot.Entry);
+                    }
+                    else
+                    {
+                        Traverse.Create(slotInfo).Field("m_state").SetValue(SlotSelectionPanel.SlotState.Empty);
+                    }
+                }
+
+                t.Method("RefreshSlotLabels").GetValue();
+                UpdateSaveSlotAuxiliaryControls(panel);
+                PagingManager.Update(panel);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[SnapshotBrowser] Error refreshing snapshot slots: " + ex);
+            }
+
+            return false;
+        }
+
+        private static void UpdateSaveSlotAuxiliaryControls(SlotSelectionPanel panel)
+        {
+            if (SaveSnapshotBrowserState.IsActive(panel))
+            {
+                SaveVerification.UpdateIcons(panel);
+                SaveSnapshotSlotControls.UpdateButtons(panel);
+                return;
+            }
+
+            List<SlotSelectionVisibleSave> visibleSaves = SlotSelectionSaveEntryResolver.Resolve(panel);
+            SaveVerification.UpdateIcons(panel, visibleSaves);
+            SaveSnapshotSlotControls.UpdateButtons(panel, visibleSaves);
+        }
+
+        private static void ApplySlotInfo(object slotInfo, SaveEntry entry)
+        {
+            SaveInfo info = entry != null ? entry.saveInfo : null;
+            var tSlot = Traverse.Create(slotInfo);
+            tSlot.Field("m_state").SetValue(SlotSelectionPanel.SlotState.Loaded);
+            tSlot.Field("m_familyName").SetValue(info != null ? info.familyName : "Unknown");
+            tSlot.Field("m_daysSurvived").SetValue(info != null ? info.daysSurvived : 0);
+            tSlot.Field("m_diffSetting").SetValue(info != null ? info.difficulty : 1);
+            tSlot.Field("m_rainDiff").SetValue(info != null ? info.rainDiff : 1);
+            tSlot.Field("m_resourceDiff").SetValue(info != null ? info.resourceDiff : 1);
+            tSlot.Field("m_breachDiff").SetValue(info != null ? info.breachDiff : 1);
+            tSlot.Field("m_factionDiff").SetValue(info != null ? info.factionDiff : 1);
+            tSlot.Field("m_moodDiff").SetValue(info != null ? info.moodDiff : 1);
+            tSlot.Field("m_mapSize").SetValue(info != null ? info.mapSize : 0);
+            tSlot.Field("m_fog").SetValue(info != null && info.fog);
+
+            string rawTime = info != null && !string.IsNullOrEmpty(info.saveTime) ? info.saveTime : entry.updatedAt;
+            string displayTime = FormatDisplayTime(rawTime);
+            if (tSlot.Field("m_dateSaved").FieldExists()) tSlot.Field("m_dateSaved").SetValue(displayTime);
+            if (tSlot.Field("m_saveTime").FieldExists()) tSlot.Field("m_saveTime").SetValue(displayTime);
+        }
+
+        private static void RefreshSnapshotSlotLabels(SlotSelectionPanel panel)
+        {
+            try
+            {
+                SaveSnapshotBrowserSession session;
+                if (!SaveSnapshotBrowserState.TryGet(panel, out session))
+                    return;
+
+                int page = PagingManager.GetPage(panel);
+                var labels = Traverse.Create(panel).Field("m_slotButtonLabels").GetValue<System.Collections.IList>();
+                if (labels == null)
+                    return;
+
+                for (int i = 0; i < labels.Count && i < 3; i++)
+                {
+                    UILabel label = labels[i] as UILabel;
+                    if (label == null)
+                        continue;
+
+                    SaveBackupSnapshotInfo snapshot = session.GetSnapshotAt(page, i);
+                    int ordinal = (page * 3) + i + 1;
+                    if (snapshot == null || snapshot.Entry == null)
+                    {
+                        label.text = "Snapshot: Empty";
+                        continue;
+                    }
+
+                    string rawTime = snapshot.Entry.saveInfo != null && !string.IsNullOrEmpty(snapshot.Entry.saveInfo.saveTime)
+                        ? snapshot.Entry.saveInfo.saveTime
+                        : snapshot.Entry.updatedAt;
+                    label.text = "Snapshot " + ordinal + ":\n" + FormatDisplayTime(rawTime);
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[SnapshotBrowser] Error refreshing snapshot labels: " + ex.Message);
+            }
+        }
+
+        private static bool HandleSnapshotSlotChosen(SlotSelectionPanel panel)
+        {
+            try
+            {
+                if (!panel.m_inputEnabled || (SaveManager.instance != null && SaveManager.instance.isDeleting))
+                    return false;
+
+                int chosenSlotIndex = Traverse.Create(panel).Field("m_selectedSlot").GetValue<int>();
+                if (chosenSlotIndex < 0 || chosenSlotIndex > 2)
+                    return false;
+
+                SaveBackupSnapshotInfo snapshot = SaveSnapshotBrowserState.GetSnapshotAt(panel, chosenSlotIndex);
+                if (snapshot == null)
+                    return false;
+
+                Action continueLoad = delegate { ConfirmSnapshotLoad(panel, chosenSlotIndex, snapshot); };
+                int futureCount = SaveBackupService.CountSnapshotsAfter(snapshot);
+                if (SnapshotLoadWarningDialog.ShouldShow(futureCount))
+                {
+                    SnapshotLoadWarningDialog.Show(snapshot.Entry, futureCount, continueLoad, null);
+                    return false;
+                }
+
+                continueLoad();
+                return false;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[SnapshotBrowser] Snapshot slot chosen error: " + ex);
+                return false;
+            }
+        }
+
+        private static void ConfirmSnapshotLoad(SlotSelectionPanel panel, int chosenSlotIndex, SaveBackupSnapshotInfo snapshot)
+        {
+            SlotManifest manifest = snapshot != null ? snapshot.SlotManifest : null;
+            SaveVerification.VerificationState state = manifest != null
+                ? SaveVerification.Verify(manifest)
+                : SaveVerification.VerificationState.Match;
+
+            if (manifest != null && state != SaveVerification.VerificationState.Match)
+            {
+                SaveDetailsWindow.Show(snapshot.Entry, manifest, state, true, delegate
+                {
+                    RestoreAndLoadSnapshot(panel, chosenSlotIndex, snapshot);
+                });
+                return;
+            }
+
+            RestoreAndLoadSnapshot(panel, chosenSlotIndex, snapshot);
+        }
+
+        private static void RestoreAndLoadSnapshot(SlotSelectionPanel panel, int chosenSlotIndex, SaveBackupSnapshotInfo snapshot)
+        {
+            string error;
+            if (!SaveBackupService.RestoreSnapshot(snapshot, out error))
+            {
+                MessageBox.Show(MessageBoxButtons.Okay_Button,
+                    "Failed to restore backup snapshot:\n" + (error ?? "Unknown error"),
+                    null,
+                    null,
+                    null,
+                    false);
+                return;
+            }
+
+            SaveBackupService.ArmBranchTruncation(snapshot);
+            QueueSnapshotLoad(panel, chosenSlotIndex, snapshot);
+        }
+
+        private static void QueueSnapshotLoad(SlotSelectionPanel panel, int chosenSlotIndex, SaveBackupSnapshotInfo snapshot)
+        {
+            SaveSnapshotBrowserSession session;
+            if (!SaveSnapshotBrowserState.TryGet(panel, out session))
+                return;
+
+            if (snapshot.Entry != null && snapshot.Entry.saveInfo != null)
+                ApplyDifficultySettings(snapshot.Entry.saveInfo);
+
+            int slotToLoad;
+            if (session.SourceIsVanilla || snapshot.IsVanilla)
+            {
+                SaveProtectionPatches.LoadGamePatch._forceLoad = true;
+                slotToLoad = SlotPagingScope.SaveTypeToSlotNumber(snapshot.SaveType != SaveManager.SaveType.Invalid
+                    ? snapshot.SaveType
+                    : session.SourceVanillaSaveType);
+            }
+            else
+            {
+                SaveManager.SaveType transportSaveType = session.SourceScope.GetTransportSaveType(chosenSlotIndex);
+                PlatformSaveProxy.SetNextLoad(transportSaveType, snapshot.ScenarioId, snapshot.SaveId);
+                SaveProtectionPatches.LoadGamePatch._forceLoad = true;
+                slotToLoad = session.SourceScope.GetTransportSlotNumber(chosenSlotIndex);
+            }
+
+            try
+            {
+                var t = Traverse.Create(panel);
+                var loadingGraphic = t.Field("m_loadingGraphic").GetValue<GameObject>();
+                if (loadingGraphic != null)
+                    loadingGraphic.SetActive(true);
+            }
+            catch
+            {
+            }
+
+            panel.m_inputEnabled = false;
+            SaveManager.instance.SetSlotToLoad(slotToLoad);
         }
 
         private static bool HandleVanillaSlotChosen(SlotSelectionPanel panel)

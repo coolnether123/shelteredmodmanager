@@ -93,8 +93,23 @@ namespace ShelteredAPI.Saves.Paging{
         internal static class SlotSelectionPanel_Start_Patch
         {
             static void Postfix()
-            {
-            }
+        {
         }
     }
+
+    [PatchPolicy(PatchDomain.SaveFlow, "SlotSelectionSnapshotBackRouting",
+        TargetBehavior = "Back button exits backup snapshot archives before leaving the save selection screen",
+        FailureMode = "Back button can leave the save screen instead of returning from a snapshot archive to the save list.",
+        RollbackStrategy = "Disable the SaveFlow patch domain or remove the snapshot back routing patch.",
+        StartupTiming = PatchStartupTiming.SaveFlowCritical)]
+    [HarmonyPatch(typeof(SlotSelectionPanel), "OnCancel")]
+    internal static class SlotSelectionPanel_OnCancel_Patch
+    {
+        static bool Prefix(SlotSelectionPanel __instance)
+        {
+            return SlotSelectionPatchCoordinator.OnCancelPrefix(__instance);
+        }
+    }
+}
+
 }

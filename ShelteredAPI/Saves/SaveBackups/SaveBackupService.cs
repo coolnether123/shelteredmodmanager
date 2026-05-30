@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using ModAPI.Core;
 using ModAPI.Harmony;
+using ModAPI.Util;
 using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Saves.Backups
@@ -13,6 +14,7 @@ namespace ShelteredAPI.Saves.Backups
         private const string RetentionKey = "SaveBackupRetention";
         private const string LegacyRetentionModeKey = "SaveBackupRetentionMode";
         private const string LegacyRetentionCountKey = "SaveBackupRetentionCount";
+        private const string BranchMarkerDirectoryName = "branches";
         private static readonly object Sync = new object();
         private static readonly HashSet<string> CurrentSavePassSnapshots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -28,13 +30,18 @@ namespace ShelteredAPI.Saves.Backups
         {
             try
             {
+                if (SaveRuntimeState.HasActiveCustomSave || SaveRuntimeState.HasAnyPendingSave())
+                {
+                    MMLog.WriteDebug("[SaveBackup] Manager pre-save backup skipped for custom save context; custom router will capture the overwrite.");
+                    return;
+                }
+
                 SaveManager.SaveType type = ResolveCurrentSaveType(manager);
                 if (IsReservedSaveType(type))
                     return;
 
                 SaveBackupTarget target;
-                if (TryCreateCustomTargetForSaveType(type, out target)
-                    || TryCreateVanillaTarget(type, out target))
+                if (TryCreateVanillaTarget(type, out target))
                 {
                     CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, false, true);
                 }
@@ -50,8 +57,17 @@ namespace ShelteredAPI.Saves.Backups
             try
             {
                 SaveBackupTarget target;
-                if (TryCreateCustomTarget(entry, out target))
-                    CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, false);
+                if (!TryCreateCustomTarget(entry, out target))
+                {
+                    MMLog.WriteInfo("[SaveBackup] Custom overwrite snapshot skipped. " + DescribeCustomTargetFailure(entry));
+                    return;
+                }
+
+                string snapshotId = CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, false);
+                MMLog.WriteInfo("[SaveBackup] Custom overwrite snapshot request. scenario="
+                    + target.ScenarioId + ", absoluteSlot=" + target.AbsoluteSlot
+                    + ", saveId=" + target.SaveId + ", timeline=" + target.TimelineKey
+                    + ", created=" + (!string.IsNullOrEmpty(snapshotId) ? snapshotId : "<none>") + ".");
             }
             catch (Exception ex)
             {
@@ -73,22 +89,140 @@ namespace ShelteredAPI.Saves.Backups
             }
         }
 
-        private static bool TryCreateCustomTargetForSaveType(SaveManager.SaveType type, out SaveBackupTarget target)
+        internal static bool TryGetCustomTimelineKey(SaveEntry entry, out string timelineKey)
         {
-            target = null;
+            timelineKey = null;
+            if (entry == null || entry.absoluteSlot <= 0)
+                return false;
 
-            PlatformSaveProxy.Target pending;
-            if (SaveRuntimeState.TryGetPendingSave(type, out pending) && pending != null)
+            string scenarioId = SaveStorageRouter.NormalizeScenarioId(entry.scenarioId);
+            string slotRoot = DirectoryProvider.SlotRoot(scenarioId, entry.absoluteSlot, false);
+            string lineageId = SaveBackupLineageStore.TryReadCustomLineageId(slotRoot);
+            if (string.IsNullOrEmpty(lineageId))
+                return false;
+
+            timelineKey = "custom:" + lineageId;
+            return true;
+        }
+
+        internal static bool TryGetVanillaTimelineKey(int vanillaSlotNumber, out string timelineKey, out SaveManager.SaveType saveType)
+        {
+            timelineKey = null;
+            saveType = SaveManager.SaveType.Invalid;
+
+            switch (vanillaSlotNumber)
             {
-                string scenarioId = SaveStorageRouter.NormalizeScenarioId(pending.scenarioId);
-                SaveEntry pendingEntry = SaveStorageRouter.Get(scenarioId, pending.saveId);
-                return TryCreateCustomTarget(pendingEntry, out target);
+                case 1: saveType = SaveManager.SaveType.Slot1; break;
+                case 2: saveType = SaveManager.SaveType.Slot2; break;
+                case 3: saveType = SaveManager.SaveType.Slot3; break;
+                case 4: saveType = SaveManager.SaveType.SlotSurrounded; break;
+                case 5: saveType = SaveManager.SaveType.SlotStasis; break;
+                default: return false;
             }
 
-            if (SaveRuntimeState.HasActiveCustomSessionFor(type))
-                return TryCreateCustomTarget(SaveRuntimeState.ActiveCustomSave, out target);
+            timelineKey = "vanilla:" + saveType;
+            return true;
+        }
 
-            return false;
+        internal static List<SaveBackupSnapshotInfo> ListSnapshots(string timelineKey, SaveBackupSnapshotSortOrder sortOrder)
+        {
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            return repository.ListSnapshots(timelineKey, sortOrder);
+        }
+
+        internal static int CountSnapshots(string timelineKey)
+        {
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            return repository.CountSnapshots(timelineKey);
+        }
+
+        internal static int CountSnapshotsAfter(SaveBackupSnapshotInfo snapshot)
+        {
+            if (snapshot == null || snapshot.Ref == null)
+                return 0;
+
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            return repository.CountSnapshotsAfter(
+                snapshot.Ref.TimelineKey,
+                snapshot.Ref.CreatedAtUtc,
+                snapshot.Ref.SnapshotId);
+        }
+
+        internal static bool RestoreSnapshot(SaveBackupSnapshotInfo snapshot, out string error)
+        {
+            error = null;
+            if (snapshot == null || snapshot.Ref == null || string.IsNullOrEmpty(snapshot.Ref.ManifestPath))
+            {
+                error = "Snapshot metadata was missing.";
+                return false;
+            }
+
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            return repository.RestoreSnapshot(snapshot.Ref.ManifestPath, out error);
+        }
+
+        internal static bool DeleteSnapshot(SaveBackupSnapshotInfo snapshot, out string error)
+        {
+            error = null;
+            if (snapshot == null || snapshot.Ref == null || string.IsNullOrEmpty(snapshot.Ref.ManifestPath))
+            {
+                error = "Snapshot metadata was missing.";
+                return false;
+            }
+
+            SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+            bool deleted = repository.DeleteSnapshot(snapshot.Ref.ManifestPath, out error);
+            if (deleted)
+                ClearBranchMarkerIfTarget(snapshot.Ref);
+
+            return deleted;
+        }
+
+        internal static void ArmBranchTruncation(SaveBackupSnapshotInfo snapshot)
+        {
+            if (snapshot == null || snapshot.Ref == null || string.IsNullOrEmpty(snapshot.Ref.TimelineKey))
+                return;
+
+            try
+            {
+                if (CountSnapshotsAfter(snapshot) <= 0)
+                {
+                    ClearBranchMarker(snapshot.Ref.TimelineKey);
+                    return;
+                }
+
+                string markerPath = GetBranchMarkerPath(snapshot.Ref.TimelineKey);
+                Directory.CreateDirectory(Path.GetDirectoryName(markerPath));
+
+                ManualJsonObject root = new ManualJsonObject();
+                root.Set("schemaVersion", ManualJsonValue.Number(1));
+                root.Set("timelineKey", ManualJsonValue.String(snapshot.Ref.TimelineKey));
+                root.Set("snapshotId", ManualJsonValue.String(snapshot.Ref.SnapshotId));
+                root.Set("snapshotCreatedAtUtc", ManualJsonValue.String(snapshot.Ref.CreatedAtUtc.ToString("o")));
+                root.Set("armedAtUtc", ManualJsonValue.String(DateTime.UtcNow.ToString("o")));
+                File.WriteAllText(markerPath, ManualJson.Serialize(root, true));
+
+                MMLog.WriteInfo("[SaveBackup] Armed branch truncation for timeline "
+                    + snapshot.Ref.TimelineKey + " at snapshot " + snapshot.Ref.SnapshotId + ".");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[SaveBackup] Failed to arm branch truncation: " + ex.Message);
+            }
+        }
+
+        private static void ClearBranchMarkerIfTarget(SaveBackupSnapshotRef snapshotRef)
+        {
+            if (snapshotRef == null || string.IsNullOrEmpty(snapshotRef.TimelineKey))
+                return;
+
+            string armedSnapshotId;
+            DateTime armedSnapshotCreatedAtUtc;
+            if (!TryReadBranchMarker(snapshotRef.TimelineKey, out armedSnapshotId, out armedSnapshotCreatedAtUtc))
+                return;
+
+            if (string.Equals(armedSnapshotId, snapshotRef.SnapshotId, StringComparison.OrdinalIgnoreCase))
+                ClearBranchMarker(snapshotRef.TimelineKey);
         }
 
         private static bool TryCreateCustomTarget(SaveEntry entry, out SaveBackupTarget target)
@@ -126,6 +260,24 @@ namespace ShelteredAPI.Saves.Backups
                 Kind = SaveBackupSourceKind.Directory
             });
             return true;
+        }
+
+        private static string DescribeCustomTargetFailure(SaveEntry entry)
+        {
+            if (entry == null)
+                return "entry=<null>.";
+            if (entry.absoluteSlot <= 0)
+                return "slot is invalid for saveId=" + (entry.id ?? "<null>") + ".";
+
+            string scenarioId = SaveStorageRouter.NormalizeScenarioId(entry.scenarioId);
+            string savePath = DirectoryProvider.EntryPath(scenarioId, entry.absoluteSlot);
+            string slotRoot = DirectoryProvider.SlotRoot(scenarioId, entry.absoluteSlot, false);
+
+            return "scenario=" + scenarioId
+                + ", absoluteSlot=" + entry.absoluteSlot
+                + ", saveId=" + (entry.id ?? "<null>")
+                + ", saveExists=" + File.Exists(savePath)
+                + ", slotRootExists=" + Directory.Exists(slotRoot) + ".";
         }
 
         private static bool TryCreateVanillaTarget(SaveManager.SaveType type, out SaveBackupTarget target)
@@ -182,6 +334,8 @@ namespace ShelteredAPI.Saves.Backups
             if (skipIfAlreadyCaptured && WasCapturedInCurrentSavePass(target.TimelineKey))
                 return null;
 
+            ApplyPendingBranchTruncation(target.TimelineKey);
+
             SaveBackupRetentionPolicy policy = ReadRetentionPolicy();
             if (policy == null || !policy.IsEnabled)
                 return null;
@@ -192,6 +346,107 @@ namespace ShelteredAPI.Saves.Backups
                 MarkCapturedInCurrentSavePass(target.TimelineKey);
 
             return snapshotId;
+        }
+
+        private static void ApplyPendingBranchTruncation(string timelineKey)
+        {
+            if (string.IsNullOrEmpty(timelineKey))
+                return;
+
+            string snapshotId;
+            DateTime snapshotCreatedAtUtc;
+            if (!TryReadBranchMarker(timelineKey, out snapshotId, out snapshotCreatedAtUtc))
+                return;
+
+            try
+            {
+                SaveBackupRepository repository = new SaveBackupRepository(DirectoryProvider.SaveBackupsRoot);
+                int deleted = repository.PruneSnapshotsAfter(timelineKey, snapshotCreatedAtUtc, snapshotId);
+                MMLog.WriteInfo("[SaveBackup] Applied branch truncation for timeline "
+                    + timelineKey + ". Deleted future snapshots: " + deleted + ".");
+            }
+            finally
+            {
+                ClearBranchMarker(timelineKey);
+            }
+        }
+
+        private static bool TryReadBranchMarker(string timelineKey, out string snapshotId, out DateTime snapshotCreatedAtUtc)
+        {
+            snapshotId = null;
+            snapshotCreatedAtUtc = DateTime.MinValue;
+
+            string markerPath = GetBranchMarkerPath(timelineKey);
+            if (!File.Exists(markerPath))
+                return false;
+
+            try
+            {
+                ManualJsonObject root;
+                string error;
+                if (!ManualJson.TryParseObject(File.ReadAllText(markerPath), out root, out error))
+                {
+                    ClearBranchMarker(timelineKey);
+                    return false;
+                }
+
+                string markerTimeline = root.GetString("timelineKey", string.Empty);
+                if (!string.Equals(markerTimeline, timelineKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    ClearBranchMarker(timelineKey);
+                    return false;
+                }
+
+                DateTime parsed;
+                if (!DateTime.TryParse(
+                    root.GetString("snapshotCreatedAtUtc", string.Empty),
+                    null,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal,
+                    out parsed))
+                {
+                    ClearBranchMarker(timelineKey);
+                    return false;
+                }
+
+                snapshotId = root.GetString("snapshotId", string.Empty);
+                snapshotCreatedAtUtc = parsed.ToUniversalTime();
+                return !string.IsNullOrEmpty(snapshotId);
+            }
+            catch
+            {
+                ClearBranchMarker(timelineKey);
+                return false;
+            }
+        }
+
+        private static void ClearBranchMarker(string timelineKey)
+        {
+            try
+            {
+                string markerPath = GetBranchMarkerPath(timelineKey);
+                if (File.Exists(markerPath))
+                    File.Delete(markerPath);
+            }
+            catch
+            {
+            }
+        }
+
+        private static string GetBranchMarkerPath(string timelineKey)
+        {
+            string branchRoot = Path.Combine(DirectoryProvider.SaveBackupsRoot, BranchMarkerDirectoryName);
+            return Path.Combine(branchRoot, SanitizePathSegment(timelineKey) + ".json");
+        }
+
+        private static string SanitizePathSegment(string value)
+        {
+            string safe = string.IsNullOrEmpty(value) ? "unknown" : value;
+            char[] invalid = Path.GetInvalidFileNameChars();
+            for (int i = 0; i < invalid.Length; i++)
+                safe = safe.Replace(invalid[i], '_');
+
+            safe = safe.Replace('\\', '_').Replace('/', '_').Replace(':', '_').Replace('|', '_');
+            return safe.Length > 96 ? safe.Substring(0, 96) : safe;
         }
 
         private static SaveBackupRetentionPolicy ReadRetentionPolicy()

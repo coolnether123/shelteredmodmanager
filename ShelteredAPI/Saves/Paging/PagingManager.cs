@@ -17,10 +17,11 @@ namespace ShelteredAPI.Saves.Paging
         private static readonly Dictionary<SlotSelectionPanel, UIElements> _ui = new Dictionary<SlotSelectionPanel, UIElements>();
         private static bool _suppressWelcomeDialogOnce;
 
-        internal class UIElements { public GameObject prev; public GameObject next; public UILabel label; }
+        internal class UIElements { public GameObject prev; public GameObject next; public GameObject sort; public UILabel label; public GameObject archiveTitleRoot; public UILabel archiveTitle; }
 
         public static int GetPage(SlotSelectionPanel p) { int v; _page.TryGetValue(p, out v); return v; }
         private static void SetPage(SlotSelectionPanel p, int v) { _page[p] = Math.Max(0, v); }
+        public static void SetPageDirect(SlotSelectionPanel p, int v) { SetPage(p, v); }
         public static void Reset(SlotSelectionPanel p) { _page[p] = 0; }
         public static void SuppressWelcomeDialogOnce() { _suppressWelcomeDialogOnce = true; }
 
@@ -68,6 +69,33 @@ namespace ShelteredAPI.Saves.Paging
             pageObj.transform.localPosition = new Vector3(0, -200, 0);
             ui.label = pageObj.GetComponent<UILabel>();
 
+            var archiveTitleObj = NGUITools.AddChild(root.gameObject, template.gameObject);
+            archiveTitleObj.name = "ModAPI_ArchiveTitle";
+            archiveTitleObj.transform.localPosition = new Vector3(0, 430, 0);
+            ui.archiveTitleRoot = archiveTitleObj;
+            ui.archiveTitle = archiveTitleObj.GetComponent<UILabel>();
+            if (ui.archiveTitle != null)
+            {
+                ui.archiveTitle.text = "Save Archive";
+                ui.archiveTitle.fontSize = 34;
+                ui.archiveTitle.width = 920;
+                ui.archiveTitle.height = 58;
+                ui.archiveTitle.alignment = NGUIText.Alignment.Center;
+                ui.archiveTitle.pivot = UIWidget.Pivot.Center;
+                ui.archiveTitle.overflowMethod = UILabel.Overflow.ShrinkContent;
+            }
+
+            // Sort Toggle (only shown while browsing snapshots)
+            ui.sort = NGUITools.AddChild(root.gameObject, template.gameObject);
+            ui.sort.name = "ModAPI_SnapshotSortButton";
+            ui.sort.transform.localPosition = new Vector3(0, -235, 0);
+            var sortLabel = ui.sort.GetComponent<UILabel>();
+            sortLabel.text = "Newest first";
+            sortLabel.fontSize = 16;
+            NGUITools.AddWidgetCollider(ui.sort);
+            if (ui.sort.GetComponent<UIButton>() == null) ui.sort.AddComponent<UIButton>();
+            UIEventListener.Get(ui.sort).onClick = (go) => ToggleSnapshotSort(panel);
+
             _ui[panel] = ui;
             Update(panel);
         }
@@ -82,21 +110,46 @@ namespace ShelteredAPI.Saves.Paging
 
             int p = GetPage(panel);
             SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
+            SaveSnapshotBrowserSession snapshotSession;
+            bool browsingSnapshots = SaveSnapshotBrowserState.TryGet(panel, out snapshotSession);
 
-            bool canPrev = p > 0;
+            bool canPrev = browsingSnapshots ? true : p > 0;
 
             int maxSlot = scope.GetMaxSlot();
             int lastSavePage = (maxSlot < scope.FirstExpandedSlot) ? 0 : (maxSlot - scope.FirstExpandedSlot) / 3 + 1;
             
             // Allow navigation if we are on the vanilla page (to go to first custom page)
             // or if we hasn't reached the page after the last save yet.
-            bool canNext = (p == 0) || (p <= lastSavePage);
+            bool canNext = browsingSnapshots ? p + 1 < snapshotSession.PageCount : (p == 0) || (p <= lastSavePage);
 
             var prevBtn = ui.prev?.GetComponent<UIButton>();
             var nextBtn = ui.next?.GetComponent<UIButton>();
             if (prevBtn != null) prevBtn.isEnabled = canPrev;
             if (nextBtn != null) nextBtn.isEnabled = canNext;
-            if (ui.label != null) ui.label.text = "Page " + (p + 1);
+            if (ui.prev != null)
+            {
+                UILabel prevLabel = ui.prev.GetComponent<UILabel>();
+                if (prevLabel != null) prevLabel.text = browsingSnapshots && p == 0 ? "< Saves" : "< Prev";
+            }
+            if (ui.label != null)
+            {
+                ui.label.text = browsingSnapshots
+                    ? "Snapshots " + (p + 1) + "/" + snapshotSession.PageCount
+                    : "Page " + (p + 1);
+            }
+            if (ui.sort != null)
+            {
+                ui.sort.SetActive(browsingSnapshots);
+                UILabel sortLabel = ui.sort.GetComponent<UILabel>();
+                if (sortLabel != null && browsingSnapshots)
+                    sortLabel.text = snapshotSession.SortLabel;
+            }
+            if (ui.archiveTitleRoot != null)
+            {
+                ui.archiveTitleRoot.SetActive(browsingSnapshots);
+                if (ui.archiveTitle != null && browsingSnapshots)
+                    ui.archiveTitle.text = snapshotSession != null ? snapshotSession.ArchiveTitle : "Save Archive";
+            }
         }
 
         /// <summary>
@@ -107,6 +160,29 @@ namespace ShelteredAPI.Saves.Paging
             try
             {
                 int p = GetPage(panel);
+
+                if (SaveSnapshotBrowserState.IsActive(panel))
+                {
+                    SaveSnapshotBrowserSession snapshotSession;
+                    SaveSnapshotBrowserState.TryGet(panel, out snapshotSession);
+                    if (delta < 0 && p <= 0)
+                    {
+                        SaveSnapshotBrowserState.Exit(panel);
+                        panel.RefreshSaveSlotInfo();
+                        Update(panel);
+                        return;
+                    }
+
+                    int targetPage = Math.Max(0, p + delta);
+                    int maxPage = snapshotSession != null ? snapshotSession.PageCount - 1 : 0;
+                    if (targetPage > maxPage)
+                        return;
+
+                    SetPage(panel, targetPage);
+                    panel.RefreshSaveSlotInfo();
+                    Update(panel);
+                    return;
+                }
 
                 if (delta < 0 && p <= 0) 
                 {
@@ -156,6 +232,13 @@ namespace ShelteredAPI.Saves.Paging
                 // ALWAYS update UI buttons state
                 Update(panel);
             }
+        }
+
+        private static void ToggleSnapshotSort(SlotSelectionPanel panel)
+        {
+            SaveSnapshotBrowserState.ToggleSort(panel);
+            panel.RefreshSaveSlotInfo();
+            Update(panel);
         }
     }
 }

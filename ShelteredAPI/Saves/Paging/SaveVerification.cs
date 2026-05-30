@@ -30,84 +30,56 @@ namespace ShelteredAPI.Saves.Paging
 
         private static UIFont _cachedUIFont;
         private static Font _cachedTTFFont;
+        private static UIAtlas _cachedVerificationAtlas;
+
+        private static void HideAllIcons()
+        {
+            foreach (var kv in _slotIcons)
+            {
+                if (kv.Value != null)
+                    kv.Value.SetActive(false);
+            }
+        }
 
         public static void UpdateIcons(SlotSelectionPanel panel)
+        {
+            if (panel == null)
+                return;
+
+            if (SaveSnapshotBrowserState.IsActive(panel))
+            {
+                HideAllIcons();
+                return;
+            }
+
+            UpdateIcons(panel, SlotSelectionSaveEntryResolver.Resolve(panel));
+        }
+
+        public static void UpdateIcons(SlotSelectionPanel panel, IList<SlotSelectionVisibleSave> visibleSaves)
         {
             if (panel == null)
             {
                 return;
             }
 
-            var buttons = panel.GetComponentsInChildren<SaveSlotButton>(true);
-            int page = PagingManager.GetPage(panel);
-            SlotPagingScope scope = SlotPagingScopeResolver.Resolve(panel);
+            HideAllIcons();
+            if (SaveSnapshotBrowserState.IsActive(panel))
+                return;
 
-            // Reset all icons for known buttons
-            foreach(var kv in _slotIcons) 
-            {
-                if(kv.Value != null) kv.Value.SetActive(false);
-            }
-
-            // Find an atlas that has the sprites we need
-            UIAtlas sampleAtlas = null;
-            string[] desiredSprites = { "Checkmark", "Tick", "Cancel", "Close" };
-            var allAtlases = Resources.FindObjectsOfTypeAll<UIAtlas>();
-            
-            foreach(var a in allAtlases)
-            {
-                if (a.spriteList == null || a.spriteList.Count == 0) continue;
-                foreach(var spriteName in desiredSprites)
-                {
-                    if (a.GetSprite(spriteName) != null)
-                    {
-                        sampleAtlas = a;
-                        break;
-                    }
-                }
-                if (sampleAtlas != null) break;
-            }
+            UIAtlas sampleAtlas = GetVerificationAtlas();
 
             if (sampleAtlas == null) return;
 
-            // Sort buttons by visual Y position to ensure top-to-bottom mapping
-            var sortedButtons = buttons.Where(b => b != null && b.gameObject.activeInHierarchy)
-                                       .OrderByDescending(b => b.transform.localPosition.y)
-                                       .ToList();
+            if (visibleSaves == null)
+                return;
 
-            for (int i = 0; i < sortedButtons.Count; i++)
+            for (int i = 0; i < visibleSaves.Count; i++)
             {
-                var btn = sortedButtons[i];
-                int uiSlotIndex = i; // Visual index 0, 1, 2
-
-                // Calculate absolute slot
-                int absoluteSlot;
-                if (page == 0) absoluteSlot = uiSlotIndex + 1;
-                else absoluteSlot = scope.GetAbsoluteSlot(page, uiSlotIndex, 3);
-
-                // Find save entry
-                var all = page == 0 ? new SaveEntry[0] : scope.ListSaves();
-                SaveEntry target = null;
-                foreach(var e in all) 
-                {
-                    if (e.absoluteSlot == absoluteSlot) { target = e; break; }
-                }
-
-                if (target == null && page == 0 && absoluteSlot <= 5)
-                {
-                    // For vanilla slots 1-5, try to read save info
-                    var saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(absoluteSlot);
-                    
-                    // Only create entry if save file actually exists
-                    if (saveInfo != null)
-                    {
-                        target = new SaveEntry { 
-                            id = "vanilla_slot_" + absoluteSlot,
-                            absoluteSlot = absoluteSlot,
-                            name = "Slot " + absoluteSlot,
-                            saveInfo = saveInfo
-                        };
-                    }
-                }
+                SlotSelectionVisibleSave visible = visibleSaves[i];
+                var btn = visible.Button;
+                int uiSlotIndex = visible.UiSlotIndex;
+                int absoluteSlot = visible.DisplaySlotNumber;
+                SaveEntry target = visible.Entry;
 
                 // Skip icon creation if no save exists
                 if (target == null)
@@ -197,8 +169,8 @@ namespace ShelteredAPI.Saves.Paging
                 var bgTexture = iconGO.GetComponent<UITexture>();
                 
                 // Get Manifest and State
-                string manifestScenarioId = page == 0 ? "Standard" : scope.StorageScenarioId;
-                var slotRoot = DirectoryProvider.SlotRoot(manifestScenarioId, absoluteSlot, false);
+                string manifestScenarioId = visible.StorageScenarioId;
+                var slotRoot = DirectoryProvider.SlotRoot(manifestScenarioId, visible.ManifestSlotNumber, false);
                 var manPath = Path.Combine(slotRoot, "manifest.json");
                 
                 VerificationState state = VerificationState.Match;
@@ -218,7 +190,7 @@ namespace ShelteredAPI.Saves.Paging
                         MMLog.WriteError($"[SaveVerification] Failed to deserialize manifest for {manifestScenarioId}/slot {absoluteSlot}: {ex.Message}");
                     }
                 }
-                else if (page > 0 || absoluteSlot > 3)
+                else if (!visible.IsVanillaPage || absoluteSlot > 3)
                 {
                     state = VerificationState.Unknown;
                 }
@@ -312,28 +284,24 @@ namespace ShelteredAPI.Saves.Paging
                 var capTarget = target;
                 var capManifest = manifest;
                 var capState = state;
-                int capSlot = absoluteSlot;
-                int capUiSlotIndex = uiSlotIndex;
-                int capPage = page;
-                SlotPagingScope capScope = scope;
+                SlotSelectionVisibleSave capVisible = visible;
 
                 EventDelegate.Set(iconButton.onClick, () => {
                     SaveDetailsWindow.Show(capTarget, capManifest, capState, false, () => {
                         int slotToLoad;
 
-                        if (capPage == 0)
+                        if (capVisible.IsVanillaPage)
                         {
                             // For vanilla saves, ensure we bypass the anti-mod-mismatch loading block
                             SaveProtectionPatches.LoadGamePatch._forceLoad = true;
-                            slotToLoad = capSlot;
+                            slotToLoad = capVisible.TransportSlotNumber;
                         }
                         else
                         {
-                            var virtualSaveType = capScope.GetTransportSaveType(capUiSlotIndex);
                             // For custom saves, set the redirect target
-                            PlatformSaveProxy.SetNextLoad(virtualSaveType, capScope.StorageScenarioId, capTarget.id);
+                            PlatformSaveProxy.SetNextLoad(capVisible.TransportSaveType, capVisible.StorageScenarioId, capTarget.id);
                             SaveProtectionPatches.LoadGamePatch._forceLoad = true;
-                            slotToLoad = capScope.GetTransportSlotNumber(capUiSlotIndex);
+                            slotToLoad = capVisible.TransportSlotNumber;
 
                             // Transfer difficulty settings from the manifest/save info
                             if (capTarget.saveInfo != null)
@@ -373,6 +341,32 @@ namespace ShelteredAPI.Saves.Paging
                 string spriteName = spriteNames[i];
                 if (!string.IsNullOrEmpty(spriteName) && atlas.GetSprite(spriteName) != null)
                     return spriteName;
+            }
+
+            return null;
+        }
+
+        private static UIAtlas GetVerificationAtlas()
+        {
+            if (_cachedVerificationAtlas != null)
+                return _cachedVerificationAtlas;
+
+            string[] desiredSprites = { "Checkmark", "Tick", "Cancel", "Close" };
+            var allAtlases = Resources.FindObjectsOfTypeAll<UIAtlas>();
+
+            foreach (var atlas in allAtlases)
+            {
+                if (atlas == null || atlas.spriteList == null || atlas.spriteList.Count == 0)
+                    continue;
+
+                foreach (var spriteName in desiredSprites)
+                {
+                    if (atlas.GetSprite(spriteName) == null)
+                        continue;
+
+                    _cachedVerificationAtlas = atlas;
+                    return _cachedVerificationAtlas;
+                }
             }
 
             return null;

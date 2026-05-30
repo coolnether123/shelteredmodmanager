@@ -63,17 +63,17 @@ namespace ShelteredAPI.Saves.Backups
         internal static byte[] Decompress(byte[] input)
         {
             if (input == null || input.Length < Magic.Length + 4)
-                throw new InvalidDataException("Compressed backup blob is truncated.");
+                throw new IOException("Compressed backup blob is truncated.");
 
             for (int i = 0; i < Magic.Length; i++)
             {
                 if (input[i] != Magic[i])
-                    throw new InvalidDataException("Compressed backup blob has an unsupported header.");
+                    throw new IOException("Compressed backup blob has an unsupported header.");
             }
 
             int outputLength = ReadInt32(input, Magic.Length);
             if (outputLength < 0)
-                throw new InvalidDataException("Compressed backup blob has an invalid length.");
+                throw new IOException("Compressed backup blob has an invalid length.");
 
             byte[] output = new byte[outputLength];
             int inputPosition = Magic.Length + 4;
@@ -82,7 +82,7 @@ namespace ShelteredAPI.Saves.Backups
             while (outputPosition < outputLength)
             {
                 if (inputPosition >= input.Length)
-                    throw new InvalidDataException("Compressed backup blob ended inside a token group.");
+                    throw new IOException("Compressed backup blob ended inside a token group.");
 
                 byte flags = input[inputPosition++];
                 for (int bit = 0; bit < 8 && outputPosition < outputLength; bit++)
@@ -90,14 +90,14 @@ namespace ShelteredAPI.Saves.Backups
                     if ((flags & (1 << bit)) == 0)
                     {
                         if (inputPosition >= input.Length)
-                            throw new InvalidDataException("Compressed backup blob ended inside a literal.");
+                            throw new IOException("Compressed backup blob ended inside a literal.");
 
                         output[outputPosition++] = input[inputPosition++];
                         continue;
                     }
 
                     if (inputPosition + 1 >= input.Length)
-                        throw new InvalidDataException("Compressed backup blob ended inside a match.");
+                        throw new IOException("Compressed backup blob ended inside a match.");
 
                     int encoded = input[inputPosition] | (input[inputPosition + 1] << 8);
                     inputPosition += 2;
@@ -105,7 +105,7 @@ namespace ShelteredAPI.Saves.Backups
                     int offset = encoded >> 4;
                     int length = (encoded & 0x0F) + MinMatchLength;
                     if (offset <= 0 || offset > outputPosition)
-                        throw new InvalidDataException("Compressed backup blob contains an invalid match offset.");
+                        throw new IOException("Compressed backup blob contains an invalid match offset.");
 
                     for (int i = 0; i < length && outputPosition < outputLength; i++)
                     {

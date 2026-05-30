@@ -25,6 +25,14 @@ namespace ShelteredAPI.Saves.Backups
             return lineageId;
         }
 
+        internal static string TryReadCustomLineageId(string slotRoot)
+        {
+            if (string.IsNullOrEmpty(slotRoot) || !Directory.Exists(slotRoot))
+                return null;
+
+            return TryReadLineageId(Path.Combine(slotRoot, IdentityFileName));
+        }
+
         private static string TryReadLineageId(string path)
         {
             try
