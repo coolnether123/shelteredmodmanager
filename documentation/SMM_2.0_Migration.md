@@ -1,12 +1,12 @@
-# SMM 2.0 Beta Migration
+# SMM 2.0 Migration
 
-Sheltered Mod Manager 2.0 Beta is a breaking mod-system update. Mods built for SMM 1.2.2 or the old 1.3 beta line may not work until rebuilt for ModAPI/ShelteredAPI 2.0.
+Sheltered Mod Manager 2.0 is a breaking mod-system update. Mods built for SMM 1.2.2 or the old 1.3 beta line may not work until rebuilt for ModAPI/ShelteredAPI 2.0.
 
 Mod authors rebuilding packages should use [For Modders: 2.0 API Migration](For_Modders_2.0_API_Migration.md) and the canonical [ModAPI/ShelteredAPI assembly boundary](README.md#assembly-boundary-canonical). This page is the player upgrade checklist.
 
 ## For Players
 
-- Back up saves before switching to SMM 2.0 Beta.
+- Back up saves before switching to SMM 2.0.
 - Use 2.0 versions of mods when they are available.
 - Do not assume a 1.2.2 or 1.3 mod is safe just because it appears in the manager.
 - Read the compatibility status in the mod details panel before enabling a mod.
@@ -16,7 +16,7 @@ If a save used older API mods, update those mods first. If no 2.0 version exists
 
 ## Upgrade Checklist
 
-1. Install SMM 2.0 Beta into a clean Sheltered test install.
+1. Install SMM 2.0 into a clean Sheltered test install.
 2. Launch once with no mods enabled.
 3. Add updated 2.0 public mods one at a time.
 4. Launch after each mod and check `SMM\mod_manager.log`.

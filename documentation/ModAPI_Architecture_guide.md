@@ -1,6 +1,6 @@
-# ModAPI v2.0 Beta.1 Architecture Guide
+# ModAPI v2.0 Architecture Guide
 
-This document summarizes loader/runtime architecture for maintainers and advanced integration work. The 2.0 Beta.1 line is a breaking clean API line.
+This document summarizes loader/runtime architecture for maintainers and advanced integration work. The 2.0 line is a breaking clean API line.
 
 Mod authors should use the canonical [assembly boundary](README.md#assembly-boundary-canonical) rather than treating this internal map as setup instructions. For exact public signatures, use [API Signatures Reference](API_Signatures_Reference.md).
 

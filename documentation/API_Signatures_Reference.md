@@ -1,6 +1,6 @@
-# ModAPI + ShelteredAPI v2.0 Beta.1 API Signatures Reference
+# ModAPI + ShelteredAPI v2.0 API Signatures Reference
 
-This is the signature lookup sheet for public APIs present in the current repo. The 2.0 Beta.1 line is a breaking clean API line.
+This is the signature lookup sheet for public APIs present in the current repo. The 2.0 line is a breaking clean API line.
 
 Use this file for type names and method shapes only. For setup, assembly selection, stability rules, and task workflows, start with the [Documentation Index](README.md) and its canonical [assembly boundary](README.md#assembly-boundary-canonical).
 
@@ -29,7 +29,7 @@ Use this file for type names and method shapes only. For setup, assembly selecti
 | Compatibility exports | [Save Manifest / Support Bundle](#save-manifest--support-bundle-smm-20) |
 | Documentation contract | [Documentation Model](#documentation-model-smm-20) |
 
-> Status note: runtime UI/store/cooking signatures are API preview, and custom scenario authoring/runtime/scoring surfaces are experimental in Beta.1. See the linked task guides before publishing against those areas.
+> Status note: runtime UI/store/cooking signatures are API preview, and custom scenario authoring/runtime/scoring surfaces are experimental in 2.0. See the linked task guides before publishing against those areas.
 - Shared SMM 2.0 naming and DTO rules are defined in [ShelteredAPI Guide: Shared Facade Conventions](ShelteredAPI_Guide.md#shared-facade-conventions).
 
 ## Plugin Lifecycle (`ModAPI.Core`)

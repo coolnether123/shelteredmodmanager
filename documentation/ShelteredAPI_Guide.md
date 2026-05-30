@@ -1,4 +1,4 @@
-# When To Use ShelteredAPI (v2.0 Beta.1)
+# When To Use ShelteredAPI (v2.0)
 
 `ShelteredAPI.dll` is the game-facing layer for mods that operate on Sheltered content, saves, runtime UI/input, gameplay events, actors/characters, or scenarios. Use [Core ModAPI Basics](ModAPI_Developer_Guide.md) first for a plugin that only needs neutral framework behavior.
 
@@ -78,20 +78,20 @@ New SMM 2.0 service APIs follow the facade pattern represented by `ShelteredSave
 | Lifetime token | `<Domain>Handle` or `<Domain>RegistrationHandle` | Implement `IDisposable` for removable registrations/open resources. |
 | Diagnostic export | `<Domain>DiagnosticsReport` with `<Domain>Diagnostic` or `<Domain>DiagnosticEntry` records | Reports contain concrete facts, not capability discovery. |
 
-Existing Beta.1 names that predate these rules remain supported, including `SaveEntry` and `PatchApplyReport`. New public `ShelteredAPI` classes, interfaces, structs, and enums require a justified `ShelteredAPI_PublicSurface_Baseline.tsv` row and exact callable signatures in [API Signatures Reference](API_Signatures_Reference.md). Reserved signature sections identify ownership only; they are not callable API promises.
+Existing 2.0 names that predate these rules remain supported, including `SaveEntry` and `PatchApplyReport`. New public `ShelteredAPI` classes, interfaces, structs, and enums require a justified `ShelteredAPI_PublicSurface_Baseline.tsv` row and exact callable signatures in [API Signatures Reference](API_Signatures_Reference.md). Reserved signature sections identify ownership only; they are not callable API promises.
 
 ## Status Of Advanced Surfaces
 
-| Surface | Beta.1 Status | Consequence For Authors |
+| Surface | 2.0 Status | Consequence For Authors |
 |---------|---------------|-------------------------|
 | Content, events, input, actors/characters, and save facades | Documented public author surface | Follow the relevant guide and signature reference. |
 | Expedition map context and generation-policy intent | API preview | Query runtime facts safely; generation adapters consuming policy intent remain follow-up work. |
 | Map-marker/expedition-actor snapshots and support bundles | API preview / diagnostics | Use copied facts for integrations and reports; do not treat them as mutable game state. |
 | Player queue snapshots and conservative restore | API preview | Queue capacity is observed metadata, not framework-owned policy. |
-| Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments before stable 2.0. |
+| Runtime UI, stores, item reservations/assignments, and cooking stations | API preview | Expect small API or behavior adjustments within the 2.0 line. |
 | Custom scenario browser/XML authoring/runtime/scoring snapshots | Experimental | Test using disposable saves and do not promise stable long-running-save behavior yet. |
 
-Back up saves before testing any save-changing or experimental scenario behavior. The public beta status applies even when a particular facade is documented.
+Back up saves before testing any save-changing or experimental scenario behavior. The stable release status applies even when a particular facade is documented.
 
 ## Stable Surface Versus Internals
 

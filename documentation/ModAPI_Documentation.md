@@ -1,10 +1,10 @@
-# ModAPI Project Map (v2.0 Beta.1)
+# ModAPI Project Map (v2.0)
 
 This document is the current high-level map of the codebase. It is intentionally module-oriented rather than a stale file-by-file dump.
 
 For exact callable signatures, use [API Signatures Reference](API_Signatures_Reference.md). Mod authors should make assembly choices from the canonical [assembly boundary](README.md#assembly-boundary-canonical); this project map describes implementation ownership.
 
-The 2.0 Beta.1 line is a breaking clean API line.
+The 2.0 line is a breaking clean API line.
 
 ## Compatibility Matrix
 

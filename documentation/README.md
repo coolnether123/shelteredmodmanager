@@ -1,8 +1,8 @@
 # Sheltered Mod Manager Documentation
 
-This index is the mod-author entry point for SMM v2.0 Beta.1. Start with the shortest path below, then open a task or reference guide only when your mod needs it.
+This index is the mod-author entry point for SMM v2.0. Start with the shortest path below, then open a task or reference guide only when your mod needs it.
 
-> **Beta safety:** SMM 2.0 Beta.1 is a public beta, not stable 2.0. Back up saves before testing mods or framework upgrades. Custom scenarios are experimental and should first be tested with disposable saves.
+> **Upgrade safety:** Back up saves before testing mods or framework upgrades. Custom scenarios and expanded vanilla save modes should first be smoke tested with disposable saves.
 
 ## Start Here / First Mod
 
@@ -83,7 +83,7 @@ These surfaces are useful after a first plugin is working. Preview or experiment
 | Focused UI clone/bind/color/lifecycle helpers | API preview | [`ShelteredUI` signatures](API_Signatures_Reference.md#ui-extensions-smm-20) |
 | Expedition map context, generation intent, markers, and actor projections | API preview | [`ShelteredMap` signatures](API_Signatures_Reference.md#expedition-map-context-smm-20) and [`ShelteredMapMarkers` signatures](API_Signatures_Reference.md#map-markers-smm-20) |
 | Player queue snapshots, conservative restore, and change notification | API preview | [`ShelteredQueues` signatures](API_Signatures_Reference.md#player-queues-smm-20) |
-| Custom scenario XML/code registration, authoring, runtime triggers, and scoring snapshots | Experimental in Beta.1 | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
+| Custom scenario XML/code registration, authoring, runtime triggers, and scoring snapshots | Supported 2.0 surface | [Custom Scenarios Guide](Custom_Scenarios_Guide.md) |
 | Spine settings UI | Supported | [Spine Settings Guide](Spine_Settings_Guide.md) |
 | Patch metadata, conflict reports, and cooperative patching | Current neutral API | [Patch Governance](Patch_Governance.md) |
 | Save manifests and structured support-bundle capture | API preview / support tooling | [`ShelteredSupportBundle` signatures](API_Signatures_Reference.md#save-manifest--support-bundle-smm-20) |
@@ -106,8 +106,8 @@ The signature reference is a lookup sheet, not a tutorial. Begin with a task gui
 
 | Situation | Document |
 |-----------|----------|
-| Player upgrading to the public beta | [SMM 2.0 Beta Migration](SMM_2.0_Beta_Migration.md) |
+| Player upgrading to 2.0 | [SMM 2.0 Migration](SMM_2.0_Migration.md) |
 | Mod author rebuilding a 1.x mod | [For Modders: 2.0 API Migration](For_Modders_2.0_API_Migration.md) |
 | Runtime/log failure investigation | [API Troubleshooting](API_Troubleshooting.md) |
 | Known release issues and reporting data | [Known Issues](Known_Issues.md) |
-| Beta.1 release scope/checklist | [Beta.1 Release Notes](Release_Beta.1.md) |
+| 2.0 release scope/checklist | [2.0 Release Notes](Release_2.0.md) |

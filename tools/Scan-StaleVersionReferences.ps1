@@ -53,15 +53,15 @@ function Get-Classification {
         return "keep: intentional first-run migration warning"
     }
 
-    if ($RelativePath -like "documentation/Release_Beta.1.md" -and $Line -match "supersedes|previous") {
+    if ($RelativePath -like "documentation/Release_2.0.md" -and $Line -match "supersedes|previous") {
         return "keep: explicitly references superseded release"
     }
 
     if ($RelativePath -in @(
-        "documentation/SMM_2.0_Beta_Migration.md",
+        "documentation/SMM_2.0_Migration.md",
         "documentation/Known_Issues.md",
         "documentation/For_Modders_2.0_API_Migration.md",
-        "documentation/Player_Announcement_2.0_Beta.md"
+        "documentation/Player_Announcement_2.0.md"
     )) {
         return "keep: intentional 2.0 migration warning"
     }

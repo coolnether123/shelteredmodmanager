@@ -1,6 +1,6 @@
-# Custom Scenarios Guide (v2.0 Beta.1, Experimental)
+# Custom Scenarios Guide (v2.0, Experimental)
 
-The 2.0 Beta.1 line is a breaking clean API line. Custom scenarios are experimental in Beta.1 and should be tested with disposable saves before being used in long-running playthroughs.
+The 2.0 line is a breaking clean API line. Custom scenarios are experimental in 2.0 and should be tested with disposable saves before being used in long-running playthroughs.
 
 Exact scenario signatures are in [API Signatures Reference](API_Signatures_Reference.md); use this guide for authoring flow and behavior. Reference choices and facade rules are centralized in the canonical [assembly boundary](README.md#assembly-boundary-canonical).
 

@@ -1,4 +1,4 @@
-# Core ModAPI Basics (v2.0 Beta.1)
+# Core ModAPI Basics (v2.0)
 
 This guide covers the minimum host-neutral plugin model. For a packaged first mod, start with [How to Develop a Plugin](how%20to%20develop%20a%20plugin.md). For exact method shapes, use [API Signatures Reference](API_Signatures_Reference.md).
 
@@ -95,4 +95,4 @@ Use a stable mod ID and feature ID for each decision family. Draws from one name
 - Prefer the documented facade for a task before patching vanilla behavior.
 - Use `ctx.Log` for mod logs.
 - Treat public facades and DTOs as the author surface; internal manager-binding classes may move.
-- The Beta.1 API is a breaking public-beta line. Back up saves before testing a mod that touches save or scenario behavior.
+- The 2.0 API is a breaking stable line. Back up saves before testing a mod that touches save or scenario behavior.

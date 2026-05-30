@@ -1,7 +1,7 @@
 # ModAPI + ShelteredAPI Events Guide
-## Current v2.0 Beta.1 Line
+## Current v2.0 Line
 
-The 2.0 Beta.1 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical), and use [API Signatures Reference](API_Signatures_Reference.md) for exact current signatures.
+The 2.0 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical), and use [API Signatures Reference](API_Signatures_Reference.md) for exact current signatures.
 
 ## Compatibility Matrix
 

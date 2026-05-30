@@ -1,4 +1,4 @@
-# ModAPI Transpiler and Debugging Guide (v2.0 Beta.1)
+# ModAPI Transpiler and Debugging Guide (v2.0)
 
 This guide focuses on the current transpiler stack under `ModAPI.Harmony.Transpilers`.
 

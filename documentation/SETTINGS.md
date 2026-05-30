@@ -1,6 +1,6 @@
-# Settings and Persistence (v2.0 Beta.1)
+# Settings and Persistence (v2.0)
 
-The 2.0 Beta.1 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical); this guide covers only settings and persistence choices.
+The 2.0 line is a breaking clean API line. See the canonical [assembly boundary and stability rules](README.md#assembly-boundary-canonical); this guide covers only settings and persistence choices.
 
 ## Compatibility Matrix
 

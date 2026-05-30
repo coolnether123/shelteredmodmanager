@@ -29,4 +29,4 @@ Use both fields when the mod references both assemblies. Do not leave old 1.3 me
 
 Use plain language on Nexus pages:
 
-`Requires Sheltered Mod Manager 2.0 Beta or newer. Older SMM 1.2.2/1.3 versions are not supported by this package. Back up saves before switching major SMM versions.`
+`Requires Sheltered Mod Manager 2.0 or newer. Older SMM 1.2.2/1.3 versions are not supported by this package. Back up saves before switching major SMM versions.`

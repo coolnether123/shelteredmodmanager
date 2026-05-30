@@ -1,10 +1,10 @@
 ![Mod Manager GUI](documentation/screenshots/mod_manager_gui.png)
-# Sheltered Mod Manager v2.0 Beta.1
+# Sheltered Mod Manager v2.0
 
 **A modding framework for [Sheltered](https://store.steampowered.com/app/356040/Sheltered/) by Unicube & Team17**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-![ModAPI Version](https://img.shields.io/badge/ModAPI-v2.0_Beta.1-blue)
+![ModAPI Version](https://img.shields.io/badge/ModAPI-v2.0-blue)
 
 > **Credit:** Originally created by benjaminfoo (2019)
 > **Maintained by:** Coolnether123 (2025-Present)
@@ -42,12 +42,12 @@ Sheltered Mod Manager (SMM) is a modding framework for Sheltered that installs n
 ![Desktop Manager](documentation/screenshots/mod_manager_gui_mods.png)
 *The Mod Manager mods tab allows you to customize your load order, resolve dependencies, and view detailed mod information.*
 
-### New in ModAPI v2.0 Beta.1
+### New in ModAPI v2.0
 
 The 2.0 line is a breaking clean API line. It separates the neutral modding framework from Sheltered-specific runtime integrations and expands the in-game authoring surface.
 
 - **ModAPI/ShelteredAPI split:** `ModAPI.dll` owns neutral contracts; `ShelteredAPI.dll` owns Sheltered content, saves, input, UI, events, actors, and scenarios.
-- **Custom scenarios (experimental):** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes. Beta.1 testers should treat this as an active testing surface.
+- **Custom scenarios:** XML packs and code registrations appear in the in-game scenario browser, with dependency lockout, custom save binding, triggers, scheduled effects, and win/loss outcomes.
 - **Release-gated safety fixes:** custom-scenario save APIs reject built-in save ids, scenario XML saves use temp/validate/replace with backups, Unity log filtering never suppresses errors/asserts/exceptions, and Nexus installs verify copied files before success.
 - **Rebindable controls:** Vanilla Sheltered actions and mod-defined input actions share one keybinding UI with persisted bindings and conflict handling.
 - **Modern developer experience:** `ModManagerBase`, attribute settings, Spine settings UI, event bus, isolated persistence, Harmony helpers, and runtime diagnostics remain supported.
@@ -55,13 +55,13 @@ The 2.0 line is a breaking clean API line. It separates the neutral modding fram
 > [!TIP]
 > Mod authors should start with the [Documentation Index](documentation/README.md), which gives the first-mod path and the canonical ModAPI/ShelteredAPI boundary rule before linking advanced guides.
 
-The API is in beta. See the documentation for current capabilities.
+The API is stable for the 2.0 release line. See the documentation for current capabilities.
 
-### Beta Safety Notes
+### Release Safety Notes
 
-This release line is a public beta, not stable 2.0. Back up saves before testing, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
+Back up saves before upgrading major framework versions, especially when testing custom scenarios, Stasis/Surrounded expanded saves, or mods built against 1.2.2.
 
-Family Expansion and Deep Expansion need rebuilt/tested packages before they should be listed as compatible with Beta.1. Some 1.2.2 mods may need migration because Sheltered-specific APIs moved from `ModAPI.dll` to `ShelteredAPI.dll`.
+Family Expansion and Deep Expansion need rebuilt/tested packages before they should be listed as compatible with 2.0. Some 1.2.2 mods may need migration because Sheltered-specific APIs moved from `ModAPI.dll` to `ShelteredAPI.dll`.
 
 ## Installation
 
@@ -284,8 +284,8 @@ Use [Documentation Index](documentation/README.md) for the ordered first-mod, ad
 | Author custom scenarios | [Custom Scenarios Guide](documentation/Custom_Scenarios_Guide.md) |
 | Patch game code with Harmony | [Harmony Patches](documentation/how%20to%20develop%20a%20patch%20with%20harmony.md) |
 | Check exact API signatures | [API Signatures Reference](documentation/API_Signatures_Reference.md) |
-| Review this release | [Beta.1 Release Notes](documentation/Release_Beta.1.md) |
-| Upgrade from older SMM | [SMM 2.0 Beta Migration](documentation/SMM_2.0_Beta_Migration.md) |
+| Review this release | [2.0 Release Notes](documentation/Release_2.0.md) |
+| Upgrade from older SMM | [SMM 2.0 Migration](documentation/SMM_2.0_Migration.md) |
 | Known issues | [Known Issues](documentation/Known_Issues.md) |
 | Modder migration | [For Modders: 2.0 API Migration](documentation/For_Modders_2.0_API_Migration.md) |
 | Nexus app registration readiness | [Nexus Official Registration Readiness](documentation/Nexus_Official_Readiness.md) |

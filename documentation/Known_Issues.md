@@ -1,10 +1,10 @@
 # Known Issues
 
-This list is for SMM 2.0 Beta.1 release testing.
+This list is for SMM 2.0 release tracking.
 
-## Public Beta Scope
+## Release Scope
 
-- SMM 2.0 Beta is not a stable release.
+- SMM 2.0 is the stable release line for the split ModAPI/ShelteredAPI contract.
 - Custom scenario browser/editor features are experimental.
 - Nexus publish tools are experimental and hidden unless explicitly enabled.
 - Older 1.2.2 or 1.3 mods may require a 2.0 rebuild before they are safe for saves.
@@ -12,8 +12,8 @@ This list is for SMM 2.0 Beta.1 release testing.
 ## Mods Needing Extra Verification
 
 - Family Expansion and Deep Expansion need rebuilt 2.0 packages and smoke tests before they should be advertised as compatible.
-- Faction Overhaul should not be advertised as stable with SMM 2.0 Beta unless its runtime checklist passes on real saves.
-- Expanded Map Sizes needs real save/runtime testing before stable release status.
+- Faction Overhaul should not be advertised as stable with SMM 2.0 unless its runtime checklist passes on real saves.
+- Expanded Map Sizes needs real save/runtime testing before it should be advertised as fully compatible.
 
 ## Nexus Install Notes
 

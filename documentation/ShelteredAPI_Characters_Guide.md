@@ -1,6 +1,6 @@
-# ShelteredAPI Actors Guide (v2.0 Beta.1)
+# ShelteredAPI Actors Guide (v2.0)
 
-The 2.0 Beta.1 line is a breaking clean API line. See the canonical [assembly boundary and typed escape-hatch rule](README.md#assembly-boundary-canonical); this guide covers actor and character usage.
+The 2.0 line is a breaking clean API line. See the canonical [assembly boundary and typed escape-hatch rule](README.md#assembly-boundary-canonical); this guide covers actor and character usage.
 
 This guide covers the actor system exposed through:
 
