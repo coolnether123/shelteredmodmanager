@@ -133,6 +133,10 @@ namespace Manager.Core.Services
             if (raw.TryGetValue("LogLevel", out logLevel))
                 settings.LogLevel = logLevel;
 
+            string debugLogScope;
+            if (raw.TryGetValue("DebugLogScope", out debugLogScope))
+                settings.DebugLogScope = debugLogScope;
+
             string logCategories;
             if (raw.TryGetValue("LogCategories", out logCategories))
             {
@@ -308,6 +312,7 @@ namespace Manager.Core.Services
             data["DarkMode"] = settings.DarkMode.ToString();
             data["DevMode"] = settings.DevMode.ToString();
             data["LogLevel"] = settings.LogLevel ?? "Info";
+            data["DebugLogScope"] = settings.DebugLogScope ?? AppSettings.DebugLogScopeMod;
             
             // Convert HashSet to comma-separated string
             var cats = settings.LogCategories ?? new HashSet<string>();

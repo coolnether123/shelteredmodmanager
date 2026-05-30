@@ -11,6 +11,8 @@ namespace Manager.Core.Models
         public const int SaveBackupRetentionAlways = -1;
         public const int SaveBackupRetentionDisabled = 0;
         public const int DefaultSaveBackupRetention = 3;
+        public const string DebugLogScopeMod = "Mod";
+        public const string DebugLogScopeAll = "All";
 
         // Paths
         private string _gamePath = string.Empty;
@@ -19,6 +21,7 @@ namespace Manager.Core.Models
         private string _lastSelectedModId = string.Empty;
         private bool _devMode = false;
         private string _logLevel = "Info";
+        private string _debugLogScope = DebugLogScopeMod;
         private HashSet<string> _logCategories;
         private bool _ignoreOrderChecks = false;
         private bool _skipHarmonyDependencyCheck = false;
@@ -83,6 +86,12 @@ namespace Manager.Core.Models
         { 
             get { return _logLevel; } 
             set { _logLevel = value; } 
+        }
+
+        public string DebugLogScope
+        {
+            get { return NormalizeDebugLogScope(_debugLogScope); }
+            set { _debugLogScope = NormalizeDebugLogScope(value); }
         }
         
         public HashSet<string> LogCategories 
@@ -257,6 +266,17 @@ namespace Manager.Core.Models
             if (value == 0)
                 return "none";
             return value.ToString();
+        }
+
+        public static string NormalizeDebugLogScope(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            if (normalized.Equals(DebugLogScopeAll, StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Everything", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Framework", StringComparison.OrdinalIgnoreCase))
+                return DebugLogScopeAll;
+
+            return DebugLogScopeMod;
         }
     }
 }

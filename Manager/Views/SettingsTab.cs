@@ -47,6 +47,8 @@ namespace Manager.Views
         private CheckBox _devModeCheckBox;
         private GroupBox _devSettingsGroup;
         private CheckBox _verboseLoggingCheckBox;
+        private Label _debugLogScopeLabel;
+        private ComboBox _debugLogScopeCombo;
         private CheckBox _skipHarmonyCheckBox;
         private CheckBox _ignoreOrderCheckBox;
         private CheckBox _includeNexusPrereleaseCheckBox;
@@ -293,35 +295,53 @@ namespace Manager.Views
             _devSettingsGroup = new GroupBox();
             _devSettingsGroup.Text = "Developer Options";
             _devSettingsGroup.Font = new Font("Segoe UI", 10f);
-            _devSettingsGroup.Size = new Size(500, 160);
+            _devSettingsGroup.Size = new Size(500, 195);
             _devSettingsGroup.Visible = false;
 
             _verboseLoggingCheckBox = new CheckBox();
-            _verboseLoggingCheckBox.Text = "Verbose Logging (Debug Level)";
+            _verboseLoggingCheckBox.Text = "Debug Logging";
             _verboseLoggingCheckBox.Font = new Font("Segoe UI", 10f);
             _verboseLoggingCheckBox.AutoSize = true;
             _verboseLoggingCheckBox.Location = new Point(15, 25);
+
+            _debugLogScopeLabel = new Label();
+            _debugLogScopeLabel.Text = "Debug Scope";
+            _debugLogScopeLabel.Font = new Font("Segoe UI", 9f);
+            _debugLogScopeLabel.AutoSize = true;
+            _debugLogScopeLabel.Location = new Point(35, 57);
+
+            _debugLogScopeCombo = new ComboBox();
+            _debugLogScopeCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+            _debugLogScopeCombo.Font = new Font("Segoe UI", 9f);
+            _debugLogScopeCombo.Items.Add("Mod logs only");
+            _debugLogScopeCombo.Items.Add("All logs");
+            _debugLogScopeCombo.SelectedIndex = 0;
+            _debugLogScopeCombo.Location = new Point(130, 53);
+            _debugLogScopeCombo.Size = new Size(170, 25);
+            _helpToolTip.SetToolTip(_debugLogScopeCombo, "Mod logs only keeps plugin debug output and suppresses ModAPI/ShelteredAPI framework debug noise. All logs includes loader, patch, UI, save, and framework debug traces.");
 
             _skipHarmonyCheckBox = new CheckBox();
             _skipHarmonyCheckBox.Text = "Skip Harmony Dependency Check";
             _skipHarmonyCheckBox.Font = new Font("Segoe UI", 10f);
             _skipHarmonyCheckBox.AutoSize = true;
-            _skipHarmonyCheckBox.Location = new Point(15, 55);
+            _skipHarmonyCheckBox.Location = new Point(15, 88);
 
             _ignoreOrderCheckBox = new CheckBox();
             _ignoreOrderCheckBox.Text = "Ignore Load Order Checks";
             _ignoreOrderCheckBox.Font = new Font("Segoe UI", 10f);
             _ignoreOrderCheckBox.AutoSize = true;
-            _ignoreOrderCheckBox.Location = new Point(15, 85);
+            _ignoreOrderCheckBox.Location = new Point(15, 118);
 
             _includeNexusPrereleaseCheckBox = new CheckBox();
             _includeNexusPrereleaseCheckBox.Text = "Include Nexus beta/prerelease files";
             _includeNexusPrereleaseCheckBox.Font = new Font("Segoe UI", 10f);
             _includeNexusPrereleaseCheckBox.AutoSize = true;
-            _includeNexusPrereleaseCheckBox.Location = new Point(15, 115);
+            _includeNexusPrereleaseCheckBox.Location = new Point(15, 148);
             _helpToolTip.SetToolTip(_includeNexusPrereleaseCheckBox, "Also inspect Nexus file versions so beta/prerelease uploads can appear as updates.");
 
             _devSettingsGroup.Controls.Add(_verboseLoggingCheckBox);
+            _devSettingsGroup.Controls.Add(_debugLogScopeLabel);
+            _devSettingsGroup.Controls.Add(_debugLogScopeCombo);
             _devSettingsGroup.Controls.Add(_skipHarmonyCheckBox);
             _devSettingsGroup.Controls.Add(_ignoreOrderCheckBox);
             _devSettingsGroup.Controls.Add(_includeNexusPrereleaseCheckBox);
@@ -387,6 +407,7 @@ namespace Manager.Views
             _darkModeCheckBox.CheckedChanged += DarkModeCheckBox_CheckedChanged;
             _devModeCheckBox.CheckedChanged += DevModeCheckBox_CheckedChanged;
             _verboseLoggingCheckBox.CheckedChanged += VerboseLoggingCheckBox_CheckedChanged;
+            _debugLogScopeCombo.SelectedIndexChanged += DebugLogScopeCombo_SelectedIndexChanged;
             _skipHarmonyCheckBox.CheckedChanged += SkipHarmonyCheckBox_CheckedChanged;
             _ignoreOrderCheckBox.CheckedChanged += IgnoreOrderCheckBox_CheckedChanged;
             _includeNexusPrereleaseCheckBox.CheckedChanged += IncludeNexusPrereleaseCheckBox_CheckedChanged;
@@ -526,6 +547,7 @@ namespace Manager.Views
                 _devModeCheckBox.Checked = _settings.DevMode;
                 _devSettingsGroup.Visible = _settings.DevMode;
                 _verboseLoggingCheckBox.Checked = string.Equals(_settings.LogLevel, "Debug", StringComparison.OrdinalIgnoreCase);
+                ApplyDebugLogScopeToUi(_settings.DebugLogScope);
                 _skipHarmonyCheckBox.Checked = _settings.SkipHarmonyDependencyCheck;
                 _ignoreOrderCheckBox.Checked = _settings.IgnoreOrderChecks;
                 _includeNexusPrereleaseCheckBox.Checked = _settings.IncludeNexusPrereleaseFiles;
@@ -561,6 +583,7 @@ namespace Manager.Views
             _settings.DarkMode = _darkModeCheckBox.Checked;
             _settings.DevMode = _devModeCheckBox.Checked;
             _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
+            _settings.DebugLogScope = ReadDebugLogScopeFromUi();
             _settings.SkipHarmonyDependencyCheck = _skipHarmonyCheckBox.Checked;
             _settings.IgnoreOrderChecks = _ignoreOrderCheckBox.Checked;
             _settings.IncludeNexusPrereleaseFiles = _includeNexusPrereleaseCheckBox.Checked;
@@ -623,11 +646,32 @@ namespace Manager.Views
             return (int)_saveBackupRetentionCountNumeric.Value;
         }
 
+        private void ApplyDebugLogScopeToUi(string scope)
+        {
+            string normalized = AppSettings.NormalizeDebugLogScope(scope);
+            _debugLogScopeCombo.SelectedIndex = normalized == AppSettings.DebugLogScopeAll ? 1 : 0;
+            UpdateDebugLogScopeInputs();
+        }
+
+        private string ReadDebugLogScopeFromUi()
+        {
+            return _debugLogScopeCombo.SelectedIndex == 1
+                ? AppSettings.DebugLogScopeAll
+                : AppSettings.DebugLogScopeMod;
+        }
+
         private void UpdateSaveBackupRetentionInputs()
         {
             bool limited = _saveBackupRetentionCombo.SelectedIndex == 0;
             _saveBackupRetentionCountLabel.Enabled = limited;
             _saveBackupRetentionCountNumeric.Enabled = limited;
+        }
+
+        private void UpdateDebugLogScopeInputs()
+        {
+            bool enabled = _verboseLoggingCheckBox.Checked;
+            _debugLogScopeLabel.Enabled = enabled;
+            _debugLogScopeCombo.Enabled = enabled;
         }
 
         private void UpdateNexusStatusLabels()
@@ -735,7 +779,21 @@ namespace Manager.Views
         private void VerboseLoggingCheckBox_CheckedChanged(object sender, EventArgs e)
         {
             if (_settings != null)
+            {
                 _settings.LogLevel = _verboseLoggingCheckBox.Checked ? "Debug" : "Info";
+                _settings.DebugLogScope = ReadDebugLogScopeFromUi();
+            }
+            UpdateDebugLogScopeInputs();
+            TriggerSave();
+        }
+
+        private void DebugLogScopeCombo_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (_suppressEvents)
+                return;
+
+            if (_settings != null)
+                _settings.DebugLogScope = ReadDebugLogScopeFromUi();
             TriggerSave();
         }
 

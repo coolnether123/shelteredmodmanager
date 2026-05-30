@@ -60,6 +60,10 @@ namespace Manager.Views
             _devSettingsGroup.ForeColor = Color.White;
             _devSettingsGroup.BackColor = Color.FromArgb(50, 50, 52);
             _verboseLoggingCheckBox.ForeColor = Color.White;
+            _debugLogScopeLabel.ForeColor = Color.Gainsboro;
+            _debugLogScopeCombo.BackColor = Color.FromArgb(60, 60, 62);
+            _debugLogScopeCombo.ForeColor = Color.White;
+            _debugLogScopeCombo.FlatStyle = FlatStyle.Flat;
             _skipHarmonyCheckBox.ForeColor = Color.White;
             _ignoreOrderCheckBox.ForeColor = Color.White;
             _includeNexusPrereleaseCheckBox.ForeColor = Color.White;
@@ -115,6 +119,10 @@ namespace Manager.Views
             _devSettingsGroup.ForeColor = SystemColors.ControlText;
             _devSettingsGroup.BackColor = SystemColors.Control;
             _verboseLoggingCheckBox.ForeColor = SystemColors.ControlText;
+            _debugLogScopeLabel.ForeColor = SystemColors.ControlText;
+            _debugLogScopeCombo.BackColor = SystemColors.Window;
+            _debugLogScopeCombo.ForeColor = SystemColors.WindowText;
+            _debugLogScopeCombo.FlatStyle = FlatStyle.Standard;
             _skipHarmonyCheckBox.ForeColor = SystemColors.ControlText;
             _ignoreOrderCheckBox.ForeColor = SystemColors.ControlText;
             _includeNexusPrereleaseCheckBox.ForeColor = SystemColors.ControlText;

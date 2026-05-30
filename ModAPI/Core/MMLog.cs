@@ -47,6 +47,12 @@ namespace ModAPI.Core
             IO
         }
 
+        private enum DebugLogScope
+        {
+            Mod,
+            All
+        }
+
         /// <summary>
         /// One recent log entry kept in memory for diagnostics and debug UI.
         /// </summary>
@@ -62,6 +68,7 @@ namespace ModAPI.Core
         private static readonly object _lock = new object();
         private static string _logPath;
         private static LogLevel _minLevel = LogLevel.Info;
+        private static DebugLogScope _debugLogScope = DebugLogScope.Mod;
         private static readonly HashSet<LogCategory> _enabledCategories = new HashSet<LogCategory>();
         private static readonly Dictionary<string, int> _modLogCounts = new Dictionary<string, int>();
         private static long _logFileSize = 0;
@@ -108,7 +115,7 @@ namespace ModAPI.Core
                 var smmPath = Path.Combine(Directory.GetCurrentDirectory(), "SMM");
                 var binPath = Path.Combine(smmPath, "bin");
                 var ini = Path.Combine(binPath, "mod_manager.ini");
-                string devMode = null, logLevel = null, logCategories = null;
+                string logLevel = null, logCategories = null, debugLogScope = null;
                 if (File.Exists(ini))
                 {
                     foreach (var raw in File.ReadAllLines(ini))
@@ -120,27 +127,19 @@ namespace ModAPI.Core
                         var key = line.Substring(0, idx).Trim();
                         var val = line.Substring(idx + 1).Trim();
                         _iniSettings[key] = val;
-                        if (key.Equals("DevMode", StringComparison.OrdinalIgnoreCase)) devMode = val;
-                        else if (key.Equals("LogLevel", StringComparison.OrdinalIgnoreCase)) logLevel = val;
+                        if (key.Equals("LogLevel", StringComparison.OrdinalIgnoreCase)) logLevel = val;
                         else if (key.Equals("LogCategories", StringComparison.OrdinalIgnoreCase)) logCategories = val;
+                        else if (key.Equals("DebugLogScope", StringComparison.OrdinalIgnoreCase)) debugLogScope = val;
                     }
                 }
-                // DevMode or Debug LogLevel = enable ALL categories for verbose logging
-                if (!string.IsNullOrEmpty(devMode) && devMode.ToLower() == "true")
-                {
-                    _minLevel = LogLevel.Debug;
-                    // Enable all categories for verbose logging
-                    _enabledCategories.Clear();
-                    foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
-                        _enabledCategories.Add(cat);
-                }
+
+                _debugLogScope = ParseDebugLogScope(debugLogScope);
 
                 var level = TryParseLogLevel(logLevel);
                 if (level.HasValue)
                 {
                     _minLevel = level.Value;
-                    // If Debug level is set, also enable all categories
-                    if (level.Value == LogLevel.Debug)
+                    if (level.Value == LogLevel.Debug && _debugLogScope == DebugLogScope.All)
                     {
                         _enabledCategories.Clear();
                         foreach (LogCategory cat in Enum.GetValues(typeof(LogCategory)))
@@ -177,6 +176,8 @@ namespace ModAPI.Core
             banner.AppendLine(string.Format("Unity Version:   {0}", unityVersion));
             banner.AppendLine(string.Format("Data Path:       {0}", Application.dataPath));
             banner.AppendLine(string.Format("Log Level:       {0}", _minLevel));
+            if (_minLevel == LogLevel.Debug)
+                banner.AppendLine(string.Format("Debug Scope:     {0}", _debugLogScope));
             banner.AppendLine("=================================================================================");
 
             try { File.AppendAllText(_logPath, banner.ToString(), Encoding.UTF8); } 
@@ -195,6 +196,20 @@ namespace ModAPI.Core
             {
                 return null;
             }
+        }
+
+        private static DebugLogScope ParseDebugLogScope(string value)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                var trimmed = value.Trim();
+                if (trimmed.Equals("All", StringComparison.OrdinalIgnoreCase)
+                    || trimmed.Equals("Everything", StringComparison.OrdinalIgnoreCase)
+                    || trimmed.Equals("Framework", StringComparison.OrdinalIgnoreCase))
+                    return DebugLogScope.All;
+            }
+
+            return DebugLogScope.Mod;
         }
 
         private static LogCategory? TryParseLogCategory(string value)
@@ -222,13 +237,13 @@ namespace ModAPI.Core
 
         public static void WriteDebug(string message, LogCategory category = LogCategory.General)
         {
-            if (!ShouldLog(LogLevel.Debug, category)) return;
+            if (LogLevel.Debug < _minLevel) return;
             WriteInternal(LogLevel.Debug, category, GetLightweightCallerInfo(), message);
         }
 
         public static void WriteDebugBlock(string heading, IEnumerable<string> lines, LogCategory category = LogCategory.General)
         {
-            if (!ShouldLog(LogLevel.Debug, category)) return;
+            if (LogLevel.Debug < _minLevel) return;
             WriteInternal(LogLevel.Debug, category, GetLightweightCallerInfo(), BuildBlock(heading, lines));
         }
 
@@ -456,7 +471,7 @@ namespace ModAPI.Core
 
         private static void WriteInternal(LogLevel level, LogCategory category, string source, string message)
         {
-            if (level < _minLevel) return;
+            if (!ShouldLog(level, category, source)) return;
             if (message == null) message = string.Empty;
 
             var now = DateTime.Now;
@@ -464,10 +479,6 @@ namespace ModAPI.Core
 
             lock (_lock)
             {
-                // Category filtering enabled - only configured categories log (unless Error level)
-                if (!_enabledCategories.Contains(category) && level < LogLevel.Error)
-                    return;
-
                 if (!string.IsNullOrEmpty(_lastMsg) && string.Equals(comparableMessage, _lastMsg, StringComparison.Ordinal))
                 {
                     if (_repeatCount == 0)
@@ -510,15 +521,27 @@ namespace ModAPI.Core
             return sb.ToString();
         }
 
-        private static bool ShouldLog(LogLevel level, LogCategory category)
+        private static bool ShouldLog(LogLevel level, LogCategory category, string source = null)
         {
             if (level < _minLevel)
                 return false;
+
+            if (level == LogLevel.Debug && _debugLogScope == DebugLogScope.Mod)
+                return IsModDebugSource(category, source);
 
             if (level < LogLevel.Error && !_enabledCategories.Contains(category))
                 return false;
 
             return true;
+        }
+
+        private static bool IsModDebugSource(LogCategory category, string source)
+        {
+            if (string.IsNullOrEmpty(source))
+                return false;
+
+            ModEntry entry;
+            return ModRegistry.TryGetMod(source, out entry) && entry != null;
         }
 
         private static void WriteToFile(string message)

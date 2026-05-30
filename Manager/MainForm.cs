@@ -844,6 +844,7 @@ namespace Manager
                     lines.Add("DarkMode=" + (_settings.DarkMode ? "True" : "False"));
                     lines.Add("DevMode=" + (_settings.DevMode ? "True" : "False"));
                     lines.Add("LogLevel=" + (_settings.LogLevel ?? "Info"));
+                    lines.Add("DebugLogScope=" + (_settings.DebugLogScope ?? AppSettings.DebugLogScopeMod));
                     lines.Add("AutoCondenseSaves=" + (_settings.AutoCondenseSaves ?? "ask"));
                     lines.Add("SaveBackupRetention=" + AppSettings.FormatSaveBackupRetention(_settings.SaveBackupRetention));
                     
@@ -1487,6 +1488,8 @@ namespace Manager
                 changes.Add("DevMode");
             if (!string.Equals(previous.LogLevel, current.LogLevel, StringComparison.OrdinalIgnoreCase))
                 changes.Add("LogLevel");
+            if (!string.Equals(previous.DebugLogScope, current.DebugLogScope, StringComparison.OrdinalIgnoreCase))
+                changes.Add("DebugLogScope");
             if (previous.IgnoreOrderChecks != current.IgnoreOrderChecks)
                 changes.Add("IgnoreOrderChecks");
             if (previous.SkipHarmonyDependencyCheck != current.SkipHarmonyDependencyCheck)
