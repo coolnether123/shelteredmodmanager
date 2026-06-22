@@ -598,14 +598,12 @@ namespace Manager.Views
 
         private void LaunchButton_Click(object sender, EventArgs e)
         {
-            Log("Launching Sheltered with mods...");
             if (LaunchRequested != null)
                 LaunchRequested(true);
         }
 
         private void LaunchVanillaButton_Click(object sender, EventArgs e)
         {
-            Log("Launching Sheltered (vanilla)...");
             if (LaunchRequested != null)
                 LaunchRequested(false);
         }

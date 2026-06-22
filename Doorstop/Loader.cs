@@ -17,11 +17,6 @@ internal static class LoaderDebugLog
         get { return Path.Combine("SMM", "mod_manager.log"); }
     }
 
-    private static string RootLogPath
-    {
-        get { return "mod_manager.log"; }
-    }
-
     public static void Reset(string message)
     {
         try
@@ -30,11 +25,7 @@ internal static class LoaderDebugLog
         }
         catch { }
 
-        try
-        {
-            File.WriteAllText(SmmLogPath, message + Environment.NewLine);
-        }
-        catch { }
+        try { File.WriteAllText(SmmLogPath, message + Environment.NewLine); } catch { }
     }
 
     public static void Write(string message)
@@ -56,7 +47,6 @@ internal static class LoaderDebugLog
             catch { }
 
             try { File.AppendAllText(SmmLogPath, line); } catch { }
-            try { File.AppendAllText(RootLogPath, line); } catch { }
         }
     }
 }

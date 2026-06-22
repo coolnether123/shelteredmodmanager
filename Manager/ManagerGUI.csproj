@@ -195,6 +195,7 @@
 SET CONFIG=$(Configuration)
 SET SMM_DIR=%25BASE%25Dist\SMM
 SET BIN_DIR=%25SMM_DIR%25\bin
+SET DOORSTOP_PROXY_DIR=%25SMM_DIR%25\Doorstop
 SET DECOMPILER_DIR=%25BIN_DIR%25\decompiler
 SET MODS_DIR=%25BASE%25Dist\mods
 SET DOORSTOP_DLL=%25BASE%25Doorstop\bin\%25CONFIG%25\Doorstop.dll
@@ -203,6 +204,9 @@ SET MANAGER_EXE=%25TargetPath%25
 
 mkdir "%25SMM_DIR%25" 2&gt;nul
 mkdir "%25BIN_DIR%25" 2&gt;nul
+mkdir "%25DOORSTOP_PROXY_DIR%25" 2&gt;nul
+mkdir "%25DOORSTOP_PROXY_DIR%25\x86" 2&gt;nul
+mkdir "%25DOORSTOP_PROXY_DIR%25\x64" 2&gt;nul
 mkdir "%25DECOMPILER_DIR%25" 2&gt;nul
 mkdir "%25MODS_DIR%25" 2&gt;nul
 
@@ -210,7 +214,9 @@ if exist "%25MANAGER_EXE%25" copy /y "%25MANAGER_EXE%25" "%25SMM_DIR%25\"
 if exist "%25MODAPI_DLL%25" copy /y "%25MODAPI_DLL%25" "%25SMM_DIR%25\"
 if exist "%25DOORSTOP_DLL%25" copy /y "%25DOORSTOP_DLL%25" "%25BIN_DIR%25\"
 
-if exist "%25BASE%25libs\winhttp.dll" copy /y "%25BASE%25libs\winhttp.dll" "%25BASE%25Dist\"
+if exist "%25BASE%25libs\x86\winhttp.dll" copy /y "%25BASE%25libs\x86\winhttp.dll" "%25DOORSTOP_PROXY_DIR%25\x86\"
+if exist "%25BASE%25libs\x64\winhttp.dll" copy /y "%25BASE%25libs\x64\winhttp.dll" "%25DOORSTOP_PROXY_DIR%25\x64\"
+if exist "%25BASE%25libs\x64\winhttp.dll" copy /y "%25BASE%25libs\x64\winhttp.dll" "%25BASE%25Dist\"
 
 if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.dll" "%25MODS_DIR%25\PluginConsole\Assemblies\"
 if exist "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" copy /y "%25BASE%25PluginConsole\bin\%25CONFIG%25\PluginConsole.pdb" "%25MODS_DIR%25\PluginConsole\Assemblies\"

@@ -40,6 +40,7 @@ namespace Manager
         private NexusUploadTab _nexusUploadTab;
         private SettingsTab _settingsTab;
         private AboutTab _aboutTab;
+        private const int ModLaunchVerificationTimeoutMs = 60000;
 
         // Services
         private SettingsService _settingsService;
@@ -545,14 +546,8 @@ namespace Manager
                 if (!_settings.IsGamePathValid) return;
                 
                 string gameDir = Path.GetDirectoryName(_settings.GamePath);
-                // Look for mod_manager.log in SMM folder (standard location) or root
+                // All SMM-owned logs live under SMM. Do not read stale root-folder logs.
                 string logPath = Path.Combine(Path.Combine(gameDir, "SMM"), "mod_manager.log");
-                
-                if (!File.Exists(logPath))
-                {
-                    // Fallback to root just in case
-                    logPath = Path.Combine(gameDir, "mod_manager.log");
-                }
 
                 if (File.Exists(logPath))
                 {
@@ -794,7 +789,7 @@ namespace Manager
                 }
 
                 // Save settings before launch
-                _settingsService.Save(_settings);
+                SaveSettingsFromUi();
 
                 if (withMods)
                 {
@@ -824,9 +819,11 @@ namespace Manager
                 return;
             }
 
-            ReconcileLoadOrderForLaunch();
+            int enabledModCount = ReconcileLoadOrderForLaunch();
+            _gameSetupTab.Log("Launching Sheltered with " + enabledModCount + " mod(s).");
             SetupDoorstop();
             if (!PreflightCheck()) return;
+            DeleteLegacyRootLogs(Path.GetDirectoryName(_settings.GamePath));
 
             try
             {
@@ -902,16 +899,235 @@ namespace Manager
                 // Launch the game
                 var startInfo = new System.Diagnostics.ProcessStartInfo();
                 startInfo.FileName = _settings.GamePath;
-                startInfo.WorkingDirectory = Path.GetDirectoryName(_settings.GamePath);
+                string launchGameDir = Path.GetDirectoryName(_settings.GamePath);
+                startInfo.WorkingDirectory = launchGameDir;
                 startInfo.UseShellExecute = false;
-                System.Diagnostics.Process.Start(startInfo);
+                DateTime launchStartedAt = DateTime.Now;
+                var process = System.Diagnostics.Process.Start(startInfo);
                 
-                _gameSetupTab.Log("Launched Sheltered with mods");
+                StartModLaunchVerification(process, launchGameDir, launchStartedAt);
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Failed to launch: " + ex.Message, "Error",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private sealed class ModLaunchVerificationContext
+        {
+            public System.Diagnostics.Process Process;
+            public string GameDir;
+            public DateTime LaunchStartedAt;
+        }
+
+        private sealed class ModLaunchStatus
+        {
+            public bool StartupComplete;
+            public bool Fatal;
+            public string Message;
+        }
+
+        private void StartModLaunchVerification(System.Diagnostics.Process process, string gameDir, DateTime launchStartedAt)
+        {
+            if (process == null || string.IsNullOrEmpty(gameDir))
+            {
+                _gameSetupTab.Log("SMM launch verification skipped because the game process could not be inspected.");
+                return;
+            }
+
+            var context = new ModLaunchVerificationContext();
+            context.Process = process;
+            context.GameDir = gameDir;
+            context.LaunchStartedAt = launchStartedAt;
+            System.Threading.ThreadPool.QueueUserWorkItem(VerifyModLaunchWorker, context);
+        }
+
+        private void VerifyModLaunchWorker(object state)
+        {
+            var context = state as ModLaunchVerificationContext;
+            if (context == null)
+                return;
+
+            string logPath = Path.Combine(Path.Combine(context.GameDir, "SMM"), "mod_manager.log");
+            DateTime deadline = DateTime.Now.AddMilliseconds(ModLaunchVerificationTimeoutMs);
+            string lastStatus = "waiting for SMM/mod_manager.log";
+            bool initialProcessExitNoted = false;
+
+            while (DateTime.Now < deadline)
+            {
+                string content = ReadFreshLaunchLog(logPath, context.LaunchStartedAt);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    ModLaunchStatus status = InspectModLaunchLog(content);
+                    if (!string.IsNullOrEmpty(status.Message))
+                        lastStatus = status.Message;
+
+                    if (status.StartupComplete)
+                    {
+                        _gameSetupTab.Log(status.Message);
+                        return;
+                    }
+
+                    if (status.Fatal)
+                    {
+                        _gameSetupTab.Log("SMM failed to load: " + status.Message);
+                        return;
+                    }
+                }
+
+                if (HasProcessExited(context.Process))
+                {
+                    if (!initialProcessExitNoted)
+                    {
+                        initialProcessExitNoted = true;
+                        lastStatus = lastStatus + "; initial Sheltered process exited, continuing to watch SMM log";
+                    }
+                }
+
+                System.Threading.Thread.Sleep(1000);
+            }
+
+            _gameSetupTab.Log("SMM launch verification timed out after 60 seconds. Last status: " + lastStatus + ". Check SMM\\mod_manager.log.");
+        }
+
+        private static string ReadFreshLaunchLog(string logPath, DateTime launchStartedAt)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(logPath) || !File.Exists(logPath))
+                    return null;
+
+                DateTime minimumWriteTime = launchStartedAt.AddSeconds(-2);
+                if (File.GetLastWriteTime(logPath) < minimumWriteTime)
+                    return null;
+
+                return File.ReadAllText(logPath);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static ModLaunchStatus InspectModLaunchLog(string content)
+        {
+            var status = new ModLaunchStatus();
+            status.Message = "log created";
+
+            if (ContainsOrdinalIgnoreCase(content, "Startup complete"))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    content,
+                    @"Startup complete(?: in \d+ms)?\. Loaded (\d+) plugin\(s\), (\d+) error\(s\)\.",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                if (match.Success)
+                {
+                    status.StartupComplete = true;
+                    string pluginCount = match.Groups[1].Value;
+                    string errorCount = match.Groups[2].Value;
+                    status.Message = "SMM loaded " + pluginCount + " plugin(s), " + errorCount + " error(s).";
+                    return status;
+                }
+
+                status.StartupComplete = true;
+                status.Message = "SMM startup complete.";
+                return status;
+            }
+
+            if (ContainsOrdinalIgnoreCase(content, "ERROR: ModAPI.dll not found"))
+                return FatalLaunchStatus("ModAPI.dll is missing from the SMM folder.");
+
+            if (ContainsOrdinalIgnoreCase(content, "ERROR: ModAPI.Core.PluginManager type not found"))
+                return FatalLaunchStatus("ModAPI.Core.PluginManager was not found in ModAPI.dll.");
+
+            if (ContainsOrdinalIgnoreCase(content, "ERROR: getInstance method not found"))
+                return FatalLaunchStatus("PluginManager.getInstance was not found in ModAPI.dll.");
+
+            if (ContainsOrdinalIgnoreCase(content, "ERROR: loadAssemblies method not found"))
+                return FatalLaunchStatus("PluginManager.loadAssemblies was not found in ModAPI.dll.");
+
+            if (ContainsOrdinalIgnoreCase(content, "ERROR: Camera timeout"))
+                return FatalLaunchStatus("Unity camera initialization timed out before SMM could bootstrap.");
+
+            if (ContainsOrdinalIgnoreCase(content, "Timeout: Unity log callback was not received"))
+                return FatalLaunchStatus("Unity never delivered the startup log callback that triggers SMM bootstrap.");
+
+            if (ContainsOrdinalIgnoreCase(content, "CRITICAL while creating runner"))
+                return FatalLaunchStatus("SMM could not create its Unity bootstrap runner.");
+
+            if (ContainsOrdinalIgnoreCase(content, "[Bootstrap] ERROR:"))
+                return FatalLaunchStatus("Doorstop bootstrap threw an exception. Open SMM\\mod_manager.log for the stack trace.");
+
+            if (ContainsOrdinalIgnoreCase(content, "LoadAndInitializePlugins complete"))
+            {
+                status.Message = "plugin activation complete; waiting for final startup summary";
+                return status;
+            }
+
+            if (ContainsOrdinalIgnoreCase(content, "Handoff to ModAPI complete"))
+            {
+                status.Message = "Doorstop handed off to ModAPI; waiting for plugin startup to finish";
+                return status;
+            }
+
+            if (ContainsOrdinalIgnoreCase(content, "Invoking PluginManager.loadAssemblies"))
+            {
+                status.Message = "ModAPI startup invoked";
+                return status;
+            }
+
+            if (ContainsOrdinalIgnoreCase(content, "First Unity log callback received"))
+            {
+                status.Message = "Unity startup callback received";
+                return status;
+            }
+
+            if (ContainsOrdinalIgnoreCase(content, "Registered Unity log callback"))
+            {
+                status.Message = "Unity log callback registered";
+                return status;
+            }
+
+            if (ContainsOrdinalIgnoreCase(content, "Sheltered Mod Manager starting"))
+            {
+                status.Message = "Doorstop entrypoint started";
+                return status;
+            }
+
+            return status;
+        }
+
+        private static ModLaunchStatus FatalLaunchStatus(string message)
+        {
+            var status = new ModLaunchStatus();
+            status.Fatal = true;
+            status.Message = message;
+            return status;
+        }
+
+        private static bool ContainsOrdinalIgnoreCase(string text, string value)
+        {
+            if (text == null || value == null)
+                return false;
+
+            return text.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool HasProcessExited(System.Diagnostics.Process process)
+        {
+            try
+            {
+                if (process == null)
+                    return true;
+
+                process.Refresh();
+                return process.HasExited;
+            }
+            catch
+            {
+                return true;
             }
         }
 
@@ -924,11 +1140,11 @@ namespace Manager
         /// Reconciles load order before launch: migrates known renamed IDs and removes entries
         /// that are no longer discoverable on disk.
         /// </summary>
-        private void ReconcileLoadOrderForLaunch()
+        private int ReconcileLoadOrderForLaunch()
         {
             try
             {
-                if (_settings == null || !_settings.IsModsPathValid) return;
+                if (_settings == null || !_settings.IsModsPathValid) return 0;
                 string orderPath = Path.Combine(_settings.ModsPath, "loadorder.json");
 
                 var allMods = _discoveryService.DiscoverMods(_settings.ModsPath);
@@ -950,8 +1166,7 @@ namespace Manager
                         _orderService.SaveOrder(_settings.ModsPath, existingOrder);
                         _gameSetupTab.Log("Created explicit empty loadorder.json (0 enabled mods).");
                     }
-                    _gameSetupTab.Log("Launch diagnostics: load order is empty (0 enabled mods).");
-                    return;
+                    return 0;
                 }
 
                 var reconciled = new System.Collections.Generic.List<string>();
@@ -970,10 +1185,7 @@ namespace Manager
                     {
                         candidateNorm = NormalizeModId(migratedTo);
                         if (!string.Equals(originalNorm, candidateNorm, StringComparison.OrdinalIgnoreCase))
-                        {
                             migrated++;
-                            _gameSetupTab.Log("Migrated load order ID: " + originalNorm + " -> " + candidateNorm);
-                        }
                     }
 
                     string canonicalId;
@@ -985,7 +1197,6 @@ namespace Manager
                     else
                     {
                         removed++;
-                        _gameSetupTab.Log("Removed missing mod from load order: " + raw);
                     }
                 }
 
@@ -997,12 +1208,12 @@ namespace Manager
                         "Reconciled load order: {0} -> {1} entries ({2} migrated, {3} removed).",
                         existingOrder.Length, reconciled.Count, migrated, removed));
                 }
-
-                _gameSetupTab.Log("Launch diagnostics: enabled mods in load order = " + reconciled.Count);
+                return reconciled.Count;
             }
             catch (Exception ex)
             {
                 _gameSetupTab.Log("Load order reconciliation failed: " + ex.Message);
+                return 0;
             }
         }
 
@@ -1112,6 +1323,26 @@ namespace Manager
 
                 string winhttpPath = Path.Combine(gameDir, "winhttp.dll");
                 if (!File.Exists(winhttpPath)) missing.Add("winhttp.dll (in game folder)");
+                else
+                {
+                    bool gameIs64Bit;
+                    bool proxyIs64Bit;
+                    if (TryDetectPeIs64Bit(_settings.GamePath, out gameIs64Bit)
+                        && TryDetectPeIs64Bit(winhttpPath, out proxyIs64Bit)
+                        && gameIs64Bit != proxyIs64Bit)
+                    {
+                        MessageBox.Show(
+                            "Doorstop proxy architecture mismatch.\n\nSheltered.exe is "
+                            + (gameIs64Bit ? "64-bit" : "32-bit")
+                            + ", but winhttp.dll is "
+                            + (proxyIs64Bit ? "64-bit" : "32-bit")
+                            + ".\n\nSMM cannot load until the matching Doorstop proxy is installed.",
+                            "Launch Blocked",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                        return false;
+                    }
+                }
 
                 string smmDir = Path.Combine(gameDir, "SMM");
                 string doorstopDllRoot = Path.Combine(smmDir, "Doorstop.dll");
@@ -1207,7 +1438,7 @@ namespace Manager
                 ini.Add("[General]");
                 ini.Add("enabled=true");
                 ini.Add("target_assembly=" + doorstopTargetRelative);
-                ini.Add("redirect_output_log=true");
+                ini.Add("redirect_output_log=false");
                 ini.Add("");
                 ini.Add("[UnityMono]");
                 ini.Add("dll_search_path_override=" + dllSearchPath);
@@ -1215,15 +1446,39 @@ namespace Manager
                 ini.Add("debug_address=127.0.0.1:10000");
                 ini.Add("debug_suspend=false");
                 File.WriteAllLines(iniPath, ini.ToArray());
-                _gameSetupTab.Log("Doorstop configured. target_assembly=" + doorstopTargetRelative);
 
-                bool is64Bit = DetectIsExe64Bit(_settings.GamePath);
-                CopyWinhttpForGame(gameDir, is64Bit);
+                LogDoorstopProxyStatus(gameDir);
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Failed to configure Doorstop: " + ex.Message,
                     "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void DeleteLegacyRootLogs(string gameDir)
+        {
+            if (string.IsNullOrEmpty(gameDir))
+                return;
+
+            DeleteLegacyRootLog(gameDir, "mod_manager.log");
+            DeleteLegacyRootLog(gameDir, "output_log.txt");
+        }
+
+        private void DeleteLegacyRootLog(string gameDir, string fileName)
+        {
+            try
+            {
+                string path = Path.Combine(gameDir, fileName);
+                if (!File.Exists(path))
+                    return;
+
+                File.Delete(path);
+                _gameSetupTab.Log("Removed legacy root log: " + fileName);
+            }
+            catch (Exception ex)
+            {
+                _gameSetupTab.Log("Could not remove legacy root log '" + fileName + "': " + ex.Message);
             }
         }
 
@@ -1242,7 +1497,7 @@ namespace Manager
                 File.WriteAllLines(doorstopConfigPath, lines.ToArray());
 
                 System.Diagnostics.Process.Start(_settings.GamePath);
-                _gameSetupTab.Log("Launched Sheltered (vanilla mode)");
+                _gameSetupTab.Log("Launched Sheltered without mods.");
             }
             catch (Exception ex)
             {
@@ -1259,13 +1514,14 @@ namespace Manager
             return Uri.UnescapeDataString(relativeUri.ToString().Replace('/', Path.DirectorySeparatorChar));
         }
 
-        private bool DetectIsExe64Bit(string exePath)
+        private bool TryDetectPeIs64Bit(string path, out bool is64Bit)
         {
             FileStream fs = null;
             BinaryReader br = null;
+            is64Bit = false;
             try
             {
-                fs = new FileStream(exePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                 br = new BinaryReader(fs);
                 fs.Seek(0x3C, SeekOrigin.Begin);
                 int peOffset = br.ReadInt32();
@@ -1273,7 +1529,19 @@ namespace Manager
                 uint peSignature = br.ReadUInt32();
                 if (peSignature != 0x00004550) return false;
                 ushort machine = br.ReadUInt16();
-                return machine == 0x8664;
+                if (machine == 0x8664)
+                {
+                    is64Bit = true;
+                    return true;
+                }
+
+                if (machine == 0x014c)
+                {
+                    is64Bit = false;
+                    return true;
+                }
+
+                return false;
             }
             catch { return false; }
             finally
@@ -1283,23 +1551,27 @@ namespace Manager
             }
         }
 
-        private void CopyWinhttpForGame(string gameDir, bool is64Bit)
+        private void LogDoorstopProxyStatus(string gameDir)
         {
             try
             {
-                string smmDir = Path.Combine(gameDir, "SMM");
-                string doorstopDir = Path.Combine(smmDir, "Doorstop");
-                string bitnessDir = is64Bit ? Path.Combine(doorstopDir, "x64") : Path.Combine(doorstopDir, "x32");
-                string sourceWinhttp = Path.Combine(bitnessDir, "winhttp.dll");
-                string targetWinhttp = Path.Combine(gameDir, "winhttp.dll");
+                string winhttpPath = Path.Combine(gameDir, "winhttp.dll");
+                if (!File.Exists(winhttpPath))
+                    return;
 
-                if (File.Exists(sourceWinhttp))
+                bool gameIs64Bit;
+                bool proxyIs64Bit;
+                if (!TryDetectPeIs64Bit(_settings.GamePath, out gameIs64Bit)
+                    || !TryDetectPeIs64Bit(winhttpPath, out proxyIs64Bit))
                 {
-                    File.Copy(sourceWinhttp, targetWinhttp, true);
-                    _gameSetupTab.Log("Copied " + (is64Bit ? "64-bit" : "32-bit") + " winhttp.dll");
+                    _gameSetupTab.Log("Doorstop proxy present; architecture could not be verified.");
+                    return;
                 }
             }
-            catch { }
+            catch
+            {
+                _gameSetupTab.Log("Doorstop proxy present; validation failed.");
+            }
         }
 
 
