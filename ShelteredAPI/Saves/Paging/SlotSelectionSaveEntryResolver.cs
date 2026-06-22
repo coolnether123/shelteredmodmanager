@@ -72,6 +72,17 @@ namespace ShelteredAPI.Saves.Paging
 
         private static void PopulateVanillaEntry(SlotSelectionVisibleSave visible, int vanillaSlotNumber)
         {
+            SaveEntry imported = SaveRegistryCore.ImportStandardVanillaSlotIfNeeded(vanillaSlotNumber);
+            if (imported != null && System.IO.File.Exists(DirectoryProvider.EntryPath("Standard", vanillaSlotNumber, false)))
+            {
+                visible.StorageScenarioId = "Standard";
+                visible.ManifestSlotNumber = vanillaSlotNumber;
+                visible.TransportSaveType = (SaveManager.SaveType)vanillaSlotNumber;
+                visible.TransportSlotNumber = vanillaSlotNumber;
+                visible.Entry = imported;
+                return;
+            }
+
             string timelineKey;
             SaveManager.SaveType saveType;
             if (!ShelteredAPI.Saves.Backups.SaveBackupService.TryGetVanillaTimelineKey(vanillaSlotNumber, out timelineKey, out saveType))

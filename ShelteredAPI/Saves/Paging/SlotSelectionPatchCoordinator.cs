@@ -24,14 +24,8 @@ namespace ShelteredAPI.Saves.Paging{
             int page = PagingManager.GetPage(panel);
             if (page == 0)
             {
-                var vanillaButtons = panel.GetComponentsInChildren<SaveSlotButton>(true);
-                foreach (var btn in vanillaButtons)
-                {
-                    if (btn != null && (btn.slotNumber == 3 || btn.slotNumber == 4) && !btn.gameObject.activeSelf)
-                        btn.gameObject.SetActive(true);
-                }
-
-                return true;
+                RefreshVanillaSaveSlotInfo(panel);
+                return false;
             }
 
             try
@@ -116,41 +110,6 @@ namespace ShelteredAPI.Saves.Paging{
 
         internal static void RefreshSaveSlotInfoPostfix(SlotSelectionPanel panel)
         {
-            if (PagingManager.GetPage(panel) != 0)
-                return;
-
-            try
-            {
-                var t = Traverse.Create(panel);
-                var slotInfos = t.Field("m_slotInfo").GetValue<System.Collections.IList>();
-
-                if (slotInfos != null)
-                {
-                    for (int i = 0; i < 3 && i < slotInfos.Count; i++)
-                    {
-                        var info = slotInfos[i];
-                        if (info == null)
-                            continue;
-
-                        var tSlot = Traverse.Create(info);
-                        var state = tSlot.Field("m_state").GetValue<SlotSelectionPanel.SlotState>();
-                        if (state != SlotSelectionPanel.SlotState.Empty)
-                            continue;
-
-                        tSlot.Field("m_familyName").SetValue(string.Empty);
-                        tSlot.Field("m_daysSurvived").SetValue(0);
-                        if (tSlot.Field("m_dateSaved").FieldExists()) tSlot.Field("m_dateSaved").SetValue(string.Empty);
-                        if (tSlot.Field("m_saveTime").FieldExists()) tSlot.Field("m_saveTime").SetValue(string.Empty);
-                    }
-                }
-
-                t.Method("RefreshSlotLabels").GetValue();
-                UpdateSaveSlotAuxiliaryControls(panel);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteError("[RefreshSaveSlotInfo Postfix] Error during Page 0 cleanup: " + ex.Message);
-            }
         }
 
         internal static void RefreshSlotLabelsPostfix(SlotSelectionPanel panel)
@@ -359,6 +318,22 @@ namespace ShelteredAPI.Saves.Paging{
             }
         }
 
+        internal static void RestoreSnapshotAfterVerification(SlotSelectionPanel panel, int chosenSlotIndex, SaveBackupSnapshotInfo snapshot)
+        {
+            if (panel == null || snapshot == null)
+                return;
+
+            Action continueRestore = delegate { RestoreAndLoadSnapshot(panel, chosenSlotIndex, snapshot); };
+            int futureCount = SaveBackupService.CountSnapshotsAfter(snapshot);
+            if (SnapshotLoadWarningDialog.ShouldShow(futureCount))
+            {
+                SnapshotLoadWarningDialog.Show(snapshot.Entry, futureCount, continueRestore, null);
+                return;
+            }
+
+            continueRestore();
+        }
+
         private static bool RefreshSnapshotSaveSlotInfoPrefix(SlotSelectionPanel panel)
         {
             try
@@ -416,6 +391,138 @@ namespace ShelteredAPI.Saves.Paging{
             List<SlotSelectionVisibleSave> visibleSaves = SlotSelectionSaveEntryResolver.Resolve(panel);
             SaveVerification.UpdateIcons(panel, visibleSaves);
             SaveSnapshotSlotControls.UpdateButtons(panel, visibleSaves);
+        }
+
+        private static void RefreshVanillaSaveSlotInfo(SlotSelectionPanel panel)
+        {
+            try
+            {
+                SaveRegistryCore.ImportStandardVanillaSlotsIfNeeded();
+
+                var panelTraverse = Traverse.Create(panel);
+                var slotInfoList = panelTraverse.Field("m_slotInfo").GetValue<System.Collections.IList>();
+                if (slotInfoList == null)
+                    return;
+
+                slotInfoList.Clear();
+                panelTraverse.Field("m_slotBeingLoaded").SetValue(-1);
+
+                SetVanillaScenarioButtonsVisible(panel, false);
+
+                for (int slotNumber = 1; slotNumber <= 3; slotNumber++)
+                {
+                    object slotInfo = CreateSlotInfo();
+                    PopulateVanillaSlotInfo(slotInfo, slotNumber);
+                    slotInfoList.Add(slotInfo);
+                }
+
+                panelTraverse.Method("RefreshSlotLabels").GetValue();
+                ClearInactiveVanillaLabels(panel);
+                UpdateSaveSlotAuxiliaryControls(panel);
+                PagingManager.Update(panel);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteError("[RefreshSaveSlotInfo Page0] Error during direct vanilla refresh: " + ex);
+            }
+        }
+
+        private static object CreateSlotInfo()
+        {
+            Type slotInfoType = AccessTools.Inner(typeof(SlotSelectionPanel), "SlotInfo");
+            return Activator.CreateInstance(slotInfoType, true);
+        }
+
+        private static void PopulateVanillaSlotInfo(object slotInfo, int slotNumber)
+        {
+            var slotTraverse = Traverse.Create(slotInfo);
+
+            SaveEntry imported = SaveRegistryCore.ImportStandardVanillaSlotIfNeeded(slotNumber);
+            if (imported != null && File.Exists(DirectoryProvider.EntryPath("Standard", slotNumber, false)))
+            {
+                ApplySlotInfo(slotInfo, imported);
+                return;
+            }
+
+            bool exists = false;
+            bool corrupted = false;
+            if (SaveManager.instance != null)
+                SaveManager.instance.DoesSaveExist(slotNumber, out exists, out corrupted);
+            else
+                exists = File.Exists(SaveRegistryCore.GetVanillaSavePath(slotNumber));
+
+            if (!exists)
+            {
+                ClearSlotInfo(slotTraverse, SlotSelectionPanel.SlotState.Empty);
+                return;
+            }
+
+            if (corrupted)
+            {
+                ClearSlotInfo(slotTraverse, SlotSelectionPanel.SlotState.Corrupt);
+                return;
+            }
+
+            SaveInfo saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(slotNumber);
+            if (saveInfo == null)
+            {
+                ClearSlotInfo(slotTraverse, SlotSelectionPanel.SlotState.Corrupt);
+                return;
+            }
+
+            slotTraverse.Field("m_state").SetValue(SlotSelectionPanel.SlotState.Loaded);
+            slotTraverse.Field("m_familyName").SetValue(saveInfo.familyName ?? string.Empty);
+            slotTraverse.Field("m_daysSurvived").SetValue(saveInfo.daysSurvived);
+            slotTraverse.Field("m_diffSetting").SetValue(saveInfo.difficulty);
+            slotTraverse.Field("m_rainDiff").SetValue(saveInfo.rainDiff);
+            slotTraverse.Field("m_resourceDiff").SetValue(saveInfo.resourceDiff);
+            slotTraverse.Field("m_breachDiff").SetValue(saveInfo.breachDiff);
+            slotTraverse.Field("m_factionDiff").SetValue(saveInfo.factionDiff);
+            slotTraverse.Field("m_moodDiff").SetValue(saveInfo.moodDiff);
+            slotTraverse.Field("m_mapSize").SetValue(saveInfo.mapSize);
+            slotTraverse.Field("m_fog").SetValue(saveInfo.fog);
+            if (slotTraverse.Field("m_dateSaved").FieldExists()) slotTraverse.Field("m_dateSaved").SetValue(FormatDisplayTime(saveInfo.saveTime));
+            if (slotTraverse.Field("m_saveTime").FieldExists()) slotTraverse.Field("m_saveTime").SetValue(FormatDisplayTime(saveInfo.saveTime));
+        }
+
+        private static void ClearSlotInfo(Traverse slotTraverse, SlotSelectionPanel.SlotState state)
+        {
+            slotTraverse.Field("m_state").SetValue(state);
+            slotTraverse.Field("m_familyName").SetValue(string.Empty);
+            slotTraverse.Field("m_daysSurvived").SetValue(0);
+            if (slotTraverse.Field("m_dateSaved").FieldExists()) slotTraverse.Field("m_dateSaved").SetValue(string.Empty);
+            if (slotTraverse.Field("m_saveTime").FieldExists()) slotTraverse.Field("m_saveTime").SetValue(string.Empty);
+        }
+
+        private static void SetVanillaScenarioButtonsVisible(SlotSelectionPanel panel, bool visible)
+        {
+            SaveSlotButton[] buttons = panel.GetComponentsInChildren<SaveSlotButton>(true);
+            for (int i = 0; i < buttons.Length; i++)
+            {
+                SaveSlotButton button = buttons[i];
+                if (button != null && (button.slotNumber == 3 || button.slotNumber == 4))
+                    button.gameObject.SetActive(visible);
+            }
+        }
+
+        private static void ClearInactiveVanillaLabels(SlotSelectionPanel panel)
+        {
+            var panelTraverse = Traverse.Create(panel);
+            ClearLabels(panelTraverse.Field("m_slotButtonLabels").GetValue<System.Collections.IList>(), 3);
+            ClearLabels(panelTraverse.Field("m_slotDescLabels").GetValue<System.Collections.IList>(), 3);
+        }
+
+        private static void ClearLabels(System.Collections.IList labels, int firstIndex)
+        {
+            if (labels == null)
+                return;
+
+            for (int i = firstIndex; i < labels.Count; i++)
+            {
+                UILabel label = labels[i] as UILabel;
+                if (label != null)
+                    label.text = string.Empty;
+            }
         }
 
         private static void ApplySlotInfo(object slotInfo, SaveEntry entry)
@@ -598,49 +705,110 @@ namespace ShelteredAPI.Saves.Paging{
                 if (chosenSlotIndex < 0 || chosenSlotIndex >= 3)
                     return true;
 
-                var vanillaSaveInfo = SaveRegistryCore.ReadVanillaSaveInfo(chosenSlotIndex + 1);
-                var manifestPath = Path.Combine(DirectoryProvider.SlotRoot("Standard", chosenSlotIndex + 1, false), "manifest.json");
-
-                if (vanillaSaveInfo == null && File.Exists(manifestPath))
+                int vanillaSlotNumber = chosenSlotIndex + 1;
+                VanillaMirrorComparisonResult comparison = SaveRegistryCore.CompareStandardVanillaMirror(vanillaSlotNumber);
+                if (comparison.Status == VanillaMirrorComparisonStatus.MissingMirror)
                 {
-                    MMLog.WriteDebug("[OnSlotChosen] Found orphaned manifest for empty vanilla slot " + (chosenSlotIndex + 1) + ". Auto-cleaning.");
-                    SaveDeleteRouter.DeleteAbsoluteSlot(chosenSlotIndex + 1, "OnSlotChosen.OrphanedManifestCleanup");
-                    return true;
+                    SaveEntry imported = SaveRegistryCore.WriteStandardVanillaMirrorFromVanilla(
+                        comparison,
+                        false,
+                        "missing-mirror-load");
+                    if (imported == null)
+                        return true;
+
+                    QueueVerifiedVanillaMirrorLoad(panel, t, chosenSlotIndex, imported);
+                    return false;
                 }
 
-                SlotManifest manifest = ReadManifest(manifestPath);
-                if (manifest == null)
-                    return true;
-
-                var state = SaveVerification.Verify(manifest);
-                if (state == SaveVerification.VerificationState.Match)
-                    return true;
-
-                var entry = new SaveEntry
+                if (comparison.Status == VanillaMirrorComparisonStatus.InSync)
                 {
-                    id = "vanilla_slot_" + (chosenSlotIndex + 1),
-                    absoluteSlot = chosenSlotIndex + 1,
-                    saveInfo = new SaveInfo
+                    SaveRegistryCore.EnsureStandardVanillaMirrorManifest(comparison);
+                    SaveEntry entry = SaveRegistryCore.ImportStandardVanillaSlotIfNeeded(vanillaSlotNumber);
+                    if (entry == null)
+                        return true;
+
+                    QueueVerifiedVanillaMirrorLoad(panel, t, chosenSlotIndex, entry);
+                    return false;
+                }
+
+                if (comparison.Status == VanillaMirrorComparisonStatus.Diverged)
+                {
+                    ShowVanillaMirrorDivergencePrompt(panel, t, chosenSlotIndex, comparison);
+                    return false;
+                }
+
+                if (comparison.Status == VanillaMirrorComparisonStatus.MissingVanilla
+                    && File.Exists(DirectoryProvider.EntryPath("Standard", vanillaSlotNumber, false)))
+                {
+                    SaveEntry mirrorEntry = SaveRegistryCore.ImportStandardVanillaSlotIfNeeded(vanillaSlotNumber);
+                    if (mirrorEntry == null)
+                        return true;
+
+                    VanillaMirrorConflictDialog.ShowMissingVanilla(delegate
                     {
-                        familyName = vanillaSaveInfo != null ? vanillaSaveInfo.familyName : manifest.family_name ?? "Unknown",
-                        daysSurvived = vanillaSaveInfo != null ? vanillaSaveInfo.daysSurvived : 0,
-                        saveTime = vanillaSaveInfo != null ? vanillaSaveInfo.saveTime : DateTime.Now.ToString()
-                    }
-                };
+                        QueueVerifiedVanillaMirrorLoad(panel, t, chosenSlotIndex, mirrorEntry);
+                    }, null);
+                    return false;
+                }
 
-                SaveDetailsWindow.Show(entry, manifest, state, true, delegate
-                {
-                    SaveProtectionPatches.LoadGamePatch._forceLoad = true;
-                    SaveManager.instance.SetSlotToLoad(chosenSlotIndex + 1);
-                });
-
-                return false;
+                return true;
             }
             catch (Exception ex)
             {
                 MMLog.WriteError("[OnSlotChosen vanilla check] Error: " + ex);
                 return true;
             }
+        }
+
+        private static void ShowVanillaMirrorDivergencePrompt(
+            SlotSelectionPanel panel,
+            Traverse panelTraverse,
+            int chosenSlotIndex,
+            VanillaMirrorComparisonResult comparison)
+        {
+            VanillaMirrorConflictDialog.Show(
+                delegate
+                {
+                    SaveEntry entry = SaveRegistryCore.WriteStandardVanillaMirrorFromVanilla(
+                        comparison,
+                        true,
+                        "load-vanilla-state");
+                    if (entry != null)
+                        QueueVerifiedVanillaMirrorLoad(panel, panelTraverse, chosenSlotIndex, entry);
+                },
+                delegate
+                {
+                    SaveBackupService.BackupVanillaBeforeOverwrite(comparison.SaveType);
+                    SaveEntry entry = SaveRegistryCore.ImportStandardVanillaSlotIfNeeded(comparison.SlotNumber);
+                    if (entry != null)
+                        QueueVerifiedVanillaMirrorLoad(panel, panelTraverse, chosenSlotIndex, entry);
+                },
+                null);
+        }
+
+        private static void QueueVerifiedVanillaMirrorLoad(
+            SlotSelectionPanel panel,
+            Traverse panelTraverse,
+            int chosenSlotIndex,
+            SaveEntry entry)
+        {
+            if (entry == null)
+                return;
+
+            SlotManifest manifest = SaveRegistryCore.ReadSlotManifest("Standard", entry.absoluteSlot);
+            var state = SaveVerification.Verify(manifest);
+            Action queue = delegate
+            {
+                QueueStandardVanillaMirrorLoad(panelTraverse, chosenSlotIndex, SlotPagingScopeResolver.Resolve(panel), (SaveManager.SaveType)entry.absoluteSlot, entry);
+            };
+
+            if (manifest != null && state != SaveVerification.VerificationState.Match)
+            {
+                SaveDetailsWindow.Show(entry, manifest, state, true, queue);
+                return;
+            }
+
+            queue();
         }
 
         private static bool HandleCustomSlotChosen(SlotSelectionPanel panel, int page)
@@ -698,6 +866,15 @@ namespace ShelteredAPI.Saves.Paging{
                 MMLog.WriteError("OnSlotChosen Prefix patch error: " + ex);
                 return true;
             }
+        }
+
+        private static void QueueStandardVanillaMirrorLoad(Traverse panelTraverse, int chosenSlotIndex, SlotPagingScope scope, SaveManager.SaveType virtualSaveType, SaveEntry entry)
+        {
+            VanillaSaveRoute route;
+            if (VanillaSaveRouting.TryGetRoute(virtualSaveType, out route))
+                SaveRuntimeState.MarkPendingMirroredVanillaLoad(virtualSaveType, route);
+
+            QueueCustomLoad(panelTraverse, chosenSlotIndex, scope, virtualSaveType, entry);
         }
 
         private static void QueueCustomLoad(Traverse panelTraverse, int chosenSlotIndex, SlotPagingScope scope, SaveManager.SaveType virtualSaveType, SaveEntry entry)

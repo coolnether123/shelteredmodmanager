@@ -163,12 +163,14 @@
     <Compile Include="Saves\Paging\SaveSnapshotBrowserState.cs" />
     <Compile Include="Saves\Paging\SaveSnapshotSlotControls.cs" />
     <Compile Include="Saves\Paging\SnapshotLoadWarningDialog.cs" />
+    <Compile Include="Saves\Paging\VanillaMirrorConflictDialog.cs" />
     <Compile Include="Saves\Paging\SlotSelectionPatchCoordinator.cs" />
     <Compile Include="Saves\Paging\SlotSelectionPatches.cs" />
     <Compile Include="Saves\Paging\SaveVerification.cs" />
     <Compile Include="Saves\Paging\SaveDetailsWindow.cs" />
     <Compile Include="Saves\Paging\CondensePromptDialog.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupLineageStore.cs" />
+    <Compile Include="Saves\SaveBackups\SaveBackupSidecarCapture.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupBlobCodec.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupModels.cs" />
     <Compile Include="Saves\SaveBackups\SaveBackupRepository.cs" />
@@ -193,6 +195,7 @@
     <Compile Include="Saves\ScenarioSaves.cs" />
     <Compile Include="Saves\ShelteredSaveEvents.cs" />
     <Compile Include="Saves\ShelteredSaves.cs" />
+    <Compile Include="Saves\VanillaMirrorComparison.cs" />
     <Compile Include="Scenarios\Public\IShelteredCustomScenario.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioCatalog.cs" />
     <Compile Include="Scenarios\Domain\Assets\SpritePatchDefinition.cs" />

@@ -35,6 +35,10 @@ namespace ShelteredAPI.Saves.Runtime
                 if (SaveRuntimeState.TryGetPendingSave(type, out target) && target != null)
                     return SavePendingTarget(type, data, slotName, target);
 
+                SaveRuntimeState.MirroredVanillaSession mirroredSession;
+                if (SaveRuntimeState.TryGetActiveMirroredVanillaSessionFor(type, out mirroredSession))
+                    return SaveActiveMirroredVanillaSession(type, data, slotName, mirroredSession);
+
                 if (SaveRuntimeState.HasActiveCustomSessionFor(type))
                     return SaveActiveCustomSession(type, data, slotName);
 
@@ -132,6 +136,62 @@ namespace ShelteredAPI.Saves.Runtime
                 result.id,
                 result.scenarioId,
                 result.absoluteSlot));
+            return true;
+        }
+
+        private bool SaveActiveMirroredVanillaSession(
+            SaveManager.SaveType type,
+            byte[] data,
+            string slotName,
+            SaveRuntimeState.MirroredVanillaSession session)
+        {
+            SaveEntry active = session != null && session.Entry != null
+                ? session.Entry
+                : SaveRuntimeState.ActiveCustomSave;
+            if (active == null)
+            {
+                MMLog.WriteError(string.Format("PlatformSaveProxy.PlatformSave: mirrored vanilla save failed because active entry was missing. proxySlot={0}", slotName));
+                return false;
+            }
+
+            SaveBackupService.BackupVanillaBeforeOverwrite(type);
+
+            string scenarioId = SaveStorageRouter.NormalizeScenarioId(active.scenarioId);
+            SaveEntry result = SaveStorageRouter.Overwrite(scenarioId, active.id, new SaveOverwriteOptions(), data);
+            if (result == null)
+            {
+                MMLog.WriteError(string.Format("PlatformSaveProxy.PlatformSave: mirrored XML overwrite failed. proxySlot={0}, scenario={1}, saveId={2}", slotName, scenarioId, active.id));
+                return false;
+            }
+
+            byte[] vanillaBytes = data != null ? (byte[])data.Clone() : null;
+            bool vanillaSuccess = _inner.PlatformSave(type, vanillaBytes);
+            if (!vanillaSuccess)
+            {
+                MMLog.WriteError(string.Format("PlatformSaveProxy.PlatformSave: mirrored vanilla write failed. proxySlot={0}, scenario={1}, saveId={2}", slotName, scenarioId, active.id));
+                SaveRuntimeState.SetActiveMirroredVanillaSession(type, result, session.Route);
+                return false;
+            }
+
+            SaveRegistryCore.TryWriteStandardVanillaMirrorManifestFromSave(
+                session.Route.VanillaSlotNumber,
+                result.saveInfo,
+                data);
+            SaveRuntimeState.SetActiveMirroredVanillaSession(type, result, session.Route);
+
+            if (ModRuntime.IsQuitting)
+            {
+                ModRuntime.MarkSaveExit("PlatformSave.MirroredVanilla.Done", "entry=" + result.id);
+                SaveRuntimeStatus.MarkQuitSaveCompleted();
+            }
+
+            MMLog.WriteInfo(string.Format(
+                "Save finished {0} (mirrored vanilla slot: {1}, scenario: {2}, absoluteSlot: {3}, vanillaSlot: {4})",
+                slotName,
+                result.id,
+                result.scenarioId,
+                result.absoluteSlot,
+                session.Route.VanillaSlotNumber));
             return true;
         }
 

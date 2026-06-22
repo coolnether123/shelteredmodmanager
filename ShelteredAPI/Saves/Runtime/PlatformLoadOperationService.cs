@@ -69,7 +69,15 @@ namespace ShelteredAPI.Saves.Runtime
                 }
 
                 _customLoadedXml = File.ReadAllText(path);
-                SaveRuntimeState.SetActiveCustomSession(type, entry);
+                VanillaSaveRoute mirrorRoute;
+                bool isMirroredVanilla = SaveRuntimeState.TryConsumePendingMirroredVanillaLoad(type, out mirrorRoute)
+                    || SaveRegistryCore.TryGetStandardVanillaMirrorRoute(type, scenarioId, entry, out mirrorRoute);
+
+                if (isMirroredVanilla)
+                    SaveRuntimeState.SetActiveMirroredVanillaSession(type, entry, mirrorRoute);
+                else
+                    SaveRuntimeState.SetActiveCustomSession(type, entry);
+
                 SaveRuntimeState.ClearPendingLoad(type);
                 MMLog.WriteInfo(string.Format("[PlatformLoad] Loaded redirected save. proxySlot={0}, scenario={1}, saveId={2}, absoluteSlot={3}", type, scenarioId, saveId, entry.absoluteSlot));
                 return true;

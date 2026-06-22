@@ -10,9 +10,19 @@ namespace ShelteredAPI.Saves.Runtime
     /// </summary>
     internal static class SaveRuntimeState
     {
+        internal sealed class MirroredVanillaSession
+        {
+            public SaveManager.SaveType ProxySlot;
+            public SaveEntry Entry;
+            public VanillaSaveRoute Route;
+        }
+
         private static SaveManager.SaveType _activeCustomProxySlot = SaveManager.SaveType.Invalid;
         private static SaveManager.SaveType _currentSaveOperationProxySlot = SaveManager.SaveType.Invalid;
         private static SaveEntry _currentSaveOperationEntry;
+        private static MirroredVanillaSession _activeMirroredVanillaSession;
+        private static readonly Dictionary<SaveManager.SaveType, VanillaSaveRoute> _pendingMirroredVanillaLoads =
+            new Dictionary<SaveManager.SaveType, VanillaSaveRoute>();
 
         internal static SaveEntry ActiveCustomSave
         {
@@ -34,17 +44,53 @@ namespace ShelteredAPI.Saves.Runtime
         {
             ActiveCustomSave = entry;
             _activeCustomProxySlot = entry != null ? proxySlot : SaveManager.SaveType.Invalid;
+            _activeMirroredVanillaSession = null;
+        }
+
+        internal static void SetActiveMirroredVanillaSession(SaveManager.SaveType proxySlot, SaveEntry entry, VanillaSaveRoute route)
+        {
+            ActiveCustomSave = entry;
+            _activeCustomProxySlot = entry != null ? proxySlot : SaveManager.SaveType.Invalid;
+            _activeMirroredVanillaSession = entry != null
+                ? new MirroredVanillaSession
+                {
+                    ProxySlot = proxySlot,
+                    Entry = entry,
+                    Route = route
+                }
+                : null;
+
+            ModAPI.Core.MMLog.WriteDebug("[SaveRuntime] Active mirrored vanilla session. proxySlot=" + proxySlot
+                + ", vanillaSlot=" + route.VanillaSlotNumber
+                + ", scenario=" + (entry != null ? entry.scenarioId : "<null>")
+                + ", saveId=" + (entry != null ? entry.id : "<null>")
+                + ", absoluteSlot=" + (entry != null ? entry.absoluteSlot.ToString() : "<null>") + ".");
         }
 
         internal static void ClearActiveCustomSession()
         {
             ActiveCustomSave = null;
             _activeCustomProxySlot = SaveManager.SaveType.Invalid;
+            _activeMirroredVanillaSession = null;
         }
 
         internal static bool HasActiveCustomSessionFor(SaveManager.SaveType type)
         {
             return ActiveCustomSave != null && _activeCustomProxySlot == type && type != SaveManager.SaveType.Invalid;
+        }
+
+        internal static bool TryGetActiveMirroredVanillaSessionFor(SaveManager.SaveType type, out MirroredVanillaSession session)
+        {
+            session = _activeMirroredVanillaSession;
+            if (session == null || session.Entry == null || ActiveCustomSave == null)
+                return false;
+
+            return session.ProxySlot == type
+                && _activeCustomProxySlot == type
+                && type != SaveManager.SaveType.Invalid
+                && type != SaveManager.SaveType.GlobalData
+                && ActiveCustomSave.absoluteSlot == session.Entry.absoluteSlot
+                && string.Equals(ActiveCustomSave.id, session.Entry.id, System.StringComparison.OrdinalIgnoreCase);
         }
 
         internal static bool TryBeginSaveOperation(SaveManager.SaveType type)
@@ -155,6 +201,29 @@ namespace ShelteredAPI.Saves.Runtime
             }
         }
 
+        internal static void MarkPendingMirroredVanillaLoad(SaveManager.SaveType type, VanillaSaveRoute route)
+        {
+            lock (PlatformSaveProxy._nextLoadLock)
+            {
+                _pendingMirroredVanillaLoads[type] = route;
+            }
+        }
+
+        internal static bool TryConsumePendingMirroredVanillaLoad(SaveManager.SaveType type, out VanillaSaveRoute route)
+        {
+            lock (PlatformSaveProxy._nextLoadLock)
+            {
+                if (_pendingMirroredVanillaLoads.TryGetValue(type, out route))
+                {
+                    _pendingMirroredVanillaLoads.Remove(type);
+                    return true;
+                }
+            }
+
+            route = new VanillaSaveRoute();
+            return false;
+        }
+
         internal static void SetPendingSave(SaveManager.SaveType type, string scenarioId, string saveId)
         {
             lock (PlatformSaveProxy._nextSaveLock)
@@ -167,6 +236,7 @@ namespace ShelteredAPI.Saves.Runtime
         {
             lock (PlatformSaveProxy._nextLoadLock)
             {
+                _pendingMirroredVanillaLoads.Remove(type);
                 return PlatformSaveProxy.NextLoad.Remove(type);
             }
         }
@@ -217,6 +287,7 @@ namespace ShelteredAPI.Saves.Runtime
                 for (int i = 0; i < loadKeys.Count; i++)
                 {
                     PlatformSaveProxy.NextLoad.Remove(loadKeys[i]);
+                    _pendingMirroredVanillaLoads.Remove(loadKeys[i]);
                 }
             }
 

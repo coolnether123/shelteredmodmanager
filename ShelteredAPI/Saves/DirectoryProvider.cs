@@ -79,7 +79,12 @@ namespace ShelteredAPI.Saves
 
         public static string EntryPath(string scenarioId, int absoluteSlot)
         {
-            return Path.Combine(SlotRoot(scenarioId, absoluteSlot), "SaveData.xml");
+            return EntryPath(scenarioId, absoluteSlot, true);
+        }
+
+        public static string EntryPath(string scenarioId, int absoluteSlot, bool create)
+        {
+            return Path.Combine(SlotRoot(scenarioId, absoluteSlot, create), "SaveData.xml");
         }
 
         public static string EntryPath(string scenarioId, string saveId)

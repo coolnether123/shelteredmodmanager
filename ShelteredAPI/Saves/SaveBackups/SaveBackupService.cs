@@ -63,7 +63,7 @@ namespace ShelteredAPI.Saves.Backups
                     return;
                 }
 
-                string snapshotId = CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, false);
+                string snapshotId = CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, true);
                 MMLog.WriteInfo("[SaveBackup] Custom overwrite snapshot request. scenario="
                     + target.ScenarioId + ", absoluteSlot=" + target.AbsoluteSlot
                     + ", saveId=" + target.SaveId + ", timeline=" + target.TimelineKey
@@ -81,7 +81,7 @@ namespace ShelteredAPI.Saves.Backups
             {
                 SaveBackupTarget target;
                 if (TryCreateVanillaTarget(type, out target))
-                    CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, false);
+                    CreateSnapshot(target, SaveBackupReason.BeforeOverwrite, true, true);
             }
             catch (Exception ex)
             {
@@ -291,6 +291,9 @@ namespace ShelteredAPI.Saves.Backups
             string vanillaPath = SaveRegistryCore.GetVanillaSavePath(route.VanillaSlotNumber);
             if (string.IsNullOrEmpty(vanillaPath) || !File.Exists(vanillaPath))
                 return false;
+
+            SaveInfo saveInfo = SaveRegistryCore.ReadVanillaSaveInfo(route.VanillaSlotNumber);
+            SaveBackupSidecarCapture.EnsureVanillaSidecar(route, saveInfo);
 
             target = new SaveBackupTarget
             {

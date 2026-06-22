@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using UnityEngine;
 using ModAPI.Core;
 using ModAPI.Util;
 using ShelteredAPI.Saves.Backups;
+using ShelteredAPI.Saves.Runtime;
 
 namespace ShelteredAPI.Saves
 {
@@ -529,7 +531,12 @@ namespace ShelteredAPI.Saves
 
         private bool TryWriteEntryFile(int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
         {
-            var path = DirectoryProvider.EntryPath(_scenarioId, absoluteSlot);
+            return TryWriteEntryFile(_scenarioId, absoluteSlot, xmlBytes, out fileSize, out crc);
+        }
+
+        private static bool TryWriteEntryFile(string scenarioId, int absoluteSlot, byte[] xmlBytes, out long fileSize, out uint crc)
+        {
+            var path = DirectoryProvider.EntryPath(scenarioId, absoluteSlot);
             var tmp = path + ".tmp";
             fileSize = 0; crc = 0;
             try
@@ -599,6 +606,10 @@ namespace ShelteredAPI.Saves
             root.Set("saveScopeId", ManualJsonValue.String(manifest.saveScopeId));
             root.Set("saveId", ManualJsonValue.String(manifest.saveId));
             root.Set("customScenarioId", ManualJsonValue.String(manifest.customScenarioId));
+            root.Set("source", ManualJsonValue.String(manifest.source));
+            root.Set("sourceSlot", ManualJsonValue.Number(manifest.sourceSlot));
+            root.Set("sourceVanillaCrc32", ManualJsonValue.Number(((long)manifest.sourceVanillaCrc32).ToString(CultureInfo.InvariantCulture)));
+            root.Set("sourceVanillaLastWriteUtc", ManualJsonValue.String(manifest.sourceVanillaLastWriteUtc));
             root.Set("modApiVersion", ManualJsonValue.String(manifest.modApiVersion));
             root.Set("shelteredApiVersion", ManualJsonValue.String(manifest.shelteredApiVersion));
             root.Set("mapFactsStatus", ManualJsonValue.String(manifest.mapFactsStatus));
@@ -708,6 +719,10 @@ namespace ShelteredAPI.Saves
             result.saveScopeId = root.GetString("saveScopeId", result.saveScopeId);
             result.saveId = root.GetString("saveId", result.saveId);
             result.customScenarioId = root.GetString("customScenarioId", result.customScenarioId);
+            result.source = root.GetString("source", result.source);
+            result.sourceSlot = root.GetInt("sourceSlot", result.sourceSlot);
+            result.sourceVanillaCrc32 = ReadUInt32(root, "sourceVanillaCrc32", result.sourceVanillaCrc32);
+            result.sourceVanillaLastWriteUtc = root.GetString("sourceVanillaLastWriteUtc", result.sourceVanillaLastWriteUtc);
             result.modApiVersion = root.GetString("modApiVersion", result.modApiVersion);
             result.shelteredApiVersion = root.GetString("shelteredApiVersion", result.shelteredApiVersion);
             result.mapFactsStatus = root.GetString("mapFactsStatus", result.mapFactsStatus);
@@ -725,6 +740,24 @@ namespace ShelteredAPI.Saves
             result.restoreLineageId = root.GetString("restoreLineageId", result.restoreLineageId);
             result.lastLoadedMods = ReadLoadedMods(root.GetArray("lastLoadedMods"));
             return result;
+        }
+
+        private static uint ReadUInt32(ManualJsonObject root, string name, uint fallback)
+        {
+            ManualJsonValue value = root != null ? root.Get(name) : null;
+            if (value == null)
+                return fallback;
+
+            string raw = null;
+            if (value.Type == ManualJsonValueType.Number)
+                raw = value.NumberText;
+            else if (value.Type == ManualJsonValueType.String)
+                raw = value.StringValue;
+
+            uint parsed;
+            return uint.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : fallback;
         }
 
         private static LoadedModInfo[] ReadLoadedMods(ManualJsonArray modsJson)
@@ -886,6 +919,298 @@ namespace ShelteredAPI.Saves
             catch (Exception ex)
             {
                 MMLog.WriteError($"Failed to read vanilla save entry for slot {slotNumber}: {ex.Message}");
+                return null;
+            }
+        }
+
+        internal static VanillaMirrorComparisonResult CompareStandardVanillaMirror(int slotNumber)
+        {
+            VanillaMirrorComparisonResult result = new VanillaMirrorComparisonResult
+            {
+                SlotNumber = slotNumber,
+                SaveType = slotNumber >= 1 && slotNumber <= 3
+                    ? (SaveManager.SaveType)slotNumber
+                    : SaveManager.SaveType.Invalid,
+                VanillaPath = GetVanillaSavePath(slotNumber),
+                MirrorPath = DirectoryProvider.EntryPath(ScenarioSaveIdGuards.StandardStorageScenarioId, slotNumber, false)
+            };
+
+            if (slotNumber < 1 || slotNumber > 3)
+            {
+                result.Status = VanillaMirrorComparisonStatus.MissingVanilla;
+                result.Error = "Standard vanilla mirror comparison only supports slots 1-3.";
+                return result;
+            }
+
+            if (string.IsNullOrEmpty(result.VanillaPath) || !File.Exists(result.VanillaPath))
+            {
+                result.Status = VanillaMirrorComparisonStatus.MissingVanilla;
+                TryReadMirrorBytes(result);
+                return result;
+            }
+
+            try
+            {
+                byte[] encryptedData = File.ReadAllBytes(result.VanillaPath);
+                result.VanillaXmlBytes = DecryptVanillaSave(encryptedData);
+                result.SourceVanillaCrc32 = CRC32.Compute(result.VanillaXmlBytes);
+                result.SourceVanillaLastWriteUtc = File.GetLastWriteTimeUtc(result.VanillaPath);
+            }
+            catch (Exception ex)
+            {
+                result.Status = VanillaMirrorComparisonStatus.MissingVanilla;
+                result.Error = ex.Message;
+                return result;
+            }
+
+            if (!File.Exists(result.MirrorPath))
+            {
+                result.Status = VanillaMirrorComparisonStatus.MissingMirror;
+                return result;
+            }
+
+            TryReadMirrorBytes(result);
+            result.Status = ByteArraysEqual(result.VanillaXmlBytes, result.MirrorXmlBytes)
+                ? VanillaMirrorComparisonStatus.InSync
+                : VanillaMirrorComparisonStatus.Diverged;
+            return result;
+        }
+
+        internal static SaveEntry WriteStandardVanillaMirrorFromVanilla(
+            VanillaMirrorComparisonResult comparison,
+            bool backupExistingMirror,
+            string reason)
+        {
+            if (comparison == null || comparison.SlotNumber < 1 || comparison.SlotNumber > 3)
+                return null;
+
+            byte[] xmlBytes = comparison.VanillaXmlBytes;
+            if (xmlBytes == null || xmlBytes.Length == 0)
+                return null;
+
+            string scenarioId = ScenarioSaveIdGuards.StandardStorageScenarioId;
+            SaveRegistryCore registry = new SaveRegistryCore(scenarioId);
+            SaveEntry existing = registry.GetSaveBySlot(comparison.SlotNumber);
+            if (backupExistingMirror && existing != null && File.Exists(comparison.MirrorPath))
+                SaveBackupService.BackupCustomEntryBeforeOverwrite(existing);
+
+            long fileSize;
+            uint crc;
+            if (!TryWriteEntryFile(scenarioId, comparison.SlotNumber, xmlBytes, out fileSize, out crc))
+                return null;
+
+            SlotManifest manifest = CreateVanillaMirrorManifest(
+                ReadSaveInfoFromXml(xmlBytes),
+                comparison.SlotNumber,
+                comparison.SourceVanillaCrc32,
+                comparison.SourceVanillaLastWriteUtc);
+
+            string manifestPath;
+            string error;
+            if (!TryWriteSlotManifest(scenarioId, comparison.SlotNumber, manifest, out manifestPath, out error))
+            {
+                MMLog.WriteWarning("[VanillaMirror] Failed to write mirror manifest for slot "
+                    + comparison.SlotNumber + ": " + error);
+            }
+
+            SaveEntry entry = new SaveRegistryCore(scenarioId).GetSaveBySlot(comparison.SlotNumber);
+            MMLog.WriteInfo("[VanillaMirror] Wrote Standard Slot_" + comparison.SlotNumber
+                + " from vanilla " + comparison.SaveType
+                + ". reason=" + (reason ?? "unspecified") + ".");
+            return entry;
+        }
+
+        internal static void EnsureStandardVanillaMirrorManifest(VanillaMirrorComparisonResult comparison)
+        {
+            if (comparison == null
+                || comparison.Status != VanillaMirrorComparisonStatus.InSync
+                || comparison.SlotNumber < 1
+                || comparison.SlotNumber > 3
+                || comparison.VanillaXmlBytes == null)
+            {
+                return;
+            }
+
+            SlotManifest manifest = ReadSlotManifest(ScenarioSaveIdGuards.StandardStorageScenarioId, comparison.SlotNumber);
+            bool needsWrite = manifest == null
+                || !string.Equals(manifest.source, "vanilla-mirror", StringComparison.OrdinalIgnoreCase)
+                || manifest.sourceSlot != comparison.SlotNumber
+                || manifest.sourceVanillaCrc32 != comparison.SourceVanillaCrc32
+                || !string.Equals(
+                    manifest.sourceVanillaLastWriteUtc,
+                    comparison.SourceVanillaLastWriteUtc.ToString("o", CultureInfo.InvariantCulture),
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (!needsWrite)
+                return;
+
+            SlotManifest updated = CreateVanillaMirrorManifest(
+                ReadSaveInfoFromXml(comparison.VanillaXmlBytes),
+                comparison.SlotNumber,
+                comparison.SourceVanillaCrc32,
+                comparison.SourceVanillaLastWriteUtc);
+
+            string manifestPath;
+            string error;
+            if (!TryWriteSlotManifest(ScenarioSaveIdGuards.StandardStorageScenarioId, comparison.SlotNumber, updated, out manifestPath, out error))
+            {
+                MMLog.WriteWarning("[VanillaMirror] Failed to refresh mirror manifest for slot "
+                    + comparison.SlotNumber + ": " + error);
+            }
+        }
+
+        internal static bool TryWriteStandardVanillaMirrorManifestFromSave(
+            int slotNumber,
+            SaveInfo saveInfo,
+            byte[] xmlBytes)
+        {
+            if (slotNumber < 1 || slotNumber > 3 || xmlBytes == null || xmlBytes.Length == 0)
+                return false;
+
+            string vanillaPath = GetVanillaSavePath(slotNumber);
+            DateTime lastWriteUtc = !string.IsNullOrEmpty(vanillaPath) && File.Exists(vanillaPath)
+                ? File.GetLastWriteTimeUtc(vanillaPath)
+                : DateTime.UtcNow;
+
+            SlotManifest manifest = CreateVanillaMirrorManifest(
+                saveInfo ?? ReadSaveInfoFromXml(xmlBytes),
+                slotNumber,
+                CRC32.Compute(xmlBytes),
+                lastWriteUtc);
+
+            string manifestPath;
+            string error;
+            if (!TryWriteSlotManifest(ScenarioSaveIdGuards.StandardStorageScenarioId, slotNumber, manifest, out manifestPath, out error))
+            {
+                MMLog.WriteWarning("[VanillaMirror] Failed to write synchronized mirror manifest for slot "
+                    + slotNumber + ": " + error);
+                return false;
+            }
+
+            return true;
+        }
+
+        internal static bool IsStandardVanillaMirrorEntry(SaveManager.SaveType type, string scenarioId, SaveEntry entry)
+        {
+            VanillaSaveRoute route;
+            return TryGetStandardVanillaMirrorRoute(type, scenarioId, entry, out route);
+        }
+
+        internal static bool TryGetStandardVanillaMirrorRoute(
+            SaveManager.SaveType type,
+            string scenarioId,
+            SaveEntry entry,
+            out VanillaSaveRoute route)
+        {
+            route = new VanillaSaveRoute();
+            if (entry == null)
+                return false;
+
+            if (!string.Equals(
+                SaveStorageRouter.NormalizeScenarioId(scenarioId),
+                ScenarioSaveIdGuards.StandardStorageScenarioId,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (entry.absoluteSlot < 1 || entry.absoluteSlot > 3)
+                return false;
+
+            if (!VanillaSaveRouting.TryGetRoute(type, out route))
+                return false;
+
+            return route.VanillaSlotNumber == entry.absoluteSlot
+                && string.Equals(route.StorageScenarioId, ScenarioSaveIdGuards.StandardStorageScenarioId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static SlotManifest CreateVanillaMirrorManifest(
+            SaveInfo info,
+            int slotNumber,
+            uint sourceVanillaCrc32,
+            DateTime sourceVanillaLastWriteUtc)
+        {
+            SlotManifest manifest = SaveManifestFacts.CaptureCurrent(info);
+            manifest.source = "vanilla-mirror";
+            manifest.sourceSlot = slotNumber;
+            manifest.sourceVanillaCrc32 = sourceVanillaCrc32;
+            manifest.sourceVanillaLastWriteUtc = sourceVanillaLastWriteUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
+            return manifest;
+        }
+
+        private static void TryReadMirrorBytes(VanillaMirrorComparisonResult result)
+        {
+            if (result == null || string.IsNullOrEmpty(result.MirrorPath) || !File.Exists(result.MirrorPath))
+                return;
+
+            try
+            {
+                result.MirrorXmlBytes = File.ReadAllBytes(result.MirrorPath);
+            }
+            catch (Exception ex)
+            {
+                result.Error = ex.Message;
+            }
+        }
+
+        private static bool ByteArraysEqual(byte[] left, byte[] right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+
+            for (int i = 0; i < left.Length; i++)
+            {
+                if (left[i] != right[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        internal static void ImportStandardVanillaSlotsIfNeeded()
+        {
+            for (int slotNumber = 1; slotNumber <= 3; slotNumber++)
+                ImportStandardVanillaSlotIfNeeded(slotNumber);
+        }
+
+        internal static SaveEntry ImportStandardVanillaSlotIfNeeded(int slotNumber)
+        {
+            if (slotNumber < 1 || slotNumber > 3)
+                return null;
+
+            string scenarioId = ScenarioSaveIdGuards.StandardStorageScenarioId;
+            string xmlPath = DirectoryProvider.EntryPath(scenarioId, slotNumber, false);
+            VanillaMirrorComparisonResult comparison = CompareStandardVanillaMirror(slotNumber);
+            if (comparison.Status == VanillaMirrorComparisonStatus.InSync)
+            {
+                EnsureStandardVanillaMirrorManifest(comparison);
+                return new SaveRegistryCore(scenarioId).GetSaveBySlot(slotNumber);
+            }
+
+            if (comparison.Status == VanillaMirrorComparisonStatus.Diverged
+                || comparison.Status == VanillaMirrorComparisonStatus.MissingVanilla)
+            {
+                return File.Exists(xmlPath)
+                    ? new SaveRegistryCore(scenarioId).GetSaveBySlot(slotNumber)
+                    : null;
+            }
+
+            if (comparison.Status != VanillaMirrorComparisonStatus.MissingMirror)
+                return null;
+
+            try
+            {
+                SaveEntry imported = WriteStandardVanillaMirrorFromVanilla(comparison, false, "missing-mirror-import");
+                MMLog.WriteInfo("[VanillaImport] Imported vanilla slot " + slotNumber
+                    + " into SMM Standard Slot_" + slotNumber + " and left the vanilla file untouched.");
+                return imported;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[VanillaImport] Failed to import vanilla slot "
+                    + slotNumber + ": " + ex.Message);
                 return null;
             }
         }

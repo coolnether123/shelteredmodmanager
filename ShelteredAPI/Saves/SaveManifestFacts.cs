@@ -14,7 +14,7 @@ namespace ShelteredAPI.Saves
     /// </summary>
     internal static class SaveManifestFacts
     {
-        internal const int CurrentManifestVersion = 2;
+        internal const int CurrentManifestVersion = 3;
 
         internal static SlotManifest CaptureCurrent(SaveInfo info)
         {

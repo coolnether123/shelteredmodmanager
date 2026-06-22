@@ -209,6 +209,10 @@ namespace ShelteredAPI.Saves
         public string saveScopeId;
         public string saveId;
         public string customScenarioId;
+        public string source;
+        public int sourceSlot;
+        public uint sourceVanillaCrc32;
+        public string sourceVanillaLastWriteUtc;
         public string modApiVersion;
         public string shelteredApiVersion;
         public string mapFactsStatus = "unknown";
