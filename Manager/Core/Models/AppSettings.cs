@@ -10,7 +10,7 @@ namespace Manager.Core.Models
     {
         public const int SaveBackupRetentionAlways = -1;
         public const int SaveBackupRetentionDisabled = 0;
-        public const int DefaultSaveBackupRetention = 3;
+        public const int DefaultSaveBackupRetention = 10;
         public const string DebugLogScopeMod = "Mod";
         public const string DebugLogScopeAll = "All";
 
