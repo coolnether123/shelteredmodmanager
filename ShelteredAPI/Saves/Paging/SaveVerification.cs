@@ -6,6 +6,7 @@ using UnityEngine;
 using ModAPI.Core;
 using ShelteredAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Backups;
 using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.UI.Compatibility;
 using HarmonyLib;
@@ -48,7 +49,7 @@ namespace ShelteredAPI.Saves.Paging
 
             if (SaveSnapshotBrowserState.IsActive(panel))
             {
-                HideAllIcons();
+                UpdateSnapshotIcons(panel);
                 return;
             }
 
@@ -290,7 +291,7 @@ namespace ShelteredAPI.Saves.Paging
                     SaveDetailsWindow.Show(capTarget, capManifest, capState, false, () => {
                         int slotToLoad;
 
-                        if (capVisible.IsVanillaPage)
+                        if (capVisible.IsVanillaPage && !IsSmmStoredEntry(capVisible))
                         {
                             // For vanilla saves, ensure we bypass the anti-mod-mismatch loading block
                             SaveProtectionPatches.LoadGamePatch._forceLoad = true;
@@ -329,6 +330,185 @@ namespace ShelteredAPI.Saves.Paging
                     });
                 });
             }
+        }
+
+        private static bool IsSmmStoredEntry(SlotSelectionVisibleSave visible)
+        {
+            if (visible == null || visible.Entry == null)
+                return false;
+
+            string scenarioId = string.IsNullOrEmpty(visible.StorageScenarioId) ? "Standard" : visible.StorageScenarioId;
+            return File.Exists(DirectoryProvider.EntryPath(scenarioId, visible.Entry.absoluteSlot, false));
+        }
+
+        private static void UpdateSnapshotIcons(SlotSelectionPanel panel)
+        {
+            HideAllIcons();
+            if (panel == null)
+                return;
+
+            SaveSnapshotBrowserSession session;
+            if (!SaveSnapshotBrowserState.TryGet(panel, out session))
+                return;
+
+            UIAtlas sampleAtlas = GetVerificationAtlas();
+            if (sampleAtlas == null)
+                return;
+
+            CacheFonts(panel);
+            List<SaveSlotButton> buttons = GetVisibleSlotButtons(panel);
+            int page = PagingManager.GetPage(panel);
+
+            for (int i = 0; i < buttons.Count && i < 3; i++)
+            {
+                SaveSlotButton btn = buttons[i];
+                SaveBackupSnapshotInfo snapshot = session.GetSnapshotAt(page, i);
+                if (btn == null || snapshot == null || snapshot.Entry == null)
+                    continue;
+
+                SlotManifest manifest = snapshot.SlotManifest;
+                VerificationState state = manifest != null ? Verify(manifest) : VerificationState.Unknown;
+                GameObject iconGO = GetOrCreateSnapshotIcon(panel, btn, snapshot.AbsoluteSlot, sampleAtlas);
+                iconGO.SetActive(true);
+                iconGO.transform.localPosition = new Vector3(-320, 0, -20);
+                ApplyVerificationVisual(iconGO, sampleAtlas, state);
+
+                SaveBackupSnapshotInfo capSnapshot = snapshot;
+                SlotManifest capManifest = manifest;
+                VerificationState capState = state;
+                int capIndex = i;
+                UIButton iconButton = iconGO.GetComponent<UIButton>();
+                EventDelegate.Set(iconButton.onClick, () =>
+                {
+                    SaveDetailsWindow.ShowSnapshot(capSnapshot.Entry, capManifest, capState, () =>
+                    {
+                        SlotSelectionPatchCoordinator.RestoreSnapshotAfterVerification(panel, capIndex, capSnapshot);
+                    });
+                });
+            }
+        }
+
+        private static List<SaveSlotButton> GetVisibleSlotButtons(SlotSelectionPanel panel)
+        {
+            return panel.GetComponentsInChildren<SaveSlotButton>(true)
+                .Where(b => b != null && b.gameObject.activeInHierarchy)
+                .OrderByDescending(b => b.transform.localPosition.y)
+                .ToList();
+        }
+
+        private static void CacheFonts(SlotSelectionPanel panel)
+        {
+            if ((_cachedUIFont != null || _cachedTTFFont != null) || panel == null)
+                return;
+
+            var label = panel.GetComponentInChildren<UILabel>();
+            if (label != null)
+            {
+                _cachedUIFont = label.bitmapFont;
+                _cachedTTFFont = label.trueTypeFont;
+            }
+        }
+
+        private static GameObject GetOrCreateSnapshotIcon(SlotSelectionPanel panel, SaveSlotButton btn, int absoluteSlot, UIAtlas sampleAtlas)
+        {
+            GameObject iconGO;
+            if (_slotIcons.TryGetValue(btn, out iconGO) && iconGO != null)
+                return iconGO;
+
+            iconGO = new GameObject("VerificationBtn_" + absoluteSlot);
+            iconGO.transform.SetParent(btn.transform, false);
+            iconGO.layer = btn.gameObject.layer;
+
+            var parentPanel = NGUITools.FindInParents<UIPanel>(btn.gameObject);
+            int baseDepth = UIUtil.ComputeSafeDepth(parentPanel, 50);
+
+            var bgTex = iconGO.AddComponent<UITexture>();
+            var whiteTex = new Texture2D(2, 2);
+            for (int x = 0; x < 2; x++)
+                for (int y = 0; y < 2; y++)
+                    whiteTex.SetPixel(x, y, Color.white);
+            whiteTex.Apply();
+
+            bgTex.mainTexture = whiteTex;
+            bgTex.depth = baseDepth;
+            bgTex.width = 60;
+            bgTex.height = 60;
+            bgTex.pivot = UIWidget.Pivot.Center;
+            bgTex.color = new Color(0.3f, 0.25f, 0.2f, 0.9f);
+
+            var iconChild = new GameObject("Icon");
+            iconChild.transform.SetParent(iconGO.transform, false);
+            iconChild.layer = iconGO.layer;
+            var iconSprite = iconChild.AddComponent<UISprite>();
+            iconSprite.atlas = sampleAtlas;
+            iconSprite.depth = baseDepth + 5;
+            iconSprite.width = 36;
+            iconSprite.height = 36;
+            iconSprite.pivot = UIWidget.Pivot.Center;
+
+            var col = iconGO.AddComponent<BoxCollider>();
+            col.size = new Vector3(70, 70, 1);
+            var uiBtn = iconGO.AddComponent<UIButton>();
+            uiBtn.tweenTarget = iconGO;
+
+            _slotIcons[btn] = iconGO;
+            return iconGO;
+        }
+
+        private static void ApplyVerificationVisual(GameObject iconGO, UIAtlas sampleAtlas, VerificationState state)
+        {
+            Transform iconChildObj = iconGO != null ? iconGO.transform.Find("Icon") : null;
+            if (iconChildObj == null)
+                return;
+
+            UISprite childSprite = iconChildObj.GetComponent<UISprite>();
+            UILabel childLabel = iconChildObj.GetComponent<UILabel>();
+            if (childLabel == null)
+            {
+                childLabel = iconChildObj.gameObject.AddComponent<UILabel>();
+                childLabel.bitmapFont = _cachedUIFont;
+                childLabel.trueTypeFont = _cachedTTFFont;
+                childLabel.fontSize = 48;
+                childLabel.pivot = UIWidget.Pivot.Center;
+                childLabel.alignment = NGUIText.Alignment.Center;
+                var parentBgTex = iconChildObj.parent.GetComponent<UITexture>();
+                childLabel.depth = (parentBgTex != null ? parentBgTex.depth : 100) + 10;
+                childLabel.overflowMethod = UILabel.Overflow.ResizeFreely;
+                childLabel.width = 60;
+                childLabel.height = 60;
+            }
+
+            string iconText = TEXT_MATCH;
+            string spriteName = SelectVerificationSpriteName(sampleAtlas, "Checkmark", "Tick");
+            Color iconColor = COLOR_MATCH;
+            float yOffset = 0f;
+
+            switch (state)
+            {
+                case VerificationState.VersionMismatch:
+                case VerificationState.Warning:
+                    iconText = TEXT_VERSION_DIFF;
+                    spriteName = null;
+                    iconColor = COLOR_VERSION_DIFF;
+                    yOffset = -20f;
+                    break;
+                case VerificationState.Missing:
+                    iconText = TEXT_MISSING;
+                    spriteName = SelectVerificationSpriteName(sampleAtlas, "Cancel", "Close");
+                    iconColor = COLOR_MISSING;
+                    break;
+                case VerificationState.Unknown:
+                    iconText = TEXT_UNKNOWN;
+                    spriteName = null;
+                    iconColor = COLOR_UNKNOWN;
+                    break;
+            }
+
+            bool usedSprite = TryApplyVerificationSprite(childSprite, spriteName, iconColor);
+            childLabel.enabled = !usedSprite;
+            childLabel.text = iconText;
+            childLabel.color = iconColor;
+            iconChildObj.localPosition = new Vector3(0, yOffset, 0);
         }
 
         private static string SelectVerificationSpriteName(UIAtlas atlas, params string[] spriteNames)

@@ -71,6 +71,28 @@ namespace ShelteredAPI.Saves.Paging
             Show(entry, manifest, state, isAttemptingLoad, onLoadAnyway, onCancel, null);
         }
 
+        public static void ShowSnapshot(SaveEntry entry, SlotManifest manifest, SaveVerification.VerificationState state, Action onRestore, Action onCancel = null)
+        {
+            VerificationWindowOptions options = new VerificationWindowOptions
+            {
+                Title = "SNAPSHOT MOD VERIFICATION",
+                SavedColumnHeader = "SNAPSHOT",
+                MatchLoadButtonText = "RESTORE SNAPSHOT",
+                MismatchLoadButtonText = "RESTORE ANYWAY",
+                BlockedLoadButtonText = "RESTORE BLOCKED",
+                UnknownLoadButtonText = "RESTORE BLOCKED",
+                MatchLoadHint = "(Mods match)",
+                MismatchLoadHint = "(Override warnings)",
+                BlockedLoadHint = "(Resolve required mod issues)",
+                UnknownBlockedHint = "(Snapshot metadata unavailable)",
+                MatchStatusText = "Mods match - snapshot can be restored",
+                UnknownBlockedStatusText = "Snapshot metadata missing - restore blocked",
+                AllowUnknownRecovery = false
+            };
+
+            Show(entry, manifest, state, true, onRestore, onCancel, options);
+        }
+
         public static void ShowScenario(string scenarioName, SlotManifest manifest, SaveVerification.VerificationState state, Action onStart, Action onCancel = null)
         {
             VerificationWindowOptions options = new VerificationWindowOptions

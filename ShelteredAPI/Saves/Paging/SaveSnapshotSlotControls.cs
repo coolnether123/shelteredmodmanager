@@ -95,7 +95,7 @@ namespace ShelteredAPI.Saves.Paging
                 string capTimelineKey = timelineKey;
                 SaveEntry capEntry = visible.Entry;
                 SlotPagingScope capScope = visible.Scope;
-                bool capIsVanilla = visible.IsVanillaPage;
+                bool capIsVanilla = visible.IsVanillaPage && !IsSmmStoredEntry(visible);
                 SaveManager.SaveType capVanillaType = vanillaSaveType;
                 int capDisplaySlotNumber = visible.DisplaySlotNumber;
                 EventDelegate.Set(button.GetComponent<UIButton>().onClick, () =>
@@ -118,9 +118,23 @@ namespace ShelteredAPI.Saves.Paging
                 return false;
 
             if (visible.IsVanillaPage)
+            {
+                if (IsSmmStoredEntry(visible) && SaveBackupService.TryGetCustomTimelineKey(visible.Entry, out timelineKey))
+                    return true;
+
                 return SaveBackupService.TryGetVanillaTimelineKey(visible.TransportSlotNumber, out timelineKey, out vanillaSaveType);
+            }
 
             return SaveBackupService.TryGetCustomTimelineKey(visible.Entry, out timelineKey);
+        }
+
+        private static bool IsSmmStoredEntry(SlotSelectionVisibleSave visible)
+        {
+            if (visible == null || visible.Entry == null)
+                return false;
+
+            string scenarioId = string.IsNullOrEmpty(visible.StorageScenarioId) ? "Standard" : visible.StorageScenarioId;
+            return System.IO.File.Exists(DirectoryProvider.EntryPath(scenarioId, visible.Entry.absoluteSlot, false));
         }
 
         private static GameObject GetOrCreateButton(SlotSelectionPanel panel, SaveSlotButton slotButton)
