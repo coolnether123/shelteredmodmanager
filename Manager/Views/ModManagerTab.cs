@@ -693,8 +693,6 @@ namespace Manager.Views
                 {
                     string feedError;
                     var feed = _nexusService.GetLatestMods(fallbackDomain, 200, out feedError);
-                    if (!string.IsNullOrEmpty(feedError) && string.IsNullOrEmpty(error))
-                        error = feedError;
 
                     if (feed != null && feed.Count > 0)
                     {
@@ -755,11 +753,7 @@ namespace Manager.Views
                         string searchError;
                         var searchResults = _nexusService.FindModsByName(fallbackDomain, searchName, 10, out searchError);
                         if (!string.IsNullOrEmpty(searchError))
-                        {
-                            if (string.IsNullOrEmpty(error))
-                                error = searchError;
                             continue;
-                        }
 
                         if (searchResults == null || searchResults.Count == 0)
                             continue;

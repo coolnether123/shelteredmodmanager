@@ -686,7 +686,7 @@ namespace Manager.Views
                     return;
                 }
 
-                string downloadUrl = _nexusService.GetV3DownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
+                string downloadUrl = _nexusService.GetDownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
                     FinishInstallWithError(RewriteDirectDownloadError(error));

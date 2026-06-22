@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web.Script.Serialization;
 using Manager.Core;
@@ -86,15 +85,7 @@ namespace Manager.Core.Services
                 if (!string.IsNullOrEmpty(chunkError))
                 {
                     errorMessage = chunkError;
-                    if (!HasApiKey)
-                        continue;
-
-                    chunkResult = QueryV3ModsByReferences(chunk, out chunkError);
-                    if (!string.IsNullOrEmpty(chunkError))
-                    {
-                        errorMessage += " Nexus v3 fallback also failed: " + chunkError;
-                        continue;
-                    }
+                    continue;
                 }
 
                 foreach (var pair in chunkResult)
@@ -130,35 +121,6 @@ namespace Manager.Core.Services
             }
 
             errorMessage = v2Error;
-            if (!HasApiKey)
-                return list;
-
-            NexusV3RestResult response = _v3Client.Get("/games/" + Escape(gameDomain) + "/trending-mods");
-            if (!string.IsNullOrEmpty(response.ErrorMessage))
-            {
-                errorMessage += " Nexus v3 fallback also failed: " + response.ErrorMessage;
-                return list;
-            }
-
-            object[] mods = AsArray(response.Data, "mods");
-            if (mods == null)
-            {
-                errorMessage = null;
-                StoreCached(_latestCache, cacheKey, list);
-                return list;
-            }
-
-            int limit = count <= 0 ? mods.Length : Math.Min(count, mods.Length);
-            for (int i = 0; i < limit; i++)
-            {
-                var node = mods[i] as Dictionary<string, object>;
-                NexusRemoteMod mod = ParseTrendingMod(node, gameDomain);
-                if (mod != null)
-                    list.Add(mod);
-            }
-
-            errorMessage = null;
-            StoreCached(_latestCache, cacheKey, list);
             return list;
         }
 
@@ -194,20 +156,7 @@ namespace Manager.Core.Services
             }
 
             errorMessage = v2Error;
-            if (!HasApiKey)
-                return null;
-
-            string v3Error;
-            NexusRemoteMod mod = GetV3ModByDomainAndId(gameDomain, modId, out v3Error);
-            if (!string.IsNullOrEmpty(v3Error))
-            {
-                errorMessage += " Nexus v3 fallback also failed: " + v3Error;
-                return null;
-            }
-
-            errorMessage = null;
-            StoreCached(_modCache, cacheKey, mod);
-            return mod;
+            return null;
         }
 
         public List<NexusRemoteMod> FindModsByName(string gameDomain, string modName, int count, out string errorMessage)
@@ -365,27 +314,6 @@ namespace Manager.Core.Services
                     readError = v2FilesError;
             }
 
-            if (string.IsNullOrEmpty(readError) && mod != null && !string.IsNullOrEmpty(mod.Uid))
-            {
-                string v3Error;
-                List<NexusModFileUpdateGroup> groups = GetModFileUpdateGroups(mod.Uid, out v3Error);
-                if (string.IsNullOrEmpty(v3Error))
-                {
-                    for (int i = 0; i < groups.Count; i++)
-                    {
-                        string versionError;
-                        List<NexusRemoteModFile> groupFiles = GetFileUpdateGroupVersions(groups[i].Id, out versionError);
-                        if (!string.IsNullOrEmpty(versionError) && string.IsNullOrEmpty(readError))
-                            readError = versionError;
-                        files.AddRange(groupFiles);
-                    }
-                }
-                else
-                {
-                    readError = v3Error;
-                }
-            }
-
             if (HasManagerInstallableFile(files))
             {
                 StoreCached(_fileListCache, cacheKey, files);
@@ -441,7 +369,7 @@ namespace Manager.Core.Services
             return SelectPreferredInstallFile(files, true, true);
         }
 
-        public string GetV3DownloadUrl(string gameDomain, int modId, int fileId, string apiKey, out string errorMessage)
+        public string GetDownloadUrl(string gameDomain, int modId, int fileId, string apiKey, out string errorMessage)
         {
             return GetLegacyDownloadUrl(gameDomain, modId, fileId, apiKey, out errorMessage);
         }
@@ -639,7 +567,7 @@ namespace Manager.Core.Services
             }
 
             string modError;
-            NexusRemoteMod mod = GetModByDomainAndId(draft.GameDomain, draft.NexusModId, out modError);
+            NexusRemoteMod mod = GetV3ModByDomainAndId(draft.GameDomain, draft.NexusModId, out modError);
             if (!string.IsNullOrEmpty(modError) || mod == null || string.IsNullOrEmpty(mod.Uid))
             {
                 errorMessage = !string.IsNullOrEmpty(modError) ? modError : "Could not resolve the Nexus v3 mod id.";
@@ -1086,34 +1014,6 @@ query modFiles($modId: ID!, $gameId: ID!){
             return files;
         }
 
-        private Dictionary<string, NexusRemoteMod> QueryV3ModsByReferences(List<NexusModReference> references, out string errorMessage)
-        {
-            errorMessage = null;
-            var results = new Dictionary<string, NexusRemoteMod>(StringComparer.OrdinalIgnoreCase);
-            if (references == null)
-                return results;
-
-            for (int i = 0; i < references.Count; i++)
-            {
-                NexusModReference reference = references[i];
-                if (reference == null || !reference.IsValid)
-                    continue;
-
-                string error;
-                NexusRemoteMod mod = GetV3ModByDomainAndId(reference.GameDomain, reference.ModId, out error);
-                if (!string.IsNullOrEmpty(error))
-                {
-                    errorMessage = error;
-                    continue;
-                }
-
-                if (mod != null)
-                    results[reference.Key] = mod;
-            }
-
-            return results;
-        }
-
         private NexusRemoteMod GetV3ModByDomainAndId(string gameDomain, int modId, out string errorMessage)
         {
             errorMessage = null;
@@ -1340,23 +1240,6 @@ query modFiles($modId: ID!, $gameId: ID!){
             return mod;
         }
 
-        private static NexusRemoteMod ParseTrendingMod(Dictionary<string, object> node, string fallbackDomain)
-        {
-            if (node == null)
-                return null;
-
-            var mod = new NexusRemoteMod();
-            mod.Name = ReadString(node, "name");
-            mod.Author = ReadString(node, "author");
-            mod.UploaderName = mod.Author;
-            mod.Summary = ReadString(node, "summary");
-            mod.PictureUrl = ReadString(node, "picture_url");
-            mod.ThumbnailUrl = mod.PictureUrl;
-            mod.GameDomain = NormalizeDomain(fallbackDomain);
-            mod.ModId = ParseModIdFromUrl(ReadString(node, "mod_page_url"));
-            return mod;
-        }
-
         private static NexusRemoteModFile ParseMinimalFile(Dictionary<string, object> node, string groupId)
         {
             if (node == null)
@@ -1537,15 +1420,6 @@ query modFiles($modId: ID!, $gameId: ID!){
         {
             string text = value ?? string.Empty;
             return text.Length <= maxLength ? text : text.Substring(0, maxLength);
-        }
-
-        private static int ParseModIdFromUrl(string url)
-        {
-            if (string.IsNullOrEmpty(url))
-                return 0;
-            Match match = Regex.Match(url, @"/mods/(?<id>\d+)", RegexOptions.IgnoreCase);
-            int parsed;
-            return match.Success && int.TryParse(match.Groups["id"].Value, out parsed) ? parsed : 0;
         }
 
         private static string BuildLegacyUrl(string relativePath, Dictionary<string, string> query)

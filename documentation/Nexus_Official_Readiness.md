@@ -6,7 +6,7 @@ This checklist tracks what SMM needs before requesting/using an official Nexus M
 
 - SMM identifies API requests with `Application-Name`, `Application-Version`, `User-Agent`, and `APIKEY` headers.
 - API keys are validated through the Nexus API key validation endpoint before the UI reports a connected account.
-- Metadata browsing uses Nexus API v3 where SMM has adopted v3 endpoints.
+- Metadata browsing and update checks use Nexus v2/legacy read endpoints. Nexus v3 is reserved for the experimental publish/upload flow.
 - Direct install selects files that Nexus marks as manager-downloadable, resolves short-lived mirror URLs through the Nexus download-link endpoint, and never stores resolved mirror URLs.
 - Direct install rejects unsafe packages, duplicate mod IDs, reserved folder names, non-ZIP archives, and unwritable `mods` folders before replacing an installed mod.
 - Publish/upload API actions remain experimental and hidden unless Nexus integration and the experimental publish setting are enabled. Package creation streams file content instead of loading the full package into memory.
