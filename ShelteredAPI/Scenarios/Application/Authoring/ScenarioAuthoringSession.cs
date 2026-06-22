@@ -1,5 +1,6 @@
 using System;
 using ModAPI.Scenarios;
+using ShelteredAPI.Saves;
 using SaveType = SaveManager.SaveType;
 
 using ShelteredAPI.Scenarios.Definitions;
@@ -20,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string StorageScenarioId { get; private set; }
         public string StartupSaveId { get; private set; }
         public int StartupSaveSlot { get; private set; }
+        public SaveEntry StartupSave { get; private set; }
         public SaveType LaunchSaveType { get; private set; }
 
         public static ScenarioAuthoringSession Create(
@@ -28,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string storageScenarioId,
             string startupSaveId,
             int startupSaveSlot,
+            SaveEntry startupSave,
             SaveType launchSaveType)
         {
             if (draftInfo == null)
@@ -45,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 StorageScenarioId = storageScenarioId,
                 StartupSaveId = startupSaveId,
                 StartupSaveSlot = startupSaveSlot,
+                StartupSave = startupSave,
                 LaunchSaveType = launchSaveType
             };
         }

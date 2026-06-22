@@ -91,6 +91,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                     draft.StartupSave != null ? draft.StartupSave.id : null,
                     draft.Slot,
+                    draft.StartupSave,
                     launchSaveType);
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Queued draft authoring bootstrap: " + _pendingSession.DraftId + ".");
                 result = _pendingSession;
@@ -141,6 +142,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                     startupSave.id,
                     startupSave.absoluteSlot,
+                    startupSave,
                     launchSaveType);
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Queued existing draft authoring bootstrap: " + _pendingSession.DraftId + ".");
                 return _pendingSession;

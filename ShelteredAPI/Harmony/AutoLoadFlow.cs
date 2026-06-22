@@ -5,6 +5,7 @@ using HarmonyLib;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Paging;
+using ShelteredAPI.Saves.Runtime;
 using UnityEngine;
 
 namespace ShelteredAPI.Harmony
@@ -113,6 +114,12 @@ namespace ShelteredAPI.Harmony
                     + " (page " + targetPage + ", index " + targetIndex + ").");
 
                 _slotChosen = true;
+                if (lowestSlot > 3 && TryOpenExpandedStandardCustomization(instance, lowestSlot, targetIndex))
+                {
+                    Reset();
+                    return;
+                }
+
                 instance.OnSlotChosen();
                 Reset();
             }
@@ -120,6 +127,52 @@ namespace ShelteredAPI.Harmony
             {
                 Reset();
                 MMLog.WriteError("[AutoLoad] Failed choosing New Save slot: " + ex.Message);
+            }
+        }
+
+        private static bool TryOpenExpandedStandardCustomization(SlotSelectionPanel instance, int absoluteSlot, int targetIndex)
+        {
+            try
+            {
+                SaveEntry created = ExpandedVanillaSaves.Create(new SaveCreateOptions
+                {
+                    name = "New Game",
+                    absoluteSlot = absoluteSlot
+                });
+                if (created == null)
+                {
+                    MMLog.WriteWarning("[AutoLoad] Could not create transient expanded save entry for slot " + absoluteSlot + ".");
+                    return false;
+                }
+
+                SaveManager.SaveType transportSaveType = (SaveManager.SaveType)(targetIndex + 1);
+                PlatformSaveProxy.SetNextSave(transportSaveType, "Standard", created.id);
+                if (SaveManager.instance != null)
+                    SaveManager.instance.SetCurrentSlot(targetIndex + 1);
+
+                Traverse panelTraverse = Traverse.Create(instance);
+                panelTraverse.Field("m_selectedSlot").SetValue(targetIndex);
+                panelTraverse.Field("m_chosenSlot").SetValue(targetIndex);
+                instance.m_inputEnabled = false;
+
+                Traverse showCustomization = panelTraverse.Method("ShowCustomizationScreen");
+                if (showCustomization.MethodExists())
+                {
+                    MMLog.WriteInfo("[AutoLoad] Opening customization directly for expanded standard slot "
+                        + absoluteSlot + " via " + transportSaveType + ".");
+                    showCustomization.GetValue();
+                    return true;
+                }
+
+                MMLog.WriteWarning("[AutoLoad] SlotSelectionPanel.ShowCustomizationScreen was not found; falling back to vanilla slot choice.");
+                instance.m_inputEnabled = true;
+                return false;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[AutoLoad] Direct expanded new-save customization failed: " + ex.Message);
+                try { instance.m_inputEnabled = true; } catch { }
+                return false;
             }
         }
 

@@ -813,9 +813,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (draft == null || string.IsNullOrEmpty(draft.StartupSaveId))
                     throw new InvalidOperationException("The authoring draft session did not provide a startup save.");
 
-                SaveEntry draftStartupSave;
-                if (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(id, out draftStartupSave) || draftStartupSave == null)
+                SaveEntry draftStartupSave = draft.StartupSave;
+                if (draftStartupSave == null
+                    && (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(id, out draftStartupSave) || draftStartupSave == null))
+                {
                     throw new InvalidOperationException("Could not resolve the draft save entry for '" + id + "'.");
+                }
 
                 ScenarioBrowserPanelAdapter draftAdapter = new ScenarioBrowserPanelAdapter(panel);
                 string draftError;
