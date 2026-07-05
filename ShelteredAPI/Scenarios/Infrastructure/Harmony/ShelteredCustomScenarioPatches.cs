@@ -349,8 +349,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
         [HarmonyPatch(typeof(UIPanelManager), "PushPanel", new[] { typeof(BasePanel) })]
         [HarmonyPrefix]
-        private static bool PushPanelPrefix(BasePanel panel)
+        private static bool PushPanelPrefix(UIPanelManager __instance, BasePanel panel)
         {
+            if (IsDuplicateTutorialPopupPush(__instance, panel))
+            {
+                MMLog.WriteInfo("[ScenarioSetupFlow] Suppressed duplicate tutorial popup push while setup flow was advancing.");
+                return false;
+            }
+
             if (!ScenarioAuthoringPauseService.Instance.ShouldSuppressPauseMenu())
                 return true;
 
@@ -359,6 +365,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
             MMLog.WriteInfo("[ScenarioAuthoringPause] Suppressed UIPanelManager.PushPanel for the vanilla pause menu while authoring.");
             return false;
+        }
+
+        private static bool IsDuplicateTutorialPopupPush(UIPanelManager panelManager, BasePanel panel)
+        {
+            if (panelManager == null || panel == null)
+                return false;
+            if (!(panel is TutorialPopupPanel))
+                return false;
+
+            try { return panelManager.IsPanelOnStack(panel); }
+            catch { return false; }
         }
     }
 

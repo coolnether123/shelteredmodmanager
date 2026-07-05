@@ -183,6 +183,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     handle.Add(button.gameObject);
             }
 
+            AddPanelChromeChildren(handle);
             return handle;
         }
 
@@ -256,6 +257,23 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             if (handle != null && label != null)
                 handle.Add(label.gameObject);
+        }
+
+        private void AddPanelChromeChildren(ScenarioBrowserSuppressionHandle handle)
+        {
+            if (handle == null || _panel == null)
+                return;
+
+            Transform root = _panel.transform;
+            if (root == null)
+                return;
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform child = root.GetChild(i);
+                if (child != null && child.gameObject != null)
+                    handle.Add(child.gameObject);
+            }
         }
     }
 }

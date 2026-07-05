@@ -164,6 +164,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 CustomScenarioInfo scenario = scenarios[i];
                 if (scenario == null || string.IsNullOrEmpty(scenario.Id))
                     continue;
+                if (IsAuthoringDraftScenario(scenario))
+                    continue;
 
                 SlotManifest manifest = _dependencies.CreateDependencyManifest(scenario);
                 ScenarioDependencyVerificationState dependencyState = _dependencies.VerifyDependencies(scenario);
@@ -187,6 +189,26 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     DependencyManifest = manifest,
                     CustomScenario = scenario
                 });
+            }
+        }
+
+        private static bool IsAuthoringDraftScenario(CustomScenarioInfo scenario)
+        {
+            if (scenario == null)
+                return false;
+
+            if (string.Equals(scenario.OwnerModId, ScenarioAuthoringDraftRepository.DraftOwnerId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            try
+            {
+                ScenarioInfo ignored;
+                return ScenarioAuthoringDraftRepository.Instance.TryGet(scenario.Id, out ignored);
+            }
+            catch
+            {
+                return !string.IsNullOrEmpty(scenario.Id)
+                    && scenario.Id.StartsWith(ScenarioAuthoringDraftRepository.DraftOwnerId + ".", StringComparison.OrdinalIgnoreCase);
             }
         }
 

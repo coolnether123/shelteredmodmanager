@@ -338,9 +338,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 rows.Add(new ScenarioBookRowModel
                 {
                     Kind = ScenarioBookRowKind.CreateDraft,
-                    Title = "+ Add New Scenario",
-                    Detail = "Create a new authoring draft for scenario-building work.",
-                    Badge = "New Draft"
+                    Title = "Create New Draft",
+                    Detail = "Authoring-only workspace. This does not start normal play.",
+                    Badge = "Draft Tool"
                 });
             }
 

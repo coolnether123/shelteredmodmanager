@@ -76,7 +76,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 ScenarioDefinition definition = new ScenarioDefinition();
                 definition.Id = scenarioId;
-                definition.DisplayName = "New Custom Scenario";
+                definition.DisplayName = "Untitled Scenario";
                 definition.Description = "Local scenario authoring draft.";
                 definition.Author = "SMM Authoring";
                 definition.Version = "0.1.0";

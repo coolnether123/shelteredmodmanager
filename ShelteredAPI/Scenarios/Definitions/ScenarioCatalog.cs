@@ -4,6 +4,7 @@ using System.IO;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Definitions{
     /// <summary>
@@ -52,7 +53,15 @@ namespace ShelteredAPI.Scenarios.Definitions{
                 }
 
                 for (int j = 0; j < files.Length; j++)
+                {
+                    if (IsAuthoringDraftScenarioFile(files[j]))
+                    {
+                        MMLog.WriteInfo("[ScenarioCatalog] Skipping authoring draft scenario file outside playable catalog: " + files[j]);
+                        continue;
+                    }
+
                     TryAddScenario(next, files[j], folder.ModId);
+                }
             }
 
             lock (_sync)
@@ -134,6 +143,30 @@ namespace ShelteredAPI.Scenarios.Definitions{
             int name = string.Compare(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
             if (name != 0) return name;
             return string.Compare(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsAuthoringDraftScenarioFile(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return false;
+
+            try
+            {
+                string fullPath = Path.GetFullPath(filePath);
+                string marker = Path.DirectorySeparatorChar
+                    + ScenarioAuthoringDraftRepository.DraftStorageScenarioId
+                    + Path.DirectorySeparatorChar;
+                if (fullPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase) < 0)
+                    return false;
+
+                string parent = Path.GetFileName(Path.GetDirectoryName(fullPath));
+                return !string.IsNullOrEmpty(parent)
+                    && parent.StartsWith("Slot_", StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return filePath.IndexOf(ScenarioAuthoringDraftRepository.DraftStorageScenarioId, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
         }
     }
 }

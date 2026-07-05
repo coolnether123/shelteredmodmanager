@@ -532,6 +532,13 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 UIPanelManager panelManager = UIPanelManager.instance;
                 if (customizationPanel != null && panelManager != null)
                 {
+                    if (panelManager.IsPanelOnStack(customizationPanel))
+                    {
+                        MMLog.WriteInfo("[ScenarioLaunchCoordinator] Customisation panel already active or queued; duplicate push skipped. target="
+                            + (launchTargetLabel ?? "<unknown>") + ".");
+                        return true;
+                    }
+
                     panelManager.PushPanel(customizationPanel);
                     MMLog.WriteInfo("[ScenarioLaunchCoordinator] Customisation panel opened. target="
                         + (launchTargetLabel ?? "<unknown>") + ".");

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ModAPI.Scenarios;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Registration;
 namespace ShelteredAPI.Scenarios.Definitions{
@@ -66,8 +67,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Dictionary<string, ScenarioInfo> current = new Dictionary<string, ScenarioInfo>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < definitions.Length; i++)
             {
-                if (definitions[i] != null && !string.IsNullOrEmpty(definitions[i].Id))
+                if (definitions[i] != null
+                    && !string.IsNullOrEmpty(definitions[i].Id)
+                    && !IsAuthoringDraftDefinition(definitions[i]))
+                {
                     current[definitions[i].Id] = definitions[i];
+                }
             }
 
             ScenarioRecord[] records = _store.ListRecords();
@@ -85,6 +90,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
             {
                 ScenarioInfo definition = definitions[i];
                 if (definition == null || string.IsNullOrEmpty(definition.Id))
+                    continue;
+                if (IsAuthoringDraftDefinition(definition))
                     continue;
 
                 ScenarioRecord existing;
@@ -124,6 +131,18 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
             string trimmed = value.Trim();
             return trimmed.Length == 0 ? null : trimmed;
+        }
+
+        private static bool IsAuthoringDraftDefinition(ScenarioInfo definition)
+        {
+            if (definition == null)
+                return false;
+
+            if (string.Equals(definition.OwnerModId, ScenarioAuthoringDraftRepository.DraftOwnerId, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return !string.IsNullOrEmpty(definition.FilePath)
+                && definition.FilePath.IndexOf(ScenarioAuthoringDraftRepository.DraftStorageScenarioId, StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }
