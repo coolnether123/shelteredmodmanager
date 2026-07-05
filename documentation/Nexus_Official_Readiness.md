@@ -9,7 +9,7 @@ This checklist tracks what SMM needs before requesting/using an official Nexus M
 - Metadata browsing and update checks use Nexus v2/legacy read endpoints. Nexus v3 is reserved for the experimental publish/upload flow.
 - Direct install selects files that Nexus marks as manager-downloadable, resolves short-lived mirror URLs through the Nexus download-link endpoint, and never stores resolved mirror URLs.
 - Direct install rejects unsafe packages, duplicate mod IDs, reserved folder names, non-ZIP archives, and unwritable `mods` folders before replacing an installed mod.
-- Publish/upload API actions remain experimental and hidden unless Nexus integration and the experimental publish setting are enabled. Package creation streams file content instead of loading the full package into memory.
+- Publish/upload API actions are disabled in public 2.0 settings. The experimental code remains present for future review, but the stable manager only supports manual package handoff.
 
 ## Registration Checklist
 

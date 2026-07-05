@@ -200,13 +200,9 @@ namespace Manager.Core.Services
                     settings.EnableNexusIntegration = enabled;
             }
 
-            string enableExperimentalPublishTab;
-            if (raw.TryGetValue("EnableExperimentalPublishTab", out enableExperimentalPublishTab))
-            {
-                bool enabled;
-                if (bool.TryParse(enableExperimentalPublishTab, out enabled))
-                    settings.EnableExperimentalPublishTab = enabled;
-            }
+            // Public 2.0 builds do not expose Nexus API upload/publish.
+            // Keep the setting key self-healing for older configs that enabled the experimental tab.
+            settings.EnableExperimentalPublishTab = false;
 
             string lastSeenReleaseNoticeVersion;
             if (raw.TryGetValue("LastSeenReleaseNoticeVersion", out lastSeenReleaseNoticeVersion))
@@ -327,7 +323,7 @@ namespace Manager.Core.Services
             data["InstalledModApiVersion"] = settings.InstalledModApiVersion ?? string.Empty;
             data["InstalledShelteredApiVersion"] = settings.InstalledShelteredApiVersion ?? string.Empty;
             data["EnableNexusIntegration"] = settings.EnableNexusIntegration.ToString();
-            data["EnableExperimentalPublishTab"] = settings.EnableExperimentalPublishTab.ToString();
+            data["EnableExperimentalPublishTab"] = false.ToString();
             data["LastSeenReleaseNoticeVersion"] = settings.LastSeenReleaseNoticeVersion ?? string.Empty;
             data["NexusGameDomain"] = settings.NexusGameDomain ?? "sheltered";
             string plaintextNexusApiKey = settings.NexusApiKey ?? string.Empty;

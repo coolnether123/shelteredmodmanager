@@ -475,7 +475,7 @@ namespace Manager.Core.Services
 
             string expectedVersion = GetExpectedInstalledVersion(targetContext, mod, file);
             if (!string.IsNullOrEmpty(expectedVersion) &&
-                !string.Equals(NexusVersionComparer.Normalize(about.version), NexusVersionComparer.Normalize(expectedVersion), StringComparison.OrdinalIgnoreCase))
+                NexusVersionComparer.CompareVersions(about.version, expectedVersion) != 0)
             {
                 errorMessage = "Installed mod version '" + about.version + "' does not match expected Nexus version '" + expectedVersion + "'.";
                 return false;

@@ -26,7 +26,6 @@ namespace Manager.Views
         private NumericUpDown _saveBackupRetentionCountNumeric;
         private Label _nexusLabel;
         private CheckBox _enableNexusCheckBox;
-        private CheckBox _enableExperimentalPublishCheckBox;
         private Label _nexusApiKeyLabel;
         private TextBox _nexusApiKeyTextBox;
         private Button _nexusApiHelpButton;
@@ -169,11 +168,6 @@ namespace Manager.Views
             _enableNexusCheckBox.Font = new Font("Segoe UI", 10f);
             _enableNexusCheckBox.AutoSize = true;
 
-            _enableExperimentalPublishCheckBox = new CheckBox();
-            _enableExperimentalPublishCheckBox.Text = "Enable Experimental Publish tab";
-            _enableExperimentalPublishCheckBox.Font = new Font("Segoe UI", 10f);
-            _enableExperimentalPublishCheckBox.AutoSize = true;
-
             _nexusApiKeyLabel = new Label();
             _nexusApiKeyLabel.Text = "Personal API Key:";
             _nexusApiKeyLabel.Font = new Font("Segoe UI", 10f);
@@ -254,7 +248,6 @@ namespace Manager.Views
             _helpToolTip.SetToolTip(_nexusApiKeyTextBox, "Personal Nexus API key. Needed for direct downloads and account validation; browsing and update checks do not require it.");
             _helpToolTip.SetToolTip(_nexusApiHelpButton, "Open the Nexus account page where personal API keys are managed.");
             _helpToolTip.SetToolTip(_nexusApiRevealButton, "Reveal or hide the stored Nexus API key for manual editing.");
-            _helpToolTip.SetToolTip(_enableExperimentalPublishCheckBox, "Shows the experimental Publish tab for preparing Nexus upload drafts and packages.");
             _helpToolTip.SetToolTip(_nexusAdvancedToggleLink, "Show internal Nexus settings that most players should never need to edit.");
             _helpToolTip.SetToolTip(_saveBackupRetentionCombo, "Controls automatic pre-overwrite save snapshots stored under Mods/ModAPI/Backups/Saves.");
             _helpToolTip.SetToolTip(_saveBackupRetentionCountNumeric, "Number of unpinned snapshots to keep for each save timeline.");
@@ -369,7 +362,6 @@ namespace Manager.Views
             _contentPanel.Controls.Add(_saveBackupRetentionCountNumeric);
             _contentPanel.Controls.Add(_nexusLabel);
             _contentPanel.Controls.Add(_enableNexusCheckBox);
-            _contentPanel.Controls.Add(_enableExperimentalPublishCheckBox);
             _contentPanel.Controls.Add(_nexusApiKeyLabel);
             _contentPanel.Controls.Add(_nexusApiKeyTextBox);
             _contentPanel.Controls.Add(_nexusApiHelpButton);
@@ -415,7 +407,6 @@ namespace Manager.Views
             _saveBackupRetentionCombo.SelectedIndexChanged += SaveBackupRetentionCombo_SelectedIndexChanged;
             _saveBackupRetentionCountNumeric.ValueChanged += SaveBackupRetentionCountNumeric_ValueChanged;
             _enableNexusCheckBox.CheckedChanged += EnableNexusCheckBox_CheckedChanged;
-            _enableExperimentalPublishCheckBox.CheckedChanged += EnableExperimentalPublishCheckBox_CheckedChanged;
             _nexusDomainTextBox.TextChanged += NexusDomainTextBox_TextChanged;
             _nexusApiKeyTextBox.TextChanged += NexusApiKeyTextBox_TextChanged;
             _nexusApiKeyTextBox.KeyDown += NexusApiKeyTextBox_KeyDown;
@@ -457,7 +448,6 @@ namespace Manager.Views
             _nexusDownloadSummaryLabel.Enabled = enabled;
             _nexusAdvancedToggleLink.Enabled = enabled;
             _nexusAdvancedPanel.Enabled = enabled;
-            _enableExperimentalPublishCheckBox.Enabled = enabled;
             _nexusDomainLabel.Enabled = enabled;
             _nexusDomainTextBox.Enabled = enabled;
             _managerNexusModIdLabel.Enabled = enabled;
@@ -559,7 +549,7 @@ namespace Manager.Views
 
                 ApplySaveBackupRetentionToUi(_settings.SaveBackupRetention);
                 _enableNexusCheckBox.Checked = _settings.EnableNexusIntegration;
-                _enableExperimentalPublishCheckBox.Checked = _settings.EnableExperimentalPublishTab;
+                _settings.EnableExperimentalPublishTab = false;
                 _nexusDomainTextBox.Text = _settings.NexusGameDomain ?? "sheltered";
                 _managerNexusModIdTextBox.Text = _settings.ManagerNexusModId > 0 ? _settings.ManagerNexusModId.ToString() : string.Empty;
                 _nexusApiKeyRevealed = false;
@@ -595,7 +585,7 @@ namespace Manager.Views
             _settings.SaveBackupRetention = ReadSaveBackupRetentionFromUi();
 
             _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
-            _settings.EnableExperimentalPublishTab = _enableExperimentalPublishCheckBox.Checked;
+            _settings.EnableExperimentalPublishTab = false;
             _settings.NexusGameDomain = (_nexusDomainTextBox.Text ?? string.Empty).Trim().ToLowerInvariant();
             if (IsNexusApiKeyEditable())
                 _settings.NexusApiKey = (_nexusApiKeyTextBox.Text ?? string.Empty).Trim();
@@ -854,13 +844,6 @@ namespace Manager.Views
             if (_settings != null)
                 _settings.EnableNexusIntegration = _enableNexusCheckBox.Checked;
             SetNexusInputsEnabled(_enableNexusCheckBox.Checked);
-            TriggerSave();
-        }
-
-        private void EnableExperimentalPublishCheckBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (_settings != null)
-                _settings.EnableExperimentalPublishTab = _enableExperimentalPublishCheckBox.Checked;
             TriggerSave();
         }
 

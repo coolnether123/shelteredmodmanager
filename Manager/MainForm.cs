@@ -64,7 +64,7 @@ namespace Manager
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 // Historical IDs seen in user loadorder files/logs.
-                { "com.coolnether123.pluginconsole", "coolnether123.pluginconsole" },
+                { "coolnether123.pluginconsole", "com.coolnether123.pluginconsole" },
                 { "com.plugin.harmony.example", "coolnether123.harmonyexample" }
             };
 
