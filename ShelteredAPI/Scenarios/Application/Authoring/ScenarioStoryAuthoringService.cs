@@ -8,9 +8,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         public bool CanHandle(string actionId)
         {
-            return !string.IsNullOrEmpty(actionId)
-                && (actionId.StartsWith("scenario.story.", StringComparison.Ordinal)
-                    || actionId.StartsWith("scenario.flow.", StringComparison.Ordinal));
+            return ScenarioStoryAuthoringActions.CanHandle(actionId);
         }
 
         public bool TryHandleAction(ScenarioEditorSession session, string actionId, out string message)
@@ -23,7 +21,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ScenarioFlowDefinition flow = EnsureFlow(session.WorkingDefinition);
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryStageAdd, StringComparison.Ordinal))
+            if (ScenarioStoryAuthoringActions.IsAddStage(actionId))
                 return AddStage(session, flow, out message);
 
             int stageIndex;
@@ -110,18 +108,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Added intercom step.";
                 return true;
             }
-            if (!TryPair(actionId, flow, out stageIndex, out intercomIndex, out ScenarioIntercomStageDefinition intercom))
+            if (!ScenarioStoryAuthoringActions.TryResolveIntercom(actionId, flow, out stageIndex, out intercomIndex, out ScenarioIntercomStageDefinition intercom))
                 return false;
 
-            string prefix = stageIndex.ToString() + "." + intercomIndex.ToString();
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomDeletePrefix + prefix, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.IntercomDelete(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 flow.Stages[stageIndex].IntercomStages.RemoveAt(intercomIndex);
                 MarkDirty(session);
                 message = "Removed intercom step.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomDuplicatePrefix + prefix, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.IntercomDuplicate(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 ScenarioIntercomStageDefinition copy = CloneIntercom(intercom, NextIntercomId(flow.Stages[stageIndex]));
                 flow.Stages[stageIndex].IntercomStages.Insert(intercomIndex + 1, copy);
@@ -174,7 +171,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated recruitment list.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryRecruitFamilyPrefix + prefix, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.RecruitFamily(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 intercom.RecruitAsFamily = !intercom.RecruitAsFamily;
                 MarkDirty(session);
@@ -188,14 +185,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated encounter end type.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryEndCompleteQuestPrefix + prefix, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.EndCompleteQuest(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 EnsureEnd(intercom).CompleteQuest = !EnsureEnd(intercom).CompleteQuest;
                 MarkDirty(session);
                 message = "Updated quest completion outcome.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryEndCompleteScenarioPrefix + prefix, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.EndCompleteScenario(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 EnsureEnd(intercom).CompleteParentScenario = !EnsureEnd(intercom).CompleteParentScenario;
                 MarkDirty(session);
@@ -209,81 +206,79 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private static bool TryHandleIntercomChildren(ScenarioEditorSession session, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, string actionId, int stageIndex, int intercomIndex, out string message)
         {
             message = null;
-            int first;
-            int second;
             int child;
             string token;
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueAddPrefix + stageIndex + "." + intercomIndex, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.DialogueAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 intercom.Dialogue.Add(new ScenarioDialogueLineDefinition { Character = FirstOrNone(stage.CharacterIds), TextKey = "dialogue_" + (intercom.Dialogue.Count + 1).ToString() });
                 MarkDirty(session);
                 message = "Added dialogue line.";
                 return true;
             }
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueSpeakerPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.Dialogue.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueSpeakerPrefix, stageIndex, intercomIndex, intercom.Dialogue.Count, out child, out token))
             {
                 intercom.Dialogue[child].Character = NullIfNone(Decode(token));
                 MarkDirty(session);
                 message = "Updated dialogue speaker.";
                 return true;
             }
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueKeyPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.Dialogue.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueKeyPrefix, stageIndex, intercomIndex, intercom.Dialogue.Count, out child, out token))
             {
                 intercom.Dialogue[child].TextKey = Decode(token);
                 MarkDirty(session);
                 message = "Updated dialogue key.";
                 return true;
             }
-            if (TryTriple(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueDeletePrefix, out first, out second, out child) && first == stageIndex && second == intercomIndex && child < intercom.Dialogue.Count)
+            if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueDeletePrefix, stageIndex, intercomIndex, intercom.Dialogue.Count, out child))
             {
                 intercom.Dialogue.RemoveAt(child);
                 MarkDirty(session);
                 message = "Removed dialogue line.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryOptionAddPrefix + stageIndex + "." + intercomIndex, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.OptionAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 intercom.Options.Add(new ScenarioDialogueOptionDefinition { TextKey = "option_" + (intercom.Options.Count + 1).ToString(), NextId = FirstOtherIntercomId(stage, intercom.Id) });
                 MarkDirty(session);
                 message = "Added response option.";
                 return true;
             }
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryOptionKeyPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.Options.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryOptionKeyPrefix, stageIndex, intercomIndex, intercom.Options.Count, out child, out token))
             {
                 intercom.Options[child].TextKey = Decode(token);
                 MarkDirty(session);
                 message = "Updated option key.";
                 return true;
             }
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryOptionNextPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.Options.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryOptionNextPrefix, stageIndex, intercomIndex, intercom.Options.Count, out child, out token))
             {
                 intercom.Options[child].NextId = NullIfNone(Decode(token));
                 MarkDirty(session);
                 message = "Updated option route.";
                 return true;
             }
-            if (TryTriple(actionId, ScenarioAuthoringActionIds.ActionStoryOptionDeletePrefix, out first, out second, out child) && first == stageIndex && second == intercomIndex && child < intercom.Options.Count)
+            if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryOptionDeletePrefix, stageIndex, intercomIndex, intercom.Options.Count, out child))
             {
                 intercom.Options.RemoveAt(child);
                 MarkDirty(session);
                 message = "Removed response option.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomRandomAddPrefix + stageIndex + "." + intercomIndex, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.RandomRouteAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 intercom.RandomizedNextIds.Add(FirstOtherIntercomId(stage, intercom.Id));
                 MarkDirty(session);
                 message = "Added randomized route.";
                 return true;
             }
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomRandomTargetPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.RandomizedNextIds.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomRandomTargetPrefix, stageIndex, intercomIndex, intercom.RandomizedNextIds.Count, out child, out token))
             {
                 intercom.RandomizedNextIds[child] = NullIfNone(Decode(token));
                 MarkDirty(session);
                 message = "Updated randomized route.";
                 return true;
             }
-            if (TryTriple(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomRandomDeletePrefix, out first, out second, out child) && first == stageIndex && second == intercomIndex && child < intercom.RandomizedNextIds.Count)
+            if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomRandomDeletePrefix, stageIndex, intercomIndex, intercom.RandomizedNextIds.Count, out child))
             {
                 intercom.RandomizedNextIds.RemoveAt(child);
                 MarkDirty(session);
@@ -297,11 +292,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private static bool TryHandleItemsAndMilestones(ScenarioEditorSession session, ScenarioIntercomStageDefinition intercom, string actionId, int stageIndex, int intercomIndex, out string message)
         {
             message = null;
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryRewardAddPrefix + stageIndex + "." + intercomIndex, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.RewardAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
                 return AddItem(session, intercom.Items, "reward", out message);
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalAddPrefix + stageIndex + "." + intercomIndex, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.RemovalAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
                 return AddItem(session, intercom.ItemsToRemove, "removal", out message);
-            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryMilestoneAddPrefix + stageIndex + "." + intercomIndex, StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.MilestoneAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
             {
                 intercom.SetMilestones.Add(new ScenarioMilestoneDefinition { Name = "milestone_" + (intercom.SetMilestones.Count + 1).ToString(), Scope = "Scenario", Action = "Set" });
                 MarkDirty(session);
@@ -309,41 +304,39 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            int first;
-            int second;
             int child;
             int delta;
             string token;
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryRewardItemPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.Items.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryRewardItemPrefix, stageIndex, intercomIndex, intercom.Items.Count, out child, out token))
                 return SetItem(session, intercom.Items[child], Decode(token), out message);
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalItemPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.ItemsToRemove.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalItemPrefix, stageIndex, intercomIndex, intercom.ItemsToRemove.Count, out child, out token))
                 return SetItem(session, intercom.ItemsToRemove[child], Decode(token), out message);
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryRewardQuantityPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.Items.Count && int.TryParse(token, out delta))
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryRewardQuantityPrefix, stageIndex, intercomIndex, intercom.Items.Count, out child, out token) && int.TryParse(token, out delta))
                 return StepQuantity(session, intercom.Items[child], delta, out message);
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalQuantityPrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.ItemsToRemove.Count && int.TryParse(token, out delta))
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalQuantityPrefix, stageIndex, intercomIndex, intercom.ItemsToRemove.Count, out child, out token) && int.TryParse(token, out delta))
                 return StepQuantity(session, intercom.ItemsToRemove[child], delta, out message);
-            if (TryTriple(actionId, ScenarioAuthoringActionIds.ActionStoryRewardDeletePrefix, out first, out second, out child) && first == stageIndex && second == intercomIndex && child < intercom.Items.Count)
+            if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryRewardDeletePrefix, stageIndex, intercomIndex, intercom.Items.Count, out child))
             {
                 intercom.Items.RemoveAt(child);
                 MarkDirty(session);
                 message = "Removed reward item.";
                 return true;
             }
-            if (TryTriple(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalDeletePrefix, out first, out second, out child) && first == stageIndex && second == intercomIndex && child < intercom.ItemsToRemove.Count)
+            if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryRemovalDeletePrefix, stageIndex, intercomIndex, intercom.ItemsToRemove.Count, out child))
             {
                 intercom.ItemsToRemove.RemoveAt(child);
                 MarkDirty(session);
                 message = "Removed removal item.";
                 return true;
             }
-            if (TryTripleToken(actionId, ScenarioAuthoringActionIds.ActionStoryMilestoneNamePrefix, out first, out second, out child, out token) && first == stageIndex && second == intercomIndex && child < intercom.SetMilestones.Count)
+            if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryMilestoneNamePrefix, stageIndex, intercomIndex, intercom.SetMilestones.Count, out child, out token))
             {
                 intercom.SetMilestones[child].Name = Decode(token);
                 MarkDirty(session);
                 message = "Updated milestone name.";
                 return true;
             }
-            if (TryTriple(actionId, ScenarioAuthoringActionIds.ActionStoryMilestoneDeletePrefix, out first, out second, out child) && first == stageIndex && second == intercomIndex && child < intercom.SetMilestones.Count)
+            if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryMilestoneDeletePrefix, stageIndex, intercomIndex, intercom.SetMilestones.Count, out child))
             {
                 intercom.SetMilestones.RemoveAt(child);
                 MarkDirty(session);
@@ -371,72 +364,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             intercom.Dialogue.Add(new ScenarioDialogueLineDefinition { Character = FirstOrNone(stage != null ? stage.CharacterIds : null), TextKey = "dialogue_" + intercom.Id });
             intercom.Options.Add(new ScenarioDialogueOptionDefinition { TextKey = "option_continue" });
             return intercom;
-        }
-
-        private static bool TryPair(string actionId, ScenarioFlowDefinition flow, out int stageIndex, out int intercomIndex, out ScenarioIntercomStageDefinition intercom)
-        {
-            stageIndex = -1;
-            intercomIndex = -1;
-            intercom = null;
-            if (flow == null || flow.Stages == null)
-                return false;
-            string[] prefixes =
-            {
-                ScenarioAuthoringActionIds.ActionStoryIntercomDeletePrefix,
-                ScenarioAuthoringActionIds.ActionStoryIntercomDuplicatePrefix,
-                ScenarioAuthoringActionIds.ActionStoryIntercomMovePrefix,
-                ScenarioAuthoringActionIds.ActionStoryIntercomIdPrefix,
-                ScenarioAuthoringActionIds.ActionStoryIntercomTypePrefix,
-                ScenarioAuthoringActionIds.ActionStoryIntercomNextPrefix,
-                ScenarioAuthoringActionIds.ActionStoryIntercomAlternatePrefix,
-                ScenarioAuthoringActionIds.ActionStoryStageChangeTargetPrefix,
-                ScenarioAuthoringActionIds.ActionStoryStageChangeDelayPrefix,
-                ScenarioAuthoringActionIds.ActionStoryRecruitTogglePrefix,
-                ScenarioAuthoringActionIds.ActionStoryRecruitFamilyPrefix,
-                ScenarioAuthoringActionIds.ActionStoryEndTypePrefix,
-                ScenarioAuthoringActionIds.ActionStoryEndCompleteQuestPrefix,
-                ScenarioAuthoringActionIds.ActionStoryEndCompleteScenarioPrefix
-            };
-            for (int i = 0; i < prefixes.Length; i++)
-            {
-                string prefix = prefixes[i];
-                if (ScenarioAuthoringActionParser.TryPairIndex(actionId, prefix, flow.Stages.Count, out stageIndex, out intercomIndex)
-                    || ScenarioAuthoringActionParser.TryPairToken(actionId, prefix, flow.Stages.Count, out stageIndex, out intercomIndex, out string ignored))
-                {
-                    if (stageIndex < flow.Stages.Count && flow.Stages[stageIndex] != null && intercomIndex < flow.Stages[stageIndex].IntercomStages.Count)
-                    {
-                        intercom = flow.Stages[stageIndex].IntercomStages[intercomIndex];
-                        return intercom != null;
-                    }
-                }
-            }
-            return false;
-        }
-
-        private static bool TryTriple(string actionId, string prefix, out int first, out int second, out int third)
-        {
-            first = -1;
-            second = -1;
-            third = -1;
-            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
-                return false;
-            string[] parts = actionId.Substring(prefix.Length).Split('.');
-            return parts.Length == 3 && int.TryParse(parts[0], out first) && int.TryParse(parts[1], out second) && int.TryParse(parts[2], out third);
-        }
-
-        private static bool TryTripleToken(string actionId, string prefix, out int first, out int second, out int third, out string token)
-        {
-            first = -1;
-            second = -1;
-            third = -1;
-            token = null;
-            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
-                return false;
-            string[] parts = actionId.Substring(prefix.Length).Split(new[] { '.' }, 4);
-            if (parts.Length != 4 || !int.TryParse(parts[0], out first) || !int.TryParse(parts[1], out second) || !int.TryParse(parts[2], out third))
-                return false;
-            token = parts[3];
-            return true;
         }
 
         private static bool Move<T>(List<T> list, int index, int delta, ScenarioEditorSession session, string label, out string message)
@@ -699,7 +626,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static string Decode(string token)
         {
-            return string.IsNullOrEmpty(token) ? string.Empty : Uri.UnescapeDataString(token);
+            return ScenarioStoryAuthoringActions.DecodeToken(token);
         }
 
         private static string NullIfNone(string value)
