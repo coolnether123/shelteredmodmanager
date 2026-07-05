@@ -8,7 +8,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (time == null)
                 return "unscheduled";
 
-            return "day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2");
+            return "day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2") + " exact clock, day rolls at 06:00";
         }
     }
 }

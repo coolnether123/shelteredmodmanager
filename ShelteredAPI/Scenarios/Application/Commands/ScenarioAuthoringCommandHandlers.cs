@@ -541,8 +541,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionTimelineDayPrefix, StringComparison.Ordinal))
             {
                 handled = true;
-                state.TimelineSelectionId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineDayPrefix.Length);
-                message = "Timeline day " + state.TimelineSelectionId + " selected.";
+                state.TimelineSelectedDayId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineDayPrefix.Length);
+                state.TimelineSelectionId = state.TimelineSelectedDayId;
+                message = "Timeline day " + state.TimelineSelectedDayId + " selected.";
                 return true;
             }
 
@@ -650,6 +651,32 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         }
 
         private delegate bool CaptureAction(ScenarioEditorSession session, out string message);
+    }
+
+    internal sealed class StoryAuthoringCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioStoryAuthoringService _service;
+        private readonly IScenarioEditorService _editorService;
+
+        public StoryAuthoringCommandHandler(
+            ScenarioStoryAuthoringService service,
+            IScenarioEditorService editorService)
+        {
+            _service = service;
+            _editorService = editorService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (_service == null || string.IsNullOrEmpty(actionId) || !_service.CanHandle(actionId))
+                return false;
+
+            handled = true;
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            return _service.TryHandleAction(session, actionId, out message);
+        }
     }
 
     internal sealed class GameplayScheduleCommandHandler : IScenarioCommandHandler

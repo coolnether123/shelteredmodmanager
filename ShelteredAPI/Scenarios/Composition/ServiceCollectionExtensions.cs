@@ -73,7 +73,6 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStageCoordinator(resolver.Get<ScenarioStageRegistry>(), new IScenarioStageModule[0]); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PublishValidationSummaryBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTimelineBuilder(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioScheduleTimelineBuilder(resolver.Get<ScenarioTimelineBuilder>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioModDependencyDetector(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectIdentityAssignmentService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioBunkerSupportResolver(); });

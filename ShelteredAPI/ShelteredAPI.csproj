@@ -300,7 +300,6 @@
     <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioLegacyScheduleActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleRuntimeCoordinator.cs" />
-    <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleTimelineBuilder.cs" />
     <Compile Include="Scenarios\Application\Stages\IScenarioStageModule.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageContext.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageCoordinator.cs" />
@@ -451,6 +450,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioInventoryItemCatalog.cs" />
     <Compile Include="Scenarios\Shared\ScenarioPropertyBag.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringActionCodec.cs" />

@@ -7,6 +7,7 @@ using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Timeline{
     internal sealed class ScenarioTimelineNavigationService
     {
@@ -25,8 +26,13 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
 
             ScenarioStageKind stage = ResolveStage(entry);
             if (_layoutService != null)
+            {
                 _layoutService.SelectStage(state, stage);
+                if (!string.IsNullOrEmpty(entry.OwnerWindowId))
+                    _layoutService.SetWindowOpen(state, entry.OwnerWindowId, true);
+            }
             state.TimelineSelectionId = entry.Id;
+            state.TimelineSelectedEntryId = entry.Id;
             ScenarioAuthoringTarget target = BuildTimelineTarget(entry, stage);
             if (target != null)
             {
@@ -96,14 +102,19 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 Id = "timeline:" + entry.Id,
                 Kind = kind,
                 DisplayName = entry.Title ?? entry.TargetId,
-                Description = "Timeline target " + entry.TargetId + ".",
+                Description = "Timeline source " + Safe(entry.SourceCollection) + " #" + entry.SourceIndex + " target " + entry.TargetId + ".",
                 AdapterId = "ShelteredAPI.Timeline",
                 GameObjectName = entry.TargetId,
-                TransformPath = stage + "/" + entry.TargetId,
+                TransformPath = stage + "/" + Safe(entry.OwnerWindowId) + "/" + Safe(entry.SourceCollection) + "/" + entry.SourceIndex,
                 ScenarioReferenceId = entry.TargetId,
                 SupportsInspect = true,
                 SupportsReplace = entry.Kind == ScenarioTimelineEntryKind.Object || entry.Kind == ScenarioTimelineEntryKind.Bunker
             };
+        }
+
+        private static string Safe(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "<none>" : value;
         }
 
     }

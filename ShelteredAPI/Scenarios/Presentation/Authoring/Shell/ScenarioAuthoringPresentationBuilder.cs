@@ -1645,12 +1645,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 change.Kind == ScenarioInventoryChangeKind.Add));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this timed change to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this timed change to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
+            AddInventoryPickerActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix, index, change.ItemId);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleKindPrefix + index.ToString(CultureInfo.InvariantCulture), "Toggle Add/Remove", "Switch this timed change between adding and removing items.", true, change.Kind == ScenarioInventoryChangeKind.Add, "AR", change.Kind.ToString())));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this timed change quantity by one.", true, false, "+", change.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this timed change quantity by one.", true, false, "-", change.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".10", "Quantity +10", "Increase this timed change quantity by ten.", true, false, "+10", change.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-10", "Quantity -10", "Decrease this timed change quantity by ten.", true, false, "-10", change.Quantity.ToString(CultureInfo.InvariantCulture))));
-            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, index);
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleMinutePrefix, index);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix + index.ToString(), "Remove Timed Item Change", "Remove this timed stockpile change.", true, false, "RM")));
         }
 
@@ -1670,6 +1671,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this starting stack to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this starting stack to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
+            AddInventoryPickerActions(items, ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, index, entry.ItemId);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this starting stack by one.", true, false, "+", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this starting stack by one.", true, false, "-", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".10", "Quantity +10", "Increase this starting stack by ten.", true, false, "+10", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
@@ -1682,8 +1684,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (items == null || weather == null)
                 return;
 
-            items.Add(Property(Safe(weather.WeatherState), FormatSchedule(weather.When)));
-            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, index);
+            items.Add(Property(Safe(weather.WeatherState), FormatSchedule(weather.When), weather.DurationHours > 0 ? "Restores at " + FormatSchedule(AddHours(weather.When, weather.DurationHours)) : "No restore event"));
+            AddWeatherStateActions(items, index, weather.WeatherState);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Duration +", "Increase weather duration by one hour.", true, false, "DU+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Duration -", "Decrease weather duration by one hour.", true, false, "DU-")));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleMinutePrefix, index);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix + index.ToString(), "Remove Weather Event", "Remove this scheduled weather event.", true, false, "RM")));
         }
 
@@ -1695,7 +1700,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string schedule = FormatTriggerSchedule(trigger);
             items.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, Safe(trigger.Type) + " / " + schedule));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTypePrefix + index.ToString(CultureInfo.InvariantCulture), "Cycle Trigger Type", "Switch between manual, scheduled, flag, quest, and item trigger templates.", true, false, "TY")));
-            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, index);
+            AddTriggerTargetActions(items, trigger, index);
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, ScenarioAuthoringActionIds.ActionTriggerMinutePrefix, index);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerDeletePrefix + index.ToString(CultureInfo.InvariantCulture), "Remove Trigger", "Remove this authored trigger.", true, false, "RM")));
         }
 
@@ -1707,6 +1713,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string prefix = gateIndex.ToString(CultureInfo.InvariantCulture) + "." + conditionIndex.ToString(CultureInfo.InvariantCulture);
             items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), condition.Kind + " / " + FormatConditionTarget(condition)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionKindPrefix + prefix, "Cycle Condition Kind", "Switch this gate condition to the next supported template.", true, false, "CK")));
+            AddConditionTargetActions(items, condition, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionDeletePrefix + prefix, "Remove Condition", "Remove this gate condition.", true, false, "RM")));
         }
 
@@ -1718,15 +1725,198 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string prefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + effectIndex.ToString(CultureInfo.InvariantCulture);
             items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), effect.Kind + " / " + FormatEffectTarget(effect)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectKindPrefix + prefix, "Cycle Effect Kind", "Switch this effect to the next supported template.", true, false, "EK")));
+            AddEffectTargetActions(items, effect, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectDeletePrefix + prefix, "Remove Effect", "Remove this scheduled action effect.", true, false, "RM")));
         }
 
+        private static void AddInventoryPickerActions(List<ScenarioAuthoringInspectorItem> items, string actionPrefix, int index, string currentItemId)
+        {
+            List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
+            int max = Math.Min(12, catalog.Count);
+            for (int i = 0; i < max; i++)
+            {
+                ScenarioInventoryItemCatalogEntry entry = catalog[i];
+                if (entry == null)
+                    continue;
+                items.Add(ActionItem(Action(
+                    actionPrefix + index.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken(entry.ItemId),
+                    entry.DisplayName,
+                    "Select this stockpile item.",
+                    true,
+                    string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase),
+                    "IT",
+                    entry.Detail,
+                    null,
+                    entry.PreviewSprite)));
+            }
+        }
+
+        private static void AddWeatherStateActions(List<ScenarioAuthoringInspectorItem> items, int index, string current)
+        {
+            string[] states = { "None", "Rain", "BlackRain", "LightSand", "MediumSand", "HeavySand" };
+            for (int i = 0; i < states.Length; i++)
+            {
+                string state = states[i];
+                items.Add(ActionItem(Action(
+                    ScenarioAuthoringActionIds.ActionWeatherScheduleStatePrefix + index.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken(state),
+                    state,
+                    "Set this weather state.",
+                    true,
+                    string.Equals(current, state, StringComparison.OrdinalIgnoreCase),
+                    "WE")));
+            }
+        }
+
+        private static void AddTriggerTargetActions(List<ScenarioAuthoringInspectorItem> items, TriggerDef trigger, int index)
+        {
+            string type = trigger != null ? trigger.Type : null;
+            string idText = index.ToString(CultureInfo.InvariantCulture);
+            if (string.Equals(type, "ScenarioFlagSet", StringComparison.OrdinalIgnoreCase))
+            {
+                string flag = ScenarioPropertyBag.GetString(trigger.Properties, "flagId", "flag_1");
+                items.Add(Property("Flag", flag + "=" + ScenarioPropertyBag.GetString(trigger.Properties, "flagValue", "true")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTargetPrefix + idText + "." + EncodeToken(flag + "_copy"), "Flag " + flag + "_copy", "Use a scenario flag target.", true, false, "FL")));
+            }
+            else if (string.Equals(type, "ItemQuantityAvailable", StringComparison.OrdinalIgnoreCase))
+            {
+                AddInventoryPickerActions(items, ScenarioAuthoringActionIds.ActionTriggerTargetPrefix, index, ScenarioPropertyBag.GetString(trigger.Properties, "itemId", null));
+            }
+            else if (string.Equals(type, "QuestCompleted", StringComparison.OrdinalIgnoreCase))
+            {
+                string quest = ScenarioPropertyBag.GetString(trigger.Properties, "questId", "quest_1");
+                items.Add(Property("Quest", quest));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTargetPrefix + idText + "." + EncodeToken(quest + "_copy"), "Quest " + quest + "_copy", "Use a quest id target.", true, false, "QT")));
+            }
+        }
+
+        private static void AddConditionTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioConditionRef condition, string prefix)
+        {
+            if (condition == null)
+                return;
+            if (condition.Kind == ScenarioConditionKind.ItemQuantityAvailable)
+            {
+                AddConditionItemPickerActions(items, prefix, condition.TargetId);
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionQuantityPrefix, prefix, "Qty +", "Increase required item quantity.", "1", "+");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionQuantityPrefix, prefix, "Qty -", "Decrease required item quantity.", "-1", "-");
+            }
+            else if (condition.Kind == ScenarioConditionKind.ScenarioFlagSet)
+            {
+                string flag = !string.IsNullOrEmpty(condition.FlagId) ? condition.FlagId : condition.TargetId;
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, "Flag " + flag + "_copy", "Use a scenario flag target.", flag + "_copy", "FL");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionFlagValuePrefix, prefix, "Flag true", "Require flag value true.", "true", "T");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionFlagValuePrefix, prefix, "Flag false", "Require flag value false.", "false", "F");
+            }
+            else
+            {
+                string target = !string.IsNullOrEmpty(condition.TargetId) ? condition.TargetId : "target_1";
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, "Target " + target + "_copy", "Use this target-id pattern.", target + "_copy", "TG");
+            }
+        }
+
+        private static void AddEffectTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioEffectDefinition effect, string prefix)
+        {
+            if (effect == null)
+                return;
+            if (effect.Kind == ScenarioEffectKind.AddInventory || effect.Kind == ScenarioEffectKind.RemoveInventory)
+            {
+                AddInventoryEffectPickerActions(items, prefix, effect.ItemId);
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix, prefix, "Qty +", "Increase effect quantity.", "1", "+");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix, prefix, "Qty -", "Decrease effect quantity.", "-1", "-");
+            }
+            else if (effect.Kind == ScenarioEffectKind.SetWeather || effect.Kind == ScenarioEffectKind.RestoreWeather)
+            {
+                string[] states = { "None", "Rain", "BlackRain", "LightSand", "MediumSand", "HeavySand" };
+                for (int i = 0; i < states.Length; i++)
+                    AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, states[i], "Set effect weather state.", states[i], "WE", string.Equals(effect.WeatherState, states[i], StringComparison.OrdinalIgnoreCase));
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectWeatherDurationPrefix, prefix, "Duration +", "Increase weather duration.", "1", "DU+");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectWeatherDurationPrefix, prefix, "Duration -", "Decrease weather duration.", "-1", "DU-");
+            }
+            else if (effect.Kind == ScenarioEffectKind.SetScenarioFlag)
+            {
+                string flag = !string.IsNullOrEmpty(effect.FlagId) ? effect.FlagId : "flag_1";
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Flag " + flag + "_copy", "Use a scenario flag target.", flag + "_copy", "FL");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectFlagValuePrefix, prefix, "Flag true", "Set flag value true.", "true", "T");
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectFlagValuePrefix, prefix, "Flag false", "Set flag value false.", "false", "F");
+            }
+            else
+            {
+                string target = !string.IsNullOrEmpty(effect.TargetId) ? effect.TargetId : "target_1";
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Target " + target + "_copy", "Use this target-id pattern.", target + "_copy", "TG");
+            }
+        }
+
+        private static void AddInventoryEffectPickerActions(List<ScenarioAuthoringInspectorItem> items, string prefix, string currentItemId)
+        {
+            List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
+            int max = Math.Min(12, catalog.Count);
+            for (int i = 0; i < max; i++)
+            {
+                ScenarioInventoryItemCatalogEntry entry = catalog[i];
+                if (entry != null)
+                    AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, entry.DisplayName, "Select this item.", entry.ItemId, "IT", string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase), entry.Detail, entry.PreviewSprite);
+            }
+        }
+
+        private static void AddConditionItemPickerActions(List<ScenarioAuthoringInspectorItem> items, string prefix, string currentItemId)
+        {
+            List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
+            int max = Math.Min(12, catalog.Count);
+            for (int i = 0; i < max; i++)
+            {
+                ScenarioInventoryItemCatalogEntry entry = catalog[i];
+                if (entry != null)
+                    AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, entry.DisplayName, "Select this required item.", entry.ItemId, "IT", string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase), entry.Detail, entry.PreviewSprite);
+            }
+        }
+
+        private static void AddPairTokenAction(List<ScenarioAuthoringInspectorItem> items, string actionPrefix, string prefix, string label, string hint, string token, string icon)
+        {
+            AddPairTokenAction(items, actionPrefix, prefix, label, hint, token, icon, false, null, null);
+        }
+
+        private static void AddPairTokenAction(List<ScenarioAuthoringInspectorItem> items, string actionPrefix, string prefix, string label, string hint, string token, string icon, bool emphasized)
+        {
+            AddPairTokenAction(items, actionPrefix, prefix, label, hint, token, icon, emphasized, null, null);
+        }
+
+        private static void AddPairTokenAction(List<ScenarioAuthoringInspectorItem> items, string actionPrefix, string prefix, string label, string hint, string token, string icon, bool emphasized, string detail, Sprite preview)
+        {
+            items.Add(ActionItem(Action(actionPrefix + prefix + "." + EncodeToken(token), label, hint, true, emphasized, icon, detail, null, preview)));
+        }
+
+        private static string EncodeToken(string value)
+        {
+            return Uri.EscapeDataString(value ?? string.Empty);
+        }
+
+        private static ScenarioScheduleTime AddHours(ScenarioScheduleTime time, int hours)
+        {
+            ScenarioScheduleTime result = new ScenarioScheduleTime();
+            result.Day = time != null ? time.Day : 1;
+            result.Hour = time != null ? time.Hour : 0;
+            result.Minute = time != null ? time.Minute : 0;
+            int total = result.Hour + hours;
+            result.Day += total / 24;
+            result.Hour = total % 24;
+            return result;
+        }
+
         private static void AddScheduleActions(List<ScenarioAuthoringInspectorItem> items, string dayPrefix, string hourPrefix, int index)
+        {
+            AddScheduleActions(items, dayPrefix, hourPrefix, null, index);
+        }
+
+        private static void AddScheduleActions(List<ScenarioAuthoringInspectorItem> items, string dayPrefix, string hourPrefix, string minutePrefix, int index)
         {
             items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".1", "Day +", "Move this scheduled entry one day later.", true, false, "D+")));
             items.Add(ActionItem(Action(dayPrefix + index.ToString() + ".-1", "Day -", "Move this scheduled entry one day earlier.", true, false, "D-")));
             items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".1", "Hour +", "Move this scheduled entry one hour later.", true, false, "H+")));
             items.Add(ActionItem(Action(hourPrefix + index.ToString() + ".-1", "Hour -", "Move this scheduled entry one hour earlier.", true, false, "H-")));
+            if (!string.IsNullOrEmpty(minutePrefix))
+            {
+                items.Add(ActionItem(Action(minutePrefix + index.ToString() + ".15", "Min +15", "Move this scheduled entry fifteen minutes later. Game days roll at 06:00.", true, false, "M+")));
+                items.Add(ActionItem(Action(minutePrefix + index.ToString() + ".-15", "Min -15", "Move this scheduled entry fifteen minutes earlier. Game days roll at 06:00.", true, false, "M-")));
+            }
         }
 
         private static int CompareSchedule(ScenarioScheduleTime left, ScenarioScheduleTime right)

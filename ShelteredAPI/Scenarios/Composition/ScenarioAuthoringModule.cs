@@ -119,6 +119,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioTimelineNavigationService>(),
                     resolver.Get<ScenarioSelectionScopeService>(),
                     resolver.Get<ScenarioCharacterEditorAuthoringService>(),
+                    resolver.Get<ScenarioStoryAuthoringService>(),
                     resolver.Get<ScenarioEventAuthoringService>(),
                     resolver.Get<ScenarioPublishExportService>());
             });

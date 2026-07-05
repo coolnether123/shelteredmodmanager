@@ -96,18 +96,70 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionInventoryScheduleDeletePrefix = "scenario.inventory.schedule.delete.";
         public const string ActionInventoryScheduleDayPrefix = "scenario.inventory.schedule.day.";
         public const string ActionInventoryScheduleHourPrefix = "scenario.inventory.schedule.hour.";
+        public const string ActionInventoryScheduleMinutePrefix = "scenario.inventory.schedule.minute.";
         public const string ActionInventoryScheduleQuantityPrefix = "scenario.inventory.schedule.quantity.";
         public const string ActionInventoryScheduleItemPrefix = "scenario.inventory.schedule.item.";
+        public const string ActionInventoryScheduleItemSelectPrefix = "scenario.inventory.schedule.item_select.";
         public const string ActionInventoryScheduleKindPrefix = "scenario.inventory.schedule.kind.";
         public const string ActionInventoryStartingAdd = "scenario.inventory.start.add";
         public const string ActionInventoryStartingRemovePrefix = "scenario.inventory.start.remove.";
         public const string ActionInventoryStartingQuantityPrefix = "scenario.inventory.start.quantity.";
         public const string ActionInventoryStartingItemPrefix = "scenario.inventory.start.item.";
+        public const string ActionInventoryStartingItemSelectPrefix = "scenario.inventory.start.item_select.";
         public const string ActionInventoryStartingOverrideToggle = "scenario.inventory.start.override_random";
         public const string ActionWeatherScheduleAdd = "scenario.weather.schedule.add";
         public const string ActionWeatherScheduleDeletePrefix = "scenario.weather.schedule.delete.";
         public const string ActionWeatherScheduleDayPrefix = "scenario.weather.schedule.day.";
         public const string ActionWeatherScheduleHourPrefix = "scenario.weather.schedule.hour.";
+        public const string ActionWeatherScheduleMinutePrefix = "scenario.weather.schedule.minute.";
+        public const string ActionWeatherScheduleStatePrefix = "scenario.weather.schedule.state.";
+        public const string ActionWeatherScheduleDurationPrefix = "scenario.weather.schedule.duration.";
+        public const string ActionStoryStageAdd = "scenario.story.stage.add";
+        public const string ActionStoryStageDeletePrefix = "scenario.story.stage.delete.";
+        public const string ActionStoryStageDuplicatePrefix = "scenario.story.stage.duplicate.";
+        public const string ActionStoryStageMovePrefix = "scenario.story.stage.move.";
+        public const string ActionStoryStageIdPrefix = "scenario.story.stage.id.";
+        public const string ActionStoryStageCharacterTogglePrefix = "scenario.story.stage.character.";
+        public const string ActionStoryStageUnansweredPrefix = "scenario.story.stage.unanswered.";
+        public const string ActionStoryStageUnansweredDelayPrefix = "scenario.story.stage.unanswered_delay.";
+        public const string ActionStoryStagePunishPrefix = "scenario.story.stage.punish.";
+        public const string ActionStoryIntercomAddPrefix = "scenario.story.intercom.add.";
+        public const string ActionStoryIntercomDeletePrefix = "scenario.story.intercom.delete.";
+        public const string ActionStoryIntercomDuplicatePrefix = "scenario.story.intercom.duplicate.";
+        public const string ActionStoryIntercomMovePrefix = "scenario.story.intercom.move.";
+        public const string ActionStoryIntercomIdPrefix = "scenario.story.intercom.id.";
+        public const string ActionStoryIntercomTypePrefix = "scenario.story.intercom.type.";
+        public const string ActionStoryIntercomNextPrefix = "scenario.story.intercom.next.";
+        public const string ActionStoryIntercomAlternatePrefix = "scenario.story.intercom.alternate.";
+        public const string ActionStoryIntercomRandomAddPrefix = "scenario.story.intercom.random.add.";
+        public const string ActionStoryIntercomRandomDeletePrefix = "scenario.story.intercom.random.delete.";
+        public const string ActionStoryIntercomRandomTargetPrefix = "scenario.story.intercom.random.target.";
+        public const string ActionStoryDialogueAddPrefix = "scenario.story.dialogue.add.";
+        public const string ActionStoryDialogueDeletePrefix = "scenario.story.dialogue.delete.";
+        public const string ActionStoryDialogueSpeakerPrefix = "scenario.story.dialogue.speaker.";
+        public const string ActionStoryDialogueKeyPrefix = "scenario.story.dialogue.key.";
+        public const string ActionStoryOptionAddPrefix = "scenario.story.option.add.";
+        public const string ActionStoryOptionDeletePrefix = "scenario.story.option.delete.";
+        public const string ActionStoryOptionKeyPrefix = "scenario.story.option.key.";
+        public const string ActionStoryOptionNextPrefix = "scenario.story.option.next.";
+        public const string ActionStoryRewardAddPrefix = "scenario.story.reward.add.";
+        public const string ActionStoryRewardDeletePrefix = "scenario.story.reward.delete.";
+        public const string ActionStoryRewardItemPrefix = "scenario.story.reward.item.";
+        public const string ActionStoryRewardQuantityPrefix = "scenario.story.reward.quantity.";
+        public const string ActionStoryRemovalAddPrefix = "scenario.story.removal.add.";
+        public const string ActionStoryRemovalDeletePrefix = "scenario.story.removal.delete.";
+        public const string ActionStoryRemovalItemPrefix = "scenario.story.removal.item.";
+        public const string ActionStoryRemovalQuantityPrefix = "scenario.story.removal.quantity.";
+        public const string ActionStoryMilestoneAddPrefix = "scenario.story.milestone.add.";
+        public const string ActionStoryMilestoneDeletePrefix = "scenario.story.milestone.delete.";
+        public const string ActionStoryMilestoneNamePrefix = "scenario.story.milestone.name.";
+        public const string ActionStoryStageChangeTargetPrefix = "scenario.story.stage_change.target.";
+        public const string ActionStoryStageChangeDelayPrefix = "scenario.story.stage_change.delay.";
+        public const string ActionStoryRecruitTogglePrefix = "scenario.story.recruit.";
+        public const string ActionStoryRecruitFamilyPrefix = "scenario.story.recruit_family.";
+        public const string ActionStoryEndTypePrefix = "scenario.story.end.type.";
+        public const string ActionStoryEndCompleteQuestPrefix = "scenario.story.end.complete_quest.";
+        public const string ActionStoryEndCompleteScenarioPrefix = "scenario.story.end.complete_scenario.";
         public const string ActionQuestCaptureActive = "scenario.quest.capture_active";
         public const string ActionQuestScheduleAdd = "scenario.quest.schedule.add";
         public const string ActionQuestCatalogAddPrefix = "scenario.quest.catalog.add.";
@@ -130,16 +182,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionTriggerTypePrefix = "scenario.trigger.type.";
         public const string ActionTriggerDayPrefix = "scenario.trigger.day.";
         public const string ActionTriggerHourPrefix = "scenario.trigger.hour.";
+        public const string ActionTriggerMinutePrefix = "scenario.trigger.minute.";
+        public const string ActionTriggerTargetPrefix = "scenario.trigger.target.";
         public const string ActionGateAdd = "scenario.gate.add";
         public const string ActionGateDeletePrefix = "scenario.gate.delete.";
         public const string ActionGateModePrefix = "scenario.gate.mode.";
         public const string ActionGateConditionAddPrefix = "scenario.gate.condition.add.";
         public const string ActionGateConditionDeletePrefix = "scenario.gate.condition.delete.";
         public const string ActionGateConditionKindPrefix = "scenario.gate.condition.kind.";
+        public const string ActionGateConditionTargetPrefix = "scenario.gate.condition.target.";
+        public const string ActionGateConditionQuantityPrefix = "scenario.gate.condition.quantity.";
+        public const string ActionGateConditionFlagValuePrefix = "scenario.gate.condition.flag_value.";
         public const string ActionScheduledActionAdd = "scenario.action.add";
         public const string ActionScheduledActionDeletePrefix = "scenario.action.delete.";
         public const string ActionScheduledActionDayPrefix = "scenario.action.day.";
         public const string ActionScheduledActionHourPrefix = "scenario.action.hour.";
+        public const string ActionScheduledActionMinutePrefix = "scenario.action.minute.";
         public const string ActionScheduledActionTypePrefix = "scenario.action.type.";
         public const string ActionScheduledActionGatePrefix = "scenario.action.gate.";
         public const string ActionScheduledActionRepeatPrefix = "scenario.action.repeat.";
@@ -147,6 +205,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionScheduledActionEffectAddPrefix = "scenario.action.effect.add.";
         public const string ActionScheduledActionEffectDeletePrefix = "scenario.action.effect.delete.";
         public const string ActionScheduledActionEffectKindPrefix = "scenario.action.effect.kind.";
+        public const string ActionScheduledActionEffectTargetPrefix = "scenario.action.effect.target.";
+        public const string ActionScheduledActionEffectQuantityPrefix = "scenario.action.effect.quantity.";
+        public const string ActionScheduledActionEffectWeatherDurationPrefix = "scenario.action.effect.weather_duration.";
+        public const string ActionScheduledActionEffectFlagValuePrefix = "scenario.action.effect.flag_value.";
         public const string ActionTimelineDayPrefix = "scenario.timeline.day.";
         public const string ActionTimelineEntryPrefix = "scenario.timeline.entry.";
         public const string ActionSpriteSwapClear = "sprite_swap.clear";
@@ -391,6 +453,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int ActiveSelectionStackIndex { get; set; }
         public string SelectionStackSignature { get; set; }
         public string TimelineSelectionId { get; set; }
+        public string TimelineSelectedDayId { get; set; }
+        public string TimelineSelectedEntryId { get; set; }
         public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
         public string FilterText { get; set; }
         public string SearchText { get; set; }
@@ -423,6 +487,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ActiveSelectionStackIndex = ActiveSelectionStackIndex,
                 SelectionStackSignature = SelectionStackSignature,
                 TimelineSelectionId = TimelineSelectionId,
+                TimelineSelectedDayId = TimelineSelectedDayId,
+                TimelineSelectedEntryId = TimelineSelectedEntryId,
                 InspectorTab = InspectorTab,
                 FilterText = FilterText,
                 SearchText = SearchText,

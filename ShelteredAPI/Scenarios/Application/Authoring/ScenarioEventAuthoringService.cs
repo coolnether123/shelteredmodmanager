@@ -98,6 +98,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated trigger hour to " + hour + ".";
                 return true;
             }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionTriggerMinutePrefix, events.Triggers.Count, out index, out delta))
+            {
+                TriggerDef trigger = events.Triggers[index];
+                int minute = ScenarioAuthoringSchedule.Clamp(ScenarioPropertyBag.GetInt(trigger.Properties, "minute", 0) + delta, 0, 59);
+                ScenarioPropertyBag.Set(trigger.Properties, "minute", minute.ToString());
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated trigger minute to " + minute + ".";
+                return true;
+            }
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionTriggerTargetPrefix, events.Triggers.Count, out index, out token))
+            {
+                TriggerDef trigger = events.Triggers[index];
+                ApplyTriggerTarget(session.WorkingDefinition, trigger, Uri.UnescapeDataString(token));
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated trigger target.";
+                return true;
+            }
 
             return false;
         }
@@ -163,6 +181,28 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (string.Equals(current, "QuestCompleted", StringComparison.OrdinalIgnoreCase))
                 return "ItemQuantityAvailable";
             return "Manual";
+        }
+
+        private static void ApplyTriggerTarget(ScenarioDefinition definition, TriggerDef trigger, string target)
+        {
+            if (trigger == null)
+                return;
+            string type = trigger.Type ?? string.Empty;
+            if (string.Equals(type, "ScenarioFlagSet", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioPropertyBag.Set(trigger.Properties, "flagId", target);
+                ScenarioPropertyBag.Set(trigger.Properties, "flagValue", "true");
+            }
+            else if (string.Equals(type, "QuestCompleted", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioPropertyBag.Set(trigger.Properties, "questId", target);
+            }
+            else if (string.Equals(type, "ItemQuantityAvailable", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioPropertyBag.Set(trigger.Properties, "itemId", target);
+                if (ScenarioPropertyBag.GetInt(trigger.Properties, "quantity", 0) <= 0)
+                    ScenarioPropertyBag.Set(trigger.Properties, "quantity", "1");
+            }
         }
     }
 
@@ -232,6 +272,43 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            string token;
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, definition.Gates.Count, out index, out conditionIndex, out token))
+            {
+                ScenarioConditionGroup group = EnsureGroup(definition.Gates[index]);
+                if (conditionIndex >= group.Conditions.Count)
+                    return false;
+                ApplyConditionTarget(group.Conditions[conditionIndex], Uri.UnescapeDataString(token));
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated gate condition target.";
+                return true;
+            }
+
+            int delta;
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionGateConditionQuantityPrefix, definition.Gates.Count, out index, out conditionIndex, out token))
+            {
+                ScenarioConditionGroup group = EnsureGroup(definition.Gates[index]);
+                if (conditionIndex >= group.Conditions.Count || !int.TryParse(token, out delta))
+                    return false;
+                ScenarioConditionRef condition = group.Conditions[conditionIndex];
+                condition.Quantity = Math.Max(1, condition.Quantity + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated gate condition quantity to " + condition.Quantity + ".";
+                return true;
+            }
+
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionGateConditionFlagValuePrefix, definition.Gates.Count, out index, out conditionIndex, out token))
+            {
+                ScenarioConditionGroup group = EnsureGroup(definition.Gates[index]);
+                if (conditionIndex >= group.Conditions.Count)
+                    return false;
+                ScenarioConditionRef condition = group.Conditions[conditionIndex];
+                condition.FlagValue = Uri.UnescapeDataString(token);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated gate flag value.";
+                return true;
+            }
+
             return false;
         }
 
@@ -279,6 +356,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case ScenarioConditionKind.SurvivorPresent: return ScenarioConditionKind.BunkerExpansionUnlocked;
                 case ScenarioConditionKind.BunkerExpansionUnlocked: return ScenarioConditionKind.CustomTrigger;
                 default: return ScenarioConditionKind.TimeReached;
+            }
+        }
+
+        private static void ApplyConditionTarget(ScenarioConditionRef condition, string target)
+        {
+            if (condition == null)
+                return;
+            condition.TargetId = target;
+            if (condition.Kind == ScenarioConditionKind.ScenarioFlagSet)
+            {
+                condition.FlagId = target;
+                if (string.IsNullOrEmpty(condition.FlagValue))
+                    condition.FlagValue = "true";
             }
         }
     }
@@ -362,6 +452,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated scheduled hour to " + time.Hour + ".";
                 return true;
             }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionMinutePrefix, definition.ScheduledActions.Count, out index, out delta))
+            {
+                ScenarioScheduleTime time = definition.ScheduledActions[index].DueTime;
+                time.Minute = ScenarioAuthoringSchedule.Clamp(time.Minute + delta, 0, 59);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated scheduled minute to " + time.Minute + ".";
+                return true;
+            }
 
             return TryHandleEffect(session, actionId, out message);
         }
@@ -419,7 +517,93 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            string token;
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, definition.ScheduledActions.Count, out actionIndex, out effectIndex, out token))
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
+                if (effectIndex >= action.Effects.Count)
+                    return false;
+                ApplyEffectTarget(action.Effects[effectIndex], Uri.UnescapeDataString(token));
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated scheduled effect target.";
+                return true;
+            }
+
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix, definition.ScheduledActions.Count, out actionIndex, out effectIndex, out token))
+            {
+                int delta;
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
+                if (effectIndex >= action.Effects.Count || !int.TryParse(token, out delta))
+                    return false;
+                action.Effects[effectIndex].Quantity = Math.Max(1, action.Effects[effectIndex].Quantity + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated scheduled effect quantity to " + action.Effects[effectIndex].Quantity + ".";
+                return true;
+            }
+
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionScheduledActionEffectWeatherDurationPrefix, definition.ScheduledActions.Count, out actionIndex, out effectIndex, out token))
+            {
+                int delta;
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
+                if (effectIndex >= action.Effects.Count || !int.TryParse(token, out delta))
+                    return false;
+                action.Effects[effectIndex].DurationHours = Math.Max(0, action.Effects[effectIndex].DurationHours + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated weather duration to " + action.Effects[effectIndex].DurationHours + " hour(s).";
+                return true;
+            }
+
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionScheduledActionEffectFlagValuePrefix, definition.ScheduledActions.Count, out actionIndex, out effectIndex, out token))
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
+                if (effectIndex >= action.Effects.Count)
+                    return false;
+                action.Effects[effectIndex].FlagValue = Uri.UnescapeDataString(token);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated scheduled flag value.";
+                return true;
+            }
+
             return false;
+        }
+
+        private static void ApplyEffectTarget(ScenarioEffectDefinition effect, string target)
+        {
+            if (effect == null)
+                return;
+            effect.TargetId = target;
+            switch (effect.Kind)
+            {
+                case ScenarioEffectKind.AddInventory:
+                case ScenarioEffectKind.RemoveInventory:
+                    effect.ItemId = target;
+                    break;
+                case ScenarioEffectKind.SetWeather:
+                case ScenarioEffectKind.RestoreWeather:
+                    effect.WeatherState = target;
+                    break;
+                case ScenarioEffectKind.StartQuest:
+                    effect.QuestId = target;
+                    break;
+                case ScenarioEffectKind.ActivateObject:
+                case ScenarioEffectKind.DeactivateObject:
+                    effect.ObjectId = target;
+                    break;
+                case ScenarioEffectKind.SpawnFutureSurvivor:
+                    effect.SurvivorId = target;
+                    break;
+                case ScenarioEffectKind.UnlockBunkerExpansion:
+                    effect.BunkerExpansionId = target;
+                    break;
+                case ScenarioEffectKind.SetScenarioFlag:
+                    effect.FlagId = target;
+                    if (string.IsNullOrEmpty(effect.FlagValue))
+                        effect.FlagValue = "true";
+                    break;
+                case ScenarioEffectKind.FireTrigger:
+                    effect.TriggerId = target;
+                    break;
+            }
         }
 
         private static ScenarioSchedulePolicy EnsurePolicy(ScenarioScheduledActionDefinition action)

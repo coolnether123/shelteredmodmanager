@@ -23,6 +23,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioTimelineNavigationService timelineNavigationService,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioCharacterEditorAuthoringService characterEditorService,
+            ScenarioStoryAuthoringService storyAuthoringService,
             ScenarioEventAuthoringService eventAuthoringService,
             ScenarioPublishExportService publishExportService)
         {
@@ -36,6 +37,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 timelineNavigationService,
                 selectionScopeService,
                 characterEditorService,
+                storyAuthoringService,
                 eventAuthoringService,
                 publishExportService));
         }
@@ -62,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioTimelineNavigationService timelineNavigationService,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioCharacterEditorAuthoringService characterEditorService,
+            ScenarioStoryAuthoringService storyAuthoringService,
             ScenarioEventAuthoringService eventAuthoringService,
             ScenarioPublishExportService publishExportService)
         {
@@ -74,6 +77,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
+                new StoryAuthoringCommandHandler(storyAuthoringService, editorService),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioPublishCommandHandler(publishExportService),

@@ -6,6 +6,7 @@ using ModAPI.Core;
 
 using ModAPI.Scenarios;
 
+using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Persistence;
 using ShelteredAPI.Scenarios.Definitions;
@@ -241,6 +242,12 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     result.AddError("Starting inventory item #" + i + " is missing itemId.");
                 else if (item.Quantity <= 0)
                     result.AddError("Starting inventory item '" + item.ItemId + "' must have quantity greater than zero.");
+                else
+                {
+                    ItemManager.ItemType itemType;
+                    if (!ContentInjector.ResolveItemType(item.ItemId, out itemType))
+                        result.AddError("Starting inventory item '" + item.ItemId + "' is not a known item id.");
+                }
             }
         }
 
@@ -783,6 +790,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     return;
 
                 HashSet<string> stageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                HashSet<string> characterIds = BuildScenarioCharacterIds(definition);
                 for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
                 {
                     ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
@@ -796,6 +804,15 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
                     if (stage.UnansweredNextDays < 0)
                         summary.AddError("core.flow.invalid_unanswered_delay", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' has a negative unanswered delay.");
+
+                    for (int c = 0; stage.CharacterIds != null && c < stage.CharacterIds.Count; c++)
+                    {
+                        string characterId = TrimToNull(stage.CharacterIds[c]);
+                        if (characterId == null)
+                            summary.AddError("core.flow.character_required", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' has an empty character id.");
+                        else if (!IsKnownScenarioCharacter(characterIds, characterId))
+                            summary.AddError("core.flow.unknown_character", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' references unknown character id '" + characterId + "'.");
+                    }
                 }
 
                 for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
@@ -807,6 +824,114 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     if (!stageIds.Contains(stage.UnansweredNextStage))
                         summary.AddError("core.flow.missing_unanswered_stage", "Scenario flow stage '" + (stage.Id ?? ("#" + i.ToString())) + "' routes unanswered intercoms to missing stage '" + stage.UnansweredNextStage + "'.");
                 }
+
+                for (int i = 0; i < definition.ScenarioFlow.Stages.Count; i++)
+                    ValidateIntercomStages(definition.ScenarioFlow.Stages[i], i, stageIds, characterIds, summary);
+            }
+
+            private static void ValidateIntercomStages(ScenarioFlowStageDefinition stage, int stageIndex, HashSet<string> stageIds, HashSet<string> characterIds, ValidationSummary summary)
+            {
+                if (stage == null || stage.IntercomStages == null)
+                    return;
+
+                HashSet<string> intercomIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < stage.IntercomStages.Count; i++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                    string id = TrimToNull(intercom != null ? intercom.Id : null);
+                    if (id == null)
+                        summary.AddError("core.flow.intercom_id_required", "Scenario flow stage '" + (stage.Id ?? ("#" + stageIndex.ToString())) + "' intercom #" + i.ToString() + " requires an id.");
+                    else if (!intercomIds.Add(id))
+                        summary.AddError("core.flow.duplicate_intercom", "Scenario flow stage '" + (stage.Id ?? ("#" + stageIndex.ToString())) + "' has duplicate intercom id '" + id + "'.");
+                }
+
+                for (int i = 0; i < stage.IntercomStages.Count; i++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                    if (intercom == null)
+                        continue;
+                    string label = stage.Id + "/" + (intercom.Id ?? ("#" + i.ToString()));
+                    ValidateIntercomTarget(summary, intercomIds, intercom.NextId, label, "NextId");
+                    ValidateIntercomTarget(summary, intercomIds, intercom.AlternateNextId, label, "AlternateNextId");
+                    for (int r = 0; intercom.RandomizedNextIds != null && r < intercom.RandomizedNextIds.Count; r++)
+                        ValidateIntercomTarget(summary, intercomIds, intercom.RandomizedNextIds[r], label, "RandomizedNextIds");
+                    for (int o = 0; intercom.Options != null && o < intercom.Options.Count; o++)
+                    {
+                        ScenarioDialogueOptionDefinition option = intercom.Options[o];
+                        if (TrimToNull(option != null ? option.TextKey : null) == null)
+                            summary.AddError("core.flow.option_key_required", "Scenario flow option #" + o.ToString() + " in '" + label + "' has an empty text key.");
+                        ValidateIntercomTarget(summary, intercomIds, option != null ? option.NextId : null, label, "Option NextId");
+                    }
+                    for (int d = 0; intercom.Dialogue != null && d < intercom.Dialogue.Count; d++)
+                    {
+                        ScenarioDialogueLineDefinition line = intercom.Dialogue[d];
+                        if (TrimToNull(line != null ? line.TextKey : null) == null)
+                            summary.AddError("core.flow.dialogue_key_required", "Scenario flow dialogue #" + d.ToString() + " in '" + label + "' has an empty text key.");
+                    }
+                    if (intercom.StageChange != null && TrimToNull(intercom.StageChange.Id) != null && !stageIds.Contains(intercom.StageChange.Id))
+                        summary.AddError("core.flow.missing_stage_change", "Scenario flow intercom '" + label + "' changes to missing stage '" + intercom.StageChange.Id + "'.");
+                    for (int c = 0; intercom.CharacterIdsToRecruit != null && c < intercom.CharacterIdsToRecruit.Count; c++)
+                    {
+                        string characterId = TrimToNull(intercom.CharacterIdsToRecruit[c]);
+                        if (characterId != null && !IsKnownScenarioCharacter(characterIds, characterId))
+                            summary.AddError("core.flow.unknown_recruit", "Scenario flow intercom '" + label + "' recruits unknown character id '" + characterId + "'.");
+                    }
+                    ValidateItemEntries(summary, intercom.Items, "reward item", label);
+                    ValidateItemEntries(summary, intercom.ItemsToRemove, "removal item", label);
+                    if (intercom.EndOptions != null)
+                    {
+                        ValidateItemEntries(summary, intercom.EndOptions.RewardItems, "end reward item", label);
+                        ValidateItemEntries(summary, intercom.EndOptions.TradeItems, "trade item", label);
+                    }
+                }
+            }
+
+            private static void ValidateIntercomTarget(ValidationSummary summary, HashSet<string> intercomIds, string value, string label, string field)
+            {
+                string id = TrimToNull(value);
+                if (id != null && !intercomIds.Contains(id))
+                    summary.AddError("core.flow.missing_intercom_target", "Scenario flow intercom '" + label + "' " + field + " references missing intercom '" + id + "'.");
+            }
+
+            private static void ValidateItemEntries(ValidationSummary summary, List<ItemEntry> items, string label, string owner)
+            {
+                for (int i = 0; items != null && i < items.Count; i++)
+                {
+                    ItemEntry item = items[i];
+                    string itemId = TrimToNull(item != null ? item.ItemId : null);
+                    if (itemId == null)
+                    {
+                        summary.AddError("core.flow.item_id_required", "Scenario flow " + label + " #" + i.ToString() + " in '" + owner + "' is missing item id.");
+                        continue;
+                    }
+                    if (item.Quantity <= 0)
+                        summary.AddError("core.flow.item_quantity_invalid", "Scenario flow " + label + " '" + itemId + "' in '" + owner + "' must have quantity greater than zero.");
+                    ItemManager.ItemType itemType;
+                    if (!ContentInjector.ResolveItemType(itemId, out itemType))
+                        summary.AddError("core.flow.item_unknown", "Scenario flow " + label + " '" + itemId + "' in '" + owner + "' is not a known item id.");
+                }
+            }
+
+            private static HashSet<string> BuildScenarioCharacterIds(ScenarioDefinition definition)
+            {
+                HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; definition != null && definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
+                {
+                    string id = TrimToNull(definition.ScenarioCharacters[i] != null ? definition.ScenarioCharacters[i].CharacterId : null);
+                    if (id != null)
+                        ids.Add(id);
+                }
+                ids.Add("LeadNpc");
+                ids.Add("Npc2");
+                ids.Add("Npc3");
+                ids.Add("Npc4");
+                ids.Add("BackgroundNpc");
+                return ids;
+            }
+
+            private static bool IsKnownScenarioCharacter(HashSet<string> characterIds, string id)
+            {
+                return characterIds != null && characterIds.Contains(id);
             }
         }
 

@@ -38,6 +38,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             return first >= 0 && first < count && second >= 0;
         }
+
+        public static bool TryIndexToken(string actionId, string prefix, int count, out int index, out string token)
+        {
+            index = -1;
+            token = null;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+            string[] parts = actionId.Substring(prefix.Length).Split(new[] { '.' }, 2);
+            if (parts.Length != 2 || !int.TryParse(parts[0], out index))
+                return false;
+            token = parts[1];
+            return index >= 0 && index < count;
+        }
+
+        public static bool TryPairToken(string actionId, string prefix, int count, out int first, out int second, out string token)
+        {
+            first = -1;
+            second = -1;
+            token = null;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+            string[] parts = actionId.Substring(prefix.Length).Split(new[] { '.' }, 3);
+            if (parts.Length != 3 || !int.TryParse(parts[0], out first) || !int.TryParse(parts[1], out second))
+                return false;
+            token = parts[2];
+            return first >= 0 && first < count && second >= 0;
+        }
     }
 
     internal static class ScenarioAuthoringSchedule

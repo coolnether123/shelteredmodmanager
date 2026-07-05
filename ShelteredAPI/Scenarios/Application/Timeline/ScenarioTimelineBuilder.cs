@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Bunker;
@@ -10,6 +11,7 @@ using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Timeline;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Timeline{
     internal sealed class ScenarioTimelineBuilder
     {
@@ -58,7 +60,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             {
                 FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
                 string id = "legacy.survivor." + BuildId(survivor != null ? survivor.Id : null, i);
-                entries.Add(NewEntry(id, ScenarioTimelineEntryKind.Survivor, survivor != null ? survivor.Arrival : null, "Future survivor " + Safe(survivor != null && survivor.Survivor != null ? survivor.Survivor.Name : null), "FutureSurvivor", "People", survivor != null ? survivor.Id : null, runtimeState, "legacy"));
+                entries.Add(NewEntry(id, ScenarioTimelineEntryKind.Survivor, survivor != null ? survivor.Arrival : null, "Future survivor " + Safe(survivor != null && survivor.Survivor != null ? survivor.Survivor.Name : null), "FutureSurvivor", "People", survivor != null ? survivor.Id : null, runtimeState, "legacy", "future_survivor", "FamilySetup.FutureSurvivors", i, survivor != null ? survivor.Id : null, ScenarioAuthoringWindowIds.Survivors, ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + i.ToString()));
             }
         }
 
@@ -68,7 +70,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             {
                 TimedInventoryChangeDefinition change = definition.StartingInventory.ScheduledChanges[i];
                 string id = "legacy.inventory." + BuildId(change != null ? change.Id : null, i);
-                entries.Add(NewEntry(id, ScenarioTimelineEntryKind.Inventory, change != null ? change.When : null, (change != null ? change.Kind.ToString() : "Inventory") + " " + Safe(change != null ? change.ItemId : null), "Inventory", "Inventory / Storage", change != null ? change.Id : null, runtimeState, "legacy"));
+                entries.Add(NewEntry(id, ScenarioTimelineEntryKind.Inventory, change != null ? change.When : null, (change != null ? change.Kind.ToString() : "Inventory") + " " + Safe(change != null ? change.ItemId : null), "Inventory", "Inventory / Storage", change != null ? change.Id : null, runtimeState, "legacy", "inventory_change", "StartingInventory.ScheduledChanges", i, change != null ? change.Id : null, ScenarioAuthoringWindowIds.Stockpile, ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix + i.ToString()));
             }
         }
 
@@ -78,9 +80,9 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             {
                 WeatherEventDefinition weather = definition.TriggersAndEvents.WeatherEvents[i];
                 string baseId = BuildId(weather != null ? weather.Id : null, i);
-                entries.Add(NewEntry("legacy.weather." + baseId, ScenarioTimelineEntryKind.Weather, weather != null ? weather.When : null, "Weather " + Safe(weather != null ? weather.WeatherState : null), "Weather", "Events", weather != null ? weather.Id : null, runtimeState, "legacy"));
+                entries.Add(NewEntry("legacy.weather." + baseId, ScenarioTimelineEntryKind.Weather, weather != null ? weather.When : null, "Weather " + Safe(weather != null ? weather.WeatherState : null), "Weather", "Events", weather != null ? weather.Id : null, runtimeState, "legacy", "weather_event", "TriggersAndEvents.WeatherEvents", i, weather != null ? weather.Id : null, ScenarioAuthoringWindowIds.Triggers, ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix + i.ToString()));
                 if (weather != null && weather.DurationHours > 0)
-                    entries.Add(NewEntry("legacy.weather." + baseId + ".restore", ScenarioTimelineEntryKind.Weather, AddHours(weather.When, weather.DurationHours), "Restore weather", "Weather", "Events", weather.Id, runtimeState, "legacy"));
+                    entries.Add(NewEntry("legacy.weather." + baseId + ".restore", ScenarioTimelineEntryKind.Weather, AddHours(weather.When, weather.DurationHours), "Restore weather", "Weather", "Events", weather.Id, runtimeState, "legacy", "weather_restore", "TriggersAndEvents.WeatherEvents", i, weather.Id, ScenarioAuthoringWindowIds.Triggers, ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + i.ToString() + ".-1"));
             }
         }
 
@@ -91,7 +93,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 QuestDefinition quest = definition.Quests.Quests[i];
                 if (quest == null)
                     continue;
-                entries.Add(NewEntry("legacy.quest." + BuildId(quest.Id, i), ScenarioTimelineEntryKind.Quest, quest.ScheduledStart, "Quest " + Safe(quest.Title ?? quest.Id), "Quest", "Quests", quest.Id, runtimeState, "legacy"));
+                entries.Add(NewEntry("legacy.quest." + BuildId(quest.Id, i), ScenarioTimelineEntryKind.Quest, quest.ScheduledStart, "Quest " + Safe(quest.Title ?? quest.Id), "Quest", "Quests", quest.Id, runtimeState, "legacy", "quest_popup", "Quests.Quests", i, quest.Id, ScenarioAuthoringWindowIds.Quests, ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix + i.ToString()));
             }
         }
 
@@ -105,7 +107,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 if (!ScenarioTriggerDefinitionCompiler.TryCreateAction(trigger, i, out action, out reason))
                     continue;
 
-                entries.Add(NewEntry(action.Id, ScenarioTimelineEntryKind.CustomModded, action.DueTime, "Trigger " + Safe(trigger.Id), "Trigger", "Events", trigger.Id, runtimeState, "legacy"));
+                entries.Add(NewEntry(action.Id, ScenarioTimelineEntryKind.CustomModded, action.DueTime, "Trigger " + Safe(trigger.Id), "Trigger", "Events", trigger.Id, runtimeState, "legacy", "trigger", "TriggersAndEvents.Triggers", i, trigger.Id, ScenarioAuthoringWindowIds.Triggers, ScenarioAuthoringActionIds.ActionTriggerDeletePrefix + i.ToString()));
             }
         }
 
@@ -116,7 +118,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 ScenarioBunkerExpansionDefinition expansion = definition.BunkerGrid.Expansions[i];
                 if (expansion == null || expansion.RequiredTime == null || string.IsNullOrEmpty(expansion.Id))
                     continue;
-                entries.Add(NewEntry("legacy.bunker.expansion." + expansion.Id, ScenarioTimelineEntryKind.Bunker, expansion.RequiredTime, "Expansion " + Safe(expansion.DisplayName ?? expansion.Id), "BunkerExpansion", "Bunker", expansion.Id, runtimeState, "legacy"));
+                entries.Add(NewEntry("legacy.bunker.expansion." + expansion.Id, ScenarioTimelineEntryKind.Bunker, expansion.RequiredTime, "Expansion " + Safe(expansion.DisplayName ?? expansion.Id), "BunkerExpansion", "Bunker", expansion.Id, runtimeState, "legacy", "bunker_expansion", "BunkerGrid.Expansions", i, expansion.Id, ScenarioAuthoringWindowIds.BuildTools, null));
             }
         }
 
@@ -127,7 +129,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 ObjectPlacement placement = definition.BunkerEdits.ObjectPlacements[i];
                 if (placement == null || string.IsNullOrEmpty(placement.ScheduledActivationId))
                     continue;
-                entries.Add(NewEntry(placement.ScheduledActivationId, ScenarioTimelineEntryKind.Object, null, "Activate object " + Safe(placement.ScenarioObjectId ?? placement.DefinitionReference ?? placement.PrefabReference), "ObjectActivation", "Bunker", placement.ScenarioObjectId, runtimeState, "legacy"));
+                entries.Add(NewEntry(placement.ScheduledActivationId, ScenarioTimelineEntryKind.Object, null, "Activate object " + Safe(placement.ScenarioObjectId ?? placement.DefinitionReference ?? placement.PrefabReference), "ObjectActivation", "Bunker", placement.ScenarioObjectId, runtimeState, "legacy", "object_activation", "BunkerEdits.ObjectPlacements", i, placement.ScenarioObjectId, ScenarioAuthoringWindowIds.BuildTools, null));
             }
         }
 
@@ -138,11 +140,11 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action == null)
                     continue;
-                entries.Add(NewEntry(action.Id, InferKind(action), action.DueTime, Safe(action.ActionType ?? action.Id), action.ActionType, InferStage(action), ResolveTarget(action), runtimeState, "shared"));
+                entries.Add(NewEntry(action.Id, InferKind(action), action.DueTime, Safe(action.ActionType ?? action.Id), action.ActionType, InferStage(action), ResolveTarget(action), runtimeState, "shared", "scheduled_action", "ScheduledActions", i, action.Id, ScenarioAuthoringWindowIds.Triggers, ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString()));
             }
         }
 
-        private static ScenarioTimelineEntry NewEntry(string id, ScenarioTimelineEntryKind kind, ScenarioScheduleTime when, string title, string type, string ownerStage, string targetId, ScenarioRuntimeState runtimeState, string source)
+        private static ScenarioTimelineEntry NewEntry(string id, ScenarioTimelineEntryKind kind, ScenarioScheduleTime when, string title, string type, string ownerStage, string targetId, ScenarioRuntimeState runtimeState, string source, string sourceKind, string sourceCollection, int sourceIndex, string sourceId, string ownerWindowId, string focusActionId)
         {
             ScenarioTimelineEntry entry = new ScenarioTimelineEntry();
             entry.Id = id;
@@ -154,6 +156,12 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             entry.OwnerId = targetId;
             entry.TargetId = targetId;
             entry.Source = source;
+            entry.SourceKind = sourceKind;
+            entry.SourceCollection = sourceCollection;
+            entry.SourceIndex = sourceIndex;
+            entry.SourceId = sourceId;
+            entry.OwnerWindowId = ownerWindowId;
+            entry.FocusActionId = focusActionId;
             ApplyStatus(entry, runtimeState);
             return entry;
         }

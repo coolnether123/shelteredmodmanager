@@ -423,7 +423,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Items = dayItems.ToArray()
             });
 
-            string selected = state != null ? state.TimelineSelectionId : null;
+            string selected = state != null ? state.TimelineSelectedDayId : null;
             for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
             {
                 ScenarioTimelineDayViewModel day = model.Days[i];

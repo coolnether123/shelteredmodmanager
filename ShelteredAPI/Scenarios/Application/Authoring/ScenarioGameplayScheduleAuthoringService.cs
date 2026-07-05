@@ -245,6 +245,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            string itemToken;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, inventory.Items.Count, out index, out itemToken))
+            {
+                ItemEntry entry = inventory.Items[index];
+                entry.ItemId = DecodeToken(itemToken);
+                MarkInventoryDirty(session);
+                message = "Changed starting stockpile item to '" + entry.ItemId + "'.";
+                return true;
+            }
+
             int removeIndex;
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix, inventory.ScheduledChanges.Count, out removeIndex))
             {
@@ -281,7 +291,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            return TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, inventory.ScheduledChanges.Count, delegate(int itemIndex) { return inventory.ScheduledChanges[itemIndex].When; }, session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory, out message);
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix, inventory.ScheduledChanges.Count, out index, out itemToken))
+            {
+                TimedInventoryChangeDefinition change = inventory.ScheduledChanges[index];
+                change.ItemId = DecodeToken(itemToken);
+                MarkInventoryDirty(session);
+                message = "Changed timed inventory item to '" + change.ItemId + "'.";
+                return true;
+            }
+
+            if (TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, inventory.ScheduledChanges.Count, delegate(int itemIndex) { return inventory.ScheduledChanges[itemIndex].When; }, session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory, out message))
+                return true;
+
+            return TryStepScheduleMinute(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleMinutePrefix, inventory.ScheduledChanges.Count, delegate(int itemIndex) { return inventory.ScheduledChanges[itemIndex].When; }, session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory, out message);
         }
 
         private static bool TryHandleWeatherEvent(ScenarioEditorSession session, string actionId, out string message)
@@ -296,7 +318,30 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Removed weather event.";
                 return true;
             }
-            return TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, events.WeatherEvents.Count, delegate(int index) { return events.WeatherEvents[index].When; }, session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers, out message);
+
+            int index;
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleStatePrefix, events.WeatherEvents.Count, out index, out token))
+            {
+                events.WeatherEvents[index].WeatherState = DecodeToken(token);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Weather event state set to " + events.WeatherEvents[index].WeatherState + ".";
+                return true;
+            }
+
+            int delta;
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix, events.WeatherEvents.Count, out index, out delta))
+            {
+                events.WeatherEvents[index].DurationHours = Math.Max(0, events.WeatherEvents[index].DurationHours + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Weather duration set to " + events.WeatherEvents[index].DurationHours + " hour(s).";
+                return true;
+            }
+
+            if (TryStepSchedule(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, events.WeatherEvents.Count, delegate(int itemIndex) { return events.WeatherEvents[itemIndex].When; }, session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers, out message))
+                return true;
+
+            return TryStepScheduleMinute(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleMinutePrefix, events.WeatherEvents.Count, delegate(int itemIndex) { return events.WeatherEvents[itemIndex].When; }, session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers, out message);
         }
 
         private static bool TryHandleQuest(ScenarioEditorSession session, string actionId, out string message)
@@ -418,6 +463,31 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkQuestDirty(session);
             message = "Updated scheduled minute to " + time.Minute + ".";
             return true;
+        }
+
+        private static bool TryStepScheduleMinute(string actionId, string minutePrefix, int count, ScheduleGetter getter, ScenarioEditorSession session, ScenarioDirtySection section, ScenarioEditCategory category, out string message)
+        {
+            message = null;
+            int index;
+            int delta;
+            if (!ScenarioAuthoringActionParser.TrySignedIndex(actionId, minutePrefix, count, out index, out delta))
+                return false;
+
+            ScenarioScheduleTime time = getter(index);
+            if (time == null)
+            {
+                message = "This item has no schedule to edit.";
+                return false;
+            }
+            time.Minute = ScenarioAuthoringSchedule.Clamp(time.Minute + delta, 0, 59);
+            ScenarioAuthoringMutation.MarkDirty(session, section, category);
+            message = "Updated scheduled minute to " + time.Minute + ".";
+            return true;
+        }
+
+        private static string DecodeToken(string token)
+        {
+            return string.IsNullOrEmpty(token) ? string.Empty : Uri.UnescapeDataString(token);
         }
 
         private static bool CycleQuestId(ScenarioEditorSession session, QuestDefinition quest, int delta, out string message)
