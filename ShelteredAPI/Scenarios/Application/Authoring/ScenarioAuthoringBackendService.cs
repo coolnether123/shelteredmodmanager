@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Composition;
@@ -28,6 +29,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioAuthoringLayoutService _layoutService;
         private readonly ScenarioStageCoordinator _stageCoordinator;
         private readonly ScenarioSelectionScopeService _selectionScopeService;
+        private readonly ScenarioAuthoringTutorialService _tutorialService;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
 
@@ -60,7 +62,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringSettingsService settingsService,
             ScenarioAuthoringLayoutService layoutService,
             ScenarioStageCoordinator stageCoordinator,
-            ScenarioSelectionScopeService selectionScopeService)
+            ScenarioSelectionScopeService selectionScopeService,
+            ScenarioAuthoringTutorialService tutorialService)
         {
             _selectionService = selectionService;
             _sessionStore = sessionStore;
@@ -73,6 +76,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _layoutService = layoutService;
             _stageCoordinator = stageCoordinator;
             _selectionScopeService = selectionScopeService;
+            _tutorialService = tutorialService;
         }
 
         internal void SetActiveSession(ScenarioAuthoringSession session)
@@ -199,6 +203,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
+            string tutorialMessage;
+            if (_tutorialService != null && _tutorialService.Synchronize(snapshot, _sessionStore.Current, out tutorialMessage))
+            {
+                changed = true;
+                if (!string.IsNullOrEmpty(tutorialMessage))
+                    snapshot.StatusMessage = tutorialMessage;
+            }
             ScenarioAuthoringUiDebugService.Instance.DumpSceneEntities(snapshot);
 
             lock (_sync)
@@ -243,6 +254,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
+            string tutorialMessage;
+            if (_tutorialService != null && _tutorialService.Synchronize(snapshot, _sessionStore.Current, out tutorialMessage))
+            {
+                changed = true;
+                if (!string.IsNullOrEmpty(tutorialMessage))
+                    snapshot.StatusMessage = tutorialMessage;
+            }
             lock (_sync)
             {
                 _state = snapshot;

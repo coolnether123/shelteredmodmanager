@@ -10,6 +10,7 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
@@ -56,6 +57,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioSelectionStackAuthoringContentBuilder _selectionStackAuthoringContentBuilder;
         private readonly ScenarioPublishAuthoringContentBuilder _publishAuthoringContentBuilder;
         private readonly ScenarioTimelineAuthoringContentBuilder _timelineAuthoringContentBuilder;
+        private readonly ScenarioAuthoringTutorialService _tutorialService;
+        private readonly ScenarioHelpAuthoringContentBuilder _helpAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
 
         public ScenarioAuthoringPresentationBuilder(
@@ -77,7 +80,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioTargetClassifier targetClassifier,
             ScenarioAssetAuthoringContentBuilder assetAuthoringContentBuilder,
             ScenarioMapAuthoringContentBuilder mapAuthoringContentBuilder,
-            ScenarioQuestAuthoringContentBuilder questAuthoringContentBuilder)
+            ScenarioQuestAuthoringContentBuilder questAuthoringContentBuilder,
+            ScenarioAuthoringTutorialService tutorialService,
+            ScenarioHelpAuthoringContentBuilder helpAuthoringContentBuilder)
         {
             _captureService = captureService;
             _sectionHub = sectionHub;
@@ -94,6 +99,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _assetAuthoringContentBuilder = assetAuthoringContentBuilder;
             _mapAuthoringContentBuilder = mapAuthoringContentBuilder;
             _questAuthoringContentBuilder = questAuthoringContentBuilder;
+            _tutorialService = tutorialService;
+            _helpAuthoringContentBuilder = helpAuthoringContentBuilder;
             _workflowAuthoringContentBuilder = new ScenarioWorkflowAuthoringContentBuilder(sectionHub, selectionScopeService);
             _scenarioOverviewAuthoringContentBuilder = new ScenarioOverviewAuthoringContentBuilder();
             _runtimeTestAuthoringContentBuilder = new ScenarioRuntimeTestAuthoringContentBuilder(timelineBuilder, modDependencyDetector, modCompatibilityViewModelBuilder);
@@ -126,11 +133,50 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
+                Help = state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
+                Tutorial = BuildTutorialViewModel(state, editorSession),
                 ContextMenu = contextMenu,
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
             _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);
             return viewModel;
+        }
+
+        private ScenarioAuthoringTutorialViewModel BuildTutorialViewModel(ScenarioAuthoringState state, ScenarioEditorSession editorSession)
+        {
+            if (_tutorialService == null)
+                return null;
+
+            TutorialStep step = _tutorialService.GetActiveStep(state);
+            if (step == null)
+                return null;
+
+            bool satisfied = _tutorialService.IsStepSatisfied(state, editorSession, step);
+            TutorialStep[] steps = TutorialContent.GetSteps();
+            return new ScenarioAuthoringTutorialViewModel
+            {
+                Visible = true,
+                StepIndex = step.Index,
+                StepCount = steps != null ? steps.Length : 0,
+                StepId = step.Id,
+                Title = step.Title,
+                Body = step.Body,
+                PrimaryCallout = satisfied ? "NEXT" : step.PendingCallout,
+                WaitingForAction = !satisfied && string.Equals(step.PendingCallout, "WAITING FOR ACTION", StringComparison.Ordinal),
+                TargetWindowId = step.TargetWindowId,
+                TargetActionId = step.TargetActionId,
+                TargetStage = step.TargetStage,
+                PrimaryAction = Item.Action(
+                    ScenarioAuthoringActionIds.ActionTutorialOpenTarget,
+                    satisfied ? "NEXT" : step.PendingCallout,
+                    satisfied ? "Continue to the next tutorial step." : "Open or use the highlighted editor target.",
+                    true,
+                    true,
+                    "GO"),
+                NextAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialNext, "NEXT", "Continue to the next tutorial step.", true, false, "NX"),
+                SkipAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialSkip, "SKIP", "End the guided tour.", true, false, "SK"),
+                HelpAction = Item.Action(ScenarioAuthoringActionIds.ActionShellOpenHelp, "HELP", "Open the workshop help pages.", true, false, "HP")
+            };
         }
 
         public ScenarioAuthoringInspectorDocument BuildShellDocument(ScenarioAuthoringContext context)

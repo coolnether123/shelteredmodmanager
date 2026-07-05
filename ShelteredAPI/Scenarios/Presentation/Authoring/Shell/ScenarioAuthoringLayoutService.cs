@@ -196,6 +196,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
             state.SettingsWindowOpen = false;
+            state.HelpWindowOpen = false;
             ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
@@ -216,6 +217,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             state.MinimalMode = true;
             state.FocusSelectionMode = false;
             state.SettingsWindowOpen = false;
+            state.HelpWindowOpen = false;
             PersistIfEnabled(state);
             return true;
         }

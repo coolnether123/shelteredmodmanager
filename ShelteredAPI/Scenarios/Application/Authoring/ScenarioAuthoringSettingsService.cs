@@ -131,6 +131,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         .AppendLine("\" />");
                 }
 
+                for (int i = 0; snapshot.Values != null && i < snapshot.Values.Count; i++)
+                {
+                    ScenarioAuthoringSettingValue value = snapshot.Values[i];
+                    if (value == null || string.IsNullOrEmpty(value.Id) || IsDefined(value.Id))
+                        continue;
+
+                    builder.Append("  <Setting id=\"")
+                        .Append(Escape(value.Id))
+                        .Append("\" value=\"")
+                        .Append(Escape(value.Value ?? string.Empty))
+                        .AppendLine("\" />");
+                }
+
                 builder.AppendLine("</ScenarioAuthoringSettings>");
                 File.WriteAllText(ShelteredAPI.Scenarios.Infrastructure.Persistence.ScenarioAuthoringStoragePaths.GetSettingsFilePath(), builder.ToString());
             }
@@ -225,6 +238,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return string.IsNullOrEmpty(value)
                 ? string.Empty
                 : SecurityElement.Escape(value);
+        }
+
+        private bool IsDefined(string id)
+        {
+            for (int i = 0; i < _definitions.Count; i++)
+            {
+                ScenarioAuthoringSettingDefinition definition = _definitions[i];
+                if (definition != null && string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
         }
 
         private void RegisterToggle(string id, string section, string label, string description, string defaultValue)

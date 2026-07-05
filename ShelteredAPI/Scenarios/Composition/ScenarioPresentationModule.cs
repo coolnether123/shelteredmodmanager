@@ -1,5 +1,6 @@
 using ShelteredAPI.Core;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Timeline;
@@ -19,6 +20,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddScenarioPresentation();
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapAuthoringContentBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestAuthoringContentBuilder(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioHelpAuthoringContentBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringShellImguiRenderModule(
@@ -47,7 +49,9 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioTargetClassifier>(),
                     resolver.Get<ScenarioAssetAuthoringContentBuilder>(),
                     resolver.Get<ScenarioMapAuthoringContentBuilder>(),
-                    resolver.Get<ScenarioQuestAuthoringContentBuilder>());
+                    resolver.Get<ScenarioQuestAuthoringContentBuilder>(),
+                    resolver.Get<ScenarioAuthoringTutorialService>(),
+                    resolver.Get<ScenarioHelpAuthoringContentBuilder>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

@@ -300,8 +300,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 _animations.GetModalPanelProgress(false);
             }
 
+            Rect overlayRect = new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight);
+            DrawHelpModalCore(overlayRect, shell.Help, inputCapture);
+            DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
+
             inputCapture.SetKeyboardCaptured(
                 shell.SpritePickerDocument != null
+                || shell.Help != null
                 || _assetBrowserSearchFocused
                 || _spritePickerSearchFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));

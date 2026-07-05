@@ -273,6 +273,10 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioPublishExportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\ScenarioAuthoringTutorialService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialContent.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialProgress.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialStep.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioDraftMutationService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioBunkerGridCaptureService.cs" />
@@ -375,6 +379,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationUtilities.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringInspectorItemFacade.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHierarchyAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHelpAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
@@ -448,6 +453,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellToolRailImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTooltipImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTopBarImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTutorialImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorkspaceTabsImguiRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioAuthoringStoragePaths.cs" />

@@ -10,6 +10,7 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
@@ -231,6 +232,12 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                         return false;
                     message = "Editor settings opened.";
                     return true;
+                case ScenarioAuthoringActionIds.ActionShellOpenHelp:
+                    if (state.HelpWindowOpen)
+                        return false;
+                    state.HelpWindowOpen = true;
+                    message = "Workshop help opened.";
+                    return true;
                 case ScenarioAuthoringActionIds.ActionShellOpenTimeline:
                 case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
                     if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Triggers, true))
@@ -241,6 +248,12 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     if (!_layoutService.SetSettingsWindowOpen(state, false))
                         return false;
                     message = "Editor settings closed.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellCloseHelp:
+                    if (!state.HelpWindowOpen)
+                        return false;
+                    state.HelpWindowOpen = false;
+                    message = "Workshop help closed.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellSettingsReset:
                     state.Settings = _settingsService.ResetToDefaults();
@@ -512,6 +525,60 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             _layoutService.PersistIfEnabled(state);
             state.StatusMessage = definition.Label + " set to " + selectedValue + ".";
             return true;
+        }
+    }
+
+    internal sealed class TutorialCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioAuthoringTutorialService _tutorialService;
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+
+        public TutorialCommandHandler(
+            ScenarioAuthoringTutorialService tutorialService,
+            IScenarioEditorService editorService,
+            ScenarioAuthoringLayoutService layoutService)
+        {
+            _tutorialService = tutorialService;
+            _editorService = editorService;
+            _layoutService = layoutService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (_tutorialService == null || state == null || string.IsNullOrEmpty(actionId))
+                return false;
+
+            if (!actionId.StartsWith("tutorial.", StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialOpenTarget, StringComparison.Ordinal))
+                return OpenTargetOrAdvance(state, out message);
+
+            return _tutorialService.HandleAction(state, actionId, out message);
+        }
+
+        private bool OpenTargetOrAdvance(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            TutorialStep step = _tutorialService.GetActiveStep(state);
+            if (step == null)
+                return false;
+
+            ScenarioEditorSession editorSession = _editorService != null ? _editorService.CurrentSession : null;
+            if (_tutorialService.IsStepSatisfied(state, editorSession, step))
+                return _tutorialService.HandleAction(state, ScenarioAuthoringActionIds.ActionTutorialNext, out message);
+
+            if (string.Equals(step.TargetActionId, "playtest", StringComparison.Ordinal))
+            {
+                message = "Use Playtest to continue.";
+                return true;
+            }
+
+            return _tutorialService.OpenStepTarget(state, step, _layoutService, out message);
         }
     }
 

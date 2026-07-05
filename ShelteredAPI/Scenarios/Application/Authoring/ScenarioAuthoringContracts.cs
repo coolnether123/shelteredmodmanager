@@ -45,7 +45,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellOpenTimeline = "shell.timeline.open";
         public const string ActionShellOpenCalendar = "shell.calendar.open";
         public const string ActionShellCloseSettings = "shell.settings.close";
+        public const string ActionShellOpenHelp = "shell.help.open";
+        public const string ActionShellCloseHelp = "shell.help.close";
         public const string ActionShellSettingsReset = "shell.settings.reset";
+        public const string ActionTutorialNext = "tutorial.next";
+        public const string ActionTutorialSkip = "tutorial.skip";
+        public const string ActionTutorialReset = "tutorial.reset";
+        public const string ActionTutorialOpenTarget = "tutorial.open_target";
+        public const string ActionHelpPagePrevious = "tutorial.help_page.previous";
+        public const string ActionHelpPageNext = "tutorial.help_page.next";
         public const string ActionShellToggleWindowMenu = "shell.menu.windows";
         public const string ActionWindowTogglePrefix = "shell.window.toggle.";
         public const string ActionWindowCollapsePrefix = "shell.window.collapse.";
@@ -459,6 +467,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string FilterText { get; set; }
         public string SearchText { get; set; }
         public bool SettingsWindowOpen { get; set; }
+        public bool HelpWindowOpen { get; set; }
         public ScenarioSpriteSwapPickerState SpriteSwapPicker { get; set; }
         public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
         public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
@@ -493,6 +502,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 FilterText = FilterText,
                 SearchText = SearchText,
                 SettingsWindowOpen = SettingsWindowOpen,
+                HelpWindowOpen = HelpWindowOpen,
                 SpriteSwapPicker = SpriteSwapPicker != null ? SpriteSwapPicker.Copy() : null,
                 Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot()
             };
@@ -869,8 +879,43 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringInspectorDocument SpritePickerDocument { get; set; }
         internal ScenarioSpriteSwapAuthoringService.CustomEditorModel CustomSpriteEditor { get; set; }
         public ScenarioAuthoringSettingsViewModel Settings { get; set; }
+        public ScenarioAuthoringHelpViewModel Help { get; set; }
+        public ScenarioAuthoringTutorialViewModel Tutorial { get; set; }
         public ScenarioAuthoringContextMenuModel ContextMenu { get; set; }
         public string[] StatusEntries { get; set; }
+    }
+
+    internal sealed class ScenarioAuthoringHelpViewModel
+    {
+        public string Title { get; set; }
+        public string Subtitle { get; set; }
+        public int PageIndex { get; set; }
+        public int PageCount { get; set; }
+        public string PageTitle { get; set; }
+        public string Body { get; set; }
+        public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
+        public ScenarioAuthoringInspectorAction PreviousAction { get; set; }
+        public ScenarioAuthoringInspectorAction NextAction { get; set; }
+        public ScenarioAuthoringInspectorAction ReplayAction { get; set; }
+    }
+
+    internal sealed class ScenarioAuthoringTutorialViewModel
+    {
+        public bool Visible { get; set; }
+        public int StepIndex { get; set; }
+        public int StepCount { get; set; }
+        public string StepId { get; set; }
+        public string Title { get; set; }
+        public string Body { get; set; }
+        public string PrimaryCallout { get; set; }
+        public bool WaitingForAction { get; set; }
+        public string TargetWindowId { get; set; }
+        public string TargetActionId { get; set; }
+        public ScenarioStageKind TargetStage { get; set; }
+        public ScenarioAuthoringInspectorAction PrimaryAction { get; set; }
+        public ScenarioAuthoringInspectorAction NextAction { get; set; }
+        public ScenarioAuthoringInspectorAction SkipAction { get; set; }
+        public ScenarioAuthoringInspectorAction HelpAction { get; set; }
     }
 
     internal sealed class ScenarioAuthoringInspectorDocument

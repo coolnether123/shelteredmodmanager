@@ -2,6 +2,7 @@ using ShelteredAPI.Core;
 
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -71,6 +72,10 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringSettingsService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
+                return new ScenarioAuthoringTutorialService(resolver.Get<ScenarioAuthoringSettingsService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
                 return new ScenarioPublishExportService(
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<IScenarioDefinitionSerializer>(),
@@ -121,7 +126,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioCharacterEditorAuthoringService>(),
                     resolver.Get<ScenarioStoryAuthoringService>(),
                     resolver.Get<ScenarioEventAuthoringService>(),
-                    resolver.Get<ScenarioPublishExportService>());
+                    resolver.Get<ScenarioPublishExportService>(),
+                    resolver.Get<ScenarioAuthoringTutorialService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -150,7 +156,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioAuthoringSettingsService>(),
                     resolver.Get<ScenarioAuthoringLayoutService>(),
                     resolver.Get<ScenarioStageCoordinator>(),
-                    resolver.Get<ScenarioSelectionScopeService>());
+                    resolver.Get<ScenarioSelectionScopeService>(),
+                    resolver.Get<ScenarioAuthoringTutorialService>());
             });
             services.AddSingleton<IScenarioAuthoringBackend>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioAuthoringBackendService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

@@ -54,6 +54,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "SAVE", true, true, "Validate and save the current scenario draft."),
                 CreateAction(ScenarioAuthoringActionIds.ActionShellOpenTimeline, "Timeline", "TIME", true, HasWindowVisible(state, ScenarioAuthoringWindowIds.Triggers), "Open the scenario timeline."),
+                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, "Help", "HELP", true, state != null && state.HelpWindowOpen, "Open the workshop help pages."),
                 CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "SET", true, false, "Open authoring settings.")
             };
         }

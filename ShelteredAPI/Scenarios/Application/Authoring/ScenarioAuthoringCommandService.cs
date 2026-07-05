@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 
 using ShelteredAPI.Scenarios.Application.Commands;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
@@ -25,7 +26,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioCharacterEditorAuthoringService characterEditorService,
             ScenarioStoryAuthoringService storyAuthoringService,
             ScenarioEventAuthoringService eventAuthoringService,
-            ScenarioPublishExportService publishExportService)
+            ScenarioPublishExportService publishExportService,
+            ScenarioAuthoringTutorialService tutorialService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -39,7 +41,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 characterEditorService,
                 storyAuthoringService,
                 eventAuthoringService,
-                publishExportService));
+                publishExportService,
+                tutorialService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -66,7 +69,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioCharacterEditorAuthoringService characterEditorService,
             ScenarioStoryAuthoringService storyAuthoringService,
             ScenarioEventAuthoringService eventAuthoringService,
-            ScenarioPublishExportService publishExportService)
+            ScenarioPublishExportService publishExportService,
+            ScenarioAuthoringTutorialService tutorialService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -74,6 +78,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),
                 new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new ShellCommandHandler(layoutService, settingsService),
+                new TutorialCommandHandler(tutorialService, editorService, layoutService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),

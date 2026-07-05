@@ -28,6 +28,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private const string TooltipKey = "tooltip.current";
         private const string ModalDimKey = "modal.sprite_picker.dim";
         private const string ModalPanelKey = "modal.sprite_picker.panel";
+        private const string HelpModalDimKey = "modal.help.dim";
+        private const string HelpModalPanelKey = "modal.help.panel";
+        private const string TutorialOverlayKey = "modal.tutorial.overlay";
         private const string ToastKey = "toast.status";
 
         private readonly ScenarioUiTweenSet _tweens = new ScenarioUiTweenSet();
@@ -214,6 +217,21 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             if (visible && _tweens.IsRunning(ModalPanelKey))
                 TransitionActive = true;
             return progress;
+        }
+
+        public float GetHelpModalDimAlpha(bool visible)
+        {
+            return GetBinaryProgress(HelpModalDimKey, visible, ModalDimDuration, ScenarioUiEasing.EaseOut) * 0.36f;
+        }
+
+        public float GetHelpModalPanelProgress(bool visible)
+        {
+            return GetBinaryProgress(HelpModalPanelKey, visible, ModalPanelDuration, ScenarioUiEasing.EaseOut);
+        }
+
+        public float GetTutorialOverlayProgress(bool visible)
+        {
+            return GetBinaryProgress(TutorialOverlayKey, visible, PopupDuration, ScenarioUiEasing.PopupOut);
         }
 
         public float GetToastProgress(string status)
