@@ -10,6 +10,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
     internal sealed class ScenarioAuthoringTutorialService
     {
         private readonly ScenarioAuthoringSettingsService _settingsService;
+        private string _activationDraftId;
+        private int _activationStep = -1;
+        private bool _lastPredicateSatisfied;
+        private bool _activationRendered;
 
         public ScenarioAuthoringTutorialService(ScenarioAuthoringSettingsService settingsService)
         {
@@ -53,14 +57,35 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
         public bool Synchronize(ScenarioAuthoringState state, ScenarioEditorSession editorSession, out string message)
         {
             message = null;
-            TutorialStep step = GetActiveStep(state);
-            if (step == null)
+            if (state != null && state.HelpWindowOpen)
                 return false;
 
-            if (!IsStepSatisfied(state, editorSession, step))
+            TutorialStep step = GetActiveStep(state);
+            if (step == null)
+            {
+                ClearActivation();
+                return false;
+            }
+
+            bool satisfied = IsStepSatisfied(state, editorSession, step);
+            EnsureActivation(state, step, satisfied);
+            bool changedAfterActivation = !_lastPredicateSatisfied && satisfied;
+            _lastPredicateSatisfied = satisfied;
+
+            if (!_activationRendered || !changedAfterActivation)
                 return false;
 
             return Advance(state, false, out message);
+        }
+
+        public void MarkStepRendered(ScenarioAuthoringState state, ScenarioEditorSession editorSession, TutorialStep step)
+        {
+            if (state == null || step == null || state.HelpWindowOpen)
+                return;
+
+            bool satisfied = IsStepSatisfied(state, editorSession, step);
+            EnsureActivation(state, step, satisfied);
+            _activationRendered = true;
         }
 
         public bool HandleAction(ScenarioAuthoringState state, string actionId, out string message)
@@ -159,12 +184,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
                 progress.Completed = true;
                 progress.Step = steps.Length - 1;
                 Save(state, progress);
+                ClearActivation();
                 message = manual ? "Tutorial complete." : "Tutorial completed.";
                 return true;
             }
 
             progress.Step = next;
             Save(state, progress);
+            ClearActivation();
             message = manual ? "Tutorial advanced." : "Tutorial step complete.";
             return true;
         }
@@ -178,6 +205,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             TutorialProgress progress = Load(state.Settings);
             progress.Skipped = true;
             Save(state, progress);
+            ClearActivation();
             message = "Tutorial skipped. Help remains available.";
             return true;
         }
@@ -194,6 +222,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             progress.Step = 0;
             state.HelpWindowOpen = false;
             Save(state, progress);
+            ClearActivation();
             message = "Tutorial replay started.";
             return true;
         }
@@ -224,6 +253,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             state.Settings.Set(TutorialContent.HelpPageKey, progress.HelpPage.ToString());
             if (_settingsService != null)
                 _settingsService.Save(state.Settings);
+        }
+
+        private void EnsureActivation(ScenarioAuthoringState state, TutorialStep step, bool satisfied)
+        {
+            string draftId = state != null ? state.ActiveDraftId : null;
+            int stepIndex = step != null ? step.Index : -1;
+            if (_activationStep == stepIndex && string.Equals(_activationDraftId, draftId, StringComparison.Ordinal))
+                return;
+
+            _activationDraftId = draftId;
+            _activationStep = stepIndex;
+            _lastPredicateSatisfied = satisfied;
+            _activationRendered = false;
+        }
+
+        private void ClearActivation()
+        {
+            _activationDraftId = null;
+            _activationStep = -1;
+            _lastPredicateSatisfied = false;
+            _activationRendered = false;
         }
 
         private static bool IsWindowVisible(ScenarioAuthoringState state, string windowId)

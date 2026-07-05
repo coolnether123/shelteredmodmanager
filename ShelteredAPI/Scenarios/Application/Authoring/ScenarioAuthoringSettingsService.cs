@@ -7,6 +7,7 @@ using System.Text;
 using System.Xml;
 
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Infrastructure.Persistence;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringSettingsService
@@ -99,7 +100,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             lock (_sync)
             {
-                _cached = BuildDefaults();
+                ScenarioAuthoringSettingsSnapshot previous = _cached != null ? _cached.Copy() : Load();
+                ScenarioAuthoringSettingsSnapshot reset = BuildDefaults();
+                string[] preservedKeys =
+                {
+                    TutorialContent.CompletedKey,
+                    TutorialContent.SkippedKey,
+                    TutorialContent.StepKey,
+                    TutorialContent.HelpPageKey
+                };
+
+                for (int i = 0; i < preservedKeys.Length; i++)
+                {
+                    string key = preservedKeys[i];
+                    string value = previous != null ? previous.Get(key, null) : null;
+                    if (value != null)
+                        reset.Set(key, value);
+                }
+
+                _cached = reset;
                 Save(_cached);
                 return _cached.Copy();
             }

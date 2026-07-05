@@ -305,7 +305,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Rect overlayRect = new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight);
             DrawHelpModalCore(overlayRect, shell.Help, inputCapture);
-            DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
+            if (shell.Help == null)
+                DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
 
             inputCapture.SetKeyboardCaptured(
                 shell.SpritePickerDocument != null

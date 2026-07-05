@@ -133,8 +133,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
-                Help = state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
-                Tutorial = BuildTutorialViewModel(state, editorSession),
+                Help = state != null && state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
+                Tutorial = state != null && state.HelpWindowOpen ? null : BuildTutorialViewModel(state, editorSession),
                 ContextMenu = contextMenu,
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
@@ -152,6 +152,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return null;
 
             bool satisfied = _tutorialService.IsStepSatisfied(state, editorSession, step);
+            _tutorialService.MarkStepRendered(state, editorSession, step);
             TutorialStep[] steps = TutorialContent.GetSteps();
             return new ScenarioAuthoringTutorialViewModel
             {
