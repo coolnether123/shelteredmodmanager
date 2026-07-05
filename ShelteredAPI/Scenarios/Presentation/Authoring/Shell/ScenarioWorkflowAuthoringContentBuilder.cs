@@ -65,11 +65,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Item.Property("Undo Depth", history.UndoDepth.ToString()),
                     Item.Property("Redo Depth", history.RedoDepth.ToString()),
                     Item.Property("Clipboard", ScenarioSpriteSwapClipboard.Describe()),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo (Ctrl+Z)", "Undo the last sprite swap change.", canUndo, false, "UN", "Rewind the last authored sprite change.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryRedo, "Redo (Ctrl+Y)", "Redo the last undone change.", canRedo, false, "RE", "Re-apply the last undone change.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Swap (Ctrl+C)", "Copy the selected target's active sprite swap to the clipboard.", true, false, "CP", "Copy the selected sprite rule.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapPaste, "Paste Swap (Ctrl+V)", "Paste the clipboard sprite swap onto the selected target.", clipboardHasRule, clipboardHasRule, "PA", clipboardHasRule ? "Apply the copied rule to the current target." : "Clipboard is empty.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapRevert, "Revert Sprite (Ctrl+R)", "Remove the selected target's sprite swap and restore its original sprite.", true, false, "RV", "Clear the authored swap."))
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Visual Edit (Ctrl+Z)", "Undo the last sprite swap visual edit.", canUndo, false, "UN", "Rewind the last authored visual change.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryRedo, "Redo Visual Edit (Ctrl+Y)", "Redo the last undone visual edit.", canRedo, false, "RE", "Re-apply the last undone visual change.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Visual Swap (Ctrl+C)", "Copy the selected target's active sprite swap to the clipboard.", true, false, "CP", "Copy the selected visual rule.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapPaste, "Paste Visual Swap (Ctrl+V)", "Paste the clipboard sprite swap onto the selected target.", clipboardHasRule, clipboardHasRule, "PA", clipboardHasRule ? "Apply the copied visual rule to the current target." : "Clipboard is empty.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapRevert, "Revert Visual Swap (Ctrl+R)", "Remove the selected target's sprite swap and restore its original sprite.", true, false, "RV", "Clear the authored visual swap."))
                 }
             };
         }
@@ -174,6 +174,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildStructureRoom, "Place Room Tile", "Start vanilla-style room placement for the scenario draft.", true, false, "RM", "Extend the shelter layout.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildStructureLadder, "Place Ladder", "Start vanilla-style ladder placement for the scenario draft.", true, false, "LD", "Connect shelter levels.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildStructureLight, "Place Room Light", "Start vanilla-style room-light placement for the scenario draft.", true, false, "LG", "Light a room tile.")));
+                    AddBuildDeletionActions(items, selectedTarget, true, false, false);
                     AddCancelPlacement(items, buildStatus, "Stop the active structure preview without committing it.");
                     break;
 
@@ -184,7 +185,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     AddBuildStatus(items, buildStatus);
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture All Spawned Objects", "Replace the scenario placement list with the current live spawned shelter objects.", true, true, "OB", "Capture every current shelter placement.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Selected Object", "Store the selected live shelter object as a scenario placement.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Selected Capture", "Remove the selected object's captured placement from the scenario.", hasCapturedSelectedObject, false, "RM", "Delete the stored selected capture.")));
+                    AddDeleteObjectAction(items, selectedTarget);
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
                     AddCancelPlacement(items, buildStatus, "Stop the active object preview without committing it.");
                     if (!string.IsNullOrEmpty(selectedObjectStatus))
                         items.Add(Item.Text(selectedObjectStatus));
@@ -195,6 +197,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.Property("Selected Room", Item.FormatTarget(selectedTarget)));
                     items.Add(Item.Property("Recorded Room Edits", definition != null && definition.BunkerEdits != null ? definition.BunkerEdits.RoomChanges.Count.ToString() : "0"));
                     AddBuildStatus(items, buildStatus);
+                    AddBuildDeletionActions(items, selectedTarget, false, true, true);
                     items.Add(Item.Text("Pick a room tile, then choose wall or wiring variants from the palette."));
                     break;
 
@@ -223,7 +226,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.Text(Item.SummarizeObjectPlacements(definition)));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture All Spawned Objects", "Replace the scenario placement list with the current live spawned shelter objects.", true, true, "OB", "Capture every current shelter placement.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Selected Object", "Store the selected live shelter object as a scenario placement.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Selected Capture", "Remove the selected object's captured placement from the scenario.", hasCapturedSelectedObject, false, "RM", "Delete the stored selected capture.")));
+                    AddDeleteObjectAction(items, selectedTarget);
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
                     items.Add(Item.Property("Selected Object", Item.FormatTarget(selectedTarget)));
                     if (!string.IsNullOrEmpty(selectedObjectStatus))
                         items.Add(Item.Text(selectedObjectStatus));
@@ -246,6 +250,62 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(Item.Text(buildStatus.Guidance));
             if (buildStatus != null && !string.IsNullOrEmpty(buildStatus.Detail))
                 items.Add(Item.Text(buildStatus.Detail));
+            if (buildStatus != null && buildStatus.PlacementActive)
+            {
+                if (!string.IsNullOrEmpty(buildStatus.TargetCell))
+                    items.Add(Item.Property("Target Cell", buildStatus.TargetCell));
+                if (buildStatus.CanPlace.HasValue)
+                    items.Add(Item.Property("Placement", buildStatus.CanPlace.Value ? "Valid" : "Invalid"));
+                if (!string.IsNullOrEmpty(buildStatus.ValidationReason))
+                    items.Add(Item.Text(buildStatus.ValidationReason));
+            }
+        }
+
+        private void AddDeleteObjectAction(List<ScenarioAuthoringInspectorItem> items, ScenarioAuthoringTarget selectedTarget)
+        {
+            string reason;
+            bool canDelete = _sectionHub.BuildPlacement.CanDeleteObject(selectedTarget, out reason);
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionBuildDeleteObject,
+                "Delete Live Object + Draft",
+                "Remove the selected live object through ObjectManager and remove its draft ObjectPlacement.",
+                canDelete,
+                false,
+                "DL",
+                canDelete ? "Delete the object and its scenario placement." : reason)));
+        }
+
+        private void AddBuildDeletionActions(
+            List<ScenarioAuthoringInspectorItem> items,
+            ScenarioAuthoringTarget selectedTarget,
+            bool structureDeletes,
+            bool resetWall,
+            bool resetWire)
+        {
+            string reason;
+            if (structureDeletes)
+            {
+                bool canDeleteRoom = _sectionHub.BuildPlacement.CanDeleteRoom(selectedTarget, out reason);
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildDeleteRoom, "Delete Room + Draft", "Remove the selected room tile and dependent authored room placements.", canDeleteRoom, false, "DR", canDeleteRoom ? "Delete the room tile and matching draft records." : reason)));
+
+                bool canDeleteLadder = _sectionHub.BuildPlacement.CanDeleteLadder(selectedTarget, out reason);
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildDeleteLadder, "Delete Ladder + Draft", "Remove the ladder from the selected top cell and remove its draft placement.", canDeleteLadder, false, "DL", canDeleteLadder ? "Delete the ladder and matching draft record." : reason)));
+
+                bool canDeleteLight = _sectionHub.BuildPlacement.CanDeleteLight(selectedTarget, out reason);
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildDeleteLight, "Delete Light + Draft", "Remove the room light from the selected cell and remove its draft placement.", canDeleteLight, false, "DG", canDeleteLight ? "Delete the light and matching draft record." : reason)));
+            }
+
+            if (resetWall)
+            {
+                bool canResetWall = _sectionHub.BuildPlacement.CanResetWall(selectedTarget, out reason);
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildResetWall, "Reset Wall (persist clear)", "Reset the selected room wall to the default wall and store an authored clear.", canResetWall, false, "RW", canResetWall ? "Persist a wall clear for this room." : reason)));
+            }
+
+            if (resetWire)
+            {
+                bool canResetWire = _sectionHub.BuildPlacement.CanResetWire(selectedTarget, out reason);
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildResetWire, "Reset Wire (persist clear)", "Clear the selected room wiring and store an authored no-wire state.", canResetWire, false, "RX", canResetWire ? "Persist a no-wire clear for this room." : reason)));
+            }
         }
 
         private static void AddCancelPlacement(List<ScenarioAuthoringInspectorItem> items, ScenarioBuildPlacementAuthoringService.StatusModel buildStatus, string hint)

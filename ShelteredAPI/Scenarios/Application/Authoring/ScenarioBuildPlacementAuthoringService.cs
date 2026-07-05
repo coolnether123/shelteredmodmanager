@@ -40,6 +40,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public string Title;
             public string Guidance;
             public string Detail;
+            public string TargetCell;
+            public bool? CanPlace;
+            public string ValidationReason;
+        }
+
+        internal sealed class PlacementValidationResult
+        {
+            public int? GridX;
+            public int? GridY;
+            public bool CanPlace;
+            public string Reason;
         }
 
         private enum PlacementSessionKind
@@ -60,6 +71,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public int Level;
             public bool PlaceableOnSurface;
             public float ColliderWidth;
+            public PlacementValidationResult Validation;
         }
 
         private static readonly string[] ObjectSectionOrder = new[]
@@ -76,6 +88,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly PlacementPaletteService _placementPaletteService;
         private readonly RoomVisualPaletteService _roomVisualPaletteService;
         private readonly PlacementGhostSessionService _placementGhostSessionService;
+        private readonly ScenarioBuildDeletionAuthoringService _deletionService;
         private ActivePlacementSession _activePlacement;
 
         public static ScenarioBuildPlacementAuthoringService Instance
@@ -94,7 +107,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             WallWiringEditService wallWiringEditService,
             PlacementPaletteService placementPaletteService,
             RoomVisualPaletteService roomVisualPaletteService,
-            PlacementGhostSessionService placementGhostSessionService)
+            PlacementGhostSessionService placementGhostSessionService,
+            ScenarioBuildDeletionAuthoringService deletionService)
         {
             _structurePlacementService = structurePlacementService;
             _objectPlacementService = objectPlacementService;
@@ -102,6 +116,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _placementPaletteService = placementPaletteService;
             _roomVisualPaletteService = roomVisualPaletteService;
             _placementGhostSessionService = placementGhostSessionService;
+            _deletionService = deletionService;
         }
 
         public void Reset()
@@ -120,6 +135,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 model.Title = "Placing " + (_activePlacement.Label ?? "Item");
                 model.Guidance = "Left-click to place instantly into the scenario draft. Right-click or Escape cancels.";
                 model.Detail = "This uses Sheltered ghost previews and placement rules before committing the final edit.";
+                PlacementValidationResult validation = _activePlacement.Validation ?? EvaluateActivePlacement();
+                if (validation != null)
+                {
+                    model.TargetCell = validation.GridX.HasValue && validation.GridY.HasValue
+                        ? validation.GridX.Value + "," + validation.GridY.Value
+                        : "<none>";
+                    model.CanPlace = validation.CanPlace;
+                    model.ValidationReason = validation.Reason;
+                }
                 return model;
             }
 
@@ -192,6 +216,42 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 handled = true;
                 return StartRoomLightPlacement(out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildDeleteObject, StringComparison.Ordinal))
+            {
+                handled = true;
+                return _deletionService.DeleteObject(state != null ? state.SelectedTarget : null, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildDeleteRoom, StringComparison.Ordinal))
+            {
+                handled = true;
+                return _deletionService.DeleteRoom(state != null ? state.SelectedTarget : null, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildDeleteLadder, StringComparison.Ordinal))
+            {
+                handled = true;
+                return _deletionService.DeleteLadder(state != null ? state.SelectedTarget : null, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildDeleteLight, StringComparison.Ordinal))
+            {
+                handled = true;
+                return _deletionService.DeleteLight(state != null ? state.SelectedTarget : null, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildResetWall, StringComparison.Ordinal))
+            {
+                handled = true;
+                return _deletionService.ResetWall(state != null ? state.SelectedTarget : null, out message);
+            }
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildResetWire, StringComparison.Ordinal))
+            {
+                handled = true;
+                return _deletionService.ResetWire(state != null ? state.SelectedTarget : null, out message);
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix, StringComparison.Ordinal))
@@ -297,6 +357,47 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool CancelForPlaytest(out string message)
         {
             return CancelActivePlacement("Placement cancelled before playtest started.", out message);
+        }
+
+        public bool CancelForToolSwitch(out string message)
+        {
+            return CancelActivePlacement("Placement cancelled because the active tool changed.", out message);
+        }
+
+        public bool CanDeleteObject(ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = "Build deletion service is not ready.";
+            return _deletionService != null && _deletionService.CanDeleteObject(target, out reason);
+        }
+
+        public bool CanDeleteRoom(ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = "Build deletion service is not ready.";
+            return _deletionService != null && _deletionService.CanDeleteRoom(target, out reason);
+        }
+
+        public bool CanDeleteLadder(ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = "Build deletion service is not ready.";
+            return _deletionService != null && _deletionService.CanDeleteLadder(target, out reason);
+        }
+
+        public bool CanDeleteLight(ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = "Build deletion service is not ready.";
+            return _deletionService != null && _deletionService.CanDeleteLight(target, out reason);
+        }
+
+        public bool CanResetWall(ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = "Build deletion service is not ready.";
+            return _deletionService != null && _deletionService.CanResetWall(target, out reason);
+        }
+
+        public bool CanResetWire(ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = "Build deletion service is not ready.";
+            return _deletionService != null && _deletionService.CanResetWire(target, out reason);
         }
 
         private static bool TryParseObjectAction(string actionId, out ObjectManager.ObjectType objectType, out int level)
@@ -905,6 +1006,176 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             position.z = 0f;
             _activePlacement.Ghost.transform.position = position;
+            _activePlacement.Validation = EvaluateActivePlacement();
+        }
+
+        private PlacementValidationResult EvaluateActivePlacement()
+        {
+            if (!HasActivePlacement || _activePlacement.Ghost == null)
+                return null;
+
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            int gridX = -1;
+            int gridY = -1;
+            bool hasCell = grid != null && grid.WorldCoordsToCellCoords(_activePlacement.Ghost.transform.position, out gridX, out gridY);
+            ShelterRoomGrid.GridCell cell = hasCell ? grid.GetCell(gridX, gridY) : null;
+            bool ghostAllowsPlacement = _activePlacement.Ghost.IsPlacable();
+            PlacementValidationResult result = new PlacementValidationResult
+            {
+                GridX = hasCell ? (int?)gridX : null,
+                GridY = hasCell ? (int?)gridY : null,
+                CanPlace = ghostAllowsPlacement,
+                Reason = ghostAllowsPlacement ? "Valid target." : "That placement is blocked by the current shelter layout or collisions."
+            };
+
+            switch (_activePlacement.Kind)
+            {
+                case PlacementSessionKind.Room:
+                    PopulateRoomValidation(result, cell, ghostAllowsPlacement);
+                    break;
+                case PlacementSessionKind.Ladder:
+                    PopulateLadderValidation(result, grid, gridX, gridY, hasCell, cell, ghostAllowsPlacement);
+                    break;
+                case PlacementSessionKind.RoomLight:
+                    PopulateLightValidation(result, cell, ghostAllowsPlacement);
+                    break;
+                case PlacementSessionKind.Object:
+                    PopulateObjectValidation(result, cell, ghostAllowsPlacement);
+                    break;
+            }
+
+            return result;
+        }
+
+        private static void PopulateRoomValidation(PlacementValidationResult result, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
+        {
+            if (cell == null)
+            {
+                result.CanPlace = false;
+                result.Reason = "Target is outside the shelter grid.";
+                return;
+            }
+
+            if (cell.type != ShelterRoomGrid.CellType.Dirt)
+            {
+                result.CanPlace = false;
+                result.Reason = "Room tiles can only be placed into Dirt cells.";
+                return;
+            }
+
+            if (!HasNeighborRoom(cell))
+            {
+                result.CanPlace = false;
+                result.Reason = "Room tiles must touch an existing Room or RoomTop cell.";
+                return;
+            }
+
+            result.CanPlace = ghostAllowsPlacement;
+            result.Reason = ghostAllowsPlacement ? "Room tile can be placed here." : "Room tile is blocked by vanilla collision rules.";
+        }
+
+        private static void PopulateLadderValidation(PlacementValidationResult result, ShelterRoomGrid grid, int gridX, int gridY, bool hasCell, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
+        {
+            if (!hasCell || cell == null)
+            {
+                result.CanPlace = false;
+                result.Reason = "Target is outside the shelter grid.";
+                return;
+            }
+
+            if (!IsRoomOrTop(cell))
+            {
+                result.CanPlace = false;
+                result.Reason = "Ladders must start in a Room or RoomTop cell.";
+                return;
+            }
+
+            ShelterRoomGrid.GridCell below = grid != null ? grid.GetCell(gridX, gridY + 1) : null;
+            if (below == null || (below.type != ShelterRoomGrid.CellType.Room && below.type != ShelterRoomGrid.CellType.InProgress))
+            {
+                result.CanPlace = false;
+                result.Reason = "Ladders need a valid room cell directly below.";
+                return;
+            }
+
+            result.CanPlace = ghostAllowsPlacement;
+            result.Reason = ghostAllowsPlacement ? "Ladder can be placed here." : "Ladder is blocked by an object, wall, door, or existing ladder.";
+        }
+
+        private static void PopulateLightValidation(PlacementValidationResult result, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
+        {
+            if (cell == null)
+            {
+                result.CanPlace = false;
+                result.Reason = "Target is outside the shelter grid.";
+                return;
+            }
+
+            if (!IsRoomOrTop(cell))
+            {
+                result.CanPlace = false;
+                result.Reason = "Room lights can only be placed in Room or RoomTop cells.";
+                return;
+            }
+
+            if ((UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
+            {
+                result.CanPlace = false;
+                result.Reason = "This room cell already has a light.";
+                return;
+            }
+
+            result.CanPlace = ghostAllowsPlacement;
+            result.Reason = ghostAllowsPlacement ? "Room light can be placed here." : "Room light is blocked by another light preview.";
+        }
+
+        private void PopulateObjectValidation(PlacementValidationResult result, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
+        {
+            if (cell == null)
+            {
+                result.CanPlace = false;
+                result.Reason = "Target is outside the shelter grid.";
+                return;
+            }
+
+            if (_activePlacement != null && _activePlacement.PlaceableOnSurface && cell.type == ShelterRoomGrid.CellType.Surface)
+            {
+                result.CanPlace = ghostAllowsPlacement;
+                result.Reason = ghostAllowsPlacement ? "Surface object can be placed here." : "Surface object placement is blocked by a collision.";
+                return;
+            }
+
+            if (!IsRoomOrTop(cell))
+            {
+                result.CanPlace = false;
+                result.Reason = _activePlacement != null && _activePlacement.PlaceableOnSurface
+                    ? "Objects must target a room cell or valid surface."
+                    : "This object must be placed in a Room or RoomTop cell.";
+                return;
+            }
+
+            result.CanPlace = ghostAllowsPlacement;
+            result.Reason = ghostAllowsPlacement ? "Object can be placed here." : "Object placement is blocked by another object, door, wall, ladder, or ghost.";
+        }
+
+        private static bool HasNeighborRoom(ShelterRoomGrid.GridCell cell)
+        {
+            if (cell == null || cell.neighbours == null)
+                return false;
+
+            for (int i = 0; i < cell.neighbours.Length; i++)
+            {
+                if (i != 1 && IsRoomOrTop(cell.neighbours[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsRoomOrTop(ShelterRoomGrid.GridCell cell)
+        {
+            return cell != null
+                && (cell.type == ShelterRoomGrid.CellType.Room || cell.type == ShelterRoomGrid.CellType.RoomTop);
         }
 
         private Vector3 ResolveObjectPlacementPosition(Vector3 worldPoint)

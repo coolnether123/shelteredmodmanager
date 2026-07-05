@@ -1175,6 +1175,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
 
             message = BuildToolStatus(state, tool, transition.StageChanged);
+            string placementMessage;
+            ScenarioBuildPlacementAuthoringService buildPlacement = ScenarioCompositionRoot.Resolve<ScenarioBuildPlacementAuthoringService>();
+            if (buildPlacement != null && buildPlacement.HasActivePlacement && buildPlacement.CancelForToolSwitch(out placementMessage))
+            {
+                message = !string.IsNullOrEmpty(placementMessage)
+                    ? message + " " + placementMessage
+                    : message;
+            }
             return true;
         }
 

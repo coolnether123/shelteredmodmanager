@@ -674,7 +674,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                             WallSpriteIndex = ReadNullableIntAttribute(roomElement, "wallSpriteIndex"),
                             WireSpriteIndex = ReadNullableIntAttribute(roomElement, "wireSpriteIndex"),
                             WallRuntimeSpriteKey = AttributeOrChild(roomElement, "wallRuntimeSpriteKey", "WallRuntimeSpriteKey"),
-                            WireRuntimeSpriteKey = AttributeOrChild(roomElement, "wireRuntimeSpriteKey", "WireRuntimeSpriteKey")
+                            WireRuntimeSpriteKey = AttributeOrChild(roomElement, "wireRuntimeSpriteKey", "WireRuntimeSpriteKey"),
+                            WallCleared = ReadBoolAttribute(roomElement, "wallCleared", false),
+                            WireCleared = ReadBoolAttribute(roomElement, "wireCleared", false)
                         });
                     }
                 }
@@ -1414,6 +1416,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     writer.WriteAttributeString("wireSpriteIndex", room.WireSpriteIndex.Value.ToString(CultureInfo.InvariantCulture));
                 WriteAttribute(writer, "wallRuntimeSpriteKey", room.WallRuntimeSpriteKey);
                 WriteAttribute(writer, "wireRuntimeSpriteKey", room.WireRuntimeSpriteKey);
+                if (room.WallCleared)
+                    writer.WriteAttributeString("wallCleared", "true");
+                if (room.WireCleared)
+                    writer.WriteAttributeString("wireCleared", "true");
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();

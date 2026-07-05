@@ -301,10 +301,27 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 if (TrimToNull(placement.PrefabReference) == null && TrimToNull(placement.DefinitionReference) == null)
                     result.AddError("Object placement #" + i + " must define prefab or definition.");
 
+                AddUnsupportedObjectPlacementWarnings(placement, i, result);
+
                 ScenarioPlacementDefinitionKind kind;
                 if (ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind))
                     ValidateSpecialPlacement(placement, i, kind, result);
             }
+        }
+
+        private static void AddUnsupportedObjectPlacementWarnings(ObjectPlacement placement, int index, ScenarioValidationResult result)
+        {
+            if (placement == null || result == null)
+                return;
+
+            if (TrimToNull(placement.PrefabReference) != null)
+                result.AddWarning("Object placement #" + index + " PrefabReference is not applied at runtime yet.");
+            if (TrimToNull(placement.RequiredFoundationId) != null)
+                result.AddWarning("Object placement #" + index + " RequiredFoundationId is not applied at runtime yet.");
+            if (TrimToNull(placement.RequiredBunkerExpansionId) != null)
+                result.AddWarning("Object placement #" + index + " RequiredBunkerExpansionId is not applied at runtime yet.");
+            if (TrimToNull(placement.UnlockGateId) != null && TrimToNull(placement.ScheduledActivationId) == null)
+                result.AddWarning("Object placement #" + index + " UnlockGateId is not applied at runtime yet.");
         }
 
         private static void ValidateQuests(ScenarioDefinition definition, ScenarioValidationResult result)
@@ -575,7 +592,24 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
                 if (placement.GridY.HasValue && placement.GridY.Value < 0)
                     result.AddError("Scene sprite placement #" + i + " has negative gridY.");
+
+                AddUnsupportedSceneSpritePlacementWarnings(placement, i, result);
             }
+        }
+
+        private static void AddUnsupportedSceneSpritePlacementWarnings(SceneSpritePlacement placement, int index, ScenarioValidationResult result)
+        {
+            if (placement == null || result == null)
+                return;
+
+            if (TrimToNull(placement.RequiredFoundationId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " RequiredFoundationId is not applied at runtime yet.");
+            if (TrimToNull(placement.RequiredBunkerExpansionId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " RequiredBunkerExpansionId is not applied at runtime yet.");
+            if (TrimToNull(placement.UnlockGateId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " UnlockGateId is not applied at runtime yet.");
+            if (TrimToNull(placement.ScheduledActivationId) != null)
+                result.AddWarning("Scene sprite placement #" + index + " ScheduledActivationId is not applied at runtime yet.");
         }
 
         private static bool HasSpriteReference(AssetReferencesDefinition assets, string spriteId)

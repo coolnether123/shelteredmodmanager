@@ -27,11 +27,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Bunker))
-                session.DirtyFlags.Add(ScenarioDirtySection.Bunker);
-
-            session.CurrentEditCategory = ScenarioEditCategory.Bunker;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
         }
 
         public static void UpsertRoomEdit(ScenarioEditorSession session, int gridX, int gridY, Action<RoomEdit> applyUpdate)
@@ -140,6 +136,41 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkBunkerDirty(session);
         }
 
+        public static bool RemovePlacement(ScenarioEditorSession session, Predicate<ObjectPlacement> predicate)
+        {
+            if (predicate == null)
+                return false;
+
+            BunkerEditsDefinition bunkerEdits = EnsureBunkerEdits(session);
+            for (int i = bunkerEdits.ObjectPlacements.Count - 1; i >= 0; i--)
+            {
+                ObjectPlacement placement = bunkerEdits.ObjectPlacements[i];
+                if (placement != null && predicate(placement))
+                {
+                    bunkerEdits.ObjectPlacements.RemoveAt(i);
+                    MarkBunkerDirty(session);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public static bool RemoveRoomEdit(ScenarioEditorSession session, int gridX, int gridY, Func<RoomEdit, bool> shouldRemove)
+        {
+            BunkerEditsDefinition bunkerEdits = EnsureBunkerEdits(session);
+            RoomEdit room = FindRoomEdit(bunkerEdits.RoomChanges, gridX, gridY);
+            if (room == null)
+                return false;
+
+            if (shouldRemove != null && !shouldRemove(room))
+                return false;
+
+            bunkerEdits.RoomChanges.Remove(room);
+            MarkBunkerDirty(session);
+            return true;
+        }
+
         public static int FindPlacementIndex(List<ObjectPlacement> placements, Obj_Base obj)
         {
             if (placements == null || obj == null)
@@ -223,6 +254,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return -1;
+        }
+
+        public static bool IsPlacementAtGrid(ObjectPlacement placement, string definitionReference, int gridX, int gridY)
+        {
+            if (placement == null || !string.Equals(placement.DefinitionReference, definitionReference, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int placementGridX;
+            int placementGridY;
+            if (ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridX, out placementGridX)
+                && ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridY, out placementGridY))
+            {
+                return placementGridX == gridX && placementGridY == gridY;
+            }
+
+            return false;
         }
 
         public static bool ShouldPreserveDuringLiveCapture(ObjectPlacement placement)

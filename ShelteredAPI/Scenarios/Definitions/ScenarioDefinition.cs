@@ -573,6 +573,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public int? WireSpriteIndex { get; set; }
         public string WallRuntimeSpriteKey { get; set; }
         public string WireRuntimeSpriteKey { get; set; }
+        public bool WallCleared { get; set; }
+        public bool WireCleared { get; set; }
     }
 
     /// <summary>

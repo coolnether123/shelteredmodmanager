@@ -83,6 +83,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new StructurePlacementService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ObjectPlacementService(resolver.Get<IScenarioDraftMutationService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new WallWiringEditService(resolver.Get<IScenarioDraftMutationService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioBuildDeletionAuthoringService(resolver.Get<ObjectPlacementService>(), resolver.Get<WallWiringEditService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementPaletteService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new RoomVisualPaletteService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementGhostSessionService(); });

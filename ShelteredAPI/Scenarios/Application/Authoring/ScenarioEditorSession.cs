@@ -53,5 +53,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool RequestedRestart { get; set; }
         public ScenarioEditCategory CurrentEditCategory { get; set; }
         public bool HasAppliedToCurrentWorld { get; set; }
+        public int DraftRevision { get; private set; }
+        public int AppliedDraftRevision { get; private set; }
+
+        public bool HasUnappliedDraftChanges
+        {
+            get { return HasAppliedToCurrentWorld && AppliedDraftRevision != DraftRevision; }
+        }
+
+        public void MarkDraftChanged(ScenarioDirtySection section, ScenarioEditCategory category)
+        {
+            if (DirtyFlags == null)
+                DirtyFlags = new List<ScenarioDirtySection>();
+            if (section != ScenarioDirtySection.None && !DirtyFlags.Contains(section))
+                DirtyFlags.Add(section);
+            CurrentEditCategory = category;
+            DraftRevision++;
+        }
+
+        public void MarkDraftChanged(ScenarioDirtySection section)
+        {
+            MarkDraftChanged(section, CurrentEditCategory);
+        }
+
+        public void MarkAppliedToCurrentWorld()
+        {
+            HasAppliedToCurrentWorld = true;
+            AppliedDraftRevision = DraftRevision;
+        }
     }
 }
