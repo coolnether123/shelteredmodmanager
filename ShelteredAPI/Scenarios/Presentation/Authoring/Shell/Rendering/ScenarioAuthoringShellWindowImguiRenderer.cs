@@ -75,7 +75,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool hasSecondaryActions = secondaryActions.Length > 0;
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
-                (window.Title ?? string.Empty).ToUpperInvariant(),
+                window.Title ?? string.Empty,
                 null,
                 false,
                 hasSecondaryActions ? 58f : 30f,
@@ -145,7 +145,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
-                !string.IsNullOrEmpty(window.Title) ? window.Title.ToUpperInvariant() : "SELECTION",
+                !string.IsNullOrEmpty(window.Title) ? window.Title : "Selection",
                 null,
                 false,
                 34f,
@@ -159,6 +159,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             Rect bodyRect = regions.Body;
+            if (IsEmptyInspector(window))
+            {
+                DrawEmptyInspectorState(bodyRect);
+                DrawFloatingResizeGrip(rect, window);
+                return bodyRect;
+            }
+
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
@@ -182,12 +189,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return bodyRect;
         }
 
+        private static bool IsEmptyInspector(ScenarioAuthoringShellWindowViewModel window)
+        {
+            return window != null
+                && window.Sections != null
+                && window.Sections.Length == 1
+                && window.Sections[0] != null
+                && string.Equals(window.Sections[0].Id, "empty", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void DrawEmptyInspectorState(Rect bodyRect)
+        {
+            Rect cardRect = new Rect(bodyRect.x + 12f, bodyRect.y + 12f, bodyRect.width - 24f, 112f);
+            GUI.Box(cardRect, GUIContent.none, _uiContext.Styles.Section);
+            GUI.Label(new Rect(cardRect.x + 14f, cardRect.y + 12f, cardRect.width - 28f, 24f), "Nothing selected", _sectionTitleStyle);
+            GUI.Label(
+                new Rect(cardRect.x + 14f, cardRect.y + 42f, cardRect.width - 28f, 48f),
+                "Pick an object, room, or placed asset in the shelter to inspect its scenario rules.",
+                _mutedTextStyle);
+        }
+
         private Rect DrawBottomTrayWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
-                (window.Title ?? "Asset Placement").ToUpperInvariant(),
+                window.Title ?? "Asset Placement",
                 null,
                 false,
                 34f,

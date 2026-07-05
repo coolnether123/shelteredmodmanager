@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
@@ -150,6 +151,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             DrawButtonAnimationOverlay(visualRect, action.Id, action.Enabled, hovered, pressed);
+            DrawActionPulseOverlay(visualRect, action);
         }
 
         private void DrawButtonAnimationOverlay(Rect rect, string actionId, bool enabled, bool hovered, bool pressed)
@@ -175,6 +177,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.DrawTexture(rect, Texture2D.whiteTexture);
             }
 
+            GUI.color = oldColor;
+        }
+
+        private void DrawActionPulseOverlay(Rect rect, ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id) || _uiContext == null || _uiContext.Styles == null)
+                return;
+
+            bool pulseAction = string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSave, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionPlaytest, StringComparison.Ordinal);
+            if (!pulseAction)
+                return;
+
+            string signature = action.Id + ":" + (action.Label ?? string.Empty) + ":" + action.Emphasized;
+            float pulse = _animations.GetPulseProgress("action.pulse." + action.Id, signature, 0.42f, ScenarioUiEasing.EaseOut);
+            if (pulse <= 0.001f)
+                return;
+
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.94f, 0.80f, 0.52f, 0.26f * pulse);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
     }

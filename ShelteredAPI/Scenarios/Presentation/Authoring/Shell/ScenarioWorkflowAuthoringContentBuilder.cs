@@ -157,37 +157,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.Property("Sprite Swaps", Item.CountSpriteSwaps(definition).ToString()));
                     items.Add(Item.Property("Placed Sprites", Item.CountSceneSpritePlacements(definition).ToString()));
                     items.Add(Item.Property("Selected Target", Item.FormatTarget(selectedTarget)));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen, "Edit Selected Asset", "Open the selected target in the dedicated asset editor.", selectedTarget != null && selectedTarget.SupportsReplace, false, "ED", "Change the selected asset in its own editor window.")));
                     items.Add(Item.Property("Pack Layout", "Scenarios/<ScenarioName>/scenario.xml"));
                     items.Add(Item.Property("Custom Sprite XML", "AssetReferences > CustomSprites > Sprite"));
                     items.Add(Item.Property("Swap XML", "AssetReferences > SpriteSwaps > Swap"));
                     items.Add(Item.Property("Placement XML", "AssetReferences > SceneSpritePlacements > Placement"));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen, "Edit Selected Asset", "Open the selected target in the dedicated asset editor.", selectedTarget != null && selectedTarget.SupportsReplace, false, "ED", "Change the selected asset in its own editor window.")));
                     items.Add(Item.Text("Asset authoring uses verified in-game runtime art only."));
                     items.Add(Item.Text("Use Inspector for selected assets, or place snapped scene dressing that stores Placement entries in scenario XML."));
                     break;
 
                 case ScenarioAuthoringTool.Shelter:
                     title = "Structure";
-                    items.Add(Item.Property("Recorded Placements", Item.CountObjectPlacements(definition).ToString()));
+                    items.Add(Item.Property("Captured Objects", Item.CountObjectPlacements(definition).ToString()));
                     items.Add(Item.Property("Selected Room", Item.FormatTarget(selectedTarget)));
-                    AddBuildStatus(items, buildStatus);
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildStructureRoom, "Place Room Tile", "Start vanilla-style room placement for the scenario draft.", true, false, "RM", "Extend the shelter layout.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildStructureLadder, "Place Ladder", "Start vanilla-style ladder placement for the scenario draft.", true, false, "LD", "Connect shelter levels.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionBuildStructureLight, "Place Room Light", "Start vanilla-style room-light placement for the scenario draft.", true, false, "LG", "Light a room tile.")));
                     AddBuildDeletionActions(items, selectedTarget, true, false, false);
                     AddCancelPlacement(items, buildStatus, "Stop the active structure preview without committing it.");
+                    AddBuildStatus(items, buildStatus);
                     break;
 
                 case ScenarioAuthoringTool.Objects:
                     title = "Objects";
-                    items.Add(Item.Property("Recorded Placements", Item.CountObjectPlacements(definition).ToString()));
-                    items.Add(Item.Property("Selected Object", Item.FormatTarget(selectedTarget)));
-                    AddBuildStatus(items, buildStatus);
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture All Spawned Objects", "Replace the scenario placement list with the current live spawned shelter objects.", true, true, "OB", "Capture every current shelter placement.")));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Selected Object", "Store the selected live shelter object as a scenario placement.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
+                    items.Add(Item.Property("Captured Objects", Item.CountObjectPlacements(definition).ToString()));
+                    items.Add(Item.Property("Current Pick", Item.FormatTarget(selectedTarget)));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture Objects", "Update the draft with the shelter objects currently in the world.", true, true, "OB", "Capture current shelter objects.")));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Pick", "Add the selected live shelter object to the draft.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
                     AddDeleteObjectAction(items, selectedTarget);
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
                     AddCancelPlacement(items, buildStatus, "Stop the active object preview without committing it.");
+                    AddBuildStatus(items, buildStatus);
                     if (!string.IsNullOrEmpty(selectedObjectStatus))
                         items.Add(Item.Text(selectedObjectStatus));
                     break;
@@ -196,8 +196,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     title = "Walls & Wiring";
                     items.Add(Item.Property("Selected Room", Item.FormatTarget(selectedTarget)));
                     items.Add(Item.Property("Recorded Room Edits", definition != null && definition.BunkerEdits != null ? definition.BunkerEdits.RoomChanges.Count.ToString() : "0"));
-                    AddBuildStatus(items, buildStatus);
                     AddBuildDeletionActions(items, selectedTarget, false, true, true);
+                    AddBuildStatus(items, buildStatus);
                     items.Add(Item.Text("Pick a room tile, then choose wall or wiring variants from the palette."));
                     break;
 
@@ -224,11 +224,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     title = "Shelter";
                     items.Add(Item.Property("Captured Placements", Item.CountObjectPlacements(definition).ToString()));
                     items.Add(Item.Text(Item.SummarizeObjectPlacements(definition)));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture All Spawned Objects", "Replace the scenario placement list with the current live spawned shelter objects.", true, true, "OB", "Capture every current shelter placement.")));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Selected Object", "Store the selected live shelter object as a scenario placement.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture Objects", "Update the draft with the shelter objects currently in the world.", true, true, "OB", "Capture current shelter objects.")));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Pick", "Add the selected live shelter object to the draft.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
                     AddDeleteObjectAction(items, selectedTarget);
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
-                    items.Add(Item.Property("Selected Object", Item.FormatTarget(selectedTarget)));
+                    items.Add(Item.Property("Current Pick", Item.FormatTarget(selectedTarget)));
                     if (!string.IsNullOrEmpty(selectedObjectStatus))
                         items.Add(Item.Text(selectedObjectStatus));
                     break;

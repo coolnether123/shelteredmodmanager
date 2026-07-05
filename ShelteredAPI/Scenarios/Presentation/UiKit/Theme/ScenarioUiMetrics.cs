@@ -14,7 +14,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         // Padding scale. Specific surfaces (PanelBase, Card) use values between
         // these tokens; see ScenarioUiStyleSheet for the per-role mapping.
         public float PaddingXs { get { return 4f; } }
-        public float PaddingSm { get { return 6f; } }
+        public float PaddingSm { get { return 8f; } }
         public float PaddingMd { get { return 8f; } }
         public float PaddingLg { get { return 12f; } }
         public float Gutter    { get { return ScenarioAuthoringShellLayout.Gutter; } }
@@ -37,7 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         // 1:1 swap between renderer fields and style-sheet roles preserves the
         // shell's existing visual hierarchy.
         public int FontSizeBrand    { get { return 27; } }
-        public int FontSizeTitle    { get { return 17; } }
+        public int FontSizeTitle    { get { return 18; } }
         public int FontSizeSubtitle { get { return 14; } }
         public int FontSizeSection  { get { return 15; } }
         public int FontSizeBody     { get { return 15; } }

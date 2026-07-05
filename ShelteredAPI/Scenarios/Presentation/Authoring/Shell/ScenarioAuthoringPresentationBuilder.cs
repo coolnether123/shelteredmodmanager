@@ -554,7 +554,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     {
                         Property("Component", picker.Target.Kind.ToString()),
                         Property("Current Map", Safe(picker.Target.TextureName)),
-                        Property("Stored As", Safe(picker.XmlPathHint)),
+                        Property("Draft Location", Safe(picker.XmlPathHint)),
                         Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state.ActiveScenarioFilePath)))
                     }
                 });
@@ -673,7 +673,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
                     {
-                        Property("Stored As", "FamilySetup > Members > Appearance"),
+                        Property("Draft Location", "Family appearance"),
                         Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null)))
                     }
                 });
@@ -2308,7 +2308,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Property("Expansions", grid != null && grid.Expansions != null ? grid.Expansions.Count.ToString() : "0"));
             items.Add(Property("Boundaries", grid != null && grid.Boundaries != null ? grid.Boundaries.Count.ToString() : "0"));
             if (state != null && state.SelectedTarget != null)
-                items.Add(Property("Selected Object", Safe(state.SelectedTarget.DisplayName)));
+                items.Add(Property("Current Pick", Safe(state.SelectedTarget.DisplayName)));
 
             for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count && i < 6; i++)
             {

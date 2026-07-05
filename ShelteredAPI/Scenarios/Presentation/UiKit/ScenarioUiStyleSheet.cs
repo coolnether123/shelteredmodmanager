@@ -140,7 +140,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             // Buttons sit on raised surfaces; tabs sit directly on the base
             // panel so the active tab looks "settled into" the surrounding
             // chrome rather than floating above it.
-            Button         = BuildButton(PanelRaisedTexture, AccentHoverTexture, BorderStrongTexture, palette.TextBody, metrics, padSm, padXs);
+            Button         = BuildButton(PanelRaisedTexture, AccentHoverTexture, PanelInsetTexture, palette.TextBody, metrics, padSm, padXs);
             ButtonActive   = BuildButton(AccentActiveTexture, AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
             ButtonDanger   = BuildButton(DangerTexture,       AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
             ButtonDisabled = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
@@ -200,7 +200,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.border = new RectOffset(1, 1, 1, 1);
             style.padding = new RectOffset(padX, padX, padY, padY);
             style.margin = new RectOffset(0, 0, 0, 0);
-            style.wordWrap = false;
+            style.wordWrap = true;
+            style.clipping = TextClipping.Clip;
             return style;
         }
 

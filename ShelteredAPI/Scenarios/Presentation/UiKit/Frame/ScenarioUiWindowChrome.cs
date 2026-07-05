@@ -36,8 +36,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
         {
             IScenarioUiMetrics metrics = _styles.Theme.Metrics;
 
-            // Paint the outer panel surface.
-            GUI.Box(outer, GUIContent.none, _styles.PanelBase);
+            DrawLayeredPanel(outer);
 
             Rect inner = ScenarioUiLayoutEngine.Inset(outer, metrics.CornerInset);
 
@@ -62,9 +61,23 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
             return regions;
         }
 
+        private void DrawLayeredPanel(Rect outer)
+        {
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.42f);
+            GUI.DrawTexture(new Rect(outer.x + 2f, outer.y + 2f, outer.width, outer.height), Texture2D.whiteTexture);
+            GUI.color = oldColor;
+            GUI.Box(outer, GUIContent.none, _styles.PanelBase);
+            GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, outer.width - 2f, 1f), _styles.BorderStrongTexture);
+            GUI.DrawTexture(new Rect(outer.x + 1f, outer.yMax - 2f, outer.width - 2f, 1f), _styles.BorderSubtleTexture);
+            GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderStrongTexture);
+            GUI.DrawTexture(new Rect(outer.xMax - 2f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderSubtleTexture);
+        }
+
         private void DrawHeader(Rect rect, string title, string subtitle, IScenarioUiMetrics metrics, float titleRightInset)
         {
             GUI.Box(rect, GUIContent.none, _styles.Header);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - metrics.DividerThickness, rect.width, metrics.DividerThickness), _styles.BorderSubtleTexture);
             Rect inner = ScenarioUiLayoutEngine.Inset(
                 rect,
                 metrics.HeaderPaddingX,

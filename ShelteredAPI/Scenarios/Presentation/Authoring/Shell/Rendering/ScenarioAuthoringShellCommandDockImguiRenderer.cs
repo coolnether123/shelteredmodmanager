@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
@@ -35,7 +36,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 contentRect.yMax - CommandDockHeight - 22f,
                 width,
                 CommandDockHeight);
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
+            string signature = state != null
+                ? state.ActiveTool.ToString() + ":" + (state.SelectedTarget != null ? state.SelectedTarget.Id : "none")
+                : "none";
+            float appear = _animations.GetBinaryProgress("command.dock.visible", true, 0.14f, ScenarioUiEasing.EaseOut, false);
+            float swap = 1f - _animations.GetPulseProgress("command.dock.content", signature, 0.16f, ScenarioUiEasing.EaseOut);
+            using (ScenarioUiGuiScope.Apply(appear * Mathf.Clamp01(swap), rect, 1f))
+            {
+            DrawChromePanel(rect, _rootPanelStyle);
             float gap = 8f;
             float buttonWidth = (rect.width - 20f - (gap * (actions.Length - 1))) / actions.Length;
             float x = rect.x + 10f;
@@ -43,6 +51,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawButton(new Rect(x, rect.y + 8f, buttonWidth, 32f), actions[i], false);
                 x += buttonWidth + gap;
+            }
             }
             return rect;
         }

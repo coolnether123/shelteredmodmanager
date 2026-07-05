@@ -36,6 +36,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private readonly ScenarioUiTweenSet _tweens = new ScenarioUiTweenSet();
         private readonly Dictionary<string, WindowVisualState> _windows = new Dictionary<string, WindowVisualState>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _buttonPressKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _pulseSignatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _windowRemovalBuffer = new List<string>();
         private bool _enabled = true;
         private int _lastFrame = -1;
@@ -268,8 +269,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             return GetBinaryProgress(ToastKey, visible, visible ? ToastInDuration : ToastOutDuration, ScenarioUiEasing.EaseOut, false);
         }
 
-        private float GetBinaryProgress(string key, bool visible, float duration, ScenarioUiEasing easing, bool blocksWorldInput)
+        public float GetBinaryProgress(string key, bool visible, float duration, ScenarioUiEasing easing, bool blocksWorldInput)
         {
+            if (string.IsNullOrEmpty(key))
+                return visible ? 1f : 0f;
+
             if (!_enabled)
                 return visible ? 1f : 0f;
 
@@ -277,6 +281,24 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             if (blocksWorldInput && _tweens.IsRunning(key))
                 TransitionActive = true;
             return _tweens.GetValue(key, visible ? 1f : 0f);
+        }
+
+        public float GetPulseProgress(string key, string triggerSignature, float duration, ScenarioUiEasing easing)
+        {
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(triggerSignature))
+                return 0f;
+
+            if (!_enabled)
+                return 0f;
+
+            string previous;
+            if (!_pulseSignatures.TryGetValue(key, out previous) || !string.Equals(previous, triggerSignature, StringComparison.Ordinal))
+            {
+                _pulseSignatures[key] = triggerSignature;
+                _tweens.Play(key, 1f, 0f, duration, easing);
+            }
+
+            return _tweens.GetValue(key, 0f);
         }
 
         private void PlayWindowOpen(WindowVisualState state)

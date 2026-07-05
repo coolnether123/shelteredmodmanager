@@ -26,6 +26,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const string CandidateFilterActive = "active";
         private const string CandidateFilterVanilla = "vanilla";
         private const string CandidateFilterScenario = "scenario";
+        private const string ShellRootAnimationKey = "shell.root";
 
         // Layout constants live in ScenarioAuthoringShellLayout. These aliases keep
         // the render code readable without re-declaring the values.
@@ -45,6 +46,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private ScenarioAuthoringPresentationSnapshot _snapshot;
         private ScenarioUiContext _uiContext;
         private bool _visible;
+        private bool _disposeWhenHidden;
+        private float _rootAlpha;
         private GUIStyle _rootPanelStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _titleStyle;
@@ -69,6 +72,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _assetBrowserSearchText = string.Empty;
         private string _assetBrowserCandidateFilter = CandidateFilterAll;
         private bool _assetBrowserSearchFocused;
+        private string _toolRailActiveKey;
+        private float _toolRailIndicatorY = -1f;
         private string _spritePickerSearchText = string.Empty;
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
@@ -99,7 +104,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public void Render(ScenarioAuthoringPresentationSnapshot snapshot)
         {
             EnsureRuntime();
-            _snapshot = snapshot;
+            bool wasVisible = _visible;
+            _snapshot = snapshot ?? _snapshot;
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
@@ -107,25 +113,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && snapshot.ShellViewModel != null;
 
             if (_runtime != null)
-                _runtime.enabled = _visible;
+                _runtime.enabled = _visible || wasVisible || _rootAlpha > 0.001f;
 
             if (!_visible)
             {
-                DisposeUiContext();
-                ClearInputCapture();
+                _disposeWhenHidden = true;
+                if (_runtime == null || !_runtime.enabled)
+                {
+                    DisposeUiContext();
+                    ClearInputCapture();
+                }
+            }
+            else
+            {
+                _disposeWhenHidden = false;
             }
         }
 
         public void Hide()
         {
-            _snapshot = null;
             _visible = false;
             _windowMenuOpen = false;
+            _disposeWhenHidden = true;
             ClearFloatingDrag();
             if (_runtime != null)
-                _runtime.enabled = false;
-            DisposeUiContext();
-            ClearInputCapture();
+                _runtime.enabled = true;
         }
 
         private void EnsureRuntime()
@@ -161,8 +173,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void Draw()
         {
-            if (!_visible || _snapshot == null || _snapshot.ShellViewModel == null)
+            if (_snapshot == null || _snapshot.ShellViewModel == null)
+            {
+                FinishHiddenRuntime();
                 return;
+            }
 
             ScenarioAuthoringShellViewModel shell = _snapshot.ShellViewModel;
             float uiScale = _snapshot.State != null && _snapshot.State.Settings != null
@@ -172,12 +187,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             inputCapture.BeginFrame(uiScale);
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
+            _rootAlpha = _animations.GetBinaryProgress(ShellRootAnimationKey, _visible, 0.18f, ScenarioUiEasing.EaseOut, true);
+            if (!_visible && _rootAlpha <= 0.001f)
+            {
+                FinishHiddenRuntime();
+                return;
+            }
 
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(uiScale, uiScale, 1f));
             try
             {
-
+                using (ScenarioUiGuiScope.Apply(_rootAlpha, new Rect(0f, 0f, Screen.width / uiScale, Screen.height / uiScale), 1f))
+                {
                 float scaledWidth = Screen.width / uiScale;
                 float scaledHeight = Screen.height / uiScale;
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
@@ -195,30 +217,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
             RegisterWindowAnimationStates(shell.Windows, windowRects);
+            string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
 
             Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State);
             if (toolRailRect.width > 0f && toolRailRect.height > 0f)
                 inputCapture.RegisterInteractiveRect(toolRailRect);
 
-            Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State);
-            if (commandDockRect.width > 0f && commandDockRect.height > 0f)
-                inputCapture.RegisterInteractiveRect(commandDockRect);
-
-            string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
-            Rect workspaceTabStripRect = RuntimeCompat.ZeroRect();
-            Rect workspaceRect;
-            if (activeWorkspaceId != null && windowRects.TryGetValue(activeWorkspaceId, out workspaceRect))
+            if (activeWorkspaceId == null)
             {
-                workspaceTabStripRect = new Rect(workspaceRect.x, workspaceRect.y - 42f, workspaceRect.width, 36f);
+                Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State);
+                if (commandDockRect.width > 0f && commandDockRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(commandDockRect);
             }
 
-            DrawWindowSet(shell.Windows, windowRects, false, contentRect, inputCapture);
-
-            if (activeWorkspaceId != null && workspaceTabStripRect.width > 0f)
-            {
-                DrawWorkspaceTabsCore(workspaceTabStripRect, activeWorkspaceId, shell.Windows);
-                inputCapture.RegisterInteractiveRect(workspaceTabStripRect);
-            }
+            if (activeWorkspaceId == null)
+                DrawWindowSet(shell.Windows, windowRects, false, contentRect, inputCapture);
 
             DrawWindowSet(shell.Windows, windowRects, true, contentRect, inputCapture);
 
@@ -317,12 +330,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             inputCapture.SetTransitionActive(_animations.TransitionActive);
 
             DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
+                }
 
                 inputCapture.CompleteFrame();
             }
             finally
             {
                 GUI.matrix = oldMatrix;
+            }
+        }
+
+        private void FinishHiddenRuntime()
+        {
+            _rootAlpha = 0f;
+            if (_runtime != null)
+                _runtime.enabled = false;
+            if (_disposeWhenHidden)
+            {
+                _snapshot = null;
+                DisposeUiContext();
+                ClearInputCapture();
+                _disposeWhenHidden = false;
             }
         }
 
@@ -346,14 +374,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Dictionary<string, Rect> rects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
             float viewportLeft = contentRect.x + ToolRailWidth + Gutter;
             float viewportRight = contentRect.xMax - InspectorWidth - Gutter;
+            string activeWorkspaceId = GetActiveWorkspaceId(windows);
+            bool workspaceStageActive = activeWorkspaceId != null;
 
-            bool showBottomTray = HasVisibleDockedRenderer(windows, ScenarioAuthoringShellRendererKind.BottomTray);
+            bool showBottomTray = !workspaceStageActive && HasVisibleDockedRenderer(windows, ScenarioAuthoringShellRendererKind.BottomTray);
 
-            AppendStackRect(
-                rects,
-                windows,
-                ScenarioAuthoringWindowIds.Inspector,
-                ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect));
+            if (!workspaceStageActive)
+            {
+                AppendStackRect(
+                    rects,
+                    windows,
+                    ScenarioAuthoringWindowIds.Inspector,
+                    ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect));
+            }
 
             if (showBottomTray)
             {

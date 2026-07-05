@@ -22,17 +22,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private Rect DrawTopBarCore(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
-            GUI.Box(rect, GUIContent.none, _rootPanelStyle);
+            DrawChromePanel(rect, _rootPanelStyle);
             const float primaryRowY = 10f;
             const float primaryRowHeight = 36f;
             const float secondaryRowY = 54f;
             const float secondaryRowHeight = 30f;
 
-            Rect brandRect = new Rect(rect.x + 18f, rect.y + 10f, 220f, rect.height - 18f);
-            GUI.Label(new Rect(brandRect.x, brandRect.y - 1f, brandRect.width, 30f), "SHELTERED", _titleStyle);
-            GUI.Label(new Rect(brandRect.x, brandRect.y + 27f, brandRect.width, 22f), "SCENARIO WORKSHOP", _smallTitleStyle);
+            Rect brandRect = new Rect(rect.x + 18f, rect.y + 9f, 220f, 78f);
+            GUI.Label(new Rect(brandRect.x, brandRect.y, brandRect.width, 30f), "SHELTERED", _titleStyle);
+            GUI.Label(new Rect(brandRect.x, brandRect.y + 31f, brandRect.width, 20f), "Scenario Workshop", _smallTitleStyle);
             if (shell != null && !string.IsNullOrEmpty(shell.Subtitle))
-                GUI.Label(new Rect(brandRect.x, brandRect.y + 52f, brandRect.width, 18f), ShortenToFit(shell.Subtitle, brandRect.width, _mutedTextStyle), _mutedTextStyle);
+                GUI.Label(new Rect(brandRect.x, brandRect.y + 56f, brandRect.width, 18f), ShortenToFit(shell.Subtitle, brandRect.width, _mutedTextStyle), _mutedTextStyle);
 
             float primaryRowLeft = brandRect.xMax + 20f;
             float actionRight = rect.xMax - 10f;

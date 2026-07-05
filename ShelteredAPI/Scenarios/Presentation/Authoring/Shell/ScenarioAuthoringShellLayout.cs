@@ -15,8 +15,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float Gutter = 12f;
         public const float TopBarHeight = 96f;
         public const float StatusHeight = 46f;
-        public const float ToolRailWidth = 74f;
-        public const float InspectorWidth = 316f;
+        public const float ToolRailWidth = 116f;
+        public const float InspectorWidth = 300f;
         public const float BottomTrayHeight = 272f;
         public const float CommandDockHeight = 48f;
 
@@ -36,6 +36,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
         // on the right for the HUD so labels never collide with the game UI.
         public const float PortraitReserveWidth = 248f;
+        public const float PortraitReserveHeight = 464f;
         public const float TopBarPreferredWidth = 1180f;
         public const float TopBarMinWidth = 560f;
 
@@ -83,13 +84,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
         {
-            float trayWidth = Math.Min(940f, Math.Max(520f, viewportRight - viewportLeft));
+            float trayWidth = Math.Min(1040f, Math.Max(620f, viewportRight - viewportLeft));
             float commandDockTop = contentRect.yMax - CommandDockHeight - CommandDockBottomOffset;
             float trayBottom = Math.Max(contentRect.y + 180f, commandDockTop - Gutter);
-            float upperClearanceY = contentRect.y + 240f;
-            float trayHeight = Mathf.Clamp(BottomTrayHeight, 220f, Math.Max(220f, trayBottom - upperClearanceY));
+            float upperClearanceY = contentRect.y + 216f;
+            float availableHeight = Math.Max(220f, trayBottom - upperClearanceY);
+            float trayHeight = Mathf.Clamp(Math.Max(BottomTrayHeight, 320f), 220f, availableHeight);
             float trayY = trayBottom - trayHeight;
             return new Rect(viewportLeft, trayY, trayWidth, trayHeight);
+        }
+
+        public static Rect BuildToolRailRect(Rect contentRect, int buttonCount)
+        {
+            float portraitSafeY = Math.Max(contentRect.y + 26f, PortraitReserveHeight);
+            float availableHeight = Math.Max(112f, contentRect.yMax - portraitSafeY - Gutter);
+            float regularHeight = 18f + (Math.Max(0, buttonCount) * 56f);
+            float height = Math.Min(Math.Min(560f, regularHeight), availableHeight);
+            return new Rect(contentRect.x + 4f, portraitSafeY, ToolRailWidth, height);
         }
 
         public static Rect BuildWorkspaceRect(Rect contentRect, bool reserveBottomTray)

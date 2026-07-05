@@ -23,12 +23,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private void DrawStatusBarCore(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
-            GUI.Box(rect, GUIContent.none, _statusStyle);
-            const float rightControlsWidth = 528f;
+            DrawChromePanel(rect, _statusStyle);
+            bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+            ScenarioAuthoringInspectorAction playtestAction = new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionPlaytest,
+                Label = isPlaytesting ? "End Test" : "Playtest",
+                Hint = isPlaytesting ? "Stop playtest and return to frozen authoring." : "Apply the current draft into the live world.",
+                Enabled = true,
+                Emphasized = isPlaytesting
+            };
+            ScenarioAuthoringInspectorAction pauseMenuAction = new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionOpenPauseMenu,
+                Label = "Pause Menu",
+                Hint = "Open the vanilla pause menu while the editor keeps the shelter paused.",
+                Enabled = true,
+                Emphasized = false
+            };
+            float playtestWidth = Mathf.Clamp(MeasureButtonWidth(playtestAction, false, 34f), 104f, 148f);
+            float pauseMenuWidth = Mathf.Clamp(MeasureButtonWidth(pauseMenuAction, false, 34f), 128f, 168f);
+            float rightControlsWidth = playtestWidth + pauseMenuWidth + 114f;
             float rightControlsX = Math.Max(rect.x + 220f, rect.xMax - rightControlsWidth);
             float statusRight = rightControlsX - 18f;
             float x = rect.x + 26f;
-            for (int i = 0; shell.StatusEntries != null && i < shell.StatusEntries.Length; i++)
+            int factCount = Math.Min(4, shell.StatusEntries != null ? shell.StatusEntries.Length : 0);
+            for (int i = 0; i < factCount; i++)
             {
                 string value = shell.StatusEntries[i] ?? string.Empty;
                 float available = statusRight - x;
@@ -40,38 +60,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 x += width + 18f;
             }
 
-            bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
-            Rect playtestRect = new Rect(rightControlsX, rect.y + 9f, 120f, 28f);
-            DrawButton(playtestRect, new ScenarioAuthoringInspectorAction
+            string message = shell != null && shell.StatusEntries != null && shell.StatusEntries.Length > 4
+                ? shell.StatusEntries[4]
+                : null;
+            if (!string.IsNullOrEmpty(message))
             {
-                Id = ScenarioAuthoringActionIds.ActionPlaytest,
-                Label = isPlaytesting ? "End Test" : "Playtest",
-                Hint = isPlaytesting ? "Stop playtest and return to frozen authoring." : "Apply the current draft into the live world.",
-                Enabled = true,
-                Emphasized = isPlaytesting
-            }, false);
-
-            Rect pauseMenuRect = new Rect(rect.xMax - 144f, rect.y + 9f, 128f, 28f);
-            DrawButton(pauseMenuRect, new ScenarioAuthoringInspectorAction
-            {
-                Id = ScenarioAuthoringActionIds.ActionOpenPauseMenu,
-                Label = "Pause Menu",
-                Hint = "Open the vanilla pause menu while the editor keeps the shelter paused.",
-                Enabled = true,
-                Emphasized = false
-            }, false);
-
-            if (pauseMenuRect.x - (rightControlsX + 156f) > 120f)
-            {
-                GUI.Label(new Rect(rightControlsX + 156f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
-                GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 80f, 4f), GUIContent.none, _uiContext.Styles.Field);
-                GUI.Label(new Rect(rightControlsX + 278f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
+                Rect messageRect = new Rect(x, rect.y + 13f, Math.Max(120f, statusRight - x), 22f);
+                GUI.Label(messageRect, ShortenToFit(message, messageRect.width, _mutedTextStyle), _mutedTextStyle);
             }
 
-            string toast = shell != null && shell.StatusEntries != null && shell.StatusEntries.Length > 0
-                ? shell.StatusEntries[0]
-                : null;
-            DrawStatusToastCore(rect, toast);
+            Rect playtestRect = new Rect(rightControlsX, rect.y + 8f, playtestWidth, 30f);
+            DrawButton(playtestRect, playtestAction, false);
+
+            Rect pauseMenuRect = new Rect(rect.xMax - pauseMenuWidth - 16f, rect.y + 8f, pauseMenuWidth, 30f);
+            DrawButton(pauseMenuRect, pauseMenuAction, false);
+
+            DrawStatusToastCore(rect, message);
         }
 
         private void DrawStatusToastCore(Rect statusRect, string message)
@@ -112,7 +116,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 statusRect.y - 36f,
                 width,
                 30f);
-            GUI.Box(stripRect, GUIContent.none, _statusStyle);
+            float progress = _animations.GetBinaryProgress("collapsed.window.strip", true, 0.16f, ScenarioUiEasing.EaseOut, false);
+            using (ScenarioUiGuiScope.Apply(progress, stripRect, 1f))
+            {
+            DrawChromePanel(stripRect, _statusStyle);
 
             float x = stripRect.x + 6f;
             for (int i = 0; windows != null && i < windows.Length; i++)
@@ -133,6 +140,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Enabled = true
                 }, false);
                 x += buttonWidth + 6f;
+            }
             }
 
             return stripRect;

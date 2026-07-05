@@ -22,10 +22,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             entries.Add("Workspace: " + (string.IsNullOrEmpty(stageLabel) ? "Workshop" : stageLabel));
             entries.Add("Layer: " + ScenarioTargetClassifier.FormatScopeLabel(_selectionScopeService.ResolveSelectionScope(state)));
             entries.Add("Tool: " + (state != null ? ScenarioAuthoringWorkflowLabels.GetToolLabel(state.ActiveTool) : "Unknown"));
-            entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "ON (32px)" : "OFF"));
+            entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On (32px)" : "Off"));
             if (!string.IsNullOrEmpty(state != null ? state.StatusMessage : null))
-                entries.Add(state.StatusMessage);
+                entries.Add(FormatStatusMessage(state.StatusMessage));
             return entries.ToArray();
+        }
+
+        private static string FormatStatusMessage(string statusMessage)
+        {
+            if (statusMessage == "Scenario authoring shell is active. Use playtest to make live shelter changes, then capture them back into the draft.")
+                return "Workshop ready. Playtest live changes, then capture updates into the draft.";
+
+            return statusMessage;
         }
     }
 }
