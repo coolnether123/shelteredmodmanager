@@ -36,7 +36,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             try
             {
                 if (!ScenarioAuthoringRuntimeGuards.ShouldSuspendCameraUpdateForAuthoring())
+                {
+                    _loggedCameraSuspension = false;
                     return true;
+                }
 
                 if (!_loggedCameraSuspension)
                 {

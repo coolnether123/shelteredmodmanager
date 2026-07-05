@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private bool _ownsPause;
         private bool _ownsInjectedPauseDepth;
         private bool _pauseMenuExplicitlyOpened;
+        private bool _loggedTimeScaleRestore;
         private float _authoringPauseStartedAt;
         private string _lastOwnerReason;
 
@@ -94,6 +95,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 _ownsPause = false;
                 _ownsInjectedPauseDepth = false;
                 _pauseMenuExplicitlyOpened = false;
+                _loggedTimeScaleRestore = false;
                 _authoringPauseStartedAt = 0f;
                 _lastOwnerReason = null;
                 return;
@@ -113,6 +115,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             _ownsPause = false;
             _ownsInjectedPauseDepth = false;
             _pauseMenuExplicitlyOpened = false;
+            _loggedTimeScaleRestore = false;
             _authoringPauseStartedAt = 0f;
             _lastOwnerReason = null;
         }
@@ -205,7 +208,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (Time.timeScale != 0f)
             {
                 Time.timeScale = 0f;
-                MMLog.WriteInfo("[ScenarioAuthoringPause] Restored frozen simulation while authoring remained active.");
+                if (!_loggedTimeScaleRestore)
+                {
+                    _loggedTimeScaleRestore = true;
+                    MMLog.WriteInfo("[ScenarioAuthoringPause] Restored frozen simulation while authoring remained active.");
+                }
+            }
+            else
+            {
+                _loggedTimeScaleRestore = false;
             }
 
             return true;

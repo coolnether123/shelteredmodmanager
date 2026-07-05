@@ -194,7 +194,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                         string saveId = DraftStorageScenarioId + "_" + slot;
                         entry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
-                        return entry != null;
+                        if (entry != null)
+                            return true;
+
+                        entry = new SaveEntry
+                        {
+                            id = saveId,
+                            absoluteSlot = slot,
+                            name = string.IsNullOrEmpty(loaded.DisplayName) ? loaded.Id : loaded.DisplayName,
+                            scenarioId = DraftStorageScenarioId,
+                            scenarioVersion = loaded.Version,
+                            createdAt = DateTime.UtcNow.ToString("o"),
+                            updatedAt = File.GetLastWriteTimeUtc(files[i]).ToString("o")
+                        };
+                        MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Reconstructed draft save entry for '"
+                            + draftId + "' from slot " + slot + " because no SaveData.xml entry exists yet.");
+                        return true;
                     }
                     catch (Exception ex)
                     {

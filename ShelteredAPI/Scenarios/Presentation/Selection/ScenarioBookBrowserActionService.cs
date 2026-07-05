@@ -77,12 +77,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             status = null;
             if (entry == null)
+            {
+                MMLog.WriteWarning("[ScenarioBookBrowser] Open Draft requested with no selected draft.");
                 return false;
+            }
+
+            MMLog.WriteInfo("[ScenarioBookBrowser] Open Draft requested. scenarioId=" + entry.ScenarioId
+                + " storageScenarioId=" + entry.StorageScenarioId
+                + " source=" + entry.Source
+                + " baseMode=" + entry.BaseGameMode
+                + " virtualSaveType=" + _launchCoordinator.GetVirtualSaveType(entry) + ".");
 
             SaveEntry draftStartupSave;
             if (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(entry.ScenarioId, out draftStartupSave) || draftStartupSave == null)
             {
                 status = "Could not resolve the draft authoring save.";
+                MMLog.WriteWarning("[ScenarioBookBrowser] Open Draft failed. scenarioId=" + entry.ScenarioId
+                    + " reason=" + status);
                 return false;
             }
 
@@ -92,6 +103,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (session == null)
             {
                 status = "Could not queue the draft for authoring.";
+                MMLog.WriteWarning("[ScenarioBookBrowser] Open Draft failed. scenarioId=" + entry.ScenarioId
+                    + " reason=" + status);
                 return false;
             }
 
@@ -106,9 +119,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             {
                 ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Authoring launch failed.");
                 status = "Draft launch failed: " + Safe(error, "unknown error");
+                MMLog.WriteWarning("[ScenarioBookBrowser] Open Draft failed. scenarioId=" + entry.ScenarioId
+                    + " reason=" + status);
                 return false;
             }
 
+            MMLog.WriteInfo("[ScenarioBookBrowser] Open Draft queued authoring launch. scenarioId="
+                + entry.ScenarioId + " saveId=" + draftStartupSave.id + " virtualSaveType=" + launchSaveType + ".");
             return true;
         }
 
@@ -123,9 +140,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 if (draft == null || string.IsNullOrEmpty(draft.StartupSaveId))
                     throw new InvalidOperationException("The draft session did not provide a startup save.");
 
-                SaveEntry draftStartupSave;
-                if (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(draft.DraftId, out draftStartupSave) || draftStartupSave == null)
+                SaveEntry draftStartupSave = draft.StartupSave;
+                if (draftStartupSave == null
+                    && (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(draft.DraftId, out draftStartupSave) || draftStartupSave == null))
+                {
                     throw new InvalidOperationException("Could not resolve the draft save entry.");
+                }
 
                 string error;
                 if (!_launchCoordinator.QueueAuthoringDraftLaunch(

@@ -188,97 +188,121 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void RenderCurrentView(bool animate)
         {
-            _rows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario, GetSearchFilter());
-            _pageIndex = Mathf.Clamp(_pageIndex, 0, GetPageCount() - 1);
-            ClearPreparedPagesWhenScopeChanged();
+            try
+            {
+                _rows = _dataSource.BuildRows(_view, _selectedType, _selectedScenario, GetSearchFilter());
+                _pageIndex = Mathf.Clamp(_pageIndex, 0, GetPageCount() - 1);
+                ClearPreparedPagesWhenScopeChanged();
 
-            if (_view == ScenarioBookBrowserViewKind.DraftDetails)
-            {
-                _renderer.RenderDraftEditor(
-                    BuildDraftEditorModel(),
-                    _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
-                    _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
-                    HandleDraftDetailsSaved,
-                    HandleDraftOpenRequested);
-            }
-            else
-            {
-                int pageCount = GetPageCount();
-                ScenarioBookPlayStatsModel playStats = BuildCurrentPlayStats();
-                string cacheKey = BuildPageCacheKey(_pageIndex);
-                if (!animate && _renderer.TryRenderPreparedPage(cacheKey, _pageIndex, pageCount))
+                if (_view == ScenarioBookBrowserViewKind.DraftDetails)
                 {
-                    PrepareAdjacentPages();
-                    return;
+                    _renderer.RenderDraftEditor(
+                        BuildDraftEditorModel(),
+                        _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
+                        _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                        HandleDraftDetailsSaved,
+                        HandleDraftOpenRequested);
+                }
+                else
+                {
+                    int pageCount = GetPageCount();
+                    ScenarioBookPlayStatsModel playStats = BuildCurrentPlayStats();
+                    string cacheKey = BuildPageCacheKey(_pageIndex);
+                    if (!animate && _renderer.TryRenderPreparedPage(cacheKey, _pageIndex, pageCount))
+                    {
+                        PrepareAdjacentPages();
+                        return;
+                    }
+
+                    _renderer.Render(
+                        _view,
+                        _selectedScenario,
+                        playStats,
+                        _rows,
+                        _pageIndex,
+                        pageCount,
+                        _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
+                        _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
+                        HandleRowSelected,
+                        HandleDeleteSelected);
                 }
 
-                _renderer.Render(
-                    _view,
-                    _selectedScenario,
-                    playStats,
-                    _rows,
-                    _pageIndex,
-                    pageCount,
-                    _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
-                    _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
-                    HandleRowSelected,
-                    HandleDeleteSelected);
-            }
+                if (animate && _pageTurn != null && _pageTurn.PageTransition != null)
+                {
+                    _pageTurn.PageTransition.Play(_renderer.ContentRoot);
+                    _pageTurn.PageTransition.Play(_renderer.PageLabelRoot);
+                }
 
-            if (animate && _pageTurn != null && _pageTurn.PageTransition != null)
+                PrepareAdjacentPages();
+            }
+            catch (Exception ex)
             {
-                _pageTurn.PageTransition.Play(_renderer.ContentRoot);
-                _pageTurn.PageTransition.Play(_renderer.PageLabelRoot);
+                MMLog.WriteWarning("[ScenarioBookBrowser] Render failed. view=" + _view
+                    + " selectedType=" + _selectedType
+                    + " selectedScenario=" + (_selectedScenario != null ? _selectedScenario.ScenarioId : "<none>")
+                    + ": " + ex);
             }
-
-            PrepareAdjacentPages();
         }
 
         private void HandleRowSelected(ScenarioBookRowModel row)
         {
-            if (_deletePromptActive)
-                return;
-
-            if (row == null || row.IsLocked)
+            try
             {
-                SetStatus("Scenario is locked by missing or mismatched dependencies.");
-                return;
+                if (_deletePromptActive)
+                    return;
+
+                if (row == null || row.IsLocked)
+                {
+                    SetStatus("Scenario is locked by missing or mismatched dependencies.");
+                    return;
+                }
+
+                MMLog.WriteInfo("[ScenarioBookBrowser] Row selected. kind=" + row.Kind
+                    + " type=" + row.Type
+                    + " scenario=" + (row.Scenario != null ? row.Scenario.ScenarioId : "<none>")
+                    + " save=" + (row.Save != null ? row.Save.id : "<none>"));
+
+                switch (row.Kind)
+                {
+                    case ScenarioBookRowKind.Type:
+                        SelectType(row.Type);
+                        break;
+                    case ScenarioBookRowKind.Scenario:
+                        _selectedType = row.Type;
+                        _selectedScenarioOpenedDirectlyFromType = false;
+                        SelectScenario(row.Scenario);
+                        break;
+                    case ScenarioBookRowKind.StartScenario:
+                        RunLaunchAction(delegate(out string status) { return _actions.StartScenario(row.Scenario, out status); });
+                        break;
+                    case ScenarioBookRowKind.OpenDraft:
+                        RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(row.Scenario, out status); });
+                        break;
+                    case ScenarioBookRowKind.CreateDraft:
+                        RunLaunchAction(delegate(out string status) { return _actions.CreateDraft(out status); });
+                        break;
+                    case ScenarioBookRowKind.DuplicateDraft:
+                        RunBrowserAction(delegate(out string status) { ModAPI.Scenarios.ScenarioInfo duplicate; return _actions.DuplicateDraft(row.Scenario, out duplicate, out status); });
+                        break;
+                    case ScenarioBookRowKind.DeleteDraft:
+                        HandleDeleteSelected(row);
+                        break;
+                    case ScenarioBookRowKind.RecoveryResume:
+                        RunBrowserAction(delegate(out string status) { return _actions.ResumeRecovery(row, out status); });
+                        break;
+                    case ScenarioBookRowKind.RecoveryCleanup:
+                        HandleRecoveryCleanupSelected(row);
+                        break;
+                    case ScenarioBookRowKind.LoadSave:
+                        RunLaunchAction(delegate(out string status) { return _actions.LoadSave(row.Scenario, row.Save, out status); });
+                        break;
+                }
             }
-
-            switch (row.Kind)
+            catch (Exception ex)
             {
-                case ScenarioBookRowKind.Type:
-                    SelectType(row.Type);
-                    break;
-                case ScenarioBookRowKind.Scenario:
-                    _selectedType = row.Type;
-                    _selectedScenarioOpenedDirectlyFromType = false;
-                    SelectScenario(row.Scenario);
-                    break;
-                case ScenarioBookRowKind.StartScenario:
-                    RunLaunchAction(delegate(out string status) { return _actions.StartScenario(row.Scenario, out status); });
-                    break;
-                case ScenarioBookRowKind.OpenDraft:
-                    RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(row.Scenario, out status); });
-                    break;
-                case ScenarioBookRowKind.CreateDraft:
-                    RunLaunchAction(delegate(out string status) { return _actions.CreateDraft(out status); });
-                    break;
-                case ScenarioBookRowKind.DuplicateDraft:
-                    RunBrowserAction(delegate(out string status) { ModAPI.Scenarios.ScenarioInfo duplicate; return _actions.DuplicateDraft(row.Scenario, out duplicate, out status); });
-                    break;
-                case ScenarioBookRowKind.DeleteDraft:
-                    HandleDeleteSelected(row);
-                    break;
-                case ScenarioBookRowKind.RecoveryResume:
-                    RunBrowserAction(delegate(out string status) { return _actions.ResumeRecovery(row, out status); });
-                    break;
-                case ScenarioBookRowKind.RecoveryCleanup:
-                    HandleRecoveryCleanupSelected(row);
-                    break;
-                case ScenarioBookRowKind.LoadSave:
-                    RunLaunchAction(delegate(out string status) { return _actions.LoadSave(row.Scenario, row.Save, out status); });
-                    break;
+                MMLog.WriteWarning("[ScenarioBookBrowser] Row action failed. kind="
+                    + (row != null ? row.Kind.ToString() : "<null>") + ": " + ex);
+                SetStatus("Scenario action failed: " + ex.Message);
             }
         }
 
@@ -787,6 +811,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void SetStatus(string value)
         {
+            if (!string.IsNullOrEmpty(value))
+                MMLog.WriteInfo("[ScenarioBookBrowser] Status: " + value);
             if (_renderer != null)
                 _renderer.SetStatus(value);
         }

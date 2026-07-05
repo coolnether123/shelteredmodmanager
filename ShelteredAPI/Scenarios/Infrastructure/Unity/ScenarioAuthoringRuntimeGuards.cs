@@ -24,7 +24,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (!ScenarioWorldReady.IsShelterSceneActive())
                 return false;
 
-            return IsAuthoringPending() && !IsAuthoringActive();
+            return (IsAuthoringPending() && !IsAuthoringActive())
+                || ShouldMaintainPausedSimulation();
         }
 
         public static bool IsPlaytesting()

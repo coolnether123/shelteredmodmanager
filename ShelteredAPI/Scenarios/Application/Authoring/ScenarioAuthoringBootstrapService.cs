@@ -400,9 +400,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private void HandleAfterLoad(SaveData data)
         {
+            if (IsExpectedAuthoringSaveLoaded())
+            {
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Ignored save-load event for the active authoring draft.");
+                return;
+            }
+
             CancelPendingDraft("An existing save loaded before the authoring bootstrap completed.");
             if (GetActiveSession() != null)
                 CloseActiveSession("A save loaded while scenario authoring was active.", true);
+        }
+
+        private bool IsExpectedAuthoringSaveLoaded()
+        {
+            ScenarioAuthoringSession pending;
+            ScenarioAuthoringSession active;
+            lock (_sync)
+            {
+                pending = _pendingSession;
+                active = _activeSession;
+            }
+
+            SaveEntry activeSave = SaveRuntimeState.ActiveCustomSave;
+            if (MatchesAuthoringSave(pending, activeSave) || MatchesAuthoringSave(active, activeSave))
+                return true;
+
+            return HasQueuedAuthoringStartupSave(pending);
+        }
+
+        private static bool MatchesAuthoringSave(ScenarioAuthoringSession session, SaveEntry activeSave)
+        {
+            if (!IsDraftAuthoringSession(session) || activeSave == null)
+                return false;
+
+            return string.Equals(activeSave.scenarioId, session.StorageScenarioId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(activeSave.id, session.StartupSaveId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasQueuedAuthoringStartupSave(ScenarioAuthoringSession session)
+        {
+            if (!IsDraftAuthoringSession(session))
+                return false;
+
+            PlatformSaveProxy.Target pendingTarget;
+            if (!PlatformSaveProxy.TryGetNextSave(session.LaunchSaveType, out pendingTarget) || pendingTarget == null)
+                return false;
+
+            return string.Equals(pendingTarget.scenarioId, session.StorageScenarioId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(pendingTarget.saveId, session.StartupSaveId, StringComparison.OrdinalIgnoreCase);
         }
 
         private void HandleActiveSessionBoundaries()
@@ -570,8 +615,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private void ClearLaunchRedirects(ScenarioAuthoringSession session, string reason)
         {
             SaveManager.SaveType launchSaveType = session != null ? session.LaunchSaveType : SaveManager.SaveType.Slot1;
-            bool clearedSave = _saveLibrary.ClearQueuedNewGameSave(launchSaveType);
-            bool clearedLoad = _saveLibrary.ClearQueuedLoad(launchSaveType);
+            bool clearByMatch = session != null
+                && !string.IsNullOrEmpty(session.StorageScenarioId)
+                && !string.IsNullOrEmpty(session.StartupSaveId);
+            bool clearedSave = clearByMatch
+                ? _saveLibrary.ClearQueuedNewGameSaveIfMatches(launchSaveType, session.StorageScenarioId, session.StartupSaveId)
+                : _saveLibrary.ClearQueuedNewGameSave(launchSaveType);
+            bool clearedLoad = clearByMatch
+                ? _saveLibrary.ClearQueuedLoadIfMatches(launchSaveType, session.StorageScenarioId, session.StartupSaveId)
+                : _saveLibrary.ClearQueuedLoad(launchSaveType);
             if (clearedSave || clearedLoad)
             {
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Cleared pending save/load redirects. launchSaveType=" + launchSaveType
