@@ -41,7 +41,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringTarget hovered = null;
             List<ScenarioAuthoringTarget> stack = null;
             bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection()
-                && (ScenarioAuthoringInputActions.IsSelectionModifierHeld() || IsAddSelectionHeld());
+                && (state.ActiveTool == ScenarioAuthoringTool.Select
+                    || ScenarioAuthoringInputActions.IsSelectionModifierHeld()
+                    || IsAddSelectionHeld());
             bool changed = state.SelectionModeActive != selectionMode;
             state.SelectionModeActive = selectionMode;
             changed |= _scopeService.ClearSelectionIfOutOfScope(state);
@@ -263,7 +265,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || !spriteRenderer.enabled
                     || spriteRenderer.gameObject == null
                     || !spriteRenderer.gameObject.activeInHierarchy
-                    || !spriteRenderer.bounds.Contains(worldPoint))
+                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint))
                 {
                     continue;
                 }
@@ -423,6 +425,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return Mathf.Abs(bounds.size.x * bounds.size.y);
         }
 
+        private static bool ContainsPoint2D(Bounds bounds, Vector3 point)
+        {
+            return point.x >= bounds.min.x
+                && point.x <= bounds.max.x
+                && point.y >= bounds.min.y
+                && point.y <= bounds.max.y;
+        }
+
         private static bool SynchronizeSelectionStack(ScenarioAuthoringState state, List<ScenarioAuthoringTarget> targets)
         {
             string signature = BuildStackSignature(targets);
@@ -567,7 +577,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || !spriteRenderer.enabled
                     || spriteRenderer.gameObject == null
                     || !spriteRenderer.gameObject.activeInHierarchy
-                    || !spriteRenderer.bounds.Contains(worldPoint))
+                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint))
                 {
                     continue;
                 }
