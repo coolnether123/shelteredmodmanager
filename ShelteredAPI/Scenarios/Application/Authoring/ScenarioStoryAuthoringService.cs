@@ -108,6 +108,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Added intercom step.";
                 return true;
             }
+
+            if (TryHandleIntercomChildAction(session, flow, actionId, out message))
+                return true;
+
             if (!ScenarioStoryAuthoringActions.TryResolveIntercom(actionId, flow, out stageIndex, out intercomIndex, out ScenarioIntercomStageDefinition intercom))
                 return false;
 
@@ -201,6 +205,63 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return TryHandleIntercomChildren(session, flow.Stages[stageIndex], intercom, actionId, stageIndex, intercomIndex, out message);
+        }
+
+        private static bool TryHandleIntercomChildAction(ScenarioEditorSession session, ScenarioFlowDefinition flow, string actionId, out string message)
+        {
+            message = null;
+            if (flow == null || flow.Stages == null)
+                return false;
+
+            for (int stageIndex = 0; stageIndex < flow.Stages.Count; stageIndex++)
+            {
+                ScenarioFlowStageDefinition stage = flow.Stages[stageIndex];
+                if (stage == null || stage.IntercomStages == null)
+                    continue;
+
+                for (int intercomIndex = 0; intercomIndex < stage.IntercomStages.Count; intercomIndex++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[intercomIndex];
+                    if (intercom == null)
+                        continue;
+
+                    if (string.Equals(actionId, ScenarioStoryAuthoringActions.DialogueAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
+                    {
+                        intercom.Dialogue.Add(new ScenarioDialogueLineDefinition { Character = FirstOrNone(stage.CharacterIds), TextKey = "dialogue_" + (intercom.Dialogue.Count + 1).ToString() });
+                        MarkDirty(session);
+                        message = "Added dialogue line.";
+                        return true;
+                    }
+
+                    if (string.Equals(actionId, ScenarioStoryAuthoringActions.OptionAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
+                    {
+                        intercom.Options.Add(new ScenarioDialogueOptionDefinition { TextKey = "option_" + (intercom.Options.Count + 1).ToString(), NextId = FirstOtherIntercomId(stage, intercom.Id) });
+                        MarkDirty(session);
+                        message = "Added response option.";
+                        return true;
+                    }
+
+                    int child;
+                    string token;
+                    if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryDialogueKeyPrefix, stageIndex, intercomIndex, intercom.Dialogue.Count, out child, out token))
+                    {
+                        intercom.Dialogue[child].TextKey = Decode(token);
+                        MarkDirty(session);
+                        message = "Updated dialogue key.";
+                        return true;
+                    }
+
+                    if (ScenarioStoryAuthoringActions.TryChildToken(actionId, ScenarioAuthoringActionIds.ActionStoryOptionNextPrefix, stageIndex, intercomIndex, intercom.Options.Count, out child, out token))
+                    {
+                        intercom.Options[child].NextId = NullIfNone(Decode(token));
+                        MarkDirty(session);
+                        message = "Updated option route.";
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static bool TryHandleIntercomChildren(ScenarioEditorSession session, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, string actionId, int stageIndex, int intercomIndex, out string message)
