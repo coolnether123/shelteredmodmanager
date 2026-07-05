@@ -265,7 +265,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 drewCandidateGrid = true;
             }
             if (!drewCandidateGrid)
-                GUILayout.Label("Use this window for snapped scene sprite placement. Select an existing asset and use Inspector > Edit Asset to change it.", _mutedTextStyle);
+            {
+                string emptyGuidance = "Pick a build tool to see its palette here.";
+                for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+                {
+                    ScenarioAuthoringInspectorSection section = window.Sections[i];
+                    if (section == null
+                        || !string.Equals(section.Id, "tools", StringComparison.OrdinalIgnoreCase)
+                        || section.Items == null)
+                        continue;
+
+                    for (int j = 0; j < section.Items.Length; j++)
+                    {
+                        ScenarioAuthoringInspectorItem item = section.Items[j];
+                        if (item != null
+                            && item.Kind == ScenarioAuthoringInspectorItemKind.Action
+                            && item.Action != null
+                            && item.Action.Emphasized
+                            && !string.IsNullOrEmpty(item.Action.Hint))
+                        {
+                            emptyGuidance = item.Action.Hint;
+                            break;
+                        }
+                    }
+                }
+                GUILayout.Label(emptyGuidance, _mutedTextStyle);
+            }
             if (!showDetailsPane)
             {
                 for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
