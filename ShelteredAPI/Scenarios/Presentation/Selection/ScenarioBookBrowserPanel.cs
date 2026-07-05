@@ -277,7 +277,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     RunBrowserAction(delegate(out string status) { return _actions.ResumeRecovery(row, out status); });
                     break;
                 case ScenarioBookRowKind.RecoveryCleanup:
-                    RunBrowserAction(delegate(out string status) { return _actions.CleanupRecovery(row, out status); });
+                    HandleRecoveryCleanupSelected(row);
                     break;
                 case ScenarioBookRowKind.LoadSave:
                     RunLaunchAction(delegate(out string status) { return _actions.LoadSave(row.Scenario, row.Save, out status); });
@@ -366,6 +366,76 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             RestoreBrowserCollidersAfterDeletePrompt();
             UIFlowGuard.BlockSlotClicksToggle(false);
             _deletePromptActive = false;
+        }
+
+        private void HandleRecoveryCleanupSelected(ScenarioBookRowModel row)
+        {
+            if (_deletePromptActive || row == null)
+                return;
+
+            _deletePromptActive = true;
+            DisableBrowserCollidersForDeletePrompt();
+            UIFlowGuard.BlockSlotClicksForFrames(2);
+            try
+            {
+                MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "Text.UI.DeleteSave", new MessageBoxResponse(delegate(int response)
+                {
+                    StartCoroutine(ResolveRecoveryCleanupPromptAfterClickRelease(row, response));
+                }));
+            }
+            catch
+            {
+                ReleaseDeletePromptGuard();
+                throw;
+            }
+        }
+
+        private IEnumerator ResolveRecoveryCleanupPromptAfterClickRelease(ScenarioBookRowModel row, int response)
+        {
+            UIFlowGuard.BlockSlotClicksToggle(true);
+            UIFlowGuard.BlockSlotClicksForFrames(2);
+
+            yield return null;
+            while (UnityEngine.Input.GetMouseButton(0)
+                || UnityEngine.Input.GetMouseButton(1)
+                || UnityEngine.Input.GetMouseButton(2))
+            {
+                yield return null;
+            }
+
+            try
+            {
+                if (response == 1)
+                {
+                    string status = null;
+                    bool cleared = false;
+                    try
+                    {
+                        cleared = _actions.CleanupRecovery(row, out status);
+                    }
+                    catch (Exception ex)
+                    {
+                        status = "Recovery cleanup failed: " + ex.Message;
+                        MMLog.WriteWarning("[ScenarioBookBrowser] Recovery cleanup action threw: " + ex.Message);
+                    }
+
+                    SetStatus(status);
+                    if (cleared)
+                    {
+                        _dataSource.Refresh();
+                        RenderCurrentView(true);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Recovery cleanup failed: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioBookBrowser] Recovery cleanup prompt resolution failed: " + ex.Message);
+            }
+
+            yield return null;
+            UIFlowGuard.BlockSlotClicksForFrames(1);
+            ReleaseDeletePromptGuard();
         }
 
         private void DisableBrowserCollidersForDeletePrompt()
@@ -467,7 +537,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
             }
 
-            string scenarioId = _selectedScenario != null ? _selectedScenario.ScenarioId : (updatedInfo != null ? updatedInfo.Id : null);
+            string scenarioId = updatedInfo != null ? updatedInfo.Id : (_selectedScenario != null ? _selectedScenario.ScenarioId : null);
             _dataSource.Refresh();
             ScenarioCatalogEntry refreshed;
             if (!string.IsNullOrEmpty(scenarioId) && Catalog.TryGet(scenarioId, out refreshed))

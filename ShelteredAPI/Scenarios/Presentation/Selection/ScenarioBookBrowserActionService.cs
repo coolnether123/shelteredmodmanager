@@ -256,6 +256,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return false;
             }
 
+            if (IsLaunchFlowPending())
+            {
+                status = "A scenario launch is still in progress; queued redirect state was left intact.";
+                return false;
+            }
+
             bool clearedSave = _saveLibrary.ClearQueuedNewGameSave(row.RecoverySaveType);
             bool clearedLoad = _saveLibrary.ClearQueuedLoad(row.RecoverySaveType);
             if (!clearedSave && !clearedLoad)
@@ -297,6 +303,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private static string Safe(string value, string fallback)
         {
             return string.IsNullOrEmpty(value) ? (fallback ?? string.Empty) : value;
+        }
+
+        private static bool IsLaunchFlowPending()
+        {
+            try
+            {
+                ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+                return bootstrap != null && bootstrap.HasPendingDraftLaunch();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static void EnsureEditorRuntime(string trigger)

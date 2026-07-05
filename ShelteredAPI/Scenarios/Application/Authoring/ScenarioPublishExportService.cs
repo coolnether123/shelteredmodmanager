@@ -19,7 +19,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioEditorService _editorService;
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionValidator _validator;
-        private readonly IScenarioDefinitionCatalogService _catalog;
         private readonly object _sync = new object();
         private ScenarioPublishExportResult _lastResult;
 
@@ -32,7 +31,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _editorService = editorService;
             _serializer = serializer;
             _validator = validator;
-            _catalog = catalog;
         }
 
         public ScenarioPublishExportResult LastResult
@@ -61,10 +59,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             string exportFilePath;
             string exportRoot;
+            DateTime? replacedTimestampUtc = null;
             try
             {
                 exportRoot = ResolveExportRoot(definition);
                 exportFilePath = Path.Combine(exportRoot, ScenarioDefinitionSerializer.DefaultFileName);
+                if (File.Exists(exportFilePath))
+                    replacedTimestampUtc = File.GetLastWriteTimeUtc(exportFilePath);
                 _serializer.Save(definition, exportFilePath);
                 CopyReferencedAssets(definition, state != null ? state.ActiveScenarioFilePath : null, exportRoot);
             }
@@ -92,8 +93,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     exportFilePath));
             }
 
-            RefreshCatalog();
-            return Remember(ScenarioPublishExportResult.Succeeded(exportFilePath, exportRoot, CountWarnings(exportedValidation)));
+            return Remember(ScenarioPublishExportResult.Succeeded(exportFilePath, exportRoot, CountWarnings(exportedValidation), replacedTimestampUtc));
         }
 
         private ScenarioPublishExportResult Remember(ScenarioPublishExportResult result)
@@ -125,24 +125,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
         }
 
-        private void RefreshCatalog()
-        {
-            try
-            {
-                if (_catalog != null)
-                    _catalog.RefreshDefinitionCatalog();
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioPublishExport] Export succeeded but catalog refresh failed: " + ex.Message);
-            }
-        }
-
         private static string ResolveExportRoot(ScenarioDefinition definition)
         {
             string modRoot = ResolveExportModRoot();
             string scenarioFolder = BuildSafeFolderName(!string.IsNullOrEmpty(definition.Id) ? definition.Id : definition.DisplayName);
-            return Path.Combine(Path.Combine(Path.Combine(modRoot, "Scenarios"), ExportRootFolder), scenarioFolder);
+            return Path.Combine(Path.Combine(modRoot, ExportRootFolder), scenarioFolder);
         }
 
         private static void CopyReferencedAssets(ScenarioDefinition definition, string sourceScenarioFilePath, string exportRoot)
@@ -352,6 +339,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int ErrorCount { get; private set; }
         public int WarningCount { get; private set; }
         public DateTime TimestampUtc { get; private set; }
+        public DateTime? ReplacedTimestampUtc { get; private set; }
 
         public ScenarioPublishExportResult Copy()
         {
@@ -364,7 +352,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ArtifactRootPath = ArtifactRootPath,
                 ErrorCount = ErrorCount,
                 WarningCount = WarningCount,
-                TimestampUtc = TimestampUtc
+                TimestampUtc = TimestampUtc,
+                ReplacedTimestampUtc = ReplacedTimestampUtc
             };
         }
 
@@ -375,16 +364,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 : TimestampUtc.ToString("u", CultureInfo.InvariantCulture);
         }
 
-        public static ScenarioPublishExportResult Succeeded(string artifactPath, string artifactRootPath, int warningCount)
+        public static ScenarioPublishExportResult Succeeded(string artifactPath, string artifactRootPath, int warningCount, DateTime? replacedTimestampUtc)
         {
+            string message = "Export package created and validated. To install or share it, copy this folder into any mod's Scenarios directory.";
+            if (replacedTimestampUtc.HasValue)
+            {
+                message += " Replaced previous export from "
+                    + replacedTimestampUtc.Value.ToString("u", CultureInfo.InvariantCulture)
+                    + ".";
+            }
+
             return new ScenarioPublishExportResult
             {
                 Success = true,
-                Message = "Export package created and validated.",
+                Message = message,
                 ArtifactPath = artifactPath,
                 ArtifactRootPath = artifactRootPath,
                 WarningCount = warningCount,
-                TimestampUtc = DateTime.UtcNow
+                TimestampUtc = DateTime.UtcNow,
+                ReplacedTimestampUtc = replacedTimestampUtc
             };
         }
 

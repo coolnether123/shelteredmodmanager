@@ -6,6 +6,7 @@ using ShelteredAPI.Saves;
 using ModAPI.Scenarios;
 using UnityEngine;
 
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
@@ -274,6 +275,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             lock (_sync)
             {
                 string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
+                if (ScenarioIdExistsOutsideDrafts(normalizedId))
+                {
+                    error = "A published or exported scenario already uses file name '" + normalizedId + "'.";
+                    return false;
+                }
+
                 for (int i = 0; i < files.Length; i++)
                 {
                     ScenarioDefinition existing = SafeLoadDefinition(files[i]);
@@ -344,6 +351,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         }
 
                         string duplicateId = duplicate.Info.Id;
+                        CopyDraftFolder(Path.GetDirectoryName(files[i]), Path.GetDirectoryName(duplicate.Info.FilePath));
                         source.Id = duplicateId;
                         source.DisplayName = BuildDuplicateDisplayName(source.DisplayName);
                         _serializer.Save(source, duplicate.Info.FilePath);
@@ -421,6 +429,63 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             try { return _serializer.Load(filePath); }
             catch { return null; }
+        }
+
+        private static bool ScenarioIdExistsOutsideDrafts(string scenarioId)
+        {
+            if (string.IsNullOrEmpty(scenarioId))
+                return false;
+
+            try
+            {
+                IScenarioDefinitionCatalogService catalog = ScenarioCompositionRoot.Resolve<IScenarioDefinitionCatalogService>();
+                if (catalog == null)
+                    return false;
+
+                ScenarioInfo[] infos = catalog.ListDefinitions();
+                for (int i = 0; infos != null && i < infos.Length; i++)
+                {
+                    ScenarioInfo info = infos[i];
+                    if (info != null && string.Equals(info.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Published scenario collision check failed: " + ex.Message);
+            }
+
+            return false;
+        }
+
+        private static void CopyDraftFolder(string sourceRoot, string destinationRoot)
+        {
+            if (string.IsNullOrEmpty(sourceRoot) || string.IsNullOrEmpty(destinationRoot) || !Directory.Exists(sourceRoot))
+                return;
+
+            string sourceFull = Path.GetFullPath(sourceRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string destinationFull = Path.GetFullPath(destinationRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.Equals(sourceFull, destinationFull, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string[] directories = Directory.GetDirectories(sourceFull, "*", SearchOption.AllDirectories);
+            for (int i = 0; i < directories.Length; i++)
+            {
+                string relative = directories[i].Substring(sourceFull.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                Directory.CreateDirectory(Path.Combine(destinationFull, relative));
+            }
+
+            string[] files = Directory.GetFiles(sourceFull, "*", SearchOption.AllDirectories);
+            for (int i = 0; i < files.Length; i++)
+            {
+                string relative = files[i].Substring(sourceFull.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string destination = Path.Combine(destinationFull, relative);
+                string directory = Path.GetDirectoryName(destination);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    Directory.CreateDirectory(directory);
+
+                File.Copy(files[i], destination, true);
+            }
         }
 
         private static string BuildDuplicateDisplayName(string displayName)

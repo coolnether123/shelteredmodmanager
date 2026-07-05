@@ -171,18 +171,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringActionIds.ActionPublishExport,
                 "Export Scenario Package",
                 canExport
-                    ? "Write scenario.xml into the discovered Scenarios folder and validate the exported artifact."
+                    ? "Write a staged scenario package and validate the exported artifact."
                     : "Fix validation errors before exporting.",
                 canExport,
                 canExport,
                 "EX",
-                canExport ? "Creates Scenarios/ScenarioAuthoringExports/<scenario-id>/scenario.xml." : errors.ToString(CultureInfo.InvariantCulture) + " validation error(s) block export.")));
+                canExport ? "Creates ScenarioAuthoringExports/<scenario-id>/scenario.xml. Copy the exported folder into any mod's Scenarios directory to install or share it." : errors.ToString(CultureInfo.InvariantCulture) + " validation error(s) block export.")));
 
             ScenarioPublishExportResult last = GetLastExportResult();
             if (last == null)
             {
                 items.Add(Item.Property("Last Export", "<none>"));
-                items.Add(Item.Text("Drop-in package layout: Scenarios/<PackName>/scenario.xml under a loaded mod root."));
+                items.Add(Item.Text("Export staging is outside playable catalog scans. Copy the exported folder into any mod's Scenarios directory when you want to install or share it."));
                 return items;
             }
 

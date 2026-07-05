@@ -4,6 +4,7 @@ using System.Globalization;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Runtime;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Shared;
@@ -276,8 +277,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (rows == null)
                 return;
 
+            if (IsLaunchFlowPending())
+                return;
+
             AddRecoveryRows(rows, PlatformSaveProxy.NextSave, PlatformSaveProxy._nextSaveLock, "queued startup save");
             AddRecoveryRows(rows, PlatformSaveProxy.NextLoad, PlatformSaveProxy._nextLoadLock, "queued load target");
+        }
+
+        private static bool IsLaunchFlowPending()
+        {
+            try
+            {
+                ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+                return bootstrap != null && bootstrap.HasPendingDraftLaunch();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static void AddRecoveryRows(
