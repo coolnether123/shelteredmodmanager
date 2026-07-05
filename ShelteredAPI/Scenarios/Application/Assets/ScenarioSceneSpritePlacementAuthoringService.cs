@@ -549,11 +549,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Assets))
-                session.DirtyFlags.Add(ScenarioDirtySection.Assets);
-
-            session.CurrentEditCategory = ScenarioEditCategory.Assets;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
         }
 
         private void UpdatePreview(ScenarioDefinition definition, Vector3 worldPoint, bool overrideFit)

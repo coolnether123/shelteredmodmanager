@@ -138,7 +138,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return failedValidation;
             }
 
-            if (validation != null && !validation.IsValid)
+            if (validation == null)
+            {
+                ScenarioApplyResult failedClosed = new ScenarioApplyResult();
+                failedClosed.AddMessage("Playtest blocked because scenario validation did not return a result.");
+                MMLog.WriteWarning("[ScenarioEditorController] Playtest blocked because validation returned no result.");
+                return failedClosed;
+            }
+
+            if (!validation.IsValid)
             {
                 ScenarioApplyResult blocked = new ScenarioApplyResult();
                 ScenarioValidationIssue[] issues = validation.Issues;

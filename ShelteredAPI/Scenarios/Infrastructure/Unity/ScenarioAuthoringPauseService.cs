@@ -79,6 +79,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             PauseManager pauseManager = ResolvePauseManager();
             if (pauseManager == null)
             {
+                if (_ownsInjectedPauseDepth && Time.timeScale == 0f)
+                {
+                    Time.timeScale = 1f;
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] PauseManager unavailable during controlled release; restored owned Time.timeScale to "
+                        + Time.timeScale + ". Reason=" + (reason ?? "unspecified") + ".");
+                }
+                else
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringPause] PauseManager unavailable during controlled release; authoring did not own an injected pause depth, so Time.timeScale remains "
+                        + Time.timeScale + ". Reason=" + (reason ?? "unspecified") + ".");
+                }
+
                 _ownsPause = false;
                 _ownsInjectedPauseDepth = false;
                 _pauseMenuExplicitlyOpened = false;

@@ -40,9 +40,5 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return ShouldBlockCameraInput(state, playtesting);
         }
 
-        public bool ShouldSuppressCtrlCameraBehavior(ScenarioAuthoringState state, bool playtesting)
-        {
-            return ShouldBlockCameraInput(state, playtesting);
-        }
     }
 }

@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 using ShelteredAPI.Content;
+using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
@@ -463,6 +464,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 _backend.ClearActiveSession(reason);
                 ClearLaunchRedirects(previous, reason);
+                SaveRuntimeState.ClearActiveCustomSession();
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Cleared authoring save routing for closed authoring session. reason="
+                    + (reason ?? "unspecified") + ".");
             }
 
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed active authoring session '" + previous.DraftId

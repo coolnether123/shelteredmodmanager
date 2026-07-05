@@ -79,10 +79,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         public static void MarkDirty(ScenarioEditorSession session, ScenarioDirtySection section, ScenarioEditCategory category)
         {
-            if (!session.DirtyFlags.Contains(section))
-                session.DirtyFlags.Add(section);
-            session.CurrentEditCategory = category;
-            session.HasAppliedToCurrentWorld = true;
+            if (session != null)
+                session.MarkDraftChanged(section, category);
         }
     }
 }

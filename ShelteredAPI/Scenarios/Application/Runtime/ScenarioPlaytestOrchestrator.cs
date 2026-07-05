@@ -52,8 +52,18 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 return notReady;
             }
 
+            bool staleLiveWorld = session.HasUnappliedDraftChanges;
             bool reusedLiveWorld = session.HasAppliedToCurrentWorld;
             ScenarioApplyResult result;
+            if (staleLiveWorld)
+            {
+                result = new ScenarioApplyResult();
+                result.AddMessage("Playtest not restarted: the running world predates recent draft edits. Save is allowed, but stop and restart the scenario from the authoring launch flow before verifying those edits.");
+                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest start blocked because the live world is stale. draftRevision="
+                    + session.DraftRevision + ", appliedDraftRevision=" + session.AppliedDraftRevision + ".");
+                return result;
+            }
+
             if (!reusedLiveWorld)
             {
                 try
@@ -77,7 +87,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                     return result;
                 }
 
-                session.HasAppliedToCurrentWorld = true;
+                session.MarkAppliedToCurrentWorld();
             }
             else
             {

@@ -89,16 +89,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 && axis == PlatformInput.MenuInputAxis.UIscroll;
         }
 
-        public static bool ShouldSuppressCtrlCameraBehavior()
-        {
-            if (!IsAuthoringActive())
-                return false;
-
-            ScenarioAuthoringState state = GetState();
-            return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
-                .ShouldSuppressCtrlCameraBehavior(state, IsPlaytesting());
-        }
-
         public static bool ShouldBlockGameplayButton(PlatformInput.InputButton button)
         {
             if (!ShouldCaptureGameplayInput())

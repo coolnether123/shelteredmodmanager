@@ -391,11 +391,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(dirtySection))
-                session.DirtyFlags.Add(dirtySection);
-
-            session.CurrentEditCategory = category;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(dirtySection, category);
         }
 
         private static int ComparePlacements(ObjectPlacement left, ObjectPlacement right)
