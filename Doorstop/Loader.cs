@@ -131,21 +131,22 @@ public static class UnityInitHook
     public static void StartLogHookPoller()
     {
         if (_poller != null) return;
-        LoaderDebugLog.Write("[Loader] Poller thread started (max 120 attempts, 500ms interval).");
+        const int maxAttempts = 240;
+        const int pollIntervalMs = 250;
+        LoaderDebugLog.Write(string.Format("[Loader] Poller thread started (max {0} attempts, {1}ms interval).", maxAttempts, pollIntervalMs));
         _poller = new Thread(() =>
         {
-            LoaderDebugLog.Write("[Loader] Giving Unity engine 1500ms to initialize native bindings...");
-            Thread.Sleep(1500);
+            LoaderDebugLog.Write("[Loader] Registering Unity log callback as early as possible.");
 
-            for (int i = 0; i < 120 && !Loader.BootstrapTriggered; i++)
+            for (int i = 0; i < maxAttempts && !Loader.BootstrapTriggered; i++)
             {
                 _pollAttempts = i + 1;
                 TryRegisterLogHook();
                 if ((_pollAttempts % 20) == 0 && !Loader.BootstrapTriggered)
                 {
-                    LoaderDebugLog.Write(string.Format("[Loader] Waiting for Unity log callback (attempt {0}/120).", _pollAttempts));
+                    LoaderDebugLog.Write(string.Format("[Loader] Waiting for Unity log callback (attempt {0}/{1}).", _pollAttempts, maxAttempts));
                 }
-                Thread.Sleep(500);
+                Thread.Sleep(pollIntervalMs);
                 if (Loader.BootstrapTriggered) break;
             }
             if (!Loader.BootstrapTriggered)
