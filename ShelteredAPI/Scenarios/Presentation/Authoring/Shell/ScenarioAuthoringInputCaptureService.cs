@@ -79,15 +79,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public void CompleteFrame()
         {
             Vector2 pointer = GetPointerPosition(_coordinateScale);
-            PointerOverAuthoringUi = false;
-            for (int i = 0; i < _interactiveRects.Count; i++)
-            {
-                if (_interactiveRects[i].Contains(pointer))
-                {
-                    PointerOverAuthoringUi = true;
-                    break;
-                }
-            }
+            PointerOverAuthoringUi = IsPointerOverRegisteredUi(pointer);
 
             _scrollFocusService.CompleteFrame(pointer);
             if (_scrollFocusService.PointerOverScrollableRegion)
@@ -105,6 +97,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || DraggingShellChrome
                 || KeyboardCaptured
                 || TransitionActive;
+        }
+
+        public bool ShouldSuppressWorldInputNow()
+        {
+            return ShouldSuppressWorldInput()
+                || IsPointerOverRegisteredUi(GetPointerPosition(_coordinateScale))
+                || _scrollFocusService.PointerOverScrollableRegion;
         }
 
         public bool ShouldBlockGameCameraInput()
@@ -132,6 +131,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 rect.y - padding,
                 rect.width + (padding * 2f),
                 rect.height + (padding * 2f));
+        }
+
+        private bool IsPointerOverRegisteredUi(Vector2 pointer)
+        {
+            for (int i = 0; i < _interactiveRects.Count; i++)
+            {
+                if (_interactiveRects[i].Contains(pointer))
+                    return true;
+            }
+
+            return false;
         }
 
         private static Vector2 GetPointerPosition()

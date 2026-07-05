@@ -419,6 +419,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPlacementFeelVisualService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBunkerDraftService.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioCharacterAppearanceService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioObjectPlacementRuntimeBinding.cs" />

@@ -72,6 +72,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public bool PlaceableOnSurface;
             public float ColliderWidth;
             public PlacementValidationResult Validation;
+            public ScenarioPlacementFeelVisualService.GhostPreviewHandle GhostVisual;
+            public bool SuppressPrimaryClickUntilClear;
         }
 
         private static readonly string[] ObjectSectionOrder = new[]
@@ -89,6 +91,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly RoomVisualPaletteService _roomVisualPaletteService;
         private readonly PlacementGhostSessionService _placementGhostSessionService;
         private readonly ScenarioBuildDeletionAuthoringService _deletionService;
+        private readonly ScenarioPlacementFeelVisualService _placementFeelVisualService = new ScenarioPlacementFeelVisualService();
         private ActivePlacementSession _activePlacement;
 
         public static ScenarioBuildPlacementAuthoringService Instance
@@ -164,7 +167,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 default:
                     model.Title = "Object Placement";
                     model.Guidance = "Pick a workbench, shelter system, or furniture prefab to start vanilla-style placement.";
-                    model.Detail = "Placed objects are spawned live now and stored back into BunkerEdits/ObjectPlacements.";
+                    model.Detail = "Placed objects are spawned live now and stored in the draft placement list.";
                     break;
             }
 
@@ -332,7 +335,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            if (!inputCapture.PointerOverAuthoringUi)
+            bool suppressWorldInput = inputCapture != null && inputCapture.ShouldSuppressWorldInputNow();
+            bool primaryClickConsumed = ConsumePlacementStartPrimaryClick();
+            if (!suppressWorldInput)
             {
                 Vector3 worldPoint;
                 if (TryGetMouseWorldPoint(out worldPoint))
@@ -341,9 +346,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (UnityEngine.Input.GetMouseButtonUp(1))
                     return CancelActivePlacement("Placement cancelled.", out message);
 
-                if (UnityEngine.Input.GetMouseButtonUp(0))
+                if (UnityEngine.Input.GetMouseButtonUp(0) && !primaryClickConsumed)
                     return TryCompletePlacement(session, out message);
             }
+
+            _activePlacement.Validation = EvaluateActivePlacement();
+            ApplyActiveGhostVisual();
+            if (primaryClickConsumed && UnityEngine.Input.GetMouseButtonUp(0))
+                return true;
 
             return false;
         }
@@ -469,6 +479,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             session.ColliderWidth = collider != null ? collider.size.x : 0f;
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, objectType.ToString(), session.Ghost);
+            ApplyActiveGhostVisual();
             message = "Placing " + session.Label + ". Left-click to place, right-click or Escape to cancel.";
             LogPlacementInfo("Placement session started: " + session.Label + " (" + objectType + ").");
             return true;
@@ -487,6 +498,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             session.DefinitionReference = ScenarioPlacementDefinitions.Room;
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
+            ApplyActiveGhostVisual();
             message = "Placing a room tile. Left-click to place, right-click or Escape to cancel.";
             LogPlacementInfo("Placement session started: Room Tile.");
             return true;
@@ -505,6 +517,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             session.DefinitionReference = ScenarioPlacementDefinitions.Ladder;
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
+            ApplyActiveGhostVisual();
             message = "Placing a ladder. Left-click to place, right-click or Escape to cancel.";
             LogPlacementInfo("Placement session started: Ladder.");
             return true;
@@ -523,6 +536,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             session.DefinitionReference = ScenarioPlacementDefinitions.RoomLight;
             _activePlacement = session;
             _placementGhostSessionService.Start(session.Label, session.DefinitionReference, session.Ghost);
+            ApplyActiveGhostVisual();
             message = "Placing a room light. Left-click to place, right-click or Escape to cancel.";
             LogPlacementInfo("Placement session started: Room Light.");
             return true;
@@ -584,7 +598,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Kind = kind,
                 Ghost = ghost,
                 Label = label,
-                Level = 1
+                Level = 1,
+                GhostVisual = _placementFeelVisualService.CreateGhostPreview(ghost),
+                SuppressPrimaryClickUntilClear = true
             };
         }
 
@@ -598,6 +614,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             Obj_GhostBase ghost = _activePlacement.Ghost;
+            _activePlacement.Validation = EvaluateActivePlacement();
             bool canPlace;
             try
             {
@@ -612,7 +629,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (!canPlace)
             {
-                message = "That placement is blocked by the current shelter layout or collisions.";
+                PlacementValidationResult validation = _activePlacement.Validation;
+                message = validation != null && !string.IsNullOrEmpty(validation.Reason)
+                    ? validation.Reason
+                    : "That placement is blocked by the current shelter layout or collisions.";
                 LogPlacementInfo("Placement blocked by OnTryPlacement for " + SafeActivePlacementLabel() + ".");
                 return true;
             }
@@ -659,6 +679,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             Obj_Base spawned;
             try
             {
+                RestoreActiveGhostVisual();
                 ghost.OnPlacementFinished();
                 RemoveGhostSafely(ghost);
                 spawned = manager.SpawnObject(objectType, level, new Vector2(position.x, position.y));
@@ -683,6 +704,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             LogPlacementInfo("Placement committed to world: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
+            _placementFeelVisualService.PlaySettle(spawned.gameObject);
             if (!_objectPlacementService.UpsertPlacement(_objectPlacementService.CapturePlacement(spawned)))
             {
                 message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ", but the scenario draft became unavailable before the placement could be recorded.";
@@ -719,6 +741,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             bool applied;
             try
             {
+                RestoreActiveGhostVisual();
                 ghost.OnPlacementFinished();
                 applied = CraftingManager.FinishCraft_Room(null, null, ghost);
             }
@@ -744,6 +767,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             LogPlacementInfo("Placement committed to world: " + label + " at " + gridX + "," + gridY + ".");
             ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
+            if (cell != null && cell.prefab != null)
+                _placementFeelVisualService.PlaySettle(cell.prefab);
             string definitionReference = cell != null && cell.type == ShelterRoomGrid.CellType.RoomTop
                 ? ScenarioPlacementDefinitions.RoomTop
                 : ScenarioPlacementDefinitions.Room;
@@ -790,6 +815,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             bool applied;
             try
             {
+                RestoreActiveGhostVisual();
                 ghost.OnPlacementFinished();
                 applied = CraftingManager.FinishCraft_Ladder(null, null, ghost);
             }
@@ -814,6 +840,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             LogPlacementInfo("Placement committed to world: " + label + " at " + gridX + "," + gridY + ".");
+            GameObject ladderObject = ResolveLadderObject(grid, gridX, gridY);
+            if (ladderObject != null)
+                _placementFeelVisualService.PlaySettle(ladderObject);
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateLadderPlacement(
                     gridX,
                     gridY,
@@ -855,6 +884,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             bool applied;
             try
             {
+                RestoreActiveGhostVisual();
                 ghost.OnPlacementFinished();
                 applied = CraftingManager.FinishCraft_Light(null, null, ghost);
             }
@@ -879,6 +909,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             LogPlacementInfo("Placement committed to world: " + label + " at " + gridX + "," + gridY + ".");
+            ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
+            if (cell != null && (UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
+                _placementFeelVisualService.PlaySettle(cell.lightObject.gameObject);
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateRoomLightPlacement(
                     gridX,
                     gridY,
@@ -1007,6 +1040,36 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             position.z = 0f;
             _activePlacement.Ghost.transform.position = position;
             _activePlacement.Validation = EvaluateActivePlacement();
+            ApplyActiveGhostVisual();
+        }
+
+        private bool ConsumePlacementStartPrimaryClick()
+        {
+            if (_activePlacement == null || !_activePlacement.SuppressPrimaryClickUntilClear)
+                return false;
+
+            if (UnityEngine.Input.GetMouseButton(0) || UnityEngine.Input.GetMouseButtonUp(0))
+                return true;
+
+            _activePlacement.SuppressPrimaryClickUntilClear = false;
+            return false;
+        }
+
+        private void ApplyActiveGhostVisual()
+        {
+            if (_activePlacement == null || _activePlacement.GhostVisual == null)
+                return;
+
+            _activePlacement.GhostVisual.Apply();
+        }
+
+        private void RestoreActiveGhostVisual()
+        {
+            if (_activePlacement == null || _activePlacement.GhostVisual == null)
+                return;
+
+            _activePlacement.GhostVisual.Restore();
+            _activePlacement.GhostVisual = null;
         }
 
         private PlacementValidationResult EvaluateActivePlacement()
@@ -1059,19 +1122,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (cell.type != ShelterRoomGrid.CellType.Dirt)
             {
                 result.CanPlace = false;
-                result.Reason = "Room tiles can only be placed into Dirt cells.";
+                result.Reason = "Rooms must sit on dirt next to an existing room.";
                 return;
             }
 
             if (!HasNeighborRoom(cell))
             {
                 result.CanPlace = false;
-                result.Reason = "Room tiles must touch an existing Room or RoomTop cell.";
+                result.Reason = "Rooms must sit on dirt next to an existing room.";
                 return;
             }
 
             result.CanPlace = ghostAllowsPlacement;
-            result.Reason = ghostAllowsPlacement ? "Room tile can be placed here." : "Room tile is blocked by vanilla collision rules.";
+            result.Reason = ghostAllowsPlacement ? "Room can be placed here." : "Rooms must sit on dirt next to an existing room.";
         }
 
         private static void PopulateLadderValidation(PlacementValidationResult result, ShelterRoomGrid grid, int gridX, int gridY, bool hasCell, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
@@ -1086,7 +1149,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (!IsRoomOrTop(cell))
             {
                 result.CanPlace = false;
-                result.Reason = "Ladders must start in a Room or RoomTop cell.";
+                result.Reason = "Ladder needs clear cells above and below.";
                 return;
             }
 
@@ -1094,12 +1157,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (below == null || (below.type != ShelterRoomGrid.CellType.Room && below.type != ShelterRoomGrid.CellType.InProgress))
             {
                 result.CanPlace = false;
-                result.Reason = "Ladders need a valid room cell directly below.";
+                result.Reason = "Ladder needs clear cells above and below.";
                 return;
             }
 
             result.CanPlace = ghostAllowsPlacement;
-            result.Reason = ghostAllowsPlacement ? "Ladder can be placed here." : "Ladder is blocked by an object, wall, door, or existing ladder.";
+            result.Reason = ghostAllowsPlacement ? "Ladder can be placed here." : "Ladder needs clear cells above and below.";
         }
 
         private static void PopulateLightValidation(PlacementValidationResult result, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
@@ -1121,12 +1184,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if ((UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
             {
                 result.CanPlace = false;
-                result.Reason = "This room cell already has a light.";
+                result.Reason = "A light already exists in this room.";
                 return;
             }
 
             result.CanPlace = ghostAllowsPlacement;
-            result.Reason = ghostAllowsPlacement ? "Room light can be placed here." : "Room light is blocked by another light preview.";
+            result.Reason = ghostAllowsPlacement ? "Room light can be placed here." : "A light already exists in this room.";
         }
 
         private void PopulateObjectValidation(PlacementValidationResult result, ShelterRoomGrid.GridCell cell, bool ghostAllowsPlacement)
@@ -1176,6 +1239,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             return cell != null
                 && (cell.type == ShelterRoomGrid.CellType.Room || cell.type == ShelterRoomGrid.CellType.RoomTop);
+        }
+
+        private static GameObject ResolveLadderObject(ShelterRoomGrid grid, int gridX, int gridY)
+        {
+            ShelterRoomGrid.GridCell cell = grid != null ? grid.GetCell(gridX, gridY) : null;
+            List<ShelterLadder> ladders = cell != null ? cell.ladders : null;
+            if (ladders == null || ladders.Count <= 0)
+                return null;
+
+            ShelterLadder ladder = ladders[ladders.Count - 1];
+            if ((UnityEngine.Object)ladder == (UnityEngine.Object)null)
+                return null;
+
+            return ladder.gameObject;
         }
 
         private Vector3 ResolveObjectPlacementPosition(Vector3 worldPoint)
@@ -1248,6 +1325,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             Obj_GhostBase ghost = _activePlacement.Ghost;
             string label = _activePlacement.Label;
+            RestoreActiveGhostVisual();
             _activePlacement = null;
             _placementGhostSessionService.Clear();
             RemoveGhostSafely(ghost);
