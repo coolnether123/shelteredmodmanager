@@ -106,8 +106,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             state.MinimalMode = false;
             state.FocusSelectionMode = false;
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Calendar, StringComparison.OrdinalIgnoreCase))
-                ApplyStageWorkspace(state);
             PersistIfEnabled(state);
             return true;
         }

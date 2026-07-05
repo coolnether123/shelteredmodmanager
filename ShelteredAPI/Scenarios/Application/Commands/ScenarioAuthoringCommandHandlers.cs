@@ -231,10 +231,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                         return false;
                     message = "Editor settings opened.";
                     return true;
+                case ScenarioAuthoringActionIds.ActionShellOpenTimeline:
                 case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
-                    if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Calendar, true))
+                    if (!_layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Triggers, true))
                         return false;
-                    message = "Schedule opened.";
+                    message = "Timeline opened.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellCloseSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, false))
@@ -541,7 +542,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             {
                 handled = true;
                 state.TimelineSelectionId = actionId.Substring(ScenarioAuthoringActionIds.ActionTimelineDayPrefix.Length);
-                message = "Calendar day " + state.TimelineSelectionId + " selected.";
+                message = "Timeline day " + state.TimelineSelectionId + " selected.";
                 return true;
             }
 
@@ -817,10 +818,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
         private static void MarkDirty(ScenarioEditorSession session, ScenarioDirtySection section)
         {
-            if (session == null || session.DirtyFlags == null || session.DirtyFlags.Contains(section))
+            if (session == null)
                 return;
 
-            session.DirtyFlags.Add(section);
+            session.MarkDraftChanged(section);
         }
 
         private bool SaveDraft(ScenarioAuthoringState state, out string message)
@@ -830,7 +831,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 ScenarioValidationResult validation = _editorService.CommitChanges(null);
                 if (validation != null && validation.IsValid)
                 {
-                    message = "Scenario draft saved.";
+                    ScenarioEditorSession session = _editorService.CurrentSession;
+                    message = session != null && session.HasUnappliedDraftChanges
+                        ? "Scenario draft saved. Running playtest predates recent edits; stop and restart playtest to verify the saved draft."
+                        : "Scenario draft saved.";
                     return true;
                 }
 

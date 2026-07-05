@@ -38,8 +38,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawButton(buttonRect, action, false);
                 if (!action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
                 {
-                    GUILayoutUtility.GetRect(rect.width - 24f, 16f, GUILayout.Height(16f));
-                    GUILayout.Label(action.DisabledReason, _mutedTextStyle);
+                    float reasonHeight = MeasureDisabledReasonHeight(action.DisabledReason, rect.width - 24f);
+                    Rect reasonRect = GUILayoutUtility.GetRect(rect.width - 24f, reasonHeight, GUILayout.Height(reasonHeight));
+                    GUI.Label(reasonRect, action.DisabledReason, _mutedTextStyle);
                 }
             }
             GUILayout.EndArea();
@@ -53,7 +54,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioAuthoringInspectorAction action = menu.Actions[i];
                 if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
-                    rectHeight += 18f;
+                    rectHeight += MeasureDisabledReasonHeight(action.DisabledReason, rectWidth - 24f) + 2f;
             }
             if (menu.CenterOnScreen)
                 return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(width, height, rectWidth, rectHeight, hudReserveRect);
@@ -64,6 +65,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 rectWidth,
                 rectHeight);
             return ClampAwayFromHud(rect, width, height, hudReserveRect);
+        }
+
+        private float MeasureDisabledReasonHeight(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return 0f;
+
+            GUIStyle style = _mutedTextStyle ?? GUI.skin.label;
+            float measured = style.CalcHeight(new GUIContent(reason), Mathf.Max(80f, width));
+            return Mathf.Clamp(measured + 2f, 16f, 64f);
         }
 
         private Rect BuildWindowMenuRectCore(Rect buttonRect, ScenarioAuthoringInspectorAction[] actions, float width, float height, Rect hudReserveRect)

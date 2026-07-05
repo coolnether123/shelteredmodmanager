@@ -1008,15 +1008,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return;
 
-            GUI.enabled = action.Enabled;
-            GUIStyle style = action.Emphasized ? _activeButtonStyle : _buttonStyle;
+            GUIStyle style = !action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
             if (GUI.Button(rect, GUIContent.none, style) && action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
-            GUI.enabled = true;
 
             Rect textRect;
             if (action.PreviewSprite != null && rect.width >= 150f)
@@ -1354,6 +1352,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     },
                     false);
             }
+            else if (item.Kind == ScenarioAuthoringSettingKind.Choice)
+            {
+                DrawSettingChoiceOptions(item, stacked ? availableWidth : 180f);
+            }
             else
             {
                 GUILayout.Label(item.ValueText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Width(160f), GUILayout.Height(24f));
@@ -1361,6 +1363,47 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (!stacked)
                 GUILayout.EndHorizontal();
+        }
+
+        private void DrawSettingChoiceOptions(ScenarioAuthoringSettingsItemViewModel item, float availableWidth)
+        {
+            if (item == null)
+                return;
+
+            float rowLimit = Mathf.Max(120f, availableWidth);
+            float rowWidth = 0f;
+            GUILayout.BeginHorizontal();
+            for (int i = 0; item.ChoiceValues != null && i < item.ChoiceValues.Length; i++)
+            {
+                string value = item.ChoiceValues[i] ?? string.Empty;
+                string label = item.ChoiceLabels != null && i < item.ChoiceLabels.Length && !string.IsNullOrEmpty(item.ChoiceLabels[i])
+                    ? item.ChoiceLabels[i]
+                    : value;
+                bool selected = i == item.SelectedChoiceIndex;
+                ScenarioAuthoringInspectorAction action = new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionSettingSelectPrefix + item.Id + "." + value,
+                    Label = label,
+                    Hint = "Set " + item.Label + " to " + label + ".",
+                    Enabled = item.Enabled,
+                    Emphasized = selected
+                };
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 18f), 58f, rowLimit);
+                if (rowWidth > 0f && rowWidth + width > rowLimit)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(3f);
+                    GUILayout.BeginHorizontal();
+                    rowWidth = 0f;
+                }
+
+                Rect rect = GUILayoutUtility.GetRect(width, 24f, GUILayout.Width(width), GUILayout.Height(24f));
+                DrawButton(rect, action, false);
+                GUILayout.Space(4f);
+                rowWidth += width + 4f;
+            }
+
+            GUILayout.EndHorizontal();
         }
     }
 }

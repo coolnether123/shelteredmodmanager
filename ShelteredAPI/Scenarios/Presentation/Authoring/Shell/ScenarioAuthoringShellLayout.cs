@@ -166,8 +166,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return new Vector2(horizontal, -18f);
             if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
                 return new Vector2(0f, vertical);
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Calendar, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(0f, -vertical * 0.35f);
             if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Hierarchy, StringComparison.OrdinalIgnoreCase))
                 return new Vector2(-horizontal, -vertical * 0.45f);
             if (string.Equals(window.Id, ScenarioAuthoringWindowIds.SelectionStack, StringComparison.OrdinalIgnoreCase))

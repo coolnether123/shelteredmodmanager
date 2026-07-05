@@ -93,6 +93,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
             Rect[] cells = ScenarioUiLayoutEngine.Columns(rect, styles.Theme.Metrics.PaddingSm, 1f, 1.4f);
             if (cells.Length < 2)
                 return;
+
+            Event current = Event.current;
+            if (current != null && rect.Contains(current.mousePosition))
+                GUI.Box(rect, GUIContent.none, styles.Field);
+
             GUI.Label(cells[0], label ?? string.Empty, styles.MutedText);
             GUI.Label(cells[1], value ?? string.Empty, styles.BodyText);
         }
@@ -105,10 +110,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
         {
             if (styles == null)
                 return;
-            GUIStyle centered = new GUIStyle(styles.MutedText);
-            centered.alignment = TextAnchor.MiddleCenter;
-            centered.wordWrap = true;
-            GUI.Label(rect, message ?? string.Empty, centered);
+            GUI.Label(rect, message ?? string.Empty, styles.EmptyStateText);
         }
 
         public static void DrawSpritePreviewFrame(Rect rect, Sprite sprite, ScenarioUiStyleSheet styles, bool emphasized)

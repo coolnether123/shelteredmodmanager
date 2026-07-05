@@ -95,7 +95,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "publish_timeline",
-                    Title = "Schedule Timeline",
+                    Title = "Timeline",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = timelineItems.ToArray()

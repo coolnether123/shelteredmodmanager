@@ -20,14 +20,17 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
 
         // Accents
         Color AccentActive { get; }
+        Color AccentHover { get; }
         Color AccentDanger { get; }
         Color AccentMuted { get; }
+        Color DisabledSurface { get; }
 
         // Text roles
         Color TextTitle { get; }
         Color TextSubtitle { get; }
         Color TextBody { get; }
         Color TextMuted { get; }
+        Color TextDisabled { get; }
         Color TextOnAccent { get; }
     }
 }

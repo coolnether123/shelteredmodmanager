@@ -70,11 +70,58 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
             ScenarioTargetScope activeScope = ResolveSelectionScope(state);
             ScenarioTargetClassification classification = _classifier.Classify(target);
-            if (classification != null && classification.Matches(activeScope))
+            if (TargetMatchesCurrentStageScope(activeScope, classification, out reason))
+            {
+                if (IsLayerLocked(state, activeScope))
+                {
+                    reason = ScenarioTargetClassifier.FormatScopeLabel(activeScope) + " layer is locked in Editor Settings.";
+                    return false;
+                }
+
+                return true;
+            }
+
+            reason = "Filtered by scope: " + (_classifier.FormatScopeLabel(classification)) + " target while selecting " + ScenarioTargetClassifier.FormatScopeLabel(activeScope) + ".";
+            return false;
+        }
+
+        private bool IsTargetInCurrentStageScope(ScenarioAuthoringState state, ScenarioAuthoringTarget target, out string reason)
+        {
+            reason = null;
+            if (state == null || target == null)
+                return false;
+
+            ScenarioTargetScope activeScope = ResolveSelectionScope(state);
+            ScenarioTargetClassification classification = _classifier.Classify(target);
+            if (TargetMatchesCurrentStageScope(activeScope, classification, out reason))
                 return true;
 
             reason = "Filtered by scope: " + (_classifier.FormatScopeLabel(classification)) + " target while selecting " + ScenarioTargetClassifier.FormatScopeLabel(activeScope) + ".";
             return false;
+        }
+
+        private static bool TargetMatchesCurrentStageScope(ScenarioTargetScope activeScope, ScenarioTargetClassification classification, out string reason)
+        {
+            reason = null;
+            return classification != null && classification.Matches(activeScope);
+        }
+
+        private static bool IsLayerLocked(ScenarioAuthoringState state, ScenarioTargetScope scope)
+        {
+            if (state == null || state.Settings == null)
+                return false;
+
+            switch (scope)
+            {
+                case ScenarioTargetScope.BunkerBackground:
+                    return state.Settings.GetBool("layers.lock_background", false);
+                case ScenarioTargetScope.BunkerSurface:
+                    return state.Settings.GetBool("layers.lock_surface", false);
+                case ScenarioTargetScope.BunkerInside:
+                    return state.Settings.GetBool("layers.lock_inside", false);
+                default:
+                    return false;
+            }
         }
 
         public bool ClearSelectionIfOutOfScope(ScenarioAuthoringState state)
@@ -84,13 +131,13 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
             bool changed = false;
             string reason;
-            if (state.HoveredTarget != null && !CanSelectTargetForCurrentStage(state, state.HoveredTarget, out reason))
+            if (state.HoveredTarget != null && !IsTargetInCurrentStageScope(state, state.HoveredTarget, out reason))
             {
                 state.HoveredTarget = null;
                 changed = true;
             }
 
-            if (state.SelectedTarget != null && !CanSelectTargetForCurrentStage(state, state.SelectedTarget, out reason))
+            if (state.SelectedTarget != null && !IsTargetInCurrentStageScope(state, state.SelectedTarget, out reason))
             {
                 state.SelectedTarget = null;
                 if (state.MultiSelection != null)
@@ -103,7 +150,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             {
                 for (int i = state.MultiSelection.Count - 1; i >= 0; i--)
                 {
-                    if (!CanSelectTargetForCurrentStage(state, state.MultiSelection[i], out reason))
+                    if (!IsTargetInCurrentStageScope(state, state.MultiSelection[i], out reason))
                     {
                         state.MultiSelection.RemoveAt(i);
                         changed = true;

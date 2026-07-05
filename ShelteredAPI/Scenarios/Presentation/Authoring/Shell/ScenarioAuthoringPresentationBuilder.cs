@@ -235,7 +235,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool replacementAllowed = scopeAllowed && target.SupportsReplace;
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildObjectSummarySection(target, classification, objectPlacement, hasCapturedPlacement));
+            sections.Add(BuildObjectSummarySection(target, classification, objectPlacement, hasCapturedPlacement, ShowAdvancedDetails(state)));
             sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
             if (replacementAllowed)
             {
@@ -265,7 +265,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringTarget target,
             ScenarioTargetClassification classification,
             ObjectPlacement objectPlacement,
-            bool hasCapturedPlacement)
+            bool hasCapturedPlacement,
+            bool showAdvancedDetails)
         {
             string friendlyKind = FriendlyKindLabel(target.Kind);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -279,7 +280,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Property("Name", Safe(target.DisplayName)));
             items.Add(Property("Kind", friendlyKind));
             items.Add(Property("Layer", _targetClassifier.FormatScopeLabel(classification)));
-            items.Add(Property("Draft Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
+            if (showAdvancedDetails)
+                items.Add(Property("Draft Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
             items.Add(Property("Draft State", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement)));
             items.Add(Property("Starts", FormatStartState(objectPlacement)));
             return new ScenarioAuthoringInspectorSection

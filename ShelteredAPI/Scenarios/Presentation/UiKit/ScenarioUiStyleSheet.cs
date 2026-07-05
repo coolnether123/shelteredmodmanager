@@ -61,14 +61,17 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         public GUIStyle SectionTitleText { get; private set; }
         public GUIStyle BodyText { get; private set; }
         public GUIStyle MutedText { get; private set; }
+        public GUIStyle EmptyStateText { get; private set; }
         public GUIStyle PillText { get; private set; }
 
         // Interactive styles
         public GUIStyle Button { get; private set; }
         public GUIStyle ButtonActive { get; private set; }
         public GUIStyle ButtonDanger { get; private set; }
+        public GUIStyle ButtonDisabled { get; private set; }
         public GUIStyle Tab { get; private set; }
         public GUIStyle TabActive { get; private set; }
+        public GUIStyle TabDisabled { get; private set; }
 
         // Direct texture handles for renderers that paint backgrounds via
         // GUI.DrawTexture without going through a GUIStyle.
@@ -78,7 +81,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         public Texture2D BorderStrongTexture { get; private set; }
         public Texture2D BorderSubtleTexture { get; private set; }
         public Texture2D AccentActiveTexture { get; private set; }
+        public Texture2D AccentHoverTexture { get; private set; }
         public Texture2D DangerTexture { get; private set; }
+        public Texture2D DisabledTexture { get; private set; }
         public Texture2D ViewportTexture { get; private set; }
 
         private void Rebuild()
@@ -95,7 +100,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             BorderStrongTexture = _textures.Get(palette.BorderStrong);
             BorderSubtleTexture = _textures.Get(palette.BorderSubtle);
             AccentActiveTexture = _textures.Get(_theme.WithActiveOpacity(palette.AccentActive));
+            AccentHoverTexture  = _textures.Get(_theme.WithRaisedOpacity(palette.AccentHover));
             DangerTexture       = _textures.Get(palette.AccentDanger);
+            DisabledTexture     = _textures.Get(_theme.WithPanelOpacity(palette.DisabledSurface));
             ViewportTexture     = _textures.Get(palette.Viewport);
 
             int padXs = Mathf.RoundToInt(metrics.PaddingXs);
@@ -125,17 +132,21 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             SectionTitleText = BuildText(metrics.FontSizeSection,  FontStyle.Bold,   palette.TextTitle);
             BodyText         = BuildText(metrics.FontSizeBody,     FontStyle.Normal, palette.TextBody);
             MutedText        = BuildText(metrics.FontSizeMuted,    FontStyle.Normal, palette.TextMuted);
+            EmptyStateText   = BuildText(metrics.FontSizeMuted,    FontStyle.Normal, palette.TextMuted);
+            EmptyStateText.alignment = TextAnchor.MiddleCenter;
             PillText         = BuildText(metrics.FontSizePill,     FontStyle.Bold,   palette.TextOnAccent);
             PillText.alignment = TextAnchor.MiddleCenter;
 
             // Buttons sit on raised surfaces; tabs sit directly on the base
             // panel so the active tab looks "settled into" the surrounding
             // chrome rather than floating above it.
-            Button       = BuildButton(PanelRaisedTexture, BorderStrongTexture, palette.TextBody,     metrics, padSm, padXs);
-            ButtonActive = BuildButton(AccentActiveTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
-            ButtonDanger = BuildButton(DangerTexture,       BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
-            Tab          = BuildButton(PanelTexture,        BorderStrongTexture, palette.TextBody,     metrics, padSm, padXs);
-            TabActive    = BuildButton(AccentActiveTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
+            Button         = BuildButton(PanelRaisedTexture, AccentHoverTexture, BorderStrongTexture, palette.TextBody, metrics, padSm, padXs);
+            ButtonActive   = BuildButton(AccentActiveTexture, AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
+            ButtonDanger   = BuildButton(DangerTexture,       AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
+            ButtonDisabled = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
+            Tab            = BuildButton(PanelTexture,        AccentHoverTexture, BorderStrongTexture, palette.TextBody, metrics, padSm, padXs);
+            TabActive      = BuildButton(AccentActiveTexture, AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
+            TabDisabled    = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
         }
 
         private static GUIStyle BuildBox(Texture2D background, int padding)
@@ -167,15 +178,23 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             return style;
         }
 
-        private static GUIStyle BuildButton(Texture2D background, Texture2D hover, Color textColor, IScenarioUiMetrics metrics, int padX, int padY)
+        private static GUIStyle BuildButton(Texture2D background, Texture2D hover, Texture2D active, Color textColor, IScenarioUiMetrics metrics, int padX, int padY)
         {
             GUIStyle style = new GUIStyle(GUI.skin.button);
             style.normal.background = background;
             style.hover.background = hover;
-            style.active.background = hover;
+            style.active.background = active;
+            style.focused.background = hover;
+            style.onNormal.background = active;
+            style.onHover.background = hover;
+            style.onActive.background = active;
             style.normal.textColor = textColor;
             style.hover.textColor = textColor;
             style.active.textColor = textColor;
+            style.focused.textColor = textColor;
+            style.onNormal.textColor = textColor;
+            style.onHover.textColor = textColor;
+            style.onActive.textColor = textColor;
             style.alignment = TextAnchor.MiddleCenter;
             style.fontSize = metrics.FontSizeBody;
             style.border = new RectOffset(1, 1, 1, 1);

@@ -270,6 +270,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildDeletionAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioDraftMetadataEditService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPngImportService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPublishExportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
@@ -287,6 +288,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthoringCommandHandlers.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioPublishCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />

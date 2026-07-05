@@ -9,7 +9,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
     internal static class ScenarioAuthoringWindowIds
     {
         public const string Scenario = "scenario";
-        public const string Layers = "layers";
         public const string Hierarchy = "hierarchy";
         public const string SelectionStack = "selection_stack";
         public const string TilesPalette = "tiles_palette";
@@ -21,7 +20,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
         public const string Quests = "quests";
         public const string Map = "map";
         public const string Publish = "publish";
-        public const string Calendar = "calendar";
         public const string Settings = "editor_settings";
     }
 
@@ -34,8 +32,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
             Register(Create(ScenarioAuthoringWindowIds.Scenario, "Overview", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Scenario, 0, 760f, 420f, 420f, 240f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, true, false));
             Register(Create(ScenarioAuthoringWindowIds.Hierarchy, "Hierarchy", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Hierarchy, 1, 640f, 460f, 360f, 220f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, true, true, true));
             Register(Create(ScenarioAuthoringWindowIds.SelectionStack, "Selection Stack", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.SelectionStack, 2, 620f, 360f, 360f, 180f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, true, true, true));
-            Register(Create(ScenarioAuthoringWindowIds.Layers, "Layers", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Layers, 3, 560f, 360f, 360f, 180f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, true, false));
-            Register(Create(ScenarioAuthoringWindowIds.TilesPalette, "Room Palette", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.TilesPalette, 4, 760f, 520f, 420f, 260f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, false, false));
+            Register(Create(ScenarioAuthoringWindowIds.TilesPalette, "Build Palette", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.TilesPalette, 4, 760f, 520f, 420f, 260f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, true, false));
             Register(Create(ScenarioAuthoringWindowIds.Inspector, "Selection", ScenarioAuthoringShellDock.Right, ScenarioAuthoringWindowContentKind.Inspector, 5, 380f, 620f, 320f, 260f, ScenarioAuthoringShellRendererKind.Inspector, ScenarioStageKind.None, true, false, true, true, true));
             Register(Create(ScenarioAuthoringWindowIds.BuildTools, "Tool Workspace", ScenarioAuthoringShellDock.Bottom, ScenarioAuthoringWindowContentKind.BuildTools, 6, 980f, 520f, 640f, 320f, ScenarioAuthoringShellRendererKind.BottomTray, ScenarioStageKind.None, true, false, true, true, true));
             Register(Create(ScenarioAuthoringWindowIds.Triggers, "Timeline", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Triggers, 7, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Events, false, false, false, true, true));
@@ -44,8 +41,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
             Register(Create(ScenarioAuthoringWindowIds.Quests, "Story", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Quests, 10, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Quests, false, false, false, true, true));
             Register(Create(ScenarioAuthoringWindowIds.Map, "Map", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Map, 11, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Map, false, false, false, true, true));
             Register(Create(ScenarioAuthoringWindowIds.Publish, "Publish", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Publish, 12, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Publish, false, false, false, true, true));
-            Register(Create(ScenarioAuthoringWindowIds.Calendar, "Schedule", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Calendar, 13, 760f, 420f, 520f, 260f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, true, true));
-            Register(Create(ScenarioAuthoringWindowIds.Settings, "Workshop Settings", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Empty, 14, 760f, 540f, 520f, 360f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, true, false, false));
         }
 
         public ScenarioAuthoringWindowDefinition[] GetDefinitions()

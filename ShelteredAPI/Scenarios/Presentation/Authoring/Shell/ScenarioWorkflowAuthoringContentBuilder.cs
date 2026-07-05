@@ -217,7 +217,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     title = "Selection";
                     items.Add(Item.Property("Selected Target", Item.FormatTarget(selectedTarget)));
                     items.Add(Item.Text("Selection mode is active for inspecting world objects, rooms, and authored sprites."));
-                    items.Add(Item.Text("Structure, Objects, and Walls & Wiring expose palettes in the Tiles Palette window."));
+                    items.Add(Item.Text("Structure, Objects, and Walls & Wiring expose palettes in the Build Palette window."));
                     break;
 
                 default:
