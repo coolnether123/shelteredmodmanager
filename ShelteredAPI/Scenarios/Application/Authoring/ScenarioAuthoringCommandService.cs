@@ -23,7 +23,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioTimelineNavigationService timelineNavigationService,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioCharacterEditorAuthoringService characterEditorService,
-            ScenarioEventAuthoringService eventAuthoringService)
+            ScenarioEventAuthoringService eventAuthoringService,
+            ScenarioPublishExportService publishExportService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -35,7 +36,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 timelineNavigationService,
                 selectionScopeService,
                 characterEditorService,
-                eventAuthoringService));
+                eventAuthoringService,
+                publishExportService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -60,7 +62,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioTimelineNavigationService timelineNavigationService,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioCharacterEditorAuthoringService characterEditorService,
-            ScenarioEventAuthoringService eventAuthoringService)
+            ScenarioEventAuthoringService eventAuthoringService,
+            ScenarioPublishExportService publishExportService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -73,6 +76,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
+                new ScenarioPublishCommandHandler(publishExportService),
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new SelectionCommandHandler(),
                 new ToolCommandHandler(layoutService)

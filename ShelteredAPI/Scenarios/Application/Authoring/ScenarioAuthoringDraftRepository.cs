@@ -253,6 +253,117 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
+        public bool TryRenameDraft(string draftId, string newDraftId, string displayName, string description, out ScenarioInfo updatedInfo, out string error)
+        {
+            updatedInfo = null;
+            error = null;
+
+            if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
+                return false;
+            }
+
+            string normalizedId = NormalizeDraftId(newDraftId);
+            if (string.IsNullOrEmpty(normalizedId))
+            {
+                error = "Draft file name is required.";
+                return false;
+            }
+
+            lock (_sync)
+            {
+                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
+                for (int i = 0; i < files.Length; i++)
+                {
+                    ScenarioDefinition existing = SafeLoadDefinition(files[i]);
+                    if (existing != null
+                        && !string.Equals(existing.Id, draftId, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(existing.Id, normalizedId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        error = "A draft already uses file name '" + normalizedId + "'.";
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try
+                    {
+                        ScenarioDefinition definition = _serializer.Load(files[i]);
+                        if (definition == null || !string.Equals(definition.Id, draftId, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        definition.Id = normalizedId;
+                        definition.DisplayName = string.IsNullOrEmpty(displayName) ? definition.DisplayName : displayName;
+                        definition.Description = description ?? string.Empty;
+                        _serializer.Save(definition, files[i]);
+                        updatedInfo = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Renamed draft '" + draftId + "' to '" + normalizedId + "'.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        error = ex.Message;
+                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to rename draft '" + draftId + "': " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+
+            error = "Draft '" + draftId + "' was not found.";
+            return false;
+        }
+
+        public bool TryDuplicateDraft(string draftId, out ScenarioInfo duplicateInfo, out string error)
+        {
+            duplicateInfo = null;
+            error = null;
+            if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
+                return false;
+            }
+
+            lock (_sync)
+            {
+                string[] files = EnumerateDraftScenarioFiles(GetDraftsRootPath());
+                for (int i = 0; i < files.Length; i++)
+                {
+                    try
+                    {
+                        ScenarioDefinition source = _serializer.Load(files[i]);
+                        if (source == null || !string.Equals(source.Id, draftId, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        DraftRecord duplicate = CreateDraft(source.BaseGameMode);
+                        if (duplicate == null || duplicate.Info == null || string.IsNullOrEmpty(duplicate.Info.FilePath))
+                        {
+                            error = "Could not allocate duplicate draft storage.";
+                            return false;
+                        }
+
+                        string duplicateId = duplicate.Info.Id;
+                        source.Id = duplicateId;
+                        source.DisplayName = BuildDuplicateDisplayName(source.DisplayName);
+                        _serializer.Save(source, duplicate.Info.FilePath);
+                        duplicateInfo = _serializer.LoadInfo(duplicate.Info.FilePath, DraftOwnerId);
+                        MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Duplicated draft '" + draftId + "' as '" + duplicateId + "'.");
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        error = ex.Message;
+                        MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to duplicate draft '" + draftId + "': " + ex.Message);
+                        return false;
+                    }
+                }
+            }
+
+            error = "Draft '" + draftId + "' was not found.";
+            return false;
+        }
+
         public bool DeleteDraft(string draftId, string reason)
         {
             if (string.IsNullOrEmpty(draftId))
@@ -304,6 +415,40 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (name != 0) return name;
 
             return string.Compare(left.Id, right.Id, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private ScenarioDefinition SafeLoadDefinition(string filePath)
+        {
+            try { return _serializer.Load(filePath); }
+            catch { return null; }
+        }
+
+        private static string BuildDuplicateDisplayName(string displayName)
+        {
+            return (string.IsNullOrEmpty(displayName) ? "Custom Scenario" : displayName) + " Copy";
+        }
+
+        private static string NormalizeDraftId(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return null;
+
+            string trimmed = value.Trim();
+            if (trimmed.Length == 0)
+                return null;
+
+            char[] invalid = Path.GetInvalidFileNameChars();
+            List<char> chars = new List<char>();
+            for (int i = 0; i < trimmed.Length; i++)
+            {
+                char c = trimmed[i];
+                bool bad = char.IsWhiteSpace(c);
+                for (int j = 0; !bad && j < invalid.Length; j++)
+                    bad = c == invalid[j];
+                chars.Add(bad ? '_' : c);
+            }
+
+            return new string(chars.ToArray()).Trim('_', '.');
         }
 
         private static string CreateDraftId()

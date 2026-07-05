@@ -21,12 +21,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return new[]
             {
+                BuildRuntimeNoticeSection(),
                 BuildOverviewSection(definition, map),
                 BuildMarkerSection(map),
                 BuildBoundaryTerrainSection(map),
                 BuildLootSection(map),
                 BuildEncounterSection(map),
                 BuildRouteSection(map)
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildRuntimeNoticeSection()
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_runtime_notice",
+                Title = "Runtime Notice",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = new[]
+                {
+                    Text("Map data is saved with the scenario but is not applied in-game yet.", null, "Deferred", "MAP", true),
+                    Property("Supported Now", "Use Build Palette, People, Stockpile, Events, Quests, and Art for runtime-visible scenario changes."),
+                    Property("Deferred", "Map editing UI and runtime map projection are planned for a later pass.")
+                }
             };
         }
 
@@ -250,6 +268,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorItem Text(string value)
         {
             return ScenarioInspectorItemFactory.Text(value);
+        }
+
+        private static ScenarioAuthoringInspectorItem Text(string value, string detail, string badge, string iconText, bool emphasized)
+        {
+            return ScenarioInspectorItemFactory.Text(value, detail, badge, iconText, null, emphasized);
         }
 
         private static ScenarioAuthoringInspectorItem Property(string label, string value)

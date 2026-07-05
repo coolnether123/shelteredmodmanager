@@ -55,7 +55,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<WallWiringEditService>(),
                     resolver.Get<PlacementPaletteService>(),
                     resolver.Get<RoomVisualPaletteService>(),
-                    resolver.Get<PlacementGhostSessionService>());
+                    resolver.Get<PlacementGhostSessionService>(),
+                    resolver.Get<ScenarioBuildDeletionAuthoringService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapDraftService(); });
             services.AddSingleton<IScenarioAuthoringSectionHub>(delegate(IServiceResolver resolver)
@@ -68,6 +69,14 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringWindowRegistry(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringSettingsService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioPublishExportService(
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<IScenarioDefinitionSerializer>(),
+                    resolver.Get<IScenarioDefinitionValidator>(),
+                    resolver.Get<IScenarioDefinitionCatalogService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTargetClassifier(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -110,7 +119,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioTimelineNavigationService>(),
                     resolver.Get<ScenarioSelectionScopeService>(),
                     resolver.Get<ScenarioCharacterEditorAuthoringService>(),
-                    resolver.Get<ScenarioEventAuthoringService>());
+                    resolver.Get<ScenarioEventAuthoringService>(),
+                    resolver.Get<ScenarioPublishExportService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

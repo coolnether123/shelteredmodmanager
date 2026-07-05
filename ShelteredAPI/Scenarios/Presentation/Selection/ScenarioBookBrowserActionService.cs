@@ -2,6 +2,7 @@ using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.Harmony;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
@@ -153,6 +154,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public bool UpdateDraftMetadata(ScenarioCatalogEntry entry, string displayName, string description, out ScenarioInfo updatedInfo, out string status)
         {
+            return UpdateDraftMetadata(entry, null, displayName, description, out updatedInfo, out status);
+        }
+
+        public bool UpdateDraftMetadata(ScenarioCatalogEntry entry, string draftId, string displayName, string description, out ScenarioInfo updatedInfo, out string status)
+        {
             updatedInfo = null;
             status = null;
             if (entry == null || entry.Source != ScenarioCatalogSource.Draft)
@@ -162,6 +168,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             string error;
+            if (!string.IsNullOrEmpty(draftId) && !string.Equals(draftId, entry.ScenarioId, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!ScenarioAuthoringDraftRepository.Instance.TryRenameDraft(entry.ScenarioId, draftId, displayName, description, out updatedInfo, out error))
+                {
+                    status = "Could not rename draft: " + Safe(error, "unknown error");
+                    return false;
+                }
+
+                status = "Draft renamed.";
+                return true;
+            }
+
             if (!_draftMetadataEditService.TryUpdate(
                     entry.ScenarioId,
                     new ScenarioDraftMetadataUpdate
@@ -177,6 +195,76 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             status = "Draft details saved.";
+            return true;
+        }
+
+        public bool DuplicateDraft(ScenarioCatalogEntry entry, out ScenarioInfo duplicateInfo, out string status)
+        {
+            duplicateInfo = null;
+            status = null;
+            if (entry == null || entry.Source != ScenarioCatalogSource.Draft)
+            {
+                status = "Select a draft scenario first.";
+                return false;
+            }
+
+            string error;
+            if (!ScenarioAuthoringDraftRepository.Instance.TryDuplicateDraft(entry.ScenarioId, out duplicateInfo, out error))
+            {
+                status = "Could not duplicate draft: " + Safe(error, "unknown error");
+                return false;
+            }
+
+            status = "Draft duplicated.";
+            return true;
+        }
+
+        public bool DeleteDraft(ScenarioCatalogEntry entry, out string status)
+        {
+            status = null;
+            if (entry == null || entry.Source != ScenarioCatalogSource.Draft)
+            {
+                status = "Select a draft scenario first.";
+                return false;
+            }
+
+            _saveLibrary.ClearQueuedNewGameSave(_launchCoordinator.GetVirtualSaveType(entry));
+            bool deleted = ScenarioAuthoringDraftRepository.Instance.DeleteDraft(entry.ScenarioId, "Scenario browser draft delete.");
+            status = deleted ? "Draft deleted." : "Draft delete failed.";
+            return deleted;
+        }
+
+        public bool ResumeRecovery(ScenarioBookRowModel row, out string status)
+        {
+            status = null;
+            if (row == null)
+            {
+                status = "No recovery item is selected.";
+                return false;
+            }
+
+            status = "Pending redirect left in place. Continue from the game flow that was interrupted.";
+            return true;
+        }
+
+        public bool CleanupRecovery(ScenarioBookRowModel row, out string status)
+        {
+            status = null;
+            if (row == null)
+            {
+                status = "No recovery item is selected.";
+                return false;
+            }
+
+            bool clearedSave = _saveLibrary.ClearQueuedNewGameSave(row.RecoverySaveType);
+            bool clearedLoad = _saveLibrary.ClearQueuedLoad(row.RecoverySaveType);
+            if (!clearedSave && !clearedLoad)
+            {
+                PlatformSaveProxy.ClearNextSave(row.RecoverySaveType);
+                PlatformSaveProxy.ClearNextLoad(row.RecoverySaveType);
+            }
+
+            status = "Pending redirect cleared. No save or draft files were deleted.";
             return true;
         }
 

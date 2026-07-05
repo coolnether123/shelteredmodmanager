@@ -267,6 +267,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 case ScenarioBookRowKind.CreateDraft:
                     RunLaunchAction(delegate(out string status) { return _actions.CreateDraft(out status); });
                     break;
+                case ScenarioBookRowKind.DuplicateDraft:
+                    RunBrowserAction(delegate(out string status) { ModAPI.Scenarios.ScenarioInfo duplicate; return _actions.DuplicateDraft(row.Scenario, out duplicate, out status); });
+                    break;
+                case ScenarioBookRowKind.DeleteDraft:
+                    HandleDeleteSelected(row);
+                    break;
+                case ScenarioBookRowKind.RecoveryResume:
+                    RunBrowserAction(delegate(out string status) { return _actions.ResumeRecovery(row, out status); });
+                    break;
+                case ScenarioBookRowKind.RecoveryCleanup:
+                    RunBrowserAction(delegate(out string status) { return _actions.CleanupRecovery(row, out status); });
+                    break;
                 case ScenarioBookRowKind.LoadSave:
                     RunLaunchAction(delegate(out string status) { return _actions.LoadSave(row.Scenario, row.Save, out status); });
                     break;
@@ -278,7 +290,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_deletePromptActive)
                 return;
 
-            if (row == null || row.Scenario == null || row.Save == null)
+            if (row == null || (row.Kind == ScenarioBookRowKind.LoadSave && (row.Scenario == null || row.Save == null)))
                 return;
 
             _deletePromptActive = true;
@@ -319,7 +331,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     bool deleted = false;
                     try
                     {
-                        deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
+                        if (row.Kind == ScenarioBookRowKind.DeleteDraft)
+                            deleted = _actions.DeleteDraft(row.Scenario, out status);
+                        else
+                            deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
                     }
                     catch (Exception ex)
                     {
@@ -433,6 +448,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return new ScenarioBookDraftEditorModel
             {
                 Scenario = _selectedScenario,
+                DraftId = _selectedScenario != null ? Safe(_selectedScenario.ScenarioId, string.Empty) : string.Empty,
                 DisplayName = _selectedScenario != null ? Safe(_selectedScenario.DisplayName, _selectedScenario.ScenarioId) : string.Empty,
                 Description = _selectedScenario != null ? (_selectedScenario.Description ?? string.Empty) : string.Empty
             };
@@ -445,7 +461,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             ModAPI.Scenarios.ScenarioInfo updatedInfo;
             string status;
-            if (!_actions.UpdateDraftMetadata(_selectedScenario, model.DisplayName, model.Description, out updatedInfo, out status))
+            if (!_actions.UpdateDraftMetadata(_selectedScenario, model.DraftId, model.DisplayName, model.Description, out updatedInfo, out status))
             {
                 SetStatus(status);
                 return;
@@ -480,6 +496,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             Close();
+        }
+
+        private void RunBrowserAction(ScenarioBookLaunchAction action)
+        {
+            if (action == null)
+                return;
+
+            string status;
+            bool changed = action(out status);
+            SetStatus(status);
+            if (changed)
+            {
+                _dataSource.Refresh();
+                ClearPreparedPages();
+                RenderCurrentView(false);
+            }
         }
 
         private void BackOrClose()

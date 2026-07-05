@@ -42,6 +42,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private PaperPagedList _pagedList;
         private BookPageNavigatorWidget _navigator;
         private BookSearchBarWidget _searchBar;
+        private UIInput _draftIdInput;
         private UIInput _draftNameInput;
         private UIInput _draftDescriptionInput;
 
@@ -98,6 +99,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             _pagedList.Clear();
+            _draftIdInput = null;
             _draftNameInput = null;
             _draftDescriptionInput = null;
             if (view == ScenarioBookBrowserViewKind.Saves)
@@ -209,6 +211,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             _pagedList.Clear();
+            _draftIdInput = null;
             _draftNameInput = null;
             _draftDescriptionInput = null;
 
@@ -744,18 +747,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             Action openDraft)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookDraftEditor", Vector3.zero);
-            _ui.CreateLabel(root, "NameLabel", "Scenario Name",
+            _ui.CreateLabel(root, "IdLabel", "Draft File Name",
                 new Vector3(-520f, 164f, 0f), 19, _chrome.Palette.Ink,
                 LeftPageWidth, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            _draftIdInput = CreateTextInput(root, "DraftIdInput",
+                new Vector3(LeftPageX, 124f, 0f), DraftInputWidth, 44,
+                model != null ? model.DraftId : string.Empty, false);
+
+            _ui.CreateLabel(root, "NameLabel", "Scenario Name",
+                new Vector3(-520f, 90f, 0f), 19, _chrome.Palette.Ink,
+                LeftPageWidth, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             _draftNameInput = CreateTextInput(root, "ScenarioNameInput",
-                new Vector3(LeftPageX, 124f, 0f), DraftInputWidth, 54,
+                new Vector3(LeftPageX, 50f, 0f), DraftInputWidth, 44,
                 model != null ? model.DisplayName : string.Empty, false);
 
             _ui.CreateLabel(root, "DescriptionLabel", "Description",
-                new Vector3(-520f, 68f, 0f), 19, _chrome.Palette.Ink,
+                new Vector3(-520f, -8f, 0f), 19, _chrome.Palette.Ink,
                 LeftPageWidth, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
             _draftDescriptionInput = CreateTextInput(root, "ScenarioDescriptionInput",
-                new Vector3(LeftPageX, -48f, 0f), DraftInputWidth, 200,
+                new Vector3(LeftPageX, -126f, 0f), DraftInputWidth, 190,
                 model != null ? model.Description : string.Empty, true);
 
             UILabel detail = _ui.CreateLabel(root, "DraftDetail", "Local draft metadata is written back to scenario.xml.",
@@ -811,6 +821,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return new ScenarioBookDraftEditorModel
             {
                 Scenario = original != null ? original.Scenario : null,
+                DraftId = _draftIdInput != null ? _draftIdInput.value : string.Empty,
                 DisplayName = _draftNameInput != null ? _draftNameInput.value : string.Empty,
                 Description = _draftDescriptionInput != null ? _draftDescriptionInput.value : string.Empty
             };

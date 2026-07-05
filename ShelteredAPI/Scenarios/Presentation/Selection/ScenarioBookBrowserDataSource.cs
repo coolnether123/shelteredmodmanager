@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Shared;
@@ -121,6 +122,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 rows.Add(BuildTypeRow(ScenarioBookType.Draft, "Draft Scenarios", "Authoring workspace for unfinished scenarios, not normal play content."));
 
+            AddRecoveryRows(rows);
             rows.Add(BuildTypeRow(ScenarioBookType.Surrounded, "Surrounded", "Scenario saves and custom content built on the Surrounded rule set."));
             rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
             AddPublishedScenarioRows(rows);
@@ -194,6 +196,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Badge = "Authoring",
                     IsLocked = !entry.CanStart
                 });
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.DuplicateDraft,
+                    Scenario = entry,
+                    Title = "Duplicate Draft",
+                    Detail = "Create a separate copy of this draft and its scenario.xml.",
+                    Badge = "Copy",
+                    IsLocked = !entry.CanStart
+                });
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.DeleteDraft,
+                    Scenario = entry,
+                    Title = "Delete Draft",
+                    Detail = "Quarantine this draft and remove its authoring save after confirmation.",
+                    Badge = "Delete",
+                    CanDelete = true
+                });
                 return rows;
             }
 
@@ -249,6 +269,56 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             return rows;
+        }
+
+        private static void AddRecoveryRows(List<ScenarioBookRowModel> rows)
+        {
+            if (rows == null)
+                return;
+
+            AddRecoveryRows(rows, PlatformSaveProxy.NextSave, PlatformSaveProxy._nextSaveLock, "queued startup save");
+            AddRecoveryRows(rows, PlatformSaveProxy.NextLoad, PlatformSaveProxy._nextLoadLock, "queued load target");
+        }
+
+        private static void AddRecoveryRows(
+            List<ScenarioBookRowModel> rows,
+            Dictionary<SaveManager.SaveType, PlatformSaveProxy.Target> targets,
+            object sync,
+            string label)
+        {
+            if (targets == null || sync == null)
+                return;
+
+            lock (sync)
+            {
+                foreach (KeyValuePair<SaveManager.SaveType, PlatformSaveProxy.Target> pair in targets)
+                {
+                    PlatformSaveProxy.Target target = pair.Value;
+                    if (target == null)
+                        continue;
+
+                    rows.Add(new ScenarioBookRowModel
+                    {
+                        Kind = ScenarioBookRowKind.RecoveryResume,
+                        Title = "Resume " + label,
+                        Detail = "Pending redirect: " + Safe(target.scenarioId, "<unknown>") + " / " + Safe(target.saveId, "<unknown>") + ".",
+                        Badge = "Recovery",
+                        RecoveryScenarioId = target.scenarioId,
+                        RecoverySaveId = target.saveId,
+                        RecoverySaveType = pair.Key
+                    });
+                    rows.Add(new ScenarioBookRowModel
+                    {
+                        Kind = ScenarioBookRowKind.RecoveryCleanup,
+                        Title = "Clear " + label,
+                        Detail = "Remove this pending redirect. No draft or save files are deleted.",
+                        Badge = "Cleanup",
+                        RecoveryScenarioId = target.scenarioId,
+                        RecoverySaveId = target.saveId,
+                        RecoverySaveType = pair.Key
+                    });
+                }
+            }
         }
 
         private int CountEntries(ScenarioBookType type)
@@ -387,6 +457,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string days = detail != null ? detail.DaysSurvived.ToString() + " day(s)" : "no day info";
             string result = BuildOutcomeLabel(detail);
             string score = ScenarioBookScoreDisplayReader.BuildSaveScoreLabel(detail);
+            if (detail != null && !string.IsNullOrEmpty(detail.MetadataError))
+                return family + ", " + days + " - Metadata error\n" + detail.MetadataError;
+
             string secondLine = result;
             if (!string.IsNullOrEmpty(score))
                 secondLine += " - " + score;

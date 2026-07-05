@@ -42,6 +42,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellMinimalMode = "shell.layout.minimal_mode";
         public const string ActionShellFocusSelection = "shell.layout.focus_selection";
         public const string ActionShellOpenSettings = "shell.settings.open";
+        public const string ActionShellOpenTimeline = "shell.timeline.open";
         public const string ActionShellOpenCalendar = "shell.calendar.open";
         public const string ActionShellCloseSettings = "shell.settings.close";
         public const string ActionShellSettingsReset = "shell.settings.reset";
@@ -69,6 +70,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellTabShell = "shell.tab.shell";
         public const string ActionSave = "editor.save";
         public const string ActionPlaytest = "editor.playtest.toggle";
+        public const string ActionPublishExport = "publish.export";
         public const string ActionOpenPauseMenu = "editor.pause_menu.open";
         public const string ActionCloseEditor = "editor.close";
         public const string ActionConvertToNormal = "editor.convert_to_normal";
@@ -189,6 +191,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionBuildStructureRoom = "build.place.room";
         public const string ActionBuildStructureLadder = "build.place.ladder";
         public const string ActionBuildStructureLight = "build.place.light";
+        public const string ActionBuildDeleteObject = "build.delete.object";
+        public const string ActionBuildDeleteRoom = "build.delete.room";
+        public const string ActionBuildDeleteLadder = "build.delete.ladder";
+        public const string ActionBuildDeleteLight = "build.delete.light";
+        public const string ActionBuildResetWall = "build.reset.wall";
+        public const string ActionBuildResetWire = "build.reset.wire";
         public const string ActionBuildWallApplyPrefix = "build.wall.apply.";
         public const string ActionBuildWireApplyPrefix = "build.wire.apply.";
         public const string ActionToolSelect = "tool.select";
@@ -272,7 +280,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         Empty = 0,
         Scenario = 1,
-        Layers = 2,
         TilesPalette = 3,
         Inspector = 4,
         BuildTools = 5,
@@ -282,7 +289,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Quests = 9,
         Map = 10,
         Publish = 11,
-        Calendar = 12,
         Hierarchy = 13,
         SelectionStack = 14
     }
@@ -820,6 +826,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public Sprite PreviewSprite { get; set; }
         public bool Enabled { get; set; }
         public bool Emphasized { get; set; }
+        public string DisabledReason { get; set; }
     }
 
     internal enum ScenarioAuthoringInspectorSectionLayout

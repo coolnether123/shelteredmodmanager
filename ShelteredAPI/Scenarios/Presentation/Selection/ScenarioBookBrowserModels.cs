@@ -26,6 +26,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         StartScenario,
         OpenDraft,
         CreateDraft,
+        DuplicateDraft,
+        DeleteDraft,
+        RecoveryResume,
+        RecoveryCleanup,
         LoadSave
     }
 
@@ -41,11 +45,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public ScenarioCatalogEntry Scenario;
         public SaveEntry Save;
         public ScenarioBookSaveDetailModel SaveDetail;
+        public string RecoveryScenarioId;
+        public string RecoverySaveId;
+        public SaveManager.SaveType RecoverySaveType;
     }
 
     internal sealed class ScenarioBookDraftEditorModel
     {
         public ScenarioCatalogEntry Scenario;
+        public string DraftId;
         public string DisplayName;
         public string Description;
     }
