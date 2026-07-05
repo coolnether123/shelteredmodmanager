@@ -28,7 +28,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float alpha = visual != null ? visual.Alpha : 1f;
             float scale = visual != null ? visual.Scale : 1f;
             using (ScenarioUiGuiScope.Apply(alpha, rect, scale))
-                return DrawWindowCoreUnscoped(rect, window);
+            {
+                bool scaled = Mathf.Abs(scale - 1f) > 0.0001f;
+                if (scaled)
+                    _scaledWindowDrawDepth++;
+
+                try
+                {
+                    return DrawWindowCoreUnscoped(rect, window);
+                }
+                finally
+                {
+                    if (scaled)
+                        _scaledWindowDrawDepth--;
+                }
+            }
         }
 
         private Rect DrawWindowCoreUnscoped(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -1020,7 +1034,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             GUIStyle style = !action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
-            bool hovered = rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
+            bool manualHighlightEnabled = _scaledWindowDrawDepth == 0;
+            bool hovered = manualHighlightEnabled && rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
             bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
             if (GUI.Button(rect, GUIContent.none, style) && action.Enabled)
             {

@@ -18,6 +18,7 @@ namespace ShelteredAPI.Scenarios.Composition{
         public static void AddScenarioPresentationModule(this ServiceCollection services)
         {
             services.AddScenarioPresentation();
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringShellAnimationService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapAuthoringContentBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestAuthoringContentBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioHelpAuthoringContentBuilder(); });

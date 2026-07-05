@@ -70,6 +70,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                 tween.Set(value);
         }
 
+        public void Remove(string key)
+        {
+            if (!string.IsNullOrEmpty(key))
+                _tweens.Remove(key);
+        }
+
         public void Advance(float deltaTime)
         {
             foreach (KeyValuePair<string, ScenarioUiTween> pair in _tweens)

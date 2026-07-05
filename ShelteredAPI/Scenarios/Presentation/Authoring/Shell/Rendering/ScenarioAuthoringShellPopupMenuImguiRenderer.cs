@@ -115,7 +115,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
-            bool hovered = rect.Contains(mouse);
+            bool manualHighlightEnabled = _scaledWindowDrawDepth == 0;
+            bool hovered = manualHighlightEnabled && rect.Contains(mouse);
             bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
             float press = action.Enabled ? _animations.GetButtonPressForAction(action.Id, pressed) : 0f;
             Rect visualRect = press > 0.001f

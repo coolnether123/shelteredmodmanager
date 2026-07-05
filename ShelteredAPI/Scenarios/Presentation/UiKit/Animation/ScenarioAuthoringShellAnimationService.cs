@@ -36,6 +36,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private readonly ScenarioUiTweenSet _tweens = new ScenarioUiTweenSet();
         private readonly Dictionary<string, WindowVisualState> _windows = new Dictionary<string, WindowVisualState>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _buttonPressKeys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _windowRemovalBuffer = new List<string>();
         private bool _enabled = true;
         private int _lastFrame = -1;
         private string _lastTooltip;
@@ -73,8 +74,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             state.LastRect = rect;
             state.Floating = window.Dock == ScenarioAuthoringShellDock.Floating;
             state.VisibleThisFrame = window.Visible && !window.Collapsed;
+            state.RegisteredThisFrame = true;
 
-            if (!state.WasVisible && state.VisibleThisFrame)
+            if (state.VisibleThisFrame && (!state.WasVisible || state.Closing))
             {
                 PlayWindowOpen(state);
             }
@@ -102,13 +104,14 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
 
         public void CompleteWindowRegistration()
         {
+            _windowRemovalBuffer.Clear();
             foreach (KeyValuePair<string, WindowVisualState> pair in _windows)
             {
                 WindowVisualState state = pair.Value;
                 if (state == null)
                     continue;
 
-                if (state.WasVisible && !state.VisibleThisFrame)
+                if (!state.RegisteredThisFrame && state.WasVisible)
                     PlayWindowClose(state);
 
                 if (state.Closing)
@@ -118,10 +121,26 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                     if (_tweens.IsRunning(state.AlphaKey) || _tweens.IsRunning(state.ScaleKey))
                         TransitionActive = true;
                     else if (state.Alpha <= 0.001f)
+                    {
                         state.Closing = false;
+                        _windowRemovalBuffer.Add(pair.Key);
+                    }
                 }
 
+                state.WasVisible = state.RegisteredThisFrame && state.VisibleThisFrame;
                 state.VisibleThisFrame = false;
+                state.RegisteredThisFrame = false;
+            }
+
+            for (int i = 0; i < _windowRemovalBuffer.Count; i++)
+            {
+                WindowVisualState removed;
+                if (_windows.TryGetValue(_windowRemovalBuffer[i], out removed))
+                {
+                    _tweens.Remove(removed.AlphaKey);
+                    _tweens.Remove(removed.ScaleKey);
+                    _windows.Remove(_windowRemovalBuffer[i]);
+                }
             }
         }
 
@@ -187,7 +206,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
 
         public float GetPopupProgress(bool visible, bool windowMenu)
         {
-            return GetBinaryProgress(windowMenu ? WindowMenuKey : ContextMenuKey, visible, PopupDuration, ScenarioUiEasing.PopupOut);
+            return GetBinaryProgress(windowMenu ? WindowMenuKey : ContextMenuKey, visible, PopupDuration, ScenarioUiEasing.PopupOut, false);
         }
 
         public float GetTooltipAlpha(string tooltip)
@@ -199,7 +218,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                 _tweens.Set(TooltipKey, 0f);
             }
 
-            return GetBinaryProgress(TooltipKey, visible, TooltipDuration, ScenarioUiEasing.EaseOut);
+            return GetBinaryProgress(TooltipKey, visible, TooltipDuration, ScenarioUiEasing.EaseOut, false);
         }
 
         public float GetModalDimAlpha(bool visible)
@@ -208,12 +227,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                 _tweens.Set(ModalPanelKey, 0f);
 
             _modalVisibleLastFrame = visible;
-            return GetBinaryProgress(ModalDimKey, visible, ModalDimDuration, ScenarioUiEasing.EaseOut) * 0.45f;
+            return GetBinaryProgress(ModalDimKey, visible, ModalDimDuration, ScenarioUiEasing.EaseOut, true) * 0.45f;
         }
 
         public float GetModalPanelProgress(bool visible)
         {
-            float progress = GetBinaryProgress(ModalPanelKey, visible, ModalPanelDuration, ScenarioUiEasing.EaseOut);
+            float progress = GetBinaryProgress(ModalPanelKey, visible, ModalPanelDuration, ScenarioUiEasing.EaseOut, true);
             if (visible && _tweens.IsRunning(ModalPanelKey))
                 TransitionActive = true;
             return progress;
@@ -221,17 +240,17 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
 
         public float GetHelpModalDimAlpha(bool visible)
         {
-            return GetBinaryProgress(HelpModalDimKey, visible, ModalDimDuration, ScenarioUiEasing.EaseOut) * 0.36f;
+            return GetBinaryProgress(HelpModalDimKey, visible, ModalDimDuration, ScenarioUiEasing.EaseOut, true) * 0.36f;
         }
 
         public float GetHelpModalPanelProgress(bool visible)
         {
-            return GetBinaryProgress(HelpModalPanelKey, visible, ModalPanelDuration, ScenarioUiEasing.EaseOut);
+            return GetBinaryProgress(HelpModalPanelKey, visible, ModalPanelDuration, ScenarioUiEasing.EaseOut, true);
         }
 
         public float GetTutorialOverlayProgress(bool visible)
         {
-            return GetBinaryProgress(TutorialOverlayKey, visible, PopupDuration, ScenarioUiEasing.PopupOut);
+            return GetBinaryProgress(TutorialOverlayKey, visible, PopupDuration, ScenarioUiEasing.PopupOut, true);
         }
 
         public float GetToastProgress(string status)
@@ -246,16 +265,16 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
 
             bool visible = !string.IsNullOrEmpty(status)
                 && Time.realtimeSinceStartup - _statusChangedAt <= ToastHoldSeconds;
-            return GetBinaryProgress(ToastKey, visible, visible ? ToastInDuration : ToastOutDuration, ScenarioUiEasing.EaseOut);
+            return GetBinaryProgress(ToastKey, visible, visible ? ToastInDuration : ToastOutDuration, ScenarioUiEasing.EaseOut, false);
         }
 
-        private float GetBinaryProgress(string key, bool visible, float duration, ScenarioUiEasing easing)
+        private float GetBinaryProgress(string key, bool visible, float duration, ScenarioUiEasing easing, bool blocksWorldInput)
         {
             if (!_enabled)
                 return visible ? 1f : 0f;
 
             _tweens.PlayFromCurrent(key, visible ? 1f : 0f, duration, easing, visible ? 1f : 0f);
-            if (_tweens.IsRunning(key))
+            if (blocksWorldInput && _tweens.IsRunning(key))
                 TransitionActive = true;
             return _tweens.GetValue(key, visible ? 1f : 0f);
         }
@@ -328,6 +347,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             public bool Floating;
             public bool WasVisible;
             public bool VisibleThisFrame;
+            public bool RegisteredThisFrame;
             public bool Closing;
             public float Alpha;
             public float Scale;

@@ -560,12 +560,13 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
             waited += Time.deltaTime;
             if (timeout <= 0f)
             {
-                LoaderDebugLog.Write(string.Format("[Bootstrap] ERROR: Camera timeout after {0:0.00}s.", waited));
-                yield break;
+                LoaderDebugLog.Write(string.Format("[Bootstrap] WARNING: Camera.main unavailable after {0:0.00}s; continuing bootstrap.", waited));
+                break;
             }
             yield return null;
         }
-        LoaderDebugLog.Write(string.Format("[Bootstrap] Camera.main detected after {0:0.00}s.", waited));
+        if (Camera.main != null)
+            LoaderDebugLog.Write(string.Format("[Bootstrap] Camera.main detected after {0:0.00}s.", waited));
 
         try
         {

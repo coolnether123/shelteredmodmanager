@@ -73,6 +73,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
         private float _activeContentWidth;
+        private int _scaledWindowDrawDepth;
 
         public string ModuleId
         {
@@ -174,19 +175,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(uiScale, uiScale, 1f));
+            try
+            {
 
-            float scaledWidth = Screen.width / uiScale;
-            float scaledHeight = Screen.height / uiScale;
-            Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
-            Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
-            Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
-            Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell);
-            Rect collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
-            DrawStatusBarCore(statusRect, shell);
-            inputCapture.RegisterInteractiveRect(topRect);
-            inputCapture.RegisterInteractiveRect(statusRect);
-            if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
-                inputCapture.RegisterInteractiveRect(collapsedStripRect);
+                float scaledWidth = Screen.width / uiScale;
+                float scaledHeight = Screen.height / uiScale;
+                Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
+                Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
+                Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
+                Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell);
+                Rect collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
+                DrawStatusBarCore(statusRect, shell);
+                inputCapture.RegisterInteractiveRect(topRect);
+                inputCapture.RegisterInteractiveRect(statusRect);
+                if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(collapsedStripRect);
 
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
 
@@ -314,8 +317,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
 
-            inputCapture.CompleteFrame();
-            GUI.matrix = oldMatrix;
+                inputCapture.CompleteFrame();
+            }
+            finally
+            {
+                GUI.matrix = oldMatrix;
+            }
         }
 
         private void RegisterWindowAnimationStates(
