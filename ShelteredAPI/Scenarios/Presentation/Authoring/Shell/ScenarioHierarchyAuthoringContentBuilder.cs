@@ -246,14 +246,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             string label = gameObject != null && !string.IsNullOrEmpty(gameObject.name) ? gameObject.name : kind.ToString();
             string id = kind + ":" + (gameObject != null && gameObject.transform != null ? gameObject.transform.GetInstanceID().ToString(CultureInfo.InvariantCulture) : "0");
-            bool selected = IsTargetSelected(state, id, scenarioReferenceId, gameObject);
+            bool activeSelected = IsTargetSelected(state, id, scenarioReferenceId, gameObject);
+            bool selected = activeSelected || IsTargetInMultiSelection(state, id, scenarioReferenceId, gameObject);
             bool hovered = !selected && IsTargetHovered(state, id, scenarioReferenceId, gameObject);
             return Item.Action(
                 ScenarioAuthoringActionIds.ActionHierarchySelectPrefix + id,
                 label,
-                FormatRowDetail(gameObject != null ? BuildHierarchyPath(gameObject.transform) : "Missing runtime object", selected, hovered),
+                FormatRowDetail(gameObject != null ? BuildHierarchyPath(gameObject.transform) : "Missing runtime object", activeSelected, selected, hovered),
                 gameObject != null,
-                selected,
+                activeSelected,
                 selected ? "SEL" : (hovered ? "HOV" : badge));
         }
 
@@ -272,6 +273,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return IsSameTarget(state != null ? state.HoveredTarget : null, id, scenarioReferenceId, gameObject);
         }
 
+        private static bool IsTargetInMultiSelection(ScenarioAuthoringState state, string id, string scenarioReferenceId, GameObject gameObject)
+        {
+            for (int i = 0; state != null && state.MultiSelection != null && i < state.MultiSelection.Count; i++)
+            {
+                if (IsSameTarget(state.MultiSelection[i], id, scenarioReferenceId, gameObject))
+                    return true;
+            }
+
+            return false;
+        }
+
         private static bool IsSameTarget(ScenarioAuthoringTarget target, string id, string scenarioReferenceId, GameObject gameObject)
         {
             if (target == null)
@@ -285,10 +297,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && string.Equals(target.TransformPath, BuildHierarchyPath(gameObject.transform), System.StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string FormatRowDetail(string detail, bool selected, bool hovered)
+        private static string FormatRowDetail(string detail, bool activeSelected, bool selected, bool hovered)
         {
-            if (selected)
+            if (activeSelected)
                 return detail + " / selected";
+            if (selected)
+                return detail + " / selected (multi)";
             if (hovered)
                 return detail + " / hovered";
             return detail;
@@ -352,14 +366,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         continue;
 
                     bool active = i == state.ActiveSelectionStackIndex;
-                    bool selected = SameTarget(state.SelectedTarget, target);
+                    bool activeSelected = SameTarget(state.SelectedTarget, target);
+                    bool selected = activeSelected || IsInMultiSelection(state, target);
                     bool hovered = !selected && SameTarget(state.HoveredTarget, target);
                     rows.Add(Item.ActionItem(Item.Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
                         (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Item.Safe(target.DisplayName),
-                        FormatStackDetail(target, selected, hovered, active),
+                        FormatStackDetail(target, activeSelected, selected, hovered, active),
                         true,
-                        selected || active,
+                        activeSelected || active,
                         selected ? "SEL" : (hovered ? "HOV" : (active ? "ON" : "ST")),
                         FormatGrid(target))));
                 }
@@ -396,16 +411,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 + target.GridY.Value.ToString(CultureInfo.InvariantCulture);
         }
 
-        private static string FormatStackDetail(ScenarioAuthoringTarget target, bool selected, bool hovered, bool active)
+        private static string FormatStackDetail(ScenarioAuthoringTarget target, bool activeSelected, bool selected, bool hovered, bool active)
         {
             string detail = (target != null ? target.Kind.ToString() : "Target") + " / " + Item.Safe(target != null ? target.TransformPath : null);
-            if (selected)
+            if (activeSelected)
                 return detail + " / selected";
+            if (selected)
+                return detail + " / selected (multi)";
             if (hovered)
                 return detail + " / hovered";
             if (active)
                 return detail + " / active";
             return detail;
+        }
+
+        private static bool IsInMultiSelection(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        {
+            for (int i = 0; state != null && state.MultiSelection != null && i < state.MultiSelection.Count; i++)
+            {
+                if (SameTarget(state.MultiSelection[i], target))
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool SameTarget(ScenarioAuthoringTarget left, ScenarioAuthoringTarget right)

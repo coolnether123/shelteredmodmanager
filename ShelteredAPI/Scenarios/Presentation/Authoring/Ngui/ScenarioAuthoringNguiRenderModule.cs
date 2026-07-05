@@ -552,7 +552,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             {
                 ScenarioAuthoringInspectorAction action = menu.Actions[i];
                 if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
-                    rectHeight = Math.Min(340f, rectHeight + 18f);
+                    rectHeight = Math.Min(340f, rectHeight + MeasureContextReasonHeight(action.DisabledReason, rectWidth - 24f));
             }
             Rect rect = menu.CenterOnScreen
                 ? ScenarioAuthoringShellLayout.BuildCenteredPopupRect(_scaledWidth, _scaledHeight, rectWidth, rectHeight, hudReserveRect)
@@ -568,11 +568,99 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 y += 28f;
                 if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
                 {
-                    DrawLabel("ContextActionReason" + i, rect, new Rect(12f, y - rect.y, rect.width - 24f, 18f), action.DisabledReason, 11, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 104);
-                    y += 18f;
+                    float reasonHeight = MeasureContextReasonHeight(action.DisabledReason, rect.width - 24f);
+                    DrawLabel("ContextActionReason" + i, rect, new Rect(12f, y - rect.y, rect.width - 24f, reasonHeight), FormatContextReason(action.DisabledReason, rect.width - 24f), 11, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 104);
+                    y += reasonHeight;
                 }
             }
             RegisterRect(rect);
+        }
+
+        private static float MeasureContextReasonHeight(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return 0f;
+
+            return Math.Min(54f, Math.Max(18f, CountContextReasonLines(reason, width) * 15f + 3f));
+        }
+
+        private static string FormatContextReason(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return string.Empty;
+
+            int maxChars = Math.Max(24, Mathf.FloorToInt(width / 6.2f));
+            int lines = CountContextReasonLines(reason, width);
+            if (lines <= 1)
+                return reason;
+
+            string[] words = reason.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            StringBuilder builder = new StringBuilder();
+            int lineLength = 0;
+            int writtenLines = 1;
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i];
+                int nextLength = lineLength == 0 ? word.Length : lineLength + 1 + word.Length;
+                if (nextLength > maxChars && lineLength > 0 && writtenLines < 3)
+                {
+                    builder.Append('\n');
+                    lineLength = 0;
+                    writtenLines++;
+                }
+                else if (lineLength > 0)
+                {
+                    builder.Append(' ');
+                    lineLength++;
+                }
+
+                if (writtenLines >= 3 && lineLength + word.Length > maxChars)
+                {
+                    builder.Append(ShortenStatic(word, Math.Max(3, maxChars - lineLength)));
+                    return builder.ToString();
+                }
+
+                builder.Append(word);
+                lineLength += word.Length;
+            }
+
+            return builder.ToString();
+        }
+
+        private static int CountContextReasonLines(string reason, float width)
+        {
+            if (string.IsNullOrEmpty(reason))
+                return 0;
+
+            int maxChars = Math.Max(24, Mathf.FloorToInt(width / 6.2f));
+            int lines = 1;
+            int lineLength = 0;
+            string[] words = reason.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < words.Length; i++)
+            {
+                int wordLength = words[i].Length;
+                int nextLength = lineLength == 0 ? wordLength : lineLength + 1 + wordLength;
+                if (nextLength > maxChars && lineLength > 0)
+                {
+                    lines++;
+                    lineLength = wordLength;
+                }
+                else
+                {
+                    lineLength = nextLength;
+                }
+            }
+
+            return Math.Min(3, lines);
+        }
+
+        private static string ShortenStatic(string value, int max)
+        {
+            if (string.IsNullOrEmpty(value) || max <= 0 || value.Length <= max)
+                return value ?? string.Empty;
+            if (max <= 3)
+                return value.Substring(0, max);
+            return value.Substring(0, max - 3) + "...";
         }
 
         private void DrawDocumentModal(string id, ScenarioAuthoringInspectorDocument document, Rect hudReserveRect, float preferredWidth, float preferredHeight)
@@ -866,7 +954,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             if (shell != null && shell.Settings != null)
                 builder.Append("|settings");
             if (shell != null && shell.ContextMenu != null)
+            {
                 builder.Append("|ctx").Append(shell.ContextMenu.Visible).Append(shell.ContextMenu.Title).Append(shell.ContextMenu.Detail);
+                AppendActions(builder, shell.ContextMenu.Actions);
+            }
             return builder.ToString();
         }
 
@@ -876,7 +967,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             {
                 ScenarioAuthoringInspectorAction action = actions[i];
                 if (action != null)
-                    builder.Append('|').Append(action.Id).Append(action.Label).Append(action.Enabled).Append(action.Emphasized).Append(action.Badge);
+                    builder.Append('|').Append(action.Id).Append(action.Label).Append(action.Enabled).Append(action.Emphasized).Append(action.Badge).Append(action.Detail).Append(action.Hint).Append(action.DisabledReason);
             }
         }
 
