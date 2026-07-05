@@ -57,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 case ScenarioTimelineEntryKind.Survivor:
                     return ScenarioStageKind.People;
                 case ScenarioTimelineEntryKind.Quest:
+                case ScenarioTimelineEntryKind.Story:
                     return ScenarioStageKind.Quests;
                 case ScenarioTimelineEntryKind.Map:
                     return ScenarioStageKind.Map;
@@ -86,7 +87,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
 
         private static ScenarioAuthoringTarget BuildTimelineTarget(ScenarioTimelineEntry entry, ScenarioStageKind stage)
         {
-            if (entry == null || string.IsNullOrEmpty(entry.TargetId))
+            if (entry == null)
                 return null;
 
             ScenarioAuthoringTargetKind kind = ScenarioAuthoringTargetKind.Unknown;
@@ -97,19 +98,27 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             else if (entry.Kind == ScenarioTimelineEntryKind.Object)
                 kind = ScenarioAuthoringTargetKind.PlaceableObject;
 
+            string sourceId = !string.IsNullOrEmpty(entry.SourceId) ? entry.SourceId : entry.TargetId;
+            string targetId = !string.IsNullOrEmpty(entry.TargetId) ? entry.TargetId : sourceId;
+
             return new ScenarioAuthoringTarget
             {
-                Id = "timeline:" + entry.Id,
+                Id = BuildSourceTargetId(entry),
                 Kind = kind,
-                DisplayName = entry.Title ?? entry.TargetId,
-                Description = "Timeline source " + Safe(entry.SourceCollection) + " #" + entry.SourceIndex + " target " + entry.TargetId + ".",
+                DisplayName = entry.Title ?? targetId,
+                Description = "Timeline source " + Safe(entry.SourceCollection) + " #" + entry.SourceIndex + " source " + Safe(sourceId) + " target " + Safe(targetId) + " focus " + Safe(entry.FocusActionId) + ".",
                 AdapterId = "ShelteredAPI.Timeline",
-                GameObjectName = entry.TargetId,
-                TransformPath = stage + "/" + Safe(entry.OwnerWindowId) + "/" + Safe(entry.SourceCollection) + "/" + entry.SourceIndex,
-                ScenarioReferenceId = entry.TargetId,
+                GameObjectName = sourceId,
+                TransformPath = stage + "/" + Safe(entry.OwnerWindowId) + "/" + Safe(entry.SourceCollection) + "/" + entry.SourceIndex + "/" + Safe(entry.FocusActionId),
+                ScenarioReferenceId = sourceId,
                 SupportsInspect = true,
                 SupportsReplace = entry.Kind == ScenarioTimelineEntryKind.Object || entry.Kind == ScenarioTimelineEntryKind.Bunker
             };
+        }
+
+        private static string BuildSourceTargetId(ScenarioTimelineEntry entry)
+        {
+            return "timeline:" + Safe(entry.SourceCollection) + ":" + entry.SourceIndex + ":" + Safe(entry.SourceId ?? entry.TargetId ?? entry.Id);
         }
 
         private static string Safe(string value)

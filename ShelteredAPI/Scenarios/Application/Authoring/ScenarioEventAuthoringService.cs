@@ -5,6 +5,7 @@ using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEventAuthoringService
@@ -73,7 +74,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 TriggerDef trigger = events.Triggers[index];
                 trigger.Type = NextTriggerType(trigger != null ? trigger.Type : null);
-                ApplyDefaults(trigger);
+                ApplyDefaults(session.WorkingDefinition, trigger);
                 ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
                 message = "Updated trigger type to " + trigger.Type + ".";
                 return true;
@@ -126,7 +127,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             TriggerDef trigger = new TriggerDef();
             trigger.Id = ScenarioEventIdFactory.NextTriggerId(events);
             trigger.Type = type;
-            ApplyDefaults(trigger);
+            ApplyDefaults(session.WorkingDefinition, trigger);
             events.Triggers.Add(trigger);
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
             message = "Added " + type.ToLowerInvariant() + " trigger '" + trigger.Id + "'.";
@@ -140,7 +141,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return definition.TriggersAndEvents;
         }
 
-        private static void ApplyDefaults(TriggerDef trigger)
+        private static void ApplyDefaults(ScenarioDefinition definition, TriggerDef trigger)
         {
             if (trigger == null)
                 return;
@@ -156,16 +157,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             else if (string.Equals(type, "ScenarioFlagSet", StringComparison.OrdinalIgnoreCase))
             {
-                ScenarioPropertyBag.Set(trigger.Properties, "flagId", "flag_1");
+                ScenarioPropertyBag.Set(trigger.Properties, "flagId", ScenarioEventReferenceFinder.FirstFlagId(definition) ?? string.Empty);
                 ScenarioPropertyBag.Set(trigger.Properties, "flagValue", "true");
             }
             else if (string.Equals(type, "QuestCompleted", StringComparison.OrdinalIgnoreCase))
             {
-                ScenarioPropertyBag.Set(trigger.Properties, "questId", "quest_1");
+                ScenarioPropertyBag.Set(trigger.Properties, "questId", ScenarioEventReferenceFinder.FirstQuestId(definition) ?? string.Empty);
             }
             else if (string.Equals(type, "ItemQuantityAvailable", StringComparison.OrdinalIgnoreCase))
             {
-                ScenarioPropertyBag.Set(trigger.Properties, "itemId", "Food");
+                ScenarioPropertyBag.Set(trigger.Properties, "itemId", ScenarioEventReferenceFinder.FirstItemId() ?? string.Empty);
                 ScenarioPropertyBag.Set(trigger.Properties, "quantity", "1");
             }
         }
@@ -669,33 +670,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     condition.Time = ScenarioAuthoringSchedule.NextTime();
                     break;
                 case ScenarioConditionKind.ItemQuantityAvailable:
-                    condition.TargetId = "Food";
+                    condition.TargetId = ScenarioEventReferenceFinder.FirstItemId();
                     condition.Quantity = 1;
                     break;
                 case ScenarioConditionKind.QuestActive:
                 case ScenarioConditionKind.QuestCompleted:
                 case ScenarioConditionKind.QuestFailed:
-                    condition.TargetId = ScenarioEventReferenceFinder.FirstQuestId(definition) ?? "quest_1";
+                    condition.TargetId = ScenarioEventReferenceFinder.FirstQuestId(definition);
                     break;
                 case ScenarioConditionKind.SurvivorPresent:
                 case ScenarioConditionKind.SurvivorStatCheck:
                 case ScenarioConditionKind.SurvivorTraitCheck:
-                    condition.TargetId = ScenarioEventReferenceFinder.FirstSurvivorName(definition) ?? "Survivor";
+                    condition.TargetId = ScenarioEventReferenceFinder.FirstSurvivorName(definition);
                     condition.StatId = "Strength";
                     condition.StatValue = 5;
                     condition.TraitId = "Strength:Optimistic";
                     break;
                 case ScenarioConditionKind.BunkerExpansionUnlocked:
-                    condition.TargetId = ScenarioEventReferenceFinder.FirstExpansionId(definition) ?? "expansion_1";
+                    condition.TargetId = ScenarioEventReferenceFinder.FirstExpansionId(definition);
                     break;
                 case ScenarioConditionKind.TechnologyUnlocked:
-                    condition.TargetId = "technology_1";
+                    condition.TargetId = null;
                     break;
                 case ScenarioConditionKind.CustomTrigger:
-                    condition.TargetId = ScenarioEventReferenceFinder.FirstTriggerId(definition) ?? "trigger_1";
+                    condition.TargetId = ScenarioEventReferenceFinder.FirstTriggerId(definition);
                     break;
                 case ScenarioConditionKind.ScenarioFlagSet:
-                    condition.FlagId = "flag_1";
+                    condition.FlagId = ScenarioEventReferenceFinder.FirstFlagId(definition);
                     condition.TargetId = condition.FlagId;
                     condition.FlagValue = "true";
                     break;
@@ -713,24 +714,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             switch (kind)
             {
                 case ScenarioEffectKind.UnlockBunkerExpansion:
-                    effect.BunkerExpansionId = ScenarioEventReferenceFinder.FirstExpansionId(definition) ?? "expansion_1";
+                    effect.BunkerExpansionId = ScenarioEventReferenceFinder.FirstExpansionId(definition);
                     effect.TargetId = effect.BunkerExpansionId;
                     break;
                 case ScenarioEffectKind.ActivateObject:
                 case ScenarioEffectKind.DeactivateObject:
-                    effect.ObjectId = ScenarioEventReferenceFinder.FirstObjectId(definition) ?? "object_1";
+                    effect.ObjectId = ScenarioEventReferenceFinder.FirstObjectId(definition);
                     effect.TargetId = effect.ObjectId;
                     break;
                 case ScenarioEffectKind.AddInventory:
                 case ScenarioEffectKind.RemoveInventory:
-                    effect.ItemId = "Food";
+                    effect.ItemId = ScenarioEventReferenceFinder.FirstItemId();
                     break;
                 case ScenarioEffectKind.SpawnFutureSurvivor:
-                    effect.SurvivorId = ScenarioEventReferenceFinder.FirstFutureSurvivorId(definition) ?? "future_survivor_1";
+                    effect.SurvivorId = ScenarioEventReferenceFinder.FirstFutureSurvivorId(definition);
                     effect.TargetId = effect.SurvivorId;
                     break;
                 case ScenarioEffectKind.StartQuest:
-                    effect.QuestId = ScenarioEventReferenceFinder.FirstQuestId(definition) ?? "quest_1";
+                    effect.QuestId = ScenarioEventReferenceFinder.FirstQuestId(definition);
                     effect.TargetId = effect.QuestId;
                     break;
                 case ScenarioEffectKind.SetWeather:
@@ -740,12 +741,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     effect.WeatherState = "None";
                     break;
                 case ScenarioEffectKind.SetScenarioFlag:
-                    effect.FlagId = "flag_1";
+                    effect.FlagId = ScenarioEventReferenceFinder.FirstFlagId(definition);
                     effect.TargetId = effect.FlagId;
                     effect.FlagValue = "true";
                     break;
                 case ScenarioEffectKind.FireTrigger:
-                    effect.TriggerId = ScenarioEventReferenceFinder.FirstTriggerId(definition) ?? "trigger_1";
+                    effect.TriggerId = ScenarioEventReferenceFinder.FirstTriggerId(definition);
                     effect.TargetId = effect.TriggerId;
                     break;
             }
@@ -807,44 +808,123 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         public static string FirstTriggerId(ScenarioDefinition definition)
         {
-            return definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && definition.TriggersAndEvents.Triggers.Count > 0 && definition.TriggersAndEvents.Triggers[0] != null
-                ? definition.TriggersAndEvents.Triggers[0].Id
-                : null;
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+                if (definition.TriggersAndEvents.Triggers[i] != null && !string.IsNullOrEmpty(definition.TriggersAndEvents.Triggers[i].Id))
+                    return definition.TriggersAndEvents.Triggers[i].Id;
+            return null;
         }
 
         public static string FirstQuestId(ScenarioDefinition definition)
         {
-            return definition != null && definition.Quests != null && definition.Quests.Quests != null && definition.Quests.Quests.Count > 0 && definition.Quests.Quests[0] != null
-                ? definition.Quests.Quests[0].Id
-                : null;
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count; i++)
+                if (definition.Quests.Quests[i] != null && !string.IsNullOrEmpty(definition.Quests.Quests[i].Id))
+                    return definition.Quests.Quests[i].Id;
+            return null;
         }
 
         public static string FirstExpansionId(ScenarioDefinition definition)
         {
-            return definition != null && definition.BunkerGrid != null && definition.BunkerGrid.Expansions != null && definition.BunkerGrid.Expansions.Count > 0 && definition.BunkerGrid.Expansions[0] != null
-                ? definition.BunkerGrid.Expansions[0].Id
-                : null;
+            for (int i = 0; definition != null && definition.BunkerGrid != null && definition.BunkerGrid.Expansions != null && i < definition.BunkerGrid.Expansions.Count; i++)
+                if (definition.BunkerGrid.Expansions[i] != null && !string.IsNullOrEmpty(definition.BunkerGrid.Expansions[i].Id))
+                    return definition.BunkerGrid.Expansions[i].Id;
+            return null;
         }
 
         public static string FirstObjectId(ScenarioDefinition definition)
         {
-            return definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && definition.BunkerEdits.ObjectPlacements.Count > 0 && definition.BunkerEdits.ObjectPlacements[0] != null
-                ? definition.BunkerEdits.ObjectPlacements[0].ScenarioObjectId
-                : null;
+            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+                if (definition.BunkerEdits.ObjectPlacements[i] != null && !string.IsNullOrEmpty(definition.BunkerEdits.ObjectPlacements[i].ScenarioObjectId))
+                    return definition.BunkerEdits.ObjectPlacements[i].ScenarioObjectId;
+            return null;
         }
 
         public static string FirstFutureSurvivorId(ScenarioDefinition definition)
         {
-            return definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && definition.FamilySetup.FutureSurvivors.Count > 0 && definition.FamilySetup.FutureSurvivors[0] != null
-                ? definition.FamilySetup.FutureSurvivors[0].Id
-                : null;
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+                if (definition.FamilySetup.FutureSurvivors[i] != null && !string.IsNullOrEmpty(definition.FamilySetup.FutureSurvivors[i].Id))
+                    return definition.FamilySetup.FutureSurvivors[i].Id;
+            return null;
         }
 
         public static string FirstSurvivorName(ScenarioDefinition definition)
         {
-            return definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && definition.FamilySetup.Members.Count > 0 && definition.FamilySetup.Members[0] != null
-                ? definition.FamilySetup.Members[0].Name
-                : null;
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
+                if (definition.FamilySetup.Members[i] != null && !string.IsNullOrEmpty(definition.FamilySetup.Members[i].Name))
+                    return definition.FamilySetup.Members[i].Name;
+            return null;
+        }
+
+        public static string FirstFlagId(ScenarioDefinition definition)
+        {
+            string id = FirstFlagIdFromTriggers(definition);
+            if (!string.IsNullOrEmpty(id))
+                return id;
+            id = FirstFlagIdFromGates(definition);
+            if (!string.IsNullOrEmpty(id))
+                return id;
+            return FirstFlagIdFromActions(definition);
+        }
+
+        public static string FirstItemId()
+        {
+            return ScenarioInventoryItemCatalog.DefaultItemId();
+        }
+
+        private static string FirstFlagIdFromTriggers(ScenarioDefinition definition)
+        {
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+            {
+                TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
+                string id = ScenarioPropertyBag.GetString(trigger != null ? trigger.Properties : null, "flagId", null);
+                if (!string.IsNullOrEmpty(id))
+                    return id;
+            }
+            return null;
+        }
+
+        private static string FirstFlagIdFromGates(ScenarioDefinition definition)
+        {
+            for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
+            {
+                string id = FirstFlagId(definition.Gates[i] != null ? definition.Gates[i].Conditions : null);
+                if (!string.IsNullOrEmpty(id))
+                    return id;
+            }
+            return null;
+        }
+
+        private static string FirstFlagId(ScenarioConditionGroup group)
+        {
+            for (int i = 0; group != null && group.Conditions != null && i < group.Conditions.Count; i++)
+            {
+                ScenarioConditionRef condition = group.Conditions[i];
+                string id = condition != null ? condition.FlagId ?? condition.TargetId : null;
+                if (condition != null && condition.Kind == ScenarioConditionKind.ScenarioFlagSet && !string.IsNullOrEmpty(id))
+                    return id;
+            }
+            for (int i = 0; group != null && group.Groups != null && i < group.Groups.Count; i++)
+            {
+                string id = FirstFlagId(group.Groups[i]);
+                if (!string.IsNullOrEmpty(id))
+                    return id;
+            }
+            return null;
+        }
+
+        private static string FirstFlagIdFromActions(ScenarioDefinition definition)
+        {
+            for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
+                {
+                    ScenarioEffectDefinition effect = action.Effects[e];
+                    string id = effect != null ? effect.FlagId ?? effect.TargetId : null;
+                    if (effect != null && effect.Kind == ScenarioEffectKind.SetScenarioFlag && !string.IsNullOrEmpty(id))
+                        return id;
+                }
+            }
+            return null;
         }
     }
 

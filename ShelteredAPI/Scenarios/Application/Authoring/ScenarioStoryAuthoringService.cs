@@ -32,6 +32,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryStageDeletePrefix, flow.Stages.Count, out stageIndex))
             {
                 string id = flow.Stages[stageIndex] != null ? flow.Stages[stageIndex].Id : null;
+                string reason;
+                if (!CanRemoveStage(flow, id, out reason))
+                {
+                    message = reason;
+                    return true;
+                }
                 flow.Stages.RemoveAt(stageIndex);
                 MarkDirty(session);
                 message = "Removed story stage '" + (id ?? ("#" + stageIndex.ToString())) + "'.";
@@ -568,6 +574,35 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     if (stage.IntercomStages[s] != null && stage.IntercomStages[s].StageChange != null && string.Equals(stage.IntercomStages[s].StageChange.Id, oldId, StringComparison.OrdinalIgnoreCase))
                         stage.IntercomStages[s].StageChange.Id = newId;
             }
+        }
+
+        private static bool CanRemoveStage(ScenarioFlowDefinition flow, string stageId, out string reason)
+        {
+            reason = null;
+            if (string.IsNullOrEmpty(stageId))
+                return true;
+
+            List<string> references = new List<string>();
+            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition stage = flow.Stages[i];
+                string label = stage != null && !string.IsNullOrEmpty(stage.Id) ? stage.Id : "#" + i.ToString();
+                if (stage != null && string.Equals(stage.UnansweredNextStage, stageId, StringComparison.OrdinalIgnoreCase))
+                    references.Add(label + " unanswered route");
+                for (int s = 0; stage != null && stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[s];
+                    string intercomLabel = label + "/" + (intercom != null && !string.IsNullOrEmpty(intercom.Id) ? intercom.Id : "#" + s.ToString());
+                    if (intercom != null && intercom.StageChange != null && string.Equals(intercom.StageChange.Id, stageId, StringComparison.OrdinalIgnoreCase))
+                        references.Add(intercomLabel + " stage change");
+                }
+            }
+
+            if (references.Count == 0)
+                return true;
+
+            reason = "Cannot remove story stage '" + stageId + "' because it is referenced by: " + string.Join(", ", references.ToArray()) + ". Clear those references first.";
+            return false;
         }
 
         private static void ReplaceIntercomReferences(ScenarioFlowStageDefinition stage, string oldId, string newId)

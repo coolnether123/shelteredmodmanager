@@ -8,6 +8,7 @@ using ShelteredAPI.Content.Compatibility;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 namespace ShelteredAPI.Scenarios.Domain.Validation{
@@ -25,6 +26,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
 
         private static void ValidateLegacySchedules(ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
         {
+            ScenarioDefinitionIndex index = new ScenarioDefinitionIndex(definition);
             for (int i = 0; definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
             {
                 FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
@@ -52,7 +54,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     summary.AddError("inventory.schedule.quantity", "[Inventory / Storage] Timed inventory '" + (id ?? ("#" + i)) + "' quantity must be greater than zero.");
             }
 
-            ValidateTriggers(definition, summary, actionIds);
+            ValidateTriggers(index, definition, summary, actionIds);
 
             for (int i = 0; definition.TriggersAndEvents != null && definition.TriggersAndEvents.WeatherEvents != null && i < definition.TriggersAndEvents.WeatherEvents.Count; i++)
             {
@@ -84,7 +86,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
             }
         }
 
-        private static void ValidateTriggers(ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
+        private static void ValidateTriggers(ScenarioDefinitionIndex index, ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
         {
             HashSet<string> triggerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
@@ -108,16 +110,47 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 {
                     AddActionId(summary, actionIds, "trigger:" + id, "[Events] Duplicate trigger schedule id: " + id);
                     ValidateTime(summary, action.DueTime, "[Events] Trigger '" + id + "'");
+                    for (int c = 0; action.ConditionRefs != null && c < action.ConditionRefs.Count; c++)
+                        ValidateTriggerCondition(index, summary, action.ConditionRefs[c], "[Events] Trigger '" + id + "'");
                     continue;
                 }
 
                 if (!ScenarioTriggerDefinitionCompiler.IsManual(trigger) && !string.IsNullOrEmpty(reason))
-                    summary.AddWarning("events.trigger.unsupported_type", "[Events] " + reason);
+                    summary.AddError("events.trigger.invalid_target", "[Events] " + reason);
+            }
+        }
+
+        private static void ValidateTriggerCondition(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionRef condition, string scope)
+        {
+            if (condition == null)
+                return;
+
+            string target = TrimToNull(condition.TargetId);
+            switch (condition.Kind)
+            {
+                case ScenarioConditionKind.QuestActive:
+                case ScenarioConditionKind.QuestCompleted:
+                case ScenarioConditionKind.QuestFailed:
+                    if (target == null || !index.HasQuest(target))
+                        summary.AddError("events.trigger.unknown_quest", scope + " references unknown quest '" + (target ?? string.Empty) + "'.");
+                    break;
+                case ScenarioConditionKind.SurvivorPresent:
+                    if (target == null || (!index.HasFamilySurvivor(target) && !index.HasFutureSurvivor(target)))
+                        summary.AddError("events.trigger.unknown_survivor", scope + " references unknown survivor '" + (target ?? string.Empty) + "'.");
+                    break;
+                case ScenarioConditionKind.BunkerExpansionUnlocked:
+                    if (target == null || !index.HasExpansion(target))
+                        summary.AddError("events.trigger.unknown_expansion", scope + " references unknown bunker expansion '" + (target ?? string.Empty) + "'.");
+                    break;
+                case ScenarioConditionKind.ItemQuantityAvailable:
+                    ValidateItem(summary, target, scope);
+                    break;
             }
         }
 
         private static void ValidateSharedSchedules(ScenarioDefinition definition, ValidationSummary summary, HashSet<string> actionIds)
         {
+            ScenarioDefinitionIndex index = new ScenarioDefinitionIndex(definition);
             for (int i = 0; definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
@@ -132,11 +165,11 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     summary.AddError("events.action.effects_required", "[Events] Scheduled action '" + (id ?? ("#" + i)) + "' must contain at least one effect.");
 
                 for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
-                    ValidateEffect(summary, action.Effects[e], "[Events] Scheduled action '" + (id ?? ("#" + i)) + "'");
+                    ValidateEffect(index, summary, action.Effects[e], "[Events] Scheduled action '" + (id ?? ("#" + i)) + "'");
             }
         }
 
-        private static void ValidateEffect(ValidationSummary summary, ScenarioEffectDefinition effect, string scope)
+        private static void ValidateEffect(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioEffectDefinition effect, string scope)
         {
             if (effect == null)
             {
@@ -158,29 +191,44 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                         summary.AddError("events.effect.weather", scope + " weather effect has invalid state.");
                     break;
                 case ScenarioEffectKind.SpawnFutureSurvivor:
-                    if (TrimToNull(effect.SurvivorId) == null && TrimToNull(effect.TargetId) == null)
+                    string survivorId = TrimToNull(effect.SurvivorId) ?? TrimToNull(effect.TargetId);
+                    if (survivorId == null)
                         summary.AddError("people.effect.survivor_required", scope + " survivor effect is missing survivorId/targetId.");
+                    else if (!index.HasFutureSurvivor(survivorId))
+                        summary.AddError("people.effect.unknown_survivor", scope + " references unknown future survivor '" + survivorId + "'.");
                     break;
                 case ScenarioEffectKind.StartQuest:
-                    if (TrimToNull(effect.QuestId) == null && TrimToNull(effect.TargetId) == null)
+                    string questId = TrimToNull(effect.QuestId) ?? TrimToNull(effect.TargetId);
+                    if (questId == null)
                         summary.AddError("quests.effect.quest_required", scope + " quest effect is missing questId/targetId.");
+                    else if (!index.HasQuest(questId))
+                        summary.AddError("quests.effect.unknown_quest", scope + " references unknown quest '" + questId + "'.");
                     break;
                 case ScenarioEffectKind.ActivateObject:
                 case ScenarioEffectKind.DeactivateObject:
-                    if (TrimToNull(effect.ObjectId) == null && TrimToNull(effect.TargetId) == null)
+                    string objectId = TrimToNull(effect.ObjectId) ?? TrimToNull(effect.TargetId);
+                    if (objectId == null)
                         summary.AddError("bunker.effect.object_required", scope + " object effect is missing objectId/targetId.");
+                    else if (!index.HasObject(objectId))
+                        summary.AddError("bunker.effect.unknown_object", scope + " references unknown object '" + objectId + "'.");
                     break;
                 case ScenarioEffectKind.UnlockBunkerExpansion:
-                    if (TrimToNull(effect.BunkerExpansionId) == null && TrimToNull(effect.TargetId) == null)
+                    string expansionId = TrimToNull(effect.BunkerExpansionId) ?? TrimToNull(effect.TargetId);
+                    if (expansionId == null)
                         summary.AddError("bunker.effect.expansion_required", scope + " bunker unlock effect is missing expansion id.");
+                    else if (!index.HasExpansion(expansionId))
+                        summary.AddError("bunker.effect.unknown_expansion", scope + " references unknown bunker expansion '" + expansionId + "'.");
                     break;
                 case ScenarioEffectKind.SetScenarioFlag:
                     if (TrimToNull(effect.FlagId) == null && TrimToNull(effect.TargetId) == null)
                         summary.AddError("events.effect.flag_required", scope + " flag effect is missing flag id.");
                     break;
                 case ScenarioEffectKind.FireTrigger:
-                    if (TrimToNull(effect.TriggerId) == null && TrimToNull(effect.TargetId) == null)
+                    string triggerId = TrimToNull(effect.TriggerId) ?? TrimToNull(effect.TargetId);
+                    if (triggerId == null)
                         summary.AddError("events.effect.trigger_required", scope + " trigger effect is missing triggerId/targetId.");
+                    else if (!index.HasTrigger(triggerId))
+                        summary.AddError("events.effect.unknown_trigger", scope + " references unknown trigger '" + triggerId + "'.");
                     break;
             }
         }

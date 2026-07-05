@@ -1260,7 +1260,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
                 {
                     TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
-                    AddTriggerItems(triggerItems, trigger, i);
+                    AddTriggerItems(triggerItems, definition, trigger, i);
                 }
             }
 
@@ -1692,7 +1692,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix + index.ToString(), "Remove Weather Event", "Remove this scheduled weather event.", true, false, "RM")));
         }
 
-        private static void AddTriggerItems(List<ScenarioAuthoringInspectorItem> items, TriggerDef trigger, int index)
+        private static void AddTriggerItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, TriggerDef trigger, int index)
         {
             if (items == null || trigger == null)
                 return;
@@ -1700,12 +1700,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string schedule = FormatTriggerSchedule(trigger);
             items.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, Safe(trigger.Type) + " / " + schedule));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTypePrefix + index.ToString(CultureInfo.InvariantCulture), "Cycle Trigger Type", "Switch between manual, scheduled, flag, quest, and item trigger templates.", true, false, "TY")));
-            AddTriggerTargetActions(items, trigger, index);
+            AddTriggerTargetActions(items, definition, trigger, index);
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, ScenarioAuthoringActionIds.ActionTriggerMinutePrefix, index);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerDeletePrefix + index.ToString(CultureInfo.InvariantCulture), "Remove Trigger", "Remove this authored trigger.", true, false, "RM")));
         }
 
-        private static void AddConditionItems(List<ScenarioAuthoringInspectorItem> items, ScenarioConditionRef condition, int gateIndex, int conditionIndex)
+        private static void AddConditionItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioConditionRef condition, int gateIndex, int conditionIndex)
         {
             if (items == null || condition == null)
                 return;
@@ -1713,11 +1713,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string prefix = gateIndex.ToString(CultureInfo.InvariantCulture) + "." + conditionIndex.ToString(CultureInfo.InvariantCulture);
             items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), condition.Kind + " / " + FormatConditionTarget(condition)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionKindPrefix + prefix, "Cycle Condition Kind", "Switch this gate condition to the next supported template.", true, false, "CK")));
-            AddConditionTargetActions(items, condition, prefix);
+            AddConditionTargetActions(items, definition, condition, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionDeletePrefix + prefix, "Remove Condition", "Remove this gate condition.", true, false, "RM")));
         }
 
-        private static void AddEffectItems(List<ScenarioAuthoringInspectorItem> items, ScenarioEffectDefinition effect, int actionIndex, int effectIndex)
+        private static void AddEffectItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioEffectDefinition effect, int actionIndex, int effectIndex)
         {
             if (items == null || effect == null)
                 return;
@@ -1725,7 +1725,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string prefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + effectIndex.ToString(CultureInfo.InvariantCulture);
             items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), effect.Kind + " / " + FormatEffectTarget(effect)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectKindPrefix + prefix, "Cycle Effect Kind", "Switch this effect to the next supported template.", true, false, "EK")));
-            AddEffectTargetActions(items, effect, prefix);
+            AddEffectTargetActions(items, definition, effect, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectDeletePrefix + prefix, "Remove Effect", "Remove this scheduled action effect.", true, false, "RM")));
         }
 
@@ -1767,15 +1767,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static void AddTriggerTargetActions(List<ScenarioAuthoringInspectorItem> items, TriggerDef trigger, int index)
+        private static void AddTriggerTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, TriggerDef trigger, int index)
         {
             string type = trigger != null ? trigger.Type : null;
             string idText = index.ToString(CultureInfo.InvariantCulture);
             if (string.Equals(type, "ScenarioFlagSet", StringComparison.OrdinalIgnoreCase))
             {
-                string flag = ScenarioPropertyBag.GetString(trigger.Properties, "flagId", "flag_1");
-                items.Add(Property("Flag", flag + "=" + ScenarioPropertyBag.GetString(trigger.Properties, "flagValue", "true")));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTargetPrefix + idText + "." + EncodeToken(flag + "_copy"), "Flag " + flag + "_copy", "Use a scenario flag target.", true, false, "FL")));
+                string flag = ScenarioPropertyBag.GetString(trigger.Properties, "flagId", null);
+                items.Add(Property("Flag", !string.IsNullOrEmpty(flag) ? flag + "=" + ScenarioPropertyBag.GetString(trigger.Properties, "flagValue", "true") : "<choose target>"));
+                AddTriggerTokenAction(items, ScenarioAuthoringActionIds.ActionTriggerTargetPrefix, idText, ScenarioEventReferenceFinder.FirstFlagId(definition), "Flag", "Use an existing scenario flag target.", "FL", flag);
             }
             else if (string.Equals(type, "ItemQuantityAvailable", StringComparison.OrdinalIgnoreCase))
             {
@@ -1783,13 +1783,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else if (string.Equals(type, "QuestCompleted", StringComparison.OrdinalIgnoreCase))
             {
-                string quest = ScenarioPropertyBag.GetString(trigger.Properties, "questId", "quest_1");
-                items.Add(Property("Quest", quest));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTargetPrefix + idText + "." + EncodeToken(quest + "_copy"), "Quest " + quest + "_copy", "Use a quest id target.", true, false, "QT")));
+                string quest = ScenarioPropertyBag.GetString(trigger.Properties, "questId", null);
+                items.Add(Property("Quest", !string.IsNullOrEmpty(quest) ? quest : "<choose target>"));
+                AddQuestTriggerActions(items, definition, idText, quest);
             }
         }
 
-        private static void AddConditionTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioConditionRef condition, string prefix)
+        private static void AddConditionTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioConditionRef condition, string prefix)
         {
             if (condition == null)
                 return;
@@ -1802,18 +1802,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             else if (condition.Kind == ScenarioConditionKind.ScenarioFlagSet)
             {
                 string flag = !string.IsNullOrEmpty(condition.FlagId) ? condition.FlagId : condition.TargetId;
-                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, "Flag " + flag + "_copy", "Use a scenario flag target.", flag + "_copy", "FL");
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstFlagId(definition), "Flag", "Use an existing scenario flag target.", "FL", flag);
                 AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionFlagValuePrefix, prefix, "Flag true", "Require flag value true.", "true", "T");
                 AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionFlagValuePrefix, prefix, "Flag false", "Require flag value false.", "false", "F");
             }
+            else if (condition.Kind == ScenarioConditionKind.QuestActive || condition.Kind == ScenarioConditionKind.QuestCompleted || condition.Kind == ScenarioConditionKind.QuestFailed)
+                AddQuestPairActions(items, definition, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, condition.TargetId);
+            else if (condition.Kind == ScenarioConditionKind.BunkerExpansionUnlocked)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstExpansionId(definition), "Expansion", "Use an existing bunker expansion target.", "EX", condition.TargetId);
+            else if (condition.Kind == ScenarioConditionKind.CustomTrigger)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstTriggerId(definition), "Trigger", "Use an existing trigger target.", "TR", condition.TargetId);
+            else if (condition.Kind == ScenarioConditionKind.SurvivorPresent || condition.Kind == ScenarioConditionKind.SurvivorStatCheck || condition.Kind == ScenarioConditionKind.SurvivorTraitCheck)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstSurvivorName(definition), "Survivor", "Use an existing survivor target.", "SV", condition.TargetId);
             else
             {
-                string target = !string.IsNullOrEmpty(condition.TargetId) ? condition.TargetId : "target_1";
-                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, "Target " + target + "_copy", "Use this target-id pattern.", target + "_copy", "TG");
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, prefix, condition.TargetId, "Target", "Use this target id.", "TG", condition.TargetId);
             }
         }
 
-        private static void AddEffectTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioEffectDefinition effect, string prefix)
+        private static void AddEffectTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioEffectDefinition effect, string prefix)
         {
             if (effect == null)
                 return;
@@ -1833,16 +1840,80 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else if (effect.Kind == ScenarioEffectKind.SetScenarioFlag)
             {
-                string flag = !string.IsNullOrEmpty(effect.FlagId) ? effect.FlagId : "flag_1";
-                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Flag " + flag + "_copy", "Use a scenario flag target.", flag + "_copy", "FL");
+                string flag = !string.IsNullOrEmpty(effect.FlagId) ? effect.FlagId : effect.TargetId;
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstFlagId(definition), "Flag", "Use an existing scenario flag target.", "FL", flag);
                 AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectFlagValuePrefix, prefix, "Flag true", "Set flag value true.", "true", "T");
                 AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectFlagValuePrefix, prefix, "Flag false", "Set flag value false.", "false", "F");
             }
+            else if (effect.Kind == ScenarioEffectKind.StartQuest)
+                AddQuestPairActions(items, definition, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, effect.QuestId ?? effect.TargetId);
+            else if (effect.Kind == ScenarioEffectKind.ActivateObject || effect.Kind == ScenarioEffectKind.DeactivateObject)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstObjectId(definition), "Object", "Use an existing object target.", "OB", effect.ObjectId ?? effect.TargetId);
+            else if (effect.Kind == ScenarioEffectKind.SpawnFutureSurvivor)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstFutureSurvivorId(definition), "Future Survivor", "Use an existing future survivor target.", "SV", effect.SurvivorId ?? effect.TargetId);
+            else if (effect.Kind == ScenarioEffectKind.UnlockBunkerExpansion)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstExpansionId(definition), "Expansion", "Use an existing bunker expansion target.", "EX", effect.BunkerExpansionId ?? effect.TargetId);
+            else if (effect.Kind == ScenarioEffectKind.FireTrigger)
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstTriggerId(definition), "Trigger", "Use an existing trigger target.", "TR", effect.TriggerId ?? effect.TargetId);
             else
             {
-                string target = !string.IsNullOrEmpty(effect.TargetId) ? effect.TargetId : "target_1";
-                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Target " + target + "_copy", "Use this target-id pattern.", target + "_copy", "TG");
+                AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, effect.TargetId, "Target", "Use this target id.", "TG", effect.TargetId);
             }
+        }
+
+        private static void AddQuestTriggerActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, string indexText, string current)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count && count < 8; i++)
+            {
+                QuestDefinition quest = definition.Quests.Quests[i];
+                if (quest == null || string.IsNullOrEmpty(quest.Id))
+                    continue;
+                AddTriggerTokenAction(items, ScenarioAuthoringActionIds.ActionTriggerTargetPrefix, indexText, quest.Id, "Quest", "Use this authored quest target.", "QT", current);
+                count++;
+            }
+            if (count == 0)
+                AddChooseTarget(items, "Quest", "Add a quest before selecting a quest trigger target.", "QT");
+        }
+
+        private static void AddQuestPairActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, string actionPrefix, string prefix, string current)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.Quests != null && definition.Quests.Quests != null && i < definition.Quests.Quests.Count && count < 8; i++)
+            {
+                QuestDefinition quest = definition.Quests.Quests[i];
+                if (quest == null || string.IsNullOrEmpty(quest.Id))
+                    continue;
+                AddPairTokenAction(items, actionPrefix, prefix, "Quest " + quest.Id, "Use this authored quest target.", quest.Id, "QT", string.Equals(current, quest.Id, StringComparison.OrdinalIgnoreCase));
+                count++;
+            }
+            if (count == 0)
+                AddChooseTarget(items, "Quest", "Add a quest before selecting this target.", "QT");
+        }
+
+        private static void AddTriggerTokenAction(List<ScenarioAuthoringInspectorItem> items, string actionPrefix, string indexText, string target, string label, string hint, string icon, string current)
+        {
+            if (string.IsNullOrEmpty(target))
+            {
+                AddChooseTarget(items, label, "Create an authored " + label.ToLowerInvariant() + " target first.", icon);
+                return;
+            }
+            items.Add(ActionItem(Action(actionPrefix + indexText + "." + EncodeToken(target), label + " " + target, hint, true, string.Equals(current, target, StringComparison.OrdinalIgnoreCase), icon)));
+        }
+
+        private static void AddPairTokenActionOrChoose(List<ScenarioAuthoringInspectorItem> items, string actionPrefix, string prefix, string target, string label, string hint, string icon, string current)
+        {
+            if (string.IsNullOrEmpty(target))
+            {
+                AddChooseTarget(items, label, "Create an authored " + label.ToLowerInvariant() + " target first.", icon);
+                return;
+            }
+            AddPairTokenAction(items, actionPrefix, prefix, label + " " + target, hint, target, icon, string.Equals(current, target, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void AddChooseTarget(List<ScenarioAuthoringInspectorItem> items, string label, string hint, string icon)
+        {
+            items.Add(ActionItem(Action("scenario.target.choose.missing." + EncodeToken(label), "Choose " + label, hint, false, false, icon, "<no valid target>")));
         }
 
         private static void AddInventoryEffectPickerActions(List<ScenarioAuthoringInspectorItem> items, string prefix, string currentItemId)
@@ -2230,7 +2301,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Gate Condition", "Add another condition to this gate.", true, false, "C+")));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Gate", "Remove this gate and clear scheduled action references to it.", true, false, "RM")));
                 for (int c = 0; group != null && group.Conditions != null && c < group.Conditions.Count; c++)
-                    AddConditionItems(items, group.Conditions[c], i, c);
+                    AddConditionItems(items, definition, group.Conditions[c], i, c);
             }
             if (items.Count == 1)
                 items.Add(Text("No shared gates or scenario flags have been authored yet."));
@@ -2258,7 +2329,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Effect", "Add another effect to this scheduled action.", true, false, "E+")));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Scheduled Action", "Remove this first-class scheduled action.", true, false, "RM")));
                 for (int e = 0; action.Effects != null && e < action.Effects.Count; e++)
-                    AddEffectItems(items, action.Effects[e], i, e);
+                    AddEffectItems(items, definition, action.Effects[e], i, e);
             }
             if (items.Count == 1)
                 items.Add(Text("No shared scheduled actions have been authored yet. Legacy schedules are converted at runtime."));

@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -83,10 +84,18 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 case ScenarioConditionKind.SurvivorTraitCheck:
                     if (target == null)
                         summary.AddError("people.condition.survivor_required", scope + " survivor condition is missing target id.");
+                    else if (!index.HasFamilySurvivor(target) && !index.HasFutureSurvivor(target))
+                        summary.AddError("people.condition.unknown_survivor", scope + " references unknown survivor '" + target + "'.");
                     break;
                 case ScenarioConditionKind.ItemQuantityAvailable:
                     if (target == null)
                         summary.AddError("inventory.condition.item_required", scope + " item quantity condition is missing item id.");
+                    else
+                    {
+                        ItemManager.ItemType type;
+                        if (!ContentInjector.ResolveItemType(target, out type))
+                            summary.AddError("inventory.condition.item_unknown", scope + " references unknown item id '" + target + "'.");
+                    }
                     if (condition.Quantity <= 0)
                         summary.AddError("inventory.condition.quantity", scope + " item quantity condition must be greater than zero.");
                     break;

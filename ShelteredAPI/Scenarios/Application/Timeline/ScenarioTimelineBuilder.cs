@@ -48,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             AddWeather(definition, runtimeState, entries);
             AddTriggers(definition, runtimeState, entries);
             AddQuests(definition, runtimeState, entries);
+            AddStoryFlow(definition, runtimeState, entries);
             AddBunker(definition, runtimeState, entries);
             AddObjectActivations(definition, runtimeState, entries);
             AddScheduledActions(definition, runtimeState, entries);
@@ -94,6 +95,29 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 if (quest == null)
                     continue;
                 entries.Add(NewEntry("legacy.quest." + BuildId(quest.Id, i), ScenarioTimelineEntryKind.Quest, quest.ScheduledStart, "Quest " + Safe(quest.Title ?? quest.Id), "Quest", "Quests", quest.Id, runtimeState, "legacy", "quest_popup", "Quests.Quests", i, quest.Id, ScenarioAuthoringWindowIds.Quests, ScenarioAuthoringActionIds.ActionQuestScheduleDeletePrefix + i.ToString()));
+            }
+        }
+
+        private static void AddStoryFlow(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, List<ScenarioTimelineEntry> entries)
+        {
+            for (int i = 0; definition != null && definition.ScenarioFlow != null && definition.ScenarioFlow.Stages != null && i < definition.ScenarioFlow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition stage = definition.ScenarioFlow.Stages[i];
+                if (stage == null)
+                    continue;
+                if (!string.IsNullOrEmpty(stage.UnansweredNextStage))
+                {
+                    entries.Add(NewEntry("flow.stage." + BuildId(stage.Id, i) + ".unanswered", ScenarioTimelineEntryKind.Story, DaysFromNow(stage.UnansweredNextDays), "Story unanswered -> " + Safe(stage.UnansweredNextStage), "StoryStage", "Story", stage.Id, runtimeState, "flow", "story_stage_unanswered", "ScenarioFlow.Stages", i, stage.Id, ScenarioAuthoringWindowIds.Quests, ScenarioAuthoringActionIds.ActionStoryStageUnansweredDelayPrefix + i.ToString()));
+                }
+
+                for (int s = 0; stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[s];
+                    if (intercom == null || intercom.StageChange == null || string.IsNullOrEmpty(intercom.StageChange.Id))
+                        continue;
+                    string sourceId = stage.Id + "/" + (intercom.Id ?? s.ToString());
+                    entries.Add(NewEntry("flow.stage_change." + BuildId(stage.Id, i) + "." + BuildId(intercom.Id, s), ScenarioTimelineEntryKind.Story, DaysFromNow(intercom.StageChange.DelayDays), "Story stage change -> " + Safe(intercom.StageChange.Id), "StoryStageChange", "Story", intercom.StageChange.Id, runtimeState, "flow", "story_stage_change", "ScenarioFlow.Stages[" + i.ToString() + "].IntercomStages", s, sourceId, ScenarioAuthoringWindowIds.Quests, ScenarioAuthoringActionIds.ActionStoryStageChangeDelayPrefix + i.ToString() + "." + s.ToString()));
+                }
             }
         }
 
@@ -221,6 +245,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 case ScenarioTimelineEntryKind.Weather: return "Events";
                 case ScenarioTimelineEntryKind.Survivor: return "People";
                 case ScenarioTimelineEntryKind.Quest: return "Quests";
+                case ScenarioTimelineEntryKind.Story: return "Story";
                 case ScenarioTimelineEntryKind.Bunker:
                 case ScenarioTimelineEntryKind.Object: return "Bunker";
                 case ScenarioTimelineEntryKind.Map: return "Map";
@@ -262,6 +287,15 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             int totalHours = result.Hour + hours;
             result.Day += totalHours / 24;
             result.Hour = totalHours % 24;
+            return result;
+        }
+
+        private static ScenarioScheduleTime DaysFromNow(int days)
+        {
+            ScenarioScheduleTime result = new ScenarioScheduleTime();
+            result.Day = Math.Max(1, days);
+            result.Hour = 6;
+            result.Minute = 0;
             return result;
         }
 

@@ -10,6 +10,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
         private readonly HashSet<string> _quests;
         private readonly HashSet<string> _conditions;
         private readonly HashSet<string> _expansions;
+        private readonly HashSet<string> _objects;
+        private readonly HashSet<string> _futureSurvivors;
+        private readonly HashSet<string> _familySurvivors;
 
         private ScenarioDefinitionIndex()
         {
@@ -18,6 +21,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
             _quests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _conditions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             _expansions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _objects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _futureSurvivors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _familySurvivors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         }
 
         public ScenarioDefinitionIndex(ScenarioDefinition definition)
@@ -28,6 +34,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
             AddQuests(definition);
             AddConditions(definition != null ? definition.WinLossConditions : null);
             AddExpansions(definition);
+            AddObjects(definition);
+            AddSurvivors(definition);
         }
 
         public ScenarioDefinitionIndex(TriggersAndEventsDefinition triggersAndEvents)
@@ -67,6 +75,21 @@ namespace ShelteredAPI.Scenarios.Definitions{
             return Has(_expansions, id);
         }
 
+        public bool HasObject(string id)
+        {
+            return Has(_objects, id);
+        }
+
+        public bool HasFutureSurvivor(string id)
+        {
+            return Has(_futureSurvivors, id);
+        }
+
+        public bool HasFamilySurvivor(string id)
+        {
+            return Has(_familySurvivors, id);
+        }
+
         private static bool Has(HashSet<string> ids, string id)
         {
             return !string.IsNullOrEmpty(id) && ids != null && ids.Contains(id);
@@ -104,6 +127,20 @@ namespace ShelteredAPI.Scenarios.Definitions{
             ScenarioBunkerGridDefinition grid = definition != null ? definition.BunkerGrid : null;
             for (int i = 0; grid != null && grid.Expansions != null && i < grid.Expansions.Count; i++)
                 Add(_expansions, grid.Expansions[i] != null ? grid.Expansions[i].Id : null);
+        }
+
+        private void AddObjects(ScenarioDefinition definition)
+        {
+            for (int i = 0; definition != null && definition.BunkerEdits != null && definition.BunkerEdits.ObjectPlacements != null && i < definition.BunkerEdits.ObjectPlacements.Count; i++)
+                Add(_objects, definition.BunkerEdits.ObjectPlacements[i] != null ? definition.BunkerEdits.ObjectPlacements[i].ScenarioObjectId : null);
+        }
+
+        private void AddSurvivors(ScenarioDefinition definition)
+        {
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+                Add(_futureSurvivors, definition.FamilySetup.FutureSurvivors[i] != null ? definition.FamilySetup.FutureSurvivors[i].Id : null);
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
+                Add(_familySurvivors, definition.FamilySetup.Members[i] != null ? definition.FamilySetup.Members[i].Name : null);
         }
 
         private static void Add(HashSet<string> ids, string id)
@@ -148,6 +185,16 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public static bool HasExpansion(ScenarioDefinition definition, string id)
         {
             return new ScenarioDefinitionIndex(definition).HasExpansion(id);
+        }
+
+        public static bool HasObject(ScenarioDefinition definition, string id)
+        {
+            return new ScenarioDefinitionIndex(definition).HasObject(id);
+        }
+
+        public static bool HasFutureSurvivor(ScenarioDefinition definition, string id)
+        {
+            return new ScenarioDefinitionIndex(definition).HasFutureSurvivor(id);
         }
     }
 }
