@@ -7,6 +7,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Persistence;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
@@ -65,6 +66,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 exportRoot = ResolveExportRoot(definition);
                 exportFilePath = Path.Combine(exportRoot, ScenarioDefinitionSerializer.DefaultFileName);
                 _serializer.Save(definition, exportFilePath);
+                CopyReferencedAssets(definition, state != null ? state.ActiveScenarioFilePath : null, exportRoot);
             }
             catch (Exception ex)
             {
@@ -141,6 +143,113 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string modRoot = ResolveExportModRoot();
             string scenarioFolder = BuildSafeFolderName(!string.IsNullOrEmpty(definition.Id) ? definition.Id : definition.DisplayName);
             return Path.Combine(Path.Combine(Path.Combine(modRoot, "Scenarios"), ExportRootFolder), scenarioFolder);
+        }
+
+        private static void CopyReferencedAssets(ScenarioDefinition definition, string sourceScenarioFilePath, string exportRoot)
+        {
+            if (definition == null || definition.AssetReferences == null || string.IsNullOrEmpty(exportRoot))
+                return;
+
+            List<string> relativePaths = new List<string>();
+            AddAssetReferencePaths(definition, relativePaths);
+            if (relativePaths.Count == 0)
+                return;
+
+            string draftRoot = !string.IsNullOrEmpty(sourceScenarioFilePath) ? Path.GetDirectoryName(sourceScenarioFilePath) : null;
+            string assetsRoot = ScenarioAuthoringStoragePaths.GetAssetsRootPath();
+            for (int i = 0; i < relativePaths.Count; i++)
+                CopyAssetIfFound(relativePaths[i], draftRoot, assetsRoot, exportRoot);
+        }
+
+        private static void AddAssetReferencePaths(ScenarioDefinition definition, List<string> paths)
+        {
+            if (definition.AssetReferences.CustomSprites != null)
+            {
+                for (int i = 0; i < definition.AssetReferences.CustomSprites.Count; i++)
+                    AddRelativePath(paths, definition.AssetReferences.CustomSprites[i] != null ? definition.AssetReferences.CustomSprites[i].RelativePath : null);
+            }
+
+            if (definition.AssetReferences.CustomIcons != null)
+            {
+                for (int i = 0; i < definition.AssetReferences.CustomIcons.Count; i++)
+                    AddRelativePath(paths, definition.AssetReferences.CustomIcons[i] != null ? definition.AssetReferences.CustomIcons[i].RelativePath : null);
+            }
+
+            if (definition.AssetReferences.SpriteSwaps != null)
+            {
+                for (int i = 0; i < definition.AssetReferences.SpriteSwaps.Count; i++)
+                    AddRelativePath(paths, definition.AssetReferences.SpriteSwaps[i] != null ? definition.AssetReferences.SpriteSwaps[i].RelativePath : null);
+            }
+
+            if (definition.AssetReferences.SceneSpritePlacements != null)
+            {
+                for (int i = 0; i < definition.AssetReferences.SceneSpritePlacements.Count; i++)
+                    AddRelativePath(paths, definition.AssetReferences.SceneSpritePlacements[i] != null ? definition.AssetReferences.SceneSpritePlacements[i].RelativePath : null);
+            }
+
+            if (definition.AssetReferences.SpritePatches != null)
+            {
+                for (int i = 0; i < definition.AssetReferences.SpritePatches.Count; i++)
+                    AddRelativePath(paths, definition.AssetReferences.SpritePatches[i] != null ? definition.AssetReferences.SpritePatches[i].BaseRelativePath : null);
+            }
+        }
+
+        private static void AddRelativePath(List<string> paths, string relativePath)
+        {
+            if (paths == null || string.IsNullOrEmpty(relativePath) || Path.IsPathRooted(relativePath))
+                return;
+
+            for (int i = 0; i < paths.Count; i++)
+            {
+                if (string.Equals(paths[i], relativePath, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+
+            paths.Add(relativePath);
+        }
+
+        private static void CopyAssetIfFound(string relativePath, string draftRoot, string assetsRoot, string exportRoot)
+        {
+            string source = ResolveSourceAsset(relativePath, draftRoot, assetsRoot);
+            if (string.IsNullOrEmpty(source) || !File.Exists(source))
+                return;
+
+            string destination = ResolveExportAssetPath(exportRoot, relativePath);
+            if (string.IsNullOrEmpty(destination))
+                return;
+
+            string directory = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                Directory.CreateDirectory(directory);
+            File.Copy(source, destination, true);
+        }
+
+        private static string ResolveSourceAsset(string relativePath, string draftRoot, string assetsRoot)
+        {
+            string source = ResolveContainedPath(draftRoot, relativePath);
+            if (!string.IsNullOrEmpty(source) && File.Exists(source))
+                return source;
+            source = ResolveContainedPath(assetsRoot, relativePath);
+            return !string.IsNullOrEmpty(source) && File.Exists(source) ? source : null;
+        }
+
+        private static string ResolveExportAssetPath(string exportRoot, string relativePath)
+        {
+            return ResolveContainedPath(exportRoot, relativePath);
+        }
+
+        private static string ResolveContainedPath(string root, string relativePath)
+        {
+            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(relativePath) || Path.IsPathRooted(relativePath))
+                return null;
+
+            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath));
+            if (string.Equals(fullPath, fullRoot, StringComparison.OrdinalIgnoreCase))
+                return fullPath;
+
+            string rootedPrefix = fullRoot + Path.DirectorySeparatorChar;
+            return fullPath.StartsWith(rootedPrefix, StringComparison.OrdinalIgnoreCase) ? fullPath : null;
         }
 
         private static string ResolveExportModRoot()
