@@ -39,6 +39,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float PortraitReserveHeight = 464f;
         public const float TopBarPreferredWidth = 1180f;
         public const float TopBarMinWidth = 560f;
+        private const float MinToolRailButtonHeight = 24f;
+        private const float ToolRailCompactGap = 4f;
+        private const float ToolRailVerticalPadding = 24f;
 
         public static Rect BuildHudReserveRect(float scaledWidth)
         {
@@ -96,11 +99,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildToolRailRect(Rect contentRect, int buttonCount)
         {
-            float portraitSafeY = Math.Max(contentRect.y + 26f, PortraitReserveHeight);
+            float portraitSafeY = Math.Max(contentRect.y + 26f, ResolvePortraitReserveHeight(contentRect));
             float availableHeight = Math.Max(112f, contentRect.yMax - portraitSafeY - Gutter);
+            float minimumButtonStack = ToolRailVerticalPadding
+                + (Math.Max(0, buttonCount) * MinToolRailButtonHeight)
+                + (Math.Max(0, buttonCount - 1) * ToolRailCompactGap);
             float regularHeight = 18f + (Math.Max(0, buttonCount) * 56f);
+            float targetHeight = Math.Max(regularHeight, minimumButtonStack);
             float height = Math.Min(Math.Min(560f, regularHeight), availableHeight);
+            if (buttonCount > 0 && height < minimumButtonStack)
+                height = Math.Min(availableHeight, targetHeight);
             return new Rect(contentRect.x + 4f, portraitSafeY, ToolRailWidth, height);
+        }
+
+        private static float ResolvePortraitReserveHeight(Rect contentRect)
+        {
+            float scaledScreenHeight = contentRect.yMax + StatusHeight;
+            if (scaledScreenHeight <= 760f)
+                return 360f;
+            if (scaledScreenHeight <= 820f)
+                return Mathf.Lerp(360f, PortraitReserveHeight, (scaledScreenHeight - 760f) / 60f);
+
+            return PortraitReserveHeight;
         }
 
         public static Rect BuildWorkspaceRect(Rect contentRect, bool reserveBottomTray)

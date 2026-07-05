@@ -88,6 +88,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringWindowDefinition[] definitions = windowRegistry != null ? windowRegistry.GetDefinitions() : new ScenarioAuthoringWindowDefinition[0];
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, "Help", "HELP", true, state != null && state.HelpWindowOpen, "Open the workshop help pages."));
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "SET", true, state != null && state.SettingsWindowOpen, "Open authoring settings."));
             for (int i = 0; i < definitions.Length; i++)
             {
                 ScenarioAuthoringWindowDefinition definition = definitions[i];

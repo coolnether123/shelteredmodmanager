@@ -59,7 +59,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float available = Math.Max(40f, railRect.height - 24f);
             float compactGap = 4f;
             float compactHeight = (available - (compactGap * (buttonCount - 1))) / buttonCount;
-            buttonHeight = Mathf.Clamp(compactHeight, 26f, regularButtonHeight);
+            buttonHeight = Mathf.Clamp(compactHeight, 24f, regularButtonHeight);
             buttonStep = buttonHeight + (buttonHeight >= regularButtonHeight - 0.001f ? 8f : compactGap);
         }
 
@@ -125,8 +125,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             DrawButtonAnimationOverlay(visualRect, button.Action.Id, button.Action.Enabled, hovered, pressed);
-            float labelY = visualRect.y + Math.Max(4f, (visualRect.height - 20f) * 0.5f);
-            GUI.Label(new Rect(visualRect.x + 8f, labelY, visualRect.width - 16f, 20f), button.Label ?? string.Empty, active ? _textStyle : _mutedTextStyle);
+            float labelHeight = visualRect.height < 28f ? 16f : 20f;
+            float labelY = visualRect.y + Math.Max(3f, (visualRect.height - labelHeight) * 0.5f);
+            GUI.Label(new Rect(visualRect.x + 8f, labelY, visualRect.width - 16f, labelHeight), button.Label ?? string.Empty, active ? _textStyle : _mutedTextStyle);
         }
 
     }

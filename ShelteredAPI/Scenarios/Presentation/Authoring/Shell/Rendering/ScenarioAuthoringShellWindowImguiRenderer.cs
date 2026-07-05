@@ -246,7 +246,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ref _assetBrowserCandidateFilter,
                 ref _assetBrowserSearchFocused);
 
-            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 74f, pickerRect.width, pickerRect.height - 74f));
+            float pickerScrollHeight = ResolveRowBoundedScrollHeight(pickerRect.height - 74f);
+            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 74f, pickerRect.width, pickerScrollHeight));
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, pickerRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
@@ -305,6 +306,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     GUILayout.Space(6f);
                 }
             }
+            GUILayout.Space(24f);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
             _activeContentWidth = previousContentWidth;
@@ -312,7 +314,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (showDetailsPane)
             {
-                GUILayout.BeginArea(detailsRect);
+                float detailsScrollHeight = ResolveRowBoundedScrollHeight(detailsRect.height);
+                GUILayout.BeginArea(new Rect(detailsRect.x, detailsRect.y, detailsRect.width, detailsScrollHeight));
                 previousContentWidth = _activeContentWidth;
                 _activeContentWidth = Math.Max(120f, detailsRect.width - 18f);
                 Vector2 detailsScroll = GetWindowScrollPosition(window.Id + ".details");
@@ -328,6 +331,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     DrawSection(section);
                     GUILayout.Space(6f);
                 }
+                GUILayout.Space(24f);
                 GUILayout.EndScrollView();
                 GUILayout.EndArea();
                 _activeContentWidth = previousContentWidth;
@@ -335,6 +339,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             DrawFloatingResizeGrip(rect, window);
             return bodyRect;
+        }
+
+        private static float ResolveRowBoundedScrollHeight(float height)
+        {
+            const float rowQuantum = 30f;
+            if (height <= rowQuantum * 3f)
+                return Math.Max(rowQuantum, height);
+
+            return Math.Max(rowQuantum * 3f, Mathf.Floor(height / rowQuantum) * rowQuantum);
         }
 
         private Rect DrawDocumentModalCore(Rect rect, ScenarioAuthoringInspectorDocument document, string scrollId)

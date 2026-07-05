@@ -150,24 +150,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect ResolveToolbarActionRect(Rect topRect, ScenarioAuthoringInspectorAction[] actions, string actionId)
         {
-            const float primaryRowY = 10f;
-            const float secondaryRowHeight = 30f;
-            float primaryRowLeft = topRect.x + 18f + 220f + 20f;
-            float actionRight = topRect.xMax - 10f;
-            float toolbarWidth = MeasureTopBarActionsWidth(actions);
-            float toolbarX = Math.Max(primaryRowLeft, actionRight - toolbarWidth);
+            bool compact = IsCompactTopBar(topRect);
+            float rowY = compact ? 10f : 13f;
+            float rowHeight = compact ? 28f : 30f;
+            float actionRight = compact ? topRect.xMax - 104f : topRect.xMax - 10f;
+            float primaryRowLeft = compact ? topRect.x + 12f : topRect.x + 18f + 220f + 20f;
+            float toolbarWidth = MeasureTopBarActionsWidth(actions, compact);
+            float compactToolbarX = Math.Min(topRect.x + 228f, topRect.xMax - 188f);
+            float toolbarX = compact ? compactToolbarX : Math.Max(primaryRowLeft, actionRight - toolbarWidth);
             float x = toolbarX;
             for (int i = 0; actions != null && i < actions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = actions[i];
                 if (action == null)
                     continue;
+                if (compact && IsLowPriorityTopBarAction(action))
+                    continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 96f, 126f);
-                Rect rect = new Rect(x, topRect.y + primaryRowY + 3f, width, secondaryRowHeight);
+                float width = ResolveToolbarActionWidth(action, compact);
+                Rect rect = new Rect(x, topRect.y + rowY, width, rowHeight);
                 if (string.Equals(action.Id, actionId, StringComparison.Ordinal))
                     return rect;
-                x = rect.xMax + 4f;
+                x = rect.xMax + (compact ? 3f : 4f);
             }
 
             return ZeroRect();
@@ -175,23 +179,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect ResolveStageTabRect(Rect topRect, ScenarioAuthoringInspectorAction[] tabs, string actionId)
         {
-            const float primaryRowY = 10f;
-            const float primaryRowHeight = 36f;
-            float x = topRect.x + 18f + 220f + 20f;
-            float right = topRect.xMax - 420f;
+            bool compact = IsCompactTopBar(topRect);
+            float primaryRowY = compact ? 42f : 10f;
+            float primaryRowHeight = compact ? 24f : 36f;
+            float x = compact ? topRect.x + 12f : topRect.x + 18f + 220f + 20f;
+            float right = compact ? topRect.xMax - 12f : topRect.xMax - 420f;
             for (int i = 0; tabs != null && i < tabs.Length; i++)
             {
                 ScenarioAuthoringInspectorAction tab = tabs[i];
                 if (tab == null || IsChildStageTab(tab))
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(tab, true, 30f), 92f, 170f);
+                ScenarioAuthoringInspectorAction displayTab = compact ? CloneWithLabel(tab, CompactStageLabel(tab.Label)) : tab;
+                float width = ResolvePrimaryStageTabWidth(displayTab, compact);
                 Rect rect = new Rect(x, topRect.y + primaryRowY, width, primaryRowHeight);
                 if (rect.xMax > right)
                     break;
                 if (string.Equals(tab.Id, actionId, StringComparison.Ordinal))
                     return rect;
                 x = rect.xMax + 2f;
+            }
+
+            float childX = compact ? topRect.x + 12f : topRect.x + 18f + 220f + 20f;
+            float childY = compact ? 68f : 54f;
+            float childHeight = compact ? 24f : 30f;
+            float childRight = compact ? topRect.xMax - 12f : topRect.xMax - 126f;
+            for (int i = 0; tabs != null && i < tabs.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction tab = tabs[i];
+                if (tab == null || !IsChildStageTab(tab))
+                    continue;
+
+                ScenarioAuthoringInspectorAction displayTab = CloneWithLabel(tab, CleanChildStageLabel(tab.Label));
+                float width = ResolveChildStageTabWidth(displayTab, compact);
+                Rect rect = new Rect(childX, topRect.y + childY, width, childHeight);
+                if (rect.xMax > childRight)
+                    break;
+                if (string.Equals(tab.Id, actionId, StringComparison.Ordinal))
+                    return rect;
+                childX = rect.xMax + 2f;
             }
 
             return ZeroRect();
