@@ -114,6 +114,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return;
 
+            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
+            bool hovered = rect.Contains(mouse);
+            bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
+            float press = action.Enabled ? _animations.GetButtonPressForAction(action.Id, pressed) : 0f;
+            Rect visualRect = press > 0.001f
+                ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
+                : rect;
             string tooltip = action.Enabled
                 ? (action.Hint ?? action.Detail ?? string.Empty)
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : (action.Hint ?? string.Empty)));
@@ -124,21 +131,50 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (IsWindowMenuAction(action))
             {
-                if (GUI.Button(rect, content, style) && action.Enabled)
+                if (GUI.Button(visualRect, content, style) && action.Enabled)
                 {
                     _windowMenuOpen = !_windowMenuOpen;
                     if (Event.current != null)
                         Event.current.Use();
                 }
+                DrawButtonAnimationOverlay(visualRect, action.Id, action.Enabled, hovered, pressed);
                 return;
             }
 
-            if (GUI.Button(rect, content, style) && action.Enabled)
+            if (GUI.Button(visualRect, content, style) && action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
+
+            DrawButtonAnimationOverlay(visualRect, action.Id, action.Enabled, hovered, pressed);
+        }
+
+        private void DrawButtonAnimationOverlay(Rect rect, string actionId, bool enabled, bool hovered, bool pressed)
+        {
+            if (!enabled || string.IsNullOrEmpty(actionId) || _uiContext == null || _uiContext.Styles == null)
+                return;
+
+            float hover = _animations.GetButtonHover(actionId, hovered);
+            float press = _animations.GetButtonPressForAction(actionId, pressed);
+            if (hover <= 0.001f && press <= 0.001f)
+                return;
+
+            Color oldColor = GUI.color;
+            if (hover > 0.001f)
+            {
+                GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.28f * hover);
+                GUI.DrawTexture(rect, _uiContext.Styles.AccentHoverTexture != null ? _uiContext.Styles.AccentHoverTexture : Texture2D.whiteTexture);
+            }
+
+            if (press > 0.001f)
+            {
+                GUI.color = new Color(0.718f, 0.639f, 0.482f, 0.34f * press);
+                GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            }
+
+            GUI.color = oldColor;
         }
     }
 }

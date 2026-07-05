@@ -20,6 +20,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             RegisterFloat("shell.ui_scale", "Shell", "UI Scale", "Overall scale for the authoring shell.", "1.10", 0.85f, 1.50f, 0.05f);
             RegisterFloat("shell.panel_opacity", "Visuals", "Panel Opacity", "Opacity applied to bunker panels.", "0.82", 0.55f, 1f, 0.05f);
             RegisterToggle("layout.remember_windows", "Layout", "Remember Window Layout", "Persist editor layout between launches.", "true");
+            RegisterToggle("visuals.ui_animations", "Visuals", "UI Animations", "Enable animated authoring UI transitions.", "true");
             RegisterToggle("visuals.show_grid", "Visuals", "Show Grid", "Show the shelter grid while authoring.", "true");
             RegisterToggle("visuals.snap_to_grid", "Visuals", "Snap To Grid", "Snap authored placements and previews to shelter cells.", "true");
             RegisterToggle("layers.lock_background", "Layers", "Lock Backdrop Layer (Prevents Selecting)", "Prevent accidental backdrop/background selection.", "false");

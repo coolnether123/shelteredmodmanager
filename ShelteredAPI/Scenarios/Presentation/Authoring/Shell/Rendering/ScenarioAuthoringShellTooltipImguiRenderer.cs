@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
@@ -23,7 +24,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawTooltipOverlayCore(float scaledWidth, float scaledHeight, Rect hudReserveRect)
         {
             string tip = GUI.tooltip;
-            if (string.IsNullOrEmpty(tip))
+            float alpha = _animations.GetTooltipAlpha(tip);
+            if (string.IsNullOrEmpty(tip) || alpha <= 0.001f)
                 return;
 
             GUIStyle tipStyle = _mutedTextStyle;
@@ -40,8 +42,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (x < 6f) x = 6f;
             if (y < 6f) y = 6f;
             Rect tipRect = ClampAwayFromHud(new Rect(x, y, width, height), scaledWidth, scaledHeight, hudReserveRect);
-            GUI.Box(tipRect, GUIContent.none, _uiContext.Styles.Menu);
-            GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
+            using (ScenarioUiGuiScope.Apply(alpha, tipRect, 1f))
+            {
+                GUI.Box(tipRect, GUIContent.none, _uiContext.Styles.Menu);
+                GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
+            }
         }
 
     }

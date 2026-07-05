@@ -21,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public bool PopupOpenLastFrame { get; private set; }
         public bool DraggingShellChrome { get; private set; }
         public bool KeyboardCaptured { get; private set; }
+        public bool TransitionActive { get; private set; }
 
         public void BeginFrame(float coordinateScale)
         {
@@ -31,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             PopupOpen = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
+            TransitionActive = false;
             _coordinateScale = coordinateScale > 0.001f ? coordinateScale : 1f;
             _scrollFocusService.BeginFrame();
         }
@@ -69,6 +71,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             KeyboardCaptured = captured;
         }
 
+        public void SetTransitionActive(bool active)
+        {
+            TransitionActive = active;
+        }
+
         public void CompleteFrame()
         {
             Vector2 pointer = GetPointerPosition(_coordinateScale);
@@ -96,7 +103,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || PopupOpen
                 || PopupOpenLastFrame
                 || DraggingShellChrome
-                || KeyboardCaptured;
+                || KeyboardCaptured
+                || TransitionActive;
         }
 
         public bool ShouldBlockGameCameraInput()
@@ -113,6 +121,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             PopupOpenLastFrame = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
+            TransitionActive = false;
             _scrollFocusService.BeginFrame();
         }
 

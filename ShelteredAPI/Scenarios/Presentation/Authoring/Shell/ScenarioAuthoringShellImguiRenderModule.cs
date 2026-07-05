@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
@@ -37,6 +38,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const float BottomTrayHeight = ScenarioAuthoringShellLayout.BottomTrayHeight;
         private const float CommandDockHeight = ScenarioAuthoringShellLayout.CommandDockHeight;
 
+        private readonly ScenarioAuthoringShellAnimationService _animations;
+        private readonly List<ScenarioAuthoringShellAnimationService.WindowVisualState> _closingWindowBuffer =
+            new List<ScenarioAuthoringShellAnimationService.WindowVisualState>();
         private ScenarioAuthoringShellRuntime _runtime;
         private ScenarioAuthoringPresentationSnapshot _snapshot;
         private ScenarioUiContext _uiContext;
@@ -73,6 +77,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public string ModuleId
         {
             get { return "ShelteredAPI.ShellIMGUI"; }
+        }
+
+        public ScenarioAuthoringShellImguiRenderModule(ScenarioAuthoringShellAnimationService animations)
+        {
+            _animations = animations ?? new ScenarioAuthoringShellAnimationService();
         }
 
         public int Priority
@@ -161,6 +170,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
             inputCapture.BeginFrame(uiScale);
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
+            _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
 
             Matrix4x4 oldMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(uiScale, uiScale, 1f));
@@ -181,6 +191,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
 
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
+            RegisterWindowAnimationStates(shell.Windows, windowRects);
 
             Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State);
             if (toolRailRect.width > 0f && toolRailRect.height > 0f)
@@ -212,16 +223,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_windowMenuOpen && shell.WindowMenuActions != null && shell.WindowMenuActions.Length > 0)
             {
                 windowMenuRect = BuildWindowMenuRectCore(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight, hudReserveRect);
-                DrawWindowMenuCore(windowMenuRect, shell.WindowMenuActions);
+                float menuProgress = _animations.GetPopupProgress(true, true);
+                Rect animatedMenuRect = SlidePopupRect(windowMenuRect, menuProgress);
+                using (ScenarioUiGuiScope.Apply(menuProgress, animatedMenuRect, 1f))
+                    DrawWindowMenuCore(animatedMenuRect, shell.WindowMenuActions);
                 inputCapture.RegisterInteractiveRect(windowMenuRect);
                 inputCapture.SetPopupOpen(true);
+            }
+            else
+            {
+                _animations.GetPopupProgress(false, true);
             }
 
             Rect popupRect = RuntimeCompat.ZeroRect();
             if (shell.ContextMenu != null && shell.ContextMenu.Visible)
             {
                 popupRect = BuildPopupRectCore(shell.ContextMenu, scaledWidth, scaledHeight, hudReserveRect);
-                DrawContextMenuCore(popupRect, shell.ContextMenu);
+                float popupProgress = _animations.GetPopupProgress(true, false);
+                Rect animatedPopupRect = SlidePopupRect(popupRect, popupProgress);
+                using (ScenarioUiGuiScope.Apply(popupProgress, animatedPopupRect, 1f))
+                    DrawContextMenuCore(animatedPopupRect, shell.ContextMenu);
                 inputCapture.RegisterInteractiveRect(popupRect);
                 inputCapture.SetPopupOpen(true);
                 if (Event.current != null
@@ -231,6 +252,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ScenarioCompositionRoot.Resolve<ScenarioAuthoringContextMenuService>().Close();
                     Event.current.Use();
                 }
+            }
+            else
+            {
+                _animations.GetPopupProgress(false, false);
             }
 
             if (_windowMenuOpen
@@ -245,16 +270,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (shell.SpritePickerDocument != null)
             {
+                float dimAlpha = _animations.GetModalDimAlpha(true);
+                if (dimAlpha > 0.001f)
+                {
+                    Color oldColor = GUI.color;
+                    GUI.color = new Color(0f, 0f, 0f, dimAlpha);
+                    GUI.DrawTexture(new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight), Texture2D.whiteTexture);
+                    GUI.color = oldColor;
+                }
+
                 Rect pickerRect = new Rect(
                     Math.Max(Margin, (scaledWidth - 980f) * 0.5f),
                     Math.Max(topRect.yMax + Gutter, (scaledHeight - 680f) * 0.5f),
                     Math.Min(980f, scaledWidth - (Margin * 2f)),
                     Math.Min(680f, scaledHeight - topRect.height - StatusHeight - (Margin * 3f)));
-                Rect pickerScrollRect = DrawDocumentModalCore(pickerRect, shell.SpritePickerDocument, "sprite_picker");
+                float panelProgress = _animations.GetModalPanelProgress(true);
+                float panelScale = Mathf.Lerp(0.975f, 1f, panelProgress);
+                Rect pickerScrollRect;
+                using (ScenarioUiGuiScope.Apply(panelProgress, pickerRect, panelScale))
+                    pickerScrollRect = DrawDocumentModalCore(pickerRect, shell.SpritePickerDocument, "sprite_picker");
                 inputCapture.RegisterInteractiveRect(pickerRect);
                 if (pickerScrollRect.width > 0f && pickerScrollRect.height > 0f)
                     inputCapture.RegisterScrollRect("sprite_picker", pickerScrollRect);
                 inputCapture.SetPopupOpen(true);
+            }
+            else
+            {
+                _animations.GetModalDimAlpha(false);
+                _animations.GetModalPanelProgress(false);
             }
 
             inputCapture.SetKeyboardCaptured(
@@ -262,11 +305,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || _assetBrowserSearchFocused
                 || _spritePickerSearchFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
+            inputCapture.SetTransitionActive(_animations.TransitionActive);
 
             DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
 
             inputCapture.CompleteFrame();
             GUI.matrix = oldMatrix;
+        }
+
+        private void RegisterWindowAnimationStates(
+            ScenarioAuthoringShellWindowViewModel[] windows,
+            Dictionary<string, Rect> windowRects)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                Rect rect;
+                if (window != null && windowRects != null && windowRects.TryGetValue(window.Id, out rect))
+                    _animations.RegisterWindow(window, rect);
+            }
+
+            _animations.CompleteWindowRegistration();
         }
 
         private Dictionary<string, Rect> ResolveWindowRects(Rect contentRect, ScenarioAuthoringShellWindowViewModel[] windows)
@@ -318,11 +377,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (floating)
                     rect = HandleFloatingWindowInput(window, rect, contentRect);
 
+                _animations.UpdateWindowRect(window.Id, rect);
                 Rect scrollRect = DrawWindowCore(rect, window);
                 inputCapture.RegisterInteractiveRect(rect);
                 if (scrollRect.width > 0f && scrollRect.height > 0f)
                     inputCapture.RegisterScrollRect(window.Id, scrollRect);
             }
+
+            _animations.CollectClosingWindows(floating, _closingWindowBuffer);
+            for (int i = 0; i < _closingWindowBuffer.Count; i++)
+            {
+                ScenarioAuthoringShellAnimationService.WindowVisualState state = _closingWindowBuffer[i];
+                if (state == null || state.Window == null)
+                    continue;
+
+                Rect rect = state.LastRect;
+                DrawWindowCore(rect, state.Window);
+                inputCapture.RegisterInteractiveRect(rect);
+            }
+        }
+
+        private static Rect SlidePopupRect(Rect rect, float progress)
+        {
+            float offset = (1f - Mathf.Clamp01(progress)) * -8f;
+            return new Rect(rect.x, rect.y + offset, rect.width, rect.height);
         }
 
         private static ScenarioAuthoringShellWindowViewModel[] BuildWindowDrawList(

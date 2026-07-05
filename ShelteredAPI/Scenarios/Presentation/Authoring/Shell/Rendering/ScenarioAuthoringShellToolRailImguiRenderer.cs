@@ -46,15 +46,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             bool active = state != null && state.ActiveTool == button.Tool;
             GUIStyle style = active ? _activeButtonStyle : _buttonStyle;
-            if (GUI.Button(rect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style))
+            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
+            bool hovered = rect.Contains(mouse);
+            bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
+            float press = button.Action.Enabled ? _animations.GetButtonPressForAction(button.Action.Id, pressed) : 0f;
+            Rect visualRect = press > 0.001f
+                ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
+                : rect;
+            if (GUI.Button(visualRect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style) && button.Action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(button.Action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
 
-            GUI.Label(new Rect(rect.x + 2f, rect.y + 9f, rect.width - 4f, 22f), button.IconText ?? string.Empty, _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 2f, rect.y + 42f, rect.width - 4f, rect.height - 44f), button.Label ?? string.Empty, _mutedTextStyle);
+            DrawButtonAnimationOverlay(visualRect, button.Action.Id, button.Action.Enabled, hovered, pressed);
+            GUI.Label(new Rect(visualRect.x + 2f, visualRect.y + 9f, visualRect.width - 4f, 22f), button.IconText ?? string.Empty, _sectionTitleStyle);
+            GUI.Label(new Rect(visualRect.x + 2f, visualRect.y + 42f, visualRect.width - 4f, visualRect.height - 44f), button.Label ?? string.Empty, _mutedTextStyle);
         }
 
     }

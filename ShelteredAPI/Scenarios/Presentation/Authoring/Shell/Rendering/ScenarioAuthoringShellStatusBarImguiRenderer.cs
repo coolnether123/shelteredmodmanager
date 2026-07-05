@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
@@ -65,6 +66,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Label(new Rect(rightControlsX + 156f, rect.y + 14f, 18f, 18f), "-", _mutedTextStyle);
                 GUI.Box(new Rect(rightControlsX + 184f, rect.y + 20f, 80f, 4f), GUIContent.none, _uiContext.Styles.Field);
                 GUI.Label(new Rect(rightControlsX + 278f, rect.y + 14f, 48f, 18f), "100%", _textStyle);
+            }
+
+            string toast = shell != null && shell.StatusEntries != null && shell.StatusEntries.Length > 0
+                ? shell.StatusEntries[0]
+                : null;
+            DrawStatusToastCore(rect, toast);
+        }
+
+        private void DrawStatusToastCore(Rect statusRect, string message)
+        {
+            float progress = _animations.GetToastProgress(message);
+            if (string.IsNullOrEmpty(message) || progress <= 0.001f)
+                return;
+
+            float width = Mathf.Clamp((message.Length * 7.5f) + 34f, 220f, 520f);
+            Rect rect = new Rect(
+                statusRect.x + 24f,
+                statusRect.y - Mathf.Lerp(0f, 40f, progress),
+                width,
+                30f);
+            using (ScenarioUiGuiScope.Apply(progress, rect, 1f))
+            {
+                GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 6f, rect.width - 24f, 18f), ShortenToFit(message, rect.width - 24f, _mutedTextStyle), _mutedTextStyle);
             }
         }
 

@@ -8,6 +8,7 @@ using ShelteredAPI.Scenarios.Presentation.Authoring.Imgui;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Ngui;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
 namespace ShelteredAPI.Scenarios.Composition{
@@ -18,7 +19,11 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddScenarioPresentation();
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapAuthoringContentBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestAuthoringContentBuilder(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringShellImguiRenderModule(); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringShellImguiRenderModule(
+                    resolver.Get<ScenarioAuthoringShellAnimationService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringImguiRenderModule(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringNguiRenderModule(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

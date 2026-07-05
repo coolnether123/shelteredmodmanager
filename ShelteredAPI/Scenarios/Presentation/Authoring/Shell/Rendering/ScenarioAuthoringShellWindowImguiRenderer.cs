@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
@@ -21,6 +22,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
         private Rect DrawWindowCore(Rect rect, ScenarioAuthoringShellWindowViewModel window)
+        {
+            ScenarioAuthoringShellAnimationService.WindowVisualState visual =
+                window != null ? _animations.GetWindowVisual(window.Id) : null;
+            float alpha = visual != null ? visual.Alpha : 1f;
+            float scale = visual != null ? visual.Scale : 1f;
+            using (ScenarioUiGuiScope.Apply(alpha, rect, scale))
+                return DrawWindowCoreUnscoped(rect, window);
+        }
+
+        private Rect DrawWindowCoreUnscoped(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
             if (window != null)
             {
@@ -1009,12 +1020,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             GUIStyle style = !action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
+            bool hovered = rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
+            bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
             if (GUI.Button(rect, GUIContent.none, style) && action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
+
+            DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, pressed);
 
             Rect textRect;
             if (action.PreviewSprite != null && rect.width >= 150f)
