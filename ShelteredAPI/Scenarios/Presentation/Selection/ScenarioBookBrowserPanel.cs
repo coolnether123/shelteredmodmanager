@@ -35,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private bool _isClosing;
         private bool _deletePromptActive;
         private List<Collider> _deletePromptDisabledColliders;
+        private ScenarioBrowserPanelAdapter.ScenarioBrowserSuppressionHandle _underlyingSuppression;
 
         private IScenarioSelectionCatalogService Catalog
         {
@@ -64,11 +65,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_instance != null)
                 Destroy(_instance);
 
-            // Known limitation: this browser currently stacks a second full
-            // FieldManualWindowChrome over the vanilla scenario book. The
-            // intended future architecture is to reuse or replace the content
-            // inside the existing scenario book so underlying vanilla controls
-            // such as Back are not visible behind this overlay.
             GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
             _instance = root;
 
@@ -80,9 +76,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void Initialise(GameObject root)
         {
             _adapter.SetInputEnabled(false);
+            _underlyingSuppression = _adapter.SuppressUnderlyingChrome();
             _dataSource = new ScenarioBookBrowserDataSource(Catalog, SaveLibrary);
             _actions = new ScenarioBookBrowserActionService(_adapter, LaunchCoordinator, SaveLibrary, DraftMetadataEditService);
-            _dataSource.Refresh();
 
             VanillaPageTurnAssets pageTurnAssets = new VanillaPageTurnAssets();
             _renderer = new ScenarioBookBrowserRenderer(BackOrClose, Close, ChangePage);
@@ -90,14 +86,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _pageTurn = FieldManualBookPageTurn.Attach(root, _renderer.Chrome, pageTurnAssets);
             _pageFlipRoot = _renderer.Chrome.Ui.CreateChild(root, "BookPageFlipRoot", Vector3.zero);
 
-            SetStatus(null);
-            RenderCurrentView(false);
+            StartDataRefresh("Loading scenarios...");
         }
 
         private void Update()
         {
             if (_deletePromptActive)
                 return;
+
+            ApplyDataRefreshIfReady();
 
             if (_renderer != null)
                 _renderer.HandleSearchInput(HandleSearchFilterChanged);
@@ -345,8 +342,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     SetStatus(status);
                     if (deleted)
                     {
-                        _dataSource.Refresh();
-                        RenderCurrentView(true);
+                        StartDataRefresh("Refreshing scenarios...");
                     }
                 }
             }
@@ -422,8 +418,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     SetStatus(status);
                     if (cleared)
                     {
-                        _dataSource.Refresh();
-                        RenderCurrentView(true);
+                        StartDataRefresh("Refreshing scenarios...");
                     }
                 }
             }
@@ -509,7 +504,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 : ScenarioBookBrowserViewKind.Saves;
             _pageIndex = 0;
             ClearPreparedPages();
-            SetStatus(null);
+            if (_view == ScenarioBookBrowserViewKind.Saves)
+            {
+                _dataSource.BeginSaveRowsRefreshAsync(scenario);
+                SetStatus("Loading saves...");
+            }
+            else
+            {
+                SetStatus(null);
+            }
             RenderCurrentView(true);
         }
 
@@ -537,12 +540,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
             }
 
-            string scenarioId = updatedInfo != null ? updatedInfo.Id : (_selectedScenario != null ? _selectedScenario.ScenarioId : null);
-            _dataSource.Refresh();
-            ScenarioCatalogEntry refreshed;
-            if (!string.IsNullOrEmpty(scenarioId) && Catalog.TryGet(scenarioId, out refreshed))
-                _selectedScenario = refreshed;
+            if (_selectedScenario != null && updatedInfo != null)
+            {
+                _selectedScenario.ScenarioId = updatedInfo.Id;
+                _selectedScenario.DisplayName = updatedInfo.DisplayName;
+                _selectedScenario.Description = model.Description;
+                _selectedScenario.Version = updatedInfo.Version;
+                _selectedScenario.OwnerModId = updatedInfo.OwnerModId;
+            }
 
+            StartDataRefresh("Refreshing draft details...");
             ClearPreparedPages();
             SetStatus(status);
             RenderCurrentView(false);
@@ -578,9 +585,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             SetStatus(status);
             if (changed)
             {
-                _dataSource.Refresh();
-                ClearPreparedPages();
-                RenderCurrentView(false);
+                StartDataRefresh("Refreshing scenarios...");
             }
         }
 
@@ -651,6 +656,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             try
             {
+                if (_underlyingSuppression != null)
+                {
+                    _underlyingSuppression.Restore();
+                    _underlyingSuppression = null;
+                }
+
                 if (_adapter != null)
                     _adapter.SetInputEnabled(true);
             }
@@ -721,6 +732,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_renderer != null)
                 _renderer.ClearPreparedPages();
             _lastRenderScopeKey = null;
+        }
+
+        private void StartDataRefresh(string status)
+        {
+            if (_dataSource == null)
+                return;
+
+            ClearPreparedPages();
+            SetStatus(status);
+            _dataSource.BeginRefreshAsync();
+            if (_renderer != null)
+                RenderCurrentView(false);
+        }
+
+        private void ApplyDataRefreshIfReady()
+        {
+            if (_dataSource == null || !_dataSource.ApplyLatestSaveRows())
+                return;
+
+            ClearPreparedPages();
+            string error = _dataSource.LastRefreshError;
+            SetStatus(string.IsNullOrEmpty(error) ? null : "Scenario refresh failed: " + error);
+            RenderCurrentView(false);
         }
 
         private ScenarioBookPlayStatsModel BuildCurrentPlayStats()

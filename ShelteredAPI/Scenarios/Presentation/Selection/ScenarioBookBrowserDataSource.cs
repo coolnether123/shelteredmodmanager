@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
 using ModAPI.Core;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Saves.Runtime;
@@ -11,8 +12,30 @@ using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserDataSource
     {
+        private sealed class CatalogSnapshot
+        {
+            public ScenarioCatalogEntry[] Entries;
+            public string Error;
+            public int Version;
+        }
+
+        private static readonly object SharedSnapshotSync = new object();
+        private static CatalogSnapshot _sharedSnapshot;
+        private static bool _sharedRefreshRunning;
+        private static int _sharedVersion;
+
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly IScenarioSaveLibrary _saveLibrary;
+        private readonly object _saveRefreshSync = new object();
+        private ScenarioCatalogEntry[] _entries = new ScenarioCatalogEntry[0];
+        private int _appliedVersion;
+        private string _lastRefreshError;
+        private bool _saveRefreshRunning;
+        private string _saveRefreshScenarioId;
+        private ScenarioBookRowModel[] _saveRefreshRows;
+        private string _saveRefreshError;
+        private int _saveRefreshVersion;
+        private int _appliedSaveRefreshVersion;
 
         public ScenarioBookBrowserDataSource(IScenarioSelectionCatalogService catalog, IScenarioSaveLibrary saveLibrary)
         {
@@ -21,11 +44,176 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             _catalog = catalog;
             _saveLibrary = saveLibrary;
+            ApplyLatestSnapshot();
         }
 
         public void Refresh()
         {
-            _catalog.Refresh();
+            CatalogSnapshot snapshot = BuildSnapshot(_catalog);
+            PublishSnapshot(snapshot);
+            ApplySnapshot(snapshot);
+        }
+
+        public void BeginRefreshAsync()
+        {
+            Refresh();
+        }
+
+        public void BeginSaveRowsRefreshAsync(ScenarioCatalogEntry entry)
+        {
+            if (entry == null || entry.Source == ScenarioCatalogSource.Draft || string.IsNullOrEmpty(entry.StorageScenarioId))
+                return;
+
+            string storageScenarioId = entry.StorageScenarioId;
+            lock (_saveRefreshSync)
+            {
+                if (_saveRefreshRunning && string.Equals(_saveRefreshScenarioId, storageScenarioId, StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                _saveRefreshRunning = true;
+                _saveRefreshScenarioId = storageScenarioId;
+                _saveRefreshRows = null;
+                _saveRefreshError = null;
+            }
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                ScenarioBookRowModel[] rows = null;
+                string error = null;
+                try
+                {
+                    rows = BuildSaveRowsSnapshot(entry);
+                }
+                catch (Exception ex)
+                {
+                    rows = new ScenarioBookRowModel[0];
+                    error = ex.Message;
+                    MMLog.WriteWarning("[ScenarioBookBrowser] Background save enumeration failed for "
+                        + storageScenarioId + ": " + ex.Message);
+                }
+                finally
+                {
+                    lock (_saveRefreshSync)
+                    {
+                        _saveRefreshRows = rows ?? new ScenarioBookRowModel[0];
+                        _saveRefreshError = error;
+                        _saveRefreshVersion++;
+                        _saveRefreshRunning = false;
+                    }
+                }
+            });
+        }
+
+        public static void BeginSharedRefreshAsync(IScenarioSelectionCatalogService catalog)
+        {
+            CatalogSnapshot snapshot;
+            lock (SharedSnapshotSync)
+            {
+                if (_sharedRefreshRunning)
+                    return;
+
+                _sharedRefreshRunning = true;
+            }
+
+            try
+            {
+                snapshot = BuildSnapshot(catalog);
+                PublishSnapshot(snapshot);
+            }
+            finally
+            {
+                lock (SharedSnapshotSync)
+                {
+                    _sharedRefreshRunning = false;
+                }
+            }
+        }
+
+        public bool ApplyLatestSnapshot()
+        {
+            CatalogSnapshot snapshot;
+            lock (SharedSnapshotSync)
+            {
+                snapshot = _sharedSnapshot;
+            }
+
+            if (snapshot == null || snapshot.Version == _appliedVersion)
+                return false;
+
+            ApplySnapshot(snapshot);
+            return true;
+        }
+
+        public bool ApplyLatestSaveRows()
+        {
+            lock (_saveRefreshSync)
+            {
+                if (_saveRefreshVersion == _appliedSaveRefreshVersion)
+                    return false;
+
+                _appliedSaveRefreshVersion = _saveRefreshVersion;
+                _lastRefreshError = _saveRefreshError;
+                return true;
+            }
+        }
+
+        public bool IsRefreshRunning
+        {
+            get
+            {
+                lock (_saveRefreshSync)
+                {
+                    return _saveRefreshRunning;
+                }
+            }
+        }
+
+        public bool HasEntries
+        {
+            get { return _entries != null && _entries.Length > 0; }
+        }
+
+        public string LastRefreshError
+        {
+            get { return _lastRefreshError; }
+        }
+
+        private void ApplySnapshot(CatalogSnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+
+            _entries = snapshot.Entries ?? new ScenarioCatalogEntry[0];
+            _lastRefreshError = snapshot.Error;
+            _appliedVersion = snapshot.Version;
+        }
+
+        private static CatalogSnapshot BuildSnapshot(IScenarioSelectionCatalogService catalog)
+        {
+            CatalogSnapshot snapshot = new CatalogSnapshot();
+            try
+            {
+                snapshot.Entries = catalog != null ? catalog.ListAll() : new ScenarioCatalogEntry[0];
+            }
+            catch (Exception ex)
+            {
+                snapshot.Entries = new ScenarioCatalogEntry[0];
+                snapshot.Error = ex.Message;
+            }
+
+            return snapshot;
+        }
+
+        private static void PublishSnapshot(CatalogSnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+
+            lock (SharedSnapshotSync)
+            {
+                snapshot.Version = ++_sharedVersion;
+                _sharedSnapshot = snapshot;
+            }
         }
 
         public List<ScenarioBookRowModel> BuildRows(
@@ -163,21 +351,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 if (entry == null)
                     continue;
 
-                rows.Add(new ScenarioBookRowModel
-                {
-                    Kind = ScenarioBookRowKind.Scenario,
-                    Type = selectedType,
-                    Scenario = entry,
-                    Title = Safe(entry.DisplayName, entry.ScenarioId),
-                    Detail = entry.Source == ScenarioCatalogSource.Draft
-                        ? Safe(entry.Description, BuildScenarioDetail(entry))
-                        : BuildScenarioDetail(entry),
-                    Badge = BuildScenarioBadge(entry),
-                    IsLocked = !entry.CanStart
-                });
+                rows.Add(BuildScenarioRow(selectedType, entry));
             }
 
             return rows;
+        }
+
+        private ScenarioBookRowModel BuildScenarioRow(ScenarioBookType selectedType, ScenarioCatalogEntry entry)
+        {
+            SaveEntry draftSave = null;
+            if (entry != null && entry.Source == ScenarioCatalogSource.Draft)
+            {
+                try { ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(entry.ScenarioId, out draftSave); }
+                catch { draftSave = null; }
+            }
+
+            return new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.Scenario,
+                Type = selectedType,
+                Scenario = entry,
+                Title = Safe(entry != null ? entry.DisplayName : null, entry != null ? entry.ScenarioId : null),
+                Detail = entry != null && entry.Source == ScenarioCatalogSource.Draft
+                    ? BuildDraftScenarioDetail(entry, draftSave)
+                    : BuildScenarioDetail(entry),
+                Badge = entry != null && entry.Source == ScenarioCatalogSource.Draft
+                    ? BuildDraftScenarioBadge(draftSave)
+                    : BuildScenarioBadge(entry),
+                IsLocked = entry == null || !entry.CanStart
+            };
         }
 
         private List<ScenarioBookRowModel> BuildSaveRows(ScenarioCatalogEntry entry)
@@ -218,6 +420,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return rows;
             }
 
+            ScenarioBookRowModel[] cachedRows;
+            lock (_saveRefreshSync)
+            {
+                cachedRows = string.Equals(_saveRefreshScenarioId, entry.StorageScenarioId, StringComparison.OrdinalIgnoreCase)
+                    ? _saveRefreshRows
+                    : null;
+            }
+
+            if (cachedRows != null)
+                return new List<ScenarioBookRowModel>(cachedRows);
+
+            rows.Add(BuildStartScenarioRow(entry));
+            rows.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.Empty,
+                Scenario = entry,
+                Title = "Loading saves",
+                Detail = "Reading scenario save metadata in the background.",
+                Badge = "Loading"
+            });
+            return rows;
+        }
+
+        private ScenarioBookRowModel[] BuildSaveRowsSnapshot(ScenarioCatalogEntry entry)
+        {
             SaveEntry[] saves = new SaveEntry[0];
             try { saves = _saveLibrary.ListSaves(entry.StorageScenarioId); }
             catch (Exception ex)
@@ -238,15 +465,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             saveDetails.Sort(CompareSaveDetails);
 
-            rows.Add(new ScenarioBookRowModel
-            {
-                Kind = ScenarioBookRowKind.StartScenario,
-                Scenario = entry,
-                Title = "Start New",
-                Detail = "Create a new scenario-owned save for this scenario.",
-                Badge = "New Game",
-                IsLocked = !entry.CanStart
-            });
+            List<ScenarioBookRowModel> rows = new List<ScenarioBookRowModel>();
+            rows.Add(BuildStartScenarioRow(entry));
 
             for (int i = 0; i < saveDetails.Count; i++)
             {
@@ -269,7 +489,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 });
             }
 
-            return rows;
+            return rows.ToArray();
+        }
+
+        private static ScenarioBookRowModel BuildStartScenarioRow(ScenarioCatalogEntry entry)
+        {
+            return new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.StartScenario,
+                Scenario = entry,
+                Title = "Start New",
+                Detail = "Create a new scenario-owned save for this scenario.",
+                Badge = "New Game",
+                IsLocked = entry != null && !entry.CanStart
+            };
         }
 
         private static void AddRecoveryRows(List<ScenarioBookRowModel> rows)
@@ -345,7 +578,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private ScenarioCatalogEntry[] ListEntries(ScenarioBookType type)
         {
-            ScenarioCatalogEntry[] all = _catalog.ListAll();
+            ScenarioCatalogEntry[] all = _entries ?? new ScenarioCatalogEntry[0];
             List<ScenarioCatalogEntry> entries = new List<ScenarioCatalogEntry>();
             for (int i = 0; i < all.Length; i++)
             {
@@ -371,7 +604,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void AddPublishedScenarioRows(List<ScenarioBookRowModel> rows)
         {
-            ScenarioCatalogEntry[] all = _catalog.ListAll();
+            ScenarioCatalogEntry[] all = _entries ?? new ScenarioCatalogEntry[0];
             for (int i = 0; i < all.Length; i++)
             {
                 ScenarioCatalogEntry entry = all[i];
@@ -407,12 +640,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private static string BuildScenarioDetail(ScenarioCatalogEntry entry)
         {
+            if (entry == null)
+                return string.Empty;
+
             string owner = entry.Source == ScenarioCatalogSource.Vanilla
                 ? "vanilla"
                 : (!string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "local");
             string mode = entry.BaseGameMode.ToString();
             string state = entry.CanStart ? "Ready" : "Locked";
             return owner + " - " + mode + " - " + state;
+        }
+
+        private static string BuildDraftScenarioDetail(ScenarioCatalogEntry entry, SaveEntry draftSave)
+        {
+            string description = Safe(entry != null ? entry.Description : null, "Local scenario authoring draft.");
+            string modified = BuildDraftModifiedLabel(draftSave);
+            string slot = draftSave != null && draftSave.absoluteSlot > 0 ? "slot " + draftSave.absoluteSlot.ToString(CultureInfo.InvariantCulture) : "slot ?";
+            string id = entry != null ? Safe(entry.ScenarioId, draftSave != null ? draftSave.id : null) : (draftSave != null ? draftSave.id : "unknown");
+            return description + "\nLast touched " + modified + " - " + slot + " - id " + id;
+        }
+
+        private static string BuildDraftScenarioBadge(SaveEntry draftSave)
+        {
+            if (draftSave != null && draftSave.absoluteSlot > 0)
+                return "Slot " + draftSave.absoluteSlot.ToString(CultureInfo.InvariantCulture);
+
+            return "Draft";
+        }
+
+        private static string BuildDraftModifiedLabel(SaveEntry draftSave)
+        {
+            if (draftSave == null)
+                return "unknown";
+
+            string displayTime = FormatDisplayTime(!string.IsNullOrEmpty(draftSave.updatedAt) ? draftSave.updatedAt : GetSaveTime(draftSave));
+            return string.IsNullOrEmpty(displayTime) ? "unknown" : displayTime;
         }
 
         private static string BuildScenarioBadge(ScenarioCatalogEntry entry)

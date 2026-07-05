@@ -386,20 +386,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 }
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Hierarchy, StringComparison.OrdinalIgnoreCase))
                 {
-                    rects[window.Id] = new Rect(viewportLeft, contentRect.y + 40f, Mathf.Min(360f, Math.Max(300f, window.Width)), Mathf.Min(470f, contentRect.height - 160f));
+                    rects[window.Id] = ScenarioAuthoringShellLayout.BuildFloatingWindowRect(window, contentRect, i);
                 }
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.SelectionStack, StringComparison.OrdinalIgnoreCase))
                 {
-                    rects[window.Id] = new Rect(viewportLeft, contentRect.yMax - 356f, Mathf.Min(360f, Math.Max(300f, window.Width)), 268f);
+                    rects[window.Id] = ScenarioAuthoringShellLayout.BuildFloatingWindowRect(window, contentRect, i);
                 }
                 else
                 {
-                    Rect workspace = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, false);
-                    float width = Mathf.Min(window.Width > 0f ? window.Width : 720f, Math.Max(520f, viewportRight - viewportLeft));
-                    float height = Mathf.Min(window.Height > 0f ? window.Height : 420f, Math.Max(260f, contentRect.height - 120f));
-                    float x = workspace.x + ((workspace.width - width) * 0.5f) + ((i % 3) * 18f);
-                    float y = workspace.y + ((workspace.height - height) * 0.5f) + ((i % 2) * 18f);
-                    rects[window.Id] = ScenarioAuthoringShellLayout.ClampAwayFromHud(new Rect(x, y, width, height), _scaledWidth, _scaledHeight, ScenarioAuthoringShellLayout.BuildHudReserveRect(_scaledWidth));
+                    rects[window.Id] = ScenarioAuthoringShellLayout.BuildFloatingWindowRect(window, contentRect, i);
                 }
             }
 

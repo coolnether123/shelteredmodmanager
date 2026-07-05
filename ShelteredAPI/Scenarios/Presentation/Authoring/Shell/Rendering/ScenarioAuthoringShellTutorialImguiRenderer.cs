@@ -224,23 +224,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             float width = Math.Min(430f, availableRect.width - (Margin * 2f));
             float height = 218f;
-            if (targetRect.width <= 0f || targetRect.height <= 0f)
+            if (targetRect.width <= 0f || targetRect.height <= 0f || targetRect.yMax <= availableRect.y)
+                return BuildTutorialTopCenterRect(availableRect, width, height);
+
+            float minX = availableRect.x + Margin;
+            float maxX = availableRect.xMax - width - Margin;
+            float minY = availableRect.y + Margin;
+            float maxY = availableRect.yMax - height - Margin;
+
+            Rect[] candidates = new Rect[]
             {
-                return new Rect(
-                    availableRect.xMax - width - Margin,
-                    availableRect.y + Margin,
-                    width,
-                    height);
+                new Rect(targetRect.xMax + Gutter, Mathf.Clamp(targetRect.y, minY, maxY), width, height),
+                new Rect(targetRect.x - width - Gutter, Mathf.Clamp(targetRect.y, minY, maxY), width, height),
+                new Rect(Mathf.Clamp(targetRect.center.x - (width * 0.5f), minX, maxX), targetRect.yMax + Gutter, width, height),
+                new Rect(Mathf.Clamp(targetRect.center.x - (width * 0.5f), minX, maxX), targetRect.y - height - Gutter, width, height),
+                BuildTutorialTopCenterRect(availableRect, width, height)
+            };
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                Rect candidate = candidates[i];
+                if (candidate.x < minX || candidate.x > maxX || candidate.y < minY || candidate.y > maxY)
+                    continue;
+                if (!candidate.Overlaps(targetRect))
+                    return candidate;
             }
 
-            float x = targetRect.center.x < availableRect.center.x
-                ? targetRect.xMax + Gutter
-                : targetRect.x - width - Gutter;
-            if (x < availableRect.x + Margin || x + width > availableRect.xMax - Margin)
-                x = availableRect.xMax - width - Margin;
+            Rect fallback = BuildTutorialTopCenterRect(availableRect, width, height);
+            if (fallback.Overlaps(targetRect))
+                fallback.y = Mathf.Clamp(targetRect.yMax + Gutter, minY, maxY);
+            return fallback;
+        }
 
-            float y = Mathf.Clamp(targetRect.y, availableRect.y + Margin, availableRect.yMax - height - Margin);
-            return new Rect(x, y, width, height);
+        private static Rect BuildTutorialTopCenterRect(Rect availableRect, float width, float height)
+        {
+            return new Rect(
+                availableRect.x + ((availableRect.width - width) * 0.5f),
+                availableRect.y + Margin,
+                width,
+                height);
         }
 
         private void DrawTutorialCallout(Rect rect, ScenarioAuthoringTutorialViewModel tutorial)

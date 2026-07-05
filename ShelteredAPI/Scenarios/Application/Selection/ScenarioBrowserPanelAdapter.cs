@@ -14,6 +14,60 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         private readonly ScenarioSelectionPanel _panel;
         private readonly Traverse _traverse;
 
+        internal sealed class ScenarioBrowserSuppressionHandle
+        {
+            private readonly List<SuppressedObject> _objects = new List<SuppressedObject>();
+            private bool _restored;
+
+            public void Add(GameObject gameObject)
+            {
+                if (gameObject == null || Contains(gameObject))
+                    return;
+
+                _objects.Add(new SuppressedObject(gameObject));
+                gameObject.SetActive(false);
+            }
+
+            public void Restore()
+            {
+                if (_restored)
+                    return;
+
+                _restored = true;
+                for (int i = _objects.Count - 1; i >= 0; i--)
+                {
+                    SuppressedObject item = _objects[i];
+                    if (item != null && item.GameObject != null)
+                        item.GameObject.SetActive(item.WasActive);
+                }
+
+                _objects.Clear();
+            }
+
+            private bool Contains(GameObject gameObject)
+            {
+                for (int i = 0; i < _objects.Count; i++)
+                {
+                    if (_objects[i] != null && _objects[i].GameObject == gameObject)
+                        return true;
+                }
+
+                return false;
+            }
+
+            private sealed class SuppressedObject
+            {
+                public readonly GameObject GameObject;
+                public readonly bool WasActive;
+
+                public SuppressedObject(GameObject gameObject)
+                {
+                    GameObject = gameObject;
+                    WasActive = gameObject != null && gameObject.activeSelf;
+                }
+            }
+        }
+
         public ScenarioBrowserPanelAdapter(ScenarioSelectionPanel panel)
         {
             if (panel == null)
@@ -108,6 +162,30 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
         }
 
+        public ScenarioBrowserSuppressionHandle SuppressUnderlyingChrome()
+        {
+            ScenarioBrowserSuppressionHandle handle = new ScenarioBrowserSuppressionHandle();
+
+            SlotSelectionPanel slotPanel = GetSlotSelectionPanel();
+            if (slotPanel != null)
+                handle.Add(slotPanel.gameObject);
+
+            AddLabel(handle, GetScenarioNameLabel());
+            AddLabel(handle, GetScenarioDescLabel());
+            AddLabel(handle, GetScenarioHighScoreLabel());
+            handle.Add(GetStasisScoreLabelsRoot());
+
+            List<UIButton> buttons = GetScenarioButtons();
+            for (int i = 0; buttons != null && i < buttons.Count; i++)
+            {
+                UIButton button = buttons[i];
+                if (button != null)
+                    handle.Add(button.gameObject);
+            }
+
+            return handle;
+        }
+
         public bool SetSelectedSlot(int slotIndex)
         {
             SlotSelectionPanel slotPanel = GetSlotSelectionPanel();
@@ -172,6 +250,12 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         {
             try { return _traverse.Field(name).GetValue<bool>(); }
             catch { return fallback; }
+        }
+
+        private static void AddLabel(ScenarioBrowserSuppressionHandle handle, UILabel label)
+        {
+            if (handle != null && label != null)
+                handle.Add(label.gameObject);
         }
     }
 }

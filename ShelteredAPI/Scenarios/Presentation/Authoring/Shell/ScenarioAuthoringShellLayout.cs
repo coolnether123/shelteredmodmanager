@@ -31,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float WorkspaceTabReserveHeight = 42f;
         public const float FloatingWindowStartY = 46f;
         public const float FloatingWindowCascade = 28f;
+        public const float CommandDockBottomOffset = 22f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
         // on the right for the HUD so labels never collide with the game UI.
@@ -83,8 +84,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public static Rect BuildBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
         {
             float trayWidth = Math.Min(940f, Math.Max(520f, viewportRight - viewportLeft));
-            float trayY = Math.Max(contentRect.y + 220f, contentRect.yMax - BottomTrayHeight);
-            return new Rect(viewportLeft, trayY, trayWidth, BottomTrayHeight);
+            float commandDockTop = contentRect.yMax - CommandDockHeight - CommandDockBottomOffset;
+            float trayBottom = Math.Max(contentRect.y + 180f, commandDockTop - Gutter);
+            float upperClearanceY = contentRect.y + 240f;
+            float trayHeight = Mathf.Clamp(BottomTrayHeight, 220f, Math.Max(220f, trayBottom - upperClearanceY));
+            float trayY = trayBottom - trayHeight;
+            return new Rect(viewportLeft, trayY, trayWidth, trayHeight);
         }
 
         public static Rect BuildWorkspaceRect(Rect contentRect, bool reserveBottomTray)
