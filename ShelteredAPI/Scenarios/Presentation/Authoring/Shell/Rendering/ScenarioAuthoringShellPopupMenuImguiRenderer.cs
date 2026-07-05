@@ -36,6 +36,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 Rect buttonRect = GUILayoutUtility.GetRect(rect.width - 24f, 24f, GUILayout.Height(24f));
                 DrawButton(buttonRect, action, false);
+                if (!action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
+                {
+                    GUILayoutUtility.GetRect(rect.width - 24f, 16f, GUILayout.Height(16f));
+                    GUILayout.Label(action.DisabledReason, _mutedTextStyle);
+                }
             }
             GUILayout.EndArea();
         }
@@ -44,6 +49,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             float rectWidth = 220f;
             float rectHeight = 54f + ((menu.Actions != null ? menu.Actions.Length : 0) * 28f);
+            for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = menu.Actions[i];
+                if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
+                    rectHeight += 18f;
+            }
             if (menu.CenterOnScreen)
                 return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(width, height, rectWidth, rectHeight, hudReserveRect);
 
@@ -92,35 +103,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return;
 
-            GUIContent content = new GUIContent(action.Label ?? string.Empty, action.Hint ?? string.Empty);
+            string tooltip = action.Enabled
+                ? (action.Hint ?? action.Detail ?? string.Empty)
+                : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : (action.Hint ?? string.Empty)));
+            GUIStyle style = tab
+                ? (!action.Enabled ? _uiContext.Styles.TabDisabled : (action.Emphasized ? _activeTabStyle : _tabStyle))
+                : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
+            GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, rect.width - 10f, style), tooltip);
 
             if (IsWindowMenuAction(action))
             {
-                GUI.enabled = action.Enabled;
-                GUIStyle menuStyle = tab
-                    ? (action.Emphasized ? _activeTabStyle : _tabStyle)
-                    : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
-                if (GUI.Button(rect, content, menuStyle) && action.Enabled)
+                if (GUI.Button(rect, content, style) && action.Enabled)
                 {
                     _windowMenuOpen = !_windowMenuOpen;
                     if (Event.current != null)
                         Event.current.Use();
                 }
-                GUI.enabled = true;
                 return;
             }
 
-            GUI.enabled = action.Enabled;
-            GUIStyle style = tab
-                ? (action.Emphasized ? _activeTabStyle : _tabStyle)
-                : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
             if (GUI.Button(rect, content, style) && action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
                     Event.current.Use();
             }
-            GUI.enabled = true;
         }
     }
 }

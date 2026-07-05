@@ -108,6 +108,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string previewLabel = state != null && state.SpriteSwapPicker != null
                 ? state.SpriteSwapPicker.PreviewCandidateLabel
                 : null;
+            bool showAdvancedDetails = ShowAdvancedDetails(state);
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(ScenarioInspectorItemFactory.Text(
@@ -117,13 +118,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "SP",
                 model.Target.CurrentSprite,
                 true));
-            items.Add(ScenarioInspectorItemFactory.Property("Component", model.Target.Kind.ToString()));
+            items.Add(ScenarioInspectorItemFactory.Property("Asset Type", FriendlyKindLabel(model.Target.Kind)));
             items.Add(ScenarioInspectorItemFactory.Property("Current Sprite", ScenarioInspectorItemFactory.Safe(model.Target.SpriteName)));
-            items.Add(ScenarioInspectorItemFactory.Property("Current Map", ScenarioInspectorItemFactory.Safe(model.Target.TextureName)));
             items.Add(ScenarioInspectorItemFactory.Property("Active Swap", ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary)));
             items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
-            items.Add(ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)));
-            items.Add(ScenarioInspectorItemFactory.Property("PNG Import Folder", ScenarioInspectorItemFactory.Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null))));
             items.Add(ScenarioInspectorItemFactory.Property("Compatible Vanilla", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
             items.Add(ScenarioInspectorItemFactory.Property("Compatible Modded", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
             items.Add(ScenarioInspectorItemFactory.Property("Editor", editorOpen ? "Open" : "Closed"));
@@ -145,7 +143,55 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = items.ToArray()
             });
+            if (showAdvancedDetails)
+            {
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "sprite_swap_advanced",
+                    Title = "Advanced Details",
+                    Expanded = false,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[]
+                    {
+                        ScenarioInspectorItemFactory.Property("Component", model.Target.Kind.ToString()),
+                        ScenarioInspectorItemFactory.Property("Current Map", ScenarioInspectorItemFactory.Safe(model.Target.TextureName)),
+                        ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)),
+                        ScenarioInspectorItemFactory.Property("PNG Import Folder", ScenarioInspectorItemFactory.Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null)))
+                    }
+                });
+            }
             return sections;
+        }
+
+        private static bool ShowAdvancedDetails(ScenarioAuthoringState state)
+        {
+            return state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+        }
+
+        private static string FriendlyKindLabel(ScenarioAuthoringTargetKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioAuthoringTargetKind.SceneSprite: return "Scene Art";
+                case ScenarioAuthoringTargetKind.Background: return "Background Art";
+                case ScenarioAuthoringTargetKind.PlaceableObject: return "Shelter Object";
+                case ScenarioAuthoringTargetKind.Character: return "Survivor";
+                case ScenarioAuthoringTargetKind.Tile: return "Shelter Tile";
+                default: return kind.ToString();
+            }
+        }
+
+        private static string FriendlyKindLabel(ScenarioSpriteTargetComponentKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioSpriteTargetComponentKind.SpriteRenderer: return "Sprite Renderer";
+                case ScenarioSpriteTargetComponentKind.UI2DSprite: return "UI Sprite";
+                case ScenarioSpriteTargetComponentKind.Auto: return "Auto";
+                default: return kind.ToString();
+            }
         }
     }
 
@@ -223,6 +269,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return sections;
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool showAdvancedDetails = ShowAdvancedDetails(state);
             items.Add(ScenarioInspectorItemFactory.Text(
                 ScenarioAuthoringPresentationBuilder.FormatTarget(target),
                 target != null ? target.Kind.ToString() : "<none>",
@@ -236,16 +283,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ScenarioInspectorItemFactory.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioInspectorItemFactory.Safe(model.ActiveCandidateLabel) : "<none>"));
             items.Add(ScenarioInspectorItemFactory.Property("Placement Preview", model.PlacementActive ? "Active" : "Inactive"));
             items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
-            items.Add(ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)));
             items.Add(ScenarioInspectorItemFactory.Property("Vanilla Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
             items.Add(ScenarioInspectorItemFactory.Property("Modded Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
-            items.Add(ScenarioInspectorItemFactory.Property("Filtered People", model.BlockedPeople.ToString()));
-            items.Add(ScenarioInspectorItemFactory.Property("Filtered Objects", model.BlockedInteractiveObjects.ToString()));
-            items.Add(ScenarioInspectorItemFactory.Property("Filtered Pathing", model.BlockedPathfindingActors.ToString()));
-            items.Add(ScenarioInspectorItemFactory.Property("Filtered Gameplay", model.BlockedGameplayAssets.ToString()));
             items.Add(ScenarioInspectorItemFactory.Text(ScenarioInspectorItemFactory.Safe(model.PlacementSummary)));
             items.Add(ScenarioInspectorItemFactory.Text(ScenarioInspectorItemFactory.Safe(model.GuidanceMessage)));
-            items.Add(ScenarioInspectorItemFactory.Text("This follows the same serializer shape other scenario packs use: AssetReferences > SceneSpritePlacements > Placement."));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove,
                 "Remove Placement",
@@ -267,9 +308,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = items.ToArray()
             });
+            if (showAdvancedDetails)
+            {
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "scene_sprite_advanced",
+                    Title = "Advanced Details",
+                    Expanded = false,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[]
+                    {
+                        ScenarioInspectorItemFactory.Property("Stored As", ScenarioInspectorItemFactory.Safe(model.XmlPathHint)),
+                        ScenarioInspectorItemFactory.Property("Filtered People", model.BlockedPeople.ToString()),
+                        ScenarioInspectorItemFactory.Property("Filtered Objects", model.BlockedInteractiveObjects.ToString()),
+                        ScenarioInspectorItemFactory.Property("Filtered Pathing", model.BlockedPathfindingActors.ToString()),
+                        ScenarioInspectorItemFactory.Property("Filtered Gameplay", model.BlockedGameplayAssets.ToString()),
+                        ScenarioInspectorItemFactory.Text("Serializer path: AssetReferences > SceneSpritePlacements > Placement.")
+                    }
+                });
+            }
             sections.Add(BuildPlacementCandidateSection("scene_sprite_vanilla", "Vanilla Sprites", model.VanillaCandidates, "No loaded vanilla/runtime sprites are available.", model.ActiveCandidateToken));
             sections.Add(BuildPlacementCandidateSection("scene_sprite_modded", "Scenario Sprites", model.ModdedCandidates, "No scenario custom sprites are available.", model.ActiveCandidateToken));
             return sections;
+        }
+
+        private static bool ShowAdvancedDetails(ScenarioAuthoringState state)
+        {
+            return state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
         }
 
         private static ScenarioAuthoringInspectorSection BuildPlacementCandidateSection(

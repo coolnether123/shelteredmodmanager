@@ -52,11 +52,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioWorkflowAuthoringContentBuilder _workflowAuthoringContentBuilder;
         private readonly ScenarioOverviewAuthoringContentBuilder _scenarioOverviewAuthoringContentBuilder;
         private readonly ScenarioRuntimeTestAuthoringContentBuilder _runtimeTestAuthoringContentBuilder;
-        private readonly ScenarioLayerAuthoringContentBuilder _layerAuthoringContentBuilder;
         private readonly ScenarioHierarchyAuthoringContentBuilder _hierarchyAuthoringContentBuilder;
         private readonly ScenarioSelectionStackAuthoringContentBuilder _selectionStackAuthoringContentBuilder;
         private readonly ScenarioPublishAuthoringContentBuilder _publishAuthoringContentBuilder;
-        private readonly ScenarioCalendarAuthoringContentBuilder _calendarAuthoringContentBuilder;
+        private readonly ScenarioTimelineAuthoringContentBuilder _timelineAuthoringContentBuilder;
         private readonly Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> _windowSectionBuilders;
 
         public ScenarioAuthoringPresentationBuilder(
@@ -98,11 +97,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _workflowAuthoringContentBuilder = new ScenarioWorkflowAuthoringContentBuilder(sectionHub, selectionScopeService);
             _scenarioOverviewAuthoringContentBuilder = new ScenarioOverviewAuthoringContentBuilder();
             _runtimeTestAuthoringContentBuilder = new ScenarioRuntimeTestAuthoringContentBuilder(timelineBuilder, modDependencyDetector, modCompatibilityViewModelBuilder);
-            _layerAuthoringContentBuilder = new ScenarioLayerAuthoringContentBuilder();
             _hierarchyAuthoringContentBuilder = new ScenarioHierarchyAuthoringContentBuilder();
             _selectionStackAuthoringContentBuilder = new ScenarioSelectionStackAuthoringContentBuilder();
             _publishAuthoringContentBuilder = new ScenarioPublishAuthoringContentBuilder(timelineBuilder, modDependencyDetector, modCompatibilityViewModelBuilder);
-            _calendarAuthoringContentBuilder = new ScenarioCalendarAuthoringContentBuilder(timelineBuilder, timelineViewModelBuilder);
+            _timelineAuthoringContentBuilder = new ScenarioTimelineAuthoringContentBuilder(timelineBuilder, timelineViewModelBuilder);
             _windowSectionBuilders = CreateWindowSectionBuilders();
         }
 
@@ -248,7 +246,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
             sections.Add(BuildWarningsSection(scopeAllowed, target, objectPlacement, definition, captureReason));
 
-            if (state != null && state.Settings != null && state.Settings.GetBool("debug.overlays", false))
+            if (state != null && state.Settings != null && state.Settings.GetBool("debug.show_advanced_details", false))
                 sections.Add(BuildAdvancedDebugSection(target));
 
             return new ScenarioAuthoringInspectorDocument
@@ -325,14 +323,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
-                "Capture to Scenario",
+                "Capture Placement",
                 "Store this live spawned shelter object as a scenario object placement.",
                 scopeAllowed && canCaptureTarget,
                 scopeAllowed && canCaptureTarget,
                 "CP")));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement,
-                "Remove from Draft",
+                "Remove Draft Capture (keeps object)",
                 "Remove this object's captured placement from the scenario draft.",
                 scopeAllowed && hasCapturedPlacement,
                 false,
@@ -485,18 +483,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         previewCandidate != null ? previewCandidate.Sprite : picker.Target.CurrentSprite,
                         true),
                     Property("Target", FormatTarget(state.SpriteSwapPicker.Target)),
-                    Property("Component", picker.Target.Kind.ToString()),
+                    Property("Asset Type", FriendlyKindLabel(picker.Target.Kind)),
                     Property("Saved Swap", Safe(picker.ActiveRuleSummary)),
                     Property("Preview", customEditor != null ? "Custom Sprite Draft" : (previewCandidate != null ? CleanCandidateLabel(previewCandidate.Label) : "<current>")),
                     Property("Custom Editor", customEditor != null ? "Active" : "Inactive"),
                     Property("Compatibility", Safe(picker.CompatibilitySummary)),
-                    Property("Stored As", Safe(picker.XmlPathHint)),
-                    Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state.ActiveScenarioFilePath))),
                     Property("Compatible Vanilla", CountCandidates(picker.VanillaCandidates).ToString()),
                     Property("Compatible Modded", CountCandidates(picker.ModdedCandidates).ToString()),
                     Text("Selecting an asset previews it immediately on the live target. The custom editor supports paint, eyedropper, rectangular selection, and pixel copy/paste before saving.")
                 }
             });
+            if (ShowAdvancedDetails(state))
+            {
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "sprite_picker_advanced",
+                    Title = "Advanced Details",
+                    Expanded = false,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[]
+                    {
+                        Property("Component", picker.Target.Kind.ToString()),
+                        Property("Current Map", Safe(picker.Target.TextureName)),
+                        Property("Stored As", Safe(picker.XmlPathHint)),
+                        Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state.ActiveScenarioFilePath)))
+                    }
+                });
+            }
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -598,11 +611,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Property("Editing", partLabel),
                     Property("Canvas", (customEditor != null ? customEditor.Width : 0) + "x" + (customEditor != null ? customEditor.Height : 0)),
                     Property("Zoom", (customEditor != null ? customEditor.Zoom : 8) + "x"),
-                    Property("Stored As", "FamilySetup > Members > Appearance"),
-                    Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null))),
                     Text("Family member visuals use dedicated head, torso, and legs textures instead of the regular sprite-swap catalog. The live character preview updates as you paint.")
                 }
             });
+            if (ShowAdvancedDetails(state))
+            {
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "character_picker_advanced",
+                    Title = "Advanced Details",
+                    Expanded = false,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[]
+                    {
+                        Property("Stored As", "FamilySetup > Members > Appearance"),
+                        Property("PNG Import Folder", Safe(ScenarioPngImportService.GetImportFolderPath(state != null ? state.ActiveScenarioFilePath : null)))
+                    }
+                });
+            }
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -813,6 +839,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
+        private static string FriendlyKindLabel(ScenarioSpriteTargetComponentKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioSpriteTargetComponentKind.SpriteRenderer: return "Sprite Renderer";
+                case ScenarioSpriteTargetComponentKind.UI2DSprite: return "UI Sprite";
+                case ScenarioSpriteTargetComponentKind.Auto: return "Auto";
+                default: return kind.ToString();
+            }
+        }
+
         public ScenarioAuthoringInspectorDocument BuildHoverDocument(ScenarioAuthoringState state)
         {
             if (state == null || !state.SelectionModeActive || state.HoveredTarget == null)
@@ -867,14 +904,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (state == null || target == null)
             {
-                contextMenuService.Close();
-                return;
-            }
-
-            string scopeReason;
-            if (!_selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason))
-            {
-                state.StatusMessage = scopeReason;
                 contextMenuService.Close();
                 return;
             }
@@ -963,19 +992,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ? _runtimeTestAuthoringContentBuilder.Build(context)
                     : _scenarioOverviewAuthoringContentBuilder.Build(context);
             });
-            builders[ScenarioAuthoringWindowContentKind.Layers] = _layerAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Hierarchy] = _hierarchyAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.SelectionStack] = _selectionStackAuthoringContentBuilder;
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.TilesPalette, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPaletteWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Inspector, delegate(ScenarioAuthoringWindowContentContext context) { return BuildInspectorShellSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Triggers, delegate(ScenarioAuthoringWindowContentContext context) { return BuildTriggerWindowSections(context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.Definition); });
+            builders[ScenarioAuthoringWindowContentKind.Triggers] = _timelineAuthoringContentBuilder;
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.State, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
             builders[ScenarioAuthoringWindowContentKind.Quests] = _questAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Map] = _mapAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Publish] = _publishAuthoringContentBuilder;
-            builders[ScenarioAuthoringWindowContentKind.Calendar] = _calendarAuthoringContentBuilder;
             return builders;
         }
 
@@ -1047,7 +1074,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "palette",
-                    Title = "Tiles Palette",
+                    Title = "Build Palette",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                     Items = new[]
@@ -1221,7 +1248,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return sections.ToArray();
         }
 
-        private static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioDefinition definition)
+        internal static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> triggerItems = new List<ScenarioAuthoringInspectorItem>();
             triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddManual, "Add Manual Trigger", "Create a trigger that can be fired by code or another scheduled effect.", true, true, "T+")));
@@ -1324,8 +1351,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return effect.Kind.ToString();
         }
 
-        private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(ScenarioDefinition definition)
+        private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
+            bool showAdvancedDetails = ShowAdvancedDetails(state);
             List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems();
             currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Capture Current Survivors", "Snapshot every current live family member into the starting survivor list.", true, true, "FM")));
 
@@ -1341,7 +1369,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         member,
                         i,
                         ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix,
-                        true);
+                        true,
+                        showAdvancedDetails);
                 }
             }
 
@@ -1353,7 +1382,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (definition != null && definition.FamilySetup != null)
             {
                 for (int i = 0; i < definition.FamilySetup.FutureSurvivors.Count; i++)
-                    AddFutureSurvivorItems(futureItems, definition.FamilySetup.FutureSurvivors[i], i);
+                    AddFutureSurvivorItems(futureItems, definition.FamilySetup.FutureSurvivors[i], i, showAdvancedDetails);
             }
             if (futureItems.Count == 1)
                 futureItems.Add(Text("No future survivor arrivals have been authored yet."));
@@ -1504,7 +1533,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        private static void AddFutureSurvivorItems(List<ScenarioAuthoringInspectorItem> items, FutureSurvivorDefinition survivor, int index)
+        private static void AddFutureSurvivorItems(List<ScenarioAuthoringInspectorItem> items, FutureSurvivorDefinition survivor, int index, bool showAdvancedDetails)
         {
             if (items == null || survivor == null)
                 return;
@@ -1521,7 +1550,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     survivor.Survivor,
                     index,
                     ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix,
-                    false);
+                    false,
+                    showAdvancedDetails);
             }
         }
 
@@ -1530,7 +1560,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             FamilyMemberConfig member,
             int index,
             string actionPrefix,
-            bool includeOrdering)
+            bool includeOrdering,
+            bool showAdvancedDetails)
         {
             if (items == null)
                 return;
@@ -1544,7 +1575,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 BuildFamilyMemberSummary(member)));
             items.Add(ActionItem(Action(indexedPrefix + "name", "Name", "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name))));
             items.Add(ActionItem(Action(indexedPrefix + "gender", "Gender", "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString())));
-            items.Add(ActionItem(Action(indexedPrefix + "adult", "Adult/Child", "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member))));
+            items.Add(ActionItem(Action(indexedPrefix + "adult", "Adult/Child", "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member, showAdvancedDetails))));
             items.Add(ActionItem(Action(indexedPrefix + "age.1", "Age +", "Increase this survivor's exact age.", true, false, "A+", FormatAge(member))));
             items.Add(ActionItem(Action(indexedPrefix + "age.-1", "Age -", "Decrease this survivor's exact age.", true, false, "A-", FormatAge(member))));
 
@@ -1552,16 +1583,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < statIds.Length; i++)
             {
                 string statId = statIds[i];
-                int value = FindStatValue(member, statId, 5);
-                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".1", statId + " +", "Increase " + statId + ".", true, false, "+", value.ToString(CultureInfo.InvariantCulture))));
-                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".-1", statId + " -", "Decrease " + statId + ".", true, false, "-", value.ToString(CultureInfo.InvariantCulture))));
+                int rawValue = FindStatValue(member, statId, 5);
+                int displayValue = ClampStatDisplay(rawValue);
+                string statDetail = FormatStatDisplayDetail(rawValue, displayValue);
+                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".1", statId + " +", "Increase " + statId + ".", true, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, statDetail)));
+                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".-1", statId + " -", "Decrease " + statId + ".", true, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, statDetail)));
             }
 
             items.Add(ActionItem(Action(indexedPrefix + "strength_trait", "Strength Trait", "Cycle this survivor's strength characteristic.", true, false, "ST", FindTrait(member, "Strength:"))));
             items.Add(ActionItem(Action(indexedPrefix + "weakness_trait", "Weakness Trait", "Cycle this survivor's weakness characteristic.", true, false, "WT", FindTrait(member, "Weakness:"))));
             items.Add(ActionItem(Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND")));
             items.Add(ActionItem(Action(indexedPrefix + "randomize_look", "Randomize Look", "Randomize head, top, bottom, and color choices.", true, false, "RLK", FormatAppearance(member))));
-            AddAppearanceCycleActions(items, indexedPrefix, member);
+            AddAppearanceCycleActions(items, indexedPrefix, member, showAdvancedDetails);
             items.Add(ActionItem(Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", true, false, "ID")));
             items.Add(ActionItem(Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", true, false, "LK", FormatAppearance(member))));
             items.Add(ActionItem(Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored mesh, texture, and color overrides.", true, false, "CL", FormatAppearance(member))));
@@ -1574,15 +1607,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static void AddAppearanceCycleActions(List<ScenarioAuthoringInspectorItem> items, string indexedPrefix, FamilyMemberConfig member)
+        private static void AddAppearanceCycleActions(List<ScenarioAuthoringInspectorItem> items, string indexedPrefix, FamilyMemberConfig member, bool showAdvancedDetails)
         {
             FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
-            items.Add(ActionItem(Action(indexedPrefix + "texture.head.-1", "Previous Head", "Switch to the previous vanilla head sprite.", true, false, "<H", FormatTexture(appearance, ScenarioCharacterTexturePart.Head))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.head.1", "Next Head", "Switch to the next vanilla head sprite.", true, false, "H>", FormatTexture(appearance, ScenarioCharacterTexturePart.Head))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.-1", "Previous Top", "Switch to the previous vanilla torso/top sprite.", true, false, "<T", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.1", "Next Top", "Switch to the next vanilla torso/top sprite.", true, false, "T>", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.-1", "Previous Bottom", "Switch to the previous vanilla leg/bottom sprite.", true, false, "<B", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.1", "Next Bottom", "Switch to the next vanilla leg/bottom sprite.", true, false, "B>", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.head.-1", "Previous Head", "Switch to the previous vanilla head sprite.", true, false, "<H", FormatTexture(appearance, ScenarioCharacterTexturePart.Head, showAdvancedDetails))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.head.1", "Next Head", "Switch to the next vanilla head sprite.", true, false, "H>", FormatTexture(appearance, ScenarioCharacterTexturePart.Head, showAdvancedDetails))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.-1", "Previous Top", "Switch to the previous vanilla torso/top sprite.", true, false, "<T", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso, showAdvancedDetails))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.1", "Next Top", "Switch to the next vanilla torso/top sprite.", true, false, "T>", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso, showAdvancedDetails))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.-1", "Previous Bottom", "Switch to the previous vanilla leg/bottom sprite.", true, false, "<B", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs, showAdvancedDetails))));
+            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.1", "Next Bottom", "Switch to the next vanilla leg/bottom sprite.", true, false, "B>", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs, showAdvancedDetails))));
 
             items.Add(ActionItem(Action(indexedPrefix + "color.hair.-1", "Previous Hair Color", "Switch to the previous vanilla hair color.", true, false, "<HC", FormatColor(appearance, ScenarioCharacterColorPart.Hair))));
             items.Add(ActionItem(Action(indexedPrefix + "color.hair.1", "Next Hair Color", "Switch to the next vanilla hair color.", true, false, "HC>", FormatColor(appearance, ScenarioCharacterColorPart.Hair))));
@@ -1717,7 +1750,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "Empty survivor";
 
             return member.Gender
-                + " / " + FormatBody(member)
+                + " / " + FormatBody(member, false)
                 + " / age " + FormatAge(member)
                 + " / " + FormatStatLine(member)
                 + " / " + FindTrait(member, "Strength:")
@@ -1730,7 +1763,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string[] statIds = ScenarioFamilyMemberFactory.StatIds;
             List<string> parts = new List<string>();
             for (int i = 0; i < statIds.Length; i++)
-                parts.Add(statIds[i].Substring(0, 3) + " " + FindStatValue(member, statIds[i], 5).ToString(CultureInfo.InvariantCulture));
+            {
+                int rawValue = FindStatValue(member, statIds[i], 5);
+                int displayValue = ClampStatDisplay(rawValue);
+                parts.Add(statIds[i].Substring(0, 3) + " " + displayValue.ToString(CultureInfo.InvariantCulture) + (rawValue != displayValue ? " !" : string.Empty));
+            }
             return string.Join(", ", parts.ToArray());
         }
 
@@ -1744,6 +1781,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return fallback;
+        }
+
+        private static int ClampStatDisplay(int value)
+        {
+            return Mathf.Clamp(value, 0, 20);
+        }
+
+        private static string FormatStatDisplayDetail(int rawValue, int displayValue)
+        {
+            if (rawValue == displayValue)
+                return null;
+
+            return "Warning: XML value " + rawValue.ToString(CultureInfo.InvariantCulture)
+                + " is outside 0-20; showing "
+                + displayValue.ToString(CultureInfo.InvariantCulture)
+                + ".";
         }
 
         private static string FindTrait(FamilyMemberConfig member, string prefix)
@@ -1771,12 +1824,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return "<none>";
         }
 
-        private static string FormatBody(FamilyMemberConfig member)
+        private static string FormatBody(FamilyMemberConfig member, bool showAdvancedDetails)
         {
             FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
             bool adult = appearance == null || !appearance.IsAdult.HasValue || appearance.IsAdult.Value;
             string mesh = appearance != null && !string.IsNullOrEmpty(appearance.MeshId) ? appearance.MeshId : "<auto>";
-            return (adult ? "adult" : "child") + " mesh " + mesh;
+            string label = ResolveBodyLabel(member, adult, mesh);
+            return showAdvancedDetails ? label + " (" + mesh + ")" : label;
+        }
+
+        private static string ResolveBodyLabel(FamilyMemberConfig member, bool adult, string mesh)
+        {
+            if (string.Equals(mesh, "man", StringComparison.OrdinalIgnoreCase))
+                return "Adult Male";
+            if (string.Equals(mesh, "woman", StringComparison.OrdinalIgnoreCase))
+                return "Adult Female";
+            if (string.Equals(mesh, "boy", StringComparison.OrdinalIgnoreCase))
+                return "Child Male";
+            if (string.Equals(mesh, "girl", StringComparison.OrdinalIgnoreCase))
+                return "Child Female";
+
+            ScenarioGender gender = member != null ? member.Gender : ScenarioGender.Any;
+            if (gender == ScenarioGender.Male)
+                return adult ? "Adult Male" : "Child Male";
+            if (gender == ScenarioGender.Female)
+                return adult ? "Adult Female" : "Child Female";
+            return adult ? "Adult Body" : "Child Body";
         }
 
         private static string FormatAppearance(FamilyMemberConfig member)
@@ -1806,7 +1879,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return count == 0 ? "default" : count.ToString(CultureInfo.InvariantCulture) + " custom choices";
         }
 
-        private static string FormatTexture(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part)
+        private static string FormatTexture(FamilyMemberAppearanceConfig appearance, ScenarioCharacterTexturePart part, bool showAdvancedDetails)
         {
             if (appearance == null)
                 return "default";
@@ -1830,8 +1903,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             if (!string.IsNullOrEmpty(id))
-                return id;
-            return !string.IsNullOrEmpty(path) ? path : "default";
+                return showAdvancedDetails ? id : "Vanilla " + FormatTexturePart(part);
+            if (!string.IsNullOrEmpty(path))
+                return showAdvancedDetails ? path : "Custom " + FormatTexturePart(part);
+            return "default";
+        }
+
+        private static string FormatTexturePart(ScenarioCharacterTexturePart part)
+        {
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head: return "Head";
+                case ScenarioCharacterTexturePart.Torso: return "Top";
+                case ScenarioCharacterTexturePart.Legs: return "Bottom";
+                default: return "Texture";
+            }
         }
 
         private static string FormatColor(FamilyMemberAppearanceConfig appearance, ScenarioCharacterColorPart part)
@@ -2109,33 +2195,73 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return windowState != null && (windowState.Visible || windowState.Collapsed);
         }
 
+        private static bool ShowAdvancedDetails(ScenarioAuthoringState state)
+        {
+            return state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+        }
+
         private ScenarioAuthoringInspectorAction[] BuildContextMenuActions(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
             if (state == null || target == null)
                 return new ScenarioAuthoringInspectorAction[0];
 
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
-            bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target);
+            string scopeReason;
+            bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason);
             actions.Add(Action(ScenarioAuthoringActionIds.ActionShellShow, "Inspect Placement", "Open the inspector for the selected target.", true, false));
 
-            if (target.SupportsReplace)
-            {
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionToolAssets, "Replace Look...", "Switch to art workflow for the selected target.", scopeAllowed, false));
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionToolShelter, "Apply Feature", "Switch to build workflow for the selected target.", scopeAllowed, false));
-            }
+            actions.Add(Action(
+                ScenarioAuthoringActionIds.ActionToolAssets,
+                "Replace Look...",
+                "Switch to art workflow for the selected target.",
+                scopeAllowed && target.SupportsReplace,
+                false,
+                null,
+                null,
+                null,
+                null,
+                !scopeAllowed ? scopeReason : (!target.SupportsReplace ? "This target does not expose replaceable art." : null)));
 
             string captureReason;
-            if (scopeAllowed && _captureService.CanCaptureTarget(target, out captureReason))
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Mark Placement", "Capture the selected live placement into the scenario.", true, false));
+            bool canCapture = _captureService.CanCaptureTarget(target, out captureReason);
+            actions.Add(Action(
+                ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
+                "Capture Placement",
+                "Capture the selected live placement into the scenario draft.",
+                scopeAllowed && canCapture,
+                false,
+                null,
+                null,
+                null,
+                null,
+                !scopeAllowed ? scopeReason : (!canCapture ? captureReason : null)));
 
-            if (!string.IsNullOrEmpty(target.ScenarioReferenceId))
-            {
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove, "Remove Placement", "Remove the authored placement reference.", scopeAllowed, false));
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Duplicate Placement", "Copy the selected target's sprite swap or placement.", scopeAllowed, false));
-            }
+            bool authoredSceneSprite = target.Kind == ScenarioAuthoringTargetKind.SceneSprite && !string.IsNullOrEmpty(target.ScenarioReferenceId);
+            actions.Add(Action(
+                ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove,
+                "Remove Scene Sprite Placement",
+                "Remove the authored scene sprite placement from the draft.",
+                scopeAllowed && authoredSceneSprite,
+                false,
+                null,
+                null,
+                null,
+                null,
+                !scopeAllowed ? scopeReason : (!authoredSceneSprite ? "Only authored scene sprite placements can be removed here." : null)));
 
-            if (target.SupportsReplace)
-                actions.Add(Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Tile", "Copy the selected target's current authored look.", scopeAllowed, false));
+            actions.Add(Action(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCopy,
+                "Copy Look",
+                "Copy the selected target's current authored look.",
+                scopeAllowed && target.SupportsReplace,
+                false,
+                null,
+                null,
+                null,
+                null,
+                !scopeAllowed ? scopeReason : (!target.SupportsReplace ? "This target does not expose copyable art." : null)));
 
             actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current authoring selection.", true, false));
             return actions.ToArray();
@@ -2184,7 +2310,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string iconText = null,
             string detail = null,
             string badge = null,
-            Sprite previewSprite = null)
+            Sprite previewSprite = null,
+            string disabledReason = null)
         {
             return new ScenarioAuthoringInspectorAction
             {
@@ -2196,7 +2323,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 IconText = iconText,
                 PreviewSprite = previewSprite,
                 Enabled = enabled,
-                Emphasized = emphasized
+                Emphasized = emphasized,
+                DisabledReason = disabledReason
             };
         }
 

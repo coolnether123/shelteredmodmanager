@@ -548,6 +548,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         {
             float rectWidth = 260f;
             float rectHeight = Math.Min(340f, 72f + Count(menu.Actions) * 30f);
+            for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = menu.Actions[i];
+                if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
+                    rectHeight = Math.Min(340f, rectHeight + 18f);
+            }
             Rect rect = menu.CenterOnScreen
                 ? ScenarioAuthoringShellLayout.BuildCenteredPopupRect(_scaledWidth, _scaledHeight, rectWidth, rectHeight, hudReserveRect)
                 : ScenarioAuthoringShellLayout.ClampAwayFromHud(new Rect(menu.AnchorX, menu.AnchorY, rectWidth, rectHeight), _scaledWidth, _scaledHeight, hudReserveRect);
@@ -557,8 +563,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             float y = rect.y + 56f;
             for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
             {
-                DrawButton(new Rect(rect.x + 10f, y, rect.width - 20f, 24f), menu.Actions[i], false, "ContextAction" + i);
+                ScenarioAuthoringInspectorAction action = menu.Actions[i];
+                DrawButton(new Rect(rect.x + 10f, y, rect.width - 20f, 24f), action, false, "ContextAction" + i);
                 y += 28f;
+                if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
+                {
+                    DrawLabel("ContextActionReason" + i, rect, new Rect(12f, y - rect.y, rect.width - 24f, 18f), action.DisabledReason, 11, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 104);
+                    y += 18f;
+                }
             }
             RegisterRect(rect);
         }
