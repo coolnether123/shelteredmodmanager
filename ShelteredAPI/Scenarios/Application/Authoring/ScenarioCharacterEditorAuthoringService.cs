@@ -185,7 +185,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (string.Equals(command, "gender", StringComparison.Ordinal))
             {
                 config.Gender = NextGender(config.Gender);
-                UpdateVanillaMesh(config, true);
+                UpdateVanillaMesh(config, false);
+                SanitizeAppearanceTextures(config);
                 MarkDirty(session);
                 message = "Changed " + label + " gender to " + config.Gender + ".";
                 return true;
@@ -197,7 +198,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 bool current = !config.Appearance.IsAdult.HasValue || config.Appearance.IsAdult.Value;
                 config.Appearance.IsAdult = !current;
                 config.ExactAge = config.Appearance.IsAdult.Value ? 25 : 12;
-                UpdateVanillaMesh(config, true);
+                UpdateVanillaMesh(config, false);
+                SanitizeAppearanceTextures(config);
                 MarkDirty(session);
                 message = "Changed " + label + " body type to " + (config.Appearance.IsAdult.Value ? "adult" : "child") + ".";
                 return true;
@@ -213,6 +215,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     EnsureAppearance(config);
                     config.Appearance.IsAdult = config.ExactAge.Value >= 18;
                     UpdateVanillaMesh(config, false);
+                    SanitizeAppearanceTextures(config);
                     MarkDirty(session);
                     message = "Changed " + label + " age to " + config.ExactAge.Value.ToString() + ".";
                     return true;
@@ -471,6 +474,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             config.Appearance.LegTexturePath = null;
         }
 
+        private void SanitizeAppearanceTextures(FamilyMemberConfig config)
+        {
+            if (_appearanceService != null && config != null)
+                _appearanceService.SanitizeAppearanceTextures(config.Appearance);
+        }
+
         private static void UpdateVanillaMesh(FamilyMemberConfig config, bool resetTextures)
         {
             if (config == null)
@@ -587,6 +596,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 object value = values.GetValue(UnityEngine.Random.Range(0, values.Length));
                 if (value == null || string.Equals(value.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
                     continue;
+                if (HasOppositeTrait(config, strength, value))
+                    continue;
 
                 config.Traits.Add((strength ? "Strength:" : "Weakness:") + value.ToString());
                 return;
@@ -605,10 +616,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Family))
-                session.DirtyFlags.Add(ScenarioDirtySection.Family);
-            session.CurrentEditCategory = ScenarioEditCategory.Family;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
         }
 
         private static string NextName(string current)
@@ -671,10 +679,49 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 object next = values.GetValue(nextIndex);
                 if (next == null || string.Equals(next.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
                     continue;
+                if (HasOppositeTrait(config, strength, next))
+                    continue;
 
                 config.Traits.Add(prefix + next.ToString());
                 return;
             }
+        }
+
+        private static bool HasOppositeTrait(FamilyMemberConfig config, bool strength, object value)
+        {
+            if (config == null || config.Traits == null || value == null)
+                return false;
+
+            if (strength)
+            {
+                Traits.Strength strengthValue = (Traits.Strength)value;
+                Traits.Weakness pairedWeakness;
+                if (!ScenarioFamilyMemberFactory.TryGetPairedWeakness(strengthValue, out pairedWeakness))
+                    return false;
+
+                for (int i = 0; i < config.Traits.Count; i++)
+                {
+                    Traits.Weakness weakness;
+                    if (ScenarioFamilyMemberFactory.TryParseWeaknessTrait(config.Traits[i], out weakness) && weakness == pairedWeakness)
+                        return true;
+                }
+            }
+            else
+            {
+                Traits.Weakness weaknessValue = (Traits.Weakness)value;
+                Traits.Strength pairedStrength;
+                if (!ScenarioFamilyMemberFactory.TryGetPairedStrength(weaknessValue, out pairedStrength))
+                    return false;
+
+                for (int i = 0; i < config.Traits.Count; i++)
+                {
+                    Traits.Strength existingStrength;
+                    if (ScenarioFamilyMemberFactory.TryParseStrengthTrait(config.Traits[i], out existingStrength) && existingStrength == pairedStrength)
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         private static bool TrySplitIndexedCommand(string value, out int index, out string command)

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using ShelteredAPI.Content;
+using ModAPI.Core;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.UI.Internal.Settings;
@@ -100,6 +101,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             for (int i = 0; config.Traits != null && i < config.Traits.Count; i++)
                 ApplyTrait(attributes, config.Traits[i]);
 
+            SanitizeTraitPairs(attributes, config);
             return attributes;
         }
 
@@ -255,6 +257,25 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 attributes.m_weaknessTraits.Add(weakness);
         }
 
+        private static void SanitizeTraitPairs(FamilySpawner.CharacterAttributes attributes, FamilyMemberConfig config)
+        {
+            if (attributes == null || attributes.m_strengthTraits == null || attributes.m_weaknessTraits == null)
+                return;
+
+            for (int i = attributes.m_weaknessTraits.Count - 1; i >= 0; i--)
+            {
+                Traits.Weakness weakness = attributes.m_weaknessTraits[i];
+                Traits.Strength pairedStrength;
+                if (!TryGetPairedStrength(weakness, out pairedStrength) || !attributes.m_strengthTraits.Contains(pairedStrength))
+                    continue;
+
+                attributes.m_weaknessTraits.RemoveAt(i);
+                MMLog.WriteWarning("[ScenarioFamilyMemberFactory] Dropped conflicting weakness '" + weakness
+                    + "' from survivor '" + (config != null && !string.IsNullOrEmpty(config.Name) ? config.Name : "Survivor")
+                    + "' because paired strength '" + pairedStrength + "' is already active.");
+            }
+        }
+
         public static bool TryParseStrengthTrait(string value, out Traits.Strength strength)
         {
             strength = Traits.Strength.Max;
@@ -289,6 +310,66 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             {
                 return false;
             }
+        }
+
+        public static bool TryGetPairedWeakness(Traits.Strength strength, out Traits.Weakness weakness)
+        {
+            weakness = Traits.Weakness.Max;
+            if (strength == Traits.Strength.Max)
+                return false;
+
+            int index = (int)strength;
+            if (index < 0 || index >= (int)Traits.Weakness.Max)
+                return false;
+
+            weakness = (Traits.Weakness)index;
+            return true;
+        }
+
+        public static bool TryGetPairedStrength(Traits.Weakness weakness, out Traits.Strength strength)
+        {
+            strength = Traits.Strength.Max;
+            if (weakness == Traits.Weakness.Max)
+                return false;
+
+            int index = (int)weakness;
+            if (index < 0 || index >= (int)Traits.Strength.Max)
+                return false;
+
+            strength = (Traits.Strength)index;
+            return true;
+        }
+
+        public static bool HasConflictingTraitPair(FamilyMemberConfig config, out Traits.Strength strength, out Traits.Weakness weakness)
+        {
+            strength = Traits.Strength.Max;
+            weakness = Traits.Weakness.Max;
+            if (config == null || config.Traits == null)
+                return false;
+
+            for (int i = 0; i < config.Traits.Count; i++)
+            {
+                Traits.Strength candidateStrength;
+                if (!TryParseStrengthTrait(config.Traits[i], out candidateStrength))
+                    continue;
+
+                Traits.Weakness pairedWeakness;
+                if (!TryGetPairedWeakness(candidateStrength, out pairedWeakness))
+                    continue;
+
+                for (int j = 0; j < config.Traits.Count; j++)
+                {
+                    Traits.Weakness candidateWeakness;
+                    if (TryParseWeaknessTrait(config.Traits[j], out candidateWeakness) && candidateWeakness == pairedWeakness)
+                    {
+                        strength = candidateStrength;
+                        weakness = candidateWeakness;
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         private static string TrimTraitPrefix(string value, string prefix)

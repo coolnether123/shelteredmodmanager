@@ -60,6 +60,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                     result.FamilyChanges++;
                 }
 
+                ApplyMeshAlignment(member, config, result);
+
                 ApplyStats(member, config, result);
                 ApplyTraits(member, config, result);
                 ApplySkills(member, config, result);
@@ -98,6 +100,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             string message;
             if (_characterAppearanceService.ApplyConfiguredAppearance(definition, scenarioFilePath, config, member, out message))
+                result.FamilyChanges++;
+            else if (!string.IsNullOrEmpty(message))
+                result.AddMessage(message);
+        }
+
+        private void ApplyMeshAlignment(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (_characterAppearanceService == null || member == null || config == null)
+                return;
+
+            string message;
+            if (_characterAppearanceService.AlignLiveMesh(config, member, out message))
                 result.FamilyChanges++;
             else if (!string.IsNullOrEmpty(message))
                 result.AddMessage(message);

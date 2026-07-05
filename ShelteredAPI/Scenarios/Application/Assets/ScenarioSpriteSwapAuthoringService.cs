@@ -335,6 +335,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             ScenarioCharacterAppearanceService.ResolvedCharacterTarget characterTarget;
+            string characterResolveMessage;
             if (_characterAppearanceService.TryResolve(state.SelectedTarget, out characterTarget, out message))
             {
                 ClosePickerState(state, true);
@@ -348,11 +349,14 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 _characterPreviewSession = _characterAppearanceService.CapturePreview(characterTarget);
                 return OpenCharacterEditor(state, characterTarget, ScenarioCharacterTexturePart.Head, out message);
             }
+            characterResolveMessage = message;
 
             SpritePickerModel model = GetPickerModel(session, state.SelectedTarget, state.ActiveScenarioFilePath);
             if (model == null || model.Target == null)
             {
-                message = "The selected target does not expose compatible sprite replacements.";
+                message = !string.IsNullOrEmpty(characterResolveMessage)
+                    ? characterResolveMessage + " The selected target also does not expose compatible sprite replacements."
+                    : "The selected target does not expose compatible sprite replacements.";
                 return false;
             }
 
@@ -1692,13 +1696,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Family))
-                session.DirtyFlags.Add(ScenarioDirtySection.Family);
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Assets))
-                session.DirtyFlags.Add(ScenarioDirtySection.Assets);
-
-            session.CurrentEditCategory = ScenarioEditCategory.Family;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+            session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Family);
         }
 
         private void ClearCustomClipboard()
@@ -2114,11 +2113,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (session == null)
                 return;
 
-            if (!session.DirtyFlags.Contains(ScenarioDirtySection.Assets))
-                session.DirtyFlags.Add(ScenarioDirtySection.Assets);
-
-            session.CurrentEditCategory = ScenarioEditCategory.Assets;
-            session.HasAppliedToCurrentWorld = true;
+            session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
         }
 
         private static string SafeLabel(string value)

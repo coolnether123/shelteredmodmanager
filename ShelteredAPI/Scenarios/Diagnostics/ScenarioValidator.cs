@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Validation;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Diagnostics{
     internal interface IScenarioDependencyResolver
@@ -252,6 +253,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
             {
                 FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                ValidateFamilyMemberConfig(member, "family survivor #" + i.ToString(CultureInfo.InvariantCulture), result);
                 FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
                 if (appearance == null || string.IsNullOrEmpty(packRoot))
                     continue;
@@ -262,6 +264,45 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     ValidateAssetPath(packRoot, appearance.TorsoTexturePath, "family torso texture", result);
                 if (TrimToNull(appearance.LegTexturePath) != null)
                     ValidateAssetPath(packRoot, appearance.LegTexturePath, "family leg texture", result);
+            }
+
+            for (int i = 0; definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                FutureSurvivorDefinition future = definition.FamilySetup.FutureSurvivors[i];
+                ValidateFamilyMemberConfig(
+                    future != null ? future.Survivor : null,
+                    "future survivor #" + i.ToString(CultureInfo.InvariantCulture),
+                    result);
+            }
+        }
+
+        private static void ValidateFamilyMemberConfig(FamilyMemberConfig member, string fallbackLabel, ScenarioValidationResult result)
+        {
+            if (member == null || result == null)
+                return;
+
+            string survivorName = TrimToNull(member.Name) ?? fallbackLabel ?? "survivor";
+            for (int i = 0; member.Stats != null && i < member.Stats.Count; i++)
+            {
+                StatOverride stat = member.Stats[i];
+                if (stat == null)
+                    continue;
+
+                if (stat.Value < 0 || stat.Value > 20)
+                {
+                    result.AddWarning("Family survivor '" + survivorName + "' has stat '" + (stat.StatId ?? string.Empty)
+                        + "' outside the supported 0-20 range: " + stat.Value.ToString(CultureInfo.InvariantCulture)
+                        + ". It will be clamped to 0-20 at runtime.");
+                }
+            }
+
+            Traits.Strength strength;
+            Traits.Weakness weakness;
+            if (ScenarioFamilyMemberFactory.HasConflictingTraitPair(member, out strength, out weakness))
+            {
+                result.AddWarning("Family survivor '" + survivorName + "' has conflicting trait pair: Strength:"
+                    + strength + " and Weakness:" + weakness
+                    + ". The conflicting weakness will be removed at runtime.");
             }
         }
 
