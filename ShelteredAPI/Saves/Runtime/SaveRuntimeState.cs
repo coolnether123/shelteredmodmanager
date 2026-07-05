@@ -275,6 +275,33 @@ namespace ShelteredAPI.Saves.Runtime
             }
         }
 
+        internal static bool ClearPendingLoadIfMatches(SaveManager.SaveType type, PlatformSaveProxy.Target expectedTarget)
+        {
+            if (expectedTarget == null)
+                return false;
+
+            lock (PlatformSaveProxy._nextLoadLock)
+            {
+                PlatformSaveProxy.Target currentTarget;
+                if (!PlatformSaveProxy.NextLoad.TryGetValue(type, out currentTarget))
+                    return false;
+
+                bool matches = object.ReferenceEquals(currentTarget, expectedTarget)
+                    || (currentTarget != null
+                        && string.Equals(
+                            SaveStorageRouter.NormalizeScenarioId(currentTarget.scenarioId),
+                            SaveStorageRouter.NormalizeScenarioId(expectedTarget.scenarioId),
+                            System.StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(currentTarget.saveId, expectedTarget.saveId, System.StringComparison.OrdinalIgnoreCase));
+
+                if (!matches)
+                    return false;
+
+                _pendingMirroredVanillaLoads.Remove(type);
+                return PlatformSaveProxy.NextLoad.Remove(type);
+            }
+        }
+
         internal static KeyValuePair<SaveManager.SaveType, PlatformSaveProxy.Target> GetNextSaveTargetAndClear()
         {
             lock (PlatformSaveProxy._nextSaveLock)

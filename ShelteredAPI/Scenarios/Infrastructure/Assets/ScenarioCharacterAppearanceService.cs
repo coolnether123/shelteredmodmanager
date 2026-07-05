@@ -574,6 +574,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             meshObject.name = "mesh";
             meshObject.transform.parent = parent;
             meshObject.transform.localPosition = meshType.m_meshOffset;
+            meshObject.transform.localScale = Vector3.one;
             meshObject.transform.rotation = Quaternion.Euler(new Vector3(0f, 180f, 0f));
             meshObject.AddComponent<CharacterAnimEvents>();
 
@@ -597,7 +598,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             Animator animator = meshObject.GetComponent<Animator>();
             if ((UnityEngine.Object)animator != (UnityEngine.Object)null)
+            {
                 animator.runtimeAnimatorController = meshType.m_anims;
+                animator.updateMode = AnimatorUpdateMode.UnscaledTime;
+            }
 
             return mesh;
         }
@@ -814,6 +818,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return false;
             }
 
+            CharacterMesh.TextureType meshPart = ToMeshTexturePart(part);
+            target.Mesh.SetTexture(meshPart, textureId);
+            if (!string.Equals(GetMeshTextureId(target.Mesh, part), textureId, StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Character mesh rejected texture '" + textureId + "'.";
+                return false;
+            }
+
             switch (part)
             {
                 case ScenarioCharacterTexturePart.Head:
@@ -821,23 +833,38 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                         BaseCharacterMeshIdField.SetValue(target.Character, target.Mesh.meshId);
                     if (BaseCharacterHeadTextureField != null)
                         BaseCharacterHeadTextureField.SetValue(target.Character, textureId);
-                    target.Mesh.SetTexture(CharacterMesh.TextureType.Head, textureId);
                     SetAvatarSprite(target, textureId, avatarSprite);
                     break;
                 case ScenarioCharacterTexturePart.Torso:
                     if (BaseCharacterTorsoTextureField != null)
                         BaseCharacterTorsoTextureField.SetValue(target.Character, textureId);
-                    target.Mesh.SetTexture(CharacterMesh.TextureType.Torso, textureId);
                     break;
                 case ScenarioCharacterTexturePart.Legs:
                     if (BaseCharacterLegTextureField != null)
                         BaseCharacterLegTextureField.SetValue(target.Character, textureId);
-                    target.Mesh.SetTexture(CharacterMesh.TextureType.Legs, textureId);
                     break;
             }
 
             target.Mesh.RefreshTextures();
             return true;
+        }
+
+        private static string GetMeshTextureId(CharacterMesh mesh, ScenarioCharacterTexturePart part)
+        {
+            if (mesh == null)
+                return null;
+
+            switch (part)
+            {
+                case ScenarioCharacterTexturePart.Head:
+                    return mesh.headTexture;
+                case ScenarioCharacterTexturePart.Torso:
+                    return mesh.torsoTexture;
+                case ScenarioCharacterTexturePart.Legs:
+                    return mesh.legTexture;
+                default:
+                    return null;
+            }
         }
 
         private void SetAvatarSprite(ResolvedCharacterTarget target, string textureId, Sprite fallback)

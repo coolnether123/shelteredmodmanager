@@ -72,5 +72,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         void QueueLoadTarget(string scenarioId, SaveEntry save, SaveManager.SaveType saveType);
         bool ClearQueuedNewGameSave(SaveManager.SaveType saveType);
         bool ClearQueuedLoad(SaveManager.SaveType saveType);
+        bool ClearQueuedNewGameSaveIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId);
+        bool ClearQueuedLoadIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId);
     }
 }

@@ -97,6 +97,16 @@ namespace ShelteredAPI.Saves.Runtime
             return SaveRuntimeState.ClearPendingLoad(type);
         }
 
+        public static bool ClearNextSaveIfMatches(SaveManager.SaveType type, Target expectedTarget)
+        {
+            return SaveRuntimeState.ClearPendingSaveIfMatches(type, expectedTarget);
+        }
+
+        public static bool ClearNextLoadIfMatches(SaveManager.SaveType type, Target expectedTarget)
+        {
+            return SaveRuntimeState.ClearPendingLoadIfMatches(type, expectedTarget);
+        }
+
         public static void ResetStatus()
         {
             SaveRuntimeStatus.ResetQuitSaveCompleted();

@@ -43,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellFocusSelection = "shell.layout.focus_selection";
         public const string ActionShellOpenSettings = "shell.settings.open";
         public const string ActionShellOpenTimeline = "shell.timeline.open";
+        // Legacy alias retained for older mods; routes to the Timeline window.
         public const string ActionShellOpenCalendar = "shell.calendar.open";
         public const string ActionShellCloseSettings = "shell.settings.close";
         public const string ActionShellOpenHelp = "shell.help.open";

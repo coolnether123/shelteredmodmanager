@@ -2,7 +2,6 @@ using System;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Saves;
-using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.Harmony;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
@@ -262,15 +261,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return false;
             }
 
-            bool clearedSave = _saveLibrary.ClearQueuedNewGameSave(row.RecoverySaveType);
-            bool clearedLoad = _saveLibrary.ClearQueuedLoad(row.RecoverySaveType);
-            if (!clearedSave && !clearedLoad)
-            {
-                PlatformSaveProxy.ClearNextSave(row.RecoverySaveType);
-                PlatformSaveProxy.ClearNextLoad(row.RecoverySaveType);
-            }
+            bool clearedSave = _saveLibrary.ClearQueuedNewGameSaveIfMatches(
+                row.RecoverySaveType,
+                row.RecoveryScenarioId,
+                row.RecoverySaveId);
+            bool clearedLoad = _saveLibrary.ClearQueuedLoadIfMatches(
+                row.RecoverySaveType,
+                row.RecoveryScenarioId,
+                row.RecoverySaveId);
 
-            status = "Pending redirect cleared. No save or draft files were deleted.";
+            status = clearedSave || clearedLoad
+                ? "Pending redirect cleared. No save or draft files were deleted."
+                : "Pending redirect no longer matched this recovery row; queued state was left intact.";
             return true;
         }
 

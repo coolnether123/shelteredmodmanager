@@ -201,6 +201,16 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             return PlatformSaveProxy.ClearNextLoad(saveType);
         }
 
+        public bool ClearQueuedNewGameSaveIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId)
+        {
+            return PlatformSaveProxy.ClearNextSaveIfMatches(saveType, CreateTarget(scenarioId, saveId));
+        }
+
+        public bool ClearQueuedLoadIfMatches(SaveManager.SaveType saveType, string scenarioId, string saveId)
+        {
+            return PlatformSaveProxy.ClearNextLoadIfMatches(saveType, CreateTarget(scenarioId, saveId));
+        }
+
         private SaveCreateOptions NormalizeCreateOptions(string scenarioId, SaveCreateOptions options)
         {
             SaveCreateOptions normalized = new SaveCreateOptions();
@@ -224,6 +234,11 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return (SaveRegistryCore)ExpandedVanillaSaves.Instance;
 
             return ScenarioSaves.GetTrustedRegistry(storageScenarioId);
+        }
+
+        private static PlatformSaveProxy.Target CreateTarget(string scenarioId, string saveId)
+        {
+            return new PlatformSaveProxy.Target { scenarioId = scenarioId, saveId = saveId };
         }
 
         private static string ResolveStorageScenarioId(string scenarioId, SaveEntry entry)

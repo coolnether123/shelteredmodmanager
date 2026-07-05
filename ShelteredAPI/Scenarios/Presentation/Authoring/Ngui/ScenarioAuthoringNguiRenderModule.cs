@@ -91,26 +91,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             if (inputCapture != null)
                 inputCapture.BeginFrame(_coordinateScale);
 
-            string signature = BuildSignature(snapshot);
-            bool rebuild = !string.Equals(signature, _lastSignature, StringComparison.Ordinal)
-                || Math.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) > 0.001f;
-            if (rebuild)
+            try
             {
-                _lastSignature = signature;
-                ClearOverlay();
-                BuildShell(snapshot);
-            }
+                string signature = BuildSignature(snapshot);
+                bool rebuild = !string.Equals(signature, _lastSignature, StringComparison.Ordinal)
+                    || Math.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) > 0.001f;
+                if (rebuild)
+                {
+                    _lastSignature = signature;
+                    ClearOverlay();
+                    BuildShell(snapshot);
+                }
 
-            RegisterInteractiveRects(inputCapture);
-            if (inputCapture != null)
+                RegisterInteractiveRects(inputCapture);
+                if (inputCapture != null)
+                {
+                    inputCapture.SetPopupOpen(_windowMenuOpen
+                        || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.Settings != null)
+                        || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.SpritePickerDocument != null)
+                        || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.ContextMenu != null && snapshot.ShellViewModel.ContextMenu.Visible));
+                    inputCapture.SetKeyboardCaptured(snapshot.ShellViewModel != null
+                        && (snapshot.ShellViewModel.Settings != null || snapshot.ShellViewModel.SpritePickerDocument != null));
+                }
+            }
+            finally
             {
-                inputCapture.SetPopupOpen(_windowMenuOpen
-                    || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.Settings != null)
-                    || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.SpritePickerDocument != null)
-                    || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.ContextMenu != null && snapshot.ShellViewModel.ContextMenu.Visible));
-                inputCapture.SetKeyboardCaptured(snapshot.ShellViewModel != null
-                    && (snapshot.ShellViewModel.Settings != null || snapshot.ShellViewModel.SpritePickerDocument != null));
-                inputCapture.CompleteFrame();
+                if (inputCapture != null)
+                    inputCapture.CompleteFrame();
             }
         }
 
