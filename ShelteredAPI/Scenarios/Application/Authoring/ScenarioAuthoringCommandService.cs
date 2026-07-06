@@ -27,6 +27,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioStoryAuthoringService storyAuthoringService,
             ScenarioEventAuthoringService eventAuthoringService,
             ScenarioPublishExportService publishExportService,
+            ScenarioAuthoringBaseModeReloadService baseModeReloadService,
             ScenarioAuthoringTutorialService tutorialService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
@@ -42,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 storyAuthoringService,
                 eventAuthoringService,
                 publishExportService,
+                baseModeReloadService,
                 tutorialService));
         }
 
@@ -70,6 +72,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioStoryAuthoringService storyAuthoringService,
             ScenarioEventAuthoringService eventAuthoringService,
             ScenarioPublishExportService publishExportService,
+            ScenarioAuthoringBaseModeReloadService baseModeReloadService,
             ScenarioAuthoringTutorialService tutorialService)
         {
             return new IScenarioCommandHandler[]
@@ -83,7 +86,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
                 new StoryAuthoringCommandHandler(storyAuthoringService, editorService),
-                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
+                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, baseModeReloadService),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioPublishCommandHandler(publishExportService),

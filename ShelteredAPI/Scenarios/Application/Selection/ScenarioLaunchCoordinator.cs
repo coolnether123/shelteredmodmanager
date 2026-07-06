@@ -266,6 +266,46 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             return true;
         }
 
+        public bool QueueAuthoringDraftSceneReload(
+            string draftStorageScenarioId,
+            SaveEntry draftStartupSave,
+            SaveManager.SaveType virtualSaveType,
+            string launchTargetLabel,
+            ScenarioBaseGameMode baseGameMode,
+            out string error)
+        {
+            error = null;
+
+            if (draftStartupSave == null) { error = "draft save is null"; return false; }
+
+            try
+            {
+                _saveLibrary.QueueNewGameSaveTarget(draftStorageScenarioId, draftStartupSave, virtualSaveType);
+            }
+            catch (Exception ex)
+            {
+                error = "Failed to queue draft target: " + ex.Message;
+                return false;
+            }
+
+            string sceneName;
+            if (!TryGetAuthoringLaunchScene(baseGameMode, out sceneName))
+            {
+                error = "Could not resolve the authoring scene for " + baseGameMode + ".";
+                _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                return false;
+            }
+
+            if (!BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType))
+            {
+                error = "Could not launch the " + sceneName + " scene for the draft.";
+                _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                return false;
+            }
+
+            return true;
+        }
+
         public bool LaunchVanillaScenario(
             ScenarioBrowserPanelAdapter adapter,
             ScenarioCatalogEntry entry,
@@ -470,28 +510,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 if (!adapter.GetInputEnabled())
                     adapter.SetInputEnabled(true);
 
-                SaveManager saveManager = SaveManager.instance;
-                if (saveManager == null)
-                {
-                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] SaveManager unavailable for direct scenario launch. target="
-                        + (launchTargetLabel ?? "<unknown>") + ".");
-                    return false;
-                }
-
-                if (LoadingScreen.Instance == null)
-                {
-                    MMLog.WriteWarning("[ScenarioLaunchCoordinator] LoadingScreen unavailable for direct scenario launch. target="
-                        + (launchTargetLabel ?? "<unknown>") + ".");
-                    return false;
-                }
-
-                saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
-                DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
-                LoadingScreen.Instance.ShowLoadingScreen(sceneName);
-                MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scenario scene launch started. target="
-                    + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
-                    + " virtualSaveType=" + virtualSaveType + ".");
-                return true;
+                return BeginDirectSceneTransition(sceneName, launchTargetLabel, virtualSaveType);
             }
             catch (Exception ex)
             {
@@ -578,6 +597,49 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     sceneName = null;
                     return false;
             }
+        }
+
+        private static bool TryGetAuthoringLaunchScene(ScenarioBaseGameMode baseGameMode, out string sceneName)
+        {
+            if (baseGameMode == ScenarioBaseGameMode.Survival)
+            {
+                sceneName = "ShelterScene";
+                return true;
+            }
+
+            return TryGetDirectLaunchScene(baseGameMode, out sceneName);
+        }
+
+        private static bool BeginDirectSceneTransition(
+            string sceneName,
+            string launchTargetLabel,
+            SaveManager.SaveType virtualSaveType)
+        {
+            if (string.IsNullOrEmpty(sceneName))
+                return false;
+
+            SaveManager saveManager = SaveManager.instance;
+            if (saveManager == null)
+            {
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] SaveManager unavailable for scene launch. target="
+                    + (launchTargetLabel ?? "<unknown>") + ".");
+                return false;
+            }
+
+            if (LoadingScreen.Instance == null)
+            {
+                MMLog.WriteWarning("[ScenarioLaunchCoordinator] LoadingScreen unavailable for scene launch. target="
+                    + (launchTargetLabel ?? "<unknown>") + ".");
+                return false;
+            }
+
+            saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
+            DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
+            LoadingScreen.Instance.ShowLoadingScreen(sceneName);
+            MMLog.WriteInfo("[ScenarioLaunchCoordinator] Direct scene launch started. target="
+                + (launchTargetLabel ?? "<unknown>") + " scene=" + sceneName
+                + " virtualSaveType=" + virtualSaveType + ".");
+            return true;
         }
 
         private static int GetSlotNumber(SaveManager.SaveType saveType)

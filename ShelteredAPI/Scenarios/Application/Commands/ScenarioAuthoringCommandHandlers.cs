@@ -910,15 +910,18 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
         private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementService;
+        private readonly ScenarioAuthoringBaseModeReloadService _baseModeReloadService;
 
         public EditorLifecycleCommandHandler(
             IScenarioEditorService editorService,
             ScenarioBuildPlacementAuthoringService buildPlacementService,
-            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementService)
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacementService,
+            ScenarioAuthoringBaseModeReloadService baseModeReloadService)
         {
             _editorService = editorService;
             _buildPlacementService = buildPlacementService;
             _sceneSpritePlacementService = sceneSpritePlacementService;
+            _baseModeReloadService = baseModeReloadService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -944,14 +947,35 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     message = "Scenario binding converted to a normal save.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionScenarioModePrevious:
-                    return CycleBaseMode(-1, out message);
+                    return OpenBaseModeDialog(state, -1, out message);
                 case ScenarioAuthoringActionIds.ActionScenarioModeNext:
-                    return CycleBaseMode(1, out message);
+                    return OpenBaseModeDialog(state, 1, out message);
                 case ScenarioAuthoringActionIds.ActionFocusedEditorSave:
                     return CloseFocusedEditor(state, false, out message);
                 case ScenarioAuthoringActionIds.ActionFocusedEditorCancel:
                     return CloseFocusedEditor(state, true, out message);
                 default:
+                    ScenarioBaseGameMode reloadBaseMode;
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix,
+                        out reloadBaseMode))
+                    {
+                        return SaveAndReloadBaseMode(state, reloadBaseMode, out message);
+                    }
+
+                    ScenarioBaseGameMode switchOnlyBaseMode;
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix,
+                        out switchOnlyBaseMode))
+                    {
+                        return SwitchBaseModeOnly(state, switchOnlyBaseMode, out message);
+                    }
+
+                    if (string.Equals(actionId, ScenarioBaseModeAuthoringActions.ActionSwitchCancel, StringComparison.Ordinal))
+                        return CloseBaseModeDialog(state, "Base switch canceled.", out message);
+
                     handled = false;
                     return false;
             }
@@ -978,6 +1002,77 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.FocusedEditorIsNew = false;
             message = discard ? "New timeline entry discarded." : "Timeline entry saved.";
             return true;
+        }
+
+        private bool OpenBaseModeDialog(ScenarioAuthoringState state, int direction, out string message)
+        {
+            message = null;
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (state == null || definition == null)
+            {
+                message = "No active scenario definition is available.";
+                return true;
+            }
+
+            ScenarioBaseGameMode nextMode = ResolveAdjacentBaseMode(definition.BaseGameMode, direction);
+            if (nextMode == definition.BaseGameMode)
+            {
+                message = "Base mode is already " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(nextMode) + ".";
+                return true;
+            }
+
+            state.FocusedEditorKind = ScenarioBaseModeAuthoringActions.FocusedEditorKind;
+            state.FocusedEditorIndex = (int)nextMode;
+            state.FocusedEditorIsNew = false;
+            state.TimelineSelectedEntryId = null;
+            message = "Choose how to switch base to " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(nextMode) + ".";
+            return true;
+        }
+
+        private bool SaveAndReloadBaseMode(ScenarioAuthoringState state, ScenarioBaseGameMode baseMode, out string message)
+        {
+            CloseBaseModeDialogState(state);
+            if (_baseModeReloadService == null)
+            {
+                message = "Base reload service is unavailable.";
+                return true;
+            }
+
+            return _baseModeReloadService.SaveAndReload(_editorService.CurrentSession, baseMode, out message);
+        }
+
+        private bool SwitchBaseModeOnly(ScenarioAuthoringState state, ScenarioBaseGameMode baseMode, out string message)
+        {
+            CloseBaseModeDialogState(state);
+            if (_baseModeReloadService == null)
+            {
+                message = "Base reload service is unavailable.";
+                return true;
+            }
+
+            return _baseModeReloadService.SaveBaseModeOnly(_editorService.CurrentSession, baseMode, out message);
+        }
+
+        private static bool CloseBaseModeDialog(ScenarioAuthoringState state, string closeMessage, out string message)
+        {
+            CloseBaseModeDialogState(state);
+            message = closeMessage;
+            return true;
+        }
+
+        private static void CloseBaseModeDialogState(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return;
+
+            if (string.Equals(state.FocusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+            {
+                state.FocusedEditorKind = null;
+                state.FocusedEditorIndex = -1;
+                state.FocusedEditorIsNew = false;
+                state.TimelineSelectedEntryId = null;
+            }
         }
 
         private void DiscardFocusedEntry(string kind, int index)
@@ -1039,39 +1134,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
-        private bool CycleBaseMode(int direction, out string message)
+        private static ScenarioBaseGameMode ResolveAdjacentBaseMode(ScenarioBaseGameMode mode, int direction)
         {
-            message = null;
-            ScenarioEditorSession session = _editorService.CurrentSession;
-            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
-            if (definition == null)
-            {
-                message = "No active scenario definition is available.";
-                return true;
-            }
-
             int count = Enum.GetValues(typeof(ScenarioBaseGameMode)).Length;
-            int next = ((int)definition.BaseGameMode + direction) % count;
+            int next = ((int)mode + direction) % count;
             if (next < 0)
                 next += count;
 
-            definition.BaseGameMode = (ScenarioBaseGameMode)next;
-            EnsureSelectionRulesForBaseMode(definition);
-            MarkDirty(session, ScenarioDirtySection.Meta);
-            message = "Base mode set to " + definition.BaseGameMode + ".";
-            return true;
-        }
-
-        private static void EnsureSelectionRulesForBaseMode(ScenarioDefinition definition)
-        {
-            if (definition == null)
-                return;
-            if (definition.SelectionRules == null)
-                definition.SelectionRules = new ScenarioSelectionRulesDefinition();
-            if (definition.SelectionRules.Availability == null)
-                definition.SelectionRules.Availability = new ScenarioModeAvailabilityDefinition();
-
-            definition.SelectionRules.Availability.UseOnly(definition.BaseGameMode);
+            return (ScenarioBaseGameMode)next;
         }
 
         private static void MarkDirty(ScenarioEditorSession session, ScenarioDirtySection section)

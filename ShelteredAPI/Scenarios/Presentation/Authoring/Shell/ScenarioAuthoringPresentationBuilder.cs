@@ -1539,6 +1539,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             string title = "Edit Timeline Entry";
             string subtitle = "Use the compact fields below, then save or cancel.";
+            if (string.Equals(state.FocusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), state.FocusedEditorIndex))
+                    return null;
+
+                ScenarioBaseGameMode targetMode = (ScenarioBaseGameMode)state.FocusedEditorIndex;
+                string targetLabel = FormatBaseMode(targetMode);
+                title = "Switch base to " + targetLabel + "?";
+                subtitle = "Choose when the authoring world should move to the " + targetLabel + " map.";
+                List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+                facts.Add(Fact("Current Draft Base", FormatBaseMode(definition.BaseGameMode), "Base saved in the scenario XML."));
+                facts.Add(Fact("Target Base", targetLabel, "The scene used after the world reloads."));
+                facts.Add(Text("Saving and reloading closes this authoring world, loads the " + targetLabel + " map, then reopens the editor on the same draft."));
+                facts.Add(Text("Authored content is kept. Out-of-map placements remain in the draft and can be reviewed after reload."));
+                facts.Add(Text("Quests and world map data are kept as authored."));
+                sections.Add(FactSection("base_mode_scope", "Scope", facts));
+
+                List<ScenarioAuthoringInspectorItem> actions = new List<ScenarioAuthoringInspectorItem>();
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode), "Save & reload world now", "Save the draft and reload the authoring world into the " + targetLabel + " scene.", true, true, "RL")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchOnly(targetMode), "Switch base only - world reloads next open", "Save the base choice and keep the currently loaded world until the draft is reopened.", true, false, "SW")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.ActionSwitchCancel, "Cancel", "Keep the current base mode.", true, false, "CL")));
+                sections.Add(ActionSection("base_mode_choices", string.Empty, actions));
+
+                return new ScenarioAuthoringInspectorDocument
+                {
+                    Title = title,
+                    Subtitle = subtitle,
+                    HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                    Sections = sections.ToArray()
+                };
+            }
             if (string.Equals(state.FocusedEditorKind, "weather", StringComparison.OrdinalIgnoreCase))
             {
                 WeatherEventDefinition weather = definition.TriggersAndEvents != null
@@ -3075,6 +3106,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
+        private static string FormatBaseMode(ScenarioBaseGameMode mode)
+        {
+            if (mode == ScenarioBaseGameMode.Survival)
+                return "Standard";
+            return mode.ToString();
+        }
         private static ScenarioAuthoringInspectorAction[] BuildHeaderActions(ScenarioEditorSession editorSession, bool hasSelection)
         {
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
@@ -3510,4 +3547,3 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
     }
 }
-

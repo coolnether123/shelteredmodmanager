@@ -420,6 +420,7 @@
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioAuthoringBootstrapPatches.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPlacementFeelVisualService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBunkerDraftService.cs" />
@@ -429,6 +430,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCaptureService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioBaseModeAuthoringActions.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringContextMenuService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringDraftRepository.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCameraGuardService.cs" />

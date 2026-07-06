@@ -152,6 +152,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public void CancelPendingDraft(string reason)
         {
+            CancelPendingDraft(reason, true);
+        }
+
+        public void CancelPendingDraft(string reason, bool cleanupDraftArtifacts)
+        {
             ScenarioAuthoringSession pending = null;
             lock (_sync)
             {
@@ -168,7 +173,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ClearLaunchRedirects(pending, reason);
-            if (pending != null)
+            if (cleanupDraftArtifacts && pending != null)
                 CleanupPendingDraftArtifacts(pending, reason);
         }
 

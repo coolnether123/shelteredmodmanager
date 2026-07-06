@@ -15,6 +15,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
+            ScenarioAuthoringSession authoringSession = context != null ? context.Session : null;
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
             ScenarioScoringAuthoringSummary.Summary scoring = ScenarioScoringAuthoringSummary.Build(definition);
             ScenarioHomeProgressFacts facts = ScenarioHomeProgressFacts.Build(definition, editorSession);
@@ -28,7 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = BuildIdentityItems(editorSession, definition)
             });
-            sections.Add(BuildBaseModeSection(definition));
+            sections.Add(BuildBaseModeSection(definition, authoringSession));
             AddQuestionSections(sections, facts);
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -69,18 +70,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items.ToArray();
         }
 
-        private static ScenarioAuthoringInspectorSection BuildBaseModeSection(ScenarioDefinition definition)
+        private static ScenarioAuthoringInspectorSection BuildBaseModeSection(
+            ScenarioDefinition definition,
+            ScenarioAuthoringSession authoringSession)
         {
             ScenarioBaseGameMode mode = definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival;
+            ScenarioBaseGameMode worldMode = authoringSession != null ? authoringSession.BaseMode : mode;
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(Item.Property("Current", FormatBaseMode(mode)));
+            if (worldMode != mode)
+                items.Add(Item.Text("World shows " + FormatBaseMode(worldMode) + "; reopens as " + FormatBaseMode(mode) + "."));
             items.Add(Item.Property("Changes", "Base game rules and starting scene this scenario builds on."));
+            items.Add(Item.Property("Map Data", "Quests and world map data are kept as authored."));
             items.Add(Item.Property("Supported Bases",
                 "Standard " + (mode == ScenarioBaseGameMode.Survival ? "selected" : "available")
                 + " / Stasis " + (mode == ScenarioBaseGameMode.Stasis ? "selected" : "available")
                 + " / Surrounded " + (mode == ScenarioBaseGameMode.Surrounded ? "selected" : "available")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "< " + ResolveAdjacentModeName(definition, -1), "Switch to the previous supported base.", true, false, "M-")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, ResolveAdjacentModeName(definition, 1) + " >", "Switch to the next supported base.", true, false, "M+")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "< " + ResolveAdjacentModeName(definition, -1), "Choose how to switch to the previous supported base.", true, false, "M-")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, ResolveAdjacentModeName(definition, 1) + " >", "Choose how to switch to the next supported base.", true, false, "M+")));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "home_base_mode",

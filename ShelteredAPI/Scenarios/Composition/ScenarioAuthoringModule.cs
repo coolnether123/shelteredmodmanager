@@ -121,6 +121,13 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringMenuService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
+                return new ScenarioAuthoringBaseModeReloadService(
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<ScenarioAuthoringDraftRepository>(),
+                    resolver.Get<ScenarioLaunchCoordinator>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
                 return new ScenarioAuthoringCommandService(
                     resolver.Get<ScenarioAuthoringCaptureService>(),
                     resolver.Get<IScenarioAuthoringSectionHub>(),
@@ -135,6 +142,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioStoryAuthoringService>(),
                     resolver.Get<ScenarioEventAuthoringService>(),
                     resolver.Get<ScenarioPublishExportService>(),
+                    resolver.Get<ScenarioAuthoringBaseModeReloadService>(),
                     resolver.Get<ScenarioAuthoringTutorialService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
