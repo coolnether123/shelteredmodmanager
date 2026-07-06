@@ -109,26 +109,36 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             DisabledTexture     = _textures.Get(_theme.WithPanelOpacity(palette.DisabledSurface));
             ViewportTexture     = _textures.Get(palette.Viewport);
 
+            Texture2D panelCorner       = _textures.GetCornerCut(_theme.WithPanelOpacity(palette.PanelBase));
+            Texture2D panelRaisedCorner = _textures.GetCornerCut(_theme.WithRaisedOpacity(palette.PanelRaised));
+            Texture2D panelInsetCorner  = _textures.GetCornerCut(_theme.WithPanelOpacity(palette.PanelInset));
+            Texture2D accentActiveCorner = _textures.GetCornerCut(_theme.WithActiveOpacity(palette.AccentActive));
+            Texture2D accentHoverCorner = _textures.GetCornerCut(_theme.WithRaisedOpacity(palette.AccentHover));
+            Texture2D dangerCorner       = _textures.GetCornerCut(palette.AccentDanger);
+            Texture2D disabledCorner     = _textures.GetCornerCut(_theme.WithPanelOpacity(palette.DisabledSurface));
+            Texture2D accentMutedCorner  = _textures.GetCornerCut(palette.AccentMuted);
+            Texture2D borderStrongCorner = _textures.GetCornerCut(palette.BorderStrong);
+
             int padXs = Mathf.RoundToInt(metrics.PaddingXs);
             int padSm = Mathf.RoundToInt(metrics.PaddingSm);
             int padMd = Mathf.RoundToInt(metrics.PaddingMd);
             int pillPadX = Mathf.RoundToInt(metrics.PillPaddingX);
 
-            PanelBase    = BuildBox(PanelTexture, PanelBasePadding);
-            PanelRaised  = BuildBox(PanelRaisedTexture, PanelBasePadding);
-            PanelInset   = BuildBox(PanelInsetTexture, padMd);
-            Header       = BuildBox(PanelRaisedTexture, padSm);
-            Footer       = BuildBox(PanelRaisedTexture, padSm);
-            Status       = BuildBox(PanelTexture, padSm);
-            Section      = BuildBox(PanelRaisedTexture, padMd);
-            Menu         = BuildBox(PanelRaisedTexture, padMd);
-            Card         = BuildBox(PanelRaisedTexture, CardSurfacePadding);
-            Field        = BuildField(PanelInsetTexture, AccentHoverTexture, palette.TextBody, metrics, padSm, padXs);
+            PanelBase    = BuildBox(panelCorner, PanelBasePadding);
+            PanelRaised  = BuildBox(panelRaisedCorner, PanelBasePadding);
+            PanelInset   = BuildBox(panelInsetCorner, padMd);
+            Header       = BuildBox(panelRaisedCorner, padSm);
+            Footer       = BuildBox(panelRaisedCorner, padSm);
+            Status       = BuildBox(panelCorner, padSm);
+            Section      = BuildBox(panelRaisedCorner, padMd);
+            Menu         = BuildBox(panelRaisedCorner, padMd);
+            Card         = BuildBox(panelRaisedCorner, CardSurfacePadding);
+            Field        = BuildField(panelInsetCorner, accentHoverCorner, palette.TextBody, metrics, padSm, padXs);
             Divider      = BuildBox(BorderSubtleTexture, 0);
 
-            Pill           = BuildPill(_textures.Get(palette.AccentMuted), palette.TextOnAccent, metrics, pillPadX);
-            PillEmphasized = BuildPill(AccentActiveTexture, palette.TextOnAccent, metrics, pillPadX);
-            PillDanger     = BuildPill(DangerTexture, palette.TextOnAccent, metrics, pillPadX);
+            Pill           = BuildPill(accentMutedCorner, palette.TextOnAccent, metrics, pillPadX);
+            PillEmphasized = BuildPill(accentActiveCorner, palette.TextOnAccent, metrics, pillPadX);
+            PillDanger     = BuildPill(dangerCorner, palette.TextOnAccent, metrics, pillPadX);
 
             BrandTitleText   = BuildText(metrics.FontSizeBrand,    FontStyle.Bold,   palette.TextTitle);
             TitleText        = BuildText(metrics.FontSizeTitle,    FontStyle.Bold,   palette.TextSubtitle);
@@ -146,20 +156,20 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             // Buttons sit on raised surfaces; tabs sit directly on the base
             // panel so the active tab looks "settled into" the surrounding
             // chrome rather than floating above it.
-            Button         = BuildButton(PanelRaisedTexture, AccentHoverTexture, PanelInsetTexture, palette.TextBody, metrics, padSm, padXs);
-            ButtonActive   = BuildButton(AccentActiveTexture, AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
-            ButtonDanger   = BuildButton(DangerTexture,       AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
-            ButtonDisabled = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
-            Tab            = BuildButton(PanelTexture,        AccentHoverTexture, BorderStrongTexture, palette.TextBody, metrics, padSm, padXs);
-            TabActive      = BuildButton(PanelInsetTexture,   AccentHoverTexture, BorderStrongTexture, palette.TextTitle, metrics, padSm, padXs);
-            TabDisabled    = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
+            Button         = BuildButton(panelRaisedCorner, accentHoverCorner, panelInsetCorner, palette.TextBody, metrics, padSm, padXs);
+            ButtonActive   = BuildButton(accentActiveCorner, accentHoverCorner, borderStrongCorner, palette.TextOnAccent, metrics, padSm, padXs);
+            ButtonDanger   = BuildButton(dangerCorner,       accentHoverCorner, borderStrongCorner, palette.TextOnAccent, metrics, padSm, padXs);
+            ButtonDisabled = BuildButton(disabledCorner,     disabledCorner,    disabledCorner,     palette.TextDisabled, metrics, padSm, padXs);
+            Tab            = BuildButton(panelCorner,        accentHoverCorner, borderStrongCorner, palette.TextBody, metrics, padSm, padXs);
+            TabActive      = BuildButton(panelInsetCorner,   accentHoverCorner, borderStrongCorner, palette.TextTitle, metrics, padSm, padXs);
+            TabDisabled    = BuildButton(disabledCorner,     disabledCorner,    disabledCorner,     palette.TextDisabled, metrics, padSm, padXs);
         }
 
         private static GUIStyle BuildBox(Texture2D background, int padding)
         {
             GUIStyle style = new GUIStyle(GUI.skin.box);
             style.normal.background = background;
-            style.border = new RectOffset(1, 1, 1, 1);
+            style.border = BuildCornerBorder();
             style.padding = new RectOffset(padding, padding, padding, padding);
             style.margin = new RectOffset(0, 0, 0, 0);
             return style;
@@ -179,7 +189,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.active.textColor = textColor;
             style.alignment = TextAnchor.MiddleLeft;
             style.fontSize = metrics.FontSizeBody;
-            style.border = new RectOffset(1, 1, 1, 1);
+            style.border = BuildCornerBorder();
             style.padding = new RectOffset(padX, padX, padY + 1, padY + 2);
             style.margin = new RectOffset(0, 0, 0, 0);
             style.clipping = TextClipping.Clip;
@@ -219,7 +229,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.onActive.textColor = textColor;
             style.alignment = TextAnchor.MiddleCenter;
             style.fontSize = metrics.FontSizeBody;
-            style.border = new RectOffset(1, 1, 1, 1);
+            style.border = BuildCornerBorder();
             style.padding = new RectOffset(padX, padX, padY + 1, padY + 3);
             style.margin = new RectOffset(0, 0, 0, 0);
             style.wordWrap = true;
@@ -236,10 +246,16 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.alignment = TextAnchor.MiddleCenter;
             style.fontSize = metrics.FontSizePill;
             style.fontStyle = FontStyle.Bold;
-            style.border = new RectOffset(1, 1, 1, 1);
+            style.border = BuildCornerBorder();
             style.padding = new RectOffset(padX, padX, 1, 2);
             style.margin = new RectOffset(0, 0, 0, 0);
             return style;
+        }
+
+        private static RectOffset BuildCornerBorder()
+        {
+            int radius = ScenarioUiAtlasSkin.CornerRadiusPixels;
+            return new RectOffset(radius, radius, radius, radius);
         }
 
         private static Font ResolveRuntimeFont()

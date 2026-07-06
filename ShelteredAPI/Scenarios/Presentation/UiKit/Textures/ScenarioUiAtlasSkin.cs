@@ -8,6 +8,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 {
     internal static class ScenarioUiAtlasSkin
     {
+        public const int CornerRadiusPixels = 2;
+        public const float CornerInsetPixels = 6f;
+        public const int CornerTextureSize = 8;
+        public const float ShadowOffset = 2f;
+
         private static readonly Dictionary<string, AtlasSprite> Cache = new Dictionary<string, AtlasSprite>(StringComparer.OrdinalIgnoreCase);
         private static bool _scanned;
 
@@ -40,6 +45,47 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
         public static bool DrawIcon(Rect rect, string role)
         {
             return DrawRole(rect, role, false);
+        }
+
+        public static void DrawCornerCutTexture(Rect rect, Texture texture)
+        {
+            if (texture == null || rect.width <= 0f || rect.height <= 0f)
+                return;
+
+            float cut = ResolveCornerCut(rect);
+            if (cut <= 0f)
+            {
+                GUI.DrawTexture(rect, texture);
+                return;
+            }
+
+            DrawTextureIfVisible(new Rect(rect.x + cut, rect.y, rect.width - (cut * 2f), cut), texture);
+            DrawTextureIfVisible(new Rect(rect.x, rect.y + cut, rect.width, rect.height - (cut * 2f)), texture);
+            DrawTextureIfVisible(new Rect(rect.x + cut, rect.yMax - cut, rect.width - (cut * 2f), cut), texture);
+        }
+
+        public static void DrawCornerCutShadow(Rect rect)
+        {
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.42f);
+            DrawCornerCutTexture(
+                new Rect(rect.x + ShadowOffset, rect.y + ShadowOffset, rect.width, rect.height),
+                Texture2D.whiteTexture);
+            GUI.color = oldColor;
+        }
+
+        public static void DrawCornerCutBorder(Rect rect, Texture strong, Texture subtle)
+        {
+            float cut = ResolveCornerCut(rect);
+            if (cut <= 0f)
+                return;
+
+            Texture topLeft = strong != null ? strong : Texture2D.whiteTexture;
+            Texture bottomRight = subtle != null ? subtle : topLeft;
+            DrawTextureIfVisible(new Rect(rect.x + cut, rect.y + 1f, rect.width - (cut * 2f), 1f), topLeft);
+            DrawTextureIfVisible(new Rect(rect.x + cut, rect.yMax - 2f, rect.width - (cut * 2f), 1f), bottomRight);
+            DrawTextureIfVisible(new Rect(rect.x + 1f, rect.y + cut, 1f, rect.height - (cut * 2f)), topLeft);
+            DrawTextureIfVisible(new Rect(rect.xMax - 2f, rect.y + cut, 1f, rect.height - (cut * 2f)), bottomRight);
         }
 
         public static string WriteDump(string outputPath)
@@ -108,6 +154,17 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
                 GUI.DrawTextureWithTexCoords(rect, sprite.Texture, sprite.Uv, true);
             GUI.color = oldColor;
             return true;
+        }
+
+        private static float ResolveCornerCut(Rect rect)
+        {
+            return Mathf.Min(CornerRadiusPixels, Mathf.Floor(Mathf.Min(rect.width, rect.height) * 0.5f));
+        }
+
+        private static void DrawTextureIfVisible(Rect rect, Texture texture)
+        {
+            if (texture != null && rect.width > 0f && rect.height > 0f)
+                GUI.DrawTexture(rect, texture);
         }
 
         private static AtlasSprite ResolveRole(string role)

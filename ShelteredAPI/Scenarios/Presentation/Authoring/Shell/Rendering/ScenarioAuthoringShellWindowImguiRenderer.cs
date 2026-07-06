@@ -15,6 +15,7 @@ using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 using ShelteredAPI.UI.FieldManual.Tooltips;
@@ -884,7 +885,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawCheckerboard(fillRect, 6);
             Color previous = GUI.color;
             GUI.color = color;
-            GUI.DrawTexture(fillRect, Texture2D.whiteTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(fillRect, Texture2D.whiteTexture);
             GUI.color = previous;
         }
 
@@ -1797,10 +1798,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Color oldColor = GUI.color;
             GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1f), _uiContext.Styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), _uiContext.Styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(rect.x, rect.y, 1f, rect.height), _uiContext.Styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), _uiContext.Styles.BorderStrongTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderStrongTexture);
             GUI.color = oldColor;
         }
 
@@ -2017,7 +2015,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Color oldColor = GUI.color;
             GUI.color = new Color(0.94f, 0.80f, 0.52f, 0.32f * pulse);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
 

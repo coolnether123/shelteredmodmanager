@@ -101,16 +101,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (style == _statusStyle ? ScenarioUiAtlasSkin.DrawStatus(rect) : ScenarioUiAtlasSkin.DrawPanel(rect));
             if (!drewNative)
             {
-                Color oldColor = GUI.color;
-                GUI.color = new Color(0f, 0f, 0f, 0.42f);
-                GUI.DrawTexture(new Rect(rect.x + 2f, rect.y + 2f, rect.width, rect.height), Texture2D.whiteTexture);
-                GUI.color = oldColor;
-
+                ScenarioUiAtlasSkin.DrawCornerCutShadow(rect);
                 GUI.Box(rect, GUIContent.none, style ?? _rootPanelStyle);
-                GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, 1f), _uiContext.Styles.BorderStrongTexture);
-                GUI.DrawTexture(new Rect(rect.x + 1f, rect.yMax - 2f, rect.width - 2f, 1f), _uiContext.Styles.BorderSubtleTexture);
-                GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, 1f, rect.height - 2f), _uiContext.Styles.BorderStrongTexture);
-                GUI.DrawTexture(new Rect(rect.xMax - 2f, rect.y + 1f, 1f, rect.height - 2f), _uiContext.Styles.BorderSubtleTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
             }
         }
     }

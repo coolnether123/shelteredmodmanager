@@ -1,5 +1,6 @@
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 
 namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
     /// <summary>
@@ -24,7 +25,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         public float FooterHeight     { get { return 32f; } }
         public float FooterPaddingX   { get { return 12f; } }
         public float DividerThickness { get { return 1f; } }
-        public float CornerInset      { get { return 6f; } }
+        public float CornerInset      { get { return ScenarioUiAtlasSkin.CornerInsetPixels; } }
 
         public float CardPadding      { get { return 10f; } }
         public float CardTitleHeight  { get { return 22f; } }

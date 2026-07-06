@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
@@ -388,7 +389,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect rect = new Rect(targetRect.x - 6f, targetRect.y - 6f, targetRect.width + 12f, targetRect.height + 12f);
             Color oldColor = GUI.color;
             GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.20f * progress);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
             GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.95f * progress);
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
             GUI.color = oldColor;

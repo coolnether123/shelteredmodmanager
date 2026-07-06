@@ -66,15 +66,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
         {
             if (!ScenarioUiAtlasSkin.DrawPanel(outer))
             {
-                Color oldColor = GUI.color;
-                GUI.color = new Color(0f, 0f, 0f, 0.42f);
-                GUI.DrawTexture(new Rect(outer.x + 2f, outer.y + 2f, outer.width, outer.height), Texture2D.whiteTexture);
-                GUI.color = oldColor;
+                ScenarioUiAtlasSkin.DrawCornerCutShadow(outer);
                 GUI.Box(outer, GUIContent.none, _styles.PanelBase);
-                GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, outer.width - 2f, 1f), _styles.BorderStrongTexture);
-                GUI.DrawTexture(new Rect(outer.x + 1f, outer.yMax - 2f, outer.width - 2f, 1f), _styles.BorderSubtleTexture);
-                GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderStrongTexture);
-                GUI.DrawTexture(new Rect(outer.xMax - 2f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderSubtleTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(outer, _styles.BorderStrongTexture, _styles.BorderSubtleTexture);
             }
         }
 

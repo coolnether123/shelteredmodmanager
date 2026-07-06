@@ -219,13 +219,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (hover > 0.001f)
             {
                 GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.28f * hover);
-                GUI.DrawTexture(overlayRect, _uiContext.Styles.AccentHoverTexture != null ? _uiContext.Styles.AccentHoverTexture : Texture2D.whiteTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutTexture(overlayRect, _uiContext.Styles.AccentHoverTexture != null ? _uiContext.Styles.AccentHoverTexture : Texture2D.whiteTexture);
             }
 
             if (press > 0.001f)
             {
                 GUI.color = new Color(0.718f, 0.639f, 0.482f, 0.34f * press);
-                GUI.DrawTexture(overlayRect, Texture2D.whiteTexture);
+                ScenarioUiAtlasSkin.DrawCornerCutTexture(overlayRect, Texture2D.whiteTexture);
             }
 
             GUI.color = oldColor;
@@ -248,7 +248,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Color oldColor = GUI.color;
             GUI.color = new Color(0.94f, 0.80f, 0.52f, 0.26f * pulse);
-            GUI.DrawTexture(InsetButtonOverlayRect(rect), Texture2D.whiteTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(InsetButtonOverlayRect(rect), Texture2D.whiteTexture);
             GUI.color = oldColor;
         }
 
