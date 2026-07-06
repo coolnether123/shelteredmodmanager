@@ -996,9 +996,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringShellWindowViewModel window = new ScenarioAuthoringShellWindowViewModel
                 {
                     Id = definitionEntry.Id,
-                    Title = definitionEntry.Title,
+                    Title = ResolveWindowTitle(definitionEntry, state),
                     Dock = definitionEntry.Dock,
-                    WorkspaceStage = definitionEntry.WorkspaceStage,
+                    WorkspaceStage = ResolveWindowWorkspaceStage(definitionEntry, state),
                     RendererKind = definitionEntry.RendererKind,
                     WorkspaceTabVisible = definitionEntry.WorkspaceTabVisible,
                     Visible = windowState.Visible,
@@ -1016,6 +1016,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 window.Sections = BuildWindowSections(definitionEntry, state, editorSession, session, definition);
                 windows.Add(window);
             }
+        }
+
+        private static string ResolveWindowTitle(ScenarioAuthoringWindowDefinition definitionEntry, ScenarioAuthoringState state)
+        {
+            if (definitionEntry != null
+                && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase)
+                && state != null
+                && state.ActiveStage == ScenarioStageKind.Test)
+            {
+                return "Test";
+            }
+
+            return definitionEntry != null ? definitionEntry.Title : string.Empty;
+        }
+
+        private static ScenarioStageKind ResolveWindowWorkspaceStage(ScenarioAuthoringWindowDefinition definitionEntry, ScenarioAuthoringState state)
+        {
+            if (definitionEntry != null
+                && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase)
+                && state != null
+                && state.ActiveStage == ScenarioStageKind.Test)
+            {
+                return ScenarioStageKind.Test;
+            }
+
+            return definitionEntry != null ? definitionEntry.WorkspaceStage : ScenarioStageKind.None;
         }
 
         private ScenarioAuthoringInspectorSection[] BuildWindowSections(

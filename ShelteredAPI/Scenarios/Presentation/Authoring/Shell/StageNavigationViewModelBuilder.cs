@@ -25,6 +25,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
             ScenarioStageKind activeStageKind = ResolveActiveStageKind(state);
+            actions.Add(CreateAction(
+                ScenarioAuthoringActionIds.ActionWindowTogglePrefix + ScenarioAuthoringWindowIds.Scenario,
+                "Home",
+                "HOME",
+                true,
+                activeStageKind == ScenarioStageKind.None && HasWindowVisible(state, ScenarioAuthoringWindowIds.Scenario),
+                "Open the scenario home dashboard."));
             ScenarioStageDefinition[] topLevel = _stageRegistry.GetTopLevel();
             for (int i = 0; i < topLevel.Length; i++)
             {

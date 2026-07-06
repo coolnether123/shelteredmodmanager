@@ -35,6 +35,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             state.ActiveLayoutPreset = string.IsNullOrEmpty(state.ActiveLayoutPreset) ? "default" : state.ActiveLayoutPreset;
+            state.ActiveStage = ScenarioStageKind.None;
+            state.ActiveShellTab = ScenarioAuthoringShellTab.Shell;
             if (state.ActiveBunkerStage == ScenarioStageKind.None)
                 state.ActiveBunkerStage = ScenarioStageKind.BunkerInside;
             state.Settings = state.Settings != null ? state.Settings.Copy() : _settingsService.Load();
@@ -69,6 +71,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
             if (window == null)
                 return false;
+
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+                return ShowHome(state, window);
 
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
@@ -115,6 +120,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
             if (window == null)
                 return false;
+
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+                return open && ShowHome(state, window);
 
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
             if (definition != null && definition.IsWorkspaceStageWindow)
@@ -273,6 +281,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return transition;
         }
 
+        private bool ShowHome(ScenarioAuthoringState state, ScenarioAuthoringWindowState window)
+        {
+            if (state == null || window == null)
+                return false;
+
+            bool changed = state.ActiveStage != ScenarioStageKind.None || !window.Visible || window.Collapsed;
+            state.ActiveStage = ScenarioStageKind.None;
+            state.ActiveShellTab = ScenarioAuthoringShellTab.Shell;
+            state.MinimalMode = false;
+            state.FocusSelectionMode = false;
+            window.Visible = true;
+            window.Collapsed = false;
+            ApplyStageWorkspace(state);
+            PersistIfEnabled(state);
+            return changed;
+        }
+
         public void ApplyStageWorkspace(ScenarioAuthoringState state)
         {
             if (state == null || state.WindowStates == null)
@@ -290,7 +315,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(window.Id);
                 if (definition != null && definition.IsWorkspaceStageWindow)
                 {
-                    window.Visible = definition.WorkspaceStage == activeStage;
+                    window.Visible = string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase)
+                        ? activeStage == ScenarioStageKind.None || activeStage == ScenarioStageKind.Test
+                        : definition.WorkspaceStage == activeStage;
                     window.Collapsed = !window.Visible && window.Collapsed;
                     continue;
                 }

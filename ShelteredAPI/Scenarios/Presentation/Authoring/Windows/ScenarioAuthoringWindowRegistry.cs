@@ -29,7 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
 
         public ScenarioAuthoringWindowRegistry()
         {
-            Register(Create(ScenarioAuthoringWindowIds.Scenario, "Overview", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Scenario, 0, 760f, 420f, 420f, 240f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, true, false));
+            Register(Create(ScenarioAuthoringWindowIds.Scenario, "Home", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Scenario, 0, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Bunker, true, false, false, false, true));
             Register(Create(ScenarioAuthoringWindowIds.Hierarchy, "Hierarchy", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Hierarchy, 1, 640f, 460f, 360f, 220f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, true, true, true));
             Register(Create(ScenarioAuthoringWindowIds.SelectionStack, "Selection Stack", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.SelectionStack, 2, 620f, 360f, 360f, 180f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, true, true, true));
             Register(Create(ScenarioAuthoringWindowIds.TilesPalette, "Build Palette", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.TilesPalette, 4, 760f, 520f, 420f, 260f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, true, false));
