@@ -65,8 +65,17 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public bool CanSelectTargetForCurrentStage(ScenarioAuthoringState state, ScenarioAuthoringTarget target, out string reason)
         {
             reason = null;
-            if (state == null || target == null)
+            if (state == null)
+            {
+                reason = "Scenario authoring state is unavailable.";
                 return false;
+            }
+
+            if (target == null)
+            {
+                reason = "Select a target before using this action.";
+                return false;
+            }
 
             ScenarioTargetScope activeScope = ResolveSelectionScope(state);
             ScenarioTargetClassification classification = _classifier.Classify(target);

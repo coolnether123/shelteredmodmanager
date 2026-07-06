@@ -1187,6 +1187,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     && pixelEditor.Visible
                     && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase);
                 if (!forcePixelEditor
+                    && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!forcePixelEditor
                     && !IsWindowInShell(windowState)
                     && !string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
                 {

@@ -1225,15 +1225,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (setup != null || baseMode != null)
             {
-                bool twoColumns = GetSectionContentWidth() >= 760f && setup != null && baseMode != null;
+                float contentWidth = GetSectionContentWidth();
+                bool twoColumns = contentWidth >= 760f && setup != null && baseMode != null;
+                float columnWidth = twoColumns ? (contentWidth - 12f) * 0.5f : contentWidth;
                 if (twoColumns)
                     GUILayout.BeginHorizontal();
 
                 if (setup != null)
                 {
                     if (twoColumns)
-                        GUILayout.BeginVertical(GUILayout.Width((GetSectionContentWidth() - 12f) * 0.5f));
+                        GUILayout.BeginVertical(GUILayout.Width(columnWidth));
+                    float previousContentWidth = _activeContentWidth;
+                    if (twoColumns)
+                        _activeContentWidth = Math.Max(120f, columnWidth);
                     DrawHomeSetupChecklist(setup);
+                    if (twoColumns)
+                        _activeContentWidth = previousContentWidth;
                     if (twoColumns)
                         GUILayout.EndVertical();
                 }
@@ -1244,8 +1251,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (baseMode != null)
                 {
                     if (twoColumns)
-                        GUILayout.BeginVertical(GUILayout.Width((GetSectionContentWidth() - 12f) * 0.5f));
+                        GUILayout.BeginVertical(GUILayout.Width(columnWidth));
+                    float previousContentWidth = _activeContentWidth;
+                    if (twoColumns)
+                        _activeContentWidth = Math.Max(120f, columnWidth);
                     DrawHomeBaseSelector(baseMode);
+                    if (twoColumns)
+                        _activeContentWidth = previousContentWidth;
                     if (twoColumns)
                         GUILayout.EndVertical();
                 }
@@ -1369,15 +1381,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawHomeDraftPath(ScenarioAuthoringInspectorItem pathItem, ScenarioAuthoringInspectorAction copyPath)
         {
-            Rect rowRect = GUILayoutUtility.GetRect(240f, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
+            float rowLimit = GetSectionContentWidth();
             float copyWidth = copyPath != null ? Mathf.Clamp(MeasureButtonWidth(copyPath, false, 18f), 78f, 120f) : 0f;
-            Rect labelRect = new Rect(rowRect.x, rowRect.y + 4f, Math.Max(90f, rowRect.width - copyWidth - 10f), 18f);
+            bool inlineCopy = copyPath == null || rowLimit - copyWidth - 10f >= 180f;
+            float rowHeight = inlineCopy ? 26f : 54f;
+            Rect rowRect = GUILayoutUtility.GetRect(240f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
+            Rect labelRect = new Rect(rowRect.x, rowRect.y + 4f, inlineCopy ? Math.Max(90f, rowRect.width - copyWidth - 10f) : rowRect.width, 18f);
             string path = pathItem != null ? pathItem.Value ?? string.Empty : string.Empty;
             const string prefix = "Draft: ";
             float pathWidth = Math.Max(12f, labelRect.width - _mutedTextStyle.CalcSize(new GUIContent(prefix)).x);
             GUI.Label(labelRect, new GUIContent(prefix + MiddleTruncate(path, pathWidth, _mutedTextStyle), pathItem != null ? pathItem.HoverHint ?? path : path), _mutedTextStyle);
             if (copyPath != null)
-                DrawButton(new Rect(rowRect.xMax - copyWidth, rowRect.y, copyWidth, 24f), copyPath, false);
+            {
+                float copyX = inlineCopy ? rowRect.xMax - copyWidth : rowRect.x;
+                float copyY = inlineCopy ? rowRect.y : rowRect.y + 28f;
+                DrawButton(new Rect(copyX, copyY, copyWidth, 24f), copyPath, false);
+            }
         }
 
         private void DrawHomeBaseSelector(ScenarioAuthoringInspectorSection section)
@@ -1399,13 +1418,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float width = GetSectionContentWidth();
             float gap = 4f;
-            float segmentWidth = (width - (gap * Math.Max(0, actions.Count - 1))) / Math.Max(1, actions.Count);
+            bool stacked;
+            float[] segmentWidths = CalculateHomeSegmentWidths(actions, width, gap, out stacked);
             GUILayout.BeginHorizontal();
             for (int i = 0; i < actions.Count; i++)
             {
+                if (stacked && i > 0)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(4f);
+                    GUILayout.BeginHorizontal();
+                }
+
+                float segmentWidth = i < segmentWidths.Length ? segmentWidths[i] : width;
                 Rect rect = GUILayoutUtility.GetRect(segmentWidth, 30f, GUILayout.Width(segmentWidth), GUILayout.Height(30f));
                 DrawButton(rect, actions[i], true);
-                if (i < actions.Count - 1)
+                if (!stacked && i < actions.Count - 1)
                     GUILayout.Space(gap);
             }
             GUILayout.EndHorizontal();
@@ -1415,6 +1443,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.Label(hint, _mutedTextStyle);
             }
             GUILayout.EndVertical();
+        }
+
+        private float[] CalculateHomeSegmentWidths(List<ScenarioAuthoringInspectorAction> actions, float availableWidth, float gap, out bool stacked)
+        {
+            stacked = false;
+            int count = actions != null ? actions.Count : 0;
+            if (count == 0)
+                return new float[0];
+
+            float[] widths = new float[count];
+            float totalMinimum = 0f;
+            for (int i = 0; i < count; i++)
+            {
+                widths[i] = Math.Max(74f, MeasureButtonWidth(actions[i], true, 18f));
+                totalMinimum += widths[i];
+            }
+
+            float totalGap = gap * Math.Max(0, count - 1);
+            if (totalMinimum + totalGap > availableWidth)
+            {
+                stacked = true;
+                for (int i = 0; i < count; i++)
+                    widths[i] = availableWidth;
+                return widths;
+            }
+
+            float surplus = (availableWidth - totalGap - totalMinimum) / count;
+            for (int i = 0; i < count; i++)
+                widths[i] += surplus;
+            return widths;
         }
 
         private void DrawHomeSetupChecklist(ScenarioAuthoringInspectorSection section)

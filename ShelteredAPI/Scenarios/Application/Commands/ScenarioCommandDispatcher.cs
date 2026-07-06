@@ -27,7 +27,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
         public bool Dispatch(ScenarioAuthoringState state, string actionId, out string message)
         {
-            message = null;
+            ScenarioCommandDispatchResult result = DispatchDetailed(state, actionId);
+            message = result.Message;
+            return result.Result;
+        }
+
+        public ScenarioCommandDispatchResult DispatchDetailed(ScenarioAuthoringState state, string actionId)
+        {
+            ScenarioCommandDispatchResult result = new ScenarioCommandDispatchResult();
             for (int i = 0; i < _handlers.Count; i++)
             {
                 IScenarioCommandHandler handler = _handlers[i];
@@ -35,12 +42,27 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     continue;
 
                 bool handled;
+                string message;
                 bool changed = handler.TryHandle(state, actionId, out handled, out message);
                 if (handled)
-                    return changed || !string.IsNullOrEmpty(message);
+                {
+                    result.Handled = true;
+                    result.Changed = changed;
+                    result.Message = message;
+                    result.Result = changed || !string.IsNullOrEmpty(message);
+                    return result;
+                }
             }
 
-            return false;
+            return result;
         }
+    }
+
+    internal sealed class ScenarioCommandDispatchResult
+    {
+        public bool Handled { get; set; }
+        public bool Changed { get; set; }
+        public bool Result { get; set; }
+        public string Message { get; set; }
     }
 }

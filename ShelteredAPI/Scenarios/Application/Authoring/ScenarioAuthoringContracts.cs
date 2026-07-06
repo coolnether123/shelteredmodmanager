@@ -18,6 +18,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         ScenarioAuthoringInspectorDocument GetInspectorDocument();
         ScenarioAuthoringInspectorDocument GetHoverDocument();
         bool ExecuteAction(string actionId);
+        ScenarioAuthoringActionExecutionResult ExecuteActionWithResult(string actionId);
         void Refresh();
     }
 
@@ -398,6 +399,53 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Tile = 9,
         Background = 10,
         SceneSprite = 11
+    }
+
+    internal sealed class ScenarioAuthoringActionExecutionResult
+    {
+        public bool Ok { get; set; }
+        public string ActionId { get; set; }
+        public bool Result { get; set; }
+        public string Reason { get; set; }
+        public string StatusMessage { get; set; }
+
+        public static ScenarioAuthoringActionExecutionResult Success(string actionId, bool result, string statusMessage)
+        {
+            return new ScenarioAuthoringActionExecutionResult
+            {
+                Ok = true,
+                ActionId = actionId ?? string.Empty,
+                Result = result,
+                Reason = string.Empty,
+                StatusMessage = statusMessage ?? string.Empty
+            };
+        }
+
+        public static ScenarioAuthoringActionExecutionResult Failure(string actionId, string reason, string statusMessage)
+        {
+            string safeReason = string.IsNullOrEmpty(reason) ? "Action did not complete." : reason;
+            return new ScenarioAuthoringActionExecutionResult
+            {
+                Ok = true,
+                ActionId = actionId ?? string.Empty,
+                Result = false,
+                Reason = safeReason,
+                StatusMessage = statusMessage ?? safeReason
+            };
+        }
+
+        public static ScenarioAuthoringActionExecutionResult Unavailable(string actionId, string reason)
+        {
+            string safeReason = string.IsNullOrEmpty(reason) ? "Scenario authoring is not active." : reason;
+            return new ScenarioAuthoringActionExecutionResult
+            {
+                Ok = false,
+                ActionId = actionId ?? string.Empty,
+                Result = false,
+                Reason = safeReason,
+                StatusMessage = safeReason
+            };
+        }
     }
 
     internal sealed class ScenarioAuthoringTarget

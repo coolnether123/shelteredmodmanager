@@ -51,14 +51,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
         {
-            if (state == null || string.IsNullOrEmpty(actionId))
-                return false;
+            return ExecuteWithResult(state, actionId).Result;
+        }
 
-            string message;
-            bool changed = _dispatcher.Dispatch(state, actionId, out message);
-            if (!string.IsNullOrEmpty(message))
-                state.StatusMessage = message;
-            return changed;
+        public ScenarioAuthoringActionExecutionResult ExecuteWithResult(ScenarioAuthoringState state, string actionId)
+        {
+            if (state == null || string.IsNullOrEmpty(actionId))
+                return ScenarioAuthoringActionExecutionResult.Unavailable(actionId, "Scenario authoring is not active.");
+
+            string beforeStatus = state.StatusMessage;
+            ScenarioCommandDispatchResult dispatch = _dispatcher.DispatchDetailed(state, actionId);
+            if (!string.IsNullOrEmpty(dispatch.Message))
+                state.StatusMessage = dispatch.Message;
+
+            string afterStatus = state.StatusMessage;
+            if (dispatch.Result)
+                return ScenarioAuthoringActionExecutionResult.Success(actionId, true, afterStatus);
+
+            string reason = !string.IsNullOrEmpty(dispatch.Message)
+                ? dispatch.Message
+                : (!string.Equals(beforeStatus, afterStatus) && !string.IsNullOrEmpty(afterStatus)
+                    ? afterStatus
+                    : null);
+            if (string.IsNullOrEmpty(reason))
+                reason = dispatch.Handled ? "Action was handled but made no change." : "Action was not handled.";
+
+            return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, afterStatus);
         }
 
         private static IEnumerable<IScenarioCommandHandler> CreateHandlers(
@@ -80,7 +98,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             return new IScenarioCommandHandler[]
             {
-                new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService),
+                new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService, layoutService),
                 new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),
                 new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new ScenarioHelpCommandHandler(tutorialService, layoutService, setupStateService),

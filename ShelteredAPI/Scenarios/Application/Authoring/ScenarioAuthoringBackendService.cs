@@ -235,10 +235,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool ExecuteAction(string actionId)
         {
+            ScenarioAuthoringActionExecutionResult result = ExecuteActionWithResult(actionId);
+            return result != null && result.Result;
+        }
+
+        public ScenarioAuthoringActionExecutionResult ExecuteActionWithResult(string actionId)
+        {
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionCloseEditor, StringComparison.Ordinal))
             {
                 ScenarioAuthoringBootstrapService.Instance.RequestCloseActiveSession("Closed from authoring shell.", true);
-                return true;
+                return ScenarioAuthoringActionExecutionResult.Success(actionId, true, "Closed from authoring shell.");
             }
 
             ScenarioAuthoringState snapshot;
@@ -248,10 +254,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             if (snapshot == null || !snapshot.IsActive)
-                return false;
+                return ScenarioAuthoringActionExecutionResult.Unavailable(actionId, "Scenario authoring is not active.");
 
             ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
-            bool changed = _commandService.Execute(snapshot, actionId);
+            string beforeStatus = snapshot.StatusMessage;
+            ScenarioAuthoringActionExecutionResult result = _commandService.ExecuteWithResult(snapshot, actionId);
+            bool changed = result != null && result.Result;
             string sectionMessage;
             if (_sectionHub.SynchronizeAfterAction(snapshot, out sectionMessage))
             {
@@ -273,9 +281,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _state = snapshot;
             }
 
-            if (changed)
+            if (result == null)
+                result = ScenarioAuthoringActionExecutionResult.Failure(actionId, null, snapshot.StatusMessage);
+            else
+                result.StatusMessage = snapshot.StatusMessage ?? string.Empty;
+
+            if (!result.Result && string.IsNullOrEmpty(result.Reason))
+                result.Reason = !string.Equals(beforeStatus, snapshot.StatusMessage) && !string.IsNullOrEmpty(snapshot.StatusMessage)
+                    ? snapshot.StatusMessage
+                    : "Action did not complete.";
+
+            if (changed || !string.Equals(beforeStatus, snapshot.StatusMessage))
                 RaiseStateChanged();
-            return changed;
+            return result;
         }
 
         internal bool UpdateWindowFrame(string windowId, float x, float y, float width, float height, bool persist)

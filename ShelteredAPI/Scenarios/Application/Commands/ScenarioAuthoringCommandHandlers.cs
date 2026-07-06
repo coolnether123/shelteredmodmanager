@@ -29,11 +29,16 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
     {
         private readonly ScenarioSpriteSwapAuthoringService _service;
         private readonly ScenarioSelectionScopeService _scopeService;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
 
-        public SpriteCommandHandler(ScenarioSpriteSwapAuthoringService service, ScenarioSelectionScopeService scopeService)
+        public SpriteCommandHandler(
+            ScenarioSpriteSwapAuthoringService service,
+            ScenarioSelectionScopeService scopeService,
+            ScenarioAuthoringLayoutService layoutService)
         {
             _service = service;
             _scopeService = scopeService;
+            _layoutService = layoutService;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -56,7 +61,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            return _service.TryHandleAction(state, actionId, out handled, out message);
+            bool changed = _service.TryHandleAction(state, actionId, out handled, out message);
+            if (handled && IsPixelEditorTerminalAction(actionId) && _service.GetCustomEditorModel(state) == null && _layoutService != null)
+                changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, false);
+            return changed;
         }
 
         private static bool RequiresScopedTarget(string actionId)
@@ -67,6 +75,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
 
             return actionId.StartsWith("sprite_swap.", StringComparison.Ordinal);
+        }
+
+        private static bool IsPixelEditorTerminalAction(string actionId)
+        {
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapClear, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapRevert, StringComparison.Ordinal);
         }
     }
 
