@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -58,6 +58,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             _pipeline = new ScenarioValidationPipeline(new IScenarioValidationRule[]
             {
                 new CoreScenarioRule(),
+                new ScenarioStoryFlowValidationRule(),
                 new DependencyValidationRule(this),
                 new AssetValidationRule(),
                 new FamilyValidationRule(),
@@ -760,7 +761,6 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode))
                     summary.AddError("core.meta.invalid_base_mode", "Scenario BaseMode is invalid: " + definition.BaseGameMode);
                 ValidateSelectionRules(definition, summary);
-                ValidateScenarioFlow(definition, summary);
             }
 
             private static void ValidateSelectionRules(ScenarioDefinition definition, ValidationSummary summary)

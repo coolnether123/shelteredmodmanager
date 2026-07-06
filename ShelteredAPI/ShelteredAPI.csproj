@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -235,6 +235,8 @@
     <Compile Include="Scenarios\Domain\Validation\IScenarioValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\MapValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ObjectStartStateValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationAnalyzer.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioValidationPipeline.cs" />
     <Compile Include="Scenarios\Domain\Validation\SchedulingValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ValidationIssue.cs" />
@@ -292,6 +294,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthoringCommandHandlers.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioStoryFocusedEditorCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioPublishCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
@@ -381,6 +384,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHierarchyAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHelpAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHomeProgressFacts.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
@@ -470,6 +474,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringActions.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioStoryFocusedEditorActions.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioInventoryItemCatalog.cs" />
     <Compile Include="Scenarios\Shared\ScenarioPropertyBag.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringActionCodec.cs" />

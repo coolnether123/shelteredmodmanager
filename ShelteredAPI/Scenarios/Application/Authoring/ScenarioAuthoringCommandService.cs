@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
@@ -85,6 +85,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
+                new ScenarioStoryFocusedEditorCommandHandler(storyAuthoringService, editorService),
                 new StoryAuthoringCommandHandler(storyAuthoringService, editorService),
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, baseModeReloadService),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),

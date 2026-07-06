@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -1539,6 +1539,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             string title = "Edit Timeline Entry";
             string subtitle = "Use the compact fields below, then save or cancel.";
+            ScenarioAuthoringInspectorDocument storyDocument;
+            if (ScenarioStoryFocusedEditorDocumentBuilder.TryBuild(state, definition, out storyDocument))
+                return storyDocument;
+
             if (string.Equals(state.FocusedEditorKind, ScenarioBaseModeAuthoringActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
             {
                 if (!Enum.IsDefined(typeof(ScenarioBaseGameMode), state.FocusedEditorIndex))

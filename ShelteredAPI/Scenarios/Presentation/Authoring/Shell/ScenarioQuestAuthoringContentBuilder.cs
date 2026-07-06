@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Validation;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
@@ -23,11 +24,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioDefinition definition = context != null ? context.Definition : null;
             QuestAuthoringSnapshot snapshot = QuestAuthoringSnapshot.From(definition);
+            ScenarioStoryFlowIssue[] storyIssues = new ScenarioStoryFlowValidationAnalyzer().Analyze(definition);
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
 
-            sections.Add(BuildStoryOverviewSection(definition, snapshot));
+            sections.Add(BuildStoryOverviewSection(definition, snapshot, storyIssues));
             sections.Add(BuildStoryToolsSection(definition));
-            AppendStoryStageSections(sections, definition);
+            sections.Add(BuildStageFlowSection(definition, storyIssues));
+            AppendStoryStageSections(sections, definition, storyIssues);
             sections.Add(BuildSideQuestIntroSection(snapshot));
             sections.Add(BuildToolsSection(snapshot));
             AppendAuthoredQuestSections(sections, snapshot);
@@ -39,7 +42,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         // === Scenario flow ===
 
-        private static ScenarioAuthoringInspectorSection BuildStoryOverviewSection(ScenarioDefinition definition, QuestAuthoringSnapshot snapshot)
+        private static ScenarioAuthoringInspectorSection BuildStoryOverviewSection(ScenarioDefinition definition, QuestAuthoringSnapshot snapshot, ScenarioStoryFlowIssue[] storyIssues)
         {
             ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
             int stages = flow != null && flow.Stages != null ? flow.Stages.Count : 0;
@@ -52,10 +55,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ScenarioInspectorItemFactory.Property("Story stages", stages.ToString(CultureInfo.InvariantCulture)));
             items.Add(ScenarioInspectorItemFactory.Property("Intercom steps", steps.ToString(CultureInfo.InvariantCulture)));
             items.Add(ScenarioInspectorItemFactory.Property("Side quest popups", snapshot.AuthoredCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(ScenarioInspectorItemFactory.Property("Story warnings", CountIssues(storyIssues).ToString(CultureInfo.InvariantCulture), FirstIssue(storyIssues)));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "story_flow_status",
                 Title = "Story Flow",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildStageFlowSection(ScenarioDefinition definition, ScenarioStoryFlowIssue[] storyIssues)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
+            if (flow == null || flow.Stages == null || flow.Stages.Count == 0)
+            {
+                items.Add(ScenarioInspectorItemFactory.Text("No starting stage is authored yet. Add a stage to create the vanilla ScenarioDef flow."));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryFocusedEditorActions.ActionStageOpenNew, "Add First Stage", "Create the first story stage and open it in the focused editor.", true, true, "S+")));
+            }
+            else
+            {
+                for (int i = 0; i < flow.Stages.Count; i++)
+                {
+                    ScenarioFlowStageDefinition stage = flow.Stages[i];
+                    int warnings = CountStageIssues(storyIssues, i);
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioStoryFocusedEditorActions.StageOpen(i),
+                        DisplayStageTitle(stage, i),
+                        "Open this stage in the focused story editor.",
+                        true,
+                        warnings > 0,
+                        EncounterBadge(stage),
+                        BuildStageCardDetail(stage, i),
+                        warnings > 0 ? "!" + warnings.ToString(CultureInfo.InvariantCulture) : "OK")));
+                    items.Add(ScenarioInspectorItemFactory.Property("Route " + (i + 1).ToString(CultureInfo.InvariantCulture), BuildOutgoingSummary(flow, stage), FirstStageIssue(storyIssues, i)));
+                }
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "story_stage_flow_map",
+                Title = "Stage Flow View",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
@@ -98,7 +140,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static void AppendStoryStageSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition)
+        private static void AppendStoryStageSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition, ScenarioStoryFlowIssue[] storyIssues)
         {
             ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
             if (flow == null || flow.Stages == null || flow.Stages.Count == 0)
@@ -116,18 +158,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             List<string> characterIds = BuildCharacterIds(definition);
             for (int i = 0; i < flow.Stages.Count; i++)
-                AppendStoryStage(sections, flow, flow.Stages[i], i, characterIds);
+                AppendStoryStage(sections, flow, flow.Stages[i], i, characterIds, storyIssues);
         }
 
-        private static void AppendStoryStage(List<ScenarioAuthoringInspectorSection> sections, ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage, int index, List<string> characterIds)
+        private static void AppendStoryStage(List<ScenarioAuthoringInspectorSection> sections, ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage, int index, List<string> characterIds, ScenarioStoryFlowIssue[] storyIssues)
         {
             if (stage == null)
                 return;
 
             string indexText = index.ToString(CultureInfo.InvariantCulture);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.Property("Stage id", Safe(stage.Id)));
-            items.Add(ScenarioInspectorItemFactory.Property("Characters", stage.CharacterIds != null && stage.CharacterIds.Count > 0 ? string.Join(", ", stage.CharacterIds.ToArray()) : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryFocusedEditorActions.StageOpen(index), "Open Focused Editor", "Edit this stage as a labeled vanilla scenario-stage form.", true, CountStageIssues(storyIssues, index) > 0, "ED")));
+            items.Add(ScenarioInspectorItemFactory.Property("Stage title", DisplayStageTitle(stage, index)));
+            items.Add(ScenarioInspectorItemFactory.Property("Advanced stage id", Safe(stage.Id)));
+            items.Add(ScenarioInspectorItemFactory.Property("Warnings", CountStageIssues(storyIssues, index).ToString(CultureInfo.InvariantCulture), FirstStageIssue(storyIssues, index), CountStageIssues(storyIssues, index) > 0 ? "!" : "OK"));
+            items.Add(ScenarioInspectorItemFactory.Property("Characters", stage.CharacterIds != null && stage.CharacterIds.Count > 0 ? string.Join(", ", stage.CharacterIds.ToArray()) : "No characters assigned - choose stage cast in the focused editor."));
             items.Add(ScenarioInspectorItemFactory.Property("Unanswered", FormatStageTarget(stage.UnansweredNextStage) + " / " + stage.UnansweredNextDays.ToString(CultureInfo.InvariantCulture) + " day(s)"));
             AddStageIdActions(items, flow, index);
             AddStageRouteActions(items, flow, index, stage.UnansweredNextStage);
@@ -155,7 +200,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "story_stage_" + indexText,
-                Title = "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture) + " / " + Safe(stage.Id),
+                Title = "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture) + " / " + DisplayStageTitle(stage, index),
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
@@ -171,7 +216,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(ScenarioInspectorItemFactory.Property("Step id", Safe(intercom.Id)));
             items.Add(ScenarioInspectorItemFactory.Property("Routes", "Next " + FormatStageTarget(intercom.NextId) + " / Alt " + FormatStageTarget(intercom.AlternateNextId)));
-            items.Add(ScenarioInspectorItemFactory.Property("Stage change", intercom.StageChange != null ? FormatStageTarget(intercom.StageChange.Id) + " after " + intercom.StageChange.DelayDays.ToString(CultureInfo.InvariantCulture) + " day(s)" : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.Property("Stage change", intercom.StageChange != null ? FormatStageTarget(intercom.StageChange.Id) + " after " + intercom.StageChange.DelayDays.ToString(CultureInfo.InvariantCulture) + " day(s)" : "No delayed next-stage transition."));
             AddIntercomIdActions(items, stage, stageIndex, intercomIndex);
             AddIntercomTargetActions(items, stage, intercom, stageIndex, intercomIndex, false, "Next");
             AddIntercomTargetActions(items, stage, intercom, stageIndex, intercomIndex, true, "Alt");
@@ -403,7 +448,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (quest.definition.IsScenario() && quest.stage != null)
                     state += " / " + quest.stage.id;
                 items.Add(ScenarioInspectorItemFactory.Property(
-                    ScenarioInspectorItemFactory.Safe(quest.definition.id),
+                    !string.IsNullOrEmpty(quest.definition.id) ? quest.definition.id : "Running quest with no id",
                     state));
             }
 
@@ -492,9 +537,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddIntercomTypeActions(List<ScenarioAuthoringInspectorItem> items, int stageIndex, int intercomIndex, string current)
         {
-            string[] types = { "Standard", "GiveItems", "RemoveItems", "RecruitCharacters" };
+            string[] types = { "Choice", "CheckItems", "CheckMilestone", "Randomizer", "EndEncounter", "EnterCode" };
             for (int i = 0; i < types.Length; i++)
-                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.IntercomType(stageIndex, intercomIndex, types[i]), types[i], "Set intercom step type.", true, string.Equals(current, types[i], StringComparison.OrdinalIgnoreCase), "TY")));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.IntercomType(stageIndex, intercomIndex, types[i]), types[i], "Set vanilla encounter branch type.", true, string.Equals(current, types[i], StringComparison.OrdinalIgnoreCase), "TY")));
         }
 
         private static void AddDialogueActions(List<ScenarioAuthoringInspectorItem> items, ScenarioFlowStageDefinition stage, ScenarioDialogueLineDefinition line, int stageIndex, int intercomIndex, int lineIndex)
@@ -573,9 +618,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddEndTypeActions(List<ScenarioAuthoringInspectorItem> items, int stageIndex, int intercomIndex, string current)
         {
-            string[] types = { "NothingHappens", "GiveItems", "Trade", "Combat", "RecruitCharacters" };
+            string[] types = { "NothingHappens", "RewardItems", "EnterTrade", "EnterRecruit", "Combat", "CompleteQuest" };
             for (int i = 0; i < types.Length; i++)
-                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.EndType(stageIndex, intercomIndex, types[i]), "End " + types[i], "Set encounter end option type.", true, string.Equals(current, types[i], StringComparison.OrdinalIgnoreCase), "END")));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.EndType(stageIndex, intercomIndex, types[i]), "End " + types[i], "Set vanilla encounter outcome type.", true, string.Equals(current, types[i], StringComparison.OrdinalIgnoreCase), "END")));
         }
 
         private static List<string> BuildCharacterIds(ScenarioDefinition definition)
@@ -604,12 +649,101 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string FormatStageTarget(string value)
         {
-            return string.IsNullOrEmpty(value) ? "<none>" : value;
+            return string.IsNullOrEmpty(value) ? "No route selected" : value;
         }
 
         private static string Safe(string value)
         {
-            return string.IsNullOrEmpty(value) ? "<none>" : value;
+            return string.IsNullOrEmpty(value) ? "Blank - choose or generate a value" : value;
+        }
+
+        private static int CountIssues(ScenarioStoryFlowIssue[] issues)
+        {
+            return issues != null ? issues.Length : 0;
+        }
+
+        private static string FirstIssue(ScenarioStoryFlowIssue[] issues)
+        {
+            for (int i = 0; issues != null && i < issues.Length; i++)
+                if (issues[i] != null)
+                    return issues[i].Message;
+            return "No story warnings.";
+        }
+
+        private static int CountStageIssues(ScenarioStoryFlowIssue[] issues, int stageIndex)
+        {
+            int count = 0;
+            for (int i = 0; issues != null && i < issues.Length; i++)
+                if (issues[i] != null && issues[i].StageIndex == stageIndex)
+                    count++;
+            return count;
+        }
+
+        private static string FirstStageIssue(ScenarioStoryFlowIssue[] issues, int stageIndex)
+        {
+            for (int i = 0; issues != null && i < issues.Length; i++)
+                if (issues[i] != null && issues[i].StageIndex == stageIndex)
+                    return issues[i].Message;
+            return "No stage warnings.";
+        }
+
+        private static string DisplayStageTitle(ScenarioFlowStageDefinition stage, int index)
+        {
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                if (intercom != null && !string.IsNullOrEmpty(intercom.StageDescriptionKey))
+                    return intercom.StageDescriptionKey;
+            }
+            if (stage != null && !string.IsNullOrEmpty(stage.Id))
+                return stage.Id;
+            return "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string EncounterBadge(ScenarioFlowStageDefinition stage)
+        {
+            string type = null;
+            if (stage != null && stage.IntercomStages != null && stage.IntercomStages.Count > 0 && stage.IntercomStages[0] != null)
+                type = stage.IntercomStages[0].Type;
+            if (string.IsNullOrEmpty(type))
+                return "ST";
+            return type.Length <= 3 ? type.ToUpperInvariant() : type.Substring(0, 3).ToUpperInvariant();
+        }
+
+        private static string BuildStageCardDetail(ScenarioFlowStageDefinition stage, int index)
+        {
+            int steps = stage != null && stage.IntercomStages != null ? stage.IntercomStages.Count : 0;
+            return "day-granular / " + steps.ToString(CultureInfo.InvariantCulture) + " encounter step(s) / " + BuildShortOutgoingSummary(stage);
+        }
+
+        private static string BuildShortOutgoingSummary(ScenarioFlowStageDefinition stage)
+        {
+            if (stage == null)
+                return "no outgoing route";
+            if (!string.IsNullOrEmpty(stage.UnansweredNextStage))
+                return "ignored -> " + stage.UnansweredNextStage;
+            for (int i = 0; stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                if (intercom != null && intercom.StageChange != null && !string.IsNullOrEmpty(intercom.StageChange.Id))
+                    return "outcome -> " + intercom.StageChange.Id;
+            }
+            return "no next stage";
+        }
+
+        private static string BuildOutgoingSummary(ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage)
+        {
+            List<string> routes = new List<string>();
+            string source = stage != null && !string.IsNullOrEmpty(stage.Id) ? stage.Id : "this stage";
+            if (stage != null && !string.IsNullOrEmpty(stage.UnansweredNextStage))
+                routes.Add(source + " --ignored--> " + stage.UnansweredNextStage);
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
+                if (intercom != null && intercom.StageChange != null && !string.IsNullOrEmpty(intercom.StageChange.Id))
+                    routes.Add(source + " --outcome " + (i + 1).ToString(CultureInfo.InvariantCulture) + "--> " + intercom.StageChange.Id);
+            }
+            return routes.Count > 0 ? string.Join(" | ", routes.ToArray()) : "No outgoing stage arrow - this stage stays active or ends here.";
         }
 
         // === Per-quest builder ===
@@ -654,17 +788,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 string title = !string.IsNullOrEmpty(quest.Title) ? quest.Title : quest.Id;
                 string when = triggerStarted
-                    ? "On trigger '" + ScenarioInspectorItemFactory.Safe(quest.StartTriggerId) + "'"
+                    ? "On trigger '" + (!string.IsNullOrEmpty(quest.StartTriggerId) ? quest.StartTriggerId : "not selected") + "'"
                     : QuestAuthoringHelpers.FormatSchedule(quest.ScheduledStart);
                 string sectionTitle = "Quest #" + (index + 1).ToString(CultureInfo.InvariantCulture)
-                    + " / " + ScenarioInspectorItemFactory.Safe(title)
+                    + " / " + (!string.IsNullOrEmpty(title) ? title : "Untitled quest popup")
                     + " / " + when;
                 string validation = QuestAuthoringHelpers.FormatQuestValidation(quest, _snapshot.Definition);
 
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Quest id",
-                    ScenarioInspectorItemFactory.Safe(quest.Id)));
+                    !string.IsNullOrEmpty(quest.Id) ? quest.Id : "No QuestLibrary id selected."));
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Library",
                     libraryQuest != null
@@ -800,7 +934,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     "TG+")));
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Trigger",
-                    !string.IsNullOrEmpty(quest.StartTriggerId) ? quest.StartTriggerId : "<none>"));
+                    !string.IsNullOrEmpty(quest.StartTriggerId) ? quest.StartTriggerId : "No trigger selected - this popup starts from its schedule."));
                 if (!_snapshot.HasAnyTriggers)
                 {
                     items.Add(ScenarioInspectorItemFactory.Text(
@@ -858,10 +992,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     true,
                     !string.IsNullOrEmpty(quest.CompletionConditionId),
                     "CC")));
-                items.Add(ScenarioInspectorItemFactory.Property("Title", ScenarioInspectorItemFactory.Safe(quest.Title)));
+                items.Add(ScenarioInspectorItemFactory.Property("Title", !string.IsNullOrEmpty(quest.Title) ? quest.Title : "No title synced yet - use Sync Title when the library id is valid."));
                 items.Add(ScenarioInspectorItemFactory.Property(
                     "Completion",
-                    !string.IsNullOrEmpty(quest.CompletionConditionId) ? quest.CompletionConditionId : "<none>"));
+                    !string.IsNullOrEmpty(quest.CompletionConditionId) ? quest.CompletionConditionId : "No completion condition selected - quest completion is not gated."));
 
                 return new ScenarioAuthoringInspectorSection
                 {
@@ -967,7 +1101,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     HasNextScheduled = true;
                     string label = QuestAuthoringHelpers.FormatSchedule(next.ScheduledStart);
                     string title = !string.IsNullOrEmpty(next.Title) ? next.Title : next.Id;
-                    NextScheduledLabel = label + " - " + ScenarioInspectorItemFactory.Safe(title);
+                    NextScheduledLabel = label + " - " + (!string.IsNullOrEmpty(title) ? title : "Untitled quest popup");
                 }
             }
 
