@@ -81,6 +81,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _editableFieldFocused;
         private string _toolRailActiveKey;
         private float _toolRailIndicatorY = -1f;
+        private bool _topBarMoreMenuOpen;
+        private Rect _topBarMoreButtonRect = RuntimeCompat.ZeroRect();
+        private Rect _topBarMoreMenuRect = RuntimeCompat.ZeroRect();
+        private ScenarioAuthoringInspectorAction[] _topBarOverflowTabs = new ScenarioAuthoringInspectorAction[0];
         private string _spritePickerSearchText = string.Empty;
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
@@ -222,6 +226,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
                 Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
                 Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell);
+                RegisterTopBarMoreMenu(inputCapture);
                 Rect collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
                 DrawStatusBarCore(statusRect, shell);
                 inputCapture.RegisterInteractiveRect(topRect);
@@ -240,6 +245,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Rect pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
                 windowMenuButtonRect = DrawTopBarCore(topRect, shell);
+                RegisterTopBarMoreMenu(inputCapture);
                 collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
                 DrawStatusBarCore(statusRect, shell);
                 if (pageRect.width > 0f && pageRect.height > 0f)
@@ -249,6 +255,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
+                // TODO(centralize): This is the legacy multi-surface path. Merge the tool rail,
+                // command dock, docked windows, and floating overlays into the central workspace
+                // once the remaining scenario editor migration plan is defined.
                 Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State);
                 if (toolRailRect.width > 0f && toolRailRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(toolRailRect);
@@ -267,6 +276,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawWindowSet(shell.Windows, windowRects, true, contentRect, inputCapture);
 
             Rect windowMenuRect = RuntimeCompat.ZeroRect();
+            // TODO(centralize): Window menu still exposes separate panel toggles. Re-home these
+            // controls into central workspace navigation when the window model is consolidated.
             if (_windowMenuOpen && shell.WindowMenuActions != null && shell.WindowMenuActions.Length > 0)
             {
                 windowMenuRect = BuildWindowMenuRectCore(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight, hudReserveRect);
@@ -317,8 +328,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Event.current.Use();
             }
 
+            if (_topBarMoreMenuOpen
+                && Event.current != null
+                && Event.current.type == EventType.MouseDown
+                && !_topBarMoreMenuRect.Contains(Event.current.mousePosition)
+                && !_topBarMoreButtonRect.Contains(Event.current.mousePosition))
+            {
+                _topBarMoreMenuOpen = false;
+                Event.current.Use();
+            }
+
             ScenarioAuthoringInspectorDocument modalDocument = shell.FocusedEditorDocument ?? shell.SpritePickerDocument;
             string modalScrollId = shell.FocusedEditorDocument != null ? "focused_editor" : "sprite_picker";
+            // TODO(centralize): Focused editor and sprite picker documents still open as modal
+            // panels. Merge them into a central workspace surface when ownership is clear.
             if (modalDocument != null)
             {
                 float dimAlpha = _animations.GetModalDimAlpha(true);
@@ -392,6 +415,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
+        private void RegisterTopBarMoreMenu(ScenarioAuthoringInputCaptureService inputCapture)
+        {
+            if (!_topBarMoreMenuOpen || inputCapture == null)
+                return;
+
+            inputCapture.RegisterInteractiveRect(_topBarMoreButtonRect);
+            inputCapture.RegisterInteractiveRect(_topBarMoreMenuRect);
+            inputCapture.SetPopupOpen(true);
+        }
+
         private void RegisterWindowAnimationStates(
             ScenarioAuthoringShellWindowViewModel[] windows,
             Dictionary<string, Rect> windowRects)
@@ -421,6 +454,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (!workspaceStageActive)
             {
+                // TODO(centralize): Right-side inspector remains outside the central workspace.
+                // Marked for merge once selection details have a central panel destination.
                 Rect inspectorRect = IsEmptyInspector(inspectorWindow)
                     ? ScenarioAuthoringShellLayout.BuildEmptyInspectorChipRect(contentRect, inspectorWidth)
                     : ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect, inspectorWidth);
@@ -433,6 +468,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (showBottomTray)
             {
+                // TODO(centralize): Build tools still use a separate bottom tray/collapsed tray.
+                // Merge placement tools into the central workspace when that flow is specified.
                 Rect buildToolsRect = IsPlacementActive()
                     ? ScenarioAuthoringShellLayout.BuildCollapsedBottomTrayRect(contentRect, viewportLeft, viewportRight)
                     : ScenarioAuthoringShellLayout.BuildBottomTrayRect(contentRect, viewportLeft, viewportRight);
@@ -441,6 +478,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, showBottomTray, inspectorWidth);
             AppendWorkspaceRects(rects, windows, workspaceRect);
+            // TODO(centralize): Floating windows are still resolved independently from the
+            // workspace page. Fold remaining floating tools into central workspace regions.
             AppendFloatingRects(rects, windows, contentRect);
             return rects;
         }
@@ -466,11 +505,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 if (floating)
+                {
+                    // TODO(centralize): Floating windows remain movable/resizable overlays.
+                    // Replace with central workspace panels once each tool has a target region.
                     rect = HandleFloatingWindowInput(
                         window,
                         rect,
                         contentRect,
                         IsTopmostFloatingWindowForInput(drawList, windowRects, i));
+                }
                 else if (window.Dock == ScenarioAuthoringShellDock.Right
                     && string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
                 {
@@ -478,10 +521,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 _animations.UpdateWindowRect(window.Id, rect);
-                Rect scrollRect = DrawWindowCore(rect, window);
+                DrawWindowCore(rect, window);
                 inputCapture.RegisterInteractiveRect(rect);
-                if (scrollRect.width > 0f && scrollRect.height > 0f)
-                    inputCapture.RegisterScrollRect(window.Id, scrollRect);
             }
 
             _animations.CollectClosingWindows(floating, _closingWindowBuffer);

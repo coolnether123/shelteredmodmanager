@@ -53,41 +53,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawTopBarToolbarActions(saveRect, shell, compact);
 
             float primaryTabsRight = compact ? rect.xMax - 12f : Math.Max(primaryRowLeft, saveX - 12f);
-            float tabX = primaryRowLeft;
-            float finishStart = 0f;
-            for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
-            {
-                ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
-                if (IsChildStageTab(tab) || IsFinishStageTab(tab))
-                    continue;
-
-                ScenarioAuthoringInspectorAction displayTab = compact ? CloneWithLabel(tab, CompactStageLabel(tab.Label)) : tab;
-                float tabWidth = ResolvePrimaryStageTabWidth(displayTab, compact);
-                if (tabX + tabWidth > primaryTabsRight)
-                    break;
-                Rect tabRect = new Rect(tabX, rect.y + primaryRowY, tabWidth, primaryRowHeight);
-                DrawButton(tabRect, displayTab, true);
-                tabX = tabRect.xMax + 2f;
-            }
-
-            finishStart = tabX + (compact ? 4f : 10f);
-            if (!compact && finishStart + 1f < primaryTabsRight)
-                ScenarioUiWidgets.DrawVerticalDivider(new Rect(finishStart - 6f, rect.y + primaryRowY + 5f, 1f, primaryRowHeight - 10f), _uiContext.Styles);
-            tabX = finishStart;
-            for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
-            {
-                ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
-                if (!IsFinishStageTab(tab))
-                    continue;
-
-                ScenarioAuthoringInspectorAction displayTab = compact ? CloneWithLabel(tab, CompactStageLabel(tab.Label)) : tab;
-                float width = ResolvePrimaryStageTabWidth(displayTab, compact);
-                Rect tabRect = new Rect(tabX, rect.y + primaryRowY, width, primaryRowHeight);
-                if (tabRect.xMax > primaryTabsRight)
-                    break;
-                DrawButton(tabRect, displayTab, true);
-                tabX = tabRect.xMax + 2f;
-            }
+            DrawMeasuredStageTabs(new Rect(primaryRowLeft, rect.y + primaryRowY, Math.Max(0f, primaryTabsRight - primaryRowLeft), primaryRowHeight), shell, compact);
 
             if (_snapshot != null && IsWorldStage(_snapshot.State))
             {
@@ -111,7 +77,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; shell != null && shell.WorldSubstageActions != null && i < shell.WorldSubstageActions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = shell.WorldSubstageActions[i];
-                ScenarioAuthoringInspectorAction displayAction = compact ? CloneWithLabel(action, CleanChildStageLabel(CompactStageLabel(action.Label))) : CloneWithLabel(action, CleanChildStageLabel(action.Label));
+                ScenarioAuthoringInspectorAction displayAction = CloneWithLabel(action, CleanChildStageLabel(action.Label));
                 float width = ResolveChildStageTabWidth(displayAction, compact);
                 if (x + width > rect.xMax)
                     break;
@@ -141,14 +107,166 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (compact && IsLowPriorityTopBarAction(action))
                     continue;
 
-                ScenarioAuthoringInspectorAction displayAction = compact ? CloneWithLabel(action, CompactToolbarLabel(action)) : action;
-                float width = ResolveToolbarActionWidth(displayAction, compact);
+                float width = ResolveToolbarActionWidth(action, compact);
                 Rect actionRect = new Rect(x, rect.y, width, rect.height);
                 if (actionRect.xMax > rect.xMax)
                     break;
-                DrawButton(actionRect, displayAction, false);
+                DrawButton(actionRect, action, false);
                 x = actionRect.xMax + (compact ? 3f : 4f);
             }
+        }
+
+        private void DrawMeasuredStageTabs(Rect rect, ScenarioAuthoringShellViewModel shell, bool compact)
+        {
+            _topBarOverflowTabs = new ScenarioAuthoringInspectorAction[0];
+            _topBarMoreButtonRect = RuntimeCompat.ZeroRect();
+            _topBarMoreMenuRect = RuntimeCompat.ZeroRect();
+            if (rect.width <= 0f)
+                return;
+
+            List<StageTabLayout> tabs = BuildMeasuredStageTabList(shell != null ? shell.Tabs : null, compact);
+            if (tabs.Count == 0)
+                return;
+
+            float moreWidth = Mathf.Clamp(ScenarioUiMeasuredLabel.Width("More >", _buttonStyle, 20f), 74f, 104f);
+            int visibleCount = ResolveVisibleStageTabCount(tabs, rect.width, moreWidth);
+            bool overflow = visibleCount < tabs.Count;
+            float availableRight = overflow ? rect.xMax - moreWidth - 4f : rect.xMax;
+            float x = rect.x;
+            bool drewMain = false;
+            for (int i = 0; i < visibleCount; i++)
+            {
+                StageTabLayout tab = tabs[i];
+                if (tab.Finish && drewMain && x + 8f < availableRight)
+                {
+                    ScenarioUiWidgets.DrawVerticalDivider(new Rect(x + 2f, rect.y + 5f, 1f, rect.height - 10f), _uiContext.Styles);
+                    x += 10f;
+                }
+
+                Rect tabRect = new Rect(x, rect.y, tab.Width, rect.height);
+                if (tabRect.xMax > availableRight)
+                    break;
+                DrawButton(tabRect, tab.Action, true);
+                x = tabRect.xMax + 2f;
+                if (!tab.Finish)
+                    drewMain = true;
+            }
+
+            if (!overflow)
+            {
+                _topBarMoreMenuOpen = false;
+                return;
+            }
+
+            List<ScenarioAuthoringInspectorAction> overflowTabs = new List<ScenarioAuthoringInspectorAction>();
+            for (int i = visibleCount; i < tabs.Count; i++)
+                overflowTabs.Add(tabs[i].Action);
+            _topBarOverflowTabs = overflowTabs.ToArray();
+
+            _topBarMoreButtonRect = new Rect(rect.xMax - moreWidth, rect.y, moreWidth, rect.height);
+            ScenarioAuthoringInspectorAction moreAction = new ScenarioAuthoringInspectorAction
+            {
+                Id = "shell.stage.more",
+                Label = "More >",
+                Hint = "Show remaining stage tabs.",
+                Enabled = true,
+                Emphasized = _topBarMoreMenuOpen
+            };
+            DrawTopBarMoreButton(_topBarMoreButtonRect, moreAction);
+            if (_topBarMoreMenuOpen)
+                DrawTopBarMoreMenu(_topBarMoreButtonRect, _topBarOverflowTabs);
+        }
+
+        private List<StageTabLayout> BuildMeasuredStageTabList(ScenarioAuthoringInspectorAction[] actions, bool compact)
+        {
+            List<StageTabLayout> result = new List<StageTabLayout>();
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (IsChildStageTab(action))
+                    continue;
+
+                result.Add(new StageTabLayout
+                {
+                    Action = action,
+                    Finish = IsFinishStageTab(action),
+                    Width = ResolvePrimaryStageTabWidth(action, compact)
+                });
+            }
+
+            result.Sort(delegate(StageTabLayout left, StageTabLayout right)
+            {
+                if (left.Finish == right.Finish)
+                    return 0;
+                return left.Finish ? 1 : -1;
+            });
+            return result;
+        }
+
+        private static int ResolveVisibleStageTabCount(List<StageTabLayout> tabs, float availableWidth, float moreWidth)
+        {
+            float fullWidth = MeasureStageTabRunWidth(tabs, tabs.Count);
+            if (fullWidth <= availableWidth)
+                return tabs.Count;
+
+            float limit = Math.Max(0f, availableWidth - moreWidth - 4f);
+            int visible = 0;
+            while (visible < tabs.Count)
+            {
+                float width = MeasureStageTabRunWidth(tabs, visible + 1);
+                if (width > limit)
+                    break;
+                visible++;
+            }
+
+            return Math.Max(0, visible);
+        }
+
+        private static float MeasureStageTabRunWidth(List<StageTabLayout> tabs, int count)
+        {
+            float width = 0f;
+            bool drewMain = false;
+            for (int i = 0; i < count && i < tabs.Count; i++)
+            {
+                StageTabLayout tab = tabs[i];
+                if (i > 0)
+                    width += 2f;
+                if (tab.Finish && drewMain)
+                    width += 10f;
+                width += tab.Width;
+                if (!tab.Finish)
+                    drewMain = true;
+            }
+
+            return width;
+        }
+
+        private void DrawTopBarMoreButton(Rect rect, ScenarioAuthoringInspectorAction action)
+        {
+            if (GUI.Button(rect, new GUIContent(action.Label, action.Hint), _topBarMoreMenuOpen ? _activeButtonStyle : _buttonStyle))
+            {
+                _topBarMoreMenuOpen = !_topBarMoreMenuOpen;
+                if (Event.current != null)
+                    Event.current.Use();
+            }
+        }
+
+        private void DrawTopBarMoreMenu(Rect anchor, ScenarioAuthoringInspectorAction[] overflowTabs)
+        {
+            float width = 180f;
+            for (int i = 0; overflowTabs != null && i < overflowTabs.Length; i++)
+                width = Math.Max(width, MeasureButtonWidth(overflowTabs[i], false, 26f));
+            width = Mathf.Clamp(width, 180f, 260f);
+            float height = 16f + ((overflowTabs != null ? overflowTabs.Length : 0) * 30f);
+            _topBarMoreMenuRect = new Rect(anchor.xMax - width, anchor.yMax + 4f, width, height);
+            GUI.Box(_topBarMoreMenuRect, GUIContent.none, _uiContext.Styles.Menu);
+            GUILayout.BeginArea(new Rect(_topBarMoreMenuRect.x + 8f, _topBarMoreMenuRect.y + 8f, _topBarMoreMenuRect.width - 16f, _topBarMoreMenuRect.height - 16f));
+            for (int i = 0; overflowTabs != null && i < overflowTabs.Length; i++)
+            {
+                Rect buttonRect = GUILayoutUtility.GetRect(_topBarMoreMenuRect.width - 16f, 24f, GUILayout.Height(24f));
+                DrawButton(buttonRect, overflowTabs[i], false);
+            }
+            GUILayout.EndArea();
         }
 
         private Rect DrawTopBarWindowAction(Rect rect, ScenarioAuthoringShellViewModel shell)
@@ -160,7 +278,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 ScenarioAuthoringInspectorAction displayAction = _windowMenuOpen ? CloneEmphasized(action) : action;
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 22f), 104f, 132f);
+                float width = Math.Max(104f, MeasureButtonWidth(action, false, 22f));
                 Rect actionRect = rect.width <= width
                     ? rect
                     : new Rect(rect.xMax - width, rect.y, width, rect.height);
@@ -207,48 +325,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private float ResolvePrimaryStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
-            return compact
-                ? ResolveCompactPrimaryStageTabWidth(action)
-                : Mathf.Clamp(MeasureButtonWidth(action, true, 30f), 96f, 196f);
-        }
-
-        private static float ResolveCompactPrimaryStageTabWidth(ScenarioAuthoringInspectorAction action)
-        {
-            string label = action != null ? action.Label : null;
-            if (string.Equals(label, "World", StringComparison.OrdinalIgnoreCase))
-                return 74f;
-            if (string.Equals(label, "Story", StringComparison.OrdinalIgnoreCase))
-                return 70f;
-            if (string.Equals(label, "Home", StringComparison.OrdinalIgnoreCase))
-                return 64f;
-            if (string.Equals(label, "Cast", StringComparison.OrdinalIgnoreCase))
-                return 60f;
-            if (string.Equals(label, "Time", StringComparison.OrdinalIgnoreCase))
-                return 60f;
-            if (string.Equals(label, "Test", StringComparison.OrdinalIgnoreCase))
-                return 60f;
-            if (string.Equals(label, "Map", StringComparison.OrdinalIgnoreCase))
-                return 54f;
-            if (string.Equals(label, "Pub", StringComparison.OrdinalIgnoreCase))
-                return 54f;
-            if (string.Equals(label, "Sup", StringComparison.OrdinalIgnoreCase))
-                return 56f;
-
-            return 56f;
+            float minimum = compact ? 58f : 76f;
+            return Mathf.Max(minimum, MeasureButtonWidth(action, true, compact ? 18f : 30f));
         }
 
         private float ResolveChildStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
-            return compact
-                ? Mathf.Clamp(MeasureButtonWidth(action, true, 14f), 62f, 96f)
-                : Mathf.Clamp(MeasureButtonWidth(action, true, 26f), 96f, 148f);
+            return Mathf.Max(compact ? 62f : 86f, MeasureButtonWidth(action, true, compact ? 14f : 26f));
         }
 
         private float ResolveToolbarActionWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
-            return compact
-                ? Mathf.Clamp(MeasureButtonWidth(action, false, 16f), 76f, 108f)
-                : Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 104f, 156f);
+            return Mathf.Max(compact ? 76f : 94f, MeasureButtonWidth(action, false, compact ? 16f : 24f));
         }
 
         private static bool IsLowPriorityTopBarAction(ScenarioAuthoringInspectorAction action)
@@ -258,41 +346,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionShellOpenSettings, StringComparison.Ordinal));
         }
 
-        private static string CompactStageLabel(string label)
-        {
-            if (string.IsNullOrEmpty(label))
-                return string.Empty;
-            if (string.Equals(label, "Home", StringComparison.OrdinalIgnoreCase))
-                return "H";
-            if (string.Equals(label, "World", StringComparison.OrdinalIgnoreCase))
-                return "W";
-            if (string.Equals(label, "Cast", StringComparison.OrdinalIgnoreCase))
-                return "C";
-            if (string.Equals(label, "Supplies", StringComparison.OrdinalIgnoreCase))
-                return "Sup";
-            if (string.Equals(label, "Timeline", StringComparison.OrdinalIgnoreCase))
-                return "Tm";
-            if (string.Equals(label, "Map", StringComparison.OrdinalIgnoreCase))
-                return "M";
-            if (string.Equals(label, "Publish", StringComparison.OrdinalIgnoreCase))
-                return "P";
-            if (string.Equals(label, "Backdrop", StringComparison.OrdinalIgnoreCase))
-                return "Back";
-            if (string.Equals(label, "Inside", StringComparison.OrdinalIgnoreCase))
-                return "Inside";
-
-            return label;
-        }
-
-        private static string CompactToolbarLabel(ScenarioAuthoringInspectorAction action)
-        {
-            if (action == null || string.IsNullOrEmpty(action.Label))
-                return string.Empty;
-            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSave, StringComparison.Ordinal))
-                return "Save";
-            return action.Label;
-        }
-
         private static bool IsFinishStageTab(ScenarioAuthoringInspectorAction action)
         {
             if (action == null || string.IsNullOrEmpty(action.Id))
@@ -300,6 +353,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Test, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish, StringComparison.Ordinal);
+        }
+
+        private sealed class StageTabLayout
+        {
+            public ScenarioAuthoringInspectorAction Action;
+            public bool Finish;
+            public float Width;
         }
 
     }

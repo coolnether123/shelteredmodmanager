@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
@@ -58,6 +59,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         // Text styles
         public GUIStyle BrandTitleText { get; private set; }
         public GUIStyle TitleText { get; private set; }
+        public GUIStyle HeaderTitleText { get; private set; }
+        public GUIStyle HeaderSubtitleText { get; private set; }
         public GUIStyle SubtitleText { get; private set; }
         public GUIStyle SectionTitleText { get; private set; }
         public GUIStyle BodyText { get; private set; }
@@ -129,6 +132,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
 
             BrandTitleText   = BuildText(metrics.FontSizeBrand,    FontStyle.Bold,   palette.TextTitle);
             TitleText        = BuildText(metrics.FontSizeTitle,    FontStyle.Bold,   palette.TextSubtitle);
+            HeaderTitleText  = BuildText(metrics.FontSizeTitle,    FontStyle.Bold,   new Color(0.13f, 0.08f, 0.04f, 1f));
+            HeaderSubtitleText = BuildText(metrics.FontSizeSubtitle, FontStyle.Normal, new Color(0.22f, 0.15f, 0.08f, 1f));
             SubtitleText     = BuildText(metrics.FontSizeSubtitle, FontStyle.Normal, palette.TextMuted);
             SectionTitleText = BuildText(metrics.FontSizeSection,  FontStyle.Bold,   palette.TextTitle);
             BodyText         = BuildText(metrics.FontSizeBody,     FontStyle.Normal, palette.TextBody);
@@ -242,6 +247,51 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             UIFontCache.RefreshIfMissing();
             UIFontCache.FontResult fonts = UIFontCache.GetFonts();
             return fonts.TTF;
+        }
+    }
+
+    internal static class ScenarioUiMeasuredLabel
+    {
+        public static float Width(string label, GUIStyle style, float extraPadding)
+        {
+            if (style == null)
+                style = GUI.skin.label;
+
+            Vector2 size = style.CalcSize(new GUIContent(label ?? string.Empty));
+            return size.x + Math.Max(0f, extraPadding) + ResolveHorizontalPadding(style);
+        }
+
+        public static string FitLabelWithEllipsis(string label, float maxWidth, GUIStyle style)
+        {
+            if (string.IsNullOrEmpty(label) || style == null)
+                return label ?? string.Empty;
+
+            if (style.CalcSize(new GUIContent(label)).x <= maxWidth)
+                return label;
+
+            const string ellipsis = "...";
+            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
+            if (ellipsisWidth >= maxWidth)
+                return string.Empty;
+
+            int low = 0;
+            int high = label.Length;
+            while (low < high)
+            {
+                int mid = (low + high + 1) / 2;
+                string candidate = label.Substring(0, mid) + ellipsis;
+                if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
+                    low = mid;
+                else
+                    high = mid - 1;
+            }
+
+            return label.Substring(0, low) + ellipsis;
+        }
+
+        private static float ResolveHorizontalPadding(GUIStyle style)
+        {
+            return style != null && style.padding != null ? style.padding.left + style.padding.right : 0f;
         }
     }
 }

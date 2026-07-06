@@ -73,6 +73,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawStandardWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            // TODO(centralize): Standard windows are the remaining generic dock/floating surface.
+            // Move callers into central workspace regions when their final placement is known.
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioAuthoringInspectorAction[] secondaryActions = GetHeaderActions(window.HeaderActions, false);
             bool hasSecondaryActions = secondaryActions.Length > 0;
@@ -102,7 +104,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; i < secondaryActions.Length; i++)
                 {
                     ScenarioAuthoringInspectorAction action = secondaryActions[i];
-                    float width = Mathf.Clamp(MeasureButtonWidth(action, true, 18f), 42f, 74f);
+                    float width = Math.Max(42f, MeasureButtonWidth(action, true, 18f));
                     Rect actionRect = new Rect(tabX, tabsRect.y, width, tabsRect.height);
                     DrawButton(actionRect, action, true);
                     tabX = actionRect.xMax + 4f;
@@ -119,6 +121,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
+            RegisterScrollRegion(window.Id, bodyRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
@@ -160,6 +163,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
+            RegisterScrollRegion(window.Id, bodyRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
@@ -186,6 +190,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawInspectorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            // TODO(centralize): Selection details still render in a right-side inspector.
+            // Merge this into the central workspace once selection/edit panels are assigned.
             if (IsEmptyInspector(window))
             {
                 DrawEmptyInspectorChip(rect);
@@ -214,6 +220,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             scrollPosition.x = 0f;
+            RegisterScrollRegion(window.Id, bodyRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.BeginVertical(GUILayout.Width(Mathf.Max(120f, bodyRect.width - 18f)));
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
@@ -249,6 +256,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawBottomTrayWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            // TODO(centralize): Asset placement still uses a standalone bottom tray.
+            // Merge palette/details content into the central workspace when the tool layout lands.
             if (IsPlacementActive())
                 return DrawCollapsedPlacementTray(rect, window);
 
@@ -286,11 +295,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ref _buildPaletteSearchText,
                 ref _buildPaletteSearchFocused);
 
-            float pickerScrollHeight = ResolveRowBoundedScrollHeight(pickerRect.height - 40f);
-            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 40f, pickerRect.width, pickerScrollHeight));
+            float pickerScrollHeight = ResolveRowBoundedScrollHeight(pickerRect.height - 40f, 98f);
+            Rect pickerScrollRect = new Rect(pickerRect.x, pickerRect.y + 40f, pickerRect.width, pickerScrollHeight);
+            GUILayout.BeginArea(pickerScrollRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, pickerRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
+            RegisterScrollRegion(window.Id + ".picker", pickerScrollRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             bool drewCandidateGrid = false;
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
@@ -354,11 +365,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (showDetailsPane)
             {
-                float detailsScrollHeight = ResolveRowBoundedScrollHeight(detailsRect.height);
-                GUILayout.BeginArea(new Rect(detailsRect.x, detailsRect.y, detailsRect.width, detailsScrollHeight));
+                float detailsScrollHeight = ResolveRowBoundedScrollHeight(detailsRect.height, 30f);
+                Rect detailsScrollRect = new Rect(detailsRect.x, detailsRect.y, detailsRect.width, detailsScrollHeight);
+                GUILayout.BeginArea(detailsScrollRect);
                 previousContentWidth = _activeContentWidth;
                 _activeContentWidth = Math.Max(120f, detailsRect.width - 18f);
                 Vector2 detailsScroll = GetWindowScrollPosition(window.Id + ".details");
+                RegisterScrollRegion(window.Id + ".details", detailsScrollRect);
                 detailsScroll = GUILayout.BeginScrollView(detailsScroll, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
                 for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
                 {
@@ -383,6 +396,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawCollapsedPlacementTray(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            // TODO(centralize): Active placement feedback is still a collapsed tray strip.
+            // Move this state into the central placement workspace/status area.
             DrawChromePanel(rect, _rootPanelStyle);
             string label = ResolveActivePlacementLabel(window);
             string validity = ResolvePlacementValidityLabel(window);
@@ -428,17 +443,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return "Previewing";
         }
 
-        private static float ResolveRowBoundedScrollHeight(float height)
+        private static float ResolveRowBoundedScrollHeight(float height, float rowQuantum)
         {
-            const float rowQuantum = 30f;
-            if (height <= rowQuantum * 3f)
+            rowQuantum = Math.Max(1f, rowQuantum);
+            if (height <= rowQuantum)
                 return Math.Max(rowQuantum, height);
 
-            return Math.Max(rowQuantum * 3f, Mathf.Floor(height / rowQuantum) * rowQuantum);
+            return Math.Max(rowQuantum, Mathf.Floor(height / rowQuantum) * rowQuantum);
         }
 
         private Rect DrawDocumentModalCore(Rect rect, ScenarioAuthoringInspectorDocument document, string scrollId)
         {
+            // TODO(centralize): Document-style editors still render as modals over the shell.
+            // Convert to central workspace panels when the editor workflow is consolidated.
             string title = document != null && !string.IsNullOrEmpty(document.Title)
                 ? document.Title.ToUpperInvariant()
                 : "DOCUMENT";
@@ -454,6 +471,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(scrollId);
+            RegisterScrollRegion(scrollId, bodyRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             if (string.Equals(scrollId, "sprite_picker", StringComparison.Ordinal))
             {
@@ -485,6 +503,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawPixelEditorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            // TODO(centralize): Pixel editor is still a dedicated floating-style window.
+            // Merge it into the central art/edit workspace when the art workflow is finalized.
             ScenarioSpriteSwapAuthoringService.CustomEditorModel editor =
                 _snapshot != null && _snapshot.ShellViewModel != null
                     ? _snapshot.ShellViewModel.CustomSpriteEditor
@@ -522,26 +542,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCustomSpriteEditorDedicated(Rect bodyRect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
         {
-            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.28f, 180f, 270f);
+            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.34f, 304f, 344f);
+            controlsWidth = Math.Min(controlsWidth, Math.Max(224f, bodyRect.width - 170f));
+            float controlsContentWidth = Math.Max(180f, controlsWidth - 24f);
             float footerHeight = 42f;
             Rect toolsRect = new Rect(bodyRect.x, bodyRect.y, controlsWidth, Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect canvasPane = new Rect(toolsRect.xMax + 10f, bodyRect.y, Math.Max(160f, bodyRect.xMax - toolsRect.xMax - 10f), Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect footerRect = new Rect(bodyRect.x, bodyRect.yMax - footerHeight, bodyRect.width, footerHeight);
 
             GUILayout.BeginArea(toolsRect);
-            GUILayout.BeginVertical(_uiContext.Styles.Section, GUILayout.Width(toolsRect.width), GUILayout.Height(toolsRect.height));
+            RegisterScrollRegion("pixel_editor.tools", toolsRect);
+            Vector2 toolsScroll = GetWindowScrollPosition("pixel_editor.tools");
+            toolsScroll = GUILayout.BeginScrollView(toolsScroll, false, true, GUILayout.Width(toolsRect.width), GUILayout.Height(toolsRect.height));
+            GUILayout.BeginVertical(_uiContext.Styles.Section, GUILayout.Width(Math.Max(180f, toolsRect.width - 18f)));
             GUILayout.Label(editor.IsCharacterEditor ? "Character Pixels" : "Sprite Pixels", _sectionTitleStyle);
             GUILayout.Label(editor.Dirty ? "Unsaved changes" : "No unsaved changes", _mutedTextStyle);
             if (editor.IsCharacterEditor)
             {
-                DrawCharacterPartToolbar(editor);
+                DrawCharacterPartToolbar(editor, controlsContentWidth);
                 GUILayout.Space(6f);
             }
-            DrawCustomEditorToolbar(editor);
+            DrawCustomEditorToolbar(editor, controlsContentWidth);
             GUILayout.Space(6f);
-            DrawCustomClipboardToolbar(editor);
+            DrawCustomClipboardToolbar(editor, controlsContentWidth);
             GUILayout.Space(6f);
-            DrawCustomZoomToolbar(editor);
+            DrawCustomZoomToolbar(editor, controlsContentWidth);
             GUILayout.Space(6f);
             GUILayout.Label("Zoom " + Mathf.RoundToInt(Mathf.Max(1f, editor.Zoom) * 100f) + "%", _smallTitleStyle);
             GUILayout.Label("Color", _smallTitleStyle);
@@ -565,6 +590,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label(BuildSelectionSummary(editor), _mutedTextStyle);
             GUILayout.Label(BuildClipboardSummary(editor), _mutedTextStyle);
             GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+            SetWindowScrollPosition("pixel_editor.tools", toolsScroll);
             GUILayout.EndArea();
 
             DrawPixelCanvasViewport(canvasPane, editor);
@@ -607,14 +634,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginVertical(GUILayout.Width(controlsWidth));
             if (editor.IsCharacterEditor)
             {
-                DrawCharacterPartToolbar(editor);
+                DrawCharacterPartToolbar(editor, controlsWidth);
                 GUILayout.Space(6f);
             }
-            DrawCustomEditorToolbar(editor);
+            DrawCustomEditorToolbar(editor, controlsWidth);
             GUILayout.Space(6f);
-            DrawCustomClipboardToolbar(editor);
+            DrawCustomClipboardToolbar(editor, controlsWidth);
             GUILayout.Space(6f);
-            DrawCustomZoomToolbar(editor);
+            DrawCustomZoomToolbar(editor, controlsWidth);
             GUILayout.Space(6f);
             GUILayout.Label("Active Color", _smallTitleStyle);
             Rect colorRect = GUILayoutUtility.GetRect(112f, 44f, GUILayout.Width(112f), GUILayout.Height(44f));
@@ -654,10 +681,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label("Canvas " + editor.Width + "x" + editor.Height + " @ " + editor.Zoom + "x", _smallTitleStyle);
             GUILayout.Label("Mouse wheel zooms. Right click always samples color.", _mutedTextStyle);
             Vector2 canvasScroll = GetWindowScrollPosition("custom_sprite_canvas");
+            Rect canvasScrollRect = GUILayoutUtility.GetRect(viewportWidth, viewportHeight, GUILayout.Width(viewportWidth), GUILayout.Height(viewportHeight));
+            RegisterScrollRegion("custom_sprite_canvas", canvasScrollRect);
+            GUILayout.BeginArea(canvasScrollRect);
             canvasScroll = GUILayout.BeginScrollView(canvasScroll, true, true, GUILayout.Width(viewportWidth), GUILayout.Height(viewportHeight));
             Rect canvasRect = GUILayoutUtility.GetRect(width, height, GUILayout.Width(width), GUILayout.Height(height));
             DrawPixelCanvas(canvasRect, editor);
             GUILayout.EndScrollView();
+            GUILayout.EndArea();
             SetWindowScrollPosition("custom_sprite_canvas", canvasScroll);
             GUILayout.EndVertical();
             if (stackedLayout)
@@ -667,40 +698,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.EndVertical();
         }
 
-        private void DrawCustomEditorToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        private void DrawCustomEditorToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 88f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPaint,
                 "Paint",
                 editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Paint,
-                92f,
+                buttonWidth,
                 "Paint pixels using the active color.");
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPick,
                 "Pick",
                 editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick,
-                92f,
+                buttonWidth,
                 "Sample a pixel color from the canvas.");
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolSelect,
                 "Select",
                 editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Select,
-                92f,
+                buttonWidth,
                 "Drag a rectangular pixel selection.");
             GUILayout.EndHorizontal();
         }
 
-        private void DrawCustomClipboardToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        private void DrawCustomClipboardToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 88f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomCopy,
                 "Copy",
                 false,
-                92f,
+                buttonWidth,
                 "Copy the current selection. If nothing is selected, copy the whole sprite.",
                 true);
             GUILayout.Space(4f);
@@ -708,7 +741,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste,
                 "Paste",
                 editor.HasClipboard,
-                92f,
+                buttonWidth,
                 editor.HasClipboard ? "Paste the pixel clipboard into the canvas." : "Pixel clipboard is empty.",
                 editor.HasClipboard);
             GUILayout.Space(4f);
@@ -716,20 +749,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomSelectionClear,
                 "Clear Sel",
                 editor.HasSelection,
-                92f,
+                buttonWidth,
                 editor.HasSelection ? "Clear the current pixel selection." : "There is no active selection.",
                 editor.HasSelection);
             GUILayout.EndHorizontal();
         }
 
-        private void DrawCustomZoomToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        private void DrawCustomZoomToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 88f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut,
                 "Zoom -",
                 false,
-                92f,
+                buttonWidth,
                 "Zoom out of the canvas.",
                 editor.Zoom > 1);
             GUILayout.Space(4f);
@@ -737,43 +771,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomReset,
                 editor.Zoom + "x",
                 false,
-                68f,
+                Math.Max(68f, buttonWidth - 20f),
                 "Reset canvas zoom to 8x.");
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn,
                 "Zoom +",
                 false,
-                92f,
+                buttonWidth,
                 "Zoom into the canvas.",
                 editor.Zoom < 48);
             GUILayout.EndHorizontal();
         }
 
-        private void DrawCharacterPartToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        private void DrawCharacterPartToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 88f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCharacterPartHead,
                 "Head",
                 editor.CharacterPart == ScenarioCharacterTexturePart.Head,
-                92f,
+                buttonWidth,
                 "Edit the head texture for this family member.");
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCharacterPartTorso,
                 "Torso",
                 editor.CharacterPart == ScenarioCharacterTexturePart.Torso,
-                92f,
+                buttonWidth,
                 "Edit the torso texture for this family member.");
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCharacterPartLegs,
                 "Legs",
                 editor.CharacterPart == ScenarioCharacterTexturePart.Legs,
-                92f,
+                buttonWidth,
                 "Edit the legs texture for this family member.");
             GUILayout.EndHorizontal();
+        }
+
+        private static float ResolveToolbarButtonWidth(float contentWidth, int columns, float gap, float minimum)
+        {
+            int safeColumns = Math.Max(1, columns);
+            float available = Math.Max(minimum, contentWidth - (gap * (safeColumns - 1)));
+            return Math.Max(minimum, available / safeColumns);
         }
 
         private void DrawBrushSwatch(Rect rect, Color color, bool active, int brushIndex)
@@ -797,15 +839,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawInlineAction(string actionId, string label, bool emphasized, float width, string hint, bool enabled = true)
         {
-            Rect rect = GUILayoutUtility.GetRect(width, 28f, GUILayout.Width(width), GUILayout.Height(28f));
-            DrawButton(rect, new ScenarioAuthoringInspectorAction
+            ScenarioAuthoringInspectorAction action = new ScenarioAuthoringInspectorAction
             {
                 Id = actionId,
                 Label = label,
                 Hint = hint,
                 Enabled = enabled,
                 Emphasized = emphasized
-            }, false);
+            };
+            float resolvedWidth = Math.Max(width, MeasureButtonWidth(action, false, 16f));
+            Rect rect = GUILayoutUtility.GetRect(resolvedWidth, 28f, GUILayout.Width(resolvedWidth), GUILayout.Height(28f));
+            DrawButton(rect, action, false);
         }
 
         private void DrawColorSlider(string label, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, int channel)
@@ -855,6 +899,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(viewportRect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = new Rect(viewportRect.x + 10f, viewportRect.y + 10f, viewportRect.width - 20f, viewportRect.height - 20f);
+            RegisterScrollRegion("pixel_editor.canvas.zoom", inner);
             if (editor.Width <= 0 || editor.Height <= 0)
             {
                 GUI.Label(inner, "No sprite pixels available.", _mutedTextStyle);
@@ -1197,10 +1242,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     if (item == null || item.Action == null)
                         continue;
 
-                    float width = Mathf.Clamp(
-                        MeasureButtonWidth(item.Action, renderAsTabs, 20f),
+                    float width = Math.Max(
                         renderAsTabs ? 72f : 94f,
-                        renderAsTabs ? 148f : 184f);
+                        MeasureButtonWidth(item.Action, renderAsTabs, 20f));
+                    width = Math.Min(width, rowLimit);
                     if (rowWidth > 0f && rowWidth + width > rowLimit)
                     {
                         GUILayout.EndHorizontal();
@@ -1387,7 +1432,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioAuthoringInspectorItemKind.Action:
                     if (item.Action != null)
                     {
-                        float width = Mathf.Clamp(MeasureButtonWidth(item.Action, false, 24f), 96f, GetSectionContentWidth());
+                        float width = Math.Max(96f, MeasureButtonWidth(item.Action, false, 24f));
+                        width = Math.Min(width, GetSectionContentWidth());
                         Rect rect = GUILayoutUtility.GetRect(width, 30f, GUILayout.Width(width), GUILayout.Height(30f));
                         DrawButton(rect, item.Action, false);
                     }
@@ -1605,7 +1651,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         actionColumn = 0;
                     }
 
-                    float width = Mathf.Clamp(MeasureButtonWidth(item.Action, false, 24f), 86f, actionWidth);
+                    float width = Math.Max(86f, MeasureButtonWidth(item.Action, false, 24f));
+                    width = Math.Min(width, actionWidth);
                     Rect actionRect = GUILayoutUtility.GetRect(width, 28f, GUILayout.Width(width), GUILayout.Height(28f));
                     DrawButton(actionRect, item.Action, false);
                     actionColumn++;
@@ -1811,30 +1858,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string ShortenToFit(string value, float maxWidth, GUIStyle style)
         {
-            if (string.IsNullOrEmpty(value) || style == null)
-                return value ?? string.Empty;
-
-            if (style.CalcSize(new GUIContent(value)).x <= maxWidth)
-                return value;
-
-            const string ellipsis = "...";
-            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
-            if (ellipsisWidth >= maxWidth)
-                return string.Empty;
-
-            int low = 0;
-            int high = value.Length;
-            while (low < high)
-            {
-                int mid = (low + high + 1) / 2;
-                string candidate = value.Substring(0, mid) + ellipsis;
-                if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
-                    low = mid;
-                else
-                    high = mid - 1;
-            }
-
-            return value.Substring(0, low) + ellipsis;
+            return ScenarioUiMeasuredLabel.FitLabelWithEllipsis(value, maxWidth, style);
         }
 
         private Rect DrawSettingsWindow(
@@ -1842,6 +1866,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringSettingsViewModel settings,
             ScenarioAuthoringShellWindowViewModel window)
         {
+            // TODO(centralize): Settings still render as a standalone editor window.
+            // Move them into the central workspace/settings surface after navigation is settled.
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window != null ? window.HeaderActions : null, true);
             int settingsActionCount = settings.HeaderActions != null ? settings.HeaderActions.Length : 0;
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
@@ -1871,6 +1897,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
+            RegisterScrollRegion((window != null ? window.Id : null) ?? "settings", bodyRect);
             _settingsScrollPosition = GUILayout.BeginScrollView(_settingsScrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
             GUILayout.Label(settings.Subtitle ?? string.Empty, _mutedTextStyle);
             GUILayout.Space(8f);
@@ -2002,7 +2029,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Enabled = item.Enabled,
                     Emphasized = selected
                 };
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 18f), 58f, rowLimit);
+                float width = Math.Max(58f, MeasureButtonWidth(action, false, 18f));
+                width = Math.Min(width, rowLimit);
                 if (rowWidth > 0f && rowWidth + width > rowLimit)
                 {
                     GUILayout.EndHorizontal();

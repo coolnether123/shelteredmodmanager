@@ -34,7 +34,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             KeyboardCaptured = false;
             TransitionActive = false;
             _coordinateScale = coordinateScale > 0.001f ? coordinateScale : 1f;
-            _scrollFocusService.BeginFrame();
+            _scrollFocusService.BeginFrame(GetPointerPosition(_coordinateScale));
         }
 
         public void BeginFrame()
@@ -54,6 +54,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             RegisterInteractiveRect(rect);
             _scrollFocusService.RegisterRegion(ownerId, rect);
+            _scrollFocusService.ConsumeScrollWheelIfNotFocused(ownerId, rect, Event.current, GetPointerPosition(_coordinateScale));
         }
 
         public void SetPopupOpen(bool open)

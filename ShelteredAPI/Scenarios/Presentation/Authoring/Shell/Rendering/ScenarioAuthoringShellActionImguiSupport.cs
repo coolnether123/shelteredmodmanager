@@ -54,13 +54,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUIStyle style = tab
                 ? (action != null && action.Emphasized ? _activeTabStyle : _tabStyle)
                 : (action != null && action.Emphasized ? _activeButtonStyle : _buttonStyle);
-            Vector2 size = style.CalcSize(new GUIContent(action != null ? action.Label ?? string.Empty : string.Empty));
-            return size.x + extraPadding + ResolveButtonHorizontalPadding(style);
+            return ScenarioUiMeasuredLabel.Width(action != null ? action.Label ?? string.Empty : string.Empty, style, extraPadding);
         }
 
-        private static float ResolveButtonHorizontalPadding(GUIStyle style)
+        private void RegisterScrollRegion(string ownerId, Rect rect)
         {
-            return style != null && style.padding != null ? style.padding.left + style.padding.right : 0f;
+            try
+            {
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                if (inputCapture != null)
+                    inputCapture.RegisterScrollRect(ownerId, rect);
+            }
+            catch
+            {
+            }
         }
 
         private void DrawChromePanel(Rect rect, GUIStyle style)

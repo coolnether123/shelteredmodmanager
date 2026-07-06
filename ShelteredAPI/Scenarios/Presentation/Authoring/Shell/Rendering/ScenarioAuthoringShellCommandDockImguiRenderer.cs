@@ -23,6 +23,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private Rect DrawCommandDockCore(Rect contentRect, ScenarioAuthoringState state)
         {
+            // TODO(centralize): Command dock is still a separate bottom-center action strip.
+            // Merge these selection/build commands into the central workspace command area.
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
                 return RuntimeCompat.ZeroRect();
 
@@ -33,7 +35,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float gap = 8f;
             float buttonsWidth = 0f;
             for (int i = 0; i < actions.Length; i++)
-                buttonsWidth += Mathf.Clamp(MeasureButtonWidth(actions[i], false, 24f), 104f, 168f);
+                buttonsWidth += Math.Max(104f, MeasureButtonWidth(actions[i], false, 24f));
             float width = Mathf.Clamp(20f + buttonsWidth + (gap * (actions.Length - 1)), 360f, Math.Min(760f, contentRect.width - 40f));
             Rect rect = new Rect(
                 contentRect.x + ((contentRect.width - width) * 0.5f),
@@ -51,7 +53,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float x = rect.x + 10f;
             for (int i = 0; i < actions.Length; i++)
             {
-                float buttonWidth = Mathf.Clamp(MeasureButtonWidth(actions[i], false, 24f), 104f, 168f);
+                float buttonWidth = Math.Max(104f, MeasureButtonWidth(actions[i], false, 24f));
                 DrawButton(new Rect(x, rect.y + 8f, buttonWidth, 32f), actions[i], false);
                 x += buttonWidth + gap;
             }

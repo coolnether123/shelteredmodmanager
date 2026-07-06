@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float InspectorWidth = 300f;
         public const float InspectorMinWidth = 240f;
         public const float InspectorMaxWidth = 480f;
-        public const float BottomTrayHeight = 168f;
+        public const float BottomTrayHeight = 226f;
         public const float BottomTrayCollapsedHeight = 44f;
         public const float CommandDockHeight = 48f;
 
@@ -87,6 +87,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildInspectorRect(Rect contentRect, float inspectorWidth)
         {
+            // TODO(centralize): Right inspector layout is a remaining non-central panel.
+            // Remove this once selection details move into the central workspace.
             // Anchor the inspector below the HUD reserve so it never sits on top of the
             // vanilla clock/magnifier widgets, regardless of how tall the top bar grows.
             float width = Mathf.Clamp(inspectorWidth > 0f ? inspectorWidth : InspectorWidth, InspectorMinWidth, InspectorMaxWidth);
@@ -100,18 +102,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
         {
+            // TODO(centralize): Bottom tray layout is still separate from the central workspace.
+            // Retire this after placement tools are merged into the workspace page.
             float trayWidth = Math.Min(920f, Math.Max(560f, viewportRight - viewportLeft));
             float commandDockTop = contentRect.yMax - CommandDockHeight - CommandDockBottomOffset;
             float trayBottom = Math.Max(contentRect.y + 180f, commandDockTop - Gutter);
             float upperClearanceY = contentRect.y + 216f;
             float availableHeight = Math.Max(150f, trayBottom - upperClearanceY);
-            float trayHeight = Mathf.Clamp(BottomTrayHeight, 150f, Math.Min(190f, availableHeight));
+            float trayHeight = Mathf.Clamp(BottomTrayHeight, 206f, Math.Min(246f, availableHeight));
             float trayY = trayBottom - trayHeight;
             return new Rect(viewportLeft, trayY, trayWidth, trayHeight);
         }
 
         public static Rect BuildCollapsedBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
         {
+            // TODO(centralize): Collapsed tray is a placement-mode holdover.
+            // Replace with central workspace placement status when that surface exists.
             float trayWidth = Math.Min(760f, Math.Max(420f, viewportRight - viewportLeft));
             return new Rect(
                 viewportLeft + Math.Max(0f, ((viewportRight - viewportLeft) - trayWidth) * 0.5f),
@@ -122,6 +128,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildEmptyInspectorChipRect(Rect contentRect, float inspectorWidth)
         {
+            // TODO(centralize): Empty inspector chip should disappear with the right inspector.
             float width = Mathf.Clamp(inspectorWidth > 0f ? inspectorWidth : InspectorWidth, InspectorMinWidth, InspectorMaxWidth);
             float chipWidth = Math.Min(width, 220f);
             return new Rect(contentRect.xMax - chipWidth, HudReserveHeight + Gutter + InspectorHudClearance, chipWidth, 34f);
@@ -186,6 +193,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect contentRect,
             int visibleFloatingIndex)
         {
+            // TODO(centralize): Floating window positioning is still independent of the
+            // workspace page. Remove when floating tools become central workspace regions.
             float minWidth = window != null && window.MinWidth > 0f ? window.MinWidth : 260f;
             float minHeight = window != null && window.MinHeight > 0f ? window.MinHeight : 140f;
             float width = window != null && window.Width > 0f ? window.Width : minWidth;

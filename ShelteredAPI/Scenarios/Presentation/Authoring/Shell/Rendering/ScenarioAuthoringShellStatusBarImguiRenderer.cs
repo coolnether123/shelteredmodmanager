@@ -41,8 +41,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Enabled = true,
                 Emphasized = false
             };
-            float playtestWidth = Mathf.Clamp(MeasureButtonWidth(playtestAction, false, 34f), 104f, 148f);
-            float pauseMenuWidth = Mathf.Clamp(MeasureButtonWidth(pauseMenuAction, false, 34f), 128f, 168f);
+            float playtestWidth = Math.Max(104f, MeasureButtonWidth(playtestAction, false, 34f));
+            float pauseMenuWidth = Math.Max(128f, MeasureButtonWidth(pauseMenuAction, false, 34f));
             float rightControlsWidth = playtestWidth + pauseMenuWidth + 114f;
             float rightControlsX = Math.Max(rect.x + 220f, rect.xMax - rightControlsWidth);
             float statusRight = rightControlsX - 18f;
@@ -85,6 +85,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawCollapsedWindowStripCore(Rect statusRect, ScenarioAuthoringShellWindowViewModel[] windows)
         {
+            // TODO(centralize): Collapsed window restore strip belongs to the old multi-window
+            // shell. Replace with central workspace navigation/state once windows are merged.
             int count = 0;
             for (int i = 0; windows != null && i < windows.Length; i++)
             {

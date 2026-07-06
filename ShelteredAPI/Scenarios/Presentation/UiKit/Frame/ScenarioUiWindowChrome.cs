@@ -104,12 +104,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
                     out titleRect,
                     out subtitleRect);
 
-                GUI.Label(titleRect, title ?? string.Empty, _styles.TitleText);
-                GUI.Label(subtitleRect, subtitle, _styles.SubtitleText);
+                GUI.Label(titleRect, title ?? string.Empty, _styles.HeaderTitleText);
+                GUI.Label(subtitleRect, subtitle, _styles.HeaderSubtitleText);
             }
             else
             {
-                GUI.Label(inner, title ?? string.Empty, _styles.TitleText);
+                GUI.Label(inner, title ?? string.Empty, _styles.HeaderTitleText);
             }
         }
     }

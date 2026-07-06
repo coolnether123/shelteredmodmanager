@@ -81,6 +81,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect BuildWindowMenuRectCore(Rect buttonRect, ScenarioAuthoringInspectorAction[] actions, float width, float height, Rect hudReserveRect)
         {
+            // TODO(centralize): Window menu is still a panel-management popup from the
+            // multi-window shell. Fold these choices into central workspace navigation.
             float rectWidth = 220f;
             for (int i = 0; actions != null && i < actions.Length; i++)
                 rectWidth = Math.Max(rectWidth, MeasureButtonWidth(actions[i], false, 26f) + 24f);
@@ -135,7 +137,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
             bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
             GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
-            GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, rect.width - 10f, drawStyle), tooltip);
+            GUIContent content = new GUIContent(ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, rect.width - 10f, drawStyle), tooltip);
 
             if (IsWindowMenuAction(action))
             {
