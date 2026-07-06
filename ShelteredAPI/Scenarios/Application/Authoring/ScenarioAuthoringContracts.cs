@@ -95,6 +95,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionConvertToNormal = "editor.convert_to_normal";
         public const string ActionSelectionClear = "selection.clear";
         public const string ActionSelectionStackCycle = "selection.stack.cycle";
+        public const string ActionSelectionStackToggleExpanded = "selection.stack.toggle_expanded";
         public const string ActionSelectionStackSelectPrefix = "selection.stack.select.";
         public const string ActionHierarchySelectPrefix = "hierarchy.select.";
         public const string ActionCaptureFamily = "capture.family.current";
@@ -521,6 +522,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public List<ScenarioAuthoringTarget> MultiSelection { get; private set; }
         public List<ScenarioAuthoringTarget> SelectionStack { get; private set; }
         public int ActiveSelectionStackIndex { get; set; }
+        public bool SelectionStackExpanded { get; set; }
         public string SelectionStackSignature { get; set; }
         public string TimelineSelectionId { get; set; }
         public string TimelineSelectedDayId { get; set; }
@@ -561,6 +563,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 HoveredTarget = HoveredTarget != null ? HoveredTarget.Copy() : null,
                 SelectedTarget = SelectedTarget != null ? SelectedTarget.Copy() : null,
                 ActiveSelectionStackIndex = ActiveSelectionStackIndex,
+                SelectionStackExpanded = SelectionStackExpanded,
                 SelectionStackSignature = SelectionStackSignature,
                 TimelineSelectionId = TimelineSelectionId,
                 TimelineSelectedDayId = TimelineSelectedDayId,

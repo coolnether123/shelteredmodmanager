@@ -362,19 +362,44 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     false,
                     ">>")));
 
-                List<string> candidateNames = new List<string>();
-                int displayCount = Mathf.Min(stackCount, 4);
+                int displayCount = state.SelectionStackExpanded ? stackCount : Mathf.Min(stackCount, 5);
                 for (int i = 0; i < displayCount; i++)
                 {
                     ScenarioAuthoringTarget candidate = state.SelectionStack[i];
-                    string prefix = i == activeIndex ? "* " : string.Empty;
-                    candidateNames.Add(prefix + (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(candidate != null ? candidate.DisplayName : null));
+                    if (candidate == null)
+                        continue;
+
+                    bool active = i == activeIndex;
+                    items.Add(ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
+                        FormatSelectionStackRowLabel(i, candidate),
+                        FormatSelectionStackRowHint(candidate, active),
+                        true,
+                        active,
+                        active ? "ON" : "ST",
+                        FormatTargetCell(candidate))));
                 }
 
                 if (stackCount > displayCount)
-                    candidateNames.Add("+" + (stackCount - displayCount).ToString(CultureInfo.InvariantCulture) + " more");
-
-                items.Add(Text("Under cursor: " + string.Join(" | ", candidateNames.ToArray())));
+                {
+                    items.Add(ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded,
+                        "+" + (stackCount - displayCount).ToString(CultureInfo.InvariantCulture) + " more",
+                        "Show the remaining selectable targets under the pointer.",
+                        true,
+                        false,
+                        "+")));
+                }
+                else if (state.SelectionStackExpanded && stackCount > 5)
+                {
+                    items.Add(ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded,
+                        "Show fewer",
+                        "Collapse the target stack back to the first five rows.",
+                        true,
+                        false,
+                        "-")));
+                }
             }
             return new ScenarioAuthoringInspectorSection
             {
@@ -384,6 +409,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = items.ToArray()
             };
+        }
+
+        private static string FormatSelectionStackRowLabel(int index, ScenarioAuthoringTarget target)
+        {
+            return (index + 1).ToString(CultureInfo.InvariantCulture)
+                + ". "
+                + Safe(target != null ? target.DisplayName : null)
+                + " - "
+                + FriendlyKindLabel(target != null ? target.Kind : ScenarioAuthoringTargetKind.Unknown);
+        }
+
+        private static string FormatSelectionStackRowHint(ScenarioAuthoringTarget target, bool active)
+        {
+            string prefix = active ? "Current target. " : "Select this target. ";
+            return prefix
+                + FriendlyKindLabel(target != null ? target.Kind : ScenarioAuthoringTargetKind.Unknown)
+                + " at "
+                + FormatTargetCell(target);
         }
 
         private ScenarioAuthoringInspectorSection BuildPinnedFactsSection(

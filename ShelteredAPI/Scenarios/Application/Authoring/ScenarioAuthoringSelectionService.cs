@@ -476,13 +476,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int rightScore = right.TotalScore;
             if (leftScore != rightScore)
                 return rightScore.CompareTo(leftScore);
+            if (left.SourceRank != right.SourceRank)
+                return right.SourceRank.CompareTo(left.SourceRank);
+            int distance = left.Distance.CompareTo(right.Distance);
+            if (distance != 0)
+                return distance;
             if (left.SortingLayer != right.SortingLayer)
                 return right.SortingLayer.CompareTo(left.SortingLayer);
             if (left.SortingOrder != right.SortingOrder)
                 return right.SortingOrder.CompareTo(left.SortingOrder);
-            int distance = left.Distance.CompareTo(right.Distance);
-            if (distance != 0)
-                return distance;
             int z = right.Z.CompareTo(left.Z);
             if (z != 0)
                 return z;
@@ -928,7 +930,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             public int TotalScore
             {
-                get { return SourceRank + ToolScore + StageScore + KindScore; }
+                get { return ToolScore + StageScore + KindScore; }
             }
         }
 

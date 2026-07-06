@@ -296,15 +296,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ? new Rect(pickerRect.xMax + 16f, bodyRect.y, bodyRect.xMax - pickerRect.xMax - 16f, bodyRect.height)
                 : RuntimeCompat.ZeroRect();
 
-            Rect filterRect = new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 30f);
+            Rect filterRect = new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 24f);
             DrawCandidateSearchControl(
                 filterRect,
                 "build_palette_search",
                 ref _buildPaletteSearchText,
                 ref _buildPaletteSearchFocused);
 
-            float pickerScrollHeight = Math.Max(98f, pickerRect.height - 40f);
-            Rect pickerScrollRect = new Rect(pickerRect.x, pickerRect.y + 40f, pickerRect.width, pickerScrollHeight);
+            float pickerScrollHeight = Math.Max(98f, pickerRect.height - 30f);
+            Rect pickerScrollRect = new Rect(pickerRect.x, pickerRect.y + 30f, pickerRect.width, pickerScrollHeight);
             GUILayout.BeginArea(pickerScrollRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, pickerRect.width - 18f);
@@ -1755,10 +1755,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 float availableWidth = GetSectionContentWidth();
-                float cardGap = 4f;
-                float preferredCardWidth = compactInspector ? 190f : 224f;
-                float minCardWidth = compactInspector ? 176f : 196f;
-                int maxColumns = compactInspector ? 2 : 4;
+                bool buildPaletteSection = IsBuildPaletteSection(section);
+                float cardGap = buildPaletteSection ? 3f : 4f;
+                float preferredCardWidth = buildPaletteSection ? (compactInspector ? 152f : 176f) : (compactInspector ? 190f : 224f);
+                float minCardWidth = buildPaletteSection ? (compactInspector ? 136f : 156f) : (compactInspector ? 176f : 196f);
+                float cardHeight = buildPaletteSection ? 72f : 94f;
+                int maxColumns = buildPaletteSection ? (compactInspector ? 4 : 5) : (compactInspector ? 2 : 4);
                 int columns = Mathf.Clamp(
                     Mathf.FloorToInt((availableWidth + cardGap) / (minCardWidth + cardGap)),
                     1,
@@ -1778,7 +1780,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     if (!CandidateActionMatches(section, item.Action, candidateSearchText, candidateFilter))
                         continue;
 
-                    Rect rect = GUILayoutUtility.GetRect(cardWidth, 94f, GUILayout.Width(cardWidth), GUILayout.Height(94f));
+                    Rect rect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
                     DrawCandidateCard(rect, item.Action);
                     count++;
                     if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, candidateSearchText, candidateFilter))
@@ -1913,6 +1915,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioAuthoringInspectorItemKind.Action:
                     if (item.Action != null)
                     {
+                        if (!string.IsNullOrEmpty(item.Action.Id)
+                            && item.Action.Id.StartsWith(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix, StringComparison.Ordinal))
+                        {
+                            Rect stackRowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
+                            DrawButton(stackRowRect, item.Action, false);
+                            break;
+                        }
+
                         float width = Math.Max(96f, MeasureButtonWidth(item.Action, false, 24f));
                         width = Math.Min(width, GetSectionContentWidth());
                         Rect rect = GUILayoutUtility.GetRect(width, 30f, GUILayout.Width(width), GUILayout.Height(30f));
@@ -2093,7 +2103,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect textRect;
             if (action.PreviewSprite != null && rect.width >= 150f)
             {
-                Rect previewRect = new Rect(rect.x + 6f, rect.y + 6f, 70f, rect.height - 12f);
+                float previewSize = Mathf.Clamp(rect.height - 12f, 44f, 70f);
+                Rect previewRect = new Rect(rect.x + 6f, rect.y + 6f, previewSize, previewSize);
                 DrawSpritePreview(previewRect, action.PreviewSprite, action.Emphasized);
                 textRect = new Rect(previewRect.xMax + 10f, rect.y + 8f, rect.width - previewRect.width - 22f, rect.height - 16f);
             }
@@ -2105,10 +2116,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUIContent labelContent = new GUIContent(action.Label ?? string.Empty, action.Hint ?? action.Detail ?? string.Empty);
             GUIStyle labelStyle = new GUIStyle(_textStyle);
             labelStyle.wordWrap = true;
-            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 38f), labelContent, labelStyle);
+            float labelHeight = rect.height <= 76f ? 28f : 38f;
+            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), labelContent, labelStyle);
             string detail = !string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint;
             if (!string.IsNullOrEmpty(detail))
-                GUI.Label(new Rect(textRect.x, textRect.y + 42f, textRect.width, 30f), detail, _mutedTextStyle);
+                GUI.Label(new Rect(textRect.x, textRect.y + labelHeight + 2f, textRect.width, Math.Max(16f, rect.height - labelHeight - 30f)), detail, _mutedTextStyle);
 
             if (!string.IsNullOrEmpty(action.Badge))
             {
@@ -2133,6 +2145,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private float GetSectionContentWidth()
         {
             return Math.Max(120f, _activeContentWidth - 24f);
+        }
+
+        private static bool IsBuildPaletteSection(ScenarioAuthoringInspectorSection section)
+        {
+            return section != null
+                && !string.IsNullOrEmpty(section.Id)
+                && (section.Id.IndexOf("palette", StringComparison.OrdinalIgnoreCase) >= 0
+                    || section.Id.IndexOf("structure_tools", StringComparison.OrdinalIgnoreCase) >= 0
+                    || section.Id.IndexOf("objects_", StringComparison.OrdinalIgnoreCase) >= 0
+                    || section.Id.IndexOf("walls_", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private void DrawFactGrid(ScenarioAuthoringInspectorSection section, bool compactInspector)

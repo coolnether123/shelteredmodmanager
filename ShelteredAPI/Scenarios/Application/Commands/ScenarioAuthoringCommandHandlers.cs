@@ -1461,6 +1461,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return CycleSelectionStack(state, out message);
             }
 
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded, StringComparison.Ordinal))
+            {
+                handled = true;
+                state.SelectionStackExpanded = !state.SelectionStackExpanded;
+                message = state.SelectionStackExpanded ? "Selection stack expanded." : "Selection stack collapsed.";
+                return true;
+            }
+
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix, StringComparison.Ordinal))
             {
                 handled = true;

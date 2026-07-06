@@ -33,10 +33,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return RuntimeCompat.ZeroRect();
 
             float gap = 8f;
+            float maxWidth = Math.Min(760f, contentRect.width - 40f);
             float buttonsWidth = 0f;
             for (int i = 0; i < actions.Length; i++)
-                buttonsWidth += Math.Max(104f, MeasureButtonWidth(actions[i], false, 24f));
-            float width = Mathf.Clamp(20f + buttonsWidth + (gap * (actions.Length - 1)), 360f, Math.Min(760f, contentRect.width - 40f));
+                buttonsWidth += ResolveCommandDockButtonWidth(actions[i]);
+            float naturalWidth = 20f + buttonsWidth + (gap * (actions.Length - 1));
+            float width = Mathf.Clamp(naturalWidth, 280f, Math.Max(280f, maxWidth));
             Rect rect = new Rect(
                 contentRect.x + ((contentRect.width - width) * 0.5f),
                 contentRect.yMax - CommandDockHeight - 22f,
@@ -51,14 +53,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
             DrawChromePanel(rect, _rootPanelStyle);
             float x = rect.x + 10f;
+            float availableButtonWidth = rect.width - 20f - (gap * (actions.Length - 1));
+            float overflow = Math.Max(0f, buttonsWidth - availableButtonWidth);
             for (int i = 0; i < actions.Length; i++)
             {
-                float buttonWidth = Math.Max(104f, MeasureButtonWidth(actions[i], false, 24f));
+                float buttonWidth = ResolveCommandDockButtonWidth(actions[i]);
+                if (overflow > 0f)
+                {
+                    float shrink = Math.Min(overflow, Math.Max(0f, buttonWidth - 88f));
+                    buttonWidth -= shrink;
+                    overflow -= shrink;
+                }
                 DrawButton(new Rect(x, rect.y + 8f, buttonWidth, 32f), actions[i], false);
                 x += buttonWidth + gap;
             }
             }
             return rect;
+        }
+
+        private float ResolveCommandDockButtonWidth(ScenarioAuthoringInspectorAction action)
+        {
+            return Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 88f, 176f);
         }
 
         private static ScenarioAuthoringInspectorAction[] BuildCommandDockActions(ScenarioAuthoringState state)
@@ -67,7 +82,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool hasTarget = target != null;
             bool authoredTarget = hasTarget && !string.IsNullOrEmpty(target.ScenarioReferenceId);
             bool canReplace = hasTarget && target.SupportsReplace;
-            bool insideLayer = state != null && state.ActiveStage == ScenarioStageKind.BunkerInside;
 
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
             actions.Add(new ScenarioAuthoringInspectorAction
@@ -88,16 +102,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Hint = "Open the scenario art tray for snapped scene assets.",
                     Enabled = true
                 });
-                actions.Add(new ScenarioAuthoringInspectorAction
-                {
-                    Id = ScenarioAuthoringActionIds.ActionCaptureShelterObjects,
-                    Label = "Capture Live",
-                    Hint = insideLayer
-                        ? "Capture the current live shelter object layout into the draft."
-                        : "Switch to Interior before capturing live shelter objects.",
-                    Enabled = insideLayer
-                });
-                actions.Add(DisabledAction("No Selection", "Pick a live or authored object to edit object-specific rules."));
+                actions.Add(DisabledAction("Pick Target", "Pick a live or authored object to edit object-specific rules. Legacy live-object import is available from the Objects tool workspace."));
                 return actions.ToArray();
             }
 
