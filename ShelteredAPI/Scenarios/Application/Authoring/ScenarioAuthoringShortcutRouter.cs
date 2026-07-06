@@ -209,7 +209,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 ObjectType = objectType,
                 Level = level,
-                Label = ScenarioBunkerDraftService.SafeObjectName(obj)
+                Label = ScenarioBunkerDraftService.SafeObjectName(obj),
+                SourceObject = obj
             };
             message = "Copied object placement '" + _objectClipboard.Label + "'. Ctrl+V starts a placement preview.";
             return true;
@@ -224,9 +225,35 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            ObjectManager manager = ObjectManager.Instance;
+            ObjectManager.ObjectType resolvedType;
+            int resolvedLevel;
+            GameObject prefab;
+            Obj_Base prefabComponent;
+            if (!ScenarioBuildPlacementAuthoringService.TryResolvePlaceableObject(
+                    manager,
+                    _objectClipboard.ObjectType,
+                    _objectClipboard.Level,
+                    _objectClipboard.Label,
+                    out resolvedType,
+                    out resolvedLevel,
+                    out prefab,
+                    out prefabComponent))
+            {
+                if (_objectClipboard.SourceObject != null)
+                {
+                    bool startedClone = ScenarioBuildPlacementAuthoringService.Instance.StartObjectClonePlacement(_objectClipboard.SourceObject, out message);
+                    changed = startedClone;
+                    return true;
+                }
+
+                message = "No compatible prefab is available for " + _objectClipboard.Label + ".";
+                return true;
+            }
+
             return Execute(
                 state,
-                ScenarioBuildPlacementAuthoringService.BuildObjectActionId(_objectClipboard.ObjectType, _objectClipboard.Level),
+                ScenarioBuildPlacementAuthoringService.BuildObjectActionId(resolvedType, resolvedLevel),
                 out changed,
                 out message);
         }
@@ -377,6 +404,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public ObjectManager.ObjectType ObjectType;
             public int Level;
             public string Label;
+            public Obj_Base SourceObject;
         }
     }
 }

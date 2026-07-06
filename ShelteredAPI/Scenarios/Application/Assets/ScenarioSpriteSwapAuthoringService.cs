@@ -1503,9 +1503,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             string description;
             ScenarioDirtySection dirtySection;
             ScenarioEditCategory editCategory;
-            if (!_historyService.Undo(definition, out description, out dirtySection, out editCategory))
+            ScenarioEditCategory[] allowedCategories = ResolveUndoScope(state);
+            if (!_historyService.Undo(definition, allowedCategories, out description, out dirtySection, out editCategory))
             {
-                message = "Nothing to undo.";
+                message = BuildScopedHistoryUnavailableMessage(true, allowedCategories);
                 return false;
             }
 
@@ -1536,9 +1537,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             string description;
             ScenarioDirtySection dirtySection;
             ScenarioEditCategory editCategory;
-            if (!_historyService.Redo(definition, out description, out dirtySection, out editCategory))
+            ScenarioEditCategory[] allowedCategories = ResolveUndoScope(state);
+            if (!_historyService.Redo(definition, allowedCategories, out description, out dirtySection, out editCategory))
             {
-                message = "Nothing to redo.";
+                message = BuildScopedHistoryUnavailableMessage(false, allowedCategories);
                 return false;
             }
 
@@ -1669,6 +1671,95 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             RecordCustomPixelSnapshot("paint stroke");
             _customPixelStrokeSnapshotRecorded = true;
             return true;
+        }
+
+        private ScenarioEditCategory[] ResolveUndoScope(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return null;
+
+            switch (state.ActiveTool)
+            {
+                case ScenarioAuthoringTool.Objects:
+                case ScenarioAuthoringTool.Shelter:
+                case ScenarioAuthoringTool.Wiring:
+                    return new[] { ScenarioEditCategory.Bunker };
+
+                case ScenarioAuthoringTool.Assets:
+                    return new[] { ScenarioEditCategory.Assets };
+
+                case ScenarioAuthoringTool.Family:
+                    return new[] { ScenarioEditCategory.Family };
+
+                case ScenarioAuthoringTool.Inventory:
+                    return new[] { ScenarioEditCategory.Inventory };
+
+                case ScenarioAuthoringTool.WinLoss:
+                    return new[] { ScenarioEditCategory.WinLoss };
+            }
+
+            if (state.ActiveStage == ShelteredAPI.Scenarios.Domain.Stages.ScenarioStageKind.BunkerInside)
+                return new[] { ScenarioEditCategory.Bunker, ScenarioEditCategory.Assets };
+
+            return null;
+        }
+
+        private string BuildScopedHistoryUnavailableMessage(bool undo, ScenarioEditCategory[] allowedCategories)
+        {
+            if (allowedCategories == null || allowedCategories.Length == 0)
+                return undo ? "Nothing to undo." : "Nothing to redo.";
+
+            string description;
+            ScenarioEditCategory topCategory;
+            bool hasTop = undo
+                ? _historyService.TryPeekUndo(out description, out topCategory)
+                : _historyService.TryPeekRedo(out description, out topCategory);
+            string scope = FormatHistoryScope(allowedCategories);
+            if (!hasTop)
+                return undo ? "Nothing to undo for " + scope + "." : "Nothing to redo for " + scope + ".";
+
+            return (undo ? "Nothing to undo for " : "Nothing to redo for ")
+                + scope
+                + ". Next history entry is "
+                + FormatEditCategory(topCategory)
+                + ": "
+                + (description ?? "unnamed change")
+                + ".";
+        }
+
+        private static string FormatHistoryScope(ScenarioEditCategory[] allowedCategories)
+        {
+            if (allowedCategories == null || allowedCategories.Length == 0)
+                return "this context";
+
+            if (allowedCategories.Length == 1)
+                return FormatEditCategory(allowedCategories[0]) + " edits";
+
+            List<string> labels = new List<string>();
+            for (int i = 0; i < allowedCategories.Length; i++)
+                labels.Add(FormatEditCategory(allowedCategories[i]));
+            return string.Join("/", labels.ToArray()) + " edits";
+        }
+
+        private static string FormatEditCategory(ScenarioEditCategory category)
+        {
+            switch (category)
+            {
+                case ScenarioEditCategory.Family:
+                    return "survivor";
+                case ScenarioEditCategory.Inventory:
+                    return "stockpile";
+                case ScenarioEditCategory.Bunker:
+                    return "world";
+                case ScenarioEditCategory.Triggers:
+                    return "event";
+                case ScenarioEditCategory.Assets:
+                    return "asset";
+                case ScenarioEditCategory.WinLoss:
+                    return "win/loss";
+                default:
+                    return category.ToString().ToLowerInvariant();
+            }
         }
 
         private void EnsureCustomPixelStrokeSnapshot(string description)

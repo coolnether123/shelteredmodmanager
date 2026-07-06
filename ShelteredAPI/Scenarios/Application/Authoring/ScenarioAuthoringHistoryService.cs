@@ -50,6 +50,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             get { return _redo.Count; }
         }
 
+        public bool TryPeekUndo(out string description, out ScenarioEditCategory editCategory)
+        {
+            description = null;
+            editCategory = ScenarioEditCategory.Bunker;
+            if (_undo.Count == 0)
+                return false;
+
+            DefinitionSnapshot snapshot = _undo.Peek();
+            description = snapshot.Description;
+            editCategory = snapshot.EditCategory;
+            return true;
+        }
+
+        public bool TryPeekRedo(out string description, out ScenarioEditCategory editCategory)
+        {
+            description = null;
+            editCategory = ScenarioEditCategory.Bunker;
+            if (_redo.Count == 0)
+                return false;
+
+            DefinitionSnapshot snapshot = _redo.Peek();
+            description = snapshot.Description;
+            editCategory = snapshot.EditCategory;
+            return true;
+        }
+
         // Call when the active authoring draft changes so stale snapshots don't leak
         // across sessions.
         public void BindSession(string draftId)
@@ -113,10 +139,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             out ScenarioDirtySection dirtySection,
             out ScenarioEditCategory editCategory)
         {
+            return Undo(definition, null, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Undo(
+            ScenarioDefinition definition,
+            ScenarioEditCategory[] allowedCategories,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
             description = null;
             dirtySection = ScenarioDirtySection.None;
             editCategory = ScenarioEditCategory.Bunker;
             if (definition == null || _undo.Count == 0)
+                return false;
+
+            if (!IsCategoryAllowed(_undo.Peek().EditCategory, allowedCategories))
                 return false;
 
             DefinitionSnapshot redoPoint = new DefinitionSnapshot
@@ -127,6 +166,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             DefinitionSnapshot snapshot = _undo.Pop();
             RestoreDefinition(definition, snapshot.Definition);
+            redoPoint.Description = snapshot.Description;
             redoPoint.DirtySection = snapshot.DirtySection;
             redoPoint.EditCategory = snapshot.EditCategory;
             _redo.Push(redoPoint);
@@ -151,10 +191,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             out ScenarioDirtySection dirtySection,
             out ScenarioEditCategory editCategory)
         {
+            return Redo(definition, null, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Redo(
+            ScenarioDefinition definition,
+            ScenarioEditCategory[] allowedCategories,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
             description = null;
             dirtySection = ScenarioDirtySection.None;
             editCategory = ScenarioEditCategory.Bunker;
             if (definition == null || _redo.Count == 0)
+                return false;
+
+            if (!IsCategoryAllowed(_redo.Peek().EditCategory, allowedCategories))
                 return false;
 
             DefinitionSnapshot undoPoint = new DefinitionSnapshot
@@ -165,6 +218,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             DefinitionSnapshot snapshot = _redo.Pop();
             RestoreDefinition(definition, snapshot.Definition);
+            undoPoint.Description = snapshot.Description;
             undoPoint.DirtySection = snapshot.DirtySection;
             undoPoint.EditCategory = snapshot.EditCategory;
             PushUndo(undoPoint);
@@ -174,6 +228,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Redo: " + (description ?? "<unnamed>")
                 + " | undoDepth=" + _undo.Count + " redoDepth=" + _redo.Count);
             return true;
+        }
+
+        private static bool IsCategoryAllowed(ScenarioEditCategory editCategory, ScenarioEditCategory[] allowedCategories)
+        {
+            if (allowedCategories == null || allowedCategories.Length == 0)
+                return true;
+
+            for (int i = 0; i < allowedCategories.Length; i++)
+            {
+                if (allowedCategories[i] == editCategory)
+                    return true;
+            }
+
+            return false;
         }
 
         private void PushUndo(DefinitionSnapshot snapshot)

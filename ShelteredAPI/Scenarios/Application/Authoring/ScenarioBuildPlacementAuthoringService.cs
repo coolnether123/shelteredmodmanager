@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using ModAPI.Core;
 using ModAPI.Scenarios;
@@ -74,6 +75,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public PlacementValidationResult Validation;
             public ScenarioPlacementFeelVisualService.GhostPreviewHandle GhostVisual;
             public bool SuppressPrimaryClickUntilClear;
+            public Obj_Base CloneSourceObject;
         }
 
         private static readonly string[] ObjectSectionOrder = new[]
@@ -83,6 +85,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             "Storage & Utility",
             "Furniture & Misc"
         };
+
+        private static readonly FieldInfo ObjectManagerObjectsField = typeof(ObjectManager).GetField("objects", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo ObjectManagerSpawnedObjectIdField = typeof(ObjectManager).GetField("m_spawnedObjectId", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo CraftingGhostImitatedTypeField = typeof(Obj_CraftingGhost).GetField("m_imitatedType", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo CraftingGhostImitatedLevelField = typeof(Obj_CraftingGhost).GetField("m_imitatedLevel", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo CraftingGhostPlaceableOnSurfaceField = typeof(Obj_CraftingGhost).GetField("placableOnSurface", BindingFlags.NonPublic | BindingFlags.Instance);
 
         private readonly StructurePlacementService _structurePlacementService;
         private readonly ObjectPlacementService _objectPlacementService;
@@ -365,6 +373,53 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix + EncodeActionToken(payload);
         }
 
+        internal static bool TryResolvePlaceableObject(
+            ObjectManager manager,
+            ObjectManager.ObjectType requestedType,
+            int requestedLevel,
+            string requestedLabel,
+            out ObjectManager.ObjectType resolvedType,
+            out int resolvedLevel,
+            out GameObject prefab,
+            out Obj_Base prefabComponent)
+        {
+            if (TryResolvePlaceablePrefab(manager, requestedType, requestedLevel, out resolvedType, out resolvedLevel, out prefab, out prefabComponent))
+                return true;
+
+            if (manager == null || string.IsNullOrEmpty(requestedLabel))
+                return false;
+
+            string normalizedLabel = NormalizeObjectLabel(requestedLabel);
+            int maxValue = (int)ObjectManager.ObjectType.Max;
+            for (int raw = 0; raw < maxValue; raw++)
+            {
+                ObjectManager.ObjectType candidateType = (ObjectManager.ObjectType)raw;
+                if (!IsEligiblePaletteObject(candidateType, manager))
+                    continue;
+
+                ObjectManager.ObjectType candidateResolvedType;
+                int candidateResolvedLevel;
+                GameObject candidatePrefab;
+                Obj_Base candidateComponent;
+                if (!TryResolvePlaceablePrefab(manager, candidateType, 1, out candidateResolvedType, out candidateResolvedLevel, out candidatePrefab, out candidateComponent))
+                    continue;
+
+                string candidateLabel = NormalizeObjectLabel(BuildObjectLabel(candidateComponent, candidateType));
+                string candidateTypeLabel = NormalizeObjectLabel(FormatObjectType(candidateType.ToString()));
+                if (string.Equals(normalizedLabel, candidateLabel, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(normalizedLabel, candidateTypeLabel, StringComparison.OrdinalIgnoreCase))
+                {
+                    resolvedType = candidateResolvedType;
+                    resolvedLevel = candidateResolvedLevel;
+                    prefab = candidatePrefab;
+                    prefabComponent = candidateComponent;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public bool CancelForPlaytest(out string message)
         {
             return CancelActivePlacement("Placement cancelled before playtest started.", out message);
@@ -373,6 +428,49 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool CancelForToolSwitch(out string message)
         {
             return CancelActivePlacement("Placement cancelled because the active tool changed.", out message);
+        }
+
+        internal bool StartObjectClonePlacement(Obj_Base source, out string message)
+        {
+            message = null;
+            if (source == null)
+            {
+                message = "No compatible prefab is available for the copied object.";
+                return true;
+            }
+
+            ObjectManager.ObjectType objectType = source.GetObjectType();
+            if (objectType == ObjectManager.ObjectType.Undefined || objectType == ObjectManager.ObjectType.Max)
+            {
+                message = "No compatible prefab is available for " + ScenarioBunkerDraftService.SafeObjectName(source) + ".";
+                return true;
+            }
+
+            int level = source.objectLevel > 0 ? source.objectLevel : 1;
+            ActivePlacementSession session = CreateGhostSession(ObjectManager.ObjectType.CraftingGhost, PlacementSessionKind.Object, ScenarioBunkerDraftService.SafeObjectName(source), out message);
+            if (session == null)
+                return true;
+
+            Obj_CraftingGhost ghost = session.Ghost as Obj_CraftingGhost;
+            if (ghost == null || !ConfigureGhostFromSource(ghost, source))
+            {
+                CancelActivePlacement(null);
+                message = "Object placement could not start because the copied object has no placeable visual preview.";
+                return true;
+            }
+
+            session.ObjectType = objectType;
+            session.Level = level;
+            session.PlaceableOnSurface = source.PlacableOnSurface;
+            session.ColliderWidth = ResolveColliderWidth(source.gameObject);
+            session.DefinitionReference = objectType.ToString();
+            session.CloneSourceObject = source;
+            _activePlacement = session;
+            _placementGhostSessionService.Start(session.Label, objectType.ToString(), session.Ghost);
+            ApplyActiveGhostVisual();
+            LogPlacementInfo("Clone placement session started: " + session.Label + " (" + objectType + ").");
+            message = "Placing copied " + session.Label + ". Left-click to place, right-click or Escape to cancel.";
+            return true;
         }
 
         public bool CanDeleteObject(ScenarioAuthoringTarget target, out string reason)
@@ -450,15 +548,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
-            GameObject prefab = manager.GetPrefab(objectType, level);
-            Obj_Base prefabComponent = prefab != null ? prefab.GetComponent<Obj_Base>() : null;
+            ObjectManager.ObjectType resolvedObjectType;
+            int resolvedLevel;
+            GameObject prefab;
+            Obj_Base prefabComponent;
+            if (!TryResolvePlaceableObject(manager, objectType, level, null, out resolvedObjectType, out resolvedLevel, out prefab, out prefabComponent))
+            {
+                message = "No compatible prefab is available for " + objectType + ".";
+                return false;
+            }
+
             if (prefab == null || prefabComponent == null)
             {
                 message = "No compatible prefab is available for " + objectType + ".";
                 return false;
             }
 
-            ActivePlacementSession session = CreateGhostSession(ObjectManager.ObjectType.CraftingGhost, PlacementSessionKind.Object, BuildObjectLabel(prefabComponent, objectType), out message);
+            ActivePlacementSession session = CreateGhostSession(ObjectManager.ObjectType.CraftingGhost, PlacementSessionKind.Object, BuildObjectLabel(prefabComponent, resolvedObjectType), out message);
             if (session == null)
                 return false;
 
@@ -470,19 +576,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
-            ghost.ImitateObject(objectType, level);
+            ghost.ImitateObject(resolvedObjectType, resolvedLevel);
             ghost.SetIgnoresObjects(ResolveIgnoreMovementCollision(prefabComponent));
-            session.ObjectType = objectType;
-            session.Level = level;
-            session.DefinitionReference = objectType.ToString();
+            session.ObjectType = resolvedObjectType;
+            session.Level = resolvedLevel;
+            session.DefinitionReference = resolvedObjectType.ToString();
             session.PlaceableOnSurface = prefabComponent.PlacableOnSurface;
             BoxCollider2D collider = prefabComponent.GetComponent<BoxCollider2D>();
             session.ColliderWidth = collider != null ? collider.size.x : 0f;
             _activePlacement = session;
-            _placementGhostSessionService.Start(session.Label, objectType.ToString(), session.Ghost);
+            _placementGhostSessionService.Start(session.Label, resolvedObjectType.ToString(), session.Ghost);
             ApplyActiveGhostVisual();
             message = "Placing " + session.Label + ". Left-click to place, right-click or Escape to cancel.";
-            LogPlacementInfo("Placement session started: " + session.Label + " (" + objectType + ").");
+            LogPlacementInfo("Placement session started: " + session.Label + " (" + resolvedObjectType + ").");
             return true;
         }
 
@@ -683,7 +789,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 RestoreActiveGhostVisual();
                 ghost.OnPlacementFinished();
                 RemoveGhostSafely(ghost);
-                spawned = manager.SpawnObject(objectType, level, new Vector2(position.x, position.y));
+                spawned = _activePlacement.CloneSourceObject != null
+                    ? SpawnCloneObject(manager, _activePlacement.CloneSourceObject, objectType, position)
+                    : manager.SpawnObject(objectType, level, new Vector2(position.x, position.y));
             }
             catch (Exception ex)
             {
@@ -1079,6 +1187,133 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _activePlacement.GhostVisual = null;
         }
 
+        private static bool ConfigureGhostFromSource(Obj_CraftingGhost ghost, Obj_Base source)
+        {
+            if (ghost == null || source == null)
+                return false;
+
+            SpriteRenderer sourceRenderer = ResolvePreviewRenderer(source.gameObject);
+            SpriteRenderer ghostRenderer = ResolvePreviewRenderer(ghost.gameObject);
+            BoxCollider2D sourceCollider = source.GetComponent<BoxCollider2D>();
+            BoxCollider2D ghostCollider = ghost.GetComponent<BoxCollider2D>();
+            if (sourceRenderer == null || sourceRenderer.sprite == null || ghostRenderer == null || sourceCollider == null || ghostCollider == null)
+                return false;
+
+            ghostRenderer.sprite = sourceRenderer.sprite;
+            ghostRenderer.transform.localPosition = sourceRenderer.transform.localPosition;
+            ghostRenderer.transform.localRotation = sourceRenderer.transform.localRotation;
+            ghostRenderer.transform.localScale = sourceRenderer.transform.localScale;
+            ghostCollider.size = sourceCollider.size;
+            ghostCollider.offset = sourceCollider.offset;
+            ghost.constructionSprites = source.constructionSprites;
+            ghost.craftAnimation = source.craftAnimation;
+
+            SetFieldValue(CraftingGhostImitatedTypeField, ghost, source.GetObjectType());
+            SetFieldValue(CraftingGhostImitatedLevelField, ghost, source.objectLevel > 0 ? source.objectLevel : 1);
+            SetFieldValue(CraftingGhostPlaceableOnSurfaceField, ghost, source.PlacableOnSurface);
+            ghost.SetIgnoresObjects(ResolveIgnoreMovementCollision(source));
+            return true;
+        }
+
+        private static SpriteRenderer ResolvePreviewRenderer(GameObject gameObject)
+        {
+            SpriteRenderer[] renderers = gameObject != null ? gameObject.GetComponentsInChildren<SpriteRenderer>(true) : null;
+            for (int i = 0; renderers != null && i < renderers.Length; i++)
+                if (renderers[i] != null && renderers[i].sprite != null)
+                    return renderers[i];
+
+            return null;
+        }
+
+        private static float ResolveColliderWidth(GameObject gameObject)
+        {
+            BoxCollider2D collider = gameObject != null ? gameObject.GetComponent<BoxCollider2D>() : null;
+            return collider != null ? collider.size.x : 0f;
+        }
+
+        private static Obj_Base SpawnCloneObject(ObjectManager manager, Obj_Base source, ObjectManager.ObjectType objectType, Vector3 position)
+        {
+            if (manager == null || source == null)
+                return null;
+
+            GameObject clone = UnityEngine.Object.Instantiate(source.gameObject, new Vector3(position.x, position.y, 0f), Quaternion.identity) as GameObject;
+            Obj_Base spawned = clone != null ? clone.GetComponent<Obj_Base>() : null;
+            if (spawned == null)
+            {
+                if (clone != null)
+                    UnityEngine.Object.Destroy(clone);
+                return null;
+            }
+
+            if (manager.spawned_objects != null)
+                clone.transform.parent = manager.spawned_objects.transform;
+            spawned.SetObjectId(NextSpawnedObjectId(manager), false);
+            spawned.movable = source.movable;
+            RegisterSpawnedObject(manager, objectType, spawned);
+            return spawned;
+        }
+
+        private static int NextSpawnedObjectId(ObjectManager manager)
+        {
+            if (manager == null || ObjectManagerSpawnedObjectIdField == null)
+                return 0;
+
+            int next = 0;
+            try
+            {
+                object value = ObjectManagerSpawnedObjectIdField.GetValue(manager);
+                if (value != null && value.GetType() == typeof(int))
+                    next = (int)value;
+                ObjectManagerSpawnedObjectIdField.SetValue(manager, next + 1);
+            }
+            catch
+            {
+                return 0;
+            }
+
+            return next;
+        }
+
+        private static void RegisterSpawnedObject(ObjectManager manager, ObjectManager.ObjectType objectType, Obj_Base spawned)
+        {
+            if (manager == null || spawned == null || ObjectManagerObjectsField == null)
+                return;
+
+            try
+            {
+                Dictionary<ObjectManager.ObjectType, List<Obj_Base>> objects = ObjectManagerObjectsField.GetValue(manager) as Dictionary<ObjectManager.ObjectType, List<Obj_Base>>;
+                if (objects == null)
+                    return;
+
+                List<Obj_Base> typedObjects;
+                if (!objects.TryGetValue(objectType, out typedObjects) || typedObjects == null)
+                {
+                    typedObjects = new List<Obj_Base>();
+                    objects[objectType] = typedObjects;
+                }
+
+                if (!typedObjects.Contains(spawned))
+                    typedObjects.Add(spawned);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void SetFieldValue(FieldInfo field, object target, object value)
+        {
+            if (field == null || target == null)
+                return;
+
+            try
+            {
+                field.SetValue(target, value);
+            }
+            catch
+            {
+            }
+        }
+
         private PlacementValidationResult EvaluateActivePlacement()
         {
             if (!HasActivePlacement || _activePlacement.Ghost == null)
@@ -1268,9 +1503,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (grid == null)
                 return worldPoint;
 
+            Vector3 origin = grid.transform.position;
             float width = Mathf.Max(0f, _activePlacement != null ? _activePlacement.ColliderWidth : 0f);
-            float minX = width * 0.5f;
-            float maxX = (grid.grid_width * grid.grid_cell_width) - width;
+            float halfWidth = width * 0.5f;
+            float minX = origin.x + halfWidth;
+            float maxX = origin.x + (grid.grid_width * grid.grid_cell_width) - halfWidth;
             if (maxX < minX)
                 maxX = minX;
 
@@ -1278,13 +1515,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             float maxY;
             if (_activePlacement != null && _activePlacement.PlaceableOnSurface)
             {
-                minY = -1f * grid.grid_cell_height;
-                maxY = 0f;
+                minY = origin.y - grid.grid_cell_height;
+                maxY = origin.y;
             }
             else
             {
-                minY = -1f * ((grid.grid_height - 1) * grid.grid_cell_height);
-                maxY = -1f * grid.grid_cell_height;
+                minY = origin.y - ((grid.grid_height - 1) * grid.grid_cell_height);
+                maxY = origin.y - grid.grid_cell_height;
             }
 
             return new Vector3(
@@ -1335,7 +1572,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return worldPoint;
 
             Vector3 snapped = ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY);
-            float cellLeft = gridX * grid.grid_cell_width;
+            float cellLeft = grid.transform.position.x + (gridX * grid.grid_cell_width);
             float cellRight = cellLeft + grid.grid_cell_width;
             snapped.x = Mathf.Clamp(worldPoint.x, cellLeft + 0.05f, cellRight - 0.05f);
             return snapped;
@@ -1830,7 +2067,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (grid == null)
                 return 0.5f;
 
-            float cellLeft = gridX * grid.grid_cell_width;
+            float cellLeft = grid.transform.position.x + (gridX * grid.grid_cell_width);
             float cellRight = cellLeft + grid.grid_cell_width;
             if (Mathf.Approximately(cellRight, cellLeft))
                 return 0.5f;
@@ -1860,6 +2097,40 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             objectType = (ObjectManager.ObjectType)Enum.Parse(typeof(ObjectManager.ObjectType), parts[0], true);
             return objectType != ObjectManager.ObjectType.Undefined && objectType != ObjectManager.ObjectType.Max;
+        }
+
+        private static bool TryResolvePlaceablePrefab(
+            ObjectManager manager,
+            ObjectManager.ObjectType objectType,
+            int requestedLevel,
+            out ObjectManager.ObjectType resolvedType,
+            out int resolvedLevel,
+            out GameObject prefab,
+            out Obj_Base prefabComponent)
+        {
+            resolvedType = objectType;
+            resolvedLevel = requestedLevel > 0 ? requestedLevel : 1;
+            prefab = null;
+            prefabComponent = null;
+
+            if (manager == null || !IsEligiblePaletteObject(objectType, manager))
+                return false;
+
+            prefab = manager.GetPrefab(objectType, resolvedLevel);
+            prefabComponent = prefab != null ? prefab.GetComponent<Obj_Base>() : null;
+            if (prefab == null || prefabComponent == null)
+                return false;
+
+            resolvedLevel = prefabComponent.objectLevel > 0 ? prefabComponent.objectLevel : resolvedLevel;
+            return true;
+        }
+
+        private static string NormalizeObjectLabel(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            return value.Trim();
         }
 
         private static string EncodeActionToken(string token)
