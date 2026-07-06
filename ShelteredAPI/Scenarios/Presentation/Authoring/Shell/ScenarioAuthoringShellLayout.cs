@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float InspectorWidth = 300f;
         public const float InspectorMinWidth = 240f;
         public const float InspectorMaxWidth = 480f;
-        public const float BottomTrayHeight = 226f;
+        public const float BottomTrayHeight = 246f;
         public const float BottomTrayCollapsedHeight = 44f;
         public const float CommandDockHeight = 48f;
 

@@ -106,14 +106,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return actions.ToArray();
             }
 
-            actions.Add(new ScenarioAuthoringInspectorAction
+            if (!authoredTarget)
             {
-                Id = ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
-                Label = authoredTarget ? "Refresh" : "Capture",
-                Hint = authoredTarget ? "Refresh this authored placement from the live object." : "Capture this live object into the scenario draft.",
-                Enabled = true,
-                Emphasized = !authoredTarget
-            });
+                actions.Add(new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionToolObjects,
+                    Label = "Objects",
+                    Hint = "Open the Objects workspace for advanced live-object import and draft placement tools.",
+                    Enabled = true
+                });
+            }
             actions.Add(new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,

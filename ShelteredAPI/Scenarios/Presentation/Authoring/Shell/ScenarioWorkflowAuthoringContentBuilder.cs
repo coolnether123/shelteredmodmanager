@@ -197,7 +197,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture Objects", "Update the draft with the shelter objects currently in the world.", true, true, "OB", "Capture current shelter objects.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Pick", "Add the selected live shelter object to the draft.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
                     AddDeleteObjectAction(items, selectedTarget);
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove Draft Capture (keeps object): remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
                     AddCancelPlacement(items, buildStatus, "Stop the active object preview without committing it.");
                     AddBuildStatus(items, buildStatus);
                     if (!string.IsNullOrEmpty(selectedObjectStatus))
@@ -237,7 +237,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureShelterObjects, "Capture Objects", "Update the draft with the shelter objects currently in the world.", true, true, "OB", "Capture current shelter objects.")));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureSelectedObject, "Capture Pick", "Add the selected live shelter object to the draft.", canCaptureSelectedObject, canCaptureSelectedObject, "CP", "Capture only the selected object.")));
                     AddDeleteObjectAction(items, selectedTarget);
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, "Remove Draft Capture (keeps object)", "Remove Draft Capture (keeps object): remove the selected object's captured placement from the scenario without deleting the live object.", hasCapturedSelectedObject, false, "DC", "Remove only the stored selected capture.")));
                     items.Add(Item.Property("Current Pick", Item.FormatTarget(selectedTarget)));
                     if (!string.IsNullOrEmpty(selectedObjectStatus))
                         items.Add(Item.Text(selectedObjectStatus));

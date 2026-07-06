@@ -513,7 +513,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement,
                 "Remove Draft Capture (keeps object)",
-                "Remove this object's captured placement from the scenario draft.",
+                "Remove Draft Capture (keeps object): remove this object's captured placement from the scenario draft.",
                 scopeAllowed && hasCapturedPlacement,
                 false,
                 "RM",

@@ -295,14 +295,28 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             while (low < high)
             {
                 int mid = (low + high + 1) / 2;
-                string candidate = label.Substring(0, mid) + ellipsis;
+                string candidate = BuildEllipsisCandidate(label, mid, ellipsis);
                 if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
                     low = mid;
                 else
                     high = mid - 1;
             }
 
-            return label.Substring(0, low) + ellipsis;
+            return BuildEllipsisCandidate(label, low, ellipsis);
+        }
+
+        private static string BuildEllipsisCandidate(string label, int length, string ellipsis)
+        {
+            if (string.IsNullOrEmpty(label) || length <= 0)
+                return ellipsis;
+
+            int safeLength = Math.Min(length, label.Length);
+            string prefix = label.Substring(0, safeLength).TrimEnd();
+            int wordBoundary = Math.Max(prefix.LastIndexOf(' '), Math.Max(prefix.LastIndexOf('/'), prefix.LastIndexOf('-')));
+            if (wordBoundary >= 6 && safeLength < label.Length)
+                prefix = prefix.Substring(0, wordBoundary).TrimEnd();
+
+            return prefix + ellipsis;
         }
 
         private static float ResolveHorizontalPadding(GUIStyle style)

@@ -1713,6 +1713,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawHomeQuestionCard(section);
             }
+            else if (IsTargetStripSection(section))
+            {
+                DrawTargetStripSection(section, compactInspector);
+            }
             else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip || section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip)
             {
                 bool renderAsTabs = section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip;
@@ -1837,6 +1841,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip;
         }
 
+        private static bool IsTargetStripSection(ScenarioAuthoringInspectorSection section)
+        {
+            return section != null
+                && string.Equals(section.Id, "target_strip", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void DrawTargetStripSection(ScenarioAuthoringInspectorSection section, bool compactInspector)
+        {
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+
+                if (item.Action != null && IsSelectionStackAction(item.Action))
+                {
+                    DrawCompactActionRow(item.Action);
+                    GUILayout.Space(2f);
+                    continue;
+                }
+
+                DrawItem(item, compactInspector);
+                if (i == 0)
+                    GUILayout.Space(4f);
+            }
+        }
+
         private void DrawHomeQuestionCard(ScenarioAuthoringInspectorSection section)
         {
             Rect rect = GUILayoutUtility.GetRect(120f, 78f, GUILayout.ExpandWidth(true), GUILayout.Height(78f));
@@ -1932,11 +1963,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioAuthoringInspectorItemKind.Action:
                     if (item.Action != null)
                     {
-                        if (!string.IsNullOrEmpty(item.Action.Id)
-                            && item.Action.Id.StartsWith(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix, StringComparison.Ordinal))
+                        if (IsSelectionStackAction(item.Action))
                         {
-                            Rect stackRowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
-                            DrawButton(stackRowRect, item.Action, false);
+                            DrawCompactActionRow(item.Action);
                             break;
                         }
 
@@ -1950,6 +1979,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     GUILayout.Label(item.Value ?? string.Empty, _textStyle);
                     break;
             }
+        }
+
+        private static bool IsSelectionStackAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && !string.IsNullOrEmpty(action.Id)
+                && (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSelectionStackCycle, StringComparison.Ordinal)
+                    || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded, StringComparison.Ordinal)
+                    || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix, StringComparison.Ordinal));
+        }
+
+        private void DrawCompactActionRow(ScenarioAuthoringInspectorAction action)
+        {
+            Rect rowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
+            DrawButton(rowRect, action, false);
         }
 
         private void DrawEditableProperty(ScenarioAuthoringInspectorItem item, bool compactInspector)
@@ -2130,11 +2174,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 textRect = new Rect(rect.x + 10f, rect.y + 8f, rect.width - 20f, rect.height - 16f);
             }
 
-            GUIContent labelContent = new GUIContent(action.Label ?? string.Empty, action.Hint ?? action.Detail ?? string.Empty);
             GUIStyle labelStyle = new GUIStyle(_textStyle);
-            labelStyle.wordWrap = true;
-            float labelHeight = rect.height <= 76f ? 28f : 38f;
-            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), labelContent, labelStyle);
+            labelStyle.wordWrap = false;
+            labelStyle.clipping = TextClipping.Clip;
+            float labelHeight = 20f;
+            string fittedLabel = ShortenToFit(action.Label ?? string.Empty, textRect.width, labelStyle);
+            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, BuildFullLabelTooltip(action)), labelStyle);
             string detail = !string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint;
             if (!string.IsNullOrEmpty(detail))
                 GUI.Label(new Rect(textRect.x, textRect.y + labelHeight + 2f, textRect.width, Math.Max(16f, rect.height - labelHeight - 30f)), detail, _mutedTextStyle);
@@ -2162,6 +2207,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private float GetSectionContentWidth()
         {
             return Math.Max(120f, _activeContentWidth - 24f);
+        }
+
+        private static string BuildFullLabelTooltip(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return string.Empty;
+
+            string label = action.Label ?? string.Empty;
+            string hint = action.Hint ?? action.Detail ?? string.Empty;
+            if (string.IsNullOrEmpty(label))
+                return hint;
+            if (string.IsNullOrEmpty(hint) || hint.IndexOf(label, StringComparison.OrdinalIgnoreCase) >= 0)
+                return label;
+            return label + ": " + hint;
         }
 
         private static bool IsBuildPaletteSection(ScenarioAuthoringInspectorSection section)

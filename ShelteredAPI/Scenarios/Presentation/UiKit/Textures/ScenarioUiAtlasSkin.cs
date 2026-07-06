@@ -33,7 +33,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
         public static bool DrawButton(Rect rect, bool active, bool enabled, bool pressed, bool tab)
         {
-            if (tab && active)
+            if (active)
                 return false;
 
             string role = tab
