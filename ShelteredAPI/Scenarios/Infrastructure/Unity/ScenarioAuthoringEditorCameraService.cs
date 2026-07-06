@@ -7,13 +7,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioAuthoringEditorCameraService
     {
         private const float BasePanSpeed = 8f;
+        private const float PanAcceleration = 22f;
+        private const float PanDeceleration = 28f;
         private const float MinZoom = 2f;
         private const float ZoomStep = 1.5f;
+        private const float ZoomEaseSpeed = 14f;
+        private const float LeftDragPanThresholdPixels = 5f;
 
         private readonly ScenarioAuthoringInputCaptureService _inputCapture;
         private readonly ScenarioAuthoringVanillaPanelVisibilityService _panelVisibility;
         private bool _middleDragging;
-        private Vector3 _lastMousePosition;
+        private bool _leftDragCandidate;
+        private bool _leftDragging;
+        private Vector3 _lastMiddleMousePosition;
+        private Vector3 _lastLeftMousePosition;
+        private Vector3 _leftDragStartMousePosition;
+        private Vector2 _keyboardPanVelocity = Vector2.zero;
+        private float _targetOrthographicSize = -1f;
+        private int _suppressSelectionFrame = -1;
 
         public ScenarioAuthoringEditorCameraService(
             ScenarioAuthoringInputCaptureService inputCapture,
@@ -25,9 +36,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public void Update()
         {
-            if (!CanControlCamera())
+            if (!CanRunCameraUpdate())
             {
-                _middleDragging = false;
+                ResetDragState();
+                _keyboardPanVelocity = Vector2.zero;
+                _targetOrthographicSize = -1f;
                 return;
             }
 
@@ -36,22 +49,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (camera == null || !camera.orthographic)
                 return;
 
+            if (_targetOrthographicSize < 0f)
+                _targetOrthographicSize = camera.orthographicSize;
+
             Vector3 translation = ResolveKeyboardPan(camera);
-            translation += ResolveMiddleMousePan(camera);
+            translation += ResolveMouseDragPan(camera);
             if (translation.sqrMagnitude > 0.000001f)
-                camera.transform.position = ClampCameraPosition(camera, basicCamera, camera.transform.position + translation);
+                camera.transform.position = ClampCameraPosition(camera, basicCamera, PreserveCameraZ(camera, camera.transform.position + translation));
 
             ApplyWheelZoom(camera, basicCamera);
+            ApplyEasedZoom(camera, basicCamera);
             camera.transform.position = ClampCameraPosition(camera, basicCamera, camera.transform.position);
         }
 
-        private bool CanControlCamera()
+        public bool ShouldSuppressSelectionClickThisFrame()
+        {
+            return _leftDragging || Time.frameCount <= _suppressSelectionFrame;
+        }
+
+        private bool CanRunCameraUpdate()
         {
             if (!ScenarioAuthoringRuntimeGuards.IsAuthoringActive() || ScenarioAuthoringRuntimeGuards.IsPlaytesting())
                 return false;
             if (_panelVisibility != null && _panelVisibility.HasBlockingPanelOpen())
-                return false;
-            if (_inputCapture != null && _inputCapture.ShouldSuppressWorldInputNow())
                 return false;
             return !IsTextFieldFocused();
         }
@@ -63,23 +83,36 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return basic != null ? basic : Object.FindObjectOfType<BasicCamera>();
         }
 
-        private static Vector3 ResolveKeyboardPan(Camera camera)
+        private Vector3 ResolveKeyboardPan(Camera camera)
         {
             Vector2 direction = Vector2.zero;
-            if (UnityEngine.Input.GetKey(KeyCode.A) || UnityEngine.Input.GetKey(KeyCode.LeftArrow))
-                direction.x -= 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.D) || UnityEngine.Input.GetKey(KeyCode.RightArrow))
-                direction.x += 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.S) || UnityEngine.Input.GetKey(KeyCode.DownArrow))
-                direction.y -= 1f;
-            if (UnityEngine.Input.GetKey(KeyCode.W) || UnityEngine.Input.GetKey(KeyCode.UpArrow))
-                direction.y += 1f;
+            if (!ShouldSuppressWorldCameraInput())
+            {
+                if (UnityEngine.Input.GetKey(KeyCode.A) || UnityEngine.Input.GetKey(KeyCode.LeftArrow))
+                    direction.x -= 1f;
+                if (UnityEngine.Input.GetKey(KeyCode.D) || UnityEngine.Input.GetKey(KeyCode.RightArrow))
+                    direction.x += 1f;
+                if (UnityEngine.Input.GetKey(KeyCode.S) || UnityEngine.Input.GetKey(KeyCode.DownArrow))
+                    direction.y -= 1f;
+                if (UnityEngine.Input.GetKey(KeyCode.W) || UnityEngine.Input.GetKey(KeyCode.UpArrow))
+                    direction.y += 1f;
+            }
 
             if (direction.sqrMagnitude > 1f)
                 direction.Normalize();
 
+            float deltaTime = GetRealDeltaTime();
+            float acceleration = direction.sqrMagnitude > 0.0001f ? PanAcceleration : PanDeceleration;
+            _keyboardPanVelocity = Vector2.MoveTowards(_keyboardPanVelocity, direction, acceleration * deltaTime);
             float zoomScale = Mathf.Max(0.5f, camera.orthographicSize / 4f);
-            return new Vector3(direction.x, direction.y, 0f) * BasePanSpeed * zoomScale * Time.unscaledDeltaTime;
+            return new Vector3(_keyboardPanVelocity.x, _keyboardPanVelocity.y, 0f) * BasePanSpeed * zoomScale * deltaTime;
+        }
+
+        private Vector3 ResolveMouseDragPan(Camera camera)
+        {
+            Vector3 translation = ResolveMiddleMousePan(camera);
+            translation += ResolveLeftEmptyWorldMousePan(camera);
+            return translation;
         }
 
         private Vector3 ResolveMiddleMousePan(Camera camera)
@@ -87,7 +120,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (UnityEngine.Input.GetMouseButtonDown(2))
             {
                 _middleDragging = true;
-                _lastMousePosition = UnityEngine.Input.mousePosition;
+                _lastMiddleMousePosition = UnityEngine.Input.mousePosition;
                 return Vector3.zero;
             }
 
@@ -100,14 +133,54 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (!_middleDragging)
             {
                 _middleDragging = true;
-                _lastMousePosition = UnityEngine.Input.mousePosition;
+                _lastMiddleMousePosition = UnityEngine.Input.mousePosition;
                 return Vector3.zero;
             }
 
             Vector3 current = UnityEngine.Input.mousePosition;
-            Vector3 lastWorld = ScreenToCameraPlane(camera, _lastMousePosition);
+            Vector3 lastWorld = ScreenToCameraPlane(camera, _lastMiddleMousePosition);
             Vector3 currentWorld = ScreenToCameraPlane(camera, current);
-            _lastMousePosition = current;
+            _lastMiddleMousePosition = current;
+            Vector3 delta = lastWorld - currentWorld;
+            delta.z = 0f;
+            return delta;
+        }
+
+        private Vector3 ResolveLeftEmptyWorldMousePan(Camera camera)
+        {
+            if (UnityEngine.Input.GetMouseButtonDown(0))
+            {
+                ScenarioAuthoringState state = ScenarioAuthoringBackendService.Instance.CurrentState;
+                _leftDragCandidate = !ShouldSuppressWorldCameraInput()
+                    && !ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement
+                    && (state == null || state.HoveredTarget == null);
+                _leftDragging = false;
+                _leftDragStartMousePosition = UnityEngine.Input.mousePosition;
+                _lastLeftMousePosition = _leftDragStartMousePosition;
+                return Vector3.zero;
+            }
+
+            if (!UnityEngine.Input.GetMouseButton(0))
+            {
+                if (_leftDragging)
+                    _suppressSelectionFrame = Time.frameCount + 1;
+                _leftDragCandidate = false;
+                _leftDragging = false;
+                return Vector3.zero;
+            }
+
+            if (!_leftDragCandidate)
+                return Vector3.zero;
+
+            Vector3 current = UnityEngine.Input.mousePosition;
+            if (!_leftDragging && (current - _leftDragStartMousePosition).sqrMagnitude < LeftDragPanThresholdPixels * LeftDragPanThresholdPixels)
+                return Vector3.zero;
+
+            _leftDragging = true;
+            _suppressSelectionFrame = Time.frameCount + 1;
+            Vector3 lastWorld = ScreenToCameraPlane(camera, _lastLeftMousePosition);
+            Vector3 currentWorld = ScreenToCameraPlane(camera, current);
+            _lastLeftMousePosition = current;
             Vector3 delta = lastWorld - currentWorld;
             delta.z = 0f;
             return delta;
@@ -115,14 +188,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         private void ApplyWheelZoom(Camera camera, BasicCamera basicCamera)
         {
+            if (ShouldSuppressWorldCameraInput())
+                return;
+
             float wheel = UnityEngine.Input.GetAxis("Mouse ScrollWheel");
             if (Mathf.Abs(wheel) <= 0.0001f)
                 return;
 
             ScenarioAuthoringState state = ScenarioAuthoringBackendService.Instance.CurrentState;
             float scrollSpeed = state != null && state.Settings != null ? state.Settings.GetFloat("input.scroll_speed", 1f) : 1f;
-            float nextSize = camera.orthographicSize - (wheel * ZoomStep * scrollSpeed);
-            camera.orthographicSize = ClampZoom(camera, basicCamera, nextSize);
+            _targetOrthographicSize = ClampZoom(camera, basicCamera, _targetOrthographicSize - (wheel * ZoomStep * scrollSpeed));
+        }
+
+        private void ApplyEasedZoom(Camera camera, BasicCamera basicCamera)
+        {
+            _targetOrthographicSize = ClampZoom(camera, basicCamera, _targetOrthographicSize);
+            float deltaTime = GetRealDeltaTime();
+            camera.orthographicSize = Mathf.Lerp(camera.orthographicSize, _targetOrthographicSize, 1f - Mathf.Exp(-ZoomEaseSpeed * deltaTime));
+            camera.orthographicSize = ClampZoom(camera, basicCamera, camera.orthographicSize);
         }
 
         private static Vector3 ScreenToCameraPlane(Camera camera, Vector3 screenPosition)
@@ -161,11 +244,38 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 position.x += bounds.xMin - bottomLeft.x;
             if (topRight.x > bounds.xMax)
                 position.x -= topRight.x - bounds.xMax;
-            if (topRight.y > bounds.yMin)
-                position.y -= topRight.y - bounds.yMin;
-            if (bottomLeft.y < bounds.yMax)
-                position.y += bounds.yMax - bottomLeft.y;
+            if (bottomLeft.y < bounds.yMin)
+                position.y += bounds.yMin - bottomLeft.y;
+            if (topRight.y > bounds.yMax)
+                position.y -= topRight.y - bounds.yMax;
+            return PreserveCameraZ(camera, position);
+        }
+
+        private bool ShouldSuppressWorldCameraInput()
+        {
+            return _inputCapture != null && _inputCapture.ShouldSuppressWorldInputNow();
+        }
+
+        private void ResetDragState()
+        {
+            _middleDragging = false;
+            _leftDragCandidate = false;
+            _leftDragging = false;
+        }
+
+        private static Vector3 PreserveCameraZ(Camera camera, Vector3 position)
+        {
+            if (camera != null)
+                position.z = camera.transform.position.z;
             return position;
+        }
+
+        private static float GetRealDeltaTime()
+        {
+            float deltaTime = RealTime.deltaTime;
+            if (deltaTime <= 0f)
+                deltaTime = Time.unscaledDeltaTime;
+            return Mathf.Clamp(deltaTime, 0f, 0.05f);
         }
 
         private static bool IsTextFieldFocused()

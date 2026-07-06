@@ -18,6 +18,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
         private readonly ScenarioSelectionScopeService _scopeService;
         private readonly ScenarioAuthoringTargetAdapterRegistry _adapterRegistry = new ScenarioAuthoringTargetAdapterRegistry();
+        private const float MinHitTestTolerance = 0.04f;
 
         public ScenarioAuthoringSelectionService(
             ScenarioCharacterAppearanceService characterAppearanceService,
@@ -90,7 +91,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
 
                 bool placementActive = ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
+                bool dragPanConsumedClick = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().ShouldSuppressSelectionClickThisFrame();
                 if (!placementActive
+                    && !dragPanConsumedClick
                     && ScenarioAuthoringInputActions.IsConfirmSelectionDown()
                     && hovered != null
                     && _scopeService.CanSelectTargetForCurrentStage(state, hovered))
@@ -136,7 +139,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             targets = null;
             if (UICamera.hoveredObject != null)
                 return false;
-            if (ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>().PointerOverAuthoringUi)
+            if (ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>().ShouldSuppressWorldInputNow())
                 return false;
 
             Camera camera = Camera.main;
@@ -151,6 +154,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             Ray ray = camera.ScreenPointToRay(UnityEngine.Input.mousePosition);
             Vector3 worldPoint = ResolveMouseWorldPoint(camera);
+            float hitTolerance = ResolveHitTestTolerance(camera);
             RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
             List<SelectionCandidate> candidates = new List<SelectionCandidate>();
             if (hits != null && hits.Length > 0)
@@ -180,7 +184,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             try
             {
-                Collider2D[] hits2D = Physics2D.OverlapPointAll(new Vector2(worldPoint.x, worldPoint.y));
+                Collider2D[] hits2D = Physics2D.OverlapCircleAll(new Vector2(worldPoint.x, worldPoint.y), hitTolerance);
                 for (int i = 0; hits2D != null && i < hits2D.Length; i++)
                 {
                     Collider2D collider = hits2D[i];
@@ -205,7 +209,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MMLog.WriteDebug("[ScenarioAuthoringSelection] 2D overlap check failed: " + ex.Message);
             }
 
-            AddSpriteRendererCandidates(state, candidates, camera, ray, worldPoint);
+            AddSpriteRendererCandidates(state, candidates, camera, ray, worldPoint, hitTolerance);
 
             ScenarioAuthoringTargetContext gridContext = new ScenarioAuthoringTargetContext
             {
@@ -255,7 +259,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             List<SelectionCandidate> candidates,
             Camera camera,
             Ray ray,
-            Vector3 worldPoint)
+            Vector3 worldPoint,
+            float hitTolerance)
         {
             SpriteRenderer[] spriteRenderers = UnityEngine.Object.FindObjectsOfType<SpriteRenderer>();
             for (int i = 0; spriteRenderers != null && i < spriteRenderers.Length; i++)
@@ -266,7 +271,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || !spriteRenderer.enabled
                     || spriteRenderer.gameObject == null
                     || !spriteRenderer.gameObject.activeInHierarchy
-                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint))
+                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint, hitTolerance))
                 {
                     continue;
                 }
@@ -475,12 +480,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return Mathf.Abs(bounds.size.x * bounds.size.y);
         }
 
-        private static bool ContainsPoint2D(Bounds bounds, Vector3 point)
+        private static bool ContainsPoint2D(Bounds bounds, Vector3 point, float tolerance)
         {
-            return point.x >= bounds.min.x
-                && point.x <= bounds.max.x
-                && point.y >= bounds.min.y
-                && point.y <= bounds.max.y;
+            float padding = Mathf.Max(0f, tolerance);
+            return point.x >= bounds.min.x - padding
+                && point.x <= bounds.max.x + padding
+                && point.y >= bounds.min.y - padding
+                && point.y <= bounds.max.y + padding;
         }
 
         private static bool SynchronizeSelectionStack(ScenarioAuthoringState state, List<ScenarioAuthoringTarget> targets)
@@ -608,6 +614,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return camera.ScreenToWorldPoint(mouse);
         }
 
+        private static float ResolveHitTestTolerance(Camera camera)
+        {
+            if (camera == null || !camera.orthographic || camera.pixelHeight <= 0)
+                return MinHitTestTolerance;
+
+            float worldUnitsPerPixel = (camera.orthographicSize * 2f) / camera.pixelHeight;
+            return Mathf.Max(MinHitTestTolerance, worldUnitsPerPixel * 3f);
+        }
+
         private static bool TryResolveSpriteContext(Camera camera, Ray ray, Vector3 worldPoint, out ScenarioAuthoringTargetContext context)
         {
             context = null;
@@ -627,7 +642,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || !spriteRenderer.enabled
                     || spriteRenderer.gameObject == null
                     || !spriteRenderer.gameObject.activeInHierarchy
-                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint))
+                    || !ContainsPoint2D(spriteRenderer.bounds, worldPoint, ResolveHitTestTolerance(camera)))
                 {
                     continue;
                 }

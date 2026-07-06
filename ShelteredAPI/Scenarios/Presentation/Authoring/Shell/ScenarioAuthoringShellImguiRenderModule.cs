@@ -442,7 +442,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 if (floating)
-                    rect = HandleFloatingWindowInput(window, rect, contentRect);
+                    rect = HandleFloatingWindowInput(
+                        window,
+                        rect,
+                        contentRect,
+                        IsTopmostFloatingWindowForInput(drawList, windowRects, i));
                 else if (window.Dock == ScenarioAuthoringShellDock.Right
                     && string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
                 {
@@ -501,7 +505,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return drawList.ToArray();
         }
 
-        private Rect HandleFloatingWindowInput(ScenarioAuthoringShellWindowViewModel window, Rect rect, Rect contentRect)
+        private Rect HandleFloatingWindowInput(
+            ScenarioAuthoringShellWindowViewModel window,
+            Rect rect,
+            Rect contentRect,
+            bool canStartDrag)
         {
             if (window == null)
                 return rect;
@@ -513,35 +521,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (evt == null)
                 return rect;
 
+            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+            if (IsDraggingWindow(window.Id) && inputCapture != null)
+                inputCapture.SetDraggingShellChrome(true);
+
             Rect headerDragRect = BuildFloatingHeaderDragRect(rect, window);
             Rect resizeRect = BuildFloatingResizeRect(rect);
-            Vector2 mouse = evt.mousePosition;
+            Vector2 eventMouse = evt.mousePosition;
+            Vector2 rawMouse = new Vector2(UnityEngine.Input.mousePosition.x, Screen.height - UnityEngine.Input.mousePosition.y);
+            bool eventPrimaryDown = evt.type == EventType.MouseDown && evt.button == 0;
+            bool rawPrimaryDown = UnityEngine.Input.GetMouseButtonDown(0);
+            bool eventPrimaryUp = evt.type == EventType.MouseUp || evt.rawType == EventType.MouseUp;
+            bool rawPrimaryUp = UnityEngine.Input.GetMouseButtonUp(0);
+            bool rawPrimaryHeld = UnityEngine.Input.GetMouseButton(0);
 
-            if (evt.type == EventType.MouseDown && evt.button == 0 && rect.Contains(mouse))
+            if (canStartDrag
+                && !IsDraggingWindow(window.Id)
+                && (eventPrimaryDown || rawPrimaryDown))
             {
-                BringFloatingWindowToFront(window.Id);
-                _windowMenuOpen = false;
+                Vector2 mouse = eventPrimaryDown ? eventMouse : rawMouse;
+                if (rect.Contains(mouse))
+                {
+                    BringFloatingWindowToFront(window.Id);
+                    _windowMenuOpen = false;
 
-                if (resizeRect.Contains(mouse))
-                {
-                    BeginFloatingWindowDrag(window.Id, FloatingWindowDragMode.Resize, rect, mouse);
-                    evt.Use();
-                }
-                else if (headerDragRect.Contains(mouse))
-                {
-                    BeginFloatingWindowDrag(window.Id, FloatingWindowDragMode.Move, rect, mouse);
-                    evt.Use();
+                    if (resizeRect.Contains(mouse))
+                    {
+                        BeginFloatingWindowDrag(window.Id, FloatingWindowDragMode.Resize, rect, mouse);
+                        evt.Use();
+                    }
+                    else if (headerDragRect.Contains(mouse))
+                    {
+                        BeginFloatingWindowDrag(window.Id, FloatingWindowDragMode.Move, rect, mouse);
+                        evt.Use();
+                    }
                 }
             }
-            else if (IsDraggingWindow(window.Id) && evt.type == EventType.MouseDrag && evt.button == 0)
+            else if (IsDraggingWindow(window.Id) && (eventPrimaryUp || rawPrimaryUp))
             {
-                rect = UpdateFloatingWindowDrag(window, mouse, contentRect, false);
-                evt.Use();
-            }
-            else if (IsDraggingWindow(window.Id) && (evt.type == EventType.MouseUp || evt.rawType == EventType.MouseUp))
-            {
+                Vector2 mouse = eventPrimaryUp ? eventMouse : rawMouse;
                 rect = UpdateFloatingWindowDrag(window, mouse, contentRect, true);
                 ClearFloatingDrag();
+                evt.Use();
+            }
+            else if (IsDraggingWindow(window.Id) && (evt.type == EventType.MouseDrag || rawPrimaryHeld))
+            {
+                Vector2 mouse = evt.type == EventType.MouseDrag ? eventMouse : rawMouse;
+                rect = UpdateFloatingWindowDrag(window, mouse, contentRect, false);
                 evt.Use();
             }
 
@@ -666,6 +692,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.Label(new Rect(rect.x - 5f, rect.y + 8f, 10f, 44f), "|", _mutedTextStyle);
 
             return rect;
+        }
+
+        private static bool IsTopmostFloatingWindowForInput(
+            ScenarioAuthoringShellWindowViewModel[] drawList,
+            Dictionary<string, Rect> windowRects,
+            int index)
+        {
+            Event evt = Event.current;
+            if (evt == null || evt.type == EventType.Used || drawList == null || windowRects == null || index < 0 || index >= drawList.Length)
+                return false;
+
+            ScenarioAuthoringShellWindowViewModel window = drawList[index];
+            Rect rect;
+            Vector2 pointer = evt.mousePosition;
+            if (UnityEngine.Input.GetMouseButton(0)
+                || UnityEngine.Input.GetMouseButtonDown(0)
+                || UnityEngine.Input.GetMouseButtonUp(0))
+            {
+                pointer = new Vector2(UnityEngine.Input.mousePosition.x, Screen.height - UnityEngine.Input.mousePosition.y);
+            }
+
+            if (window == null || !windowRects.TryGetValue(window.Id, out rect) || !rect.Contains(pointer))
+                return false;
+
+            for (int i = drawList.Length - 1; i > index; i--)
+            {
+                ScenarioAuthoringShellWindowViewModel candidate = drawList[i];
+                Rect candidateRect;
+                if (candidate != null
+                    && candidate.Visible
+                    && !candidate.Collapsed
+                    && windowRects.TryGetValue(candidate.Id, out candidateRect)
+                    && candidateRect.Contains(pointer))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static ScenarioAuthoringShellWindowViewModel FindWindow(ScenarioAuthoringShellWindowViewModel[] windows, string id)
