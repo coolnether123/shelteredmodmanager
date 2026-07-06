@@ -51,6 +51,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _pixelEditorWheelDeltaActive;
         private int _pixelEditorWheelHandledFrame = -1;
         private int _pixelEditorWheelDeltaSign;
+        private int _pixelEditorPendingWheelFrame = -1;
+        private int _pixelEditorPendingWheelSign;
         private float _pixelEditorWheelAcceptedAt;
         private GUIStyle _rootPanelStyle;
         private GUIStyle _headerStyle;

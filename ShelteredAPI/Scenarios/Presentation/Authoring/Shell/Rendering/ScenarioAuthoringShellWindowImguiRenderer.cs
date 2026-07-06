@@ -1019,39 +1019,56 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (current == null || !contains)
                 return false;
 
-            bool hasWheelDelta = Mathf.Abs(current.delta.y) > 0.01f;
-            if (!TryAcceptPixelCanvasWheel(current))
-            {
-                if (hasWheelDelta)
-                {
-                    current.Use();
-                    return true;
-                }
-
+            int deltaSign;
+            if (!TryAcceptPixelCanvasWheel(current, out deltaSign))
                 return false;
-            }
 
-            string zoomActionId = current.delta.y < 0f
+            string zoomActionId = deltaSign < 0
                 ? ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn
                 : ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut;
             ScenarioAuthoringBackendService.Instance.ExecuteAction(zoomActionId);
-            current.Use();
+            if (current.type != EventType.Layout && current.type != EventType.Repaint)
+                current.Use();
             return true;
         }
 
-        private bool TryAcceptPixelCanvasWheel(Event current)
+        private bool TryAcceptPixelCanvasWheel(Event current, out int deltaSign)
         {
+            deltaSign = 0;
             if (current == null)
                 return false;
 
-            if (Mathf.Abs(current.delta.y) <= 0.01f)
+            bool genuineWheel = current.type == EventType.ScrollWheel || current.rawType == EventType.ScrollWheel;
+            bool hasDelta = Mathf.Abs(current.delta.y) > 0.01f;
+            if (!genuineWheel)
             {
-                _pixelEditorWheelDeltaActive = false;
-                _pixelEditorWheelDeltaSign = 0;
+                if (!hasDelta)
+                {
+                    _pixelEditorWheelDeltaActive = false;
+                    _pixelEditorWheelDeltaSign = 0;
+                }
                 return false;
             }
 
-            int deltaSign = current.delta.y < 0f ? -1 : 1;
+            if (!hasDelta)
+            {
+                if (current.type == EventType.Repaint && _pixelEditorPendingWheelFrame == Time.frameCount)
+                    deltaSign = _pixelEditorPendingWheelSign;
+                else
+                    return false;
+            }
+            else
+            {
+                deltaSign = current.delta.y < 0f ? -1 : 1;
+            }
+
+            if (current.type == EventType.Layout)
+            {
+                _pixelEditorPendingWheelFrame = Time.frameCount;
+                _pixelEditorPendingWheelSign = deltaSign;
+                return false;
+            }
+
             if (_pixelEditorWheelHandledFrame == Time.frameCount)
                 return false;
 
