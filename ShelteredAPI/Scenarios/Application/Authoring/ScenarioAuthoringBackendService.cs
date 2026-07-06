@@ -31,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioSelectionScopeService _selectionScopeService;
         private readonly ScenarioAuthoringTutorialService _tutorialService;
         private readonly ScenarioAuthoringSetupStateService _setupStateService;
+        private readonly ScenarioAuthoringShortcutRouter _shortcutRouter;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
 
@@ -65,7 +66,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioStageCoordinator stageCoordinator,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioAuthoringTutorialService tutorialService,
-            ScenarioAuthoringSetupStateService setupStateService)
+            ScenarioAuthoringSetupStateService setupStateService,
+            ScenarioAuthoringInputCaptureService inputCaptureService)
         {
             _selectionService = selectionService;
             _sessionStore = sessionStore;
@@ -80,6 +82,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _selectionScopeService = selectionScopeService;
             _tutorialService = tutorialService;
             _setupStateService = setupStateService;
+            _shortcutRouter = new ScenarioAuthoringShortcutRouter(
+                commandService,
+                sectionHub,
+                inputCaptureService);
         }
 
         internal void SetActiveSession(ScenarioAuthoringSession session)
@@ -179,16 +185,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (_tutorialService != null && _tutorialService.CurrentTour() != null && UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape))
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionTourExit);
 
-            if (ScenarioAuthoringInputActions.IsUndoDown())
-                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionHistoryUndo);
-            if (ScenarioAuthoringInputActions.IsRedoDown())
-                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionHistoryRedo);
-            if (ScenarioAuthoringInputActions.IsCopyDown())
-                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapCopy);
-            if (ScenarioAuthoringInputActions.IsPasteDown())
-                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapPaste);
-            if (ScenarioAuthoringInputActions.IsRevertDown())
-                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSpriteSwapRevert);
+            bool shortcutChanged;
+            if (_shortcutRouter != null && _shortcutRouter.TryRoute(snapshot, out shortcutChanged))
+                changed |= shortcutChanged;
 
             string sectionMessage;
             if (_sectionHub.Update(context, out sectionMessage))

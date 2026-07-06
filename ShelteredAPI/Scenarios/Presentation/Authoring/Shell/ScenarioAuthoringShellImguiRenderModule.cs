@@ -393,12 +393,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (shell.Help == null)
                 DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
 
+            bool textFieldFocused = _buildPaletteSearchFocused
+                || _spritePickerSearchFocused
+                || _editableFieldFocused;
+            inputCapture.SetTextFieldFocused(textFieldFocused);
             inputCapture.SetKeyboardCaptured(
                 modalDocument != null
                 || shell.Help != null
-                || _buildPaletteSearchFocused
-                || _spritePickerSearchFocused
-                || _editableFieldFocused
+                || textFieldFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
             inputCapture.SetTransitionActive(_animations.TransitionActive);
 

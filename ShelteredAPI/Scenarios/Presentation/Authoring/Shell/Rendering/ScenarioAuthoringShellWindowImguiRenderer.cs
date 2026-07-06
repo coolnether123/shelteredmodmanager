@@ -598,7 +598,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginArea(footerRect);
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, 96f, "Save the current pixel edit.");
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, 96f, "Save the current pixel edit. Ctrl+S");
             GUILayout.Space(8f);
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, 96f, "Discard the current pixel edit.", editor.Dirty);
             GUILayout.Space(8f);
@@ -733,7 +733,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Copy",
                 false,
                 buttonWidth,
-                "Copy the current selection. If nothing is selected, copy the whole sprite.",
+                "Copy the current selection. If nothing is selected, copy the whole sprite. Ctrl+C",
                 true);
             GUILayout.Space(4f);
             DrawInlineAction(
@@ -741,7 +741,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Paste",
                 editor.HasClipboard,
                 buttonWidth,
-                editor.HasClipboard ? "Paste the pixel clipboard into the canvas." : "Pixel clipboard is empty.",
+                editor.HasClipboard ? "Paste the pixel clipboard into the canvas. Ctrl+V" : "Pixel clipboard is empty.",
                 editor.HasClipboard);
             GUILayout.Space(4f);
             DrawInlineAction(
@@ -999,6 +999,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
                 else if (current.type == EventType.MouseDown || current.type == EventType.MouseDrag)
                 {
+                    if (current.type == EventType.MouseDown
+                        && editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Paint)
+                    {
+                        ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomStrokeBegin);
+                    }
+
                     actionId = editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick
                         ? ScenarioSpriteSwapAuthoringService.BuildCustomPickActionId(pixelX, pixelY)
                         : ScenarioSpriteSwapAuthoringService.BuildCustomPaintActionId(pixelX, pixelY);

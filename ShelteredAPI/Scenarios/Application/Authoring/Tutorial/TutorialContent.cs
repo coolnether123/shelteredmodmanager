@@ -64,14 +64,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
                 new ScenarioAuthoringTourStep("window:" + ScenarioAuthoringWindowIds.Scenario, "Home", "Home is the workshop starting point for identity, base mode, progress, setup, and common actions.", "help.open." + TopicSetup),
                 new ScenarioAuthoringTourStep("stage:" + ScenarioStageKind.Bunker, "World Tabs", "World tabs move between bunker, surface, backdrop, and map authoring without leaving the editor shell.", "stage.select." + ScenarioStageKind.Bunker),
                 new ScenarioAuthoringTourStep("tool:" + ScenarioAuthoringTool.Select, "Selection Tool", "Selection focuses live scene targets and keeps authored changes scoped to the current workspace.", ScenarioAuthoringActionIds.ActionToolSelect),
-                new ScenarioAuthoringTourStep("action:" + ScenarioAuthoringActionIds.ActionSave, "Save", "Save validates and writes the current draft XML from inside the shell.", null)
+                new ScenarioAuthoringTourStep("action:" + ScenarioAuthoringActionIds.ActionSave, "Save", "Save validates and writes the current draft XML from inside the shell. Ctrl+S uses the same save path.", null)
             }),
             new ScenarioAuthoringTourDefinition(TourPlaceFirstObject, "Place Your First Object", new[]
             {
                 new ScenarioAuthoringTourStep("stage:" + ScenarioStageKind.BunkerInside, "Interior", "Use the inside bunker workspace for rooms, shelter objects, wiring, and interior placements.", "stage.select." + ScenarioStageKind.BunkerInside),
                 new ScenarioAuthoringTourStep("tool:" + ScenarioAuthoringTool.Objects, "Objects Tool", "The Objects tool opens object placement authoring for the current bunker workspace.", ScenarioAuthoringActionIds.ActionToolObjects),
                 new ScenarioAuthoringTourStep("window:" + ScenarioAuthoringWindowIds.TilesPalette, "Placement Palette", "The placement palette lists build and object authoring choices for the selected workspace.", "shell.window.toggle." + ScenarioAuthoringWindowIds.TilesPalette),
-                new ScenarioAuthoringTourStep("action:" + ScenarioAuthoringActionIds.ActionSave, "Save Placement", "Save after the draft contains the placement changes you want to keep.", null)
+                new ScenarioAuthoringTourStep("action:" + ScenarioAuthoringActionIds.ActionSave, "Save Placement", "Save after the draft contains the placement changes you want to keep. Ctrl+Z and Ctrl+Y undo or redo tracked placement draft changes.", null)
             }),
             new ScenarioAuthoringTourDefinition(TourTimelineEvent, "Make A Timeline Event", new[]
             {
@@ -83,7 +83,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             new ScenarioAuthoringTourDefinition(TourEditSprite, "Edit A Sprite", new[]
             {
                 new ScenarioAuthoringTourStep("tool:" + ScenarioAuthoringTool.Assets, "Art Tool", "The Art tool switches to visual authoring for replacements, placements, imports, and custom sprite edits.", ScenarioAuthoringActionIds.ActionToolAssets),
-                new ScenarioAuthoringTourStep("window:" + ScenarioAuthoringWindowIds.PixelEditor, "Pixel Editor", "The pixel editor window is used for custom sprite drafts when a supported target is being edited.", "shell.window.toggle." + ScenarioAuthoringWindowIds.PixelEditor),
+                new ScenarioAuthoringTourStep("window:" + ScenarioAuthoringWindowIds.PixelEditor, "Pixel Editor", "The pixel editor window is used for custom sprite drafts when a supported target is being edited. Ctrl+Z, Ctrl+Y, Ctrl+C, Ctrl+V, and Ctrl+S stay inside the pixel editor while it is open.", "shell.window.toggle." + ScenarioAuthoringWindowIds.PixelEditor),
                 new ScenarioAuthoringTourStep("action:" + ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, "Pixel Editor", "Custom sprite editing opens for supported selected targets before the edit is applied to the draft.", null),
                 new ScenarioAuthoringTourStep("action:" + ScenarioAuthoringActionIds.ActionSave, "Save Art", "Save writes sprite references and generated asset metadata into the scenario draft.", null)
             })

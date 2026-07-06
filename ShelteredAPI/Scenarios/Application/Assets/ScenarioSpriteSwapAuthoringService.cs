@@ -108,6 +108,13 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public int CharacterFamilyIndex;
         }
 
+        private sealed class PixelEditSnapshot
+        {
+            public string Description;
+            public Color[] Pixels;
+            public bool Dirty;
+        }
+
         private static readonly Color[] _brushPalette = new Color[]
         {
             new Color32(0, 0, 0, 255),
@@ -135,6 +142,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private Color[] _customClipboardPixels;
         private int _customClipboardWidth;
         private int _customClipboardHeight;
+        private readonly Stack<PixelEditSnapshot> _customPixelUndo = new Stack<PixelEditSnapshot>();
+        private readonly Stack<PixelEditSnapshot> _customPixelRedo = new Stack<PixelEditSnapshot>();
+        private bool _customPixelStrokeSnapshotRecorded;
 
         public static ScenarioSpriteSwapAuthoringService Instance
         {
@@ -968,6 +978,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (_customEditorSession.HasSelection && !SelectionContains(_customEditorSession, pixelX, pixelY))
                 return false;
 
+            EnsureCustomPixelStrokeSnapshot("paint stroke");
             Color color = _customEditorSession.ActiveColor;
             _customEditorSession.Texture.SetPixel(pixelX, pixelY, color);
             _customEditorSession.Texture.Apply();
@@ -1139,6 +1150,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             int targetY = _customEditorSession.HasSelection
                 ? _customEditorSession.SelectionY
                 : Mathf.Max(0, _customEditorSession.LastInteractionY);
+            RecordCustomPixelSnapshot("pixel paste");
             int applied = 0;
             for (int y = 0; y < _customClipboardHeight; y++)
             {
@@ -1475,6 +1487,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private bool Undo(ScenarioAuthoringState state, out string message)
         {
             message = null;
+            if (HasCustomEditor(state))
+                return UndoCustomPixels(state, out message);
+
             ClosePickerState(state, true);
 
             ScenarioEditorSession session = _editorService.CurrentSession;
@@ -1486,13 +1501,15 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             string description;
-            if (!_historyService.Undo(definition, out description))
+            ScenarioDirtySection dirtySection;
+            ScenarioEditCategory editCategory;
+            if (!_historyService.Undo(definition, out description, out dirtySection, out editCategory))
             {
                 message = "Nothing to undo.";
                 return false;
             }
 
-            MarkAssetsDirty(session);
+            MarkDirty(session, dirtySection, editCategory);
             ReapplyVisualState(definition, state.ActiveScenarioFilePath);
             Invalidate();
             message = "Undid: " + (description ?? "last change") + ".";
@@ -1503,6 +1520,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private bool Redo(ScenarioAuthoringState state, out string message)
         {
             message = null;
+            if (HasCustomEditor(state))
+                return RedoCustomPixels(state, out message);
+
             ClosePickerState(state, true);
 
             ScenarioEditorSession session = _editorService.CurrentSession;
@@ -1514,13 +1534,15 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             string description;
-            if (!_historyService.Redo(definition, out description))
+            ScenarioDirtySection dirtySection;
+            ScenarioEditCategory editCategory;
+            if (!_historyService.Redo(definition, out description, out dirtySection, out editCategory))
             {
                 message = "Nothing to redo.";
                 return false;
             }
 
-            MarkAssetsDirty(session);
+            MarkDirty(session, dirtySection, editCategory);
             ReapplyVisualState(definition, state.ActiveScenarioFilePath);
             Invalidate();
             message = "Redid: " + (description ?? "change") + ".";
@@ -1627,8 +1649,134 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             _customEditorSession = null;
+            _customPixelUndo.Clear();
+            _customPixelRedo.Clear();
+            _customPixelStrokeSnapshotRecorded = false;
             if (hadSession)
                 EndCustomEditorCameraSession();
+        }
+
+        private bool BeginCustomPixelStroke(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || _customEditorSession.Texture == null)
+            {
+                message = "Custom sprite editor is not active.";
+                return false;
+            }
+
+            _customPixelStrokeSnapshotRecorded = false;
+            RecordCustomPixelSnapshot("paint stroke");
+            _customPixelStrokeSnapshotRecorded = true;
+            return true;
+        }
+
+        private void EnsureCustomPixelStrokeSnapshot(string description)
+        {
+            if (_customPixelStrokeSnapshotRecorded)
+                return;
+
+            RecordCustomPixelSnapshot(description);
+            _customPixelStrokeSnapshotRecorded = true;
+        }
+
+        private void RecordCustomPixelSnapshot(string description)
+        {
+            if (_customEditorSession == null || _customEditorSession.Texture == null)
+                return;
+
+            _customPixelUndo.Push(new PixelEditSnapshot
+            {
+                Description = description,
+                Pixels = _customEditorSession.Texture.GetPixels(),
+                Dirty = _customEditorSession.Dirty
+            });
+            TrimPixelUndoStack();
+            _customPixelRedo.Clear();
+        }
+
+        private bool UndoCustomPixels(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || _customEditorSession.Texture == null)
+            {
+                message = "Custom sprite editor is not active.";
+                return false;
+            }
+
+            if (_customPixelUndo.Count == 0)
+            {
+                message = "Nothing to undo in the pixel editor.";
+                return false;
+            }
+
+            _customPixelRedo.Push(CaptureCurrentPixelSnapshot("redo pixel edit"));
+            PixelEditSnapshot snapshot = _customPixelUndo.Pop();
+            RestoreCustomPixelSnapshot(state, snapshot);
+            message = "Undid " + (snapshot.Description ?? "pixel edit") + ".";
+            return true;
+        }
+
+        private bool RedoCustomPixels(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || _customEditorSession.Texture == null)
+            {
+                message = "Custom sprite editor is not active.";
+                return false;
+            }
+
+            if (_customPixelRedo.Count == 0)
+            {
+                message = "Nothing to redo in the pixel editor.";
+                return false;
+            }
+
+            _customPixelUndo.Push(CaptureCurrentPixelSnapshot("undo pixel edit"));
+            TrimPixelUndoStack();
+            PixelEditSnapshot snapshot = _customPixelRedo.Pop();
+            RestoreCustomPixelSnapshot(state, snapshot);
+            message = "Redid " + (snapshot.Description ?? "pixel edit") + ".";
+            return true;
+        }
+
+        private PixelEditSnapshot CaptureCurrentPixelSnapshot(string description)
+        {
+            return new PixelEditSnapshot
+            {
+                Description = description,
+                Pixels = _customEditorSession != null && _customEditorSession.Texture != null
+                    ? _customEditorSession.Texture.GetPixels()
+                    : new Color[0],
+                Dirty = _customEditorSession != null && _customEditorSession.Dirty
+            };
+        }
+
+        private void RestoreCustomPixelSnapshot(ScenarioAuthoringState state, PixelEditSnapshot snapshot)
+        {
+            if (_customEditorSession == null || _customEditorSession.Texture == null || snapshot == null || snapshot.Pixels == null)
+                return;
+
+            if (snapshot.Pixels.Length != _customEditorSession.Texture.width * _customEditorSession.Texture.height)
+                return;
+
+            _customEditorSession.Texture.SetPixels(snapshot.Pixels);
+            _customEditorSession.Texture.Apply();
+            _customEditorSession.Dirty = true;
+            ApplyCustomEditorPreview(state);
+            _customPixelStrokeSnapshotRecorded = false;
+        }
+
+        private void TrimPixelUndoStack()
+        {
+            const int maxPixelUndoDepth = 50;
+            if (_customPixelUndo.Count <= maxPixelUndoDepth)
+                return;
+
+            PixelEditSnapshot[] keep = _customPixelUndo.ToArray();
+            _customPixelUndo.Clear();
+            for (int i = keep.Length - 2; i >= 0; i--)
+                _customPixelUndo.Push(keep[i]);
         }
 
         private void ClosePickerState(ScenarioAuthoringState state, bool restorePreview)
@@ -2220,6 +2368,19 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 return;
 
             session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
+        }
+
+        private static void MarkDirty(
+            ScenarioEditorSession session,
+            ScenarioDirtySection dirtySection,
+            ScenarioEditCategory editCategory)
+        {
+            if (session == null)
+                return;
+
+            if (dirtySection == ScenarioDirtySection.None)
+                dirtySection = ScenarioDirtySection.Assets;
+            session.MarkDraftChanged(dirtySection, editCategory);
         }
 
         private static string SafeLabel(string value)

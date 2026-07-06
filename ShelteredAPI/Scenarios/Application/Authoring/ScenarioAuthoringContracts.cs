@@ -252,6 +252,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSpriteSwapCustomSelectionClear = "sprite_swap.custom.selection.clear";
         public const string ActionSpriteSwapCustomCopy = "sprite_swap.custom.copy";
         public const string ActionSpriteSwapCustomPaste = "sprite_swap.custom.paste";
+        public const string ActionSpriteSwapCustomStrokeBegin = "sprite_swap.custom.stroke.begin";
         public const string ActionSpriteSwapCustomPresetPrefix = "sprite_swap.custom.preset.";
         public const string ActionSpriteSwapCustomColorPrefix = "sprite_swap.custom.color.";
         public const string ActionSpriteSwapCustomZoomIn = "sprite_swap.custom.zoom_in";

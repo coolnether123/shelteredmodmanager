@@ -21,7 +21,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public bool PopupOpenLastFrame { get; private set; }
         public bool DraggingShellChrome { get; private set; }
         public bool KeyboardCaptured { get; private set; }
+        public bool TextFieldFocused { get; private set; }
         public bool TransitionActive { get; private set; }
+        public bool KeyboardShortcutHandled { get; private set; }
 
         public void BeginFrame(float coordinateScale)
         {
@@ -32,7 +34,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             PopupOpen = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
+            TextFieldFocused = false;
             TransitionActive = false;
+            KeyboardShortcutHandled = false;
             _coordinateScale = coordinateScale > 0.001f ? coordinateScale : 1f;
             _scrollFocusService.BeginFrame(GetPointerPosition(_coordinateScale));
         }
@@ -72,6 +76,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             KeyboardCaptured = captured;
         }
 
+        public void SetTextFieldFocused(bool focused)
+        {
+            TextFieldFocused = focused;
+        }
+
+        public void MarkKeyboardShortcutHandled()
+        {
+            KeyboardShortcutHandled = true;
+            KeyboardCaptured = true;
+        }
+
         public void SetTransitionActive(bool active)
         {
             TransitionActive = active;
@@ -105,6 +120,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || PopupOpenLastFrame
                 || DraggingShellChrome
                 || KeyboardCaptured
+                || TextFieldFocused
                 || TransitionActive;
         }
 
@@ -129,7 +145,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             PopupOpenLastFrame = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
+            TextFieldFocused = false;
             TransitionActive = false;
+            KeyboardShortcutHandled = false;
             _scrollFocusService.BeginFrame();
         }
 

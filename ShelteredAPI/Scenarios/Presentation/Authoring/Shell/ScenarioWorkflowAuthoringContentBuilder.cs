@@ -35,7 +35,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = new[]
                 {
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "Persist the current scenario XML.", true, false, "SV", "Write scenario.xml to the active draft.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft (Ctrl+S)", "Persist the current scenario XML.", true, false, "SV", "Ctrl+S writes scenario.xml to the active draft.")),
                     Item.ActionItem(Item.Action(
                         ScenarioAuthoringActionIds.ActionPlaytest,
                         editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Playtest" : "Start Playtest",
@@ -382,12 +382,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool canDelete = _sectionHub.BuildPlacement.CanDeleteObject(selectedTarget, out reason);
             items.Add(Item.ActionItem(Item.Action(
                 ScenarioAuthoringActionIds.ActionBuildDeleteObject,
-                "Delete Live Object + Draft",
+                "Delete Live Object + Draft (Delete)",
                 "Remove the selected live object through ObjectManager and remove its draft ObjectPlacement.",
                 canDelete,
                 false,
                 "DL",
-                canDelete ? "Delete the object and its scenario placement." : reason)));
+                canDelete ? "Delete key removes the object and its scenario placement." : reason)));
         }
 
         private void AddBuildDeletionActions(

@@ -92,6 +92,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste, StringComparison.Ordinal))
                 return PasteCustomPixels(state, out message);
 
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomStrokeBegin, StringComparison.Ordinal))
+                return BeginCustomPixelStroke(state, out message);
+
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapClear, StringComparison.Ordinal)
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapRevert, StringComparison.Ordinal))
             {

@@ -122,6 +122,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordBunkerUndo("Delete object " + objectName);
             try
             {
                 manager.RemoveObject(obj);
@@ -162,6 +163,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            RecordBunkerUndo("Delete room at " + gridX + "," + gridY);
             bool removedLight = grid.RemoveLight(gridX, gridY);
             bool removedTopLadders = grid.RemoveLadders(gridX, gridY);
             bool removedIncomingLadders = gridY > 0 && grid.RemoveLadders(gridX, gridY - 1);
@@ -209,6 +211,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordBunkerUndo("Delete ladder at " + gridX + "," + gridY);
             bool removedDraft = RemoveStructuralPlacement(ScenarioPlacementDefinitions.Ladder, gridX, gridY);
             message = "Deleted ladder at " + gridX + "," + gridY + " and " + (removedDraft ? "removed its draft placement." : "found no matching draft placement.");
             MMLog.WriteInfo("[ScenarioBuildDeletion] " + message);
@@ -235,6 +238,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordBunkerUndo("Delete room light at " + gridX + "," + gridY);
             bool removedDraft = RemoveStructuralPlacement(ScenarioPlacementDefinitions.RoomLight, gridX, gridY);
             message = "Deleted room light at " + gridX + "," + gridY + " and " + (removedDraft ? "removed its draft placement." : "found no matching draft placement.");
             MMLog.WriteInfo("[ScenarioBuildDeletion] " + message);
@@ -260,6 +264,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordBunkerUndo("Reset wall at " + gridX + "," + gridY);
             if (!_wallWiringEditService.ResetWall(gridX, gridY))
             {
                 message = "Reset wall at " + gridX + "," + gridY + ", but the draft clear could not be recorded.";
@@ -289,6 +294,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordBunkerUndo("Clear wiring at " + gridX + "," + gridY);
             if (!_wallWiringEditService.ResetWire(gridX, gridY))
             {
                 message = "Cleared wiring at " + gridX + "," + gridY + ", but the draft clear could not be recorded.";
@@ -600,6 +606,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             Component component = target.RuntimeObject as Component;
             return component != null ? component.gameObject : null;
+        }
+
+        private static void RecordBunkerUndo(string description)
+        {
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            if (session == null || session.WorkingDefinition == null)
+                return;
+
+            ScenarioAuthoringHistoryService.Instance.RecordBunkerChange(session.WorkingDefinition, description);
         }
     }
 }

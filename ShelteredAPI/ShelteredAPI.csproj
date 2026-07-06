@@ -429,6 +429,8 @@
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioAuthoringBootstrapPatches.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutRouter.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSurfaceResolver.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringValidationSnapshot.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />

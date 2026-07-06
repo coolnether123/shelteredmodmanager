@@ -705,6 +705,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             LogPlacementInfo("Placement committed to world: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
             _placementFeelVisualService.PlaySettle(spawned.gameObject);
+            RecordBunkerUndo(session, "Place object " + ScenarioBunkerDraftService.SafeObjectName(spawned));
             if (!_objectPlacementService.UpsertPlacement(_objectPlacementService.CapturePlacement(spawned)))
             {
                 message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ", but the scenario draft became unavailable before the placement could be recorded.";
@@ -772,6 +773,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string definitionReference = cell != null && cell.type == ShelterRoomGrid.CellType.RoomTop
                 ? ScenarioPlacementDefinitions.RoomTop
                 : ScenarioPlacementDefinitions.Room;
+            RecordBunkerUndo(session, "Place room tile at " + gridX + "," + gridY);
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateRoomPlacement(
                     gridX,
                     gridY,
@@ -843,6 +845,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             GameObject ladderObject = ResolveLadderObject(grid, gridX, gridY);
             if (ladderObject != null)
                 _placementFeelVisualService.PlaySettle(ladderObject);
+            RecordBunkerUndo(session, "Place ladder at " + gridX + "," + gridY);
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateLadderPlacement(
                     gridX,
                     gridY,
@@ -912,6 +915,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid.GridCell cell = grid.GetCell(gridX, gridY);
             if (cell != null && (UnityEngine.Object)cell.lightObject != (UnityEngine.Object)null)
                 _placementFeelVisualService.PlaySettle(cell.lightObject.gameObject);
+            RecordBunkerUndo(session, "Place room light at " + gridX + "," + gridY);
             if (!_objectPlacementService.UpsertPlacement(_structurePlacementService.CreateRoomLightPlacement(
                     gridX,
                     gridY,
@@ -959,6 +963,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             int serializedIndex = entry.NativeIndex >= 0 ? appliedIndex : -1;
+            RecordBunkerUndo(ScenarioEditorController.Instance.CurrentSession, "Apply wall at " + gridX + "," + gridY);
             if (!_wallWiringEditService.ApplyWall(gridX, gridY, serializedIndex, entry.RuntimeSpriteKey))
             {
                 message = "Applied wall sprite " + appliedIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
@@ -1003,6 +1008,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             int serializedIndex = entry.NativeIndex >= 0 ? appliedIndex : -1;
+            RecordBunkerUndo(ScenarioEditorController.Instance.CurrentSession, "Apply wiring at " + gridX + "," + gridY);
             if (!_wallWiringEditService.ApplyWire(gridX, gridY, serializedIndex, entry.RuntimeSpriteKey))
             {
                 message = "Applied wiring sprite " + appliedIndex + " to room " + gridX + "," + gridY + ", but the scenario draft became unavailable before it could be recorded.";
@@ -1889,6 +1895,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return false;
+        }
+
+        private static void RecordBunkerUndo(ScenarioEditorSession session, string description)
+        {
+            if (session == null || session.WorkingDefinition == null)
+                return;
+
+            ScenarioAuthoringHistoryService.Instance.RecordBunkerChange(session.WorkingDefinition, description);
         }
     }
 }

@@ -72,13 +72,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         // Capture before mutating. A new user action invalidates the redo stack.
         public void RecordVisualChange(ScenarioDefinition definition, string description)
         {
+            RecordAuthoringChange(definition, description, ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
+        }
+
+        public void RecordBunkerChange(ScenarioDefinition definition, string description)
+        {
+            RecordAuthoringChange(definition, description, ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
+        }
+
+        public void RecordAuthoringChange(
+            ScenarioDefinition definition,
+            string description,
+            ScenarioDirtySection dirtySection,
+            ScenarioEditCategory editCategory)
+        {
             if (definition == null)
                 return;
 
             DefinitionSnapshot snapshot = new DefinitionSnapshot
             {
                 Description = description,
-                Definition = ScenarioDefinitionCloner.Clone(definition)
+                Definition = ScenarioDefinitionCloner.Clone(definition),
+                DirtySection = dirtySection,
+                EditCategory = editCategory
             };
             PushUndo(snapshot);
             _redo.Clear();
@@ -86,7 +102,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool Undo(ScenarioDefinition definition, out string description)
         {
+            ScenarioDirtySection dirtySection;
+            ScenarioEditCategory editCategory;
+            return Undo(definition, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Undo(
+            ScenarioDefinition definition,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
             description = null;
+            dirtySection = ScenarioDirtySection.None;
+            editCategory = ScenarioEditCategory.Bunker;
             if (definition == null || _undo.Count == 0)
                 return false;
 
@@ -98,8 +127,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             DefinitionSnapshot snapshot = _undo.Pop();
             RestoreDefinition(definition, snapshot.Definition);
+            redoPoint.DirtySection = snapshot.DirtySection;
+            redoPoint.EditCategory = snapshot.EditCategory;
             _redo.Push(redoPoint);
             description = snapshot.Description;
+            dirtySection = snapshot.DirtySection;
+            editCategory = snapshot.EditCategory;
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Undo: " + (description ?? "<unnamed>")
                 + " | undoDepth=" + _undo.Count + " redoDepth=" + _redo.Count);
             return true;
@@ -107,7 +140,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool Redo(ScenarioDefinition definition, out string description)
         {
+            ScenarioDirtySection dirtySection;
+            ScenarioEditCategory editCategory;
+            return Redo(definition, out description, out dirtySection, out editCategory);
+        }
+
+        public bool Redo(
+            ScenarioDefinition definition,
+            out string description,
+            out ScenarioDirtySection dirtySection,
+            out ScenarioEditCategory editCategory)
+        {
             description = null;
+            dirtySection = ScenarioDirtySection.None;
+            editCategory = ScenarioEditCategory.Bunker;
             if (definition == null || _redo.Count == 0)
                 return false;
 
@@ -119,8 +165,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             DefinitionSnapshot snapshot = _redo.Pop();
             RestoreDefinition(definition, snapshot.Definition);
+            undoPoint.DirtySection = snapshot.DirtySection;
+            undoPoint.EditCategory = snapshot.EditCategory;
             PushUndo(undoPoint);
             description = snapshot.Description;
+            dirtySection = snapshot.DirtySection;
+            editCategory = snapshot.EditCategory;
             MMLog.WriteInfo("[ScenarioAuthoringHistory] Redo: " + (description ?? "<unnamed>")
                 + " | undoDepth=" + _undo.Count + " redoDepth=" + _redo.Count);
             return true;
@@ -174,6 +224,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             public string Description;
             public ScenarioDefinition Definition;
+            public ScenarioDirtySection DirtySection;
+            public ScenarioEditCategory EditCategory;
         }
     }
 }
