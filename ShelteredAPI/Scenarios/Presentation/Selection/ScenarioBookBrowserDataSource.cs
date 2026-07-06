@@ -22,7 +22,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private static readonly object SharedSnapshotSync = new object();
         private static CatalogSnapshot _sharedSnapshot;
         private static bool _sharedRefreshRunning;
+        private static bool _sharedRefreshQueued;
         private static int _sharedVersion;
+        private static int _sharedRefreshRequestVersion;
 
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly IScenarioSaveLibrary _saveLibrary;
@@ -36,6 +38,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private string _saveRefreshError;
         private int _saveRefreshVersion;
         private int _appliedSaveRefreshVersion;
+        private int _saveRefreshRequestVersion;
+        private bool _cancelled;
 
         public ScenarioBookBrowserDataSource(IScenarioSelectionCatalogService catalog, IScenarioSaveLibrary saveLibrary)
         {
@@ -56,7 +60,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public void BeginRefreshAsync()
         {
-            Refresh();
+            BeginSharedRefreshAsync(_catalog);
         }
 
         public void BeginSaveRowsRefreshAsync(ScenarioCatalogEntry entry)
@@ -65,6 +69,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             string storageScenarioId = entry.StorageScenarioId;
+            int requestVersion;
             lock (_saveRefreshSync)
             {
                 if (_saveRefreshRunning && string.Equals(_saveRefreshScenarioId, storageScenarioId, StringComparison.OrdinalIgnoreCase))
@@ -74,6 +79,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _saveRefreshScenarioId = storageScenarioId;
                 _saveRefreshRows = null;
                 _saveRefreshError = null;
+                requestVersion = ++_saveRefreshRequestVersion;
             }
 
             ThreadPool.QueueUserWorkItem(delegate
@@ -95,10 +101,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 {
                     lock (_saveRefreshSync)
                     {
-                        _saveRefreshRows = rows ?? new ScenarioBookRowModel[0];
-                        _saveRefreshError = error;
-                        _saveRefreshVersion++;
-                        _saveRefreshRunning = false;
+                        if (!_cancelled && requestVersion == _saveRefreshRequestVersion)
+                        {
+                            _saveRefreshRows = rows ?? new ScenarioBookRowModel[0];
+                            _saveRefreshError = error;
+                            _saveRefreshVersion++;
+                            _saveRefreshRunning = false;
+                        }
                     }
                 }
             });
@@ -106,27 +115,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public static void BeginSharedRefreshAsync(IScenarioSelectionCatalogService catalog)
         {
-            CatalogSnapshot snapshot;
+            int requestVersion;
             lock (SharedSnapshotSync)
             {
                 if (_sharedRefreshRunning)
+                {
+                    _sharedRefreshQueued = true;
                     return;
+                }
 
                 _sharedRefreshRunning = true;
+                requestVersion = ++_sharedRefreshRequestVersion;
             }
 
-            try
+            ThreadPool.QueueUserWorkItem(delegate
             {
-                snapshot = BuildSnapshot(catalog);
-                PublishSnapshot(snapshot);
-            }
-            finally
-            {
-                lock (SharedSnapshotSync)
+                try
                 {
-                    _sharedRefreshRunning = false;
+                    CatalogSnapshot snapshot = BuildSnapshot(catalog);
+                    PublishSnapshot(snapshot, requestVersion);
                 }
-            }
+                finally
+                {
+                    bool runQueuedRefresh;
+                    lock (SharedSnapshotSync)
+                    {
+                        _sharedRefreshRunning = false;
+                        runQueuedRefresh = _sharedRefreshQueued;
+                        _sharedRefreshQueued = false;
+                    }
+
+                    if (runQueuedRefresh)
+                        BeginSharedRefreshAsync(catalog);
+                }
+            });
         }
 
         public bool ApplyLatestSnapshot()
@@ -142,6 +164,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             ApplySnapshot(snapshot);
             return true;
+        }
+
+        public bool IsCatalogRefreshRunning
+        {
+            get
+            {
+                lock (SharedSnapshotSync)
+                {
+                    return _sharedRefreshRunning;
+                }
+            }
         }
 
         public bool ApplyLatestSaveRows()
@@ -165,6 +198,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 {
                     return _saveRefreshRunning;
                 }
+            }
+        }
+
+        public void CancelRefreshes()
+        {
+            lock (_saveRefreshSync)
+            {
+                _cancelled = true;
+                _saveRefreshRequestVersion++;
+                _saveRefreshRunning = false;
+                _saveRefreshRows = null;
+                _saveRefreshError = null;
             }
         }
 
@@ -206,11 +251,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private static void PublishSnapshot(CatalogSnapshot snapshot)
         {
+            PublishSnapshot(snapshot, ++_sharedRefreshRequestVersion);
+        }
+
+        private static void PublishSnapshot(CatalogSnapshot snapshot, int requestVersion)
+        {
             if (snapshot == null)
                 return;
 
             lock (SharedSnapshotSync)
             {
+                if (requestVersion < _sharedRefreshRequestVersion)
+                    return;
+
                 snapshot.Version = ++_sharedVersion;
                 _sharedSnapshot = snapshot;
             }
@@ -320,13 +373,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private ScenarioBookRowModel BuildTypeRow(ScenarioBookType type, string title, string detail)
         {
+            int count = CountEntries(type);
             return new ScenarioBookRowModel
             {
                 Kind = ScenarioBookRowKind.Type,
                 Type = type,
                 Title = title,
                 Detail = detail,
-                Badge = CountEntries(type).ToString() + " scenario(s)"
+                Badge = IsCatalogLoading() && count == 0 ? "Loading" : count.ToString() + " scenario(s)"
             };
         }
 
@@ -352,6 +406,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     continue;
 
                 rows.Add(BuildScenarioRow(selectedType, entry));
+            }
+
+            if (entries.Length == 0 && IsCatalogLoading())
+            {
+                rows.Add(new ScenarioBookRowModel
+                {
+                    Kind = ScenarioBookRowKind.Empty,
+                    Type = selectedType,
+                    Title = "Loading scenarios",
+                    Detail = "Scanning scenario folders and reading scenario metadata in the background.",
+                    Badge = "Loading"
+                });
             }
 
             return rows;
@@ -574,6 +640,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private int CountEntries(ScenarioBookType type)
         {
             return ListEntries(type).Length;
+        }
+
+        private bool IsCatalogLoading()
+        {
+            return IsCatalogRefreshRunning && !HasEntries;
         }
 
         private ScenarioCatalogEntry[] ListEntries(ScenarioBookType type)

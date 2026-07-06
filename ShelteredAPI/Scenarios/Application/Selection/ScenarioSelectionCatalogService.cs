@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     internal sealed class ScenarioSelectionCatalogService : IScenarioSelectionCatalogService
     {
@@ -299,6 +300,19 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
 
             try
             {
+                ScenarioDefinitionMetadata metadata;
+                if (ScenarioDefinitionMetadataCache.TryLoad(_definitionSerializer, draft.FilePath, draft.OwnerModId, out metadata)
+                    && metadata != null)
+                {
+                    ScenarioDefinition definition = new ScenarioDefinition();
+                    definition.Id = draft.Id;
+                    definition.DisplayName = draft.DisplayName;
+                    definition.Description = metadata.Description;
+                    definition.Version = draft.Version;
+                    definition.BaseGameMode = metadata.BaseGameMode;
+                    return definition;
+                }
+
                 return _definitionSerializer.Load(draft.FilePath);
             }
             catch

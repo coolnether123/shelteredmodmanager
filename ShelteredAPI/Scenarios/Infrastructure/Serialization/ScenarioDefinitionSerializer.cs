@@ -26,6 +26,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
         public ScenarioDefinition Load(string filePath)
         {
+            return LoadUncached(filePath);
+        }
+
+        internal ScenarioDefinition LoadUncached(string filePath)
+        {
             if (string.IsNullOrEmpty(filePath))
                 throw new ArgumentException("Scenario file path is required.", "filePath");
 
@@ -129,7 +134,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
         public ScenarioInfo LoadInfo(string filePath, string ownerModId)
         {
-            ScenarioDefinition definition = Load(filePath);
+            ScenarioDefinitionMetadata metadata;
+            if (ScenarioDefinitionMetadataCache.TryLoad(this, filePath, ownerModId, out metadata) && metadata != null)
+                return metadata.Info;
+
+            ScenarioDefinition definition = LoadUncached(filePath);
             return new ScenarioInfo(
                 definition.Id,
                 definition.DisplayName,

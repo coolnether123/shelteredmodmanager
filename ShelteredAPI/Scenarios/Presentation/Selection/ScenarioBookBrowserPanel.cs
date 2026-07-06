@@ -648,6 +648,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             _isClosing = true;
+            if (_dataSource != null)
+                _dataSource.CancelRefreshes();
             RestoreUnderlyingPanel();
             if (_renderer != null)
             {
@@ -665,6 +667,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_deletePromptActive)
                 ReleaseDeletePromptGuard();
 
+            if (_dataSource != null)
+                _dataSource.CancelRefreshes();
             RestoreUnderlyingPanel();
             if (_renderer != null)
             {
@@ -772,7 +776,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void ApplyDataRefreshIfReady()
         {
-            if (_dataSource == null || !_dataSource.ApplyLatestSaveRows())
+            if (_dataSource == null)
+                return;
+
+            bool changed = _dataSource.ApplyLatestSnapshot();
+            changed = _dataSource.ApplyLatestSaveRows() || changed;
+            if (!changed)
                 return;
 
             ClearPreparedPages();
