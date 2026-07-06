@@ -48,6 +48,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _visible;
         private bool _disposeWhenHidden;
         private float _rootAlpha;
+        private bool _pixelEditorWheelDeltaActive;
+        private int _pixelEditorWheelHandledFrame = -1;
+        private int _pixelEditorWheelDeltaSign;
+        private float _pixelEditorWheelAcceptedAt;
         private GUIStyle _rootPanelStyle;
         private GUIStyle _headerStyle;
         private GUIStyle _titleStyle;

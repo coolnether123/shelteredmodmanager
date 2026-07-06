@@ -905,8 +905,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            float fitZoom = Mathf.Min(inner.width / editor.Width, inner.height / editor.Height);
-            float displayZoom = Mathf.Clamp(Mathf.Min(Mathf.Max(1f, editor.Zoom), fitZoom), 1f, 64f);
+            float displayZoom = Mathf.Clamp(Mathf.Max(1f, editor.Zoom), 1f, 64f);
             float canvasWidth = editor.Width * displayZoom;
             float canvasHeight = editor.Height * displayZoom;
             Vector2 overflow = new Vector2(Math.Max(0f, canvasWidth - inner.width), Math.Max(0f, canvasHeight - inner.height));
@@ -1013,16 +1012,60 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static bool TryHandlePixelCanvasWheel(Rect rect, Event current)
+        private bool TryHandlePixelCanvasWheel(Rect rect, Event current)
         {
-            if (current == null || current.type != EventType.ScrollWheel || !rect.Contains(current.mousePosition))
+            bool contains = current != null && rect.Contains(current.mousePosition);
+
+            if (current == null || !contains)
                 return false;
+
+            bool hasWheelDelta = Mathf.Abs(current.delta.y) > 0.01f;
+            if (!TryAcceptPixelCanvasWheel(current))
+            {
+                if (hasWheelDelta)
+                {
+                    current.Use();
+                    return true;
+                }
+
+                return false;
+            }
 
             string zoomActionId = current.delta.y < 0f
                 ? ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn
                 : ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut;
             ScenarioAuthoringBackendService.Instance.ExecuteAction(zoomActionId);
             current.Use();
+            return true;
+        }
+
+        private bool TryAcceptPixelCanvasWheel(Event current)
+        {
+            if (current == null)
+                return false;
+
+            if (Mathf.Abs(current.delta.y) <= 0.01f)
+            {
+                _pixelEditorWheelDeltaActive = false;
+                _pixelEditorWheelDeltaSign = 0;
+                return false;
+            }
+
+            int deltaSign = current.delta.y < 0f ? -1 : 1;
+            if (_pixelEditorWheelHandledFrame == Time.frameCount)
+                return false;
+
+            if (_pixelEditorWheelDeltaActive
+                && _pixelEditorWheelDeltaSign == deltaSign
+                && Time.realtimeSinceStartup - _pixelEditorWheelAcceptedAt < 0.12f)
+            {
+                return false;
+            }
+
+            _pixelEditorWheelDeltaActive = true;
+            _pixelEditorWheelDeltaSign = deltaSign;
+            _pixelEditorWheelHandledFrame = Time.frameCount;
+            _pixelEditorWheelAcceptedAt = Time.realtimeSinceStartup;
             return true;
         }
 
