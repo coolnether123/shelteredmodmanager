@@ -244,7 +244,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     inputCapture.SetKeyboardCaptured(false);
                     inputCapture.SetPopupOpen(false);
                     inputCapture.SetTransitionActive(_animations.TransitionActive);
-                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
+                    Rect reloadContentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
+                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, reloadContentRect);
                     return;
                 }
 
@@ -256,7 +257,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     inputCapture.SetKeyboardCaptured(false);
                     inputCapture.SetPopupOpen(false);
                     inputCapture.SetTransitionActive(_animations.TransitionActive);
-                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
+                    Rect playtestContentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
+                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, playtestContentRect);
                     return;
                 }
 
@@ -432,7 +434,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
             inputCapture.SetTransitionActive(_animations.TransitionActive);
 
-            DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
+            DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect);
                 }
             }
             finally

@@ -1337,7 +1337,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.PixelEditor, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPixelEditorWindowSections(context.State); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Triggers, delegate(ScenarioAuthoringWindowContentContext context) { return BuildTimelineWindowSections(context.State, context.EditorSession, context.Session, context.Definition); });
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(_captureService, context.State, context.EditorSession, context.Definition); });
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.State, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
             builders[ScenarioAuthoringWindowContentKind.Quests] = _questAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Map] = _mapAuthoringContentBuilder;
@@ -2240,12 +2240,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(
-            ScenarioAuthoringCaptureService captureService,
             ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
-            AutoCaptureCurrentFamily(captureService, state, editorSession, definition);
             bool showAdvancedDetails = ShowAdvancedDetails(state);
             List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems();
             currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Refresh from World", "Preview additions, changes, and removals before replacing the starting cast from current live survivors.", true, false, "RF")));
@@ -2272,7 +2269,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             if (startingItems.Count == 1)
-                startingItems.Add(Text("No starting survivors have been captured into this draft."));
+                startingItems.Add(Text("No starting survivors have been authored into this draft."));
 
             List<ScenarioAuthoringInspectorItem> futureItems = new List<ScenarioAuthoringInspectorItem>();
             futureItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Add Future Survivor", "Create a survivor who arrives or asks to join at a scheduled day and hour.", true, true, "FS")));
@@ -2432,26 +2429,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (names.Count == 0)
                 return "no visible traits";
             return string.Join(", ", names.ToArray());
-        }
-
-        private static void AutoCaptureCurrentFamily(
-            ScenarioAuthoringCaptureService captureService,
-            ScenarioAuthoringState state,
-            ScenarioEditorSession editorSession,
-            ScenarioDefinition definition)
-        {
-            if (captureService == null || editorSession == null || definition == null || !IsStartingRosterEmpty(definition))
-                return;
-
-            string message;
-            if (captureService.CaptureCurrentFamilyIfEmpty(editorSession, out message) && state != null)
-                state.StatusMessage = message + " Use Undo to restore the previous roster.";
-        }
-
-        private static bool IsStartingRosterEmpty(ScenarioDefinition definition)
-        {
-            FamilySetupDefinition family = definition != null ? definition.FamilySetup : null;
-            return family == null || family.Members == null || family.Members.Count == 0;
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveInventoryItems()

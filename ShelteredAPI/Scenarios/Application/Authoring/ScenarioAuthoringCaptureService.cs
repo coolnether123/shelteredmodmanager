@@ -74,19 +74,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return true;
         }
 
-        public bool CaptureCurrentFamilyIfEmpty(ScenarioEditorSession session, out string message)
-        {
-            message = null;
-            FamilySetupDefinition family = session != null && session.WorkingDefinition != null ? session.WorkingDefinition.FamilySetup : null;
-            if (family != null && family.Members != null && family.Members.Count > 0)
-            {
-                message = "Starting roster already has authored survivors; world capture was skipped.";
-                return false;
-            }
-
-            return CaptureCurrentFamily(session, out message);
-        }
-
         public bool BuildFamilyCapturePreview(ScenarioEditorSession session, out ScenarioCapturePreview preview, out string message)
         {
             preview = null;
