@@ -769,6 +769,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             ClearPreparedPages();
             SetStatus(status);
+            _dataSource.InvalidateCatalogSnapshot();
             _dataSource.BeginRefreshAsync();
             if (_renderer != null)
                 RenderCurrentView(false);

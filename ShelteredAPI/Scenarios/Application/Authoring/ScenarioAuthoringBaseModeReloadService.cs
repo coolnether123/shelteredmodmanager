@@ -64,7 +64,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            return QueueSavedDraftReload(draftId, draftStartupSave, ScenarioSelectionIds.GetDefaultSaveType(newBaseMode), newBaseMode, "as " + FormatBaseMode(newBaseMode), out message);
+            return QueueSavedDraftReload(draftId, draftStartupSave, ScenarioSelectionIds.GetDefaultSaveType(newBaseMode), newBaseMode, "as " + FormatBaseMode(newBaseMode), false, out message);
         }
 
         public bool SaveAndReloadCurrentWorld(ScenarioEditorSession editorSession, out string message)
@@ -99,7 +99,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
-            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", out message);
+            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, out message);
         }
 
         public bool SaveBaseModeOnly(ScenarioEditorSession editorSession, ScenarioBaseGameMode newBaseMode, out string message)
@@ -171,6 +171,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             SaveManager.SaveType launchSaveType,
             ScenarioBaseGameMode baseMode,
             string label,
+            bool reenterPlaytest,
             out string message)
         {
             ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
@@ -181,6 +182,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MMLog.WriteWarning("[ScenarioAuthoringBaseModeReload] QueueExistingDraft failed for draftId=" + draftId + ".");
                 return true;
             }
+
+            if (reenterPlaytest)
+                pending.RequestPlaytestAfterBootstrap();
 
             string error;
             if (!_launchCoordinator.QueueAuthoringDraftSceneReload(
@@ -198,7 +202,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            bootstrap.RequestCloseActiveSession("Reloading authoring world " + label + ".", false);
+            bootstrap.RequestReloadActiveSession(pending, "Restarting playtest. Reloading authoring world " + label + ".");
             message = "Scenario draft saved. Reloading world " + label + ".";
             return true;
         }

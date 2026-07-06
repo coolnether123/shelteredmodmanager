@@ -161,6 +161,37 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             RaiseStateChanged();
         }
 
+        internal void BeginReloadPending(ScenarioAuthoringSession pendingSession, string reason)
+        {
+            lock (_sync)
+            {
+                _activeSession = pendingSession;
+                if (_state == null)
+                    _state = new ScenarioAuthoringState();
+
+                _state.IsActive = true;
+                _state.ReloadPending = true;
+                _state.ReloadPendingReason = string.IsNullOrEmpty(reason) ? "Reloading authoring world." : reason;
+                _state.ShellVisible = true;
+                _state.SelectionModeActive = false;
+                _state.HoveredTarget = null;
+                _state.SelectedTarget = null;
+                _state.ActiveDraftId = pendingSession != null ? pendingSession.DraftId : _state.ActiveDraftId;
+                _state.ActiveScenarioFilePath = pendingSession != null ? pendingSession.ScenarioFilePath : _state.ActiveScenarioFilePath;
+                _state.StatusMessage = _state.ReloadPendingReason;
+                if (_state.Settings == null)
+                    _state.Settings = _settingsService.Load();
+                if (_state.SetupState == null)
+                    _state.SetupState = new ScenarioAuthoringSetupState();
+                ClearTransientSelection(_state);
+            }
+
+            _contextMenuService.Close();
+            ScenarioHoverVisualService.Instance.Clear();
+            MMLog.WriteInfo("[ScenarioAuthoringBackend] Reload pending. Reason=" + (reason ?? "unspecified") + ".");
+            RaiseStateChanged();
+        }
+
         internal void Update()
         {
             ScenarioAuthoringState snapshot;
@@ -171,6 +202,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (snapshot == null || !snapshot.IsActive)
                 return;
+
+            if (snapshot.ReloadPending)
+            {
+                ScenarioHoverVisualService.Instance.Clear();
+                lock (_sync)
+                {
+                    _state = snapshot;
+                }
+                return;
+            }
 
             bool changed = false;
             ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
@@ -259,6 +300,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (snapshot == null || !snapshot.IsActive)
                 return ScenarioAuthoringActionExecutionResult.Unavailable(actionId, "Scenario authoring is not active.");
+
+            if (snapshot.ReloadPending)
+            {
+                string reason = string.IsNullOrEmpty(snapshot.ReloadPendingReason)
+                    ? "Scenario world is reloading; controls are disabled until the editor reconnects."
+                    : snapshot.ReloadPendingReason;
+                return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, reason);
+            }
 
             ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
             string beforeStatus = snapshot.StatusMessage;

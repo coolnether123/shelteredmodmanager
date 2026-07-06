@@ -63,6 +63,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             BeginSharedRefreshAsync(_catalog);
         }
 
+        public void InvalidateCatalogSnapshot()
+        {
+            lock (SharedSnapshotSync)
+            {
+                _sharedSnapshot = null;
+                _sharedVersion++;
+                _sharedRefreshRequestVersion++;
+                if (_sharedRefreshRunning)
+                    _sharedRefreshQueued = true;
+            }
+
+            _entries = new ScenarioCatalogEntry[0];
+            _appliedVersion = 0;
+            _lastRefreshError = null;
+        }
+
         public void BeginSaveRowsRefreshAsync(ScenarioCatalogEntry entry)
         {
             if (entry == null || entry.Source == ScenarioCatalogSource.Draft || string.IsNullOrEmpty(entry.StorageScenarioId))
@@ -121,6 +137,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 if (_sharedRefreshRunning)
                 {
                     _sharedRefreshQueued = true;
+                    _sharedRefreshRequestVersion++;
                     return;
                 }
 
@@ -644,7 +661,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private bool IsCatalogLoading()
         {
-            return IsCatalogRefreshRunning && !HasEntries;
+            return IsCatalogRefreshRunning;
         }
 
         private ScenarioCatalogEntry[] ListEntries(ScenarioBookType type)

@@ -203,17 +203,50 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             CloseActiveSession(reason ?? "Closed from authoring shell.", resumeGame);
         }
 
+        public void RequestReloadActiveSession(ScenarioAuthoringSession pendingSession, string reason)
+        {
+            ScenarioAuthoringSession previous = null;
+            lock (_sync)
+            {
+                previous = _activeSession;
+                _activeSession = null;
+            }
+
+            _backend.BeginReloadPending(pendingSession, reason ?? "Reloading authoring world.");
+
+            try
+            {
+                _editorService.CloseEditor(false);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Editor close failed while preparing authoring reload: " + ex.Message);
+            }
+
+            SaveRuntimeState.ClearActiveCustomSession();
+            MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Prepared active authoring session for reload. previousDraft="
+                + (previous != null ? previous.DraftId : "<none>")
+                + " pendingDraft=" + (pendingSession != null ? pendingSession.DraftId : "<none>")
+                + " reason=" + (reason ?? "unspecified") + ".");
+        }
+
         public bool RequestCloseActiveSessionToMainMenu(string reason, out string message)
         {
             message = null;
             ScenarioAuthoringSession active = GetActiveSession();
-            if (!IsEditingDraftSession(active))
+            ScenarioEditorSession editorSession = _editorService.CurrentSession;
+            ScenarioAuthoringState backendState = _backend.CurrentState;
+            bool closeableActiveSession = IsEditingDraftSession(active);
+            bool closeableRuntimeState = !closeableActiveSession && IsCloseableRuntimeState(backendState, editorSession);
+
+            if (!closeableActiveSession && !closeableRuntimeState)
             {
-                message = "Scenario editor is already closed.";
+                message = backendState != null && backendState.ReloadPending
+                    ? "Scenario editor is restarting; close is disabled until the reload completes."
+                    : "Scenario editor is already closed.";
                 return true;
             }
 
-            ScenarioEditorSession editorSession = _editorService.CurrentSession;
             if (HasUnsavedDraftChanges(editorSession))
             {
                 MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "UI.Save", new MessageBoxResponse(delegate(int response)
@@ -224,13 +257,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         return;
                     }
 
-                    CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
+                    if (closeableRuntimeState)
+                        CloseRuntimeStateToMainMenu(reason ?? "Closed from authoring shell.", backendState);
+                    else
+                        CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
                 }));
                 message = "Close requested; confirm saving the draft before returning to the main menu.";
                 return true;
             }
 
-            CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
+            if (closeableRuntimeState)
+                CloseRuntimeStateToMainMenu(reason ?? "Closed from authoring shell.", backendState);
+            else
+                CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
             message = "Closed from authoring shell and returning to the main menu.";
             return true;
         }
@@ -374,9 +413,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             _backend.SetActiveSession(pending);
+            if (pending.ReenterPlaytestAfterBootstrap)
+                ReenterPlaytest(pending);
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Activated authoring session for draft '" + pending.DraftId
                 + "'. Opening authoring shell.");
             _menuService.Open(pending, true);
+        }
+
+        private void ReenterPlaytest(ScenarioAuthoringSession pending)
+        {
+            try
+            {
+                ScenarioApplyResult result = _editorService.BeginPlaytest();
+                int messages = result != null && result.Messages != null ? result.Messages.Length : 0;
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Re-entered playtest after authoring reload. draftId="
+                    + (pending != null ? pending.DraftId : "<none>") + " messages=" + messages + ".");
+                _backend.Refresh();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Failed to re-enter playtest after authoring reload: " + ex.Message);
+            }
         }
 
         private bool TryCompleteDraftWarmup(ScenarioAuthoringSession pending)
@@ -570,14 +627,49 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ReturnToMainMenu();
         }
 
+        private void CloseRuntimeStateToMainMenu(string reason, ScenarioAuthoringState state)
+        {
+            string scenarioFilePath = state != null ? state.ActiveScenarioFilePath : null;
+            if (!CommitActiveDraftForClose(scenarioFilePath))
+                return;
+
+            CloseRuntimeState(reason);
+            ReturnToMainMenu();
+        }
+
+        private void CloseRuntimeState(string reason)
+        {
+            try
+            {
+                _editorService.CloseEditor(false);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Runtime-state editor close failed: " + ex.Message);
+            }
+            finally
+            {
+                _backend.ClearActiveSession(reason);
+                SaveRuntimeState.ClearActiveCustomSession();
+            }
+
+            MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed authoring runtime from backend/editor state. Reason="
+                + (reason ?? "unspecified") + ", scene=" + SceneManager.GetActiveScene().name + ".");
+        }
+
         private bool CommitActiveDraftForClose(ScenarioAuthoringSession active)
         {
             if (active == null)
                 return false;
 
+            return CommitActiveDraftForClose(active.ScenarioFilePath);
+        }
+
+        private bool CommitActiveDraftForClose(string scenarioFilePath)
+        {
             try
             {
-                ScenarioValidationResult validation = _editorService.CommitChanges(active.ScenarioFilePath);
+                ScenarioValidationResult validation = _editorService.CommitChanges(scenarioFilePath);
                 if (validation != null && validation.IsValid)
                     return true;
 
@@ -690,6 +782,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
 
             return !string.Equals(binding.ScenarioId, session.DraftId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsCloseableRuntimeState(ScenarioAuthoringState state, ScenarioEditorSession editorSession)
+        {
+            if (state == null || !state.IsActive || state.ReloadPending || editorSession == null || editorSession.WorkingDefinition == null)
+                return false;
+
+            if (string.IsNullOrEmpty(state.ActiveDraftId))
+                return true;
+
+            return string.Equals(state.ActiveDraftId, editorSession.WorkingDefinition.Id, StringComparison.OrdinalIgnoreCase);
         }
 
         private void EnsureInactiveAuthoringState(string reason)

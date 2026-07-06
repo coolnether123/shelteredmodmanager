@@ -6,6 +6,7 @@ using ShelteredAPI.UI.Compatibility;
 using UnityEngine;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
@@ -94,6 +95,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             try
             {
                 bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+                bool reloadPending = snapshot.State != null && snapshot.State.ReloadPending;
                 string signature = BuildSignature(snapshot);
                 bool rebuild = !string.Equals(signature, _lastSignature, StringComparison.Ordinal)
                     || Math.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) > 0.001f;
@@ -107,11 +109,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 RegisterInteractiveRects(inputCapture);
                 if (inputCapture != null)
                 {
-                    inputCapture.SetPopupOpen(!isPlaytesting && (_windowMenuOpen
+                    inputCapture.SetPopupOpen(!isPlaytesting && !reloadPending && (_windowMenuOpen
                         || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.Settings != null)
                         || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.SpritePickerDocument != null)
                         || (snapshot.ShellViewModel != null && snapshot.ShellViewModel.ContextMenu != null && snapshot.ShellViewModel.ContextMenu.Visible)));
-                    inputCapture.SetKeyboardCaptured(!isPlaytesting
+                    inputCapture.SetKeyboardCaptured(!isPlaytesting && !reloadPending
                         && snapshot.ShellViewModel != null
                         && (snapshot.ShellViewModel.Settings != null || snapshot.ShellViewModel.SpritePickerDocument != null));
                 }
@@ -157,16 +159,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             _interactiveRects.Clear();
             ScenarioAuthoringShellViewModel shell = snapshot.ShellViewModel;
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
-            if (shell == null || (!snapshot.State.ShellVisible && !isPlaytesting))
+            bool reloadPending = snapshot.State != null && snapshot.State.ReloadPending;
+            if (shell == null || (!snapshot.State.ShellVisible && !isPlaytesting && !reloadPending))
                 return;
 
             Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(_scaledWidth);
             Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(_scaledWidth, hudReserveRect);
             Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(_scaledWidth, _scaledHeight);
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(_scaledWidth, topRect, statusRect);
-            if (isPlaytesting)
+            if (isPlaytesting || reloadPending)
             {
-                DrawPlaytestStrip(statusRect);
+                DrawPlaytestStrip(statusRect, snapshot.State);
                 return;
             }
 
@@ -333,7 +336,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             x += 104f;
             DrawButton(new Rect(x, rect.y + 8f, 74f, 32f), CommandAction(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear", false), false, "CommandClear");
             x += 82f;
-            DrawButton(new Rect(x, rect.y + 8f, 82f, 32f), CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Playtest", ScenarioAuthoringRuntimeGuards.IsPlaytesting()), false, "CommandPlaytest");
+            DrawButton(new Rect(x, rect.y + 8f, 82f, 32f), PlaytestAction("Playtest"), false, "CommandPlaytest");
             RegisterRect(rect);
         }
 
@@ -353,7 +356,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             }
 
             DrawButton(new Rect(rect.xMax - 220f, rect.y + 8f, 72f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionSave, "Save", true), false, "StatusSave");
-            DrawButton(new Rect(rect.xMax - 142f, rect.y + 8f, 86f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Stop Test" : "Playtest", ScenarioAuthoringRuntimeGuards.IsPlaytesting()), false, "StatusPlaytest");
+            DrawButton(new Rect(rect.xMax - 142f, rect.y + 8f, 86f, 30f), PlaytestAction(ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Stop Test" : "Playtest"), false, "StatusPlaytest");
             DrawButton(new Rect(rect.xMax - 50f, rect.y + 8f, 42f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionShellToggle, "X", false), false, "StatusHide");
             RegisterRect(rect);
         }
@@ -586,14 +589,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             RegisterRect(rect);
         }
 
-        private void DrawPlaytestStrip(Rect rect)
+        private void DrawPlaytestStrip(Rect rect, ScenarioAuthoringState state)
         {
+            bool reloadPending = state != null && state.ReloadPending;
+            string reloadReason = reloadPending && !string.IsNullOrEmpty(state.ReloadPendingReason)
+                ? state.ReloadPendingReason
+                : "Scenario world is reloading; controls are disabled until the editor reconnects.";
             DrawPanel("PlaytestStrip", rect, _statusColor, false, BaseDepth);
-            DrawLabel("PlaytestState", rect, new Rect(18f, 13f, 136f, 20f), "Playtest running", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
-            DrawLabel("PlaytestTime", rect, new Rect(166f, 13f, 150f, 20f), "Day " + GameTime.Day + " " + GameTime.Hour.ToString("D2") + ":" + GameTime.Minute.ToString("D2"), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
-            DrawLabel("PlaytestSeed", rect, new Rect(328f, 13f, Math.Max(80f, rect.width - 580f), 20f), "ModRandom seed: " + ModRandom.CurrentSeed.ToString(), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
-            DrawButton(new Rect(rect.xMax - 226f, rect.y + 8f, 92f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionPlaytestRestart, "Restart", false), false, "PlaytestRestart");
-            DrawButton(new Rect(rect.xMax - 126f, rect.y + 8f, 112f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Stop Test", true), false, "PlaytestStop");
+            if (reloadPending)
+            {
+                DrawLabel("PlaytestState", rect, new Rect(18f, 13f, Math.Max(120f, rect.width - 380f), 20f), "Restarting playtest...", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+            }
+            else
+            {
+                DrawLabel("PlaytestState", rect, new Rect(18f, 13f, 136f, 20f), "Playtest running", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+                DrawLabel("PlaytestTime", rect, new Rect(166f, 13f, 150f, 20f), "Day " + GameTime.Day + " " + GameTime.Hour.ToString("D2") + ":" + GameTime.Minute.ToString("D2"), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+                DrawLabel("PlaytestSeed", rect, new Rect(328f, 13f, Math.Max(80f, rect.width - 580f), 20f), "ModRandom seed: " + ModRandom.CurrentSeed.ToString(), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+            }
+            DrawButton(new Rect(rect.xMax - 226f, rect.y + 8f, 92f, 30f), reloadPending ? DisabledCommandAction(ScenarioAuthoringActionIds.ActionPlaytestRestart, "Restart", reloadReason) : CommandAction(ScenarioAuthoringActionIds.ActionPlaytestRestart, "Restart", false), false, "PlaytestRestart");
+            DrawButton(new Rect(rect.xMax - 126f, rect.y + 8f, 112f, 30f), reloadPending ? DisabledCommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Stop Test", reloadReason) : CommandAction(ScenarioAuthoringActionIds.ActionPlaytest, "Stop Test", true), false, "PlaytestStop");
             RegisterRect(rect);
         }
 
@@ -956,6 +970,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             ScenarioAuthoringState state = snapshot.State;
             ScenarioAuthoringShellViewModel shell = snapshot.ShellViewModel;
             builder.Append(state.IsActive).Append('|')
+                .Append(state.ReloadPending).Append('|')
+                .Append(state.ReloadPendingReason).Append('|')
                 .Append(ScenarioAuthoringRuntimeGuards.IsPlaytesting()).Append('|')
                 .Append(ModRandom.CurrentSeed).Append('|')
                 .Append(_scaledWidth).Append('|')
@@ -1052,6 +1068,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 Label = label,
                 Enabled = true,
                 Emphasized = active
+            };
+        }
+
+        private static ScenarioAuthoringInspectorAction PlaytestAction(string label)
+        {
+            bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+            string reason = null;
+            bool enabled = isPlaytesting || CanStartPlay(out reason);
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionPlaytest,
+                Label = label,
+                Enabled = enabled,
+                Emphasized = isPlaytesting,
+                Detail = enabled ? null : reason,
+                DisabledReason = enabled ? null : reason
+            };
+        }
+
+        private static bool CanStartPlay(out string reason)
+        {
+            reason = null;
+            try
+            {
+                ScenarioEditorController controller = ScenarioEditorController.Instance;
+                ScenarioEditorSession session = controller != null ? controller.CurrentSession : null;
+                return new ScenarioPlayStartReadiness().CanStartPlay(session != null ? session.WorkingDefinition : null, out reason);
+            }
+            catch (Exception ex)
+            {
+                reason = "Playtest readiness could not be checked: " + ex.Message;
+                return false;
+            }
+        }
+
+        private static ScenarioAuthoringInspectorAction DisabledCommandAction(string id, string label, string reason)
+        {
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = id,
+                Label = label,
+                Enabled = false,
+                Emphasized = false,
+                Detail = reason,
+                DisabledReason = reason
             };
         }
 

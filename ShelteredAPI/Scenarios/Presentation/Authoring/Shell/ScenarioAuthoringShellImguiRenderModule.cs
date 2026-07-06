@@ -128,10 +128,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _snapshot = snapshot ?? _snapshot;
             bool vanillaBlockingPanelOpen = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>().HasBlockingPanelOpen();
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+            bool reloadPending = snapshot != null && snapshot.State != null && snapshot.State.ReloadPending;
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
-                && (snapshot.State.ShellVisible || isPlaytesting)
+                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending)
                 && snapshot.ShellViewModel != null
                 && !vanillaBlockingPanelOpen;
 
@@ -235,6 +236,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
                 Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
+                if (_snapshot.State != null && _snapshot.State.ReloadPending)
+                {
+                    DrawPlaytestControlStripCore(statusRect, shell);
+                    inputCapture.RegisterInteractiveRect(statusRect);
+                    inputCapture.SetTextFieldFocused(false);
+                    inputCapture.SetKeyboardCaptured(false);
+                    inputCapture.SetPopupOpen(false);
+                    inputCapture.SetTransitionActive(_animations.TransitionActive);
+                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
+                    return;
+                }
+
                 if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
                 {
                     DrawPlaytestControlStripCore(statusRect, shell);

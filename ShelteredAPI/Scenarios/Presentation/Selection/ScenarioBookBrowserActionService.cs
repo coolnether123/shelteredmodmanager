@@ -5,6 +5,7 @@ using ShelteredAPI.Saves;
 using ShelteredAPI.Harmony;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Presentation.Selection{
     internal sealed class ScenarioBookBrowserActionService
@@ -195,6 +196,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     return false;
                 }
 
+                ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>());
                 status = "Draft renamed.";
                 return true;
             }
@@ -213,6 +215,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return false;
             }
 
+            ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>());
             status = "Draft details saved.";
             return true;
         }
@@ -234,6 +237,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return false;
             }
 
+            ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>());
             status = "Draft duplicated.";
             return true;
         }
@@ -249,6 +253,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             _saveLibrary.ClearQueuedNewGameSave(_launchCoordinator.GetVirtualSaveType(entry));
             bool deleted = ScenarioAuthoringDraftRepository.Instance.DeleteDraft(entry.ScenarioId, "Scenario browser draft delete.");
+            if (deleted)
+                ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>());
             status = deleted ? "Draft deleted." : "Draft delete failed.";
             return deleted;
         }

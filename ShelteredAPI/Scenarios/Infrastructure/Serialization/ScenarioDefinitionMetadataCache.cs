@@ -26,6 +26,57 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization
         private static readonly object Sync = new object();
         private static readonly Dictionary<string, CacheEntry> Entries = new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
 
+        public static void Invalidate(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath))
+                return;
+
+            string fullPath;
+            try { fullPath = Path.GetFullPath(filePath); }
+            catch { return; }
+
+            lock (Sync)
+            {
+                List<string> remove = new List<string>();
+                foreach (KeyValuePair<string, CacheEntry> pair in Entries)
+                {
+                    if (pair.Key != null && pair.Key.StartsWith(fullPath + "|", StringComparison.OrdinalIgnoreCase))
+                        remove.Add(pair.Key);
+                }
+
+                for (int i = 0; i < remove.Count; i++)
+                    Entries.Remove(remove[i]);
+            }
+        }
+
+        public static void InvalidateUnder(string directoryPath)
+        {
+            if (string.IsNullOrEmpty(directoryPath))
+                return;
+
+            string fullPath;
+            try { fullPath = Path.GetFullPath(directoryPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+            catch { return; }
+
+            lock (Sync)
+            {
+                List<string> remove = new List<string>();
+                foreach (KeyValuePair<string, CacheEntry> pair in Entries)
+                {
+                    string key = pair.Key;
+                    if (!string.IsNullOrEmpty(key)
+                        && (key.StartsWith(fullPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                            || key.StartsWith(fullPath + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        remove.Add(key);
+                    }
+                }
+
+                for (int i = 0; i < remove.Count; i++)
+                    Entries.Remove(remove[i]);
+            }
+        }
+
         public static bool TryLoad(
             ScenarioDefinitionSerializer serializer,
             string filePath,

@@ -85,6 +85,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 string scenarioFilePath = Path.Combine(draftRoot, ScenarioDefinitionSerializer.DefaultFileName);
                 _serializer.Save(definition, scenarioFilePath);
+                ScenarioDefinitionMetadataCache.Invalidate(scenarioFilePath);
                 new ScenarioAuthoringSetupStateService().CreateInitialForScenarioFile(scenarioFilePath);
                 MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Created draft '" + scenarioId + "' in save-system slot " + slot
                     + " at " + scenarioFilePath + ".");
@@ -253,6 +254,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         definition.DisplayName = displayName;
                         definition.Description = description ?? string.Empty;
                         _serializer.Save(definition, files[i]);
+                        ScenarioDefinitionMetadataCache.Invalidate(files[i]);
                         updatedInfo = _serializer.LoadInfo(files[i], DraftOwnerId);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Updated draft metadata for '" + draftId + "'.");
                         return true;
@@ -321,6 +323,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         definition.DisplayName = string.IsNullOrEmpty(displayName) ? definition.DisplayName : displayName;
                         definition.Description = description ?? string.Empty;
                         _serializer.Save(definition, files[i]);
+                        ScenarioDefinitionMetadataCache.Invalidate(files[i]);
                         updatedInfo = _serializer.LoadInfo(files[i], DraftOwnerId);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Renamed draft '" + draftId + "' to '" + normalizedId + "'.");
                         return true;
@@ -368,9 +371,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                         string duplicateId = duplicate.Info.Id;
                         CopyDraftFolder(Path.GetDirectoryName(files[i]), Path.GetDirectoryName(duplicate.Info.FilePath));
+                        ScenarioDefinitionMetadataCache.InvalidateUnder(Path.GetDirectoryName(duplicate.Info.FilePath));
                         source.Id = duplicateId;
                         source.DisplayName = BuildDuplicateDisplayName(source.DisplayName);
                         _serializer.Save(source, duplicate.Info.FilePath);
+                        ScenarioDefinitionMetadataCache.Invalidate(duplicate.Info.FilePath);
                         duplicateInfo = _serializer.LoadInfo(duplicate.Info.FilePath, DraftOwnerId);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Duplicated draft '" + draftId + "' as '" + duplicateId + "'.");
                         return true;
@@ -413,6 +418,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         }
 
                         string draftRoot = Path.GetDirectoryName(files[i]);
+                        ScenarioDefinitionMetadataCache.InvalidateUnder(draftRoot);
                         bool draftDeleted = DeleteDraftDirectory(draftRoot);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Deleted pending draft '" + draftId + "'. slot=" + slot
                             + " saveDeleted=" + saveDeleted + " draftDeleted=" + draftDeleted

@@ -7,6 +7,7 @@ using UnityEngine;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
@@ -25,13 +26,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             DrawChromePanel(rect, _statusStyle);
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
+            string playStartReason = null;
+            bool canStartPlay = isPlaytesting || CanStartPlay(out playStartReason);
             ScenarioAuthoringInspectorAction playtestAction = new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionIds.ActionPlaytest,
                 Label = isPlaytesting ? "End Test" : "Playtest",
-                Hint = isPlaytesting ? "Stop playtest and return to frozen authoring." : "Apply the current draft into the live world.",
-                Enabled = true,
-                Emphasized = isPlaytesting
+                Hint = isPlaytesting ? "Stop playtest and return to frozen authoring." : canStartPlay ? "Apply the current draft into the live world." : playStartReason,
+                Enabled = canStartPlay,
+                Emphasized = isPlaytesting,
+                DisabledReason = canStartPlay ? null : playStartReason
             };
             ScenarioAuthoringInspectorAction pauseMenuAction = new ScenarioAuthoringInspectorAction
             {
@@ -86,21 +90,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawPlaytestControlStripCore(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
             DrawChromePanel(rect, _statusStyle);
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            bool reloadPending = state != null && state.ReloadPending;
+            string reloadReason = reloadPending && !string.IsNullOrEmpty(state.ReloadPendingReason)
+                ? state.ReloadPendingReason
+                : "Scenario world is reloading; controls are disabled until the editor reconnects.";
             ScenarioAuthoringInspectorAction stopAction = new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionIds.ActionPlaytest,
-                Label = "Stop Playtest",
-                Hint = "Stop playtest and restore frozen authoring.",
-                Enabled = true,
-                Emphasized = true
+                Label = reloadPending ? "Stop Playtest" : "Stop Playtest",
+                Hint = reloadPending ? reloadReason : "Stop playtest and restore frozen authoring.",
+                Enabled = !reloadPending,
+                Emphasized = !reloadPending,
+                DisabledReason = reloadPending ? reloadReason : null
             };
             ScenarioAuthoringInspectorAction restartAction = new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionIds.ActionPlaytestRestart,
                 Label = "Restart",
-                Hint = "Save the draft and reload the authored world. This is a full restart, not an in-place tick rewind.",
-                Enabled = true,
-                Emphasized = false
+                Hint = reloadPending ? reloadReason : "Save the draft and reload the authored world. This is a full restart, not an in-place tick rewind.",
+                Enabled = !reloadPending,
+                Emphasized = false,
+                DisabledReason = reloadPending ? reloadReason : null
             };
 
             float rightPadding = 16f;
@@ -111,24 +122,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float statusRight = restartRect.x - 14f;
 
             float x = rect.x + 26f;
-            DrawStatusLabel(new Rect(x, rect.y + 14f, 124f, 20f), "Playtest running", false);
-            x += 142f;
-            DrawStatusLabel(new Rect(x, rect.y + 14f, 160f, 20f), "Day " + GameTime.Day + " " + GameTime.Hour.ToString("D2") + ":" + GameTime.Minute.ToString("D2"), false);
-            x += 178f;
-            string seed = "ModRandom seed: " + ModRandom.CurrentSeed.ToString();
-            if (statusRight - x > 140f)
-                DrawStatusLabel(new Rect(x, rect.y + 14f, statusRight - x, 20f), seed, true);
+            if (reloadPending)
+            {
+                DrawStatusLabel(new Rect(x, rect.y + 14f, Math.Max(80f, statusRight - x), 20f), "Restarting playtest...", true);
+            }
+            else
+            {
+                DrawStatusLabel(new Rect(x, rect.y + 14f, 124f, 20f), "Playtest running", false);
+                x += 142f;
+                DrawStatusLabel(new Rect(x, rect.y + 14f, 160f, 20f), "Day " + GameTime.Day + " " + GameTime.Hour.ToString("D2") + ":" + GameTime.Minute.ToString("D2"), false);
+                x += 178f;
+                string seed = "ModRandom seed: " + ModRandom.CurrentSeed.ToString();
+                if (statusRight - x > 140f)
+                    DrawStatusLabel(new Rect(x, rect.y + 14f, statusRight - x, 20f), seed, true);
+            }
 
             DrawButton(restartRect, restartAction, false);
             DrawButton(stopRect, stopAction, false);
 
-            string message = null;
+            string message = reloadPending ? reloadReason : null;
             for (int i = 0; shell != null && shell.StatusEntries != null && i < shell.StatusEntries.Length; i++)
             {
                 string value = shell.StatusEntries[i] ?? string.Empty;
                 if (!IsPrimaryStatusFact(value) && !IsSecondaryStatusFact(value))
                 {
-                    message = value;
+                    if (!reloadPending)
+                        message = value;
                     break;
                 }
             }
@@ -154,6 +173,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             return !string.IsNullOrEmpty(value)
                 && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool CanStartPlay(out string reason)
+        {
+            reason = null;
+            try
+            {
+                ScenarioEditorController controller = ScenarioEditorController.Instance;
+                ScenarioEditorSession session = controller != null ? controller.CurrentSession : null;
+                return new ScenarioPlayStartReadiness().CanStartPlay(session != null ? session.WorkingDefinition : null, out reason);
+            }
+            catch (Exception ex)
+            {
+                reason = "Playtest readiness could not be checked: " + ex.Message;
+                return false;
+            }
         }
 
         private void DrawStatusLabel(Rect rect, string value, bool tooltipWhenTruncated)

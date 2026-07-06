@@ -23,6 +23,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int StartupSaveSlot { get; private set; }
         public SaveEntry StartupSave { get; private set; }
         public SaveType LaunchSaveType { get; private set; }
+        public bool ReenterPlaytestAfterBootstrap { get; private set; }
 
         public static ScenarioAuthoringSession Create(
             ScenarioInfo draftInfo,
@@ -51,6 +52,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 StartupSave = startupSave,
                 LaunchSaveType = launchSaveType
             };
+        }
+
+        public void RequestPlaytestAfterBootstrap()
+        {
+            ReenterPlaytestAfterBootstrap = true;
         }
     }
 }
