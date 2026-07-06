@@ -1738,21 +1738,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float cardWidth = columns == 2 ? (availableWidth - gap) * 0.5f : availableWidth;
             for (int i = 0; i < questions.Count; i += columns)
             {
+                int rowCount = Math.Min(columns, questions.Count - i);
+                float rowCardWidth = rowCount == columns
+                    ? cardWidth
+                    : (availableWidth - (gap * (rowCount - 1))) / rowCount;
                 GUILayout.BeginHorizontal();
-                for (int column = 0; column < columns; column++)
+                for (int column = 0; column < rowCount; column++)
                 {
                     int index = i + column;
-                    if (index < questions.Count)
-                    {
-                        Rect rect = GUILayoutUtility.GetRect(cardWidth, 78f, GUILayout.Width(cardWidth), GUILayout.Height(78f));
-                        DrawHomeQuestionCard(rect, questions[index]);
-                    }
-                    else
-                    {
-                        GUILayout.Space(cardWidth);
-                    }
+                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, 78f, GUILayout.Width(rowCardWidth), GUILayout.Height(78f));
+                    DrawHomeQuestionCard(rect, questions[index]);
 
-                    if (column < columns - 1)
+                    if (column < rowCount - 1)
                         GUILayout.Space(gap);
                 }
                 GUILayout.EndHorizontal();

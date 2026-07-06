@@ -35,6 +35,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float FloatingWindowStartY = 46f;
         public const float FloatingWindowCascade = 24f;
         public const float CommandDockBottomOffset = 22f;
+        public const float WorkshopPageInset = 8f;
+        public const float WorkshopPageTopInset = 18f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
         // on the right for the HUD so labels never collide with the game UI.
@@ -136,9 +138,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildWorkshopPageRect(Rect contentRect)
         {
-            float pageWidth = Mathf.Clamp(contentRect.width - (Margin * 2f), 720f, 1100f);
-            float x = contentRect.x + ((contentRect.width - pageWidth) * 0.5f);
-            return new Rect(x, contentRect.y + 18f, pageWidth, Math.Max(240f, contentRect.height - 36f));
+            float horizontalInset = contentRect.width >= 760f ? WorkshopPageInset : 0f;
+            float verticalInset = contentRect.height >= 300f ? WorkshopPageTopInset : Gutter;
+            float pageWidth = Math.Max(240f, contentRect.width - (horizontalInset * 2f));
+            return new Rect(
+                contentRect.x + horizontalInset,
+                contentRect.y + verticalInset,
+                pageWidth,
+                Math.Max(120f, contentRect.height - (verticalInset * 2f)));
         }
 
         public static Rect BuildToolRailRect(Rect contentRect, int buttonCount)
