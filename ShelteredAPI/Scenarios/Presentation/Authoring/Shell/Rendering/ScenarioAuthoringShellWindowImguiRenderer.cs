@@ -1391,8 +1391,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string controlName = "editable." + label;
             string focusedName = GUI.GetNameOfFocusedControl();
             bool wasFocused = string.Equals(focusedName, controlName, StringComparison.Ordinal);
+            bool previouslyFocused = _editableFieldsFocusedLastFrame.Contains(controlName);
             string draft;
-            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || !wasFocused)
+            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || (!wasFocused && !previouslyFocused))
                 draft = value;
             GUI.SetNextControlName(controlName);
             string next = GUI.TextField(rect, draft, style);
@@ -1401,6 +1402,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _editableFieldFocused = _editableFieldFocused || focused;
             if (focused || (Event.current != null && rect.Contains(Event.current.mousePosition)))
                 DrawFieldFocusBorder(rect);
+            TryCommitEditableField(item, controlName, value, next, previouslyFocused, focused);
+            TrackEditableFieldFocus(controlName, focused);
         }
 
         private void DrawHomeStatusChips(List<ScenarioAuthoringInspectorAction> chips)
@@ -1548,10 +1551,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (item == null || item.Action == null || string.Equals(item.Action.Id, ScenarioAuthoringActionIds.ActionSetupDismiss, StringComparison.Ordinal))
                     continue;
                 Rect rect = GUILayoutUtility.GetRect(180f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
-                DrawButton(rect, item.Action, false);
+                DrawChecklistItem(rect, item.Action);
                 GUILayout.Space(4f);
             }
             GUILayout.EndVertical();
+        }
+
+        private void DrawChecklistItem(Rect rect, ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return;
+
+            bool complete = !action.Enabled && action.Label != null && action.Label.StartsWith("Done:", StringComparison.OrdinalIgnoreCase);
+            if (!complete)
+            {
+                DrawButton(rect, action, false);
+                return;
+            }
+
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
+            Rect markRect = new Rect(rect.x + 8f, rect.y + 5f, 32f, rect.height - 10f);
+            Rect textRect = new Rect(markRect.xMax + 8f, rect.y + 4f, rect.width - 48f, rect.height - 8f);
+            ScenarioUiWidgets.DrawPill(markRect, "OK", _uiContext.Styles, ScenarioUiPillEmphasis.Active);
+            string label = action.Label.Substring("Done:".Length).Trim();
+            GUI.Label(textRect, label, _textStyle);
         }
 
         private static ScenarioAuthoringInspectorAction FindAction(ScenarioAuthoringInspectorSection section, string actionId)
@@ -1872,8 +1895,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string controlName = "editable." + label;
             string focusedName = GUI.GetNameOfFocusedControl();
             bool wasFocused = string.Equals(focusedName, controlName, StringComparison.Ordinal);
+            bool previouslyFocused = _editableFieldsFocusedLastFrame.Contains(controlName);
             string draft;
-            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || !wasFocused)
+            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || (!wasFocused && !previouslyFocused))
                 draft = value ?? string.Empty;
 
             Event evt = Event.current;
@@ -1898,6 +1922,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUI.color = GUI.skin.settings.cursorColor;
                 GUI.DrawTexture(new Rect(caretX, caretY, 1f, Math.Max(14f, fieldStyle.lineHeight)), Texture2D.whiteTexture);
                 GUI.color = oldColor;
+            }
+            TryCommitEditableField(item, controlName, value ?? string.Empty, next, previouslyFocused, focused);
+            TrackEditableFieldFocus(controlName, focused);
+        }
+
+        private void TrackEditableFieldFocus(string controlName, bool focused)
+        {
+            if (string.IsNullOrEmpty(controlName))
+                return;
+
+            if (focused)
+                _editableFieldsFocusedLastFrame.Add(controlName);
+            else
+                _editableFieldsFocusedLastFrame.Remove(controlName);
+        }
+
+        private void TryCommitEditableField(
+            ScenarioAuthoringInspectorItem item,
+            string controlName,
+            string committedValue,
+            string draftValue,
+            bool previouslyFocused,
+            bool focused)
+        {
+            if (item == null || item.Action == null || string.IsNullOrEmpty(item.Action.Id))
+                return;
+
+            bool enterPressed = focused
+                && Event.current != null
+                && Event.current.type == EventType.KeyDown
+                && (Event.current.keyCode == KeyCode.Return || Event.current.keyCode == KeyCode.KeypadEnter);
+            bool lostFocus = previouslyFocused && !focused;
+            if (!enterPressed && !lostFocus)
+                return;
+
+            string next = draftValue ?? string.Empty;
+            string current = committedValue ?? string.Empty;
+            if (!string.Equals(next, current, StringComparison.Ordinal))
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(item.Action.Id + ScenarioAuthoringActionCodec.EncodeToken(next));
+
+            _editableFieldDrafts.Remove(controlName);
+            if (enterPressed && Event.current != null)
+            {
+                GUI.FocusControl(null);
+                Event.current.Use();
             }
         }
 

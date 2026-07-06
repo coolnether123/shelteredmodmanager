@@ -246,6 +246,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringInspectorItem item = Item.Property(label, value);
             item.Editable = true;
+            if (string.Equals(label, "Title", StringComparison.OrdinalIgnoreCase))
+            {
+                item.Action = Item.Action(
+                    ScenarioAuthoringActionIds.ActionDraftTitlePrefix,
+                    "Commit Title",
+                    "Update the scenario title.",
+                    true,
+                    false,
+                    "TT");
+            }
             return item;
         }
 

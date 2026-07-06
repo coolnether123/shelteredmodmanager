@@ -87,6 +87,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellTabShell = "shell.tab.shell";
         public const string ActionSave = "editor.save";
         public const string ActionDraftCopyPath = "editor.draft.copy_path";
+        public const string ActionDraftTitlePrefix = "editor.draft.title.";
         public const string ActionPlaytest = "editor.playtest.toggle";
         public const string ActionPublishExport = "publish.export";
         public const string ActionOpenPauseMenu = "editor.pause_menu.open";

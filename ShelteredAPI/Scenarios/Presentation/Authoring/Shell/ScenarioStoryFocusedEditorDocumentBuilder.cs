@@ -128,7 +128,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddEndOptionItemActions(items, "Trade items", end != null ? end.TradeItems : null, false, stageIndex, intercomIndex);
             AddRecruitActions(items, definition, intercom, stageIndex, intercomIndex);
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.EndCompleteQuest(stageIndex, intercomIndex), "Complete Quest", "Mark this vanilla quest complete when the encounter ends.", true, end != null && end.CompleteQuest, "CQ")));
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.EndCompleteScenario(stageIndex, intercomIndex), "Complete Scenario", "Mark the parent scenario complete when the encounter ends.", true, end != null && end.CompleteParentScenario, "CS")));
+            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.EndCompleteScenario(stageIndex, intercomIndex), end != null && end.CompleteParentScenario ? "Clear Complete Scenario" : "Complete Scenario unavailable", "Use Victory conditions to complete the authored scenario.", end != null && end.CompleteParentScenario, false, "VC")));
             return Section("story_focused_outcome_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "Outcomes, Rewards, Trades, Recruit", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 

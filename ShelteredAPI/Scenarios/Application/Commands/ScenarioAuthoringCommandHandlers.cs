@@ -1095,6 +1095,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionFocusedEditorCancel:
                     return CloseFocusedEditor(state, true, out message);
                 default:
+                    if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionDraftTitlePrefix, StringComparison.Ordinal))
+                        return CommitDraftTitle(actionId, out message);
+
                     ScenarioBaseGameMode reloadBaseMode;
                     if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
                         actionId,
@@ -1132,6 +1135,36 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             GUIUtility.systemCopyBuffer = path;
             message = "Draft path copied.";
+            return true;
+        }
+
+        private bool CommitDraftTitle(string actionId, out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            string title = ScenarioAuthoringActionCodec.DecodeToken(actionId.Substring(ScenarioAuthoringActionIds.ActionDraftTitlePrefix.Length));
+            title = title != null ? title.Trim() : string.Empty;
+            if (string.IsNullOrEmpty(title))
+            {
+                message = "Scenario title is required.";
+                return true;
+            }
+
+            if (string.Equals(definition.DisplayName, title, StringComparison.Ordinal))
+            {
+                message = "Scenario title is unchanged.";
+                return true;
+            }
+
+            definition.DisplayName = title;
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario title updated.";
             return true;
         }
 

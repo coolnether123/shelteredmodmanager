@@ -115,52 +115,72 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (!ScenarioStoryAuthoringActions.TryResolveIntercom(actionId, flow, out stageIndex, out intercomIndex, out ScenarioIntercomStageDefinition intercom))
                 return false;
 
-            if (string.Equals(actionId, ScenarioStoryAuthoringActions.IntercomDelete(stageIndex, intercomIndex), StringComparison.Ordinal))
+            int resolvedStageIndex = stageIndex;
+            int resolvedIntercomIndex = intercomIndex;
+            ScenarioFlowStageDefinition resolvedStage = flow.Stages[resolvedStageIndex];
+
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.IntercomDelete(resolvedStageIndex, resolvedIntercomIndex), StringComparison.Ordinal))
             {
-                flow.Stages[stageIndex].IntercomStages.RemoveAt(intercomIndex);
+                resolvedStage.IntercomStages.RemoveAt(resolvedIntercomIndex);
                 MarkDirty(session);
                 message = "Removed intercom step.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioStoryAuthoringActions.IntercomDuplicate(stageIndex, intercomIndex), StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.IntercomDuplicate(resolvedStageIndex, resolvedIntercomIndex), StringComparison.Ordinal))
             {
-                ScenarioIntercomStageDefinition copy = CloneIntercom(intercom, NextIntercomId(flow.Stages[stageIndex]));
-                flow.Stages[stageIndex].IntercomStages.Insert(intercomIndex + 1, copy);
+                ScenarioIntercomStageDefinition copy = CloneIntercom(intercom, NextIntercomId(resolvedStage));
+                resolvedStage.IntercomStages.Insert(resolvedIntercomIndex + 1, copy);
                 MarkDirty(session);
                 message = "Duplicated intercom step '" + copy.Id + "'.";
                 return true;
             }
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomMovePrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token)
+            int parsedStageIndex;
+            int parsedIntercomIndex;
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomMovePrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex
                 && int.TryParse(token, out delta))
-                return Move(flow.Stages[stageIndex].IntercomStages, intercomIndex, delta, session, "intercom step", out message);
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomIdPrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+                return Move(resolvedStage.IntercomStages, resolvedIntercomIndex, delta, session, "intercom step", out message);
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomIdPrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
             {
                 string oldId = intercom.Id;
                 intercom.Id = Decode(token);
-                ReplaceIntercomReferences(flow.Stages[stageIndex], oldId, intercom.Id);
+                ReplaceIntercomReferences(resolvedStage, oldId, intercom.Id);
                 MarkDirty(session);
                 message = "Renamed intercom step to '" + intercom.Id + "'.";
                 return true;
             }
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomTypePrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomTypePrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
             {
                 intercom.Type = Decode(token);
                 MarkDirty(session);
                 message = "Updated intercom type.";
                 return true;
             }
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomNextPrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomNextPrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
                 return SetIntercomTarget(session, intercom, "next", Decode(token), out message);
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomAlternatePrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryIntercomAlternatePrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
                 return SetIntercomTarget(session, intercom, "alternate", Decode(token), out message);
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryStageChangeTargetPrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryStageChangeTargetPrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
             {
                 EnsureStageChange(intercom).Id = NullIfNone(Decode(token));
                 MarkDirty(session);
                 message = "Updated stage change target.";
                 return true;
             }
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryStageChangeDelayPrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token)
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryStageChangeDelayPrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex
                 && int.TryParse(token, out delta))
             {
                 EnsureStageChange(intercom).DelayDays = Math.Max(0, EnsureStageChange(intercom).DelayDays + delta);
@@ -168,43 +188,55 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated stage change delay.";
                 return true;
             }
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryRecruitTogglePrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryRecruitTogglePrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
             {
                 Toggle(intercom.CharacterIdsToRecruit, Decode(token));
                 MarkDirty(session);
                 message = "Updated recruitment list.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioStoryAuthoringActions.RecruitFamily(stageIndex, intercomIndex), StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.RecruitFamily(resolvedStageIndex, resolvedIntercomIndex), StringComparison.Ordinal))
             {
                 intercom.RecruitAsFamily = !intercom.RecruitAsFamily;
                 MarkDirty(session);
                 message = "Updated recruitment mode.";
                 return true;
             }
-            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryEndTypePrefix, flow.Stages.Count, out stageIndex, out intercomIndex, out token))
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryEndTypePrefix, flow.Stages.Count, out parsedStageIndex, out parsedIntercomIndex, out token)
+                && parsedStageIndex == resolvedStageIndex
+                && parsedIntercomIndex == resolvedIntercomIndex)
             {
                 EnsureEnd(intercom).Type = Decode(token);
                 MarkDirty(session);
                 message = "Updated encounter end type.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioStoryAuthoringActions.EndCompleteQuest(stageIndex, intercomIndex), StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.EndCompleteQuest(resolvedStageIndex, resolvedIntercomIndex), StringComparison.Ordinal))
             {
                 EnsureEnd(intercom).CompleteQuest = !EnsureEnd(intercom).CompleteQuest;
                 MarkDirty(session);
                 message = "Updated quest completion outcome.";
                 return true;
             }
-            if (string.Equals(actionId, ScenarioStoryAuthoringActions.EndCompleteScenario(stageIndex, intercomIndex), StringComparison.Ordinal))
+            if (string.Equals(actionId, ScenarioStoryAuthoringActions.EndCompleteScenario(resolvedStageIndex, resolvedIntercomIndex), StringComparison.Ordinal))
             {
-                EnsureEnd(intercom).CompleteParentScenario = !EnsureEnd(intercom).CompleteParentScenario;
-                MarkDirty(session);
-                message = "Updated scenario completion outcome.";
+                ScenarioEncounterEndOptionsDefinition end = EnsureEnd(intercom);
+                if (end.CompleteParentScenario)
+                {
+                    end.CompleteParentScenario = false;
+                    MarkDirty(session);
+                    message = "Removed unsupported parent-scenario completion. Use Victory conditions for scenario completion.";
+                }
+                else
+                {
+                    message = "Parent-scenario completion is disabled here; use Victory conditions for scenario completion.";
+                }
                 return true;
             }
 
-            return TryHandleIntercomChildren(session, flow.Stages[stageIndex], intercom, actionId, stageIndex, intercomIndex, out message);
+            return TryHandleIntercomChildren(session, resolvedStage, intercom, actionId, resolvedStageIndex, resolvedIntercomIndex, out message);
         }
 
         private static bool TryHandleIntercomChildAction(ScenarioEditorSession session, ScenarioFlowDefinition flow, string actionId, out string message)
@@ -318,11 +350,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated option route.";
                 return true;
             }
+
+            if (StartsWithAny(actionId, ScenarioAuthoringActionIds.ActionStoryOptionKeyPrefix, ScenarioAuthoringActionIds.ActionStoryOptionNextPrefix, ScenarioAuthoringActionIds.ActionStoryOptionDeletePrefix))
+            {
+                message = "The selected response option no longer exists.";
+                return true;
+            }
             if (ScenarioStoryAuthoringActions.TryChild(actionId, ScenarioAuthoringActionIds.ActionStoryOptionDeletePrefix, stageIndex, intercomIndex, intercom.Options.Count, out child))
             {
                 intercom.Options.RemoveAt(child);
                 MarkDirty(session);
                 message = "Removed response option.";
+                return true;
+            }
+
+            if (StartsWithAny(actionId, ScenarioAuthoringActionIds.ActionStoryOptionKeyPrefix, ScenarioAuthoringActionIds.ActionStoryOptionNextPrefix, ScenarioAuthoringActionIds.ActionStoryOptionDeletePrefix))
+            {
+                message = "The selected response option no longer exists.";
                 return true;
             }
             if (string.Equals(actionId, ScenarioStoryAuthoringActions.RandomRouteAdd(stageIndex, intercomIndex), StringComparison.Ordinal))
@@ -468,6 +512,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkDirty(session);
             message = "Updated item.";
             return true;
+        }
+
+        private static bool StartsWithAny(string value, params string[] prefixes)
+        {
+            if (string.IsNullOrEmpty(value) || prefixes == null)
+                return false;
+
+            for (int i = 0; i < prefixes.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(prefixes[i]) && value.StartsWith(prefixes[i], StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool StepQuantity(ScenarioEditorSession session, ItemEntry item, int delta, out string message)

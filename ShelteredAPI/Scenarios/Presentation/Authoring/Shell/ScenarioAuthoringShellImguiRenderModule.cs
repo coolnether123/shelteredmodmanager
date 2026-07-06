@@ -82,6 +82,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _buildPaletteSearchText = string.Empty;
         private bool _buildPaletteSearchFocused;
         private readonly Dictionary<string, string> _editableFieldDrafts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _editableFieldsFocusedLastFrame = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _editableFieldFocused;
         private string _toolRailActiveKey;
         private float _toolRailIndicatorY = -1f;

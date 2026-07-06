@@ -137,7 +137,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 model.CanCancel = true;
                 model.Title = "Placing: " + (_activePlacement.Label ?? "Item");
                 model.Guidance = "Left-click place - Right-click/Esc cancel";
-                PlacementValidationResult validation = _activePlacement.Validation ?? EvaluateActivePlacement();
+                PlacementValidationResult validation = EvaluateActivePlacement();
+                _activePlacement.Validation = validation;
                 if (validation != null)
                 {
                     model.TargetCell = validation.GridX.HasValue && validation.GridY.HasValue
