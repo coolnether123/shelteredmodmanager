@@ -158,7 +158,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
             bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
             GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
-            bool chromeGlyph = IsWindowChromeGlyphAction(action);
+            bool chromeGlyph = IsWindowHeaderChromeGlyphAction(action, visualRect);
             GUIContent content = new GUIContent(
                 chromeGlyph ? string.Empty : ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle),
                 tooltip);
@@ -266,25 +266,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new Rect(rect.x + inset, rect.y + inset, rect.width - (inset * 2f), rect.height - (inset * 2f));
         }
 
-        private static bool IsWindowChromeGlyphAction(ScenarioAuthoringInspectorAction action)
-        {
-            return IsWindowCollapseAction(action) || IsWindowCloseAction(action);
-        }
-
-        private static bool IsWindowCollapseAction(ScenarioAuthoringInspectorAction action)
-        {
-            return action != null
-                && !string.IsNullOrEmpty(action.Id)
-                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal);
-        }
-
-        private static bool IsWindowCloseAction(ScenarioAuthoringInspectorAction action)
-        {
-            return action != null
-                && !string.IsNullOrEmpty(action.Id)
-                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal);
-        }
-
         private void DrawWindowChromeGlyph(Rect rect, ScenarioAuthoringInspectorAction action, bool hovered, bool pressed)
         {
             Color color = action != null && action.Enabled
@@ -295,7 +276,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Rect glyphRect = new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f);
             float thickness = Mathf.Max(1f, Mathf.Round(Mathf.Min(rect.width, rect.height) * 0.10f));
-            if (IsWindowCloseAction(action))
+            if (IsWindowHeaderCloseAction(action))
             {
                 DrawVectorLine(new Vector2(glyphRect.x, glyphRect.y), new Vector2(glyphRect.xMax, glyphRect.yMax), color, thickness);
                 DrawVectorLine(new Vector2(glyphRect.xMax, glyphRect.y), new Vector2(glyphRect.x, glyphRect.yMax), color, thickness);

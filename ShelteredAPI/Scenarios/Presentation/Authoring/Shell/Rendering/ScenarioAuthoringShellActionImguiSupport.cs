@@ -21,6 +21,8 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
+        private const float WindowChromeGlyphMaxExtent = 34f;
+
         private static bool IsWindowMenuAction(ScenarioAuthoringInspectorAction action)
         {
             return action != null
@@ -39,14 +41,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (action == null)
                     continue;
 
-                bool isChrome = action.Id != null
-                    && (action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal)
-                        || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal));
+                bool isChrome = IsWindowHeaderChromeAction(action);
                 if (isChrome == chromeOnly)
                     filtered.Add(action);
             }
 
             return filtered.ToArray();
+        }
+
+        private static bool IsWindowHeaderChromeAction(ScenarioAuthoringInspectorAction action)
+        {
+            return IsWindowHeaderCollapseAction(action) || IsWindowHeaderCloseAction(action);
+        }
+
+        private static bool IsWindowHeaderChromeGlyphAction(ScenarioAuthoringInspectorAction action, Rect rect)
+        {
+            return IsWindowHeaderChromeAction(action)
+                && rect.width > 0f
+                && rect.height > 0f
+                && rect.width <= WindowChromeGlyphMaxExtent
+                && rect.height <= WindowChromeGlyphMaxExtent;
+        }
+
+        private static bool IsWindowHeaderCollapseAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && !string.IsNullOrEmpty(action.Id)
+                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal)
+                && IsWindowHeaderCollapseLabel(action.Label);
+        }
+
+        private static bool IsWindowHeaderCloseAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && !string.IsNullOrEmpty(action.Id)
+                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal)
+                && string.Equals((action.Label ?? string.Empty).Trim(), "x", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsWindowHeaderCollapseLabel(string label)
+        {
+            string normalized = (label ?? string.Empty).Trim();
+            return string.Equals(normalized, "_", StringComparison.Ordinal)
+                || string.Equals(normalized, "-", StringComparison.Ordinal);
         }
 
         private float MeasureButtonWidth(ScenarioAuthoringInspectorAction action, bool tab, float extraPadding)

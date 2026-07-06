@@ -836,10 +836,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; actions != null && i < actions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = actions[i];
-                if (action != null
-                    && action.Id != null
-                    && (action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal)
-                        || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal)))
+                if (IsWindowHeaderChromeAction(action))
                 {
                     count++;
                 }

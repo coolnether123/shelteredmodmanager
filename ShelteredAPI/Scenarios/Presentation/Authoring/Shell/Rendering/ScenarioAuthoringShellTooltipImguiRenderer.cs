@@ -23,7 +23,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private void DrawTooltipOverlayCore(float scaledWidth, float scaledHeight, Rect hudReserveRect)
         {
-            string tip = GUI.tooltip;
+            string tip = _animations.ResolveTooltip(GUI.tooltip);
             float alpha = _animations.GetTooltipAlpha(tip);
             if (string.IsNullOrEmpty(tip) || alpha <= 0.001f)
                 return;

@@ -46,6 +46,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private float _statusChangedAt;
         private bool _modalVisibleLastFrame;
         private float _tooltipChangedAt;
+        private int _tooltipLastSeenFrame = -1000;
 
         public bool Enabled
         {
@@ -229,6 +230,23 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             }
 
             return GetBinaryProgress(TooltipKey, visible, TooltipDuration, ScenarioUiEasing.EaseOut, false);
+        }
+
+        public string ResolveTooltip(string tooltip)
+        {
+            if (!string.IsNullOrEmpty(tooltip))
+            {
+                _tooltipLastSeenFrame = Time.frameCount;
+                return tooltip;
+            }
+
+            if (!string.IsNullOrEmpty(_lastTooltip)
+                && Time.frameCount - _tooltipLastSeenFrame <= 1)
+            {
+                return _lastTooltip;
+            }
+
+            return string.Empty;
         }
 
         public float GetModalDimAlpha(bool visible)
