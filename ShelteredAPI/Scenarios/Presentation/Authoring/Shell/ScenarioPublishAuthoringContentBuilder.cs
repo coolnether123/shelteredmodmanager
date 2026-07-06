@@ -368,7 +368,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
             ScenarioAuthoringValidationSnapshot validation = ScenarioPublishAuthoringContentBuilder.EvaluateValidation(authoringState, definition);
-            List<ScenarioAuthoringInspectorItem> controlItems = BuildPlaytestControlItems(editorSession, validation);
+            List<ScenarioAuthoringInspectorItem> controlItems = BuildPlaytestControlItems(editorSession, definition, validation);
             List<ScenarioAuthoringInspectorItem> runSettingItems = BuildRunSettingItems(definition);
             List<ScenarioAuthoringInspectorItem> preflightItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
             List<ScenarioAuthoringInspectorItem> resultItems = BuildPlaytestResultItems(editorSession);
@@ -438,18 +438,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static List<ScenarioAuthoringInspectorItem> BuildPlaytestControlItems(
             ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
             ScenarioAuthoringValidationSnapshot validation)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
-            bool canStart = validation != null && validation.ValidationAvailable && validation.ErrorCount == 0;
+            string playStartReason;
+            bool canStartFromCast = new ScenarioPlayStartReadiness().CanStartPlay(definition, out playStartReason);
+            bool canStart = canStartFromCast && validation != null && validation.ValidationAvailable && validation.ErrorCount == 0;
             items.Add(Item.Property("State", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"));
             items.Add(Item.Property("Pre-flight", canStart ? "Ready" : isPlaytesting ? "Already running" : "Blocked"));
             items.Add(Item.Property("Errors", validation != null ? validation.ErrorCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
             items.Add(Item.Property("Warnings", validation != null ? validation.WarningCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
             items.Add(Item.Text(isPlaytesting
                 ? "The editor is in live test mode. Use Stop & return here or the slim End Test control in the status bar to restore frozen authoring."
-                : "Start Playtest applies the current draft to the live shelter. Blocking validation errors stop the transition."));
+                : canStartFromCast ? "Start Playtest applies the current draft to the live shelter. Blocking validation errors stop the transition." : playStartReason));
             ScenarioAuthoringInspectorAction action = Item.Action(
                 ScenarioAuthoringActionIds.ActionPlaytest,
                 isPlaytesting ? "Stop & Return" : "Start Playtest",
@@ -457,9 +460,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 isPlaytesting || canStart,
                 isPlaytesting || canStart,
                 isPlaytesting ? "ST" : "GO",
-                isPlaytesting ? "Authoring pause is restored immediately." : canStart ? "Pre-flight validation has no blocking errors." : "Fix blocking validation errors first.");
+                isPlaytesting ? "Authoring pause is restored immediately." : canStart ? "Pre-flight validation has no blocking errors." : canStartFromCast ? "Fix blocking validation errors first." : playStartReason);
             if (!action.Enabled)
-                action.DisabledReason = "Blocking validation errors must be fixed before playtest.";
+                action.DisabledReason = canStartFromCast ? "Blocking validation errors must be fixed before playtest." : playStartReason;
             items.Add(Item.ActionItem(action));
             if (isPlaytesting)
             {

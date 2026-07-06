@@ -10,6 +10,7 @@ using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Persistence;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
@@ -256,6 +257,10 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
         private static void ValidateFamily(ScenarioDefinition definition, string scenarioFilePath, ScenarioValidationResult result)
         {
+            string playStartReason;
+            if (!new ScenarioPlayStartReadiness().CanStartPlay(definition, out playStartReason))
+                result.AddWarning(ScenarioPlayStartReadiness.EmptyCastWarning);
+
             if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null)
                 return;
 

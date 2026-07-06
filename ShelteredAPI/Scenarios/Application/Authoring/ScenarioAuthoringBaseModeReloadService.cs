@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioAuthoringDraftRepository _draftRepository;
         private readonly ScenarioLaunchCoordinator _launchCoordinator;
+        private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
 
         public ScenarioAuthoringBaseModeReloadService(
             IScenarioEditorService editorService,
@@ -77,6 +78,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ScenarioDefinition definition = editorSession.WorkingDefinition;
+            string playStartReason;
+            if (!_playStartReadiness.CanStartPlay(definition, out playStartReason))
+            {
+                message = "Playtest restart blocked: " + playStartReason;
+                return true;
+            }
+
             string draftId = definition.Id;
             if (string.IsNullOrEmpty(draftId))
             {

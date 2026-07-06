@@ -3709,17 +3709,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorAction[] BuildHeaderActions(ScenarioEditorSession editorSession, bool hasSelection)
         {
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            string playStartReason = null;
+            bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
+            bool canStartPlay = isPlaytesting || new ScenarioPlayStartReadiness().CanStartPlay(editorSession != null ? editorSession.WorkingDefinition : null, out playStartReason);
             actions.Add(Action(ScenarioAuthoringActionIds.ActionSave, "Save", "Persist the current scenario draft XML.", true, true, "SV", "Write the current draft to scenario.xml."));
             actions.Add(Action(
                 ScenarioAuthoringActionIds.ActionPlaytest,
-                editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Playtest" : "Playtest",
-                "Toggle scenario playtest mode.",
-                true,
-                true,
+                isPlaytesting ? "Stop Playtest" : "Playtest",
+                canStartPlay ? "Toggle scenario playtest mode." : playStartReason,
+                canStartPlay,
+                canStartPlay,
                 "PL",
-                editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting
+                isPlaytesting
                     ? "End playtest and restore frozen authoring."
-                    : "Start a live playtest from the current draft."));
+                    : canStartPlay ? "Start a live playtest from the current draft." : playStartReason,
+                null,
+                null,
+                canStartPlay ? null : playStartReason));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionCloseEditor, "Exit Editor", "Close the authoring shell and release scene ownership.", true, false, "EX", "Leave the scenario editor."));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current selected target.", hasSelection, false, "CL", "Drop the current target selection.", null, null, hasSelection ? null : "No target is selected."));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionConvertToNormal, "Convert Save", "Convert the current scenario-bound save into a normal save.", true, false, "CV", "Detach this save from the scenario editor."));

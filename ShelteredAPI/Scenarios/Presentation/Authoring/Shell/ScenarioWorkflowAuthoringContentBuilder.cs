@@ -4,6 +4,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
+using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
@@ -27,6 +28,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public ScenarioAuthoringInspectorSection BuildWorkflowSection(ScenarioEditorSession editorSession)
         {
+            string playStartReason = null;
+            bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
+            bool canStartPlay = isPlaytesting || new ScenarioPlayStartReadiness().CanStartPlay(editorSession != null ? editorSession.WorkingDefinition : null, out playStartReason);
+            ScenarioAuthoringInspectorAction playtestAction = Item.Action(
+                ScenarioAuthoringActionIds.ActionPlaytest,
+                isPlaytesting ? "Stop Playtest" : "Start Playtest",
+                canStartPlay ? "Toggle simulation while keeping the live shelter editor session intact." : playStartReason,
+                canStartPlay,
+                canStartPlay,
+                "PL",
+                isPlaytesting
+                    ? "Return to frozen authoring mode."
+                    : canStartPlay ? "Run the live shelter with the current draft." : playStartReason);
+            if (!canStartPlay)
+                playtestAction.DisabledReason = playStartReason;
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "workflow",
@@ -36,16 +52,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Items = new[]
                 {
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft (Ctrl+S)", "Persist the current scenario XML.", true, false, "SV", "Ctrl+S writes scenario.xml to the active draft.")),
-                    Item.ActionItem(Item.Action(
-                        ScenarioAuthoringActionIds.ActionPlaytest,
-                        editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Playtest" : "Start Playtest",
-                        "Toggle simulation while keeping the live shelter editor session intact.",
-                        true,
-                        true,
-                        "PL",
-                        editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting
-                            ? "Return to frozen authoring mode."
-                            : "Run the live shelter with the current draft.")),
+                    Item.ActionItem(playtestAction),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCloseEditor, "Exit Editor", "Close the authoring shell and return the save to normal live play.", true, false, "EX", "Release the current authoring session."))
                 }
             };

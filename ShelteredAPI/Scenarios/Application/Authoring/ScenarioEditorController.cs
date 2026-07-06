@@ -21,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
+        private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
 
         public static ScenarioEditorController Instance
         {
@@ -121,6 +122,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioApplyResult BeginPlaytest()
         {
             ScenarioEditorSession session = RequireSession();
+            string playStartReason;
+            if (!_playStartReadiness.CanStartPlay(session.WorkingDefinition, out playStartReason))
+            {
+                ScenarioApplyResult blockedByStartState = new ScenarioApplyResult();
+                blockedByStartState.AddMessage("Playtest blocked: " + playStartReason);
+                MMLog.WriteWarning("[ScenarioEditorController] Playtest blocked by start-state readiness: " + playStartReason);
+                return blockedByStartState;
+            }
+
             ScenarioValidationResult validation;
             try
             {
