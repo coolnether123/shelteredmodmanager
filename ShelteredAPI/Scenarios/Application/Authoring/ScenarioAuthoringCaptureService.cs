@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Application.Bunker;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCaptureService
     {
@@ -295,15 +296,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
-            Obj_Base obj;
-            string blockingReason;
-            if (!TryResolveCapturableObject(target, out obj, out blockingReason))
-            {
-                message = blockingReason;
-                return false;
-            }
-
-            int index = ScenarioBunkerDraftService.FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj);
+            string displayName;
+            int index = FindPlacementIndexForTarget(session.WorkingDefinition.BunkerEdits.ObjectPlacements, target, out displayName);
             if (index < 0)
             {
                 message = "The selected object does not have a captured scenario placement.";
@@ -312,7 +306,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             session.WorkingDefinition.BunkerEdits.ObjectPlacements.RemoveAt(index);
             _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
-            message = "Removed captured placement for '" + SafeObjectName(obj) + "'.";
+            message = "Removed captured placement for '" + Safe(displayName) + "'.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -328,12 +322,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null || session.WorkingDefinition == null || session.WorkingDefinition.BunkerEdits == null)
                 return false;
 
-            Obj_Base obj;
             string ignored;
-            if (!TryResolveCapturableObject(target, out obj, out ignored))
-                return false;
-
-            return ScenarioBunkerDraftService.FindPlacementIndex(session.WorkingDefinition.BunkerEdits.ObjectPlacements, obj) >= 0;
+            return FindPlacementIndexForTarget(session.WorkingDefinition.BunkerEdits.ObjectPlacements, target, out ignored) >= 0;
         }
 
         private static void CaptureStats(FamilyMember member, FamilyMemberConfig config)
@@ -610,6 +600,76 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return true;
+        }
+
+        private static int FindPlacementIndexForTarget(List<ObjectPlacement> placements, ScenarioAuthoringTarget target, out string displayName)
+        {
+            displayName = target != null ? target.DisplayName : null;
+            if (placements == null || target == null)
+                return -1;
+
+            Obj_Base obj = ResolveShelterObject(target);
+            if (obj != null)
+            {
+                displayName = SafeObjectName(obj);
+                int objIndex = ScenarioBunkerDraftService.FindPlacementIndex(placements, obj);
+                if (objIndex >= 0)
+                    return objIndex;
+            }
+
+            string reference = FirstNonEmpty(target.ScenarioReferenceId, target.Id);
+            if (string.IsNullOrEmpty(reference))
+                return -1;
+
+            for (int i = 0; i < placements.Count; i++)
+            {
+                ObjectPlacement placement = placements[i];
+                if (placement == null)
+                    continue;
+
+                if (StringEquals(placement.ScenarioObjectId, reference)
+                    || StringEquals(placement.RuntimeBindingKey, reference)
+                    || StringEquals(ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity), reference))
+                {
+                    displayName = FirstNonEmpty(displayName, placement.ScenarioObjectId, placement.DefinitionReference, placement.PrefabReference);
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static Obj_Base ResolveShelterObject(ScenarioAuthoringTarget target)
+        {
+            if (target == null)
+                return null;
+
+            GameObject gameObject = target.RuntimeObject as GameObject;
+            if (gameObject == null)
+            {
+                Component component = target.RuntimeObject as Component;
+                gameObject = component != null ? component.gameObject : null;
+            }
+
+            return gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
+        }
+
+        private static bool StringEquals(string left, string right)
+        {
+            return !string.IsNullOrEmpty(left)
+                && !string.IsNullOrEmpty(right)
+                && string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            for (int i = 0; values != null && i < values.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(values[i]))
+                    return values[i];
+            }
+
+            return null;
         }
 
         private static bool ShouldCaptureObject(Obj_Base obj)

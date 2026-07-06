@@ -1621,7 +1621,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int column = 0;
             int actionColumn = 0;
             bool actionRow = false;
-            int actionColumns = availableWidth >= 720f ? 4 : (availableWidth >= 460f ? 3 : 2);
+            int actionColumns = availableWidth >= 720f ? 4 : (availableWidth >= 460f ? 2 : 1);
             float actionWidth = (availableWidth - (gap * (actionColumns - 1))) / actionColumns;
             GUILayout.BeginHorizontal();
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)

@@ -1275,7 +1275,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Inspector, delegate(ScenarioAuthoringWindowContentContext context) { return BuildInspectorShellSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.PixelEditor, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPixelEditorWindowSections(context.State); });
-            builders[ScenarioAuthoringWindowContentKind.Triggers] = _timelineAuthoringContentBuilder;
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Triggers, delegate(ScenarioAuthoringWindowContentContext context) { return BuildTimelineWindowSections(context.State, context.EditorSession, context.Session, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(_captureService, context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
             builders[ScenarioAuthoringWindowContentKind.Quests] = _questAuthoringContentBuilder;
@@ -1556,6 +1556,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 sections.Add(BuildBunkerRuntimeSection(definition, state));
             }
             return sections.ToArray();
+        }
+
+        private ScenarioAuthoringInspectorSection[] BuildTimelineWindowSections(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringSession session,
+            ScenarioDefinition definition)
+        {
+            if (state != null && state.ActiveTool == ScenarioAuthoringTool.WinLoss)
+            {
+                return new[]
+                {
+                    _workflowAuthoringContentBuilder.BuildToolSection(
+                        state,
+                        editorSession,
+                        ScenarioAuthoringTool.WinLoss,
+                        definition,
+                        state.SelectedTarget,
+                        false,
+                        false,
+                        null)
+                };
+            }
+
+            return _timelineAuthoringContentBuilder.Build(new ScenarioAuthoringWindowContentContext(state, editorSession, session, definition));
         }
 
         private void AddWorldSubstageSection(List<ScenarioAuthoringInspectorSection> sections, ScenarioAuthoringState state)

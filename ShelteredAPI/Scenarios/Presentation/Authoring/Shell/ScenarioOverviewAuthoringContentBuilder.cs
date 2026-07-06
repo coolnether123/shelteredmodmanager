@@ -164,8 +164,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Standard " + (mode == ScenarioBaseGameMode.Survival ? "selected" : "available")
                 + " / Stasis " + (mode == ScenarioBaseGameMode.Stasis ? "selected" : "available")
                 + " / Surrounded " + (mode == ScenarioBaseGameMode.Surrounded ? "selected" : "available")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "< " + ResolveAdjacentModeName(definition, -1), "Choose how to switch to the previous supported base.", true, false, "M-")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, ResolveAdjacentModeName(definition, 1) + " >", "Choose how to switch to the next supported base.", true, false, "M+")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "Prev: " + ResolveAdjacentModeName(definition, -1), "Choose how to switch to the previous supported base.", true, false, "M-")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, "Next: " + ResolveAdjacentModeName(definition, 1), "Choose how to switch to the next supported base.", true, false, "M+")));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "home_base_mode",

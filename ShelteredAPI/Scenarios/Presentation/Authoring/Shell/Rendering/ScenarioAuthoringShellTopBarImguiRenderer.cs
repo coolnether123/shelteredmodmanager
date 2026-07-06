@@ -147,6 +147,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (tabRect.xMax > availableRight)
                     break;
                 DrawButton(tabRect, tab.Action, true);
+                RegisterTopBarActionAliases(tab.Action, tabRect);
                 x = tabRect.xMax + 2f;
                 if (!tab.Finish)
                     drewMain = true;
@@ -265,6 +266,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Rect buttonRect = GUILayoutUtility.GetRect(_topBarMoreMenuRect.width - 16f, 24f, GUILayout.Height(24f));
                 DrawButton(buttonRect, overflowTabs[i], false);
+                RegisterTopBarActionAliases(overflowTabs[i], buttonRect);
             }
             GUILayout.EndArea();
         }
@@ -283,6 +285,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ? rect
                     : new Rect(rect.xMax - width, rect.y, width, rect.height);
                 DrawButton(actionRect, displayAction, false);
+                RegisterTourTarget("action:" + ScenarioAuthoringActionIds.ActionShellOpenHelp, actionRect);
+                RegisterTourTarget("action:" + ScenarioAuthoringActionIds.ActionShellOpenSettings, actionRect);
                 return actionRect;
             }
 
@@ -353,6 +357,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Test, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish, StringComparison.Ordinal);
+        }
+
+        private void RegisterTopBarActionAliases(ScenarioAuthoringInspectorAction action, Rect rect)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id))
+                return;
+
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Events, StringComparison.Ordinal))
+                RegisterTourTarget("action:" + ScenarioAuthoringActionIds.ActionShellOpenTimeline, rect);
         }
 
         private sealed class StageTabLayout
