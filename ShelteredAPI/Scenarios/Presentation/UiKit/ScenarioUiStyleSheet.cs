@@ -67,6 +67,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         public GUIStyle SectionTitleText { get; private set; }
         public GUIStyle BodyText { get; private set; }
         public GUIStyle MutedText { get; private set; }
+        public GUIStyle PaperTitleText { get; private set; }
+        public GUIStyle PaperBodyText { get; private set; }
+        public GUIStyle PaperMutedText { get; private set; }
         public GUIStyle EmptyStateText { get; private set; }
         public GUIStyle PillText { get; private set; }
 
@@ -136,7 +139,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             Status       = BuildBox(panelCorner, padSm);
             Section      = BuildBox(panelRaisedCorner, padMd);
             Menu         = BuildBox(panelRaisedCorner, padMd);
-            Card         = BuildBox(panelRaisedCorner, CardSurfacePadding);
+            Card         = BuildBox(accentNeutralCorner, CardSurfacePadding);
             Field        = BuildField(panelInsetCorner, accentHoverCorner, palette.TextBody, metrics, padSm, padXs);
             Divider      = BuildBox(BorderSubtleTexture, 0);
 
@@ -154,6 +157,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             SectionTitleText = BuildText(metrics.FontSizeSection,  FontStyle.Bold,   palette.TextTitle);
             BodyText         = BuildText(metrics.FontSizeBody,     FontStyle.Normal, palette.TextBody);
             MutedText        = BuildText(metrics.FontSizeMuted,    FontStyle.Normal, palette.TextMuted);
+            PaperTitleText   = BuildText(metrics.FontSizeSection,  FontStyle.Bold,   palette.TextOnLight);
+            PaperBodyText    = BuildText(metrics.FontSizeBody,     FontStyle.Normal, palette.TextOnLight);
+            PaperMutedText   = BuildText(metrics.FontSizeMuted,    FontStyle.Normal, new Color(0.34f, 0.27f, 0.18f, 1f));
             EmptyStateText   = BuildText(metrics.FontSizeMuted,    FontStyle.Normal, palette.TextMuted);
             EmptyStateText.alignment = TextAnchor.MiddleCenter;
             PillText         = BuildText(metrics.FontSizePill,     FontStyle.Bold,   palette.TextOnAccent);

@@ -41,6 +41,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
             return DrawRole(rect, role, false);
         }
 
+        public static bool HasIcon(string role)
+        {
+            AtlasSprite sprite = ResolveRole(role);
+            return sprite != null && !sprite.PremultipliedAlpha && sprite.Texture != null;
+        }
+
         public static void DrawCornerCutTexture(Rect rect, Texture texture)
         {
             if (texture == null || rect.width <= 0f || rect.height <= 0f)
@@ -198,13 +204,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
             RegisterRole(atlases, "close", "Close", "close", "x", "cross");
             RegisterRole(atlases, "check", "Check", "check", "tick", "ok");
             RegisterRole(atlases, "pin", "Pin", "pin", "clip", "paperclip");
-            RegisterRole(atlases, "home_world", "Map", "WorldMap", "Location", "Town");
-            RegisterRole(atlases, "home_people", "Survivor", "Person", "People", "Character", "Portrait");
-            RegisterRole(atlases, "home_inventory", "Crate", "Box", "Inventory", "Backpack", "Item");
-            RegisterRole(atlases, "home_events", "Clock", "Calendar", "Timeline", "Event");
-            RegisterRole(atlases, "home_art", "Brush", "Paint", "Palette", "Sprite");
-            RegisterRole(atlases, "home_test", "Flag", "Play", "Check", "Test");
-            RegisterRole(atlases, "home_publish", "Radio", "Upload", "Flag", "Publish");
+            RegisterExactRole(atlases, "home_world", "WorldMap", "ExpeditionMap", "MapIcon", "LocationIcon", "TownIcon", "LocationMarker");
+            RegisterExactRole(atlases, "home_people", "Portrait", "SurvivorPortrait", "CharacterPortrait", "PeopleIcon", "PersonIcon", "FamilyIcon");
+            RegisterExactRole(atlases, "home_inventory", "CrateIcon", "BoxIcon", "InventoryIcon", "BackpackIcon", "SupplyCrate");
+            RegisterExactRole(atlases, "home_events", "ClockIcon", "CalendarIcon", "TimelineIcon", "EventIcon");
+            RegisterExactRole(atlases, "home_art", "BrushIcon", "PaintBrush", "PaletteIcon", "SpriteIcon");
+            RegisterExactRole(atlases, "home_test", "Check", "Checkmark", "Tick", "FlagIcon", "PlayIcon");
+            RegisterExactRole(atlases, "home_publish", "RadioIcon", "FlagIcon", "UploadIcon", "PublishIcon");
         }
 
         private static void RegisterRole(UIAtlas[] atlases, string role, params string[] candidates)
@@ -212,6 +218,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
             AtlasSprite sprite = FindSprite(atlases, true, candidates);
             if (sprite == null)
                 sprite = FindSprite(atlases, false, candidates);
+            if (sprite != null && !Cache.ContainsKey(role))
+                Cache.Add(role, sprite);
+        }
+
+        private static void RegisterExactRole(UIAtlas[] atlases, string role, params string[] candidates)
+        {
+            AtlasSprite sprite = FindSprite(atlases, true, candidates);
             if (sprite != null && !Cache.ContainsKey(role))
                 Cache.Add(role, sprite);
         }

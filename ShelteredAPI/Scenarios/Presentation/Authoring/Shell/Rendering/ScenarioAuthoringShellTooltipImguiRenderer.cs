@@ -38,20 +38,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float width = Math.Min(maxWidth, size.x + 18f);
             float height = tipStyle.CalcHeight(new GUIContent(tip), width - 14f) + 10f;
             bool topChromeHover = mouse.y <= TopBarHeight + 4f;
-            float x = topChromeHover
-                ? mouse.x - (width * 0.35f)
-                : Math.Min(scaledWidth - width - 6f, mouse.x + 16f);
-            float y = topChromeHover
-                ? TopBarHeight + 8f
-                : Math.Min(scaledHeight - height - 6f, mouse.y + 20f);
-            if (x < 6f) x = 6f;
-            if (y < 6f) y = 6f;
-            Rect tipRect = ClampAwayFromHud(new Rect(x, y, width, height), scaledWidth, scaledHeight, hudReserveRect);
+            Rect tipRect = topChromeHover
+                ? BuildTopChromeTooltipRect(mouse, width, height, scaledWidth, scaledHeight, hudReserveRect)
+                : BuildContentTooltipRect(mouse, width, height, scaledWidth, scaledHeight, hudReserveRect);
             using (ScenarioUiGuiScope.Apply(alpha, tipRect, 1f))
             {
                 DrawChromePanel(tipRect, _uiContext.Styles.Menu);
                 GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
             }
+        }
+
+        private Rect BuildTopChromeTooltipRect(Vector2 mouse, float width, float height, float scaledWidth, float scaledHeight, Rect hudReserveRect)
+        {
+            float x = mouse.x - (width * 0.35f);
+            float y = TopBarHeight + 8f;
+            return ClampTooltipRect(new Rect(x, y, width, height), scaledWidth, scaledHeight, hudReserveRect);
+        }
+
+        private Rect BuildContentTooltipRect(Vector2 mouse, float width, float height, float scaledWidth, float scaledHeight, Rect hudReserveRect)
+        {
+            const float gap = 16f;
+            Rect[] candidates = new[]
+            {
+                new Rect(mouse.x + gap, mouse.y - height - gap, width, height),
+                new Rect(mouse.x - width - gap, mouse.y - height - gap, width, height),
+                new Rect(mouse.x + gap, mouse.y + gap, width, height),
+                new Rect(mouse.x - width - gap, mouse.y + gap, width, height)
+            };
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                Rect clamped = ClampTooltipRect(candidates[i], scaledWidth, scaledHeight, hudReserveRect);
+                if (!clamped.Contains(mouse))
+                    return clamped;
+            }
+
+            return ClampTooltipRect(new Rect(mouse.x + gap, mouse.y + gap, width, height), scaledWidth, scaledHeight, hudReserveRect);
+        }
+
+        private Rect ClampTooltipRect(Rect rect, float scaledWidth, float scaledHeight, Rect hudReserveRect)
+        {
+            rect.x = Mathf.Clamp(rect.x, 6f, Math.Max(6f, scaledWidth - rect.width - 6f));
+            rect.y = Mathf.Clamp(rect.y, 6f, Math.Max(6f, scaledHeight - rect.height - 6f));
+            return ClampAwayFromHud(rect, scaledWidth, scaledHeight, hudReserveRect);
         }
 
     }

@@ -88,6 +88,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect _topBarMoreButtonRect = RuntimeCompat.ZeroRect();
         private Rect _topBarMoreMenuRect = RuntimeCompat.ZeroRect();
         private ScenarioAuthoringInspectorAction[] _topBarOverflowTabs = new ScenarioAuthoringInspectorAction[0];
+        private string _lastWorkshopWorkspaceId;
         private string _spritePickerSearchText = string.Empty;
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
