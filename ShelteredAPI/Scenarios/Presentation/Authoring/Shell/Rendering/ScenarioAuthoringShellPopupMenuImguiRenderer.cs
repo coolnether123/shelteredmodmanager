@@ -129,6 +129,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect visualRect = press > 0.001f
                 ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
                 : rect;
+            if (!string.IsNullOrEmpty(action.Id))
+                RegisterTourTarget("action:" + action.Id, visualRect);
             string tooltip = action.Enabled
                 ? (action.Hint ?? action.Detail ?? string.Empty)
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : (action.Hint ?? string.Empty)));

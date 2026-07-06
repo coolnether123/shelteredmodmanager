@@ -89,6 +89,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
         private float _activeContentWidth;
+        private float _activeUiScale = 1f;
         private int _scaledWindowDrawDepth;
         private Vector2 _pixelEditorPan = Vector2.zero;
         private bool _pixelEditorPanning;
@@ -200,8 +201,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float uiScale = _snapshot.State != null && _snapshot.State.Settings != null
                 ? _snapshot.State.Settings.GetFloat("shell.ui_scale", 1f)
                 : 1f;
+            _activeUiScale = uiScale > 0.001f ? uiScale : 1f;
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
             inputCapture.BeginFrame(uiScale);
+            ScenarioAuthoringTourTargetRegistry tourTargets = ScenarioCompositionRoot.Resolve<ScenarioAuthoringTourTargetRegistry>();
+            if (tourTargets != null)
+                tourTargets.ClearFrame();
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
             _editableFieldFocused = false;
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
@@ -481,6 +486,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             // TODO(centralize): Floating windows are still resolved independently from the
             // workspace page. Fold remaining floating tools into central workspace regions.
             AppendFloatingRects(rects, windows, contentRect);
+            foreach (KeyValuePair<string, Rect> windowRect in rects)
+                RegisterTourTarget("window:" + windowRect.Key, windowRect.Value);
             return rects;
         }
 

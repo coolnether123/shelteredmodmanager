@@ -70,6 +70,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
+        private void RegisterTourTarget(string targetId, Rect rect)
+        {
+            if (string.IsNullOrEmpty(targetId) || rect.width <= 0f || rect.height <= 0f)
+                return;
+
+            ScenarioAuthoringTourTargetRegistry registry = ScenarioCompositionRoot.Resolve<ScenarioAuthoringTourTargetRegistry>();
+            if (registry != null)
+                registry.Register(targetId, ToAbsoluteGuiRect(rect));
+        }
+
+        private Rect ToAbsoluteGuiRect(Rect rect)
+        {
+            float scale = _activeUiScale > 0.001f ? _activeUiScale : 1f;
+            Vector2 origin = GUIUtility.GUIToScreenPoint(new Vector2(rect.x, rect.y));
+            Vector2 opposite = GUIUtility.GUIToScreenPoint(new Vector2(rect.xMax, rect.yMax));
+            return new Rect(origin.x / scale, origin.y / scale, (opposite.x - origin.x) / scale, (opposite.y - origin.y) / scale);
+        }
+
         private void DrawChromePanel(Rect rect, GUIStyle style)
         {
             if (_uiContext == null || _uiContext.Styles == null)

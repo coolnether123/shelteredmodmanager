@@ -117,6 +117,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect visualRect = press > 0.001f
                 ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
                 : rect;
+            RegisterTourTarget("tool:" + button.Tool, visualRect);
             if (GUI.Button(visualRect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style) && button.Action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(button.Action.Id);
