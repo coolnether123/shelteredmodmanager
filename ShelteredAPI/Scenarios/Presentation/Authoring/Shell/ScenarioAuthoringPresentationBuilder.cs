@@ -1336,12 +1336,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (buildStatus != null && buildStatus.PlacementActive)
                 sections.Add(BuildPlacementStatusSection(buildStatus));
 
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "snap",
+                Title = "Snap",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = new[]
+                {
+                    ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid",
+                        state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "Snap To Grid: On" : "Snap To Grid: Off",
+                        "Scene sprites use this by default. Rooms and room lights stay grid-locked; ladders keep hybrid placement; objects already place freely.",
+                        true,
+                        state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true),
+                        "SN")),
+                    Property("Scene Sprites", state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "Snapped by default; Shift places freely" : "Free by default; Shift snaps"),
+                    Property("Rooms / Lights", "Always grid-locked"),
+                    Property("Ladders / Objects", "Hybrid ladders; objects free")
+                }
+            });
+
             if (ShowAdvancedDetails(state))
             {
                 sections.Add(new ScenarioAuthoringInspectorSection
                 {
-                    Id = "snap",
-                    Title = "Snap",
+                    Id = "snap_diagnostics",
+                    Title = "Snap Diagnostics",
                     Expanded = false,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]

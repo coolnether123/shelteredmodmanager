@@ -15,6 +15,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioHierarchyAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Hierarchy; } }
+        private static Obj_Base[] _cachedLiveObjects;
+        private static int _cachedLiveObjectsFrame = -1;
 
         public ScenarioAuthoringInspectorSection[] Build(ScenarioAuthoringWindowContentContext context)
         {
@@ -80,7 +82,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection BuildLiveObjectsSection(ScenarioAuthoringState state)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            Obj_Base[] objects = UnityEngine.Object.FindObjectsOfType<Obj_Base>();
+            Obj_Base[] objects = GetLiveObjects();
             int count = 0;
             for (int i = 0; objects != null && i < objects.Length; i++)
             {
@@ -105,6 +107,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
             };
+        }
+
+        internal static void InvalidateLiveObjectCache()
+        {
+            _cachedLiveObjects = null;
+            _cachedLiveObjectsFrame = -1;
+        }
+
+        private static Obj_Base[] GetLiveObjects()
+        {
+            if (_cachedLiveObjects != null
+                && (_cachedLiveObjectsFrame < 0 || Time.frameCount - _cachedLiveObjectsFrame < 60))
+            {
+                return _cachedLiveObjects;
+            }
+
+            _cachedLiveObjects = UnityEngine.Object.FindObjectsOfType<Obj_Base>();
+            _cachedLiveObjectsFrame = Time.frameCount;
+            return _cachedLiveObjects;
         }
 
         private static ScenarioAuthoringInspectorSection BuildCharactersSection(ScenarioAuthoringState state, ScenarioDefinition definition)

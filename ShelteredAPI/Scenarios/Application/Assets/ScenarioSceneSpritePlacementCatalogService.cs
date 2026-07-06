@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using UnityEngine;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -29,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private string _cachedScenarioFilePath;
         private int _cachedFrame = -1;
         private PlacementCatalog _cachedCatalog;
+        private bool _refreshingCatalog;
 
         public ScenarioSceneSpritePlacementCatalogService(
             IScenarioSpriteAssetResolver assetResolver,
@@ -47,12 +49,19 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (_cachedCatalog != null
                 && string.Equals(_cachedScenarioFilePath, scenarioFilePath, StringComparison.OrdinalIgnoreCase)
                 && _cachedCustomSpriteSignature == customSpriteSignature
-                && (_cachedFrame < 0 || Time.frameCount - _cachedFrame < 30))
+                && (_cachedFrame < 0 || Time.frameCount - _cachedFrame < 300))
             {
                 return Clone(_cachedCatalog);
             }
 
             PlacementCatalog catalog = BuildCatalog(session.WorkingDefinition, scenarioFilePath);
+            if (_cachedCatalog != null)
+            {
+                ScheduleCatalogRefresh(catalog, scenarioFilePath, customSpriteSignature);
+                return Clone(_cachedCatalog);
+            }
+
+            SortCatalog(catalog);
             _cachedScenarioFilePath = scenarioFilePath;
             _cachedCustomSpriteSignature = customSpriteSignature;
             _cachedFrame = Time.frameCount;
@@ -66,6 +75,40 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             _cachedScenarioFilePath = null;
             _cachedFrame = -1;
             _cachedCatalog = null;
+            _refreshingCatalog = false;
+        }
+
+        private void ScheduleCatalogRefresh(PlacementCatalog catalog, string scenarioFilePath, int customSpriteSignature)
+        {
+            if (_refreshingCatalog || catalog == null)
+                return;
+
+            _refreshingCatalog = true;
+            PlacementCatalog snapshot = Clone(catalog);
+            ModThreads.RunAsync(
+                delegate()
+                {
+                    SortCatalog(snapshot);
+                    return snapshot;
+                },
+                delegate(PlacementCatalog sorted)
+                {
+                    _cachedScenarioFilePath = scenarioFilePath;
+                    _cachedCustomSpriteSignature = customSpriteSignature;
+                    _cachedFrame = Time.frameCount;
+                    _cachedCatalog = Clone(sorted);
+                    _refreshingCatalog = false;
+                },
+                delegate(Exception ex)
+                {
+                    _refreshingCatalog = false;
+                },
+                new ModThreadOptions
+                {
+                    SourceId = "ScenarioSceneSpritePlacementCatalog",
+                    WorkKey = "placement_catalog",
+                    StaleResultPolicy = ModThreadStaleResultPolicy.SkipIfSuperseded
+                });
         }
 
         private PlacementCatalog BuildCatalog(ScenarioDefinition definition, string scenarioFilePath)
@@ -89,10 +132,18 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 false);
             AnnotateCustomCandidates(catalog.ModdedCandidates);
 
-            catalog.VanillaCandidates.Sort(ScenarioSpriteCatalogService.CompareCandidate);
-            catalog.ModdedCandidates.Sort(ScenarioSpriteCatalogService.CompareCandidate);
             catalog.FilterSummary = BuildFilterSummary(catalog);
             return catalog;
+        }
+
+        private static void SortCatalog(PlacementCatalog catalog)
+        {
+            if (catalog == null)
+                return;
+            if (catalog.VanillaCandidates != null)
+                catalog.VanillaCandidates.Sort(ScenarioSpriteCatalogService.CompareCandidate);
+            if (catalog.ModdedCandidates != null)
+                catalog.ModdedCandidates.Sort(ScenarioSpriteCatalogService.CompareCandidate);
         }
 
         private void AddRuntimeCandidates(PlacementCatalog catalog)

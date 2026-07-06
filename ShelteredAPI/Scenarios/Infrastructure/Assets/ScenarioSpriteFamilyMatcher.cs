@@ -166,7 +166,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private static Dictionary<string, FamilyProfile> GetRuntimeProfiles()
         {
             if (_cachedRuntimeProfiles != null
-                && (_cachedRuntimeProfileFrame < 0 || Time.frameCount - _cachedRuntimeProfileFrame < 120))
+                && (_cachedRuntimeProfileFrame < 0 || Time.frameCount - _cachedRuntimeProfileFrame < 600))
             {
                 return _cachedRuntimeProfiles;
             }

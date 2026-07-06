@@ -441,6 +441,8 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeDriver.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringEditorCameraService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringVanillaPanelVisibilityService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeGuards.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringScrollFocusService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringSelectionMenuService.cs" />

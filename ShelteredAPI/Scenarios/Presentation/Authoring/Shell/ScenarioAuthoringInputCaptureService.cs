@@ -83,7 +83,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             _scrollFocusService.CompleteFrame(pointer);
             if (_scrollFocusService.PointerOverScrollableRegion)
+            {
                 PointerOverAuthoringUi = true;
+                _scrollFocusService.ConsumeScrollWheelIfFocused(Event.current);
+            }
             if (PopupOpen)
                 PointerOverAuthoringUi = true;
         }

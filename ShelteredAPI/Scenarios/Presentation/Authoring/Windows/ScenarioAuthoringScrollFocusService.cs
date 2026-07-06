@@ -32,7 +32,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
         {
             FocusedOwnerId = null;
             PointerOverScrollableRegion = false;
-            for (int i = 0; i < _frameRegions.Count; i++)
+            for (int i = _frameRegions.Count - 1; i >= 0; i--)
             {
                 ScrollRegion region = _frameRegions[i];
                 if (region.Rect.Contains(pointerPosition))
@@ -42,6 +42,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
                     return;
                 }
             }
+        }
+
+        public bool ConsumeScrollWheelIfFocused(Event evt)
+        {
+            if (evt == null || evt.type != EventType.ScrollWheel || !PointerOverScrollableRegion)
+                return false;
+
+            evt.Use();
+            return true;
         }
 
         private struct ScrollRegion

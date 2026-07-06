@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
@@ -58,6 +59,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
         private string _cachedScenarioFilePath;
         private int _cachedFrame = -1;
         private SpriteCatalog _cachedCatalog;
+        private bool _refreshingCatalog;
         internal ScenarioSpriteCatalogService(ScenarioSpriteRuntimeResolver resolver, IScenarioSpriteAssetResolver assetResolver)
         {
             _resolver = resolver;
@@ -81,12 +83,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 && string.Equals(_cachedCurrentSpriteKey, currentSpriteKey, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(_cachedScenarioFilePath, scenarioFilePath, StringComparison.OrdinalIgnoreCase)
                 && _cachedCustomSpriteSignature == customSpriteSignature
-                && (_cachedFrame < 0 || Time.frameCount - _cachedFrame < 30))
+                && (_cachedFrame < 0 || Time.frameCount - _cachedFrame < 300))
             {
                 return CloneCatalog(_cachedCatalog);
             }
 
             SpriteCatalog catalog = BuildCatalog(session.WorkingDefinition, target, resolvedTarget, scenarioFilePath, _familyMatcher, _assetResolver);
+            if (_cachedCatalog != null)
+            {
+                ScheduleCatalogRefresh(catalog, targetPath, currentSpriteKey, scenarioFilePath, customSpriteSignature);
+                return CloneCatalog(_cachedCatalog);
+            }
+
+            SortCatalog(catalog);
             _cachedTargetPath = targetPath;
             _cachedCurrentSpriteKey = currentSpriteKey;
             _cachedScenarioFilePath = scenarioFilePath;
@@ -104,6 +113,47 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             _cachedCustomSpriteSignature = 0;
             _cachedFrame = -1;
             _cachedCatalog = null;
+            _refreshingCatalog = false;
+        }
+
+        private void ScheduleCatalogRefresh(
+            SpriteCatalog catalog,
+            string targetPath,
+            string currentSpriteKey,
+            string scenarioFilePath,
+            int customSpriteSignature)
+        {
+            if (_refreshingCatalog || catalog == null)
+                return;
+
+            _refreshingCatalog = true;
+            SpriteCatalog snapshot = CloneCatalog(catalog);
+            ModThreads.RunAsync(
+                delegate()
+                {
+                    SortCatalog(snapshot);
+                    return snapshot;
+                },
+                delegate(SpriteCatalog sorted)
+                {
+                    _cachedTargetPath = targetPath;
+                    _cachedCurrentSpriteKey = currentSpriteKey;
+                    _cachedScenarioFilePath = scenarioFilePath;
+                    _cachedCustomSpriteSignature = customSpriteSignature;
+                    _cachedFrame = Time.frameCount;
+                    _cachedCatalog = CloneCatalog(sorted);
+                    _refreshingCatalog = false;
+                },
+                delegate(Exception ex)
+                {
+                    _refreshingCatalog = false;
+                },
+                new ModThreadOptions
+                {
+                    SourceId = "ScenarioSpriteCatalog",
+                    WorkKey = "sprite_catalog",
+                    StaleResultPolicy = ModThreadStaleResultPolicy.SkipIfSuperseded
+                });
         }
 
         private static SpriteCatalog BuildCatalog(
@@ -212,9 +262,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                         + familyMatcher.DescribeVerifiedFamily(targetFamily)
                         + "'. Scenario custom sprite patches are listed separately.";
             }
-            catalog.VanillaCandidates.Sort(CompareCandidate);
-            catalog.ModdedCandidates.Sort(CompareCandidate);
             return catalog;
+        }
+
+        private static void SortCatalog(SpriteCatalog catalog)
+        {
+            if (catalog == null)
+                return;
+            if (catalog.VanillaCandidates != null)
+                catalog.VanillaCandidates.Sort(CompareCandidate);
+            if (catalog.ModdedCandidates != null)
+                catalog.ModdedCandidates.Sort(CompareCandidate);
         }
 
         internal static void AddCustomSpriteCandidates(

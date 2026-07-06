@@ -45,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public string SortingLayerName;
             public int SortingOrder;
             public PlacementResolution LastResolution;
+            public bool SnapToGridDefault;
         }
 
         private sealed class PlacementResolution
@@ -116,16 +117,18 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             {
                 model.ActiveCandidateToken = _activePlacement.Candidate != null ? _activePlacement.Candidate.Token : null;
                 model.ActiveCandidateLabel = _activePlacement.Candidate != null ? _activePlacement.Candidate.Label : null;
-                model.PlacementSummary = "Placing '" + SafeLabel(_activePlacement.Candidate != null ? _activePlacement.Candidate.Label : null) + "'. Move over the bunker to snap; hold Shift to place freely.";
+                model.PlacementSummary = BuildPlacementSummary(_activePlacement.Candidate, _activePlacement.SnapToGridDefault);
             }
             else
             {
                 ScenarioSpriteCatalogService.SpriteCandidate activeCandidate = FindCandidate(model, BuildPlacementReferenceToken(activePlacement));
                 model.ActiveCandidateToken = activeCandidate != null ? activeCandidate.Token : BuildPlacementReferenceToken(activePlacement);
                 model.ActiveCandidateLabel = activeCandidate != null ? activeCandidate.Label : BuildPlacementReferenceLabel(activePlacement);
+                ScenarioAuthoringState currentState = ScenarioAuthoringBackendService.Instance.CurrentState;
+                bool snapToGrid = currentState == null || currentState.Settings == null || currentState.Settings.GetBool("visuals.snap_to_grid", true);
                 model.PlacementSummary = activePlacement != null
                     ? "Placement '" + (activePlacement.Id ?? "<placement>") + "' is selected."
-                    : "Selecting a sprite starts a snapped scene sprite placement preview.";
+                    : "Selecting a sprite starts a " + (snapToGrid ? "snapped" : "free") + " scene sprite placement preview.";
             }
             return model;
         }
@@ -163,7 +166,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             Vector3 worldPoint;
             if (TryGetMouseWorldPoint(out worldPoint))
-                UpdatePreview(session.WorkingDefinition, worldPoint, IsPlacementOverrideHeld());
+                UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
 
             if (UnityEngine.Input.GetMouseButtonUp(1))
                 return CancelActivePlacement("Scene sprite placement cancelled.", out message);
@@ -251,9 +254,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             Vector3 worldPoint;
             if (TryGetMouseWorldPoint(out worldPoint))
-                UpdatePreview(session.WorkingDefinition, worldPoint, IsPlacementOverrideHeld());
+                UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
 
-            message = "Placing '" + SafeLabel(candidate.Label) + "'. Move over the bunker to snap; hold Shift to place freely.";
+            _activePlacement.SnapToGridDefault = ResolveSnapToGrid(state);
+            message = BuildPlacementSummary(candidate, _activePlacement.SnapToGridDefault);
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);
             return true;
         }
@@ -326,6 +330,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             MarkAssetsDirty(session);
             _sceneSpritePlacementEngine.Activate(session.WorkingDefinition, state != null ? state.ActiveScenarioFilePath : null, null);
             Invalidate();
+            ScenarioHierarchyAuthoringContentBuilder.InvalidateLiveObjectCache();
 
             message = isNew
                 ? "Placed scene sprite '" + label + "' as '" + placementId + "'."
@@ -362,6 +367,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             MarkAssetsDirty(session);
             _sceneSpritePlacementEngine.Activate(session.WorkingDefinition, state.ActiveScenarioFilePath, null);
             Invalidate();
+            ScenarioHierarchyAuthoringContentBuilder.InvalidateLiveObjectCache();
             message = "Removed scene sprite placement '" + SafeLabel(placement.Id) + "'.";
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);
             return true;
@@ -552,12 +558,12 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             session.MarkDraftChanged(ScenarioDirtySection.Assets, ScenarioEditCategory.Assets);
         }
 
-        private void UpdatePreview(ScenarioDefinition definition, Vector3 worldPoint, bool overrideFit)
+        private void UpdatePreview(ScenarioDefinition definition, Vector3 worldPoint, bool snapToGrid)
         {
             if (!HasActivePlacement)
                 return;
 
-            PlacementResolution resolution = ResolvePlacement(definition, _activePlacement, worldPoint, overrideFit);
+            PlacementResolution resolution = ResolvePlacement(definition, _activePlacement, worldPoint, snapToGrid);
             _activePlacement.LastResolution = resolution;
             _activePlacement.PreviewObject.transform.position = resolution.Position;
             SetPreviewColor(_activePlacement, resolution.CanPlace, resolution.OverrideFit);
@@ -567,18 +573,19 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             ScenarioDefinition definition,
             ActivePlacementSession session,
             Vector3 worldPoint,
-            bool overrideFit)
+            bool snapToGrid)
         {
-            if (overrideFit)
+            if (!snapToGrid)
             {
                 worldPoint.z = 0f;
+                bool insideBounds = IsFreePlacementWithinBounds(session, worldPoint);
                 return new PlacementResolution
                 {
                     Position = worldPoint,
                     SnapToGrid = false,
                     GridX = null,
                     GridY = null,
-                    CanPlace = true,
+                    CanPlace = insideBounds,
                     OverrideFit = true
                 };
             }
@@ -650,6 +657,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 return false;
 
             return !OverlapsExistingPlacement(definition, session.ExistingPlacementId, bounds, gridX, gridY);
+        }
+
+        private static bool IsFreePlacementWithinBounds(ActivePlacementSession session, Vector3 worldPoint)
+        {
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            if (grid == null || session == null || session.Candidate == null || session.Candidate.Sprite == null)
+                return true;
+
+            Bounds bounds = CreateSpriteBounds(session.Candidate.Sprite, worldPoint);
+            return IsWithinGridBounds(grid, bounds);
         }
 
         private static bool IsUsableBunkerCell(ShelterRoomGrid.GridCell cell)
@@ -754,9 +771,19 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return true;
         }
 
-        private static bool IsPlacementOverrideHeld()
+        private static bool ResolveSnapToGrid(ScenarioAuthoringState state)
         {
-            return UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
+            bool snapToGrid = state == null || state.Settings == null || state.Settings.GetBool("visuals.snap_to_grid", true);
+            bool shiftHeld = UnityEngine.Input.GetKey(KeyCode.LeftShift) || UnityEngine.Input.GetKey(KeyCode.RightShift);
+            return shiftHeld ? !snapToGrid : snapToGrid;
+        }
+
+        private static string BuildPlacementSummary(ScenarioSpriteCatalogService.SpriteCandidate candidate, bool snapToGrid)
+        {
+            string label = SafeLabel(candidate != null ? candidate.Label : null);
+            return snapToGrid
+                ? "Placing '" + label + "'. Scene sprites snap to bunker cells; hold Shift to place freely."
+                : "Placing '" + label + "'. Scene sprites place freely inside shelter bounds; hold Shift to snap to cells.";
         }
 
         private bool CancelActivePlacement(string fallbackMessage)

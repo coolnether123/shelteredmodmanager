@@ -105,11 +105,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             EnsureRuntime();
             bool wasVisible = _visible;
             _snapshot = snapshot ?? _snapshot;
+            bool vanillaBlockingPanelOpen = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>().HasBlockingPanelOpen();
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
                 && snapshot.State.ShellVisible
-                && snapshot.ShellViewModel != null;
+                && snapshot.ShellViewModel != null
+                && !vanillaBlockingPanelOpen;
 
             if (_runtime != null)
                 _runtime.enabled = _visible || wasVisible || _rootAlpha > 0.001f;

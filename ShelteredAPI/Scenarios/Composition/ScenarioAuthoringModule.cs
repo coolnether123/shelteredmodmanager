@@ -10,6 +10,7 @@ using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Composition{
@@ -105,9 +106,16 @@ namespace ShelteredAPI.Scenarios.Composition{
             {
                 return new ScenarioAuthoringInputCaptureService(resolver.Get<ScenarioAuthoringScrollFocusService>());
             });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringVanillaPanelVisibilityService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringCameraGuardService(resolver.Get<ScenarioAuthoringInputCaptureService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioAuthoringEditorCameraService(
+                    resolver.Get<ScenarioAuthoringInputCaptureService>(),
+                    resolver.Get<ScenarioAuthoringVanillaPanelVisibilityService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringContextMenuService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringMenuService(); });
