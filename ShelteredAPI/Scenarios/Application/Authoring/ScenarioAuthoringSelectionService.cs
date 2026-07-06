@@ -67,21 +67,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     || (inputCapture != null && inputCapture.ShouldSuppressWorldInputNow());
                 if (worldSelectionSuppressedByUi)
                 {
-                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
+                    hovered = null;
                 }
                 else if (TryResolveCandidateStack(state, out stack))
                 {
-                    changed |= SynchronizeSelectionStack(state, stack);
-                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
-
-                    if (ScenarioAuthoringInputActions.IsStackCycleDown())
-                    {
-                        changed |= CycleSelectionStack(state, 1);
-                        if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                            hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
-                    }
+                    hovered = stack.Count > 0 ? stack[0] : null;
 
                     if (!AreSameTarget(state.HoveredTarget, hovered))
                     {
@@ -96,12 +86,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         state.HoveredTarget = null;
                         changed = true;
                     }
-
-                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
-                    {
-                        ClearSelectionStack(state);
-                        changed = true;
-                    }
                 }
 
                 bool placementActive = ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
@@ -113,14 +97,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     && hovered != null
                     && _scopeService.CanSelectTargetForCurrentStage(state, hovered))
                 {
-                    if (state.SelectionStack != null
-                        && state.SelectionStack.Count > 1
-                        && AreSameTarget(state.SelectedTarget, hovered))
-                    {
-                        changed |= CycleSelectionStack(state, 1);
-                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
-                    }
-
+                    changed |= SynchronizeSelectionStack(state, stack);
                     changed |= ApplySelection(state, hovered);
                 }
             }
@@ -139,6 +116,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     state.SelectedTarget = null;
                     state.MultiSelection.Clear();
+                    ClearSelectionStack(state);
                     state.StatusMessage = "Selection cleared.";
                     changed = true;
                 }
@@ -695,6 +673,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             state.SelectionStack.Clear();
             state.ActiveSelectionStackIndex = 0;
             state.SelectionStackSignature = null;
+            state.SelectionStackExpanded = false;
         }
 
         private static bool CycleSelectionStack(ScenarioAuthoringState state, int delta)

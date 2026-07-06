@@ -128,7 +128,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawButtonAnimationOverlay(visualRect, button.Action.Id, button.Action.Enabled, hovered, pressed);
             float labelHeight = visualRect.height < 28f ? 16f : 20f;
             float labelY = visualRect.y + Math.Max(3f, (visualRect.height - labelHeight) * 0.5f);
-            GUI.Label(new Rect(visualRect.x + 8f, labelY, visualRect.width - 16f, labelHeight), button.Label ?? string.Empty, active ? _textStyle : _mutedTextStyle);
+            GUIStyle labelStyle = active ? _textStyle : _mutedTextStyle;
+            Rect labelRect = new Rect(visualRect.x + 8f, labelY, visualRect.width - 16f, labelHeight);
+            GUI.Label(labelRect, ShortenToFit(button.Label ?? string.Empty, labelRect.width, labelStyle), labelStyle);
         }
 
     }

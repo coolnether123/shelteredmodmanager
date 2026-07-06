@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 
+using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
@@ -30,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             changed = false;
             if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
                 return false;
+
             ShortcutChord chord = ReadChord();
             if (chord.Kind == ShortcutChordKind.None)
                 return false;
@@ -37,9 +39,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             bool pixelEditorOpen = _sectionHub != null
                 && _sectionHub.SpriteSwap != null
                 && _sectionHub.SpriteSwap.GetCustomEditorModel(state) != null;
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel pixelEditor = pixelEditorOpen
+                ? _sectionHub.SpriteSwap.GetCustomEditorModel(state)
+                : null;
             ScenarioAuthoringSurfaceState surface = _surfaceResolver.Resolve(state, _inputCapture, pixelEditorOpen);
             if (surface.Kind == ScenarioAuthoringSurfaceKind.TextField)
-                return false;
+            {
+                if (chord.Kind != ShortcutChordKind.Escape)
+                    return false;
+
+                MarkHandled(state, "Finish the active text field before closing panels.", ref changed);
+                return true;
+            }
+
+            if (chord.Kind == ShortcutChordKind.Escape)
+                return TryRouteEscape(state, surface, pixelEditor, out changed);
 
             string message;
             bool handled;
@@ -51,6 +65,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case ScenarioAuthoringSurfaceKind.Modal:
                     handled = HandleModalShortcut(state, chord, out changed, out message);
                     break;
+                case ScenarioAuthoringSurfaceKind.AuthoringWindow:
+                case ScenarioAuthoringSurfaceKind.Placement:
+                    handled = true;
+                    message = "Shortcut unavailable while " + surface.Description.ToLowerInvariant() + " is active.";
+                    break;
+                case ScenarioAuthoringSurfaceKind.Selection:
                 case ScenarioAuthoringSurfaceKind.AuthoringWorld:
                     handled = HandleWorldShortcut(state, chord, out changed, out message);
                     break;
@@ -61,17 +81,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             if (handled)
-            {
-                if (!string.IsNullOrEmpty(message))
-                {
-                    state.StatusMessage = message;
-                    changed = true;
-                }
-                if (_inputCapture != null)
-                    _inputCapture.MarkKeyboardShortcutHandled();
-            }
+                MarkHandled(state, message, ref changed);
 
             return handled;
+        }
+
+        private bool TryRouteEscape(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringSurfaceState surface,
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel pixelEditor,
+            out bool changed)
+        {
+            changed = false;
+            if (surface == null || surface.Kind == ScenarioAuthoringSurfaceKind.Inactive)
+                return false;
+
+            if (surface.Kind == ScenarioAuthoringSurfaceKind.PixelEditor && pixelEditor != null && pixelEditor.Dirty)
+            {
+                MarkHandled(state, "Save or discard pixel edits before closing the editor.", ref changed);
+                return true;
+            }
+
+            if (surface.Kind == ScenarioAuthoringSurfaceKind.AuthoringWorld)
+                return false;
+
+            if (string.IsNullOrEmpty(surface.ActionId))
+            {
+                MarkHandled(state, surface.Description + " owns Escape.", ref changed);
+                return true;
+            }
+
+            string message;
+            bool executeChanged;
+            Execute(state, surface.ActionId, out executeChanged, out message);
+            changed |= executeChanged;
+            MarkHandled(state, !string.IsNullOrEmpty(message) ? message : (surface.Description + " closed."), ref changed);
+            return true;
+        }
+
+        private void MarkHandled(ScenarioAuthoringState state, string message, ref bool changed)
+        {
+            if (state != null && !string.IsNullOrEmpty(message))
+            {
+                state.StatusMessage = message;
+                changed = true;
+            }
+
+            if (_inputCapture != null)
+                _inputCapture.MarkKeyboardShortcutHandled();
         }
 
         private bool HandlePixelShortcut(ScenarioAuthoringState state, ShortcutChord chord, out bool changed, out string message)
@@ -288,6 +345,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (UnityEngine.Input.GetKeyDown(KeyCode.Delete))
                 return new ShortcutChord { Kind = ShortcutChordKind.Delete };
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+                return new ShortcutChord { Kind = ShortcutChordKind.Escape };
 
             return new ShortcutChord { Kind = ShortcutChordKind.None };
         }
@@ -304,7 +363,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             Save = 7,
             Duplicate = 8,
             Delete = 9,
-            Revert = 10
+            Revert = 10,
+            Escape = 11
         }
 
         private struct ShortcutChord

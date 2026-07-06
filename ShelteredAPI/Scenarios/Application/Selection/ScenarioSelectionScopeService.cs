@@ -90,7 +90,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return true;
             }
 
-            reason = "Filtered by scope: " + (_classifier.FormatScopeLabel(classification)) + " target while selecting " + ScenarioTargetClassifier.FormatScopeLabel(activeScope) + ".";
+            reason = BuildScopeFilterReason(activeScope, classification);
             return false;
         }
 
@@ -105,8 +105,16 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             if (TargetMatchesCurrentStageScope(activeScope, classification, out reason))
                 return true;
 
-            reason = "Filtered by scope: " + (_classifier.FormatScopeLabel(classification)) + " target while selecting " + ScenarioTargetClassifier.FormatScopeLabel(activeScope) + ".";
+            reason = BuildScopeFilterReason(activeScope, classification);
             return false;
+        }
+
+        private string BuildScopeFilterReason(ScenarioTargetScope activeScope, ScenarioTargetClassification classification)
+        {
+            if (!IsWorldScope(activeScope))
+                return "This target is not available in the current workspace.";
+
+            return "Filtered by scope: " + (_classifier.FormatScopeLabel(classification)) + " target while selecting " + ScenarioTargetClassifier.FormatScopeLabel(activeScope) + ".";
         }
 
         private static bool TargetMatchesCurrentStageScope(ScenarioTargetScope activeScope, ScenarioTargetClassification classification, out string reason)
@@ -151,7 +159,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 state.SelectedTarget = null;
                 if (state.MultiSelection != null)
                     state.MultiSelection.Clear();
-                state.StatusMessage = reason;
+                if (ShouldReportScopeFilter(state))
+                    state.StatusMessage = reason;
                 changed = true;
             }
 
@@ -168,6 +177,18 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             return changed;
+        }
+
+        private bool ShouldReportScopeFilter(ScenarioAuthoringState state)
+        {
+            return IsWorldScope(ResolveSelectionScope(state));
+        }
+
+        private static bool IsWorldScope(ScenarioTargetScope scope)
+        {
+            return scope == ScenarioTargetScope.BunkerBackground
+                || scope == ScenarioTargetScope.BunkerSurface
+                || scope == ScenarioTargetScope.BunkerInside;
         }
 
         public List<ScenarioSpriteCatalogService.SpriteCandidate> FilterCandidatesForScope(

@@ -1563,6 +1563,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
                 state.SelectedTarget = null;
                 state.MultiSelection.Clear();
+                if (state.SelectionStack != null)
+                    state.SelectionStack.Clear();
+                state.SelectionStackSignature = null;
+                state.ActiveSelectionStackIndex = 0;
+                state.SelectionStackExpanded = false;
                 message = "Selection cleared.";
                 return true;
             }

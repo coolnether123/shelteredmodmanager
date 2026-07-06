@@ -157,10 +157,11 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (state == null || session == null || session.WorkingDefinition == null || ScenarioAuthoringRuntimeGuards.IsPlaytesting())
                 return CancelActivePlacement("Scene sprite placement cancelled because authoring is no longer in live-edit mode.", out message);
 
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+            if ((inputCapture == null || !inputCapture.KeyboardShortcutHandled)
+                && UnityEngine.Input.GetKeyDown(KeyCode.Escape))
                 return CancelActivePlacement("Scene sprite placement cancelled.", out message);
 
-            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
             if (inputCapture != null && inputCapture.PointerOverAuthoringUi)
                 return false;
 

@@ -435,14 +435,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int activeIndex = count > 0 ? Mathf.Clamp(state.ActiveSelectionStackIndex, 0, count - 1) : -1;
             bool showAdvancedDetails = ScenarioHierarchyAuthoringContentBuilder.ShowAdvancedDetails(state);
             summary.Add(Item.Property("Candidates", count.ToString(CultureInfo.InvariantCulture)));
-            summary.Add(Item.Property("Target", count > 0 ? ("Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture)) : "No target under cursor"));
+            summary.Add(Item.Property("Target", count > 0 ? ("Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture)) : "No captured stack"));
             summary.Add(Item.Property("Hovered", ScenarioHierarchyAuthoringContentBuilder.FormatTargetConcept(state != null ? state.HoveredTarget : null, showAdvancedDetails)));
             summary.Add(Item.Property("Selected", ScenarioHierarchyAuthoringContentBuilder.FormatTargetConcept(state != null ? state.SelectedTarget : null, showAdvancedDetails)));
 
             List<ScenarioAuthoringInspectorItem> rows = new List<ScenarioAuthoringInspectorItem>();
             if (count == 0)
             {
-                rows.Add(Item.Text("Hover the bunker view to list selectable objects under the cursor."));
+                rows.Add(Item.Text("Click a shelter target to capture the selectable stack at that point."));
             }
             else
             {
@@ -481,7 +481,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "selection_stack_rows",
-                    Title = "Candidates Under Cursor",
+                    Title = "Captured Candidates",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = rows.ToArray()

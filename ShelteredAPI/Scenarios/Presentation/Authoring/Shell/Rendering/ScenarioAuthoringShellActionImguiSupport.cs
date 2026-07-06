@@ -73,10 +73,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static bool IsWindowHeaderCloseAction(ScenarioAuthoringInspectorAction action)
         {
-            return action != null
-                && !string.IsNullOrEmpty(action.Id)
-                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal)
-                && string.Equals((action.Label ?? string.Empty).Trim(), "x", StringComparison.OrdinalIgnoreCase);
+            if (action == null || string.IsNullOrEmpty(action.Id) || !string.Equals((action.Label ?? string.Empty).Trim(), "x", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionShellCloseHelp, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionShellCloseSettings, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionFocusedEditorCancel, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioStoryFocusedEditorActions.ActionCancel, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioBaseModeAuthoringActions.ActionSwitchCancel, StringComparison.Ordinal);
         }
 
         private static bool IsWindowHeaderCollapseLabel(string label)

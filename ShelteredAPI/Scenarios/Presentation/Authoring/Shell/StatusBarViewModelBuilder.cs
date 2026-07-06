@@ -2,6 +2,7 @@ using System.Collections.Generic;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
+using ShelteredAPI.Scenarios.Domain.Stages;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class StatusBarViewModelBuilder
     {
@@ -21,19 +22,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<string> entries = new List<string>();
             ScenarioBuildPlacementAuthoringService.StatusModel placementStatus =
                 ScenarioBuildPlacementAuthoringService.Instance.GetStatusModel(state, editorSession);
+            bool worldMode = IsWorldMode(state);
             entries.Add("Workspace: " + (string.IsNullOrEmpty(stageLabel) ? "Workshop" : stageLabel));
             entries.Add(BuildModeEntry(placementStatus));
-            ScenarioTargetScope scope = _selectionScopeService.ResolveSelectionScope(state);
-            if (scope != ScenarioTargetScope.Unknown)
-                entries.Add("Layer: " + ScenarioTargetClassifier.FormatScopeLabel(scope));
-            if (state != null && state.HoveredTarget != null)
+            if (worldMode)
+            {
+                ScenarioTargetScope scope = _selectionScopeService.ResolveSelectionScope(state);
+                if (scope != ScenarioTargetScope.Unknown)
+                    entries.Add("Layer: " + ScenarioTargetClassifier.FormatScopeLabel(scope));
+            }
+            if (worldMode && state != null && state.HoveredTarget != null)
                 entries.Add("Hover: " + state.HoveredTarget.DisplayName);
-            entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On (32px)" : "Off"));
+            if (worldMode)
+                entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On (32px)" : "Off"));
             if (placementStatus != null && placementStatus.PlacementActive)
                 entries.Add("Left-click place - Right-click/Esc cancel");
             if (!string.IsNullOrEmpty(state != null ? state.StatusMessage : null))
                 entries.Add(FormatStatusMessage(state.StatusMessage));
             return entries.ToArray();
+        }
+
+        private static bool IsWorldMode(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return false;
+
+            return state.ActiveStage == ScenarioStageKind.Bunker
+                || state.ActiveStage == ScenarioStageKind.BunkerBackground
+                || state.ActiveStage == ScenarioStageKind.BunkerSurface
+                || state.ActiveStage == ScenarioStageKind.BunkerInside;
         }
 
         private static string BuildModeEntry(ScenarioBuildPlacementAuthoringService.StatusModel placementStatus)
@@ -48,6 +65,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (statusMessage == "Scenario authoring shell is active. Use playtest to make live shelter changes, then capture them back into the draft.")
                 return "Workshop ready. Playtest live changes, then capture updates into the draft.";
+            if (!string.IsNullOrEmpty(statusMessage)
+                && statusMessage.IndexOf("Unknown", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return statusMessage.Replace("Unknown", "current workspace");
 
             return statusMessage;
         }

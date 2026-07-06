@@ -15,7 +15,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float Gutter = 12f;
         public const float TopBarHeight = 96f;
         public const float StatusHeight = 46f;
-        public const float ToolRailWidth = 116f;
+        public const float ToolRailWidth = 142f;
         public const float InspectorWidth = 300f;
         public const float InspectorMinWidth = 240f;
         public const float InspectorMaxWidth = 480f;

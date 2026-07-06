@@ -274,7 +274,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
-            ScenarioAuthoringTarget target = state.SelectedTarget ?? state.HoveredTarget;
+            ScenarioAuthoringTarget target = state != null ? state.SelectedTarget : null;
             if (target == null)
             {
                 return new ScenarioAuthoringInspectorDocument
@@ -357,7 +357,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(ActionItem(Action(
                     ScenarioAuthoringActionIds.ActionSelectionStackCycle,
                     "Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + stackCount.ToString(CultureInfo.InvariantCulture),
-                    "Cycle through selectable targets under the pointer.",
+                    "Cycle through targets captured at the selected click point.",
                     stackCount > 1,
                     false,
                     ">>")));
@@ -387,7 +387,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded,
                         "+" + (stackCount - displayCount).ToString(CultureInfo.InvariantCulture) + " more",
-                        "Show the remaining selectable targets under the pointer.",
+                        "Show the remaining targets captured at the selected click point.",
                         true,
                         false,
                         "+")));
@@ -419,14 +419,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 + ". "
                 + Safe(target != null ? target.DisplayName : null)
                 + " - "
-                + FriendlyKindLabel(target != null ? target.Kind : ScenarioAuthoringTargetKind.Unknown);
+                + (target != null ? FriendlyKindLabel(target.Kind) : "Target");
         }
 
         private static string FormatSelectionStackRowHint(ScenarioAuthoringTarget target, bool active)
         {
             string prefix = active ? "Current target. " : "Select this target. ";
             return prefix
-                + FriendlyKindLabel(target != null ? target.Kind : ScenarioAuthoringTargetKind.Unknown)
+                + (target != null ? FriendlyKindLabel(target.Kind) : "Target")
                 + " at "
                 + FormatTargetCell(target);
         }
@@ -708,13 +708,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                     Items = new[]
                     {
-                        Text("The selected target no longer exposes compatible sprite replacements."),
-                        ActionItem(Action(
-                            ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                            "Cancel",
-                            "Close the asset editor and restore the current sprite.",
-                            true,
-                            false))
+                        Text("The selected target no longer exposes compatible sprite replacements.")
                     }
                 });
 
@@ -722,7 +716,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Title = "Asset Editor",
                     Subtitle = FormatTarget(state.SpriteSwapPicker.Target),
-                    HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                    HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, "Close the asset editor."),
                     Sections = sections.ToArray()
                 };
             }
@@ -821,12 +815,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         pickerDirty ? null : "No sprite changes to save.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                        pickerDirty ? "Discard" : "Close",
-                        pickerDirty ? "Discard the preview and restore the currently saved sprite." : "Close the sprite browser.",
-                        true,
+                        "Discard Preview",
+                        "Discard the preview and restore the currently saved sprite.",
+                        pickerDirty,
                         false,
                         "CL",
-                        pickerDirty ? "Restore the previous sprite." : "No changes are pending.")),
+                        "Restore the previous sprite.",
+                        null,
+                        null,
+                        pickerDirty ? null : "No preview changes are pending.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
                         "Import PNG",
@@ -876,7 +873,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = "Asset Editor",
                 Subtitle = FormatTarget(state.SpriteSwapPicker.Target),
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, "Close the asset editor."),
                 Sections = sections.ToArray()
             };
         }
@@ -936,8 +933,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave,
-                        "Save & Close",
-                        "Persist the current character texture edit into the scenario pack and close the editor.",
+                        "Save",
+                        "Persist the current character texture edit into the scenario pack.",
                         characterDirty,
                         false,
                         "SV",
@@ -947,12 +944,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         characterDirty ? null : "No character texture changes to save.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                        characterDirty ? "Discard" : "Close",
-                        characterDirty ? "Discard the current character texture draft and restore the previously configured appearance." : "Close the character texture editor.",
-                        true,
+                        "Discard Draft",
+                        "Discard the current character texture draft and restore the previously configured appearance.",
+                        characterDirty,
                         false,
                         "CL",
-                        characterDirty ? "Restore the previous character appearance." : "No changes are pending.")),
+                        "Restore the previous character appearance.",
+                        null,
+                        null,
+                        characterDirty ? null : "No character texture changes are pending.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
                         "Import PNG Replacement",
@@ -982,7 +982,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = "Character Editor",
                 Subtitle = subtitle,
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, "Close the character editor."),
                 Sections = sections.ToArray()
             };
         }
@@ -1133,7 +1133,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioAuthoringTargetKind.Tile: return "Shelter Tile";
                 case ScenarioAuthoringTargetKind.Background: return "Background";
                 case ScenarioAuthoringTargetKind.SceneSprite: return "Scene Sprite";
-                case ScenarioAuthoringTargetKind.Unknown: return "Unknown";
+                case ScenarioAuthoringTargetKind.Unknown: return "Target";
                 default: return "Object";
             }
         }
@@ -1560,7 +1560,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     false,
                     null));
 
-                ScenarioAuthoringTarget target = state.SelectedTarget ?? state.HoveredTarget;
+                ScenarioAuthoringTarget target = state.SelectedTarget;
                 List<ScenarioAuthoringInspectorSection> assetSections = _assetAuthoringContentBuilder.BuildAssetPlacementSections(state, editorSession, target);
                 for (int i = 0; i < assetSections.Count; i++)
                     sections.Add(assetSections[i]);
@@ -1732,7 +1732,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = starting ? "Pick Starting Item" : "Pick Timed Item",
                 Subtitle = "Search by item name, id, detail, or category.",
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Close the item picker."),
                 Sections = sections.ToArray()
             };
         }
@@ -1849,7 +1849,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = family ? "Refresh Cast from World" : "Capture Current Stockpile",
                 Subtitle = "Review additions, changes, and removals before confirming.",
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Close this preview."),
                 Sections = sections.ToArray()
             };
         }
@@ -1914,7 +1914,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = starting ? "Starting Survivor" : "Future Survivor",
                 Subtitle = Safe(member != null ? member.Name : null),
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Close this survivor editor."),
                 Sections = sections.ToArray()
             };
         }
@@ -1973,7 +1973,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Title = title,
                     Subtitle = subtitle,
-                    HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                    HeaderActions = BuildModalCloseHeaderActions(ScenarioBaseModeAuthoringActions.ActionSwitchCancel, "Close the base mode dialog."),
                     Sections = sections.ToArray()
                 };
             }
@@ -2094,7 +2094,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = title,
                 Subtitle = subtitle,
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Close this focused editor."),
                 Sections = sections.ToArray()
             };
         }
@@ -3438,6 +3438,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return new ScenarioAuthoringInspectorAction[0];
 
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            if (string.Equals(windowDefinition.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioSpriteSwapAuthoringService.CustomEditorModel editor = _sectionHub != null && _sectionHub.SpriteSwap != null
+                    ? _sectionHub.SpriteSwap.GetCustomEditorModel(state)
+                    : null;
+                bool canClose = editor == null || !editor.Dirty;
+                actions.Add(Action(
+                    ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
+                    "x",
+                    canClose ? "Close the pixel editor." : "Save or discard pixel edits before closing.",
+                    canClose,
+                    false,
+                    "HD",
+                    null,
+                    null,
+                    null,
+                    canClose ? null : "Save or discard pixel edits before closing."));
+                return actions.ToArray();
+            }
+
             actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix + windowDefinition.Id, "_", "Collapse this panel into the Windows list.", true, false, "CL"));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + windowDefinition.Id, "x", "Hide this panel.", true, false, "HD"));
             return actions.ToArray();
@@ -3519,8 +3539,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Subtitle = "Shell, layout, input, visuals, sprite tools, and debug preferences.",
                 HeaderActions = new[]
                 {
-                    Action(ScenarioAuthoringActionIds.ActionShellSettingsReset, "Reset Defaults", "Restore default editor settings.", true, false),
-                    Action(ScenarioAuthoringActionIds.ActionShellCloseSettings, "Close", "Close editor settings.", true, false)
+                    Action(ScenarioAuthoringActionIds.ActionShellSettingsReset, "Reset Defaults", "Restore default editor settings.", true, false)
                 },
                 Sections = sections.ToArray()
             };
@@ -3705,6 +3724,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current selected target.", hasSelection, false, "CL", "Drop the current target selection.", null, null, hasSelection ? null : "No target is selected."));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionConvertToNormal, "Convert Save", "Convert the current scenario-bound save into a normal save.", true, false, "CV", "Detach this save from the scenario editor."));
             return actions.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorAction[] BuildModalCloseHeaderActions(string actionId, string hint)
+        {
+            return new[]
+            {
+                Action(actionId, "x", hint, true, false, "HD")
+            };
         }
 
         private static ScenarioAuthoringInspectorAction Action(

@@ -323,7 +323,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+            if ((inputCapture == null || !inputCapture.KeyboardShortcutHandled)
+                && UnityEngine.Input.GetKeyDown(KeyCode.Escape))
                 return CancelActivePlacement("Placement cancelled.", out message);
 
             if (_activePlacement.Ghost == null)

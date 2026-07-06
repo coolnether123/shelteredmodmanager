@@ -45,7 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = "Story Stage - " + DisplayStageTitle(stage, state.FocusedEditorIndex),
                 Subtitle = "Edit one vanilla scenario stage, its encounter steps, and its next-stage outcomes.",
-                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                HeaderActions = new[] { Action(ScenarioStoryFocusedEditorActions.ActionCancel, "x", "Close this story editor.", true, false, "HD") },
                 Sections = sections.ToArray()
             };
             return true;

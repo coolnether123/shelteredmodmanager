@@ -48,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawWindowCoreUnscoped(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            RegisterInteractiveRegion(rect);
             if (window != null)
             {
                 if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase)
@@ -464,7 +465,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 document != null ? document.Subtitle : null,
                 false,
                 46f,
-                0f);
+                12f + ((document != null && document.HeaderActions != null ? document.HeaderActions.Length : 0) * 24f));
+            Rect headerRect = regions.Header;
+            float actionX = headerRect.xMax - 28f;
+            for (int i = document != null && document.HeaderActions != null ? document.HeaderActions.Length - 1 : -1; i >= 0; i--)
+            {
+                Rect actionRect = new Rect(actionX, headerRect.y + 6f, 22f, 22f);
+                DrawButton(actionRect, document.HeaderActions[i], false);
+                actionX -= 24f;
+            }
+
             Rect bodyRect = regions.Body;
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
@@ -601,8 +611,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, 96f, "Save the current pixel edit. Ctrl+S");
             GUILayout.Space(8f);
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, 96f, "Discard the current pixel edit.", editor.Dirty);
-            GUILayout.Space(8f);
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel, "Close", false, 96f, editor.Dirty ? "Save or discard before closing." : "Close the sprite editor.", !editor.Dirty);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
@@ -920,7 +928,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 canvasHeight);
 
             Event current = Event.current;
-            if (current != null && inner.Contains(current.mousePosition))
+            if (current != null && IsPointerInsideGuiRect(inner, current))
             {
                 if (TryHandlePixelCanvasWheel(inner, current))
                     return;
@@ -1020,7 +1028,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private bool TryHandlePixelCanvasWheel(Rect rect, Event current)
         {
-            bool contains = current != null && rect.Contains(current.mousePosition);
+            bool contains = current != null && IsPointerInsideGuiRect(rect, current);
 
             if (current == null || !contains)
             {
@@ -1044,10 +1052,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool TryAcceptPixelCanvasWheel(Event current, out int deltaSign)
         {
             deltaSign = 0;
-            if (current == null || current.type != EventType.Repaint)
+            if (current == null)
+                return false;
+
+            if (current.type == EventType.ScrollWheel && Mathf.Abs(current.delta.y) > 0.0001f)
+            {
+                if (_pixelEditorWheelHandledFrame == Time.frameCount)
+                    return false;
+
+                deltaSign = current.delta.y < 0f ? -1 : 1;
+                _pixelEditorWheelAxisActive = false;
+                _pixelEditorWheelHandledFrame = Time.frameCount;
+                return true;
+            }
+
+            if (current.type != EventType.Repaint)
                 return false;
 
             float wheel = UnityEngine.Input.GetAxis("Mouse ScrollWheel");
+            if (Mathf.Abs(wheel) <= 0.0001f)
+                wheel = UnityEngine.Input.mouseScrollDelta.y;
             if (Mathf.Abs(wheel) <= 0.0001f)
             {
                 _pixelEditorWheelAxisActive = false;
@@ -1065,8 +1089,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void ResetPixelCanvasWheelAxisIfIdle()
         {
-            if (Mathf.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) <= 0.0001f)
+            float wheel = UnityEngine.Input.GetAxis("Mouse ScrollWheel");
+            if (Mathf.Abs(wheel) <= 0.0001f)
+                wheel = UnityEngine.Input.mouseScrollDelta.y;
+            if (Mathf.Abs(wheel) <= 0.0001f)
                 _pixelEditorWheelAxisActive = false;
+        }
+
+        private static bool IsPointerInsideGuiRect(Rect rect, Event current)
+        {
+            if (current != null && rect.Contains(current.mousePosition))
+                return true;
+
+            Vector3 mousePosition = UnityEngine.Input.mousePosition;
+            Vector2 guiMousePosition = new Vector2(mousePosition.x, Screen.height - mousePosition.y);
+            return rect.Contains(guiMousePosition);
         }
 
         private static bool TryGetCanvasPixel(
@@ -2063,6 +2100,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawCompactActionRow(ScenarioAuthoringInspectorAction action)
         {
             Rect rowRect = GUILayoutUtility.GetRect(0f, 24f, GUILayout.ExpandWidth(true), GUILayout.Height(24f));
+            Event evt = Event.current;
+            if (action != null
+                && action.Enabled
+                && string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSelectionStackToggleExpanded, StringComparison.Ordinal)
+                && evt != null
+                && evt.type == EventType.MouseDown
+                && evt.button == 0
+                && rowRect.Contains(evt.mousePosition))
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                evt.Use();
+                return;
+            }
+
             DrawButton(rowRect, action, false);
         }
 

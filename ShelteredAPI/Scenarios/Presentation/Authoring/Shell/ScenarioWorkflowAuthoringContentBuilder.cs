@@ -106,7 +106,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int stackCount = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
             string activeStackTarget = stackCount > 0
                 ? "Target " + (UnityEngine.Mathf.Clamp(state.ActiveSelectionStackIndex, 0, stackCount - 1) + 1).ToString() + " of " + stackCount.ToString()
-                : "No target under cursor";
+                : "No captured stack";
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "selection",
