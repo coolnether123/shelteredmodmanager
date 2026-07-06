@@ -158,8 +158,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
             bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
             GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
+            bool chromeGlyph = IsWindowChromeGlyphAction(action);
             GUIContent content = new GUIContent(
-                ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle),
+                chromeGlyph ? string.Empty : ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle),
                 tooltip);
 
             if (IsWindowMenuAction(action))
@@ -173,6 +174,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         Event.current.Use();
                 }
                 DrawButtonAnimationOverlay(visualRect, action.Id, action.Enabled, hovered, pressed);
+                if (chromeGlyph)
+                    DrawWindowChromeGlyph(visualRect, action, hovered, pressed);
                 return;
             }
 
@@ -185,6 +188,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             DrawButtonAnimationOverlay(visualRect, action.Id, action.Enabled, hovered, pressed);
             DrawActionPulseOverlay(visualRect, action);
+            if (chromeGlyph)
+                DrawWindowChromeGlyph(visualRect, action, hovered, pressed);
         }
 
         private GUIStyle ResolveContentButtonStyle(ScenarioAuthoringInspectorAction action, bool tab)
@@ -259,6 +264,63 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return rect;
 
             return new Rect(rect.x + inset, rect.y + inset, rect.width - (inset * 2f), rect.height - (inset * 2f));
+        }
+
+        private static bool IsWindowChromeGlyphAction(ScenarioAuthoringInspectorAction action)
+        {
+            return IsWindowCollapseAction(action) || IsWindowCloseAction(action);
+        }
+
+        private static bool IsWindowCollapseAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && !string.IsNullOrEmpty(action.Id)
+                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal);
+        }
+
+        private static bool IsWindowCloseAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && !string.IsNullOrEmpty(action.Id)
+                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal);
+        }
+
+        private void DrawWindowChromeGlyph(Rect rect, ScenarioAuthoringInspectorAction action, bool hovered, bool pressed)
+        {
+            Color color = action != null && action.Enabled
+                ? (hovered ? new Color(1.00f, 0.92f, 0.70f, 1f) : new Color(0.86f, 0.78f, 0.64f, 1f))
+                : new Color(0.48f, 0.45f, 0.39f, 1f);
+            if (pressed)
+                color = new Color(0.68f, 0.58f, 0.43f, 1f);
+
+            Rect glyphRect = new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f);
+            float thickness = Mathf.Max(1f, Mathf.Round(Mathf.Min(rect.width, rect.height) * 0.10f));
+            if (IsWindowCloseAction(action))
+            {
+                DrawVectorLine(new Vector2(glyphRect.x, glyphRect.y), new Vector2(glyphRect.xMax, glyphRect.yMax), color, thickness);
+                DrawVectorLine(new Vector2(glyphRect.xMax, glyphRect.y), new Vector2(glyphRect.x, glyphRect.yMax), color, thickness);
+                return;
+            }
+
+            float y = rect.y + (rect.height * 0.52f);
+            DrawVectorLine(new Vector2(glyphRect.x, y), new Vector2(glyphRect.xMax, y), color, thickness);
+        }
+
+        private static void DrawVectorLine(Vector2 start, Vector2 end, Color color, float thickness)
+        {
+            Vector2 delta = end - start;
+            float length = delta.magnitude;
+            if (length <= 0.001f)
+                return;
+
+            Color oldColor = GUI.color;
+            Matrix4x4 oldMatrix = GUI.matrix;
+            GUI.color = color;
+            float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+            GUIUtility.RotateAroundPivot(angle, start);
+            GUI.DrawTexture(new Rect(start.x, start.y - (thickness * 0.5f), length, thickness), Texture2D.whiteTexture);
+            GUI.matrix = oldMatrix;
+            GUI.color = oldColor;
         }
     }
 }

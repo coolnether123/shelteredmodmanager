@@ -12,11 +12,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
     {
         private const float WindowOpenDuration = 0.18f;
         private const float WindowCloseDuration = 0.12f;
-        private const float ButtonHoverDuration = 0.20f;
+        private const float ButtonHoverDuration = 0.16f;
         private const float ButtonPressDuration = 0.08f;
         private const float ButtonRecoverDuration = 0.12f;
         private const float PopupDuration = 0.15f;
         private const float TooltipDuration = 0.12f;
+        private const float TooltipShowDelaySeconds = 0.40f;
         private const float ModalDimDuration = 0.15f;
         private const float ModalPanelDuration = 0.18f;
         private const float ToastInDuration = 0.20f;
@@ -44,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private string _lastStatus;
         private float _statusChangedAt;
         private bool _modalVisibleLastFrame;
+        private float _tooltipChangedAt;
 
         public bool Enabled
         {
@@ -216,7 +218,14 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             if (!string.Equals(_lastTooltip, tooltip, StringComparison.Ordinal))
             {
                 _lastTooltip = tooltip;
+                _tooltipChangedAt = Time.realtimeSinceStartup;
                 _tweens.Set(TooltipKey, 0f);
+            }
+
+            if (visible && Time.realtimeSinceStartup - _tooltipChangedAt < TooltipShowDelaySeconds)
+            {
+                _tweens.Set(TooltipKey, 0f);
+                return 0f;
             }
 
             return GetBinaryProgress(TooltipKey, visible, TooltipDuration, ScenarioUiEasing.EaseOut, false);

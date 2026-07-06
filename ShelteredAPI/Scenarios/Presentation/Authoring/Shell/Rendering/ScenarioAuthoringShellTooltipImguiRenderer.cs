@@ -37,14 +37,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Vector2 size = tipStyle.CalcSize(new GUIContent(tip));
             float width = Math.Min(maxWidth, size.x + 18f);
             float height = tipStyle.CalcHeight(new GUIContent(tip), width - 14f) + 10f;
-            float x = Math.Min(scaledWidth - width - 6f, mouse.x + 16f);
-            float y = Math.Min(scaledHeight - height - 6f, mouse.y + 20f);
+            bool topChromeHover = mouse.y <= TopBarHeight + 4f;
+            float x = topChromeHover
+                ? mouse.x - (width * 0.35f)
+                : Math.Min(scaledWidth - width - 6f, mouse.x + 16f);
+            float y = topChromeHover
+                ? TopBarHeight + 8f
+                : Math.Min(scaledHeight - height - 6f, mouse.y + 20f);
             if (x < 6f) x = 6f;
             if (y < 6f) y = 6f;
             Rect tipRect = ClampAwayFromHud(new Rect(x, y, width, height), scaledWidth, scaledHeight, hudReserveRect);
             using (ScenarioUiGuiScope.Apply(alpha, tipRect, 1f))
             {
-                GUI.Box(tipRect, GUIContent.none, _uiContext.Styles.Menu);
+                DrawChromePanel(tipRect, _uiContext.Styles.Menu);
                 GUI.Label(new Rect(tipRect.x + 7f, tipRect.y + 5f, tipRect.width - 14f, tipRect.height - 10f), tip, tipStyle);
             }
         }

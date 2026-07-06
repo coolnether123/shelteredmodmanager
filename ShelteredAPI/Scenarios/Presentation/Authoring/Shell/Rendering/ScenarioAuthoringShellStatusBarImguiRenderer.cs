@@ -43,39 +43,73 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
             float playtestWidth = Math.Max(104f, MeasureButtonWidth(playtestAction, false, 34f));
             float pauseMenuWidth = Math.Max(128f, MeasureButtonWidth(pauseMenuAction, false, 34f));
-            float rightControlsWidth = playtestWidth + pauseMenuWidth + 114f;
-            float rightControlsX = Math.Max(rect.x + 220f, rect.xMax - rightControlsWidth);
-            float statusRight = rightControlsX - 18f;
+            float rightPadding = 16f;
+            float buttonGap = 104f;
+            Rect pauseMenuRect = new Rect(rect.xMax - pauseMenuWidth - rightPadding, rect.y + 8f, pauseMenuWidth, 30f);
+            Rect playtestRect = new Rect(pauseMenuRect.x - buttonGap - playtestWidth, rect.y + 8f, playtestWidth, 30f);
+            float statusRight = playtestRect.x - 14f;
             float x = rect.x + 26f;
-            int factCount = Math.Min(4, shell.StatusEntries != null ? shell.StatusEntries.Length : 0);
-            for (int i = 0; i < factCount; i++)
+            string message = null;
+            for (int i = 0; shell != null && shell.StatusEntries != null && i < shell.StatusEntries.Length; i++)
             {
                 string value = shell.StatusEntries[i] ?? string.Empty;
+                if (!IsPrimaryStatusFact(value))
+                {
+                    if (message == null && !IsSecondaryStatusFact(value))
+                        message = value;
+                    continue;
+                }
+
                 float available = statusRight - x;
                 if (available < 48f)
                     break;
 
-                float width = Math.Min(Math.Min(250f, value.Length * 7.5f + 30f), available);
-                GUI.Label(new Rect(x, rect.y + 14f, width, 20f), ShortenToFit(value, width, _mutedTextStyle), _mutedTextStyle);
+                float measuredWidth = ScenarioUiMeasuredLabel.Width(value, _mutedTextStyle, 16f);
+                float width = Math.Min(measuredWidth, available);
+                DrawStatusLabel(new Rect(x, rect.y + 14f, width, 20f), value, false);
                 x += width + 18f;
             }
 
-            string message = shell != null && shell.StatusEntries != null && shell.StatusEntries.Length > 4
-                ? shell.StatusEntries[4]
-                : null;
             if (!string.IsNullOrEmpty(message))
             {
-                Rect messageRect = new Rect(x, rect.y + 13f, Math.Max(120f, statusRight - x), 22f);
-                GUI.Label(messageRect, ShortenToFit(message, messageRect.width, _mutedTextStyle), _mutedTextStyle);
+                Rect messageRect = new Rect(x, rect.y + 13f, Math.Max(0f, statusRight - x), 22f);
+                if (messageRect.width > 8f)
+                    DrawStatusLabel(messageRect, message, true);
             }
 
-            Rect playtestRect = new Rect(rightControlsX, rect.y + 8f, playtestWidth, 30f);
             DrawButton(playtestRect, playtestAction, false);
-
-            Rect pauseMenuRect = new Rect(rect.xMax - pauseMenuWidth - 16f, rect.y + 8f, pauseMenuWidth, 30f);
             DrawButton(pauseMenuRect, pauseMenuAction, false);
 
             DrawStatusToastCore(rect, message);
+        }
+
+        private static bool IsPrimaryStatusFact(string value)
+        {
+            return StartsWithStatusPrefix(value, "Workspace:")
+                || StartsWithStatusPrefix(value, "Mode:")
+                || StartsWithStatusPrefix(value, "Grid:")
+                || StartsWithStatusPrefix(value, "Placing:");
+        }
+
+        private static bool IsSecondaryStatusFact(string value)
+        {
+            return StartsWithStatusPrefix(value, "Layer:")
+                || StartsWithStatusPrefix(value, "Hover:");
+        }
+
+        private static bool StartsWithStatusPrefix(string value, string prefix)
+        {
+            return !string.IsNullOrEmpty(value)
+                && value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void DrawStatusLabel(Rect rect, string value, bool tooltipWhenTruncated)
+        {
+            string fitted = ShortenToFit(value, rect.width, _mutedTextStyle);
+            string tooltip = tooltipWhenTruncated && !string.Equals(fitted, value ?? string.Empty, StringComparison.Ordinal)
+                ? value ?? string.Empty
+                : string.Empty;
+            GUI.Label(rect, new GUIContent(fitted, tooltip), _mutedTextStyle);
         }
 
         private void DrawStatusToastCore(Rect statusRect, string message)
