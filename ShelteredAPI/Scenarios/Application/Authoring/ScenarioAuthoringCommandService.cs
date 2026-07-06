@@ -90,6 +90,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, baseModeReloadService),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
+                new ScenarioWinLossCommandHandler(editorService),
                 new ScenarioPublishCommandHandler(publishExportService),
                 new SelectionCommandHandler(),
                 new ToolCommandHandler(layoutService)

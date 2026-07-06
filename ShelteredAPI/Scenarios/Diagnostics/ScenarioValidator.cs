@@ -12,6 +12,7 @@ using ShelteredAPI.Persistence;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Validation;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -67,6 +68,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 new QuestMapValidationRule(),
                 new MapValidationRule(),
                 new SchedulingValidationRule(),
+                new WinLossValidationRule(),
                 new ScoringValidationRule(),
                 new ObjectStartStateValidationRule(),
                 new BunkerDependencyValidationRule(),
@@ -949,6 +951,105 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 ScenarioValidationResult legacy = new ScenarioValidationResult();
                 _owner.ValidateDependencies(definition, legacy);
                 CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class WinLossValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                if (definition == null || summary == null)
+                    return;
+
+                WinLossConditionsDefinition winLoss = definition.WinLossConditions;
+                int winCount = Count(winLoss != null ? winLoss.WinConditions : null);
+                int lossCount = Count(winLoss != null ? winLoss.LossConditions : null);
+                if (winCount + lossCount == 0)
+                {
+                    summary.AddWarning("win_loss.no_end_state", "[Victory] No victory or failure condition is defined; the scenario can run forever.");
+                    return;
+                }
+
+                ValidateConditions(winLoss != null ? winLoss.WinConditions : null, "victory", summary);
+                ValidateConditions(winLoss != null ? winLoss.LossConditions : null, "failure", summary);
+            }
+
+            private static void ValidateConditions(List<ConditionDef> conditions, string label, ValidationSummary summary)
+            {
+                HashSet<string> ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; conditions != null && i < conditions.Count; i++)
+                {
+                    ConditionDef condition = conditions[i];
+                    string scope = "[Victory] " + label + " condition #" + i.ToString(CultureInfo.InvariantCulture);
+                    if (condition == null)
+                    {
+                        summary.AddError("win_loss.condition.null", scope + " is null.");
+                        continue;
+                    }
+
+                    string id = TrimToNull(condition.Id);
+                    if (id == null)
+                        summary.AddError("win_loss.condition.id_required", scope + " requires an id.");
+                    else if (!ids.Add(id))
+                        summary.AddError("win_loss.condition.duplicate", "[Victory] " + label + " condition id is duplicated: " + id);
+
+                    ScenarioWinLossConditionDescriptor descriptor;
+                    if (!ScenarioWinLossConditionSupport.TryGetDescriptor(condition.Type, out descriptor))
+                    {
+                        summary.AddError("win_loss.condition.unsupported_type", scope + " uses unsupported condition type '" + (condition.Type ?? string.Empty) + "'.");
+                        continue;
+                    }
+
+                    ValidateDescriptorFields(condition, descriptor, scope, summary);
+                }
+            }
+
+            private static void ValidateDescriptorFields(
+                ConditionDef condition,
+                ScenarioWinLossConditionDescriptor descriptor,
+                string scope,
+                ValidationSummary summary)
+            {
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Time)
+                {
+                    int day = ScenarioPropertyBag.GetInt(condition.Properties, "day", ScenarioPropertyBag.GetInt(condition.Properties, "days", 0));
+                    int hour = ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0);
+                    int minute = ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0);
+                    if (day <= 0 || hour < 0 || hour > 23 || minute < 0 || minute > 59)
+                        summary.AddError("win_loss.condition.invalid_time", scope + " has invalid day/hour/minute values.");
+                    return;
+                }
+
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Quantity)
+                {
+                    string itemId = ScenarioPropertyBag.FirstString(condition.Properties, "itemId", "targetId");
+                    int quantity = ScenarioPropertyBag.GetInt(condition.Properties, "quantity", 1);
+                    if (TrimToNull(itemId) == null)
+                        summary.AddError("win_loss.condition.item_required", scope + " requires an itemId property.");
+                    if (quantity <= 0)
+                        summary.AddError("win_loss.condition.quantity", scope + " quantity must be greater than zero.");
+                    return;
+                }
+
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Flag)
+                {
+                    string flagId = ScenarioPropertyBag.FirstString(condition.Properties, "flagId", "targetId");
+                    if (TrimToNull(flagId) == null)
+                        summary.AddError("win_loss.condition.flag_required", scope + " requires a flagId property.");
+                    return;
+                }
+
+                if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Target)
+                {
+                    string target = ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "technologyId", "triggerId", "targetId");
+                    if (TrimToNull(target) == null)
+                        summary.AddError("win_loss.condition.target_required", scope + " requires a target id property.");
+                }
+            }
+
+            private static int Count(List<ConditionDef> conditions)
+            {
+                return conditions != null ? conditions.Count : 0;
             }
         }
 

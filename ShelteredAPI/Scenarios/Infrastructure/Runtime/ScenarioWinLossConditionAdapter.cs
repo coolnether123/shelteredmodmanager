@@ -24,7 +24,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (condition == null)
                 return false;
 
-            string type = Normalize(condition.Type);
+            string type = ScenarioWinLossConditionSupport.Normalize(condition.Type);
             if (type == null)
             {
                 reason = "Win/loss condition type is missing.";
@@ -132,12 +132,5 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return false;
         }
 
-        private static string Normalize(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-                return null;
-
-            return value.Trim().Replace("_", string.Empty).Replace("-", string.Empty).ToLowerInvariant();
-        }
     }
 }

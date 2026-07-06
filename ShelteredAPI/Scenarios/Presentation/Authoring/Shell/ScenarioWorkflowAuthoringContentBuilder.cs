@@ -1,11 +1,15 @@
 using System.Collections.Generic;
+using System.Globalization;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
+using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioWorkflowAuthoringContentBuilder
@@ -206,15 +210,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     break;
 
                 case ScenarioAuthoringTool.WinLoss:
-                    title = "Win/Loss";
+                    title = "Victory";
                     ScenarioScoringAuthoringSummary.Summary scoring = ScenarioScoringAuthoringSummary.Build(definition);
-                    items.Add(Item.Property("Win Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.WinConditions.Count.ToString() : "0"));
-                    items.Add(Item.Property("Loss Conditions", definition != null && definition.WinLossConditions != null ? definition.WinLossConditions.LossConditions.Count.ToString() : "0"));
+                    AddVictoryAuthoringItems(items, definition);
                     items.Add(Item.Property("Scoring", scoring.IsEnabled ? "Enabled" : "Disabled"));
                     items.Add(Item.Property("Score Label", scoring.ScoreLabel));
                     items.Add(Item.Property("Score Categories", scoring.CategoryCount.ToString()));
                     items.Add(Item.Property("Score Rules", scoring.RuleCount.ToString()));
-                    items.Add(Item.Text("Win and loss conditions run against the active scenario quest during playtest and runtime."));
                     break;
 
                 case ScenarioAuthoringTool.Select:
@@ -246,6 +248,111 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = items.ToArray()
             };
+        }
+
+        private static void AddVictoryAuthoringItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition)
+        {
+            WinLossConditionsDefinition winLoss = definition != null ? definition.WinLossConditions : null;
+            int winCount = winLoss != null && winLoss.WinConditions != null ? winLoss.WinConditions.Count : 0;
+            int lossCount = winLoss != null && winLoss.LossConditions != null ? winLoss.LossConditions.Count : 0;
+            items.Add(Item.Property("Win Conditions", winCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Loss Conditions", lossCount.ToString(CultureInfo.InvariantCulture)));
+            if (winCount + lossCount == 0)
+                items.Add(Item.Text("No victory condition - scenario runs forever."));
+            items.Add(Item.ActionItem(Item.Action(ScenarioWinLossAuthoringActionIds.AddWin, "Add Victory Condition", "Create a runtime-backed win condition.", definition != null, false, "W+")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioWinLossAuthoringActionIds.AddLoss, "Add Failure Condition", "Create a runtime-backed loss condition.", definition != null, false, "L+")));
+            AddConditionList(items, winLoss != null ? winLoss.WinConditions : null, true);
+            AddConditionList(items, winLoss != null ? winLoss.LossConditions : null, false);
+            AddSupportedConditionSummary(items);
+        }
+
+        private static void AddConditionList(List<ScenarioAuthoringInspectorItem> items, List<ConditionDef> conditions, bool win)
+        {
+            string label = win ? "Victory" : "Failure";
+            string typePrefix = win ? ScenarioWinLossAuthoringActionIds.TypeWinPrefix : ScenarioWinLossAuthoringActionIds.TypeLossPrefix;
+            string deletePrefix = win ? ScenarioWinLossAuthoringActionIds.DeleteWinPrefix : ScenarioWinLossAuthoringActionIds.DeleteLossPrefix;
+            for (int i = 0; conditions != null && i < conditions.Count; i++)
+            {
+                ConditionDef condition = conditions[i];
+                ScenarioWinLossConditionDescriptor descriptor = null;
+                if (condition != null)
+                    ScenarioWinLossConditionSupport.TryGetDescriptor(condition.Type, out descriptor);
+                string id = condition != null ? condition.Id : null;
+                items.Add(Item.Property(label + " " + i.ToString(CultureInfo.InvariantCulture), Item.Safe(id) + " / " + (descriptor != null ? descriptor.Label : "Unsupported: " + (condition != null ? condition.Type : string.Empty))));
+                if (descriptor != null)
+                    items.Add(Item.Text(descriptor.Summary));
+                items.Add(Item.ActionItem(Item.Action(typePrefix + i.ToString(CultureInfo.InvariantCulture), "Condition Type", "Cycle to the next runtime-supported condition type.", condition != null, false, "TY", descriptor != null ? descriptor.Label : "Unsupported type")));
+                AddConditionFieldItems(items, condition, descriptor, i, win);
+                items.Add(Item.ActionItem(Item.Action(deletePrefix + i.ToString(CultureInfo.InvariantCulture), "Delete " + label, "Remove this outcome condition.", condition != null, false, "DEL")));
+            }
+        }
+
+        private static void AddConditionFieldItems(
+            List<ScenarioAuthoringInspectorItem> items,
+            ConditionDef condition,
+            ScenarioWinLossConditionDescriptor descriptor,
+            int index,
+            bool win)
+        {
+            if (condition == null || descriptor == null)
+                return;
+
+            if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Time)
+            {
+                string dayPrefix = win ? ScenarioWinLossAuthoringActionIds.DayWinPrefix : ScenarioWinLossAuthoringActionIds.DayLossPrefix;
+                string hourPrefix = win ? ScenarioWinLossAuthoringActionIds.HourWinPrefix : ScenarioWinLossAuthoringActionIds.HourLossPrefix;
+                string minutePrefix = win ? ScenarioWinLossAuthoringActionIds.MinuteWinPrefix : ScenarioWinLossAuthoringActionIds.MinuteLossPrefix;
+                items.Add(Item.Property("Day", ScenarioPropertyBag.GetInt(condition.Properties, "day", ScenarioPropertyBag.GetInt(condition.Properties, "days", 1)).ToString(CultureInfo.InvariantCulture)));
+                AddStepper(items, dayPrefix, index, "Day", 1, 7);
+                items.Add(Item.Property("Hour", ScenarioPropertyBag.GetInt(condition.Properties, "hour", 0).ToString(CultureInfo.InvariantCulture)));
+                AddStepper(items, hourPrefix, index, "Hour", 1, 6);
+                items.Add(Item.Property("Minute", ScenarioPropertyBag.GetInt(condition.Properties, "minute", 0).ToString(CultureInfo.InvariantCulture)));
+                AddStepper(items, minutePrefix, index, "Minute", 5, 15);
+                return;
+            }
+
+            if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Quantity)
+            {
+                string quantityPrefix = win ? ScenarioWinLossAuthoringActionIds.QuantityWinPrefix : ScenarioWinLossAuthoringActionIds.QuantityLossPrefix;
+                items.Add(Item.Property("Item Id", Item.Safe(ScenarioPropertyBag.FirstString(condition.Properties, "itemId", "targetId"))));
+                items.Add(Item.Property("Quantity", ScenarioPropertyBag.GetInt(condition.Properties, "quantity", 1).ToString(CultureInfo.InvariantCulture)));
+                AddStepper(items, quantityPrefix, index, "Quantity", 1, 10);
+                return;
+            }
+
+            if (descriptor.FieldKind == ScenarioWinLossConditionFieldKind.Flag)
+            {
+                items.Add(Item.Property("Flag Id", Item.Safe(ScenarioPropertyBag.FirstString(condition.Properties, "flagId", "targetId"))));
+                items.Add(Item.Property("Flag Value", Item.Safe(ScenarioPropertyBag.FirstString(condition.Properties, "flagValue", "value"))));
+                items.Add(Item.Text("Flag id/value are loaded from XML today; the runtime honors them but this surface does not yet include text entry."));
+                return;
+            }
+
+            items.Add(Item.Property("Target Id", Item.Safe(ScenarioPropertyBag.FirstString(condition.Properties, "questId", "survivorId", "name", "bunkerExpansionId", "triggerId", "targetId"))));
+            items.Add(Item.Text("Target ids are loaded from XML today; the runtime honors this type but this surface does not yet include text entry."));
+        }
+
+        private static void AddStepper(List<ScenarioAuthoringInspectorItem> items, string prefix, int index, string label, int small, int large)
+        {
+            string indexText = index.ToString(CultureInfo.InvariantCulture);
+            items.Add(Item.ActionItem(Item.Action(prefix + indexText + "." + (-large).ToString(CultureInfo.InvariantCulture), label + " -" + large.ToString(CultureInfo.InvariantCulture), "Decrease " + label.ToLowerInvariant() + ".", true, false, "-" + large.ToString(CultureInfo.InvariantCulture))));
+            items.Add(Item.ActionItem(Item.Action(prefix + indexText + "." + (-small).ToString(CultureInfo.InvariantCulture), label + " -" + small.ToString(CultureInfo.InvariantCulture), "Decrease " + label.ToLowerInvariant() + ".", true, false, "-" + small.ToString(CultureInfo.InvariantCulture))));
+            items.Add(Item.ActionItem(Item.Action(prefix + indexText + "." + small.ToString(CultureInfo.InvariantCulture), label + " +" + small.ToString(CultureInfo.InvariantCulture), "Increase " + label.ToLowerInvariant() + ".", true, false, "+" + small.ToString(CultureInfo.InvariantCulture))));
+            items.Add(Item.ActionItem(Item.Action(prefix + indexText + "." + large.ToString(CultureInfo.InvariantCulture), label + " +" + large.ToString(CultureInfo.InvariantCulture), "Increase " + label.ToLowerInvariant() + ".", true, false, "+" + large.ToString(CultureInfo.InvariantCulture))));
+        }
+
+        private static void AddSupportedConditionSummary(List<ScenarioAuthoringInspectorItem> items)
+        {
+            ScenarioWinLossConditionDescriptor[] descriptors = ScenarioWinLossConditionSupport.GetDescriptors();
+            string labels = string.Empty;
+            for (int i = 0; descriptors != null && i < descriptors.Length; i++)
+            {
+                if (descriptors[i] == null)
+                    continue;
+                labels = labels.Length == 0 ? descriptors[i].Label : labels + ", " + descriptors[i].Label;
+            }
+
+            items.Add(Item.Text("Supported runtime condition types: " + labels + "."));
         }
 
         private static void AddBuildStatus(List<ScenarioAuthoringInspectorItem> items, ScenarioBuildPlacementAuthoringService.StatusModel buildStatus)

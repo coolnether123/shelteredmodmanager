@@ -3,15 +3,19 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
 
@@ -39,13 +43,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioModCompatibilityReport compatibilityReport = _modDependencyDetector.BuildReport(definition);
+            ScenarioAuthoringValidationSnapshot validation = EvaluateValidation(state, definition);
             List<ScenarioAuthoringInspectorItem> dependencyItems = BuildDependencyItems(definition);
-            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
+            List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(compatibilityReport);
             List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
-            List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(state, definition);
-            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(validationItems);
+            List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(validation);
+            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(validation);
             return new[]
             {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "publish_confidence",
+                    Title = "Confidence",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                    Items = BuildReadinessSummary(editorSession, definition, validation, compatibilityReport).ToArray()
+                },
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "publish_stage",
@@ -103,45 +117,39 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildValidationItems(ScenarioAuthoringState state, ScenarioDefinition definition)
+        internal static ScenarioAuthoringValidationSnapshot EvaluateValidation(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            if (definition == null)
-            {
-                items.Add(Item.Property("Status", "No active scenario definition."));
-                return items;
-            }
-
-            ScenarioValidationResult validation = null;
+            IScenarioDefinitionValidator validator = null;
             try
             {
-                IScenarioDefinitionValidator validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
-                validation = validator != null ? validator.Validate(definition, state != null ? state.ActiveScenarioFilePath : null) : null;
+                validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
             }
-            catch (Exception ex)
+            catch
+            {
+                validator = null;
+            }
+
+            return ScenarioAuthoringValidationSnapshot.Evaluate(
+                validator,
+                definition,
+                state != null ? state.ActiveScenarioFilePath : null);
+        }
+
+        internal static List<ScenarioAuthoringInspectorItem> BuildValidationItems(ScenarioAuthoringValidationSnapshot validation)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (validation == null || !validation.ValidationAvailable)
             {
                 items.Add(Item.Property("Validation", "Unavailable"));
-                items.Add(Item.Text("Validation could not run: " + ex.Message));
+                items.Add(Item.Text(validation != null ? validation.UnavailableReason : "Validation could not run."));
                 return items;
             }
 
-            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : new ScenarioValidationIssue[0];
-            int errors = 0;
-            int warnings = 0;
-            for (int i = 0; i < issues.Length; i++)
-            {
-                if (issues[i] == null)
-                    continue;
-                if (issues[i].Severity == ScenarioIssueSeverity.Error)
-                    errors++;
-                else
-                    warnings++;
-            }
-
-            items.Add(Item.Property("Status", validation != null && validation.IsValid ? "Ready to export" : "Blocked"));
-            items.Add(Item.Property("Errors", errors.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Item.Property("Warnings", warnings.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if the draft has no blocking errors.", true, errors == 0, "SV")));
+            ScenarioValidationIssue[] issues = validation.Issues;
+            items.Add(Item.Property("Status", validation.Result != null && validation.Result.IsValid ? "Ready to export" : "Blocked"));
+            items.Add(Item.Property("Errors", validation.ErrorCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Warnings", validation.WarningCount.ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if the draft has no blocking errors.", true, validation.ErrorCount == 0, "SV")));
 
             if (issues.Length == 0)
             {
@@ -162,10 +170,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildExportItems(List<ScenarioAuthoringInspectorItem> validationItems)
+        internal static List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioAuthoringValidationSnapshot validation)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            int errors = ReadCount(validationItems, "Errors");
+            int errors = validation != null ? validation.ErrorCount : 1;
             bool canExport = errors == 0;
             items.Add(Item.ActionItem(Item.Action(
                 ScenarioAuthoringActionIds.ActionPublishExport,
@@ -182,7 +190,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (last == null)
             {
                 items.Add(Item.Property("Last Export", "<none>"));
-                items.Add(Item.Text("Export staging is outside playable catalog scans. Copy the exported folder into any mod's Scenarios directory when you want to install or share it."));
+                items.Add(Item.Text("Export staging is outside playable catalog scans. After export, install by copying the exported scenario folder into a mod's Scenarios directory."));
                 return items;
             }
 
@@ -191,9 +199,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(last.ArtifactPath))
                 items.Add(Item.Property("Artifact", last.ArtifactPath));
             if (!string.IsNullOrEmpty(last.ArtifactRootPath))
+            {
                 items.Add(Item.Property("Share Folder", last.ArtifactRootPath));
+                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.OpenLastExportFolder, "Open Export Folder", "Open the last export folder in Windows Explorer.", true, false, "OP", last.ArtifactRootPath)));
+                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.CopyLastExportPath, "Copy Path", "Copy the last export folder path to the clipboard.", true, false, "CP", last.ArtifactRootPath)));
+            }
             if (!string.IsNullOrEmpty(last.Message))
                 items.Add(Item.Text(last.Message));
+            items.Add(Item.Text("Install: 1. Open the export folder. 2. Copy the scenario folder. 3. Paste it into the Scenarios folder of the target mod. 4. Restart or reload the scenario catalog before testing it from the scenario book."));
             return items;
         }
 
@@ -205,7 +218,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "Go To " + ScenarioAuthoringWorkflowLabels.GetStageLabel(stage, false),
                 "Open the editor area most likely to own this validation issue.",
                 true,
-                issue != null && issue.Severity == ScenarioIssueSeverity.Error,
+                issue != null,
                 "GO",
                 issue != null ? issue.Severity.ToString() : "Issue");
         }
@@ -223,6 +236,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return ScenarioStageKind.People;
             if (text.IndexOf("sprite") >= 0 || text.IndexOf("asset") >= 0 || text.IndexOf("png") >= 0)
                 return ScenarioStageKind.BunkerInside;
+            if (text.IndexOf("victory") >= 0 || text.IndexOf("win") >= 0 || text.IndexOf("loss") >= 0 || text.IndexOf("end state") >= 0)
+                return ScenarioStageKind.Test;
             if (text.IndexOf("trigger") >= 0 || text.IndexOf("schedule") >= 0 || text.IndexOf("gate") >= 0 || text.IndexOf("condition") >= 0 || text.IndexOf("action") >= 0)
                 return ScenarioStageKind.Events;
             if (text.IndexOf("bunker") >= 0 || text.IndexOf("room") >= 0 || text.IndexOf("object") >= 0 || text.IndexOf("foundation") >= 0)
@@ -230,19 +245,46 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ScenarioStageKind.Publish;
         }
 
-        private static int ReadCount(List<ScenarioAuthoringInspectorItem> items, string label)
+        private static List<ScenarioAuthoringInspectorItem> BuildReadinessSummary(
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation,
+            ScenarioModCompatibilityReport compatibilityReport)
         {
-            for (int i = 0; items != null && i < items.Count; i++)
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Item.Property("Errors", validation != null ? validation.ErrorCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Property("Warnings", validation != null ? validation.WarningCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Property("Dirty Sections", Item.CountDirtyFlags(editorSession).ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Unsupported Features", CountUnsupportedWarnings(validation).ToString(CultureInfo.InvariantCulture)));
+            items.Add(Item.Property("Missing Required Mods", compatibilityReport != null && compatibilityReport.MissingRequiredMods != null ? compatibilityReport.MissingRequiredMods.Count.ToString(CultureInfo.InvariantCulture) : "0"));
+            ShelteredScenarioDefBuilderCompatibility compatibility = ShelteredScenarioDefBuilder.CheckCompatibility();
+            items.Add(Item.Property("Reflection Compatibility", compatibility != null && compatibility.IsUsable ? "Ready" : "Risk"));
+            if (compatibility != null && !compatibility.IsUsable)
+                items.Add(Item.Text("Reflection compatibility risk: " + compatibility.DescribeFailures()));
+            if (definition != null && definition.WinLossConditions != null && definition.WinLossConditions.WinConditions.Count + definition.WinLossConditions.LossConditions.Count > 0)
+                items.Add(Item.Property("End State", definition.WinLossConditions.WinConditions.Count.ToString(CultureInfo.InvariantCulture) + " win / " + definition.WinLossConditions.LossConditions.Count.ToString(CultureInfo.InvariantCulture) + " loss"));
+            else
+                items.Add(Item.Property("End State", "No victory condition - scenario runs forever"));
+            return items;
+        }
+
+        private static int CountUnsupportedWarnings(ScenarioAuthoringValidationSnapshot validation)
+        {
+            int count = 0;
+            ScenarioValidationIssue[] issues = validation != null ? validation.Issues : null;
+            for (int i = 0; issues != null && i < issues.Length; i++)
             {
-                ScenarioAuthoringInspectorItem item = items[i];
-                int value;
-                if (item != null
-                    && string.Equals(item.Label, label, StringComparison.OrdinalIgnoreCase)
-                    && int.TryParse(item.Value, out value))
-                    return value;
+                string message = issues[i] != null ? issues[i].Message : null;
+                if (message == null)
+                    continue;
+                string text = message.ToLowerInvariant();
+                if (text.IndexOf("not applied at runtime yet") >= 0
+                    || text.IndexOf("unsupported") >= 0
+                    || text.IndexOf("pre-alpha") >= 0)
+                    count++;
             }
 
-            return 0;
+            return count;
         }
 
         private static ScenarioPublishExportResult GetLastExportResult()
@@ -322,12 +364,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public ScenarioAuthoringInspectorSection[] Build(ScenarioAuthoringWindowContentContext context)
         {
+            ScenarioAuthoringState authoringState = context != null ? context.State : null;
+            ScenarioEditorSession editorSession = context != null ? context.EditorSession : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
+            ScenarioAuthoringValidationSnapshot validation = ScenarioPublishAuthoringContentBuilder.EvaluateValidation(authoringState, definition);
+            List<ScenarioAuthoringInspectorItem> controlItems = BuildPlaytestControlItems(editorSession, validation);
+            List<ScenarioAuthoringInspectorItem> preflightItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
+            List<ScenarioAuthoringInspectorItem> resultItems = BuildPlaytestResultItems(editorSession);
             List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
             List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder);
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
             return new[]
             {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_controls",
+                    Title = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "TESTING - Stop & return" : "Playtest Control",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                    Items = controlItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_preflight",
+                    Title = "Pre-flight Validation",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = preflightItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_results",
+                    Title = "Results / Summary",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = resultItems.ToArray()
+                },
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "runtime_journal",
@@ -355,6 +427,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
+        private static List<ScenarioAuthoringInspectorItem> BuildPlaytestControlItems(
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
+            bool canStart = validation != null && validation.ValidationAvailable && validation.ErrorCount == 0;
+            items.Add(Item.Property("State", editorSession != null ? editorSession.PlaytestState.ToString() : "Unavailable"));
+            items.Add(Item.Property("Pre-flight", canStart ? "Ready" : isPlaytesting ? "Already running" : "Blocked"));
+            items.Add(Item.Property("Errors", validation != null ? validation.ErrorCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Property("Warnings", validation != null ? validation.WarningCount.ToString(CultureInfo.InvariantCulture) : "n/a"));
+            items.Add(Item.Text(isPlaytesting
+                ? "The editor is in live test mode. Use Stop & return here or the slim End Test control in the status bar to restore frozen authoring."
+                : "Start Playtest applies the current draft to the live shelter. Blocking validation errors stop the transition."));
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ScenarioAuthoringActionIds.ActionPlaytest,
+                isPlaytesting ? "Stop & Return" : "Start Playtest",
+                isPlaytesting ? "Stop playtest and return to frozen authoring." : "Apply the validated draft into the live world.",
+                isPlaytesting || canStart,
+                isPlaytesting || canStart,
+                isPlaytesting ? "ST" : "GO",
+                isPlaytesting ? "Authoring pause is restored immediately." : canStart ? "Pre-flight validation has no blocking errors." : "Fix blocking validation errors first.");
+            if (!action.Enabled)
+                action.DisabledReason = "Blocking validation errors must be fixed before playtest.";
+            items.Add(Item.ActionItem(action));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if there are no blocking errors.", true, false, "SV")));
+            return items;
+        }
+
         private static List<ScenarioAuthoringInspectorItem> BuildRuntimeJournalItems()
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -362,6 +463,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             items.Add(Item.Property("Scenario", Item.Safe(state != null ? state.ScenarioId : null)));
             items.Add(Item.Property("Binding", Item.Safe(state != null ? state.RuntimeBindingId : null)));
+            items.Add(Item.Property("Outcome", Item.Safe(state != null ? state.ScenarioOutcome : null)));
+            if (state != null && !string.IsNullOrEmpty(state.ScenarioOutcomeConditionId))
+                items.Add(Item.Property("Outcome Condition", state.ScenarioOutcomeConditionId));
             items.Add(Item.Property("Last Processed", state != null ? "day " + state.LastProcessedDay + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2") : "None"));
             int count = state != null && state.ExecutedActions != null ? state.ExecutedActions.Count : 0;
             items.Add(Item.Property("Executed Actions", count.ToString()));
@@ -372,6 +476,68 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     items.Add(Item.Property(Item.Safe(record.ActionKey), record.Status + " / day " + record.FiredDay + " " + record.FiredHour.ToString("D2") + ":" + record.FiredMinute.ToString("D2")));
             }
             return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildPlaytestResultItems(ScenarioEditorSession editorSession)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioRuntimeState state = ScenarioPublishAuthoringContentBuilder.GetRuntimeState();
+            if (editorSession == null)
+            {
+                items.Add(Item.Text("No active editor session."));
+                return items;
+            }
+
+            if (state == null || string.IsNullOrEmpty(state.ScenarioId))
+            {
+                items.Add(Item.Text("No runtime journal has been recorded for this draft yet."));
+                return items;
+            }
+
+            items.Add(Item.Property("Latest Test State", editorSession.PlaytestState.ToString()));
+            items.Add(Item.Property("Day Reached", "day " + state.LastProcessedDay.ToString(CultureInfo.InvariantCulture) + " " + state.LastProcessedHour.ToString("D2") + ":" + state.LastProcessedMinute.ToString("D2")));
+            items.Add(Item.Property("Outcome", string.IsNullOrEmpty(state.ScenarioOutcome) ? "Unresolved" : state.ScenarioOutcome));
+            items.Add(Item.Property("World Changes", Count(state.ExecutedActions).ToString(CultureInfo.InvariantCulture) + " actions / " + Count(state.FiredTriggers).ToString(CultureInfo.InvariantCulture) + " triggers / " + Count(state.Flags).ToString(CultureInfo.InvariantCulture) + " flags / " + Count(state.UnlockedBunker).ToString(CultureInfo.InvariantCulture) + " unlocks / " + Count(state.ObjectStates).ToString(CultureInfo.InvariantCulture) + " object states"));
+            int failed = CountRecords(state, ScenarioExecutedActionStatus.Failed);
+            int blocked = CountRecords(state, ScenarioExecutedActionStatus.Blocked);
+            items.Add(Item.Property("Runtime Errors", failed.ToString(CultureInfo.InvariantCulture) + " failed / " + blocked.ToString(CultureInfo.InvariantCulture) + " blocked"));
+            AddRuntimeRecordItems(items, state, ScenarioExecutedActionStatus.Failed, "Failed");
+            AddRuntimeRecordItems(items, state, ScenarioExecutedActionStatus.Blocked, "Blocked");
+            return items;
+        }
+
+        private static void AddRuntimeRecordItems(
+            List<ScenarioAuthoringInspectorItem> items,
+            ScenarioRuntimeState state,
+            ScenarioExecutedActionStatus status,
+            string label)
+        {
+            int added = 0;
+            for (int i = 0; state != null && state.ExecutedActions != null && i < state.ExecutedActions.Count && added < 4; i++)
+            {
+                ScenarioExecutedActionRecord record = state.ExecutedActions[i];
+                if (record == null || record.Status != status)
+                    continue;
+                items.Add(Item.Property(label + " " + Item.Safe(record.ActionKey), string.IsNullOrEmpty(record.Message) ? record.ActionType : record.Message));
+                added++;
+            }
+        }
+
+        private static int Count<T>(IList<T> values)
+        {
+            return values != null ? values.Count : 0;
+        }
+
+        private static int CountRecords(ScenarioRuntimeState state, ScenarioExecutedActionStatus status)
+        {
+            int count = 0;
+            for (int i = 0; state != null && state.ExecutedActions != null && i < state.ExecutedActions.Count; i++)
+            {
+                if (state.ExecutedActions[i] != null && state.ExecutedActions[i].Status == status)
+                    count++;
+            }
+
+            return count;
         }
     }
 

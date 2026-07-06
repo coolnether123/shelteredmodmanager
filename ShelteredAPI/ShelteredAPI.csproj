@@ -213,6 +213,7 @@
     <Compile Include="Scenarios\Domain\Conditions\ScenarioConditionKind.cs" />
     <Compile Include="Scenarios\Domain\Conditions\ScenarioConditionRef.cs" />
     <Compile Include="Scenarios\Domain\Conditions\ScenarioGateDefinition.cs" />
+    <Compile Include="Scenarios\Domain\Conditions\ScenarioWinLossConditionSupport.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectDefinition.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectKind.cs" />
     <Compile Include="Scenarios\Domain\Map\ScenarioMapDefinitions.cs" />
@@ -296,6 +297,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioStoryFocusedEditorCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioPublishCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioWinLossCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
@@ -425,6 +427,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringValidationSnapshot.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPlacementFeelVisualService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBunkerDraftService.cs" />
