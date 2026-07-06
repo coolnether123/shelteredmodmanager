@@ -89,7 +89,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 tabX = tabRect.xMax + 2f;
             }
 
+            if (_snapshot != null && IsWorldStage(_snapshot.State))
+            {
+                Rect worldControlsRect = compact
+                    ? new Rect(primaryRowLeft, rect.y + 70f, primaryTabsRight - primaryRowLeft, 20f)
+                    : new Rect(primaryRowLeft, rect.y + 56f, Math.Max(0f, saveX - primaryRowLeft - 12f), 24f);
+                DrawWorldSurfaceControls(worldControlsRect, shell, compact);
+            }
+
             return windowMenuButtonRect;
+        }
+
+        private void DrawWorldSurfaceControls(Rect rect, ScenarioAuthoringShellViewModel shell, bool compact)
+        {
+            if (rect.width <= 80f || rect.height <= 0f)
+                return;
+
+            float chipWidth = compact ? 54f : 74f;
+            GUI.Label(new Rect(rect.x, rect.y + 2f, chipWidth, rect.height - 2f), compact ? "World" : "World", _mutedTextStyle);
+            float x = rect.x + chipWidth + 4f;
+            for (int i = 0; shell != null && shell.WorldSubstageActions != null && i < shell.WorldSubstageActions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = shell.WorldSubstageActions[i];
+                ScenarioAuthoringInspectorAction displayAction = compact ? CloneWithLabel(action, CleanChildStageLabel(CompactStageLabel(action.Label))) : CloneWithLabel(action, CleanChildStageLabel(action.Label));
+                float width = ResolveChildStageTabWidth(displayAction, compact);
+                if (x + width > rect.xMax)
+                    break;
+
+                DrawButton(new Rect(x, rect.y, width, rect.height), displayAction, true);
+                x += width + 3f;
+            }
+        }
+
+        private static bool IsWorldStage(ScenarioAuthoringState state)
+        {
+            return state != null
+                && (state.ActiveStage == ScenarioStageKind.Bunker
+                    || state.ActiveStage == ScenarioStageKind.BunkerBackground
+                    || state.ActiveStage == ScenarioStageKind.BunkerSurface
+                    || state.ActiveStage == ScenarioStageKind.BunkerInside);
         }
 
         private void DrawTopBarToolbarActions(Rect rect, ScenarioAuthoringShellViewModel shell, bool compact)

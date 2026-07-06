@@ -228,6 +228,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     _layoutService.FocusSelection(state);
                     message = "Focused the shell on the current selection.";
                     return true;
+                case ScenarioAuthoringActionIds.ActionShellToggleWindowMenu:
+                    state.WindowMenuOpen = !state.WindowMenuOpen;
+                    message = state.WindowMenuOpen ? "Windows menu opened." : "Windows menu closed.";
+                    return true;
                 case ScenarioAuthoringActionIds.ActionShellOpenSettings:
                     if (!_layoutService.SetSettingsWindowOpen(state, true))
                         return false;

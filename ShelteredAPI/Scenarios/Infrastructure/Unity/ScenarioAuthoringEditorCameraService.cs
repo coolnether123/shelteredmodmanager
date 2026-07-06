@@ -25,6 +25,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private Vector2 _keyboardPanVelocity = Vector2.zero;
         private float _targetOrthographicSize = -1f;
         private int _suppressSelectionFrame = -1;
+        private bool _assetFrameActive;
+        private Vector3 _assetFrameTarget;
 
         public ScenarioAuthoringEditorCameraService(
             ScenarioAuthoringInputCaptureService inputCapture,
@@ -55,9 +57,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             Vector3 translation = ResolveKeyboardPan(camera);
             translation += ResolveMouseDragPan(camera);
             if (translation.sqrMagnitude > 0.000001f)
+            {
+                _assetFrameActive = false;
                 camera.transform.position = ClampCameraPosition(camera, basicCamera, PreserveCameraZ(camera, camera.transform.position + translation));
+            }
 
             ApplyWheelZoom(camera, basicCamera);
+            ApplyAssetFrame(camera, basicCamera);
             ApplyEasedZoom(camera, basicCamera);
             camera.transform.position = ClampCameraPosition(camera, basicCamera, camera.transform.position);
         }
@@ -65,6 +71,25 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         public bool ShouldSuppressSelectionClickThisFrame()
         {
             return _leftDragging || Time.frameCount <= _suppressSelectionFrame;
+        }
+
+        public bool FrameTarget(ScenarioAuthoringTarget target)
+        {
+            Camera camera = Camera.main;
+            if (camera == null || !camera.orthographic || target == null)
+                return false;
+
+            Bounds bounds;
+            if (!TryResolveTargetBounds(target, out bounds))
+                return false;
+
+            float aspect = camera.aspect > 0.001f ? camera.aspect : ((float)Screen.width / Mathf.Max(1f, Screen.height));
+            float fitHeight = Mathf.Max(bounds.size.y, bounds.size.x / Mathf.Max(0.25f, aspect));
+            _targetOrthographicSize = Mathf.Clamp(Mathf.Max(MinZoom, fitHeight * 0.9f), MinZoom, 8f);
+            _assetFrameTarget = new Vector3(bounds.center.x, bounds.center.y, camera.transform.position.z);
+            _assetFrameActive = true;
+            ResetDragState();
+            return true;
         }
 
         private bool CanRunCameraUpdate()
@@ -198,6 +223,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             ScenarioAuthoringState state = ScenarioAuthoringBackendService.Instance.CurrentState;
             float scrollSpeed = state != null && state.Settings != null ? state.Settings.GetFloat("input.scroll_speed", 1f) : 1f;
             _targetOrthographicSize = ClampZoom(camera, basicCamera, _targetOrthographicSize - (wheel * ZoomStep * scrollSpeed));
+            _assetFrameActive = false;
+        }
+
+        private void ApplyAssetFrame(Camera camera, BasicCamera basicCamera)
+        {
+            if (!_assetFrameActive)
+                return;
+
+            float deltaTime = GetRealDeltaTime();
+            Vector3 target = ClampCameraPosition(camera, basicCamera, PreserveCameraZ(camera, _assetFrameTarget));
+            camera.transform.position = Vector3.Lerp(camera.transform.position, target, 1f - Mathf.Exp(-ZoomEaseSpeed * deltaTime));
+            if ((camera.transform.position - target).sqrMagnitude < 0.0004f)
+                _assetFrameActive = false;
         }
 
         private void ApplyEasedZoom(Camera camera, BasicCamera basicCamera)
@@ -268,6 +306,53 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (camera != null)
                 position.z = camera.transform.position.z;
             return position;
+        }
+
+        private static bool TryResolveTargetBounds(ScenarioAuthoringTarget target, out Bounds bounds)
+        {
+            bounds = new Bounds(target != null ? target.WorldPosition : Vector3.zero, Vector3.one);
+            GameObject gameObject = ResolveGameObject(target);
+            if (gameObject == null)
+                return target != null;
+
+            Renderer[] renderers = gameObject.GetComponentsInChildren<Renderer>(true);
+            bool initialized = false;
+            for (int i = 0; renderers != null && i < renderers.Length; i++)
+            {
+                Renderer renderer = renderers[i];
+                if (renderer == null)
+                    continue;
+
+                if (!initialized)
+                {
+                    bounds = renderer.bounds;
+                    initialized = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            if (!initialized)
+                bounds = new Bounds(gameObject.transform.position, Vector3.one);
+
+            if (bounds.size.sqrMagnitude < 0.0001f)
+                bounds.size = Vector3.one;
+            return true;
+        }
+
+        private static GameObject ResolveGameObject(ScenarioAuthoringTarget target)
+        {
+            if (target == null || target.RuntimeObject == null)
+                return null;
+
+            GameObject gameObject = target.RuntimeObject as GameObject;
+            if (gameObject != null)
+                return gameObject;
+
+            Component component = target.RuntimeObject as Component;
+            return component != null ? component.gameObject : null;
         }
 
         private static float GetRealDeltaTime()

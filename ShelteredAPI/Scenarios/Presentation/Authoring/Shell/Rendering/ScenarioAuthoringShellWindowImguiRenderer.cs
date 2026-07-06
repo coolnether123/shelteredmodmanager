@@ -134,6 +134,47 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return bodyRect;
         }
 
+        private Rect DrawWorkshopSurfaceCore(Rect contentRect, ScenarioAuthoringShellWindowViewModel[] windows, string activeWorkspaceId)
+        {
+            ScenarioAuthoringShellWindowViewModel window = FindWindow(windows, activeWorkspaceId);
+            if (window == null)
+                return RuntimeCompat.ZeroRect();
+
+            Rect backdropRect = new Rect(
+                0f,
+                0f,
+                contentRect.xMax + ScenarioAuthoringShellLayout.Margin,
+                contentRect.yMax);
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.17f, 0.13f, 0.09f, 1f);
+            GUI.DrawTexture(backdropRect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
+
+            Rect pageRect = ScenarioAuthoringShellLayout.BuildWorkshopPageRect(contentRect);
+            GUI.Label(new Rect(pageRect.x, pageRect.y, pageRect.width, 34f), window.Title ?? string.Empty, _smallTitleStyle);
+            if (!string.IsNullOrEmpty(window.Subtitle))
+                GUI.Label(new Rect(pageRect.x, pageRect.y + 30f, pageRect.width, 20f), window.Subtitle, _mutedTextStyle);
+
+            Rect bodyRect = new Rect(pageRect.x, pageRect.y + 58f, pageRect.width, Math.Max(120f, pageRect.height - 58f));
+            GUILayout.BeginArea(bodyRect);
+            float previousContentWidth = _activeContentWidth;
+            _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
+            Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+            {
+                DrawSection(window.Sections[i]);
+                if (i < window.Sections.Length - 1)
+                    GUILayout.Space(8f);
+            }
+            GUILayout.Space(18f);
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+            _activeContentWidth = previousContentWidth;
+            SetWindowScrollPosition(window.Id, scrollPosition);
+            return bodyRect;
+        }
+
         private void DrawFloatingResizeGrip(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
             if (window == null || window.Dock != ScenarioAuthoringShellDock.Floating)
@@ -145,6 +186,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawInspectorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            if (IsEmptyInspector(window))
+            {
+                DrawEmptyInspectorChip(rect);
+                return RuntimeCompat.ZeroRect();
+            }
+
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
@@ -162,13 +209,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             Rect bodyRect = regions.Body;
-            if (IsEmptyInspector(window))
-            {
-                DrawEmptyInspectorState(bodyRect);
-                DrawFloatingResizeGrip(rect, window);
-                return bodyRect;
-            }
-
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
@@ -201,19 +241,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && string.Equals(window.Sections[0].Id, "empty", StringComparison.OrdinalIgnoreCase);
         }
 
-        private void DrawEmptyInspectorState(Rect bodyRect)
+        private void DrawEmptyInspectorChip(Rect rect)
         {
-            Rect cardRect = new Rect(bodyRect.x + 12f, bodyRect.y + 12f, bodyRect.width - 24f, 112f);
-            GUI.Box(cardRect, GUIContent.none, _uiContext.Styles.Section);
-            GUI.Label(new Rect(cardRect.x + 14f, cardRect.y + 12f, cardRect.width - 28f, 24f), "Nothing selected", _sectionTitleStyle);
-            GUI.Label(
-                new Rect(cardRect.x + 14f, cardRect.y + 42f, cardRect.width - 28f, 48f),
-                "Pick an object, room, or placed asset in the shelter to inspect its scenario rules.",
-                _mutedTextStyle);
+            DrawChromePanel(rect, _rootPanelStyle);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 7f, rect.width - 24f, 20f), "Nothing selected", _mutedTextStyle);
         }
 
         private Rect DrawBottomTrayWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
+            if (IsPlacementActive())
+                return DrawCollapsedPlacementTray(rect, window);
+
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
@@ -341,6 +379,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             DrawFloatingResizeGrip(rect, window);
             return bodyRect;
+        }
+
+        private Rect DrawCollapsedPlacementTray(Rect rect, ScenarioAuthoringShellWindowViewModel window)
+        {
+            DrawChromePanel(rect, _rootPanelStyle);
+            string label = ResolveActivePlacementLabel(window);
+            string validity = ResolvePlacementValidityLabel(window);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, Math.Max(80f, rect.width * 0.45f), 22f), label, _textStyle);
+            GUI.Label(new Rect(rect.x + (rect.width * 0.48f), rect.y + 10f, 120f, 22f), validity, _mutedTextStyle);
+            GUI.Label(new Rect(rect.xMax - 190f, rect.y + 10f, 178f, 22f), "Esc or right click cancels", _mutedTextStyle);
+            return RuntimeCompat.ZeroRect();
+        }
+
+        private static string ResolveActivePlacementLabel(ScenarioAuthoringShellWindowViewModel window)
+        {
+            for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                for (int j = 0; section != null && section.Items != null && j < section.Items.Length; j++)
+                {
+                    ScenarioAuthoringInspectorItem item = section.Items[j];
+                    if (item != null && item.Action != null && item.Action.Emphasized && !string.IsNullOrEmpty(item.Action.Label))
+                        return item.Action.Label;
+                }
+            }
+
+            return "Placing asset";
+        }
+
+        private static string ResolvePlacementValidityLabel(ScenarioAuthoringShellWindowViewModel window)
+        {
+            for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                for (int j = 0; section != null && section.Items != null && j < section.Items.Length; j++)
+                {
+                    ScenarioAuthoringInspectorItem item = section.Items[j];
+                    if (item != null
+                        && string.Equals(item.Label, "Placement", StringComparison.OrdinalIgnoreCase)
+                        && !string.IsNullOrEmpty(item.Value))
+                    {
+                        return item.Value;
+                    }
+                }
+            }
+
+            return "Previewing";
         }
 
         private static float ResolveRowBoundedScrollHeight(float height)

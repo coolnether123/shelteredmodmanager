@@ -305,6 +305,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             ScenarioStageKind activeStage = ResolveActiveStage(state);
             bool showBuild = ScenarioAuthoringWorkflowRules.ShouldShowToolWorkspace(state);
+            bool showWorldInspector = IsWorldSurfaceStage(activeStage);
 
             for (int i = 0; i < state.WindowStates.Count; i++)
             {
@@ -324,10 +325,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
                     window.Visible = showBuild && !window.Collapsed;
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
+                    window.Visible = showWorldInspector && !window.Collapsed;
 
                 if (window.Visible)
                     window.Collapsed = false;
             }
+        }
+
+        private static bool IsWorldSurfaceStage(ScenarioStageKind stage)
+        {
+            return stage == ScenarioStageKind.Bunker
+                || stage == ScenarioStageKind.BunkerBackground
+                || stage == ScenarioStageKind.BunkerSurface
+                || stage == ScenarioStageKind.BunkerInside;
         }
 
         public bool SetSettingsWindowOpen(ScenarioAuthoringState state, bool open)

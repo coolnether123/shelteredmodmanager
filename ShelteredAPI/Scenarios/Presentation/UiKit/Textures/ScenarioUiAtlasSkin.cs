@@ -221,7 +221,16 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
             if (target.width <= 0f || target.height <= 0f || width <= 0f || height <= 0f)
                 return;
 
-            Rect uv = ToUv(sprite.X + localX, sprite.Y + localY, width, height, sprite.Texture.width, sprite.Texture.height);
+            const float atlasInset = 0.5f;
+            float insetX = width > atlasInset * 2f ? atlasInset : 0f;
+            float insetY = height > atlasInset * 2f ? atlasInset : 0f;
+            Rect uv = ToUv(
+                sprite.X + localX + insetX,
+                sprite.Y + localY + insetY,
+                Math.Max(0.001f, width - (insetX * 2f)),
+                Math.Max(0.001f, height - (insetY * 2f)),
+                sprite.Texture.width,
+                sprite.Texture.height);
             GUI.DrawTextureWithTexCoords(target, sprite.Texture, uv, true);
         }
 

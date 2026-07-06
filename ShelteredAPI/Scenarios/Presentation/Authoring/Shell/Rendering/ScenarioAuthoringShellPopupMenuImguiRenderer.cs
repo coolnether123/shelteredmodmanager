@@ -142,6 +142,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (GUI.Button(visualRect, content, drawStyle) && action.Enabled)
                 {
                     _windowMenuOpen = !_windowMenuOpen;
+                    if (_snapshot != null && _snapshot.State != null)
+                        _snapshot.State.WindowMenuOpen = _windowMenuOpen;
                     if (Event.current != null)
                         Event.current.Use();
                 }

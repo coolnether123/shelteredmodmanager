@@ -127,6 +127,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Tabs = _stageNavigationBuilder.BuildTabs(state),
                 ToolbarActions = _stageNavigationBuilder.BuildToolbarActions(state),
                 LayoutActions = _stageNavigationBuilder.BuildLayoutActions(state),
+                WorldSubstageActions = _stageNavigationBuilder.BuildWorldSubstageActions(state),
                 ToolButtons = _stageNavigationBuilder.BuildToolButtons(state),
                 WindowMenuActions = _stageNavigationBuilder.BuildWindowMenuActions(state, _windowRegistry),
                 Windows = windows.ToArray(),

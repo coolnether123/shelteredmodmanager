@@ -19,7 +19,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float InspectorWidth = 300f;
         public const float InspectorMinWidth = 240f;
         public const float InspectorMaxWidth = 480f;
-        public const float BottomTrayHeight = 272f;
+        public const float BottomTrayHeight = 168f;
+        public const float BottomTrayCollapsedHeight = 44f;
         public const float CommandDockHeight = 48f;
 
         // Reserve area for the vanilla HUD (clock, magnifier, resource readouts) in the
@@ -99,14 +100,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
         {
-            float trayWidth = Math.Min(1040f, Math.Max(620f, viewportRight - viewportLeft));
+            float trayWidth = Math.Min(920f, Math.Max(560f, viewportRight - viewportLeft));
             float commandDockTop = contentRect.yMax - CommandDockHeight - CommandDockBottomOffset;
             float trayBottom = Math.Max(contentRect.y + 180f, commandDockTop - Gutter);
             float upperClearanceY = contentRect.y + 216f;
-            float availableHeight = Math.Max(220f, trayBottom - upperClearanceY);
-            float trayHeight = Mathf.Clamp(Math.Max(BottomTrayHeight, 320f), 220f, availableHeight);
+            float availableHeight = Math.Max(150f, trayBottom - upperClearanceY);
+            float trayHeight = Mathf.Clamp(BottomTrayHeight, 150f, Math.Min(190f, availableHeight));
             float trayY = trayBottom - trayHeight;
             return new Rect(viewportLeft, trayY, trayWidth, trayHeight);
+        }
+
+        public static Rect BuildCollapsedBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
+        {
+            float trayWidth = Math.Min(760f, Math.Max(420f, viewportRight - viewportLeft));
+            return new Rect(
+                viewportLeft + Math.Max(0f, ((viewportRight - viewportLeft) - trayWidth) * 0.5f),
+                contentRect.yMax - BottomTrayCollapsedHeight - CommandDockBottomOffset,
+                trayWidth,
+                BottomTrayCollapsedHeight);
+        }
+
+        public static Rect BuildEmptyInspectorChipRect(Rect contentRect, float inspectorWidth)
+        {
+            float width = Mathf.Clamp(inspectorWidth > 0f ? inspectorWidth : InspectorWidth, InspectorMinWidth, InspectorMaxWidth);
+            float chipWidth = Math.Min(width, 220f);
+            return new Rect(contentRect.xMax - chipWidth, HudReserveHeight + Gutter + InspectorHudClearance, chipWidth, 34f);
+        }
+
+        public static Rect BuildWorkshopPageRect(Rect contentRect)
+        {
+            float pageWidth = Mathf.Clamp(contentRect.width - (Margin * 2f), 720f, 1180f);
+            float x = contentRect.x + ((contentRect.width - pageWidth) * 0.5f);
+            return new Rect(x, contentRect.y + 18f, pageWidth, Math.Max(240f, contentRect.height - 36f));
         }
 
         public static Rect BuildToolRailRect(Rect contentRect, int buttonCount)

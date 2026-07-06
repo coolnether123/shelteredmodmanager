@@ -201,6 +201,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
             _editableFieldFocused = false;
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
+            if (_snapshot.State != null)
+                _windowMenuOpen = _snapshot.State.WindowMenuOpen;
             _rootAlpha = _animations.GetBinaryProgress(ShellRootAnimationKey, _visible, 0.18f, ScenarioUiEasing.EaseOut, true);
             if (!_visible && _rootAlpha <= 0.001f)
             {
@@ -232,20 +234,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
             RegisterWindowAnimationStates(shell.Windows, windowRects);
             string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
+            bool workshopSurface = IsWorkshopSurface(_snapshot.State, activeWorkspaceId);
 
-            Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State);
-            if (toolRailRect.width > 0f && toolRailRect.height > 0f)
-                inputCapture.RegisterInteractiveRect(toolRailRect);
-
-            if (activeWorkspaceId == null)
+            if (workshopSurface)
             {
-                Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State);
-                if (commandDockRect.width > 0f && commandDockRect.height > 0f)
-                    inputCapture.RegisterInteractiveRect(commandDockRect);
+                Rect pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
+                windowMenuButtonRect = DrawTopBarCore(topRect, shell);
+                collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
+                DrawStatusBarCore(statusRect, shell);
+                if (pageRect.width > 0f && pageRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(pageRect);
+                if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(collapsedStripRect);
             }
+            else
+            {
+                Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State);
+                if (toolRailRect.width > 0f && toolRailRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(toolRailRect);
 
-            if (activeWorkspaceId == null)
-                DrawWindowSet(shell.Windows, windowRects, false, contentRect, inputCapture);
+                if (activeWorkspaceId == null)
+                {
+                    Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State);
+                    if (commandDockRect.width > 0f && commandDockRect.height > 0f)
+                        inputCapture.RegisterInteractiveRect(commandDockRect);
+                }
+
+                if (activeWorkspaceId == null)
+                    DrawWindowSet(shell.Windows, windowRects, false, contentRect, inputCapture);
+            }
 
             DrawWindowSet(shell.Windows, windowRects, true, contentRect, inputCapture);
 
@@ -295,6 +312,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !windowMenuButtonRect.Contains(Event.current.mousePosition))
             {
                 _windowMenuOpen = false;
+                if (_snapshot.State != null)
+                    _snapshot.State.WindowMenuOpen = false;
                 Event.current.Use();
             }
 
@@ -402,16 +421,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (!workspaceStageActive)
             {
+                Rect inspectorRect = IsEmptyInspector(inspectorWindow)
+                    ? ScenarioAuthoringShellLayout.BuildEmptyInspectorChipRect(contentRect, inspectorWidth)
+                    : ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect, inspectorWidth);
                 AppendStackRect(
                     rects,
                     windows,
                     ScenarioAuthoringWindowIds.Inspector,
-                    ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect, inspectorWidth));
+                    inspectorRect);
             }
 
             if (showBottomTray)
             {
-                Rect buildToolsRect = ScenarioAuthoringShellLayout.BuildBottomTrayRect(contentRect, viewportLeft, viewportRight);
+                Rect buildToolsRect = IsPlacementActive()
+                    ? ScenarioAuthoringShellLayout.BuildCollapsedBottomTrayRect(contentRect, viewportLeft, viewportRight)
+                    : ScenarioAuthoringShellLayout.BuildBottomTrayRect(contentRect, viewportLeft, viewportRight);
                 AppendRendererRects(rects, windows, ScenarioAuthoringShellRendererKind.BottomTray, buildToolsRect);
             }
 
@@ -914,6 +938,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return false;
+        }
+
+        private static bool IsPlacementActive()
+        {
+            try
+            {
+                return ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsWorkshopSurface(ScenarioAuthoringState state, string activeWorkspaceId)
+        {
+            if (string.IsNullOrEmpty(activeWorkspaceId))
+                return false;
+
+            return state == null
+                || (state.ActiveStage != ScenarioStageKind.Bunker
+                    && state.ActiveStage != ScenarioStageKind.BunkerBackground
+                    && state.ActiveStage != ScenarioStageKind.BunkerSurface
+                    && state.ActiveStage != ScenarioStageKind.BunkerInside);
         }
 
         private static string GetActiveWorkspaceId(ScenarioAuthoringShellWindowViewModel[] windows)

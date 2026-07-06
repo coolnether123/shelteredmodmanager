@@ -476,6 +476,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string SearchText { get; set; }
         public bool SettingsWindowOpen { get; set; }
         public bool HelpWindowOpen { get; set; }
+        public bool WindowMenuOpen { get; set; }
         public ScenarioSpriteSwapPickerState SpriteSwapPicker { get; set; }
         public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
         public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
@@ -514,6 +515,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 SearchText = SearchText,
                 SettingsWindowOpen = SettingsWindowOpen,
                 HelpWindowOpen = HelpWindowOpen,
+                WindowMenuOpen = WindowMenuOpen,
                 SpriteSwapPicker = SpriteSwapPicker != null ? SpriteSwapPicker.Copy() : null,
                 Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot()
             };
@@ -884,6 +886,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringInspectorAction[] Tabs { get; set; }
         public ScenarioAuthoringInspectorAction[] ToolbarActions { get; set; }
         public ScenarioAuthoringInspectorAction[] LayoutActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] WorldSubstageActions { get; set; }
         public ScenarioAuthoringToolButtonViewModel[] ToolButtons { get; set; }
         public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
         public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
