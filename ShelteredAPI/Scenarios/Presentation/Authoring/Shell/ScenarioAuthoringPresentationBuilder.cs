@@ -1411,6 +1411,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            AddWorldSubstageSection(sections, state);
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
             {
                 sections.Add(_workflowAuthoringContentBuilder.BuildToolSection(
@@ -1480,6 +1481,61 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 sections.Add(BuildBunkerRuntimeSection(definition, state));
             }
             return sections.ToArray();
+        }
+
+        private void AddWorldSubstageSection(List<ScenarioAuthoringInspectorSection> sections, ScenarioAuthoringState state)
+        {
+            if (!IsWorldSubstageActive(state))
+                return;
+
+            ScenarioAuthoringInspectorAction[] actions = _stageNavigationBuilder.BuildWorldSubstageActions(state);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; actions != null && i < actions.Length; i++)
+                items.Add(ActionItem(CleanWorldSubstageAction(actions[i])));
+
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "world_substages",
+                Title = string.Empty,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.TabStrip,
+                Items = items.ToArray()
+            });
+        }
+
+        private static ScenarioAuthoringInspectorAction CleanWorldSubstageAction(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return null;
+
+            string label = action.Label ?? string.Empty;
+            if (label.StartsWith("- ", StringComparison.Ordinal))
+                label = label.Substring(2);
+
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = action.Id,
+                Label = label,
+                Hint = action.Hint,
+                Detail = action.Detail,
+                Badge = action.Badge,
+                IconText = action.IconText,
+                PreviewSprite = action.PreviewSprite,
+                Enabled = action.Enabled,
+                Emphasized = action.Emphasized,
+                DisabledReason = action.DisabledReason
+            };
+        }
+
+        private static bool IsWorldSubstageActive(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return false;
+
+            return state.ActiveStage == ScenarioStageKind.Bunker
+                || state.ActiveStage == ScenarioStageKind.BunkerBackground
+                || state.ActiveStage == ScenarioStageKind.BunkerSurface
+                || state.ActiveStage == ScenarioStageKind.BunkerInside;
         }
 
         private ScenarioAuthoringInspectorSection[] BuildPixelEditorWindowSections(ScenarioAuthoringState state)

@@ -26,8 +26,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool compact = IsCompactTopBar(rect, shell);
             float primaryRowY = compact ? 42f : 10f;
             float primaryRowHeight = compact ? 24f : 36f;
-            float secondaryRowY = compact ? 68f : 54f;
-            float secondaryRowHeight = compact ? 24f : 30f;
+            float utilityRowY = compact ? 10f : 54f;
+            float utilityRowHeight = compact ? 28f : 30f;
 
             Rect brandRect = compact
                 ? new Rect(rect.x + 14f, rect.y + 8f, 206f, 30f)
@@ -40,20 +40,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float primaryRowLeft = compact ? rect.x + 12f : brandRect.xMax + 20f;
             float actionRight = rect.xMax - 10f;
-            float toolbarWidth = MeasureTopBarActionsWidth(shell.ToolbarActions, compact);
-            float toolbarX = Math.Max(primaryRowLeft, actionRight - toolbarWidth);
             Rect windowMenuButtonRect = DrawTopBarWindowAction(
                 compact
                     ? new Rect(rect.xMax - 122f, rect.y + 10f, 112f, 28f)
-                    : new Rect(primaryRowLeft, rect.y + secondaryRowY, actionRight - primaryRowLeft, secondaryRowHeight),
+                    : new Rect(primaryRowLeft, rect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),
                 shell);
 
-            float primaryTabsRight = compact ? rect.xMax - 12f : Math.Max(primaryRowLeft, toolbarX - 10f);
+            float saveWidth = MeasureTopBarActionsWidth(shell.ToolbarActions, compact);
+            float saveRight = windowMenuButtonRect.width > 0f ? windowMenuButtonRect.x - (compact ? 4f : 8f) : actionRight;
+            float saveX = Math.Max(primaryRowLeft, saveRight - saveWidth);
+            Rect saveRect = new Rect(saveX, rect.y + utilityRowY, Math.Max(0f, saveRight - saveX), utilityRowHeight);
+            DrawTopBarToolbarActions(saveRect, shell, compact);
+
+            float primaryTabsRight = compact ? rect.xMax - 12f : Math.Max(primaryRowLeft, saveX - 12f);
             float tabX = primaryRowLeft;
+            float finishStart = 0f;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
                 ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
-                if (IsChildStageTab(tab))
+                if (IsChildStageTab(tab) || IsFinishStageTab(tab))
                     continue;
 
                 ScenarioAuthoringInspectorAction displayTab = compact ? CloneWithLabel(tab, CompactStageLabel(tab.Label)) : tab;
@@ -65,34 +70,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 tabX = tabRect.xMax + 2f;
             }
 
-            DrawTopBarToolbarActions(
-                compact
-                    ? new Rect(Math.Min(rect.x + 228f, rect.xMax - 220f), rect.y + 10f, Math.Max(0f, windowMenuButtonRect.x - Math.Min(rect.x + 228f, rect.xMax - 220f) - 8f), 28f)
-                    : new Rect(toolbarX, rect.y + primaryRowY + 3f, actionRight - toolbarX, secondaryRowHeight),
-                shell,
-                compact);
-
-            float childTabsRight = compact ? rect.xMax - 12f : (windowMenuButtonRect.width > 0f ? windowMenuButtonRect.x - 10f : actionRight);
-            Rect childTabsRect = new Rect(
-                primaryRowLeft,
-                rect.y + secondaryRowY,
-                Math.Max(80f, childTabsRight - primaryRowLeft),
-                secondaryRowHeight);
-            float childX = childTabsRect.x;
+            finishStart = tabX + (compact ? 4f : 10f);
+            if (!compact && finishStart + 1f < primaryTabsRight)
+                ScenarioUiWidgets.DrawVerticalDivider(new Rect(finishStart - 6f, rect.y + primaryRowY + 5f, 1f, primaryRowHeight - 10f), _uiContext.Styles);
+            tabX = finishStart;
             for (int i = 0; shell.Tabs != null && i < shell.Tabs.Length; i++)
             {
                 ScenarioAuthoringInspectorAction tab = shell.Tabs[i];
-                if (!IsChildStageTab(tab))
+                if (!IsFinishStageTab(tab))
                     continue;
 
-                string childLabel = CleanChildStageLabel(tab.Label);
-                ScenarioAuthoringInspectorAction displayTab = CloneWithLabel(tab, compact ? CompactStageLabel(childLabel) : childLabel);
-                float width = ResolveChildStageTabWidth(displayTab, compact);
-                Rect tabRect = new Rect(childX, childTabsRect.y, width, childTabsRect.height);
-                if (tabRect.xMax > childTabsRect.xMax)
+                ScenarioAuthoringInspectorAction displayTab = compact ? CloneWithLabel(tab, CompactStageLabel(tab.Label)) : tab;
+                float width = ResolvePrimaryStageTabWidth(displayTab, compact);
+                Rect tabRect = new Rect(tabX, rect.y + primaryRowY, width, primaryRowHeight);
+                if (tabRect.xMax > primaryTabsRight)
                     break;
                 DrawButton(tabRect, displayTab, true);
-                childX = tabRect.xMax + 2f;
+                tabX = tabRect.xMax + 2f;
             }
 
             return windowMenuButtonRect;
@@ -176,8 +170,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private float ResolvePrimaryStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
             return compact
-                ? Mathf.Clamp(MeasureButtonWidth(action, true, 14f), 62f, 96f)
+                ? ResolveCompactPrimaryStageTabWidth(action)
                 : Mathf.Clamp(MeasureButtonWidth(action, true, 30f), 96f, 196f);
+        }
+
+        private static float ResolveCompactPrimaryStageTabWidth(ScenarioAuthoringInspectorAction action)
+        {
+            string label = action != null ? action.Label : null;
+            if (string.Equals(label, "World", StringComparison.OrdinalIgnoreCase))
+                return 74f;
+            if (string.Equals(label, "Story", StringComparison.OrdinalIgnoreCase))
+                return 70f;
+            if (string.Equals(label, "Home", StringComparison.OrdinalIgnoreCase))
+                return 64f;
+            if (string.Equals(label, "Cast", StringComparison.OrdinalIgnoreCase))
+                return 60f;
+            if (string.Equals(label, "Time", StringComparison.OrdinalIgnoreCase))
+                return 60f;
+            if (string.Equals(label, "Test", StringComparison.OrdinalIgnoreCase))
+                return 60f;
+            if (string.Equals(label, "Map", StringComparison.OrdinalIgnoreCase))
+                return 54f;
+            if (string.Equals(label, "Pub", StringComparison.OrdinalIgnoreCase))
+                return 54f;
+            if (string.Equals(label, "Sup", StringComparison.OrdinalIgnoreCase))
+                return 56f;
+
+            return 56f;
         }
 
         private float ResolveChildStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
@@ -205,15 +224,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (string.IsNullOrEmpty(label))
                 return string.Empty;
+            if (string.Equals(label, "Home", StringComparison.OrdinalIgnoreCase))
+                return "H";
+            if (string.Equals(label, "World", StringComparison.OrdinalIgnoreCase))
+                return "W";
+            if (string.Equals(label, "Cast", StringComparison.OrdinalIgnoreCase))
+                return "C";
             if (string.Equals(label, "Supplies", StringComparison.OrdinalIgnoreCase))
-                return "Supply";
+                return "Sup";
             if (string.Equals(label, "Timeline", StringComparison.OrdinalIgnoreCase))
-                return "Time";
+                return "Tm";
+            if (string.Equals(label, "Map", StringComparison.OrdinalIgnoreCase))
+                return "M";
             if (string.Equals(label, "Publish", StringComparison.OrdinalIgnoreCase))
-                return "Pub";
+                return "P";
             if (string.Equals(label, "Backdrop", StringComparison.OrdinalIgnoreCase))
                 return "Back";
-            if (string.Equals(label, "Interior", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(label, "Inside", StringComparison.OrdinalIgnoreCase))
                 return "Inside";
 
             return label;
@@ -225,9 +252,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return string.Empty;
             if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSave, StringComparison.Ordinal))
                 return "Save";
-            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionShellOpenTimeline, StringComparison.Ordinal))
-                return "Time";
             return action.Label;
+        }
+
+        private static bool IsFinishStageTab(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id))
+                return false;
+
+            return string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Test, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish, StringComparison.Ordinal);
         }
 
     }

@@ -53,8 +53,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildTopBarRect(float scaledWidth, Rect hudReserveRect)
         {
-            float leftBound = Mathf.Min(PortraitReserveWidth, Math.Max(0f, scaledWidth * 0.30f));
-            float rightBound = Math.Max(leftBound + TopBarMinWidth, hudReserveRect.x - Gutter);
+            bool compact = scaledWidth < 1400f;
+            float leftBound = compact
+                ? Mathf.Min(196f, Math.Max(0f, scaledWidth * 0.22f))
+                : Mathf.Min(PortraitReserveWidth, Math.Max(0f, scaledWidth * 0.30f));
+            float rightLimit = compact ? Math.Min(scaledWidth - Gutter, hudReserveRect.x + 80f) : hudReserveRect.x - Gutter;
+            float rightBound = Math.Max(leftBound + TopBarMinWidth, rightLimit);
             float availableWidth = Math.Max(TopBarMinWidth, rightBound - leftBound);
             float width = Math.Min(TopBarPreferredWidth, availableWidth);
             float x = leftBound + ((availableWidth - width) * 0.5f);

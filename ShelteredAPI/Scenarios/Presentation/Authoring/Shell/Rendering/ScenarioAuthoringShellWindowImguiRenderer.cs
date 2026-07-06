@@ -1284,6 +1284,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             switch (item.Kind)
             {
                 case ScenarioAuthoringInspectorItemKind.Property:
+                    if (item.Editable)
+                    {
+                        DrawEditableProperty(item, compactInspector);
+                        break;
+                    }
+
                     string value = compactInspector ? Shorten(item.Value, 34) : item.Value;
                     float rowHeight = CalculateKeyValueRowHeight(item.Label, value);
                     Rect rowRect = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
@@ -1301,6 +1307,64 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     GUILayout.Label(item.Value ?? string.Empty, _textStyle);
                     break;
             }
+        }
+
+        private void DrawEditableProperty(ScenarioAuthoringInspectorItem item, bool compactInspector)
+        {
+            string label = item != null ? item.Label ?? string.Empty : string.Empty;
+            string value = compactInspector ? Shorten(item != null ? item.Value : null, 34) : (item != null ? item.Value : null);
+            float rowHeight = Math.Max(30f, CalculateKeyValueRowHeight(label, value) + 6f);
+            Rect rowRect = GUILayoutUtility.GetRect(0f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
+            float gap = _uiContext != null ? _uiContext.Styles.Theme.Metrics.PaddingSm : 6f;
+            float labelWidth = Math.Max(42f, (rowRect.width - gap) / 2.4f);
+            Rect labelRect = new Rect(rowRect.x, rowRect.y + 3f, labelWidth, rowRect.height - 6f);
+            Rect fieldRect = new Rect(labelRect.xMax + gap, rowRect.y + 2f, Math.Max(60f, rowRect.width - labelWidth - gap), rowRect.height - 4f);
+            GUI.Label(labelRect, label, _mutedTextStyle);
+
+            string controlName = "editable." + label;
+            string focusedName = GUI.GetNameOfFocusedControl();
+            bool wasFocused = string.Equals(focusedName, controlName, StringComparison.Ordinal);
+            string draft;
+            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || !wasFocused)
+                draft = value ?? string.Empty;
+
+            Event evt = Event.current;
+            bool hovered = evt != null && fieldRect.Contains(evt.mousePosition);
+            if (hovered && evt.type == EventType.MouseDown && evt.button == 0)
+                GUI.FocusControl(controlName);
+
+            GUI.SetNextControlName(controlName);
+            string next = GUI.TextField(fieldRect, draft, _uiContext.Styles.Field);
+            _editableFieldDrafts[controlName] = next;
+
+            bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+            _editableFieldFocused = _editableFieldFocused || focused;
+            if (focused || hovered)
+            {
+                DrawFieldFocusBorder(fieldRect);
+                GUIStyle fieldStyle = _uiContext.Styles.Field;
+                Vector2 textSize = fieldStyle.CalcSize(new GUIContent(next ?? string.Empty));
+                float caretX = Mathf.Min(fieldRect.xMax - fieldStyle.padding.right - 2f, fieldRect.x + fieldStyle.padding.left + textSize.x + 1f);
+                float caretY = fieldRect.y + Math.Max(4f, (fieldRect.height - fieldStyle.lineHeight) / 2f);
+                Color oldColor = GUI.color;
+                GUI.color = GUI.skin.settings.cursorColor;
+                GUI.DrawTexture(new Rect(caretX, caretY, 1f, Math.Max(14f, fieldStyle.lineHeight)), Texture2D.whiteTexture);
+                GUI.color = oldColor;
+            }
+        }
+
+        private void DrawFieldFocusBorder(Rect rect)
+        {
+            if (_uiContext == null || _uiContext.Styles == null)
+                return;
+
+            Color oldColor = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1f), _uiContext.Styles.BorderStrongTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), _uiContext.Styles.BorderStrongTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, 1f, rect.height), _uiContext.Styles.BorderStrongTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), _uiContext.Styles.BorderStrongTexture);
+            GUI.color = oldColor;
         }
 
         private float CalculateKeyValueRowHeight(string label, string value)

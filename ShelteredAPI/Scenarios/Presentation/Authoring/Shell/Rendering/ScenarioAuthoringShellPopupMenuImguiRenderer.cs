@@ -87,9 +87,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             rectWidth = Mathf.Clamp(rectWidth, 220f, 320f);
             float rectHeight = 16f + ((actions != null ? actions.Length : 0) * 28f);
+            float rectX = buttonRect.width > 0f
+                ? buttonRect.xMax - rectWidth
+                : buttonRect.x;
             Rect rect = new Rect(
-                Mathf.Clamp(buttonRect.x, Margin, width - rectWidth - Margin),
-                Mathf.Clamp(buttonRect.yMax + 4f, Margin, height - rectHeight - Margin),
+                Mathf.Clamp(rectX, Margin, width - rectWidth - Margin),
+                Mathf.Clamp(buttonRect.yMax, Margin, height - rectHeight - Margin),
                 rectWidth,
                 rectHeight);
             return ClampAwayFromHud(rect, width, height, hudReserveRect);
@@ -176,16 +179,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Color oldColor = GUI.color;
+            Rect overlayRect = InsetButtonOverlayRect(rect);
             if (hover > 0.001f)
             {
                 GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.28f * hover);
-                GUI.DrawTexture(rect, _uiContext.Styles.AccentHoverTexture != null ? _uiContext.Styles.AccentHoverTexture : Texture2D.whiteTexture);
+                GUI.DrawTexture(overlayRect, _uiContext.Styles.AccentHoverTexture != null ? _uiContext.Styles.AccentHoverTexture : Texture2D.whiteTexture);
             }
 
             if (press > 0.001f)
             {
                 GUI.color = new Color(0.718f, 0.639f, 0.482f, 0.34f * press);
-                GUI.DrawTexture(rect, Texture2D.whiteTexture);
+                GUI.DrawTexture(overlayRect, Texture2D.whiteTexture);
             }
 
             GUI.color = oldColor;
@@ -208,8 +212,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             Color oldColor = GUI.color;
             GUI.color = new Color(0.94f, 0.80f, 0.52f, 0.26f * pulse);
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.DrawTexture(InsetButtonOverlayRect(rect), Texture2D.whiteTexture);
             GUI.color = oldColor;
+        }
+
+        private static Rect InsetButtonOverlayRect(Rect rect)
+        {
+            const float inset = 3f;
+            if (rect.width <= inset * 2f || rect.height <= inset * 2f)
+                return rect;
+
+            return new Rect(rect.x + inset, rect.y + inset, rect.width - (inset * 2f), rect.height - (inset * 2f));
         }
     }
 }

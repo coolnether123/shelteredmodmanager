@@ -64,10 +64,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Item.Property("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
+            items.Add(EditableProperty("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
             items.Add(Item.Property("Base Mode", definition != null ? definition.BaseGameMode.ToString() : "Unknown"));
             items.Add(Item.Property("Save State", Item.CountDirtyFlags(editorSession) == 0 ? "Saved" : "Unsaved changes"));
             return items.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorItem EditableProperty(string label, string value)
+        {
+            ScenarioAuthoringInspectorItem item = Item.Property(label, value);
+            item.Editable = true;
+            return item;
         }
 
         private static void AddQuestionSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioHomeProgressFacts facts)

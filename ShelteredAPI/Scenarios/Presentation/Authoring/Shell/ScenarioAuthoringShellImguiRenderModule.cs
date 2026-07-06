@@ -77,6 +77,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect _dragLastRect = RuntimeCompat.ZeroRect();
         private string _buildPaletteSearchText = string.Empty;
         private bool _buildPaletteSearchFocused;
+        private readonly Dictionary<string, string> _editableFieldDrafts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private bool _editableFieldFocused;
         private string _toolRailActiveKey;
         private float _toolRailIndicatorY = -1f;
         private string _spritePickerSearchText = string.Empty;
@@ -197,6 +199,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
             inputCapture.BeginFrame(uiScale);
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
+            _editableFieldFocused = false;
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
             _rootAlpha = _animations.GetBinaryProgress(ShellRootAnimationKey, _visible, 0.18f, ScenarioUiEasing.EaseOut, true);
             if (!_visible && _rootAlpha <= 0.001f)
@@ -337,6 +340,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || shell.Help != null
                 || _buildPaletteSearchFocused
                 || _spritePickerSearchFocused
+                || _editableFieldFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
             inputCapture.SetTransitionActive(_animations.TransitionActive);
 
@@ -757,6 +761,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _tabContentStyle = BuildContentOnlyStyle(styles.Tab);
             _activeTabContentStyle = BuildContentOnlyStyle(styles.TabActive);
             _disabledTabContentStyle = BuildContentOnlyStyle(styles.TabDisabled);
+            GUI.skin.settings.cursorColor = styles.Theme.Palette.TextTitle;
+            GUI.skin.settings.selectionColor = new Color(0.58f, 0.45f, 0.18f, 0.46f);
         }
 
         private void DisposeUiContext()

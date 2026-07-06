@@ -94,10 +94,6 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
             if (cells.Length < 2)
                 return;
 
-            Event current = Event.current;
-            if (current != null && rect.Contains(current.mousePosition))
-                GUI.Box(rect, GUIContent.none, styles.Field);
-
             GUI.Label(cells[0], label ?? string.Empty, styles.MutedText);
             GUI.Label(cells[1], value ?? string.Empty, styles.BodyText);
         }

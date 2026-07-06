@@ -32,24 +32,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true,
                 activeStageKind == ScenarioStageKind.None && HasWindowVisible(state, ScenarioAuthoringWindowIds.Scenario),
                 "Open the scenario home dashboard."));
-            ScenarioStageDefinition[] topLevel = _stageRegistry.GetTopLevel();
-            for (int i = 0; i < topLevel.Length; i++)
-            {
-                ScenarioStageDefinition definition = topLevel[i];
-                if (definition == null)
-                    continue;
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Bunker);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.People);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.InventoryStorage);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Events);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Quests);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Map);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Test);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Publish);
 
-                AddTab(actions, definition, activeStageKind, false);
-                if (definition.Kind == ScenarioStageKind.Bunker)
-                {
-                    ScenarioStageDefinition[] children = _stageRegistry.GetChildren(ScenarioStageKind.Bunker);
-                    for (int childIndex = 0; childIndex < children.Length; childIndex++)
-                    {
-                        ScenarioStageDefinition child = children[childIndex];
-                        if (child != null)
-                            AddTab(actions, child, activeStageKind, true);
-                    }
-                }
+            return actions.ToArray();
+        }
+
+        public ScenarioAuthoringInspectorAction[] BuildWorldSubstageActions(ScenarioAuthoringState state)
+        {
+            ScenarioStageKind activeStageKind = ResolveActiveStageKind(state);
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            ScenarioStageDefinition[] children = _stageRegistry.GetChildren(ScenarioStageKind.Bunker);
+            for (int i = 0; i < children.Length; i++)
+            {
+                ScenarioStageDefinition child = children[i];
+                if (child != null)
+                    AddTab(actions, child, activeStageKind, true);
             }
 
             return actions.ToArray();
@@ -59,11 +63,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             return new[]
             {
-                CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "SAVE", true, true, "Validate and save the current scenario draft."),
-                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenTimeline, "Timeline", "TIME", true, HasWindowVisible(state, ScenarioAuthoringWindowIds.Triggers), "Open the scenario timeline."),
-                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, "Help", "HELP", true, state != null && state.HelpWindowOpen, "Open the workshop help pages."),
-                CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "SET", true, false, "Open authoring settings.")
+                CreateAction(ScenarioAuthoringActionIds.ActionSave, "Save", "SAVE", true, true, "Validate and save the current scenario draft.")
             };
+        }
+
+        private void AddTopLevelTab(
+            List<ScenarioAuthoringInspectorAction> actions,
+            ScenarioStageKind activeStageKind,
+            ScenarioStageKind stageKind)
+        {
+            ScenarioStageDefinition definition = _stageRegistry.Find(stageKind);
+            if (definition != null)
+                AddTab(actions, definition, activeStageKind, false);
         }
 
         public ScenarioAuthoringInspectorAction[] BuildLayoutActions(ScenarioAuthoringState state)
@@ -234,7 +245,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.BunkerSurface:
                     return "Surface";
                 case ScenarioStageKind.BunkerInside:
-                    return "Interior";
+                    return "Inside";
                 case ScenarioStageKind.InventoryStorage:
                     return "Supplies";
                 case ScenarioStageKind.People:

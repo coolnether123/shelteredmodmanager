@@ -28,6 +28,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
         public static bool DrawButton(Rect rect, bool active, bool enabled, bool pressed, bool tab)
         {
+            if (tab && active)
+                return false;
+
             string role = tab
                 ? (active ? "tabActive" : "tab")
                 : (!enabled ? "buttonDisabled" : (pressed ? "buttonPressed" : (active ? "buttonHover" : "button")));

@@ -981,6 +981,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string IconText { get; set; }
         public Sprite PreviewSprite { get; set; }
         public bool Emphasized { get; set; }
+        public bool Editable { get; set; }
         public ScenarioAuthoringInspectorAction Action { get; set; }
     }
 

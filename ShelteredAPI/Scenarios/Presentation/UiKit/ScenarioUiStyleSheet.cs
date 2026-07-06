@@ -120,7 +120,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             Section      = BuildBox(PanelRaisedTexture, padMd);
             Menu         = BuildBox(PanelRaisedTexture, padMd);
             Card         = BuildBox(PanelRaisedTexture, CardSurfacePadding);
-            Field        = BuildField(PanelTexture, palette.TextBody, metrics, padXs);
+            Field        = BuildField(PanelInsetTexture, AccentHoverTexture, palette.TextBody, metrics, padSm, padXs);
             Divider      = BuildBox(BorderSubtleTexture, 0);
 
             Pill           = BuildPill(_textures.Get(palette.AccentMuted), palette.TextOnAccent, metrics, pillPadX);
@@ -146,7 +146,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             ButtonDanger   = BuildButton(DangerTexture,       AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
             ButtonDisabled = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
             Tab            = BuildButton(PanelTexture,        AccentHoverTexture, BorderStrongTexture, palette.TextBody, metrics, padSm, padXs);
-            TabActive      = BuildButton(AccentActiveTexture, AccentHoverTexture, BorderStrongTexture, palette.TextOnAccent, metrics, padSm, padXs);
+            TabActive      = BuildButton(PanelInsetTexture,   AccentHoverTexture, BorderStrongTexture, palette.TextTitle, metrics, padSm, padXs);
             TabDisabled    = BuildButton(DisabledTexture,     DisabledTexture,    DisabledTexture,     palette.TextDisabled, metrics, padSm, padXs);
         }
 
@@ -160,12 +160,24 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             return style;
         }
 
-        private static GUIStyle BuildField(Texture2D background, Color textColor, IScenarioUiMetrics metrics, int padding)
+        private static GUIStyle BuildField(Texture2D background, Texture2D focusedBackground, Color textColor, IScenarioUiMetrics metrics, int padX, int padY)
         {
-            GUIStyle style = BuildBox(background, padding);
+            GUIStyle style = new GUIStyle(GUI.skin.textField);
+            style.font = ResolveRuntimeFont();
+            style.normal.background = background;
+            style.hover.background = focusedBackground;
+            style.focused.background = focusedBackground;
+            style.active.background = focusedBackground;
             style.normal.textColor = textColor;
-            style.alignment = TextAnchor.MiddleCenter;
-            style.fontSize = metrics.FontSizeMuted;
+            style.hover.textColor = textColor;
+            style.focused.textColor = textColor;
+            style.active.textColor = textColor;
+            style.alignment = TextAnchor.MiddleLeft;
+            style.fontSize = metrics.FontSizeBody;
+            style.border = new RectOffset(1, 1, 1, 1);
+            style.padding = new RectOffset(padX, padX, padY + 1, padY + 2);
+            style.margin = new RectOffset(0, 0, 0, 0);
+            style.clipping = TextClipping.Clip;
             return style;
         }
 
@@ -177,6 +189,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.fontStyle = fontStyle;
             style.normal.textColor = color;
             style.wordWrap = true;
+            style.clipping = TextClipping.Overflow;
+            style.padding = new RectOffset(0, 0, 1, 3);
             return style;
         }
 
@@ -201,7 +215,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.alignment = TextAnchor.MiddleCenter;
             style.fontSize = metrics.FontSizeBody;
             style.border = new RectOffset(1, 1, 1, 1);
-            style.padding = new RectOffset(padX, padX, padY, padY);
+            style.padding = new RectOffset(padX, padX, padY + 1, padY + 3);
             style.margin = new RectOffset(0, 0, 0, 0);
             style.wordWrap = true;
             style.clipping = TextClipping.Clip;
@@ -218,7 +232,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.fontSize = metrics.FontSizePill;
             style.fontStyle = FontStyle.Bold;
             style.border = new RectOffset(1, 1, 1, 1);
-            style.padding = new RectOffset(padX, padX, 0, 0);
+            style.padding = new RectOffset(padX, padX, 1, 2);
             style.margin = new RectOffset(0, 0, 0, 0);
             return style;
         }
