@@ -273,6 +273,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             RaiseStateChanged();
         }
 
+        internal void SetStatusMessage(string message)
+        {
+            lock (_sync)
+            {
+                if (_state == null)
+                    _state = new ScenarioAuthoringState();
+                _state.StatusMessage = message ?? string.Empty;
+            }
+
+            RaiseStateChanged();
+        }
+
         public bool ExecuteAction(string actionId)
         {
             ScenarioAuthoringActionExecutionResult result = ExecuteActionWithResult(actionId);
@@ -313,6 +325,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string beforeStatus = snapshot.StatusMessage;
             ScenarioAuthoringActionExecutionResult result = _commandService.ExecuteWithResult(snapshot, actionId);
             bool changed = result != null && result.Result;
+
+            ScenarioAuthoringState transitionedState = CurrentState;
+            if (transitionedState != null && transitionedState.ReloadPending)
+            {
+                if (result == null)
+                    result = ScenarioAuthoringActionExecutionResult.Success(actionId, changed, transitionedState.StatusMessage);
+                result.StatusMessage = transitionedState.StatusMessage ?? string.Empty;
+                RaiseStateChanged();
+                return result;
+            }
+
             string sectionMessage;
             if (_sectionHub.SynchronizeAfterAction(snapshot, out sectionMessage))
             {

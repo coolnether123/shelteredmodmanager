@@ -23,6 +23,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int StartupSaveSlot { get; private set; }
         public SaveEntry StartupSave { get; private set; }
         public SaveType LaunchSaveType { get; private set; }
+        public string ExpectedSceneName { get; private set; }
         public bool ReenterPlaytestAfterBootstrap { get; private set; }
 
         public static ScenarioAuthoringSession Create(
@@ -50,13 +51,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 StartupSaveId = startupSaveId,
                 StartupSaveSlot = startupSaveSlot,
                 StartupSave = startupSave,
-                LaunchSaveType = launchSaveType
+                LaunchSaveType = launchSaveType,
+                ExpectedSceneName = ResolveExpectedSceneName(baseMode)
             };
         }
 
         public void RequestPlaytestAfterBootstrap()
         {
             ReenterPlaytestAfterBootstrap = true;
+        }
+
+        private static string ResolveExpectedSceneName(ScenarioBaseGameMode baseMode)
+        {
+            switch (baseMode)
+            {
+                case ScenarioBaseGameMode.Surrounded:
+                    return "ShelterScene_Surrounded";
+                case ScenarioBaseGameMode.Stasis:
+                    return "ShelterScene_Stasis";
+                default:
+                    return "ShelterScene";
+            }
         }
     }
 }

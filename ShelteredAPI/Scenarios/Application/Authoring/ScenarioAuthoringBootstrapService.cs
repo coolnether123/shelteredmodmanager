@@ -360,21 +360,42 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     + pending.BaseMode + ", ScenarioFile=" + pending.ScenarioFilePath + ".");
             }
 
+            bool warmupStarted = !pending.ReenterPlaytestAfterBootstrap
+                && string.Equals(_warmupDraftId, pending.DraftId, StringComparison.Ordinal);
             string blockingReason;
-            if (!ScenarioWorldReady.Evaluate(out blockingReason))
+            if (!warmupStarted)
             {
-                if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
+                HideCompletedShelterLoadingScreen(pending.ExpectedSceneName);
+                if (!IsExpectedSceneActive(pending.ExpectedSceneName, out blockingReason))
                 {
-                    _lastPendingBlockingReason = blockingReason;
-                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId + "' is waiting for world readiness. Reason="
-                        + blockingReason + ".");
+                    if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
+                    {
+                        _lastPendingBlockingReason = blockingReason;
+                        MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId + "' is waiting for target scene. Reason="
+                            + blockingReason + ".");
+                    }
+
+                    return;
                 }
 
-                return;
+                if (!ScenarioWorldReady.Evaluate(out blockingReason))
+                {
+                    if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
+                    {
+                        _lastPendingBlockingReason = blockingReason;
+                        MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId + "' is waiting for world readiness. Reason="
+                            + blockingReason + ".");
+                    }
+
+                    return;
+                }
             }
 
-            if (!TryCompleteDraftWarmup(pending))
+            if (!pending.ReenterPlaytestAfterBootstrap && !TryCompleteDraftWarmup(pending))
                 return;
+
+            if (pending.ReenterPlaytestAfterBootstrap)
+                ResetPendingWarmup();
 
             if (!string.IsNullOrEmpty(_lastPendingBlockingReason))
             {
@@ -426,14 +447,93 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 ScenarioApplyResult result = _editorService.BeginPlaytest();
                 int messages = result != null && result.Messages != null ? result.Messages.Length : 0;
+                ScenarioEditorSession editorSession = _editorService.CurrentSession;
+                bool running = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Re-entered playtest after authoring reload. draftId="
                     + (pending != null ? pending.DraftId : "<none>") + " messages=" + messages + ".");
+                if (!running)
+                {
+                    string message = "Playtest restart failed; returned to the editor.";
+                    if (result != null && result.Messages != null && result.Messages.Length > 0)
+                        message = result.Messages[0];
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Playtest restart did not enter running state. " + message);
+                    FailPlaytestRestartBackToEditor(message);
+                    return;
+                }
+
+                _backend.SetStatusMessage("Playtest restarted.");
                 _backend.Refresh();
             }
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Failed to re-enter playtest after authoring reload: " + ex.Message);
+                FailPlaytestRestartBackToEditor("Playtest restart failed: " + ex.Message);
             }
+        }
+
+        private static bool IsExpectedSceneActive(string expectedSceneName, out string blockingReason)
+        {
+            if (string.IsNullOrEmpty(expectedSceneName))
+            {
+                blockingReason = null;
+                return true;
+            }
+
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (!activeScene.IsValid())
+            {
+                blockingReason = "The active scene is not valid yet; expected '" + expectedSceneName + "'.";
+                return false;
+            }
+
+            if (!string.Equals(activeScene.name, expectedSceneName, StringComparison.Ordinal))
+            {
+                blockingReason = "Expected scene '" + expectedSceneName + "' but active scene is '" + activeScene.name + "'.";
+                return false;
+            }
+
+            blockingReason = null;
+            return true;
+        }
+
+        private void HideCompletedShelterLoadingScreen(string expectedSceneName)
+        {
+            if (LoadingScreen.Instance == null || !LoadingScreen.Instance.isShowing)
+                return;
+
+            if (!ScenarioWorldReady.IsShelterSceneActive())
+                return;
+
+            if (!string.IsNullOrEmpty(expectedSceneName)
+                && !string.Equals(SceneManager.GetActiveScene().name, expectedSceneName, StringComparison.Ordinal))
+                return;
+
+            if (!string.IsNullOrEmpty(LoadingScreen.nextLevel))
+                return;
+
+            if (SaveManager.instance != null && (SaveManager.instance.isLoading || SaveManager.instance.isSaving))
+                return;
+
+            LoadingScreen.Instance.HideLoadingScreen();
+            MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Hid completed authoring reload loading screen for scene "
+                + SceneManager.GetActiveScene().name + ".");
+        }
+
+        private void FailPlaytestRestartBackToEditor(string message)
+        {
+            try
+            {
+                if (_editorService.CurrentSession != null)
+                    _editorService.EndPlaytest();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Failed to restore authoring pause after playtest restart failure: " + ex.Message);
+            }
+
+            _backend.SetStatusMessage(string.IsNullOrEmpty(message)
+                ? "Playtest restart failed; returned to the editor."
+                : message);
         }
 
         private bool TryCompleteDraftWarmup(ScenarioAuthoringSession pending)
@@ -697,6 +797,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (LoadingScreen.Instance != null)
                 {
                     PauseManager.Resume();
+                    ScenarioLoadingTransitionGuard.PrepareForManagedTransition("MenuScene after authoring close");
                     LoadingScreen.Instance.ShowLoadingScreen("MenuScene");
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Requested MenuScene through LoadingScreen after editor close.");
                     return;

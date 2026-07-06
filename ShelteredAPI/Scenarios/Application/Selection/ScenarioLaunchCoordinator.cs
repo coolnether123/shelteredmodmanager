@@ -6,6 +6,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Core;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Application.Selection{
     /// <summary>
     /// Owns the "what happens after the player picks a scenario+save" flow.
@@ -633,6 +634,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return false;
             }
 
+            ScenarioLoadingTransitionGuard.PrepareForManagedTransition(launchTargetLabel);
             saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
             DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);
             LoadingScreen.Instance.ShowLoadingScreen(sceneName);
