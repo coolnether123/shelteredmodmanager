@@ -27,14 +27,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             RegisterToggle("layers.lock_background", "Layers", "Lock Backdrop Layer (Prevents Selecting)", "Prevent accidental backdrop/background selection.", "false");
             RegisterToggle("layers.lock_surface", "Layers", "Lock Surface Layer (Prevents Selecting)", "Prevent accidental exterior surface selection.", "false");
             RegisterToggle("layers.lock_inside", "Layers", "Lock Inside Layer (Prevents Selecting)", "Prevent accidental bunker-inside selection.", "false");
-            RegisterChoice("shell.renderer_mode", "Shell", "Renderer Mode", "Preferred scenario editor renderer.", "imgui", new[] { "imgui", "ngui" }, new[] { "Shell IMGUI", "NGUI Experimental" });
+            RegisterChoice("shell.renderer_mode", "Advanced", "Renderer Mode", "Preferred scenario editor renderer.", "imgui", new[] { "imgui", "ngui" }, new[] { "Shell IMGUI", "NGUI Experimental" });
             RegisterToggle("input.block_vanilla_camera", "Input", "Block Vanilla Camera Input While Shell Focused", "Suppress vanilla camera pan and zoom while the shell owns pointer focus.", "true");
             RegisterFloat("input.scroll_speed", "Input", "Scroll Speed", "Scroll speed for lists and event timelines.", "1.00", 0.50f, 3f, 0.10f);
             RegisterInteger("sprite.zoom", "Sprite Tools", "Sprite Editor Default Zoom", "Default zoom for the in-game sprite editor.", "8", 1f, 32f, 1f);
             RegisterToggle("sprite.checkerboard", "Sprite Tools", "Sprite Editor Checkerboard", "Show a checkerboard behind transparent pixels.", "true");
-            RegisterToggle("inspector.pin_edit_mode", "Inspector", "Edit Pinned Facts", "Show pin controls beside inspector facts.", "false");
-            RegisterToggle("debug.show_advanced_details", "Debug", "Show Advanced Details", "Show internal ids and runtime diagnostics in editor windows.", "false");
-            RegisterToggle("debug.overlays", "Debug", "Debug Overlays", "Draw shell layout and dump scene classification diagnostics.", "false");
+            RegisterToggle("inspector.pin_edit_mode", "Advanced", "Edit Pinned Facts", "Show pin controls beside inspector facts.", "false");
+            RegisterToggle("debug.show_advanced_details", "Advanced", "Show Advanced Details", "Show internal ids and runtime diagnostics in editor windows.", "false");
+            RegisterToggle("debug.overlays", "Advanced", "Debug Overlays", "Draw shell layout and dump scene classification diagnostics.", "false");
         }
 
         public ScenarioAuthoringSettingDefinition[] GetDefinitions()

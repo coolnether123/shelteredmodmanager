@@ -1980,7 +1980,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     {
                         Id = ScenarioAuthoringActionIds.ActionSettingDecreasePrefix + item.Id,
                         Label = "-",
-                        Enabled = item.Enabled && item.CanDecrease
+                        Enabled = item.Enabled && item.CanDecrease,
+                        DisabledReason = item.Enabled ? "This setting is already at its minimum value." : "This setting cannot be changed."
                     },
                     false);
                 GUILayout.Label(item.ValueText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Width(84f), GUILayout.Height(24f));
@@ -1989,7 +1990,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     {
                         Id = ScenarioAuthoringActionIds.ActionSettingIncreasePrefix + item.Id,
                         Label = "+",
-                        Enabled = item.Enabled && item.CanIncrease
+                        Enabled = item.Enabled && item.CanIncrease,
+                        DisabledReason = item.Enabled ? "This setting is already at its maximum value." : "This setting cannot be changed."
                     },
                     false);
             }

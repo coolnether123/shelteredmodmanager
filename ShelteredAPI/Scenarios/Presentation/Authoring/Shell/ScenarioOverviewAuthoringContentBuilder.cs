@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Definitions;
@@ -10,6 +13,12 @@ using ShelteredAPI.Scenarios.Presentation.Inspector;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioOverviewAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
+        private static readonly object ValidationCacheSync = new object();
+        private static ScenarioDefinition _cachedValidationDefinition;
+        private static string _cachedValidationPath;
+        private static int _cachedValidationRevision = -1;
+        private static ScenarioAuthoringValidationSnapshot _cachedValidation;
+
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Scenario; } }
 
         public ScenarioAuthoringInspectorSection[] Build(ScenarioAuthoringWindowContentContext context)
@@ -28,7 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Title = string.Empty,
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = BuildIdentityItems(editorSession, definition)
+                Items = BuildIdentityItems(state, editorSession, definition)
             });
             AddSetupChecklistSection(sections, state, definition);
             sections.Add(BuildBaseModeSection(definition, authoringSession));
@@ -62,14 +71,81 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         }
 
         private static ScenarioAuthoringInspectorItem[] BuildIdentityItems(
+            ScenarioAuthoringState state,
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            ScenarioAuthoringValidationSnapshot validation = GetCachedValidation(state, editorSession, definition);
             items.Add(EditableProperty("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
             items.Add(Item.Property("Base", FormatBaseMode(definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival)));
             items.Add(Item.Property("Save State", Item.CountDirtyFlags(editorSession) == 0 ? "Saved" : "Unsaved changes"));
+            items.Add(Item.Property("Validation", FormatValidation(validation)));
+            items.Add(Item.Property("Active Stage", state != null ? ScenarioAuthoringWorkflowLabels.GetStageLabel(state.ActiveStage, false) : "Workshop"));
+            items.Add(Item.Property("Draft Path", !string.IsNullOrEmpty(state != null ? state.ActiveScenarioFilePath : null) ? state.ActiveScenarioFilePath : "No draft file is active."));
+            items.Add(Item.Property("Playtest", FormatPlaytestReadiness(editorSession, validation)));
             return items.ToArray();
+        }
+
+        private static ScenarioAuthoringValidationSnapshot GetCachedValidation(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition)
+        {
+            string path = state != null ? state.ActiveScenarioFilePath : null;
+            int revision = editorSession != null ? editorSession.DraftRevision : -1;
+            lock (ValidationCacheSync)
+            {
+                if (_cachedValidation != null
+                    && ReferenceEquals(_cachedValidationDefinition, definition)
+                    && string.Equals(_cachedValidationPath, path, StringComparison.OrdinalIgnoreCase)
+                    && _cachedValidationRevision == revision)
+                {
+                    return _cachedValidation;
+                }
+
+                IScenarioDefinitionValidator validator = null;
+                try
+                {
+                    validator = ScenarioCompositionRoot.Resolve<IScenarioDefinitionValidator>();
+                }
+                catch
+                {
+                    validator = null;
+                }
+
+                _cachedValidation = ScenarioAuthoringValidationSnapshot.Evaluate(validator, definition, path);
+                _cachedValidationDefinition = definition;
+                _cachedValidationPath = path;
+                _cachedValidationRevision = revision;
+                return _cachedValidation;
+            }
+        }
+
+        private static string FormatValidation(ScenarioAuthoringValidationSnapshot validation)
+        {
+            if (validation == null || !validation.ValidationAvailable)
+                return "Unavailable";
+            if (validation.ErrorCount > 0)
+                return validation.ErrorCount.ToString(CultureInfo.InvariantCulture) + " error(s), " + validation.WarningCount.ToString(CultureInfo.InvariantCulture) + " warning(s)";
+            if (validation.WarningCount > 0)
+                return "Ready with " + validation.WarningCount.ToString(CultureInfo.InvariantCulture) + " warning(s)";
+            return "Ready";
+        }
+
+        private static string FormatPlaytestReadiness(
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            if (editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting)
+                return "Running";
+            if (Item.CountDirtyFlags(editorSession) > 0)
+                return "Save draft before testing";
+            if (validation == null || !validation.ValidationAvailable)
+                return "Validation unavailable";
+            if (validation.ErrorCount > 0)
+                return "Fix validation errors first";
+            return "Ready to test";
         }
 
         private static ScenarioAuthoringInspectorSection BuildBaseModeSection(

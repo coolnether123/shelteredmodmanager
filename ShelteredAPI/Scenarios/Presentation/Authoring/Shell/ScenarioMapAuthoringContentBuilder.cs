@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Globalization;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
+using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioMapAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
@@ -22,6 +24,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new[]
             {
                 BuildRuntimeNoticeSection(),
+                BuildSupportedActionsSection(),
                 BuildOverviewSection(definition, map),
                 BuildMarkerSection(map),
                 BuildBoundaryTerrainSection(map),
@@ -36,14 +39,50 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "map_runtime_notice",
-                Title = "Runtime Notice",
+                Title = "Map Authoring Status",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = new[]
                 {
-                    ScenarioInspectorItemFactory.Text("Map data is saved with the scenario but is not applied in-game yet.", null, "Deferred", "MAP", null, true),
-                    Property("Supported Now", "Use Build Palette, People, Stockpile, Events, Quests, and Art for runtime-visible scenario changes."),
-                    Property("Deferred", "Map editing UI and runtime map projection are planned for a later pass.")
+                    ScenarioInspectorItemFactory.Text("Map authoring is not yet supported.", "This page is a read-only review of map-facing scenario data already present in the draft.", "Read-only", "MAP", null, true),
+                    Property("Supported Here", "Review authored map locations, markers, boundaries, terrain, loot tables, encounters, and routes when those records exist."),
+                    Property("Authoring Today", "World-map story events are authored in Story. Runtime shelter changes are authored in World, Timeline, Cast, Supplies, and Art."),
+                    Property("Not Supported Yet", "Creating, moving, painting, or wiring map nodes from this page.")
+                }
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildSupportedActionsSection()
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_supported_actions",
+                Title = "Where To Author Map-Facing Work",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = new[]
+                {
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests,
+                        "Open Story",
+                        "Author world-map encounters, stage routing, dialogue, rewards, and outcomes in Story.",
+                        true,
+                        true,
+                        "ST")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicStory,
+                        "Story Help",
+                        "Open help for story and scenario-flow authoring.",
+                        true,
+                        false,
+                        "HP")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicWorldCamera,
+                        "World Help",
+                        "Open help for the supported world authoring surfaces.",
+                        true,
+                        false,
+                        "WH"))
                 }
             };
         }

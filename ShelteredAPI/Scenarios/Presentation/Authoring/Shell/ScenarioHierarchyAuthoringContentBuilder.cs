@@ -45,7 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Item.Property("Stage", state != null ? state.ActiveStage.ToString() : "Unknown"),
                     Item.Property("Tool", state != null ? state.ActiveTool.ToString() : "Unknown"),
                     Item.Property("Scenario", Item.Safe(definition != null ? definition.DisplayName : null)),
-                    Item.Property("Selection", Item.FormatTarget(state != null ? state.SelectedTarget : null))
+                    Item.Property("Selection", FormatTargetConcept(state != null ? state.SelectedTarget : null, ShowAdvancedDetails(state)))
                 }
             };
         }
@@ -270,10 +270,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool activeSelected = IsTargetSelected(state, id, scenarioReferenceId, gameObject);
             bool selected = activeSelected || IsTargetInMultiSelection(state, id, scenarioReferenceId, gameObject);
             bool hovered = !selected && IsTargetHovered(state, id, scenarioReferenceId, gameObject);
+            bool showAdvancedDetails = ShowAdvancedDetails(state);
             return Item.Action(
                 ScenarioAuthoringActionIds.ActionHierarchySelectPrefix + id,
                 label,
-                FormatRowDetail(gameObject != null ? BuildHierarchyPath(gameObject.transform) : "Missing runtime object", activeSelected, selected, hovered),
+                FormatRowDetail(FormatGameObjectConcept(gameObject, kind, showAdvancedDetails), activeSelected, selected, hovered),
                 gameObject != null,
                 activeSelected,
                 selected ? "SEL" : (hovered ? "HOV" : badge));
@@ -329,6 +330,69 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return detail;
         }
 
+        private static string FormatGameObjectConcept(GameObject gameObject, ScenarioAuthoringTargetKind kind, bool showAdvancedDetails)
+        {
+            if (gameObject == null)
+                return "Missing runtime object";
+
+            List<string> parts = new List<string>();
+            parts.Add(FormatKind(kind));
+            Vector3 position = gameObject.transform != null ? gameObject.transform.position : Vector3.zero;
+            parts.Add("at " + position.x.ToString("0.#", CultureInfo.InvariantCulture)
+                + ", "
+                + position.y.ToString("0.#", CultureInfo.InvariantCulture));
+            if (showAdvancedDetails)
+                parts.Add(BuildHierarchyPath(gameObject.transform));
+            return string.Join(" / ", parts.ToArray());
+        }
+
+        internal static string FormatTargetConcept(ScenarioAuthoringTarget target, bool showAdvancedDetails)
+        {
+            if (target == null)
+                return "No selection";
+
+            List<string> parts = new List<string>();
+            parts.Add(Item.Safe(target.DisplayName));
+            parts.Add(FormatKind(target.Kind));
+            if (target.GridX.HasValue && target.GridY.HasValue)
+            {
+                parts.Add("grid " + target.GridX.Value.ToString(CultureInfo.InvariantCulture)
+                    + ","
+                    + target.GridY.Value.ToString(CultureInfo.InvariantCulture));
+            }
+            else if (target.WorldPosition != Vector3.zero)
+            {
+                Vector3 position = target.WorldPosition;
+                parts.Add("at " + position.x.ToString("0.#", CultureInfo.InvariantCulture)
+                    + ", "
+                    + position.y.ToString("0.#", CultureInfo.InvariantCulture));
+            }
+
+            if (showAdvancedDetails && !string.IsNullOrEmpty(target.TransformPath))
+                parts.Add(target.TransformPath);
+            return string.Join(" / ", parts.ToArray());
+        }
+
+        internal static string FormatKind(ScenarioAuthoringTargetKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioAuthoringTargetKind.PlaceableObject: return "Shelter Object";
+                case ScenarioAuthoringTargetKind.Character: return "Survivor";
+                case ScenarioAuthoringTargetKind.Tile: return "Room Tile";
+                case ScenarioAuthoringTargetKind.SceneSprite: return "Scene Art";
+                case ScenarioAuthoringTargetKind.Background: return "Background";
+                default: return kind.ToString();
+            }
+        }
+
+        internal static bool ShowAdvancedDetails(ScenarioAuthoringState state)
+        {
+            return state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+        }
+
         private static string BuildHierarchyPath(Transform transform)
         {
             if (transform == null)
@@ -369,10 +433,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> summary = new List<ScenarioAuthoringInspectorItem>();
             int count = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
             int activeIndex = count > 0 ? Mathf.Clamp(state.ActiveSelectionStackIndex, 0, count - 1) : -1;
+            bool showAdvancedDetails = ScenarioHierarchyAuthoringContentBuilder.ShowAdvancedDetails(state);
             summary.Add(Item.Property("Candidates", count.ToString(CultureInfo.InvariantCulture)));
-            summary.Add(Item.Property("Target", count > 0 ? ("Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture)) : "<none>"));
-            summary.Add(Item.Property("Hovered", Item.FormatTarget(state != null ? state.HoveredTarget : null)));
-            summary.Add(Item.Property("Selected", Item.FormatTarget(state != null ? state.SelectedTarget : null)));
+            summary.Add(Item.Property("Target", count > 0 ? ("Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture)) : "No target under cursor"));
+            summary.Add(Item.Property("Hovered", ScenarioHierarchyAuthoringContentBuilder.FormatTargetConcept(state != null ? state.HoveredTarget : null, showAdvancedDetails)));
+            summary.Add(Item.Property("Selected", ScenarioHierarchyAuthoringContentBuilder.FormatTargetConcept(state != null ? state.SelectedTarget : null, showAdvancedDetails)));
 
             List<ScenarioAuthoringInspectorItem> rows = new List<ScenarioAuthoringInspectorItem>();
             if (count == 0)
@@ -394,7 +459,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     rows.Add(Item.ActionItem(Item.Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
                         (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Item.Safe(target.DisplayName),
-                        FormatStackDetail(target, activeSelected, selected, hovered, active),
+                        FormatStackDetail(target, activeSelected, selected, hovered, active, showAdvancedDetails),
                         true,
                         activeSelected || active,
                         selected ? "SEL" : (hovered ? "HOV" : (active ? "ON" : "ST")),
@@ -426,16 +491,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static string FormatGrid(ScenarioAuthoringTarget target)
         {
             if (target == null || !target.GridX.HasValue || !target.GridY.HasValue)
-                return target != null ? target.Kind.ToString() : string.Empty;
+                return target != null ? ScenarioHierarchyAuthoringContentBuilder.FormatKind(target.Kind) : string.Empty;
 
             return "Grid " + target.GridX.Value.ToString(CultureInfo.InvariantCulture)
                 + ","
                 + target.GridY.Value.ToString(CultureInfo.InvariantCulture);
         }
 
-        private static string FormatStackDetail(ScenarioAuthoringTarget target, bool activeSelected, bool selected, bool hovered, bool active)
+        private static string FormatStackDetail(ScenarioAuthoringTarget target, bool activeSelected, bool selected, bool hovered, bool active, bool showAdvancedDetails)
         {
-            string detail = (target != null ? target.Kind.ToString() : "Target") + " / " + Item.Safe(target != null ? target.TransformPath : null);
+            string detail = ScenarioHierarchyAuthoringContentBuilder.FormatTargetConcept(target, showAdvancedDetails);
             if (activeSelected)
                 return detail + " / selected";
             if (selected)

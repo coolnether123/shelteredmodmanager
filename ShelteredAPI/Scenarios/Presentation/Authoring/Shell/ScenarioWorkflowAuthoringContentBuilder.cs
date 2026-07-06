@@ -106,7 +106,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int stackCount = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
             string activeStackTarget = stackCount > 0
                 ? "Target " + (UnityEngine.Mathf.Clamp(state.ActiveSelectionStackIndex, 0, stackCount - 1) + 1).ToString() + " of " + stackCount.ToString()
-                : "<none>";
+                : "No target under cursor";
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "selection",
@@ -162,16 +162,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 case ScenarioAuthoringTool.Assets:
                     title = "Assets";
+                    bool showAdvancedAssetDetails = ShowAdvancedDetails(state);
                     items.Add(Item.Property("Sprite Swaps", Item.CountSpriteSwaps(definition).ToString()));
                     items.Add(Item.Property("Placed Sprites", Item.CountSceneSpritePlacements(definition).ToString()));
                     items.Add(Item.Property("Selected Target", Item.FormatTarget(selectedTarget)));
                     items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen, "Edit Selected Asset", "Open the selected target in the dedicated asset editor.", selectedTarget != null && selectedTarget.SupportsReplace, false, "ED", "Change the selected asset in its own editor window.")));
-                    items.Add(Item.Property("Pack Layout", "Scenarios/<ScenarioName>/scenario.xml"));
-                    items.Add(Item.Property("Custom Sprite XML", "AssetReferences > CustomSprites > Sprite"));
-                    items.Add(Item.Property("Swap XML", "AssetReferences > SpriteSwaps > Swap"));
-                    items.Add(Item.Property("Placement XML", "AssetReferences > SceneSpritePlacements > Placement"));
                     items.Add(Item.Text("Asset authoring uses verified in-game runtime art only."));
-                    items.Add(Item.Text("Use Inspector for selected assets, or place snapped scene dressing that stores Placement entries in scenario XML."));
+                    items.Add(Item.Text("Use Inspector for selected assets, or place snapped scene dressing from the Art placement browser."));
+                    if (showAdvancedAssetDetails)
+                    {
+                        items.Add(Item.Property("Pack Layout", "Scenarios/<ScenarioName>/scenario.xml"));
+                        items.Add(Item.Property("Custom Sprite XML", "AssetReferences > CustomSprites > Sprite"));
+                        items.Add(Item.Property("Swap XML", "AssetReferences > SpriteSwaps > Swap"));
+                        items.Add(Item.Property("Placement XML", "AssetReferences > SceneSpritePlacements > Placement"));
+                    }
                     break;
 
                 case ScenarioAuthoringTool.Shelter:
@@ -432,6 +436,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 false,
                 "CX",
                 "Clear the active ghost preview.")));
+        }
+
+        private static bool ShowAdvancedDetails(ScenarioAuthoringState state)
+        {
+            return state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
         }
 
     }

@@ -105,8 +105,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             ScenarioAuthoringWindowDefinition[] definitions = windowRegistry != null ? windowRegistry.GetDefinitions() : new ScenarioAuthoringWindowDefinition[0];
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
-            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, "Help", "HELP", true, state != null && state.HelpWindowOpen, "Open the workshop help pages."));
-            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, "Settings", "SET", true, state != null && state.SettingsWindowOpen, "Open authoring settings."));
+            AddWindowMenuGroup(actions, "Tools");
+            AddWindowMenuDefinitions(actions, state, definitions, WindowMenuGroup.Tools);
+            AddWindowMenuGroup(actions, "Panels");
+            AddWindowMenuDefinitions(actions, state, definitions, WindowMenuGroup.Panels);
+            AddWindowMenuGroup(actions, "Help & Settings");
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenHelp, FormatWindowMenuLabel("Help", state != null && state.HelpWindowOpen), "HELP", true, state != null && state.HelpWindowOpen, "Open the workshop help pages."));
+            actions.Add(CreateAction(ScenarioAuthoringActionIds.ActionShellOpenSettings, FormatWindowMenuLabel("Settings", state != null && state.SettingsWindowOpen), "SET", true, state != null && state.SettingsWindowOpen, "Open authoring settings."));
+
+            return actions.ToArray();
+        }
+
+        private static void AddWindowMenuDefinitions(
+            List<ScenarioAuthoringInspectorAction> actions,
+            ScenarioAuthoringState state,
+            ScenarioAuthoringWindowDefinition[] definitions,
+            WindowMenuGroup group)
+        {
             for (int i = 0; i < definitions.Length; i++)
             {
                 ScenarioAuthoringWindowDefinition definition = definitions[i];
@@ -114,18 +129,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 if (!definition.MenuVisible)
                     continue;
+                if (ResolveWindowMenuGroup(definition) != group)
+                    continue;
 
                 bool emphasized = HasWindowVisible(state, definition.Id);
                 actions.Add(CreateAction(
                     ScenarioAuthoringActionIds.ActionWindowTogglePrefix + definition.Id,
-                    definition.Title,
-                    "PANEL",
+                    FormatWindowMenuLabel(definition.Title, emphasized),
+                    emphasized ? "OPEN" : "OFF",
                     true,
                     emphasized,
                     "Toggle the '" + definition.Title + "' panel."));
             }
+        }
 
-            return actions.ToArray();
+        private static void AddWindowMenuGroup(List<ScenarioAuthoringInspectorAction> actions, string label)
+        {
+            actions.Add(CreateAction("window.menu.group." + label.Replace(" ", "_").Replace("&", "and").ToLowerInvariant(), label, "GROUP", false, false, label));
+        }
+
+        private static WindowMenuGroup ResolveWindowMenuGroup(ScenarioAuthoringWindowDefinition definition)
+        {
+            if (definition == null)
+                return WindowMenuGroup.Panels;
+
+            if (string.Equals(definition.Id, ScenarioAuthoringWindowIds.Triggers, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Survivors, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Stockpile, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Quests, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Map, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
+            {
+                return WindowMenuGroup.Tools;
+            }
+
+            return WindowMenuGroup.Panels;
+        }
+
+        private static string FormatWindowMenuLabel(string title, bool open)
+        {
+            return (open ? "Open - " : "Closed - ") + title;
+        }
+
+        private enum WindowMenuGroup
+        {
+            Tools,
+            Panels
         }
 
         public string BuildStageLabel(ScenarioAuthoringState state)

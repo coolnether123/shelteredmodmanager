@@ -45,7 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static string FormatTarget(ScenarioAuthoringTarget target)
         {
-            return target != null ? target.DisplayName + " (" + target.Kind + ")" : "<none>";
+            return target != null ? target.DisplayName + " (" + target.Kind + ")" : "No target selected";
         }
 
         public static int CountDirtyFlags(ScenarioEditorSession editorSession)

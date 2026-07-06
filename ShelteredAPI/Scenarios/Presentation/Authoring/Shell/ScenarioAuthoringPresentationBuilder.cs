@@ -303,7 +303,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioTargetClassification classification = _targetClassifier.Classify(target);
             ObjectPlacement objectPlacement = FindObjectPlacement(definition, target);
             int linkedTimelineEntries = CountLikelyTriggerReferences(definition, target);
-            bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target);
+            string scopeReason;
+            bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason);
 
             string captureReason;
             bool canCaptureTarget = _captureService.CanCaptureTarget(target, out captureReason);
@@ -313,7 +314,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(BuildTargetStripSection(state, target, classification));
             sections.Add(BuildPinnedFactsSection(state, target, classification, objectPlacement, hasCapturedPlacement));
-            sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
+            sections.Add(BuildPrimaryActionsSection(scopeAllowed, scopeReason, canCaptureTarget, captureReason, hasCapturedPlacement, replacementAllowed, target));
             if (replacementAllowed)
             {
                 List<ScenarioAuthoringInspectorSection> assetEditorSections = _assetAuthoringContentBuilder.BuildSelectedAssetEditorSections(state, editorSession, target);
@@ -437,39 +438,68 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static ScenarioAuthoringInspectorSection BuildPrimaryActionsSection(
             bool scopeAllowed,
+            string scopeReason,
             bool canCaptureTarget,
+            string captureReason,
             bool hasCapturedPlacement,
-            bool replacementAllowed)
+            bool replacementAllowed,
+            ScenarioAuthoringTarget target)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            string scopedReason = !scopeAllowed ? (!string.IsNullOrEmpty(scopeReason) ? scopeReason : "This target is outside the active workspace scope.") : null;
+            string captureDisabledReason = !scopeAllowed
+                ? scopedReason
+                : (!canCaptureTarget ? (!string.IsNullOrEmpty(captureReason) ? captureReason : "This target cannot be captured as a scenario placement.") : null);
+            string removeDisabledReason = !scopeAllowed
+                ? scopedReason
+                : (!hasCapturedPlacement ? "This target has no captured draft placement to remove." : null);
+            string editDisabledReason = !scopeAllowed
+                ? scopedReason
+                : (target == null || !target.SupportsReplace ? "This target does not expose an editable sprite asset." : null);
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
                 "Capture Placement",
                 "Store this live spawned shelter object as a scenario object placement.",
                 scopeAllowed && canCaptureTarget,
                 scopeAllowed && canCaptureTarget,
-                "CP")));
+                "CP",
+                null,
+                null,
+                null,
+                captureDisabledReason)));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement,
                 "Remove Draft Capture (keeps object)",
                 "Remove this object's captured placement from the scenario draft.",
                 scopeAllowed && hasCapturedPlacement,
                 false,
-                "RM")));
+                "RM",
+                null,
+                null,
+                null,
+                removeDisabledReason)));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionToolAssets,
                 "Place Asset",
                 "Open the asset placement browser for snapped scene sprites.",
                 scopeAllowed,
                 false,
-                "PL")));
+                "PL",
+                null,
+                null,
+                null,
+                scopedReason)));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
                 "Edit Asset",
                 "Open the asset editor for this visual target.",
                 replacementAllowed,
                 false,
-                "ED")));
+                "ED",
+                null,
+                null,
+                null,
+                editDisabledReason)));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionSelectionClear,
                 "Clear Selection",
@@ -567,7 +597,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static string FormatTargetCell(ScenarioAuthoringTarget target)
         {
             if (target == null || !target.GridX.HasValue || !target.GridY.HasValue)
-                return "<none>";
+                return "No grid cell";
 
             return target.GridX.Value.ToString(CultureInfo.InvariantCulture) + "," + target.GridY.Value.ToString(CultureInfo.InvariantCulture);
         }
@@ -575,13 +605,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string ResolveTargetSpriteName(ScenarioAuthoringTarget target)
         {
             if (target == null || !target.SupportsReplace)
-                return "<none>";
+                return "No editable sprite";
 
             ScenarioSpriteRuntimeResolver.ResolvedTarget resolvedTarget;
             if (_runtimeResolver.TryResolve(target, out resolvedTarget) && resolvedTarget != null)
                 return Safe(resolvedTarget.SpriteName);
 
-            return "<none>";
+            return "No editable sprite";
         }
 
         private ScenarioAuthoringInspectorDocument BuildSpritePickerDocument(
@@ -648,6 +678,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ? state.SpriteSwapPicker.PreviewCandidateToken
                 : savedToken;
             ScenarioSpriteCatalogService.SpriteCandidate previewCandidate = FindCandidate(picker, previewToken);
+            bool pickerDirty = (customEditor != null && customEditor.Dirty)
+                || !string.Equals(previewToken, savedToken, StringComparison.Ordinal);
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -688,8 +720,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = new[]
                 {
-                    Property("Preview", customEditor != null ? "Custom Sprite Draft" : (previewCandidate != null ? CleanCandidateLabel(previewCandidate.Label) : "<current>")),
-                    Property("Source", previewCandidate != null ? Safe(previewCandidate.SourceName) : "<current>"),
+                    Property("Preview", customEditor != null ? "Custom Sprite Draft" : (previewCandidate != null ? CleanCandidateLabel(previewCandidate.Label) : "Current saved look")),
+                    Property("Source", previewCandidate != null ? Safe(previewCandidate.SourceName) : "Current sprite"),
                     Property("Options", CountCandidates(picker.VanillaCandidates).ToString() + " vanilla / " + CountCandidates(picker.ModdedCandidates).ToString() + " scenario"),
                     Property("Compatibility", Safe(picker.CompatibilitySummary))
                 }
@@ -724,18 +756,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave,
                         "Save",
                         "Persist the previewed sprite swap.",
-                        true,
+                        pickerDirty,
                         customEditor != null && customEditor.Dirty,
                         "SV",
-                        "Commit the current preview.")),
+                        "Commit the current preview.",
+                        null,
+                        null,
+                        pickerDirty ? null : "No sprite changes to save.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                        "Discard",
-                        "Discard the preview and restore the currently saved sprite.",
+                        pickerDirty ? "Discard" : "Close",
+                        pickerDirty ? "Discard the preview and restore the currently saved sprite." : "Close the sprite browser.",
                         true,
                         false,
                         "CL",
-                        "Restore the previous sprite.")),
+                        pickerDirty ? "Restore the previous sprite." : "No changes are pending.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
                         "Import PNG",
@@ -759,7 +794,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         customEditor != null,
                         false,
                         "DS",
-                        "Drop the in-progress custom sprite draft."))
+                        "Drop the in-progress custom sprite draft.",
+                        null,
+                        null,
+                        customEditor != null ? null : "Open the pixel editor before reverting pixel edits."))
                 }
             });
 
@@ -797,6 +835,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string partLabel = customEditor != null && !string.IsNullOrEmpty(customEditor.CharacterPartLabel)
                 ? customEditor.CharacterPartLabel
                 : "Part";
+            bool characterDirty = customEditor != null && customEditor.Dirty;
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(new ScenarioAuthoringInspectorSection
@@ -843,18 +882,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave,
                         "Save & Close",
                         "Persist the current character texture edit into the scenario pack and close the editor.",
-                        true,
+                        characterDirty,
                         false,
                         "SV",
-                        "Write the edited character texture and update FamilySetup appearance data.")),
+                        "Write the edited character texture and update FamilySetup appearance data.",
+                        null,
+                        null,
+                        characterDirty ? null : "No character texture changes to save.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                        "Cancel",
-                        "Discard the current character texture draft and restore the previously configured appearance.",
+                        characterDirty ? "Discard" : "Close",
+                        characterDirty ? "Discard the current character texture draft and restore the previously configured appearance." : "Close the character texture editor.",
                         true,
                         false,
                         "CL",
-                        "Restore the previous character appearance.")),
+                        characterDirty ? "Restore the previous character appearance." : "No changes are pending.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
                         "Import PNG Replacement",
@@ -1862,7 +1904,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 title = "Weather Event";
                 subtitle = "Schedule a weather change for a scenario day and hour.";
                 List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
-                facts.Add(Fact("Type", Safe(weather.WeatherState), "Weather state to apply."));
+                facts.Add(Fact("Weather", FormatWeatherStateLabel(weather.WeatherState), "Weather state to apply."));
                 facts.Add(Fact("When", FormatSchedule(weather.When), "Scenario day and time."));
                 facts.Add(Fact("Duration", weather.DurationHours.ToString(CultureInfo.InvariantCulture) + " hour(s)", "Zero leaves weather unchanged until another event."));
                 sections.Add(FactSection("focused_weather_facts", "Weather", facts));
@@ -1888,7 +1930,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 subtitle = "Define what starts a timeline event.";
                 List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
                 facts.Add(Fact("Name", Safe(trigger.Id), "Stable trigger id saved in the scenario XML."));
-                facts.Add(Fact("Condition", Safe(trigger.Type), "What the trigger listens for."));
+                facts.Add(Fact("Condition", FormatTriggerTypeLabel(trigger.Type), "What the trigger listens for."));
                 facts.Add(Fact("When", FormatTriggerSchedule(trigger), "Only used by timed triggers."));
                 sections.Add(FactSection("focused_trigger_facts", "Trigger", facts));
 
@@ -1910,10 +1952,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 title = "Scheduled Change";
                 subtitle = "Choose when this change happens and what it does.";
-                string condition = string.IsNullOrEmpty(action.GateId) ? "<none>" : action.GateId;
+                string condition = string.IsNullOrEmpty(action.GateId) ? "No condition" : action.GateId;
                 string repeat = action.Policy != null && action.Policy.Repeatable ? "Repeat" : "Once";
                 List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
-                facts.Add(Fact("Kind", Safe(action.ActionType), "Primary effect template."));
+                facts.Add(Fact("Kind", FormatScheduledActionTypeLabel(action.ActionType), "Primary effect template."));
                 facts.Add(Fact("When", FormatSchedule(action.DueTime), "Scenario day and time."));
                 facts.Add(Fact("Condition", condition, "The event only fires while this is true."));
                 facts.Add(Fact("Repeat", repeat, "Whether the scheduled change can fire more than once."));
@@ -2579,7 +2621,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (items == null || weather == null)
                 return;
 
-            items.Add(TimelineFact(state, "weather", index, Safe(weather.WeatherState), FormatSchedule(weather.When), weather.DurationHours > 0 ? "Restores at " + FormatSchedule(AddHours(weather.When, weather.DurationHours)) : "No restore event"));
+            items.Add(TimelineFact(state, "weather", index, FormatWeatherStateLabel(weather.WeatherState), FormatSchedule(weather.When), weather.DurationHours > 0 ? "Restores at " + FormatSchedule(AddHours(weather.When, weather.DurationHours)) : "No restore event"));
             AddWeatherStateActions(items, index, weather.WeatherState);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Duration +", "Increase weather duration by one hour.", true, false, "DU+")));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Duration -", "Decrease weather duration by one hour.", true, false, "DU-")));
@@ -2593,7 +2635,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             string schedule = FormatTriggerSchedule(trigger);
-            items.Add(TimelineFact(state, "trigger", index, string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, Safe(trigger.Type) + " / " + schedule, "Defines what starts a timeline event."));
+            items.Add(TimelineFact(state, "trigger", index, string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, FormatTriggerTypeLabel(trigger.Type) + " / " + schedule, "Defines what starts a timeline event."));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTypePrefix + index.ToString(CultureInfo.InvariantCulture), "Cycle Trigger Type", "Switch between manual, scheduled, flag, quest, and item trigger templates.", true, false, "TY")));
             AddTriggerTargetActions(items, definition, trigger, index);
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, ScenarioAuthoringActionIds.ActionTriggerMinutePrefix, index);
@@ -2654,11 +2696,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 string state = states[i];
                 items.Add(ActionItem(Action(
                     ScenarioAuthoringActionIds.ActionWeatherScheduleStatePrefix + index.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken(state),
-                    state,
+                    FormatWeatherStateLabel(state),
                     "Set this weather state.",
                     true,
                     string.Equals(current, state, StringComparison.OrdinalIgnoreCase),
-                    "WE")));
+                    "WE",
+                    FormatWeatherGroupLabel(state))));
             }
         }
 
@@ -2729,7 +2772,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 string[] states = { "None", "Rain", "BlackRain", "LightSand", "MediumSand", "HeavySand" };
                 for (int i = 0; i < states.Length; i++)
-                    AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, states[i], "Set effect weather state.", states[i], "WE", string.Equals(effect.WeatherState, states[i], StringComparison.OrdinalIgnoreCase));
+                    AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, FormatWeatherStateLabel(states[i]), "Set effect weather state.", states[i], "WE", string.Equals(effect.WeatherState, states[i], StringComparison.OrdinalIgnoreCase), FormatWeatherGroupLabel(states[i]), null);
                 AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectWeatherDurationPrefix, prefix, "Duration +", "Increase weather duration.", "1", "DU+");
                 AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectWeatherDurationPrefix, prefix, "Duration -", "Decrease weather duration.", "-1", "DU-");
             }
@@ -3111,6 +3154,65 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return manager.currentState + " / day " + manager.currentDay;
         }
 
+        private static string FormatWeatherStateLabel(string state)
+        {
+            if (string.Equals(state, "None", StringComparison.OrdinalIgnoreCase))
+                return "Clear Weather";
+            if (string.Equals(state, "BlackRain", StringComparison.OrdinalIgnoreCase))
+                return "Black Rain";
+            if (string.Equals(state, "LightSand", StringComparison.OrdinalIgnoreCase))
+                return "Light Sandstorm";
+            if (string.Equals(state, "MediumSand", StringComparison.OrdinalIgnoreCase))
+                return "Sandstorm";
+            if (string.Equals(state, "HeavySand", StringComparison.OrdinalIgnoreCase))
+                return "Heavy Sandstorm";
+            return Safe(state);
+        }
+
+        private static string FormatWeatherGroupLabel(string state)
+        {
+            if (string.Equals(state, "None", StringComparison.OrdinalIgnoreCase))
+                return "Recovery";
+            if (string.Equals(state, "Rain", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state, "BlackRain", StringComparison.OrdinalIgnoreCase))
+                return "Rain";
+            if (string.Equals(state, "LightSand", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state, "MediumSand", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state, "HeavySand", StringComparison.OrdinalIgnoreCase))
+                return "Sandstorm";
+            return "Weather";
+        }
+
+        private static string FormatTriggerTypeLabel(string type)
+        {
+            if (string.Equals(type, "Manual", StringComparison.OrdinalIgnoreCase))
+                return "Manual trigger";
+            if (string.Equals(type, "Scheduled", StringComparison.OrdinalIgnoreCase))
+                return "Scheduled time";
+            if (string.Equals(type, "ScenarioFlagSet", StringComparison.OrdinalIgnoreCase))
+                return "Scenario flag";
+            if (string.Equals(type, "QuestState", StringComparison.OrdinalIgnoreCase))
+                return "Quest state";
+            if (string.Equals(type, "ItemQuantityAvailable", StringComparison.OrdinalIgnoreCase))
+                return "Stockpile item count";
+            return Safe(type);
+        }
+
+        private static string FormatScheduledActionTypeLabel(string type)
+        {
+            if (string.Equals(type, "Generic", StringComparison.OrdinalIgnoreCase))
+                return "Custom change";
+            if (string.Equals(type, "Inventory", StringComparison.OrdinalIgnoreCase))
+                return "Stockpile change";
+            if (string.Equals(type, "Weather", StringComparison.OrdinalIgnoreCase))
+                return "Weather change";
+            if (string.Equals(type, "Quest", StringComparison.OrdinalIgnoreCase))
+                return "Story change";
+            if (string.Equals(type, "Object", StringComparison.OrdinalIgnoreCase))
+                return "Object state change";
+            return Safe(type);
+        }
+
         private static string FormatSchedule(ScenarioScheduleTime time)
         {
             return ScenarioScheduleFormatter.Format(time);
@@ -3214,7 +3316,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 string gate = string.IsNullOrEmpty(action.GateId) ? "no condition" : "condition " + action.GateId;
                 string repeat = action.Policy != null && action.Policy.Repeatable ? "repeat " + action.Policy.CooldownMinutes.ToString(CultureInfo.InvariantCulture) + "m" : "once";
-                items.Add(TimelineFact(state, "scheduled_action", i, Safe(action.Id), Safe(action.ActionType) + " / " + FormatSchedule(action.DueTime) + " / " + gate + " / " + repeat, "Timed scenario change."));
+                items.Add(TimelineFact(state, "scheduled_action", i, Safe(action.Id), FormatScheduledActionTypeLabel(action.ActionType) + " / " + FormatSchedule(action.DueTime) + " / " + gate + " / " + repeat, "Timed scenario change."));
                 AddScheduleActions(items, ScenarioAuthoringActionIds.ActionScheduledActionDayPrefix, ScenarioAuthoringActionIds.ActionScheduledActionHourPrefix, i);
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionTypePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Action Type", "Cycle the primary effect template for this scheduled action.", true, false, "TY")));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "CN", gate)));
@@ -3273,11 +3375,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringSettingDefinition[] definitions = _settingsService.GetDefinitions();
             List<ScenarioAuthoringSettingsSectionViewModel> sections = new List<ScenarioAuthoringSettingsSectionViewModel>();
             Dictionary<string, List<ScenarioAuthoringSettingsItemViewModel>> bySection = new Dictionary<string, List<ScenarioAuthoringSettingsItemViewModel>>(StringComparer.OrdinalIgnoreCase);
+            bool showAdvancedDetails = ShowAdvancedDetails(state);
 
             for (int i = 0; i < definitions.Length; i++)
             {
                 ScenarioAuthoringSettingDefinition definition = definitions[i];
                 if (definition == null)
+                    continue;
+                if (IsAdvancedSetting(definition) && !showAdvancedDetails)
                     continue;
 
                 List<ScenarioAuthoringSettingsItemViewModel> items;
@@ -3288,6 +3393,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 string value = state.Settings != null ? state.Settings.Get(definition.Id, definition.DefaultValue) : definition.DefaultValue;
+                float numericValue = ParseSettingNumber(definition, value);
+                bool numericSetting = definition.Kind == ScenarioAuthoringSettingKind.Float || definition.Kind == ScenarioAuthoringSettingKind.Integer;
                 items.Add(new ScenarioAuthoringSettingsItemViewModel
                 {
                     Id = definition.Id,
@@ -3297,8 +3404,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Kind = definition.Kind,
                     BoolValue = state.Settings != null && state.Settings.GetBool(definition.Id, string.Equals(definition.DefaultValue, "true", StringComparison.OrdinalIgnoreCase)),
                     Enabled = definition.Kind != ScenarioAuthoringSettingKind.ReadOnly,
-                    CanIncrease = definition.Kind == ScenarioAuthoringSettingKind.Float || definition.Kind == ScenarioAuthoringSettingKind.Integer,
-                    CanDecrease = definition.Kind == ScenarioAuthoringSettingKind.Float || definition.Kind == ScenarioAuthoringSettingKind.Integer,
+                    CanIncrease = numericSetting && numericValue < definition.MaxValue,
+                    CanDecrease = numericSetting && numericValue > definition.MinValue,
                     ChoiceLabels = definition.ChoiceLabels,
                     ChoiceValues = definition.ChoiceValues,
                     SelectedChoiceIndex = ResolveChoiceIndex(definition, value)
@@ -3345,6 +3452,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return -1;
+        }
+
+        private static bool IsAdvancedSetting(ScenarioAuthoringSettingDefinition definition)
+        {
+            return definition != null
+                && string.Equals(definition.Section, "Advanced", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static float ParseSettingNumber(ScenarioAuthoringSettingDefinition definition, string value)
+        {
+            if (definition == null)
+                return 0f;
+
+            float parsed;
+            if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+                float.TryParse(definition.DefaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed);
+            if (definition.Kind == ScenarioAuthoringSettingKind.Integer)
+                parsed = Mathf.RoundToInt(parsed);
+            return parsed;
         }
 
         private static string[] BuildStatusEntries(ScenarioAuthoringState state, ScenarioEditorSession editorSession, ScenarioAuthoringSession session)
@@ -3472,7 +3598,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ? "End playtest and restore frozen authoring."
                     : "Start a live playtest from the current draft."));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionCloseEditor, "Exit Editor", "Close the authoring shell and release scene ownership.", true, false, "EX", "Leave the scenario editor."));
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current selected target.", hasSelection, false, "CL", "Drop the current target selection."));
+            actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current selected target.", hasSelection, false, "CL", "Drop the current target selection.", null, null, hasSelection ? null : "No target is selected."));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionConvertToNormal, "Convert Save", "Convert the current scenario-bound save into a normal save.", true, false, "CV", "Detach this save from the scenario editor."));
             return actions.ToArray();
         }
@@ -3644,7 +3770,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         internal static string FormatTarget(ScenarioAuthoringTarget target)
         {
-            return target == null ? "<none>" : (target.DisplayName + " [" + target.Kind + "]");
+            return target == null ? "No target selected" : (target.DisplayName + " [" + target.Kind + "]");
         }
 
         private static GameObject ResolveGameObject(ScenarioAuthoringTarget target)

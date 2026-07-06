@@ -112,7 +112,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(ScenarioInspectorItemFactory.Property("Current Look", ScenarioInspectorItemFactory.Safe(model.Target.SpriteName)));
-            items.Add(ScenarioInspectorItemFactory.Property("Replacement", !string.IsNullOrEmpty(previewLabel) ? previewLabel : (model.HasActiveRule ? ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary) : "<none>")));
+            items.Add(ScenarioInspectorItemFactory.Property("Replacement", !string.IsNullOrEmpty(previewLabel) ? previewLabel : (model.HasActiveRule ? ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary) : "No replacement selected")));
             items.Add(ScenarioInspectorItemFactory.Property("Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString() + " vanilla / " + ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString() + " scenario"));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
@@ -258,15 +258,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool showAdvancedDetails = ShowAdvancedDetails(state);
             items.Add(ScenarioInspectorItemFactory.Text(
                 ScenarioAuthoringPresentationBuilder.FormatTarget(target),
-                target != null ? target.Kind.ToString() : "<none>",
+                target != null ? target.Kind.ToString() : "Select a world target or grid cell to anchor placed art.",
                 null,
                 "AN",
                 ResolvePreviewSprite(target),
                 true));
             items.Add(ScenarioInspectorItemFactory.Property("Anchor", ScenarioAuthoringPresentationBuilder.FormatTarget(target)));
-            items.Add(ScenarioInspectorItemFactory.Property("Grid", target != null && target.GridX.HasValue && target.GridY.HasValue ? (target.GridX.Value + "," + target.GridY.Value) : "<none>"));
-            items.Add(ScenarioInspectorItemFactory.Property("Active Placement", model.ActivePlacement != null ? ScenarioInspectorItemFactory.Safe(model.ActivePlacement.Id) : "<none>"));
-            items.Add(ScenarioInspectorItemFactory.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioInspectorItemFactory.Safe(model.ActiveCandidateLabel) : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.Property("Grid", target != null && target.GridX.HasValue && target.GridY.HasValue ? (target.GridX.Value + "," + target.GridY.Value) : "No grid anchor selected"));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Placement", model.ActivePlacement != null ? ScenarioInspectorItemFactory.Safe(model.ActivePlacement.Id) : "No authored placement selected"));
+            items.Add(ScenarioInspectorItemFactory.Property("Active Sprite", !string.IsNullOrEmpty(model.ActiveCandidateLabel) ? ScenarioInspectorItemFactory.Safe(model.ActiveCandidateLabel) : "Choose a sprite below to start placement"));
             items.Add(ScenarioInspectorItemFactory.Property("Placement Preview", model.PlacementActive ? "Active" : "Inactive"));
             items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
             items.Add(ScenarioInspectorItemFactory.Property("Vanilla Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
