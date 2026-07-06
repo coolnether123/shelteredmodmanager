@@ -77,6 +77,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             TransitionActive = active;
         }
 
+        public void SuppressWorldInputForAction()
+        {
+            PointerOverAuthoringUi = true;
+            PointerOverAuthoringUiLastFrame = true;
+        }
+
         public void CompleteFrame()
         {
             Vector2 pointer = GetPointerPosition(_coordinateScale);

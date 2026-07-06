@@ -241,6 +241,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public ScenarioAuthoringActionExecutionResult ExecuteActionWithResult(string actionId)
         {
+            ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+            if (inputCapture != null)
+                inputCapture.SuppressWorldInputForAction();
+
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionCloseEditor, StringComparison.Ordinal))
             {
                 ScenarioAuthoringBootstrapService.Instance.RequestCloseActiveSession("Closed from authoring shell.", true);

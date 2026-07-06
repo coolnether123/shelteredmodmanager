@@ -30,15 +30,18 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private readonly ScenarioSpriteSwapAuthoringService _service;
         private readonly ScenarioSelectionScopeService _scopeService;
         private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
 
         public SpriteCommandHandler(
             ScenarioSpriteSwapAuthoringService service,
             ScenarioSelectionScopeService scopeService,
-            ScenarioAuthoringLayoutService layoutService)
+            ScenarioAuthoringLayoutService layoutService,
+            ScenarioBuildPlacementAuthoringService buildPlacement)
         {
             _service = service;
             _scopeService = scopeService;
             _layoutService = layoutService;
+            _buildPlacement = buildPlacement;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -62,6 +65,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             bool changed = _service.TryHandleAction(state, actionId, out handled, out message);
+            if (changed
+                && handled
+                && string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, StringComparison.Ordinal)
+                && _buildPlacement != null)
+            {
+                _buildPlacement.Reset();
+            }
+
             if (handled && IsPixelEditorTerminalAction(actionId) && _service.GetCustomEditorModel(state) == null && _layoutService != null)
                 changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, false);
             return changed;

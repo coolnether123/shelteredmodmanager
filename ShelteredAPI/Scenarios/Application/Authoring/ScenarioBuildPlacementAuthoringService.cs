@@ -728,7 +728,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid grid;
             int gridX;
             int gridY;
-            if (!TryGetReadyShelterGrid(out grid, out message) || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
+            if (!TryResolveActiveGridCell(ghost.transform.position, out grid, out gridX, out gridY, out message))
             {
                 return CancelActivePlacement(message ?? "Room placement could not resolve a shelter cell.", out message);
             }
@@ -800,7 +800,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid grid;
             int gridX;
             int gridY;
-            if (!TryGetReadyShelterGrid(out grid, out message) || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
+            if (!TryResolveActiveGridCell(ghost.transform.position, out grid, out gridX, out gridY, out message))
             {
                 return CancelActivePlacement(message ?? "Ladder placement could not resolve a shelter cell.", out message);
             }
@@ -871,7 +871,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid grid;
             int gridX;
             int gridY;
-            if (!TryGetReadyShelterGrid(out grid, out message) || !grid.WorldCoordsToCellCoords(ghost.transform.position, out gridX, out gridY))
+            if (!TryResolveActiveGridCell(ghost.transform.position, out grid, out gridX, out gridY, out message))
             {
                 return CancelActivePlacement(message ?? "Room light placement could not resolve a shelter cell.", out message);
             }
@@ -1079,7 +1079,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
             int gridX = -1;
             int gridY = -1;
-            bool hasCell = grid != null && grid.WorldCoordsToCellCoords(_activePlacement.Ghost.transform.position, out gridX, out gridY);
+            bool hasCell = TryResolveActiveGridCell(_activePlacement.Ghost.transform.position, out grid, out gridX, out gridY);
             ShelterRoomGrid.GridCell cell = hasCell ? grid.GetCell(gridX, gridY) : null;
             bool ghostAllowsPlacement = _activePlacement.Ghost.IsPlacable();
             PlacementValidationResult result = new PlacementValidationResult
@@ -1293,6 +1293,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY);
 
             return worldPoint;
+        }
+
+        private static bool TryResolveActiveGridCell(Vector3 worldPosition, out ShelterRoomGrid grid, out int gridX, out int gridY)
+        {
+            string ignored;
+            return TryResolveActiveGridCell(worldPosition, out grid, out gridX, out gridY, out ignored);
+        }
+
+        private static bool TryResolveActiveGridCell(Vector3 worldPosition, out ShelterRoomGrid grid, out int gridX, out int gridY, out string message)
+        {
+            gridX = -1;
+            gridY = -1;
+            if (!TryGetReadyShelterGrid(out grid, out message))
+                return false;
+
+            if (ScenarioGridSnapService.TryGetCell(worldPosition, out gridX, out gridY))
+                return true;
+
+            if (grid.WorldCoordsToCellCoords(worldPosition, out gridX, out gridY))
+                return true;
+
+            message = "Target is outside the shelter grid.";
+            return false;
         }
 
         private static Vector3 ResolveLadderPlacementPosition(Vector3 worldPoint)

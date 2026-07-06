@@ -49,7 +49,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     result.Handled = true;
                     result.Changed = changed;
                     result.Message = message;
-                    result.Result = changed || !string.IsNullOrEmpty(message);
+                    result.Result = changed;
                     return result;
                 }
             }

@@ -546,6 +546,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             state.ActiveSelectionStackIndex = next;
             ScenarioAuthoringTarget active = state.SelectionStack[next];
+            if (state.SelectedTarget != null && active != null)
+            {
+                state.SelectedTarget = active.Copy();
+                state.MultiSelection.Clear();
+                state.MultiSelection.Add(active.Copy());
+            }
+
             state.StatusMessage = "Selection stack " + (next + 1) + "/" + count + ": " + (active != null ? active.DisplayName : "Unknown") + ".";
             return true;
         }

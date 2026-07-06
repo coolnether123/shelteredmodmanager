@@ -501,6 +501,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 null,
                 editDisabledReason)));
             items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart,
+                "Edit Pixels",
+                "Open the pixel editor for this visual target.",
+                replacementAllowed,
+                false,
+                "PX",
+                null,
+                null,
+                null,
+                editDisabledReason)));
+            items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionSelectionClear,
                 "Clear Selection",
                 "Clear the current scenario target selection.",

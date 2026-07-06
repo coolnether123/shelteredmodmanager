@@ -98,7 +98,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             return new IScenarioCommandHandler[]
             {
-                new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService, layoutService),
+                new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService, layoutService, sectionHub.BuildPlacement),
                 new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),
                 new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new ScenarioHelpCommandHandler(tutorialService, layoutService, setupStateService),

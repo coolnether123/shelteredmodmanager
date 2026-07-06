@@ -412,6 +412,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private bool BeginCustomEdit(ScenarioAuthoringState state, out string message)
         {
             message = null;
+            if (!IsPickerOpen(state))
+            {
+                string openMessage;
+                if (!OpenPicker(state, out openMessage))
+                {
+                    message = openMessage;
+                    return false;
+                }
+            }
+
             ScenarioEditorSession session;
             SpritePickerModel model;
             if (!TryGetOpenPickerModel(state, out session, out model, out message))
