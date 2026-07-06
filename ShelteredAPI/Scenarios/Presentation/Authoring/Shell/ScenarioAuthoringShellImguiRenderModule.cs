@@ -78,6 +78,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _spritePickerSearchFocused;
         private float _activeContentWidth;
         private int _scaledWindowDrawDepth;
+        private Vector2 _pixelEditorPan = Vector2.zero;
+        private bool _pixelEditorPanning;
+        private Vector2 _pixelEditorPanStartMouse = Vector2.zero;
+        private Vector2 _pixelEditorPanStart = Vector2.zero;
 
         public string ModuleId
         {
@@ -374,7 +378,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             Dictionary<string, Rect> rects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
             float viewportLeft = contentRect.x + ToolRailWidth + Gutter;
-            float viewportRight = contentRect.xMax - InspectorWidth - Gutter;
+            ScenarioAuthoringShellWindowViewModel inspectorWindow = FindWindow(windows, ScenarioAuthoringWindowIds.Inspector);
+            float inspectorWidth = ResolveInspectorWidth(inspectorWindow);
+            float viewportRight = contentRect.xMax - inspectorWidth - Gutter;
             string activeWorkspaceId = GetActiveWorkspaceId(windows);
             bool workspaceStageActive = activeWorkspaceId != null;
 
@@ -386,7 +392,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     rects,
                     windows,
                     ScenarioAuthoringWindowIds.Inspector,
-                    ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect));
+                    ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect, inspectorWidth));
             }
 
             if (showBottomTray)
@@ -395,7 +401,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 AppendRendererRects(rects, windows, ScenarioAuthoringShellRendererKind.BottomTray, buildToolsRect);
             }
 
-            Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, showBottomTray);
+            Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, showBottomTray, inspectorWidth);
             AppendWorkspaceRects(rects, windows, workspaceRect);
             AppendFloatingRects(rects, windows, contentRect);
             return rects;
@@ -423,6 +429,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 if (floating)
                     rect = HandleFloatingWindowInput(window, rect, contentRect);
+                else if (window.Dock == ScenarioAuthoringShellDock.Right
+                    && string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
+                {
+                    rect = HandleDockedInspectorResize(window, rect, contentRect);
+                }
 
                 _animations.UpdateWindowRect(window.Id, rect);
                 Rect scrollRect = DrawWindowCore(rect, window);
@@ -592,6 +603,73 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static Rect BuildFloatingResizeRect(Rect rect)
         {
             return new Rect(rect.xMax - 20f, rect.yMax - 20f, 16f, 16f);
+        }
+
+        private static Rect BuildDockedInspectorResizeRect(Rect rect)
+        {
+            return new Rect(rect.x - 5f, rect.y, 10f, rect.height);
+        }
+
+        private Rect HandleDockedInspectorResize(ScenarioAuthoringShellWindowViewModel window, Rect rect, Rect contentRect)
+        {
+            Event current = Event.current;
+            Rect gripRect = BuildDockedInspectorResizeRect(rect);
+            if (current != null && current.type == EventType.MouseDown && current.button == 0 && gripRect.Contains(current.mousePosition))
+            {
+                _dragWindowId = window.Id;
+                _dragMode = FloatingWindowDragMode.Resize;
+                _dragStartMouse = current.mousePosition;
+                _dragStartRect = rect;
+                _dragLastRect = rect;
+                current.Use();
+            }
+
+            if (IsDraggingWindow(window.Id) && _dragMode == FloatingWindowDragMode.Resize)
+            {
+                if (current != null && (current.type == EventType.MouseDrag || current.type == EventType.Repaint || current.type == EventType.Layout))
+                {
+                    float deltaX = current.mousePosition.x - _dragStartMouse.x;
+                    float width = Mathf.Clamp(
+                        _dragStartRect.width - deltaX,
+                        ScenarioAuthoringShellLayout.InspectorMinWidth,
+                        Math.Min(ScenarioAuthoringShellLayout.InspectorMaxWidth, Math.Max(ScenarioAuthoringShellLayout.InspectorMinWidth, contentRect.width - ToolRailWidth - (Gutter * 3f))));
+                    rect = new Rect(contentRect.xMax - width, rect.y, width, rect.height);
+                    _dragLastRect = rect;
+                    CommitFloatingWindowFrame(window.Id, rect, false);
+                    if (current.type == EventType.MouseDrag)
+                        current.Use();
+                }
+
+                if (current != null && current.type == EventType.MouseUp)
+                {
+                    CommitFloatingWindowFrame(window.Id, _dragLastRect, true);
+                    ClearFloatingDrag();
+                    current.Use();
+                }
+            }
+
+            if (Event.current != null && Event.current.type == EventType.Repaint)
+                GUI.Label(new Rect(rect.x - 5f, rect.y + 8f, 10f, 44f), "|", _mutedTextStyle);
+
+            return rect;
+        }
+
+        private static ScenarioAuthoringShellWindowViewModel FindWindow(ScenarioAuthoringShellWindowViewModel[] windows, string id)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window != null && string.Equals(window.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return window;
+            }
+
+            return null;
+        }
+
+        private static float ResolveInspectorWidth(ScenarioAuthoringShellWindowViewModel window)
+        {
+            float width = window != null && window.Width > 0f ? window.Width : InspectorWidth;
+            return Mathf.Clamp(width, ScenarioAuthoringShellLayout.InspectorMinWidth, ScenarioAuthoringShellLayout.InspectorMaxWidth);
         }
 
         private static int CountChromeActions(ScenarioAuthoringInspectorAction[] actions)

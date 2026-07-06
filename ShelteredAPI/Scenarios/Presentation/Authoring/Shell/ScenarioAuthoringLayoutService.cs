@@ -375,10 +375,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return false;
 
             ScenarioAuthoringWindowDefinition definition = _windowRegistry.Find(windowId);
-            if (definition == null || definition.Dock != ScenarioAuthoringShellDock.Floating)
+            bool dockedInspector = definition != null
+                && definition.Dock == ScenarioAuthoringShellDock.Right
+                && string.Equals(windowId, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase);
+            if (definition == null || (definition.Dock != ScenarioAuthoringShellDock.Floating && !dockedInspector))
                 return false;
 
-            float clampedWidth = Math.Max(definition.MinWidth, width);
+            float minWidth = dockedInspector ? ScenarioAuthoringShellLayout.InspectorMinWidth : definition.MinWidth;
+            float maxWidth = dockedInspector ? ScenarioAuthoringShellLayout.InspectorMaxWidth : float.MaxValue;
+            float clampedWidth = Math.Min(maxWidth, Math.Max(minWidth, width));
             float clampedHeight = Math.Max(definition.MinHeight, height);
             bool changed = !window.HasCustomBounds
                 || Math.Abs(window.X - x) > 0.01f

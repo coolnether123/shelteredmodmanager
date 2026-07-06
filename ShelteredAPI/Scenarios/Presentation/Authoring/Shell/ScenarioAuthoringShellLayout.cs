@@ -17,6 +17,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float StatusHeight = 46f;
         public const float ToolRailWidth = 116f;
         public const float InspectorWidth = 300f;
+        public const float InspectorMinWidth = 240f;
+        public const float InspectorMaxWidth = 480f;
         public const float BottomTrayHeight = 272f;
         public const float CommandDockHeight = 48f;
 
@@ -75,14 +77,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildInspectorRect(Rect contentRect)
         {
+            return BuildInspectorRect(contentRect, InspectorWidth);
+        }
+
+        public static Rect BuildInspectorRect(Rect contentRect, float inspectorWidth)
+        {
             // Anchor the inspector below the HUD reserve so it never sits on top of the
             // vanilla clock/magnifier widgets, regardless of how tall the top bar grows.
+            float width = Mathf.Clamp(inspectorWidth > 0f ? inspectorWidth : InspectorWidth, InspectorMinWidth, InspectorMaxWidth);
             float minY = HudReserveHeight + Gutter + InspectorHudClearance;
             float y = Math.Max(contentRect.y + InspectorTopOffset, minY);
             float maxBottom = contentRect.yMax - Gutter;
             float height = Mathf.Clamp(maxBottom - y, 200f, 540f);
-            float x = contentRect.xMax - InspectorWidth;
-            return new Rect(x, y, InspectorWidth, height);
+            float x = contentRect.xMax - width;
+            return new Rect(x, y, width, height);
         }
 
         public static Rect BuildBottomTrayRect(Rect contentRect, float viewportLeft, float viewportRight)
@@ -125,10 +133,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildWorkspaceRect(Rect contentRect, bool reserveBottomTray)
         {
+            return BuildWorkspaceRect(contentRect, reserveBottomTray, InspectorWidth);
+        }
+
+        public static Rect BuildWorkspaceRect(Rect contentRect, bool reserveBottomTray, float inspectorWidth)
+        {
             Rect workspaceBounds = reserveBottomTray
                 ? new Rect(contentRect.x, contentRect.y, contentRect.width, Math.Max(240f, contentRect.height - BottomTrayHeight - Gutter))
                 : contentRect;
-            float maxWidth = Math.Max(320f, workspaceBounds.width - ((ToolRailWidth + Gutter + InspectorWidth + Gutter) * 0.5f));
+            float dockWidth = Mathf.Clamp(inspectorWidth > 0f ? inspectorWidth : InspectorWidth, InspectorMinWidth, InspectorMaxWidth);
+            float maxWidth = Math.Max(320f, workspaceBounds.width - ((ToolRailWidth + Gutter + dockWidth + Gutter) * 0.5f));
             float maxHeight = Math.Max(220f, workspaceBounds.height - WorkspaceTabReserveHeight - Gutter);
             float width = Mathf.Clamp(workspaceBounds.width * 0.58f, Math.Min(640f, maxWidth), Math.Min(980f, maxWidth));
             float height = Mathf.Clamp(workspaceBounds.height * 0.72f, Math.Min(400f, maxHeight), Math.Min(620f, maxHeight));

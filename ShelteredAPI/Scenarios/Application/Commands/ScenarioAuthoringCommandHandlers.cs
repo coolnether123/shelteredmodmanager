@@ -273,6 +273,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowRestorePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorTabPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingTogglePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingIncreasePrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingDecreasePrefix, StringComparison.Ordinal)
@@ -326,6 +327,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorTabPrefix, StringComparison.Ordinal))
                 return SetInspectorTab(state, actionId.Substring(ScenarioAuthoringActionIds.ActionInspectorTabPrefix.Length));
 
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix, StringComparison.Ordinal))
+                return ToggleInspectorPin(state, actionId.Substring(ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix.Length));
+
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSettingTogglePrefix, StringComparison.Ordinal))
                 return ToggleSetting(state, actionId.Substring(ScenarioAuthoringActionIds.ActionSettingTogglePrefix.Length));
 
@@ -339,6 +343,19 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return SelectSetting(state, actionId.Substring(ScenarioAuthoringActionIds.ActionSettingSelectPrefix.Length));
 
             return false;
+        }
+
+        private bool ToggleInspectorPin(ScenarioAuthoringState state, string token)
+        {
+            if (state == null || state.Settings == null || string.IsNullOrEmpty(token))
+                return false;
+
+            string settingId = "inspector.pin." + token;
+            bool current = state.Settings.GetBool(settingId, true);
+            state.Settings.Set(settingId, current ? "false" : "true");
+            _settingsService.Save(state.Settings);
+            state.StatusMessage = "Inspector fact " + (current ? "unpinned." : "pinned.");
+            return true;
         }
 
         private bool SetStage(ScenarioAuthoringState state, ScenarioStageKind stageKind, out string message, string statusMessage)

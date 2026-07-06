@@ -282,15 +282,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool replacementAllowed = scopeAllowed && target.SupportsReplace;
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildObjectSummarySection(state, target, classification, objectPlacement, hasCapturedPlacement, ShowAdvancedDetails(state)));
-            sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
+            sections.Add(BuildTargetStripSection(state, target, classification));
+            sections.Add(BuildPinnedFactsSection(state, target, classification, objectPlacement, hasCapturedPlacement));
+            sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
             if (replacementAllowed)
             {
                 List<ScenarioAuthoringInspectorSection> assetEditorSections = _assetAuthoringContentBuilder.BuildSelectedAssetEditorSections(state, editorSession, target);
                 for (int i = 0; i < assetEditorSections.Count; i++)
                     sections.Add(assetEditorSections[i]);
             }
-            sections.Add(BuildPrimaryActionsSection(scopeAllowed, canCaptureTarget, hasCapturedPlacement, replacementAllowed));
+            sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
             sections.Add(BuildWarningsSection(scopeAllowed, target, objectPlacement, definition, captureReason));
 
             if (state != null && state.Settings != null && state.Settings.GetBool("debug.show_advanced_details", false))
@@ -300,21 +301,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Title = "Target Inspector",
                 Subtitle = target.DisplayName,
-                HeaderActions = new[]
-                {
-                    Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current scenario target selection.", true, false)
-                },
+                HeaderActions = BuildInspectorHeaderActions(state),
                 Sections = sections.ToArray()
             };
         }
 
-        private ScenarioAuthoringInspectorSection BuildObjectSummarySection(
+        private ScenarioAuthoringInspectorSection BuildTargetStripSection(
             ScenarioAuthoringState state,
             ScenarioAuthoringTarget target,
-            ScenarioTargetClassification classification,
-            ObjectPlacement objectPlacement,
-            bool hasCapturedPlacement,
-            bool showAdvancedDetails)
+            ScenarioTargetClassification classification)
         {
             string friendlyKind = FriendlyKindLabel(target.Kind);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -325,19 +320,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "TG",
                 ResolvePreviewSprite(target),
                 true));
-            items.Add(Property("Name", Safe(target.DisplayName)));
-            items.Add(Property("Kind", friendlyKind));
-            items.Add(Property("Layer", _targetClassifier.FormatScopeLabel(classification)));
             int stackCount = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
             if (stackCount > 0)
             {
                 int activeIndex = Mathf.Clamp(state.ActiveSelectionStackIndex, 0, stackCount - 1);
-                items.Add(Property(
-                    "Target",
-                    "Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + stackCount.ToString(CultureInfo.InvariantCulture)));
+                items.Add(ActionItem(Action(
+                    ScenarioAuthoringActionIds.ActionSelectionStackCycle,
+                    "Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + stackCount.ToString(CultureInfo.InvariantCulture),
+                    "Cycle through selectable targets under the pointer.",
+                    stackCount > 1,
+                    false,
+                    ">>")));
 
                 List<string> candidateNames = new List<string>();
-                int displayCount = Mathf.Min(stackCount, 6);
+                int displayCount = Mathf.Min(stackCount, 4);
                 for (int i = 0; i < displayCount; i++)
                 {
                     ScenarioAuthoringTarget candidate = state.SelectionStack[i];
@@ -350,16 +346,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 items.Add(Text("Under cursor: " + string.Join(" | ", candidateNames.ToArray())));
             }
-            if (showAdvancedDetails)
-                items.Add(Property("Draft Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
-            items.Add(Property("Draft State", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement)));
-            items.Add(Property("Starts", FormatStartState(objectPlacement)));
             return new ScenarioAuthoringInspectorSection
             {
-                Id = "object_summary",
-                Title = "Selection",
+                Id = "target_strip",
+                Title = "Target",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                Items = items.ToArray()
+            };
+        }
+
+        private ScenarioAuthoringInspectorSection BuildPinnedFactsSection(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringTarget target,
+            ScenarioTargetClassification classification,
+            ObjectPlacement objectPlacement,
+            bool hasCapturedPlacement)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool editPins = state != null && state.Settings != null && state.Settings.GetBool("inspector.pin_edit_mode", false);
+            AddPinnedFact(items, state, target.Kind, "kind", "Kind", FriendlyKindLabel(target.Kind), editPins);
+            AddPinnedFact(items, state, target.Kind, "room_cell", "Room/Cell", FormatTargetCell(target), editPins);
+            AddPinnedFact(items, state, target.Kind, "draft_state", "Captured State", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement), editPins);
+            AddPinnedFact(items, state, target.Kind, "sprite", "Sprite", ResolveTargetSpriteName(target), editPins);
+            AddPinnedFact(items, state, target.Kind, "layer", "Layer", _targetClassifier.FormatScopeLabel(classification), editPins);
+            AddPinnedFact(items, state, target.Kind, "starts", "Starts", FormatStartState(objectPlacement), editPins);
+            if (items.Count == 0)
+                items.Add(Text(editPins ? "All facts are unpinned for this target kind." : "No pinned facts are enabled."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "pinned_facts",
+                Title = editPins ? "Pinned Facts (editing)" : "Pinned Facts",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
             };
         }
@@ -380,7 +400,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Id = "scenario_behavior",
                 Title = "Scenario Rules",
-                Expanded = true,
+                Expanded = false,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
             };
@@ -474,10 +494,65 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Id = "warnings",
                 Title = "Warnings",
-                Expanded = true,
+                Expanded = items.Count > 0 && !string.Equals(items[0].Value, "No warnings for this target.", StringComparison.Ordinal),
                 Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                 Items = items.ToArray()
             };
+        }
+
+        private static void AddPinnedFact(
+            List<ScenarioAuthoringInspectorItem> items,
+            ScenarioAuthoringState state,
+            ScenarioAuthoringTargetKind kind,
+            string factId,
+            string label,
+            string value,
+            bool editPins)
+        {
+            string keyToken = BuildInspectorPinToken(kind, factId);
+            bool pinned = state == null || state.Settings == null || state.Settings.GetBool("inspector.pin." + keyToken, true);
+            if (!pinned && !editPins)
+                return;
+
+            if (editPins)
+            {
+                items.Add(ActionItem(Action(
+                    ScenarioAuthoringActionIds.ActionInspectorPinTogglePrefix + keyToken,
+                    (pinned ? "Unpin " : "Pin ") + label,
+                    "Toggle whether this fact appears for " + FriendlyKindLabel(kind).ToLowerInvariant() + " targets.",
+                    true,
+                    pinned,
+                    pinned ? "PIN" : "+",
+                    label + ": " + Safe(value))));
+                return;
+            }
+
+            items.Add(Property(label, Safe(value)));
+        }
+
+        private static string BuildInspectorPinToken(ScenarioAuthoringTargetKind kind, string factId)
+        {
+            return kind.ToString().ToLowerInvariant() + "." + (factId ?? string.Empty).ToLowerInvariant();
+        }
+
+        private static string FormatTargetCell(ScenarioAuthoringTarget target)
+        {
+            if (target == null || !target.GridX.HasValue || !target.GridY.HasValue)
+                return "<none>";
+
+            return target.GridX.Value.ToString(CultureInfo.InvariantCulture) + "," + target.GridY.Value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private string ResolveTargetSpriteName(ScenarioAuthoringTarget target)
+        {
+            if (target == null || !target.SupportsReplace)
+                return "<none>";
+
+            ScenarioSpriteRuntimeResolver.ResolvedTarget resolvedTarget;
+            if (_runtimeResolver.TryResolve(target, out resolvedTarget) && resolvedTarget != null)
+                return Safe(resolvedTarget.SpriteName);
+
+            return "<none>";
         }
 
         private ScenarioAuthoringInspectorDocument BuildSpritePickerDocument(
@@ -495,6 +570,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioSpriteSwapAuthoringService.CustomEditorModel customEditor = _sectionHub.SpriteSwap.GetCustomEditorModel(state);
             if (customEditor != null && customEditor.IsCharacterEditor)
                 return BuildCharacterSpritePickerDocument(state, customEditor);
+            if (customEditor != null)
+                return null;
 
             ScenarioSpriteSwapAuthoringService.SpritePickerModel picker = _sectionHub.SpriteSwap.GetPickerModel(
                 editorSession,
@@ -542,7 +619,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "sprite_picker_summary",
-                Title = "Selected Asset",
+                Title = "Selected Sprite",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                 Items = new[]
@@ -553,16 +630,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         picker.Target.Kind.ToString(),
                         "SP",
                         previewCandidate != null ? previewCandidate.Sprite : picker.Target.CurrentSprite,
-                        true),
+                        true)
+                }
+            });
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "sprite_picker_current",
+                Title = "Current Look",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = new[]
+                {
                     Property("Target", FormatTarget(state.SpriteSwapPicker.Target)),
-                    Property("Asset Type", FriendlyKindLabel(picker.Target.Kind)),
-                    Property("Saved Swap", Safe(picker.ActiveRuleSummary)),
+                    Property("Sprite", Safe(picker.Target.SpriteName)),
+                    Property("Source", Safe(picker.Target.TextureName)),
+                    Property("Saved Swap", Safe(picker.ActiveRuleSummary))
+                }
+            });
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "sprite_picker_replacement",
+                Title = "Replacement",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = new[]
+                {
                     Property("Preview", customEditor != null ? "Custom Sprite Draft" : (previewCandidate != null ? CleanCandidateLabel(previewCandidate.Label) : "<current>")),
-                    Property("Custom Editor", customEditor != null ? "Active" : "Inactive"),
-                    Property("Compatibility", Safe(picker.CompatibilitySummary)),
-                    Property("Compatible Vanilla", CountCandidates(picker.VanillaCandidates).ToString()),
-                    Property("Compatible Modded", CountCandidates(picker.ModdedCandidates).ToString()),
-                    Text("Selecting an asset previews it immediately on the live target. The custom editor supports paint, eyedropper, rectangular selection, and pixel copy/paste before saving.")
+                    Property("Source", previewCandidate != null ? Safe(previewCandidate.SourceName) : "<current>"),
+                    Property("Options", CountCandidates(picker.VanillaCandidates).ToString() + " vanilla / " + CountCandidates(picker.ModdedCandidates).ToString() + " scenario"),
+                    Property("Compatibility", Safe(picker.CompatibilitySummary))
                 }
             });
             if (ShowAdvancedDetails(state))
@@ -586,22 +682,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "sprite_picker_actions",
-                Title = "Commit",
+                Title = "Actions",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = new[]
                 {
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave,
-                        "Save & Close",
-                        "Persist the previewed sprite swap and close the asset editor.",
+                        "Save",
+                        "Persist the previewed sprite swap.",
                         true,
-                        false,
+                        customEditor != null && customEditor.Dirty,
                         "SV",
                         "Commit the current preview.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                        "Cancel",
+                        "Discard",
                         "Discard the preview and restore the currently saved sprite.",
                         true,
                         false,
@@ -609,7 +705,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         "Restore the previous sprite.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapImportPng,
-                        "Import PNG Replacement",
+                        "Import PNG",
                         "Import the newest same-size PNG from the scenario import folder as a user-owned full replacement.",
                         true,
                         false,
@@ -617,15 +713,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         "Copy a user-owned PNG into the scenario pack.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart,
-                        customEditor != null ? "Custom Editor Active" : "Edit Custom Copy",
-                        "Duplicate the current preview into the asset editor's pixel tools so you can recolor, sample, select, copy, and paste pixels before saving a scenario custom sprite.",
+                        customEditor != null ? "Pixel Editor Open" : "Edit Pixels",
+                        "Open the dedicated pixel editor for the current preview.",
                         true,
                         customEditor != null,
                         "PX",
-                        "Edit pixels in the same workspace.")),
+                        "Edit pixels in a dedicated window.")),
                     ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard,
-                        "Discard Custom Copy",
+                        "Revert",
                         "Discard the current custom sprite draft and restore the saved sprite preview.",
                         customEditor != null,
                         false,
@@ -1013,19 +1109,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (windowState == null)
                     continue;
 
-                if (!IsWindowInShell(windowState) && !string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
+                ScenarioSpriteSwapAuthoringService.CustomEditorModel pixelEditor = _sectionHub.SpriteSwap.GetCustomEditorModel(state);
+                bool forcePixelEditor = pixelEditor != null
+                    && pixelEditor.Visible
+                    && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase);
+                if (!forcePixelEditor
+                    && !IsWindowInShell(windowState)
+                    && !string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 ScenarioAuthoringShellWindowViewModel window = new ScenarioAuthoringShellWindowViewModel
                 {
                     Id = definitionEntry.Id,
-                    Title = ResolveWindowTitle(definitionEntry, state),
+                    Title = forcePixelEditor && pixelEditor.Dirty ? "Pixel Editor *" : ResolveWindowTitle(definitionEntry, state),
                     Dock = definitionEntry.Dock,
                     WorkspaceStage = ResolveWindowWorkspaceStage(definitionEntry, state),
                     RendererKind = definitionEntry.RendererKind,
                     WorkspaceTabVisible = definitionEntry.WorkspaceTabVisible,
-                    Visible = windowState.Visible,
-                    Collapsed = windowState.Collapsed,
+                    Visible = forcePixelEditor || windowState.Visible,
+                    Collapsed = forcePixelEditor ? false : windowState.Collapsed,
                     HasCustomBounds = windowState.HasCustomBounds,
                     X = windowState.X,
                     Y = windowState.Y,
@@ -1095,6 +1199,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.TilesPalette, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPaletteWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Inspector, delegate(ScenarioAuthoringWindowContentContext context) { return BuildInspectorShellSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.PixelEditor, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPixelEditorWindowSections(context.State); });
             builders[ScenarioAuthoringWindowContentKind.Triggers] = _timelineAuthoringContentBuilder;
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.State, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
@@ -1375,6 +1480,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 sections.Add(BuildBunkerRuntimeSection(definition, state));
             }
             return sections.ToArray();
+        }
+
+        private ScenarioAuthoringInspectorSection[] BuildPixelEditorWindowSections(ScenarioAuthoringState state)
+        {
+            ScenarioSpriteSwapAuthoringService.CustomEditorModel editor = _sectionHub.SpriteSwap.GetCustomEditorModel(state);
+            if (editor == null || !editor.Visible)
+                return BuildEmptyWindowSections();
+
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "pixel_editor_host",
+                    Title = editor.IsCharacterEditor ? "Character Pixel Editor" : "Pixel Editor",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[]
+                    {
+                        Text((editor.SourceLabel ?? "<sprite>") + (editor.Dirty ? " | Unsaved changes" : " | Saved draft"))
+                    }
+                }
+            };
         }
 
         internal static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioDefinition definition)
@@ -2485,6 +2612,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix + windowDefinition.Id, "_", "Collapse this panel into the Windows list.", true, false, "CL"));
             actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + windowDefinition.Id, "x", "Hide this panel.", true, false, "HD"));
             return actions.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorAction[] BuildInspectorHeaderActions(ScenarioAuthoringState state)
+        {
+            bool advanced = state != null && state.Settings != null && state.Settings.GetBool("debug.show_advanced_details", false);
+            bool editPins = state != null && state.Settings != null && state.Settings.GetBool("inspector.pin_edit_mode", false);
+            return new[]
+            {
+                Action(ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "debug.show_advanced_details", advanced ? "Advanced On" : "Advanced", "Toggle advanced inspector details.", true, advanced, "GEAR"),
+                Action(ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "inspector.pin_edit_mode", editPins ? "Done Pins" : "Edit Pins", "Show pin and unpin controls for pinned facts.", true, editPins, "PIN"),
+                Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current scenario target selection.", true, false, "CL")
+            };
         }
 
 

@@ -21,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
         public const string Map = "map";
         public const string Publish = "publish";
         public const string Settings = "editor_settings";
+        public const string PixelEditor = "pixel_editor";
     }
 
     internal sealed class ScenarioAuthoringWindowRegistry
@@ -41,6 +42,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
             Register(Create(ScenarioAuthoringWindowIds.Quests, "Story", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Quests, 10, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Quests, false, false, false, true, true));
             Register(Create(ScenarioAuthoringWindowIds.Map, "Map", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Map, 11, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Map, false, false, false, true, true));
             Register(Create(ScenarioAuthoringWindowIds.Publish, "Publish", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.Publish, 12, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Publish, false, false, false, true, true));
+            Register(Create(ScenarioAuthoringWindowIds.PixelEditor, "Pixel Editor", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.PixelEditor, 13, 860f, 620f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, false, false));
         }
 
         public ScenarioAuthoringWindowDefinition[] GetDefinitions()

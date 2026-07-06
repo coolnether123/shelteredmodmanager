@@ -63,6 +63,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSettingIncreasePrefix = "shell.setting.increase.";
         public const string ActionSettingDecreasePrefix = "shell.setting.decrease.";
         public const string ActionSettingSelectPrefix = "shell.setting.select.";
+        public const string ActionInspectorPinTogglePrefix = "shell.inspector.pin.toggle.";
         public const string ActionInspectorTabPrefix = "inspector.tab.";
         public const string ActionStageSelectPrefix = "stage.select.";
         public const string ActionShellTabShelter = "shell.tab.shelter";
@@ -361,7 +362,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Map = 10,
         Publish = 11,
         Hierarchy = 13,
-        SelectionStack = 14
+        SelectionStack = 14,
+        PixelEditor = 15
     }
 
     internal enum ScenarioAuthoringSettingKind

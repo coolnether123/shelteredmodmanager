@@ -111,36 +111,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool showAdvancedDetails = ShowAdvancedDetails(state);
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.Text(
-                ScenarioInspectorItemFactory.Safe(model.Target.SpriteName),
-                ScenarioInspectorItemFactory.Safe(model.Target.TextureName),
-                model.Target.Kind.ToString(),
-                "SP",
-                model.Target.CurrentSprite,
-                true));
-            items.Add(ScenarioInspectorItemFactory.Property("Asset Type", FriendlyKindLabel(model.Target.Kind)));
-            items.Add(ScenarioInspectorItemFactory.Property("Current Sprite", ScenarioInspectorItemFactory.Safe(model.Target.SpriteName)));
-            items.Add(ScenarioInspectorItemFactory.Property("Active Swap", ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary)));
-            items.Add(ScenarioInspectorItemFactory.Property("Compatibility", ScenarioInspectorItemFactory.Safe(model.CompatibilitySummary)));
-            items.Add(ScenarioInspectorItemFactory.Property("Compatible Vanilla", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString()));
-            items.Add(ScenarioInspectorItemFactory.Property("Compatible Modded", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString()));
-            items.Add(ScenarioInspectorItemFactory.Property("Editor", editorOpen ? "Open" : "Closed"));
-            items.Add(ScenarioInspectorItemFactory.Property("Preview", !string.IsNullOrEmpty(previewLabel) ? previewLabel : "<none>"));
+            items.Add(ScenarioInspectorItemFactory.Property("Current Look", ScenarioInspectorItemFactory.Safe(model.Target.SpriteName)));
+            items.Add(ScenarioInspectorItemFactory.Property("Replacement", !string.IsNullOrEmpty(previewLabel) ? previewLabel : (model.HasActiveRule ? ScenarioInspectorItemFactory.Safe(model.ActiveRuleSummary) : "<none>")));
+            items.Add(ScenarioInspectorItemFactory.Property("Options", ScenarioAssetAuthoringContentMetrics.CountCandidates(model.VanillaCandidates).ToString() + " vanilla / " + ScenarioAssetAuthoringContentMetrics.CountCandidates(model.ModdedCandidates).ToString() + " scenario"));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
-                editorOpen ? "Asset Editor Open" : "Edit Asset",
-                "Open the dedicated asset editor, preview compatible replacements in real time, then save or cancel.",
+                editorOpen ? "Sprite Browser Open" : "Edit Look",
+                "Open the Art sprite browser to preview replacements, import PNGs, or edit pixels.",
                 true,
                 editorOpen)));
-            items.Add(ScenarioInspectorItemFactory.Text(ScenarioInspectorItemFactory.Safe(model.GuidanceMessage)));
-            items.Add(ScenarioInspectorItemFactory.Text("This follows the same serializer shape other scenario packs use: AssetReferences > SpriteSwaps > Swap."));
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "sprite_swap",
-                Title = "Asset Editing",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                Title = "Look",
+                Expanded = false,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
             });
             if (showAdvancedDetails)

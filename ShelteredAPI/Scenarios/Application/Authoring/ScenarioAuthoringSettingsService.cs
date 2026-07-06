@@ -32,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             RegisterFloat("input.scroll_speed", "Input", "Scroll Speed", "Scroll speed for lists and event timelines.", "1.00", 0.50f, 3f, 0.10f);
             RegisterInteger("sprite.zoom", "Sprite Tools", "Sprite Editor Default Zoom", "Default zoom for the in-game sprite editor.", "8", 1f, 32f, 1f);
             RegisterToggle("sprite.checkerboard", "Sprite Tools", "Sprite Editor Checkerboard", "Show a checkerboard behind transparent pixels.", "true");
+            RegisterToggle("inspector.pin_edit_mode", "Inspector", "Edit Pinned Facts", "Show pin controls beside inspector facts.", "false");
             RegisterToggle("debug.show_advanced_details", "Debug", "Show Advanced Details", "Show internal ids and runtime diagnostics in editor windows.", "false");
             RegisterToggle("debug.overlays", "Debug", "Debug Overlays", "Draw shell layout and dump scene classification diagnostics.", "false");
         }
