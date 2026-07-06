@@ -38,7 +38,41 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal))
-                return AddStartingSurvivor(session, out message);
+                return AddStartingSurvivor(session, state, out message);
+
+            if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal))
+            {
+                FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
+                int index;
+                if (!int.TryParse(actionId.Substring(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix.Length), out index)
+                    || index < 0
+                    || index >= family.Members.Count)
+                {
+                    message = "Starting survivor editor action was out of range.";
+                    return true;
+                }
+
+                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, index, false);
+                message = "Opened focused survivor editor.";
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix, StringComparison.Ordinal))
+            {
+                FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
+                int index;
+                if (!int.TryParse(actionId.Substring(ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix.Length), out index)
+                    || index < 0
+                    || index >= family.FutureSurvivors.Count)
+                {
+                    message = "Future survivor editor action was out of range.";
+                    return true;
+                }
+
+                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, index, false);
+                message = "Opened focused survivor editor.";
+                return true;
+            }
 
             if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix, StringComparison.Ordinal))
             {
@@ -57,15 +91,26 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
-        private static bool AddStartingSurvivor(ScenarioEditorSession session, out string message)
+        private static bool AddStartingSurvivor(ScenarioEditorSession session, ScenarioAuthoringState state, out string message)
         {
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             family.OverrideVanillaFamily = true;
             int next = family.Members.Count + 1;
             family.Members.Add(ScenarioFamilyMemberFactory.CreateDefaultConfig("Survivor " + next.ToString(), ScenarioGender.Any));
             MarkDirty(session);
+            FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, true);
             message = "Added starting survivor slot " + next.ToString() + ".";
             return true;
+        }
+
+        private static void FocusSurvivorEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
+        {
+            if (state == null || index < 0)
+                return;
+
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = isNew;
         }
 
         private bool HandleFutureMemberCommand(

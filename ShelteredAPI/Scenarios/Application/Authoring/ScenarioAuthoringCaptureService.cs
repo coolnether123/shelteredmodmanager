@@ -47,6 +47,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return false;
             }
 
+            RecordUndo(session, "Capture survivors from world");
             FamilySetupDefinition familySetup = session.WorkingDefinition.FamilySetup ?? new FamilySetupDefinition();
             familySetup.OverrideVanillaFamily = true;
             familySetup.Members.Clear();
@@ -59,12 +60,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     continue;
 
                 FamilyMemberConfig config = new FamilyMemberConfig();
-                config.Name = member.firstName;
-                config.Gender = member.isMale ? ScenarioGender.Male : ScenarioGender.Female;
-
-                CaptureStats(member, config);
-                CaptureTraits(member, config);
-                ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
+                CaptureLiveFamilyMember(member, config);
 
                 familySetup.Members.Add(config);
                 captured++;
@@ -72,8 +68,60 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             session.WorkingDefinition.FamilySetup = familySetup;
             MarkCaptured(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
-            message = "Captured current family snapshot: " + captured + " member(s).";
+            message = "Captured " + captured + " survivors from the world.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
+            return true;
+        }
+
+        public bool CaptureCurrentFamilyIfEmpty(ScenarioEditorSession session, out string message)
+        {
+            message = null;
+            FamilySetupDefinition family = session != null && session.WorkingDefinition != null ? session.WorkingDefinition.FamilySetup : null;
+            if (family != null && family.Members != null && family.Members.Count > 0)
+            {
+                message = "Starting roster already has authored survivors; world capture was skipped.";
+                return false;
+            }
+
+            return CaptureCurrentFamily(session, out message);
+        }
+
+        public bool BuildFamilyCapturePreview(ScenarioEditorSession session, out ScenarioCapturePreview preview, out string message)
+        {
+            preview = null;
+            message = null;
+            if (session == null || session.WorkingDefinition == null)
+            {
+                message = "No active authoring session is available.";
+                return false;
+            }
+
+            FamilyManager familyManager = FamilyManager.Instance;
+            List<FamilyMember> liveMembers = familyManager != null ? familyManager.GetAllFamilyMembers() : null;
+            if (liveMembers == null || liveMembers.Count == 0)
+            {
+                message = familyManager == null
+                    ? "FamilyManager is not ready; family capture preview is unavailable."
+                    : "No live family members were available to capture.";
+                return false;
+            }
+
+            List<FamilyMemberConfig> captured = new List<FamilyMemberConfig>();
+            for (int i = 0; i < liveMembers.Count; i++)
+            {
+                FamilyMember member = liveMembers[i];
+                if (member == null)
+                    continue;
+
+                FamilyMemberConfig config = new FamilyMemberConfig();
+                CaptureLiveFamilyMember(member, config);
+                captured.Add(config);
+            }
+
+            FamilySetupDefinition family = session.WorkingDefinition.FamilySetup;
+            List<FamilyMemberConfig> current = family != null ? family.Members : null;
+            preview = ScenarioCapturePreview.Create("family", "Starting Survivors", captured.Count, 0);
+            AddFamilyDiffLines(preview, current, captured);
             return true;
         }
 
@@ -94,34 +142,46 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             List<ItemStack> liveStacks = inventoryManager.GetItems();
+            RecordUndo(session, "Capture stockpile from world");
             StartingInventoryDefinition inventory = session.WorkingDefinition.StartingInventory ?? new StartingInventoryDefinition();
             inventory.OverrideRandomStart = true;
             inventory.Items.Clear();
 
             int totalItems = 0;
-            List<ItemEntry> capturedItems = new List<ItemEntry>();
-            for (int i = 0; liveStacks != null && i < liveStacks.Count; i++)
-            {
-                ItemStack stack = liveStacks[i];
-                if (stack == null || stack.m_type == ItemManager.ItemType.Undefined || stack.m_count <= 0)
-                    continue;
-
-                capturedItems.Add(new ItemEntry
-                {
-                    ItemId = stack.m_type.ToString(),
-                    Quantity = stack.m_count
-                });
-                totalItems += stack.m_count;
-            }
-
-            capturedItems.Sort(CompareItemEntries);
+            List<ItemEntry> capturedItems = BuildLiveInventoryEntries(liveStacks, out totalItems);
             for (int i = 0; i < capturedItems.Count; i++)
                 inventory.Items.Add(capturedItems[i]);
 
             session.WorkingDefinition.StartingInventory = inventory;
             MarkCaptured(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
-            message = "Captured current inventory snapshot: " + capturedItems.Count + " stack(s), " + totalItems + " total item(s).";
+            message = "Captured " + capturedItems.Count + " stockpile stack(s) from the world (" + totalItems + " total item(s)).";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
+            return true;
+        }
+
+        public bool BuildInventoryCapturePreview(ScenarioEditorSession session, out ScenarioCapturePreview preview, out string message)
+        {
+            preview = null;
+            message = null;
+            if (session == null || session.WorkingDefinition == null)
+            {
+                message = "No active authoring session is available.";
+                return false;
+            }
+
+            InventoryManager inventoryManager = InventoryManager.Instance;
+            if (inventoryManager == null)
+            {
+                message = "InventoryManager is not ready; inventory capture preview is unavailable.";
+                return false;
+            }
+
+            int totalItems = 0;
+            List<ItemEntry> captured = BuildLiveInventoryEntries(inventoryManager.GetItems(), out totalItems);
+            StartingInventoryDefinition inventory = session.WorkingDefinition.StartingInventory;
+            List<ItemEntry> current = inventory != null ? inventory.Items : null;
+            preview = ScenarioCapturePreview.Create("inventory", "Starting Stockpile", captured.Count, totalItems);
+            AddInventoryDiffLines(preview, current, captured);
             return true;
         }
 
@@ -308,6 +368,209 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             List<Traits.Weakness> weaknesses = member.traits.GetWeaknesses(false);
             for (int i = 0; weaknesses != null && i < weaknesses.Count; i++)
                 config.Traits.Add("Weakness:" + weaknesses[i]);
+        }
+
+        private static void CaptureLiveFamilyMember(FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null)
+                return;
+
+            config.Name = member.firstName;
+            config.Gender = member.isMale ? ScenarioGender.Male : ScenarioGender.Female;
+            CaptureStats(member, config);
+            CaptureTraits(member, config);
+            ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
+        }
+
+        private static List<ItemEntry> BuildLiveInventoryEntries(List<ItemStack> liveStacks, out int totalItems)
+        {
+            totalItems = 0;
+            List<ItemEntry> capturedItems = new List<ItemEntry>();
+            for (int i = 0; liveStacks != null && i < liveStacks.Count; i++)
+            {
+                ItemStack stack = liveStacks[i];
+                if (stack == null || stack.m_type == ItemManager.ItemType.Undefined || stack.m_count <= 0)
+                    continue;
+
+                capturedItems.Add(new ItemEntry
+                {
+                    ItemId = stack.m_type.ToString(),
+                    Quantity = stack.m_count
+                });
+                totalItems += stack.m_count;
+            }
+
+            capturedItems.Sort(CompareItemEntries);
+            return capturedItems;
+        }
+
+        private static void AddFamilyDiffLines(ScenarioCapturePreview preview, List<FamilyMemberConfig> current, List<FamilyMemberConfig> captured)
+        {
+            bool[] matchedCurrent = new bool[current != null ? current.Count : 0];
+            for (int i = 0; captured != null && i < captured.Count; i++)
+            {
+                FamilyMemberConfig next = captured[i];
+                int existing = FindFamilyByName(current, next != null ? next.Name : null, matchedCurrent);
+                if (existing < 0)
+                {
+                    preview.AddAdd("Add " + Safe(next != null ? next.Name : null) + " (" + FormatFamilyPreview(next) + ")");
+                    continue;
+                }
+
+                matchedCurrent[existing] = true;
+                FamilyMemberConfig previous = current[existing];
+                if (!string.Equals(FormatFamilyPreview(previous), FormatFamilyPreview(next), StringComparison.Ordinal))
+                    preview.AddChange("Change " + Safe(next != null ? next.Name : null) + " from " + FormatFamilyPreview(previous) + " to " + FormatFamilyPreview(next));
+            }
+
+            for (int i = 0; current != null && i < current.Count; i++)
+            {
+                if (!matchedCurrent[i])
+                    preview.AddRemoval("Remove authored survivor " + Safe(current[i] != null ? current[i].Name : null));
+            }
+        }
+
+        private static void AddInventoryDiffLines(ScenarioCapturePreview preview, List<ItemEntry> current, List<ItemEntry> captured)
+        {
+            bool[] matchedCurrent = new bool[current != null ? current.Count : 0];
+            for (int i = 0; captured != null && i < captured.Count; i++)
+            {
+                ItemEntry next = captured[i];
+                int existing = FindItem(current, next != null ? next.ItemId : null, matchedCurrent);
+                if (existing < 0)
+                {
+                    preview.AddAdd("Add " + Safe(next != null ? next.ItemId : null) + " x" + (next != null ? next.Quantity.ToString() : "0"));
+                    continue;
+                }
+
+                matchedCurrent[existing] = true;
+                ItemEntry previous = current[existing];
+                if (previous != null && next != null && previous.Quantity != next.Quantity)
+                    preview.AddChange("Change " + Safe(next.ItemId) + " from x" + previous.Quantity.ToString() + " to x" + next.Quantity.ToString());
+            }
+
+            for (int i = 0; current != null && i < current.Count; i++)
+            {
+                if (!matchedCurrent[i])
+                    preview.AddRemoval("Remove authored stockpile item " + Safe(current[i] != null ? current[i].ItemId : null));
+            }
+        }
+
+        private static int FindFamilyByName(List<FamilyMemberConfig> members, string name, bool[] excluded)
+        {
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                if (excluded != null && i < excluded.Length && excluded[i])
+                    continue;
+                FamilyMemberConfig member = members[i];
+                if (member != null && string.Equals(member.Name ?? string.Empty, name ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+            return -1;
+        }
+
+        private static int FindItem(List<ItemEntry> items, string itemId, bool[] excluded)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                if (excluded != null && i < excluded.Length && excluded[i])
+                    continue;
+                ItemEntry item = items[i];
+                if (item != null && string.Equals(item.ItemId ?? string.Empty, itemId ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+            return -1;
+        }
+
+        private static string FormatFamilyPreview(FamilyMemberConfig member)
+        {
+            if (member == null)
+                return "empty";
+
+            string body = member.Gender.ToString();
+            int strength = FindStat(member, "Strength");
+            int dexterity = FindStat(member, "Dexterity");
+            int intelligence = FindStat(member, "Intelligence");
+            return body + ", Str " + strength.ToString() + ", Dex " + dexterity.ToString() + ", Int " + intelligence.ToString()
+                + ", " + FindTrait(member, "Strength:") + "/" + FindTrait(member, "Weakness:");
+        }
+
+        private static int FindStat(FamilyMemberConfig member, string statId)
+        {
+            for (int i = 0; member != null && member.Stats != null && i < member.Stats.Count; i++)
+            {
+                StatOverride stat = member.Stats[i];
+                if (stat != null && string.Equals(stat.StatId, statId, StringComparison.OrdinalIgnoreCase))
+                    return stat.Value;
+            }
+            return 0;
+        }
+
+        private static string FindTrait(FamilyMemberConfig member, string prefix)
+        {
+            for (int i = 0; member != null && member.Traits != null && i < member.Traits.Count; i++)
+            {
+                string trait = member.Traits[i];
+                if (!string.IsNullOrEmpty(trait) && trait.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return trait.Substring(prefix.Length);
+            }
+            return "none";
+        }
+
+        private static void RecordUndo(ScenarioEditorSession session, string description)
+        {
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null && session != null)
+                history.RecordVisualChange(session.WorkingDefinition, description);
+        }
+
+        private static string Safe(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "<none>" : value;
+        }
+
+        internal sealed class ScenarioCapturePreview
+        {
+            private readonly List<string> _lines = new List<string>();
+
+            public string Kind { get; private set; }
+            public string Title { get; private set; }
+            public int SourceCount { get; private set; }
+            public int TotalQuantity { get; private set; }
+            public int Additions { get; private set; }
+            public int Changes { get; private set; }
+            public int Removals { get; private set; }
+            public IList<string> Lines { get { return _lines; } }
+            public bool HasChanges { get { return Additions > 0 || Changes > 0 || Removals > 0; } }
+
+            public static ScenarioCapturePreview Create(string kind, string title, int sourceCount, int totalQuantity)
+            {
+                return new ScenarioCapturePreview
+                {
+                    Kind = kind,
+                    Title = title,
+                    SourceCount = sourceCount,
+                    TotalQuantity = totalQuantity
+                };
+            }
+
+            public void AddAdd(string line)
+            {
+                Additions++;
+                _lines.Add(line);
+            }
+
+            public void AddChange(string line)
+            {
+                Changes++;
+                _lines.Add(line);
+            }
+
+            public void AddRemoval(string line)
+            {
+                Removals++;
+                _lines.Add(line);
+            }
         }
 
         private static bool TryResolveCapturableObject(ScenarioAuthoringTarget target, out Obj_Base obj, out string reason)

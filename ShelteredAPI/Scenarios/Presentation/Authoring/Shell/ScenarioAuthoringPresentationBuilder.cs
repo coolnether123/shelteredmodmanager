@@ -132,7 +132,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 WindowMenuActions = _stageNavigationBuilder.BuildWindowMenuActions(state, _windowRegistry),
                 Windows = windows.ToArray(),
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
-                FocusedEditorDocument = BuildFocusedEditorDocument(state, definition),
+                FocusedEditorDocument = BuildFocusedEditorDocument(state, editorSession, definition, _captureService),
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
                 Help = state != null && state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
@@ -588,6 +588,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state,
             ScenarioEditorSession editorSession)
         {
+            ScenarioAuthoringInspectorDocument inventoryPicker = BuildInventoryItemPickerDocument(state, editorSession != null ? editorSession.WorkingDefinition : null);
+            if (inventoryPicker != null)
+                return inventoryPicker;
+
             if (state == null
                 || state.SpriteSwapPicker == null
                 || !state.SpriteSwapPicker.IsOpen
@@ -1556,11 +1560,255 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
+        private static ScenarioAuthoringInspectorDocument BuildInventoryItemPickerDocument(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            if (state == null || definition == null)
+                return null;
+
+            bool starting = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, StringComparison.OrdinalIgnoreCase);
+            bool scheduled = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, StringComparison.OrdinalIgnoreCase);
+            if (!starting && !scheduled)
+                return null;
+
+            StartingInventoryDefinition inventory = definition.StartingInventory;
+            int index = state.FocusedEditorIndex;
+            string currentItemId = null;
+            if (starting)
+            {
+                if (inventory == null || inventory.Items == null || index < 0 || index >= inventory.Items.Count)
+                    return null;
+                currentItemId = inventory.Items[index] != null ? inventory.Items[index].ItemId : null;
+            }
+            else
+            {
+                if (inventory == null || inventory.ScheduledChanges == null || index < 0 || index >= inventory.ScheduledChanges.Count)
+                    return null;
+                currentItemId = inventory.ScheduledChanges[index] != null ? inventory.ScheduledChanges[index].ItemId : null;
+            }
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            ScenarioInventoryItemCatalogEntry current = ScenarioInventoryItemCatalog.Resolve(currentItemId);
+            sections.Add(FactSection("inventory_picker_summary", "Selected Item", new List<ScenarioAuthoringInspectorItem>
+            {
+                Fact("Current", current.DisplayName, current.Detail),
+                Fact("Category", current.Category.ToString(), "Catalog category from Sheltered item definitions.")
+            }));
+
+            AddInventoryPickerCategorySections(sections, starting, index, currentItemId);
+            sections.Add(ActionSection("inventory_picker_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
+            {
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", "Close the item picker without changing this row.", true, false, "CL"))
+            }));
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = starting ? "Pick Starting Item" : "Pick Timed Item",
+                Subtitle = "Search by item name, id, detail, or category.",
+                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                Sections = sections.ToArray()
+            };
+        }
+
+        private static void AddInventoryPickerCategorySections(List<ScenarioAuthoringInspectorSection> sections, bool starting, int index, string currentItemId)
+        {
+            List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
+            Dictionary<string, List<ScenarioInventoryItemCatalogEntry>> byCategory = new Dictionary<string, List<ScenarioInventoryItemCatalogEntry>>(StringComparer.OrdinalIgnoreCase);
+            List<string> categoryOrder = new List<string>();
+            for (int i = 0; i < catalog.Count; i++)
+            {
+                ScenarioInventoryItemCatalogEntry entry = catalog[i];
+                if (entry == null)
+                    continue;
+
+                string category = entry.Category.ToString();
+                List<ScenarioInventoryItemCatalogEntry> entries;
+                if (!byCategory.TryGetValue(category, out entries))
+                {
+                    entries = new List<ScenarioInventoryItemCatalogEntry>();
+                    byCategory[category] = entries;
+                    categoryOrder.Add(category);
+                }
+                entries.Add(entry);
+            }
+
+            categoryOrder.Sort(StringComparer.OrdinalIgnoreCase);
+            for (int c = 0; c < categoryOrder.Count; c++)
+            {
+                string category = categoryOrder[c];
+                List<ScenarioInventoryItemCatalogEntry> entries = byCategory[category];
+                List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+                items.Add(Property("Count", entries.Count.ToString(CultureInfo.InvariantCulture)));
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    ScenarioInventoryItemCatalogEntry entry = entries[i];
+                    string actionPrefix = starting
+                        ? ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix
+                        : ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix;
+                    items.Add(ActionItem(Action(
+                        actionPrefix + index.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken(entry.ItemId),
+                        entry.DisplayName,
+                        "Select this stockpile item.",
+                        true,
+                        string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase),
+                        "IT",
+                        entry.Detail + " | " + category,
+                        category,
+                        entry.PreviewSprite)));
+                }
+
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "inventory_picker_" + category.ToLowerInvariant(),
+                    Title = category,
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.CandidateGrid,
+                    Items = items.ToArray()
+                });
+            }
+        }
+
+        private static ScenarioAuthoringInspectorDocument BuildCapturePreviewDocument(
+            ScenarioAuthoringCaptureService captureService,
+            ScenarioEditorSession editorSession,
+            bool family)
+        {
+            ScenarioAuthoringCaptureService.ScenarioCapturePreview preview = null;
+            string message = null;
+            bool ok = family
+                ? captureService != null && captureService.BuildFamilyCapturePreview(editorSession, out preview, out message)
+                : captureService != null && captureService.BuildInventoryCapturePreview(editorSession, out preview, out message);
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            if (!ok || preview == null)
+            {
+                sections.Add(FactSection("capture_preview_unavailable", "Preview", new List<ScenarioAuthoringInspectorItem>
+                {
+                    Text(!string.IsNullOrEmpty(message) ? message : "World capture preview is unavailable.")
+                }));
+            }
+            else
+            {
+                List<ScenarioAuthoringInspectorItem> summary = new List<ScenarioAuthoringInspectorItem>();
+                summary.Add(Fact("Source Entries", preview.SourceCount.ToString(CultureInfo.InvariantCulture), "Entries currently visible in the live world."));
+                if (!family)
+                    summary.Add(Fact("Total Items", preview.TotalQuantity.ToString(CultureInfo.InvariantCulture), "Total live item count across captured stacks."));
+                summary.Add(Fact("Adds", preview.Additions.ToString(CultureInfo.InvariantCulture), "New rows that will be added."));
+                summary.Add(Fact("Changes", preview.Changes.ToString(CultureInfo.InvariantCulture), "Existing rows that will be replaced with live values."));
+                summary.Add(Fact("Removals", preview.Removals.ToString(CultureInfo.InvariantCulture), "Authored rows missing from the live world that will be removed."));
+                sections.Add(FactSection("capture_preview_summary", "Diff Summary", summary));
+
+                List<ScenarioAuthoringInspectorItem> diff = new List<ScenarioAuthoringInspectorItem>();
+                if (preview.Lines.Count == 0)
+                    diff.Add(Text("No differences from the current authored draft."));
+                else
+                {
+                    for (int i = 0; i < preview.Lines.Count; i++)
+                        diff.Add(Text(preview.Lines[i]));
+                }
+                sections.Add(FactSection("capture_preview_diff", "Changes", diff));
+            }
+
+            string confirmId = family
+                ? ScenarioAuthoringLocalActionIds.ActionCaptureFamilyConfirm
+                : ScenarioAuthoringLocalActionIds.ActionCaptureInventoryConfirm;
+            sections.Add(ActionSection("capture_preview_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
+            {
+                ActionItem(Action(confirmId, "Confirm", family ? "Replace the starting cast with the current live family." : "Replace the starting stockpile with the current live stockpile.", ok, true, "OK", null, null, null, ok ? null : message)),
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", "Close this preview without changing the draft.", true, false, "CL"))
+            }));
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = family ? "Refresh Cast from World" : "Capture Current Stockpile",
+                Subtitle = "Review additions, changes, and removals before confirming.",
+                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                Sections = sections.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorDocument BuildSurvivorFocusedEditorDocument(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            bool starting = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase);
+            bool future = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, StringComparison.OrdinalIgnoreCase);
+            if (!starting && !future)
+                return null;
+
+            FamilySetupDefinition family = definition.FamilySetup;
+            int index = state.FocusedEditorIndex;
+            FamilyMemberConfig member = null;
+            FutureSurvivorDefinition futureSurvivor = null;
+            if (starting)
+            {
+                if (family == null || family.Members == null || index < 0 || index >= family.Members.Count)
+                    return null;
+                member = family.Members[index];
+            }
+            else
+            {
+                if (family == null || family.FutureSurvivors == null || index < 0 || index >= family.FutureSurvivors.Count)
+                    return null;
+                futureSurvivor = family.FutureSurvivors[index];
+                member = futureSurvivor != null ? futureSurvivor.Survivor : null;
+            }
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            sections.Add(FactSection("survivor_editor_summary", "Summary", new List<ScenarioAuthoringInspectorItem>
+            {
+                Fact("Name", Safe(member != null ? member.Name : null), "Survivor display name."),
+                Fact("Body", FormatBody(member, true), "Age, gender, and vanilla mesh alignment."),
+                Fact("Age", FormatAge(member), "Exact age drives adult or child body choice."),
+                Fact("Stats", FormatStatLine(member), "Vanilla stats are clamped to 0-20."),
+                Fact("Traits", FindTrait(member, "Strength:") + " / " + FindTrait(member, "Weakness:"), "Strength and weakness pairs block vanilla conflicts."),
+                Fact("Appearance", FormatAppearance(member), "Mesh, textures, and colors currently stored.")
+            }));
+
+            List<ScenarioAuthoringInspectorItem> identity = new List<ScenarioAuthoringInspectorItem>();
+            string actionPrefix = starting ? ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix : ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix;
+            AddFamilyMemberEditorItems(identity, state, member, index, actionPrefix, false, true);
+            sections.Add(ActionSection("survivor_editor_fields", "Identity, Stats, Traits, Appearance", identity));
+
+            if (future && futureSurvivor != null)
+            {
+                List<ScenarioAuthoringInspectorItem> schedule = new List<ScenarioAuthoringInspectorItem>();
+                schedule.Add(Fact("Arrival", FormatSchedule(futureSurvivor.Arrival), "When this survivor arrives or asks to join."));
+                AddScheduleActions(schedule, ScenarioAuthoringActionIds.ActionFutureSurvivorDayPrefix, ScenarioAuthoringActionIds.ActionFutureSurvivorHourPrefix, index);
+                schedule.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + index.ToString(CultureInfo.InvariantCulture), "Toggle Join Mode", "Switch between recruit intercom flow and immediate auto-join.", true, futureSurvivor.AskToJoin, "AJ")));
+                sections.Add(ActionSection("survivor_editor_schedule", "Arrival", schedule));
+            }
+
+            sections.Add(ActionSection("survivor_editor_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
+            {
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorSave, "Save", "Close this focused survivor editor.", true, true, "SV")),
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", state.FocusedEditorIsNew ? "Close this new survivor editor." : "Close this survivor editor.", true, false, "CL"))
+            }));
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = starting ? "Starting Survivor" : "Future Survivor",
+                Subtitle = Safe(member != null ? member.Name : null),
+                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                Sections = sections.ToArray()
+            };
+        }
+
         private static ScenarioAuthoringInspectorDocument BuildFocusedEditorDocument(
             ScenarioAuthoringState state,
-            ScenarioDefinition definition)
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
+            ScenarioAuthoringCaptureService captureService)
         {
             if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || definition == null)
+                return null;
+
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindCaptureFamily, StringComparison.OrdinalIgnoreCase))
+                return BuildCapturePreviewDocument(captureService, editorSession, true);
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindCaptureInventory, StringComparison.OrdinalIgnoreCase))
+                return BuildCapturePreviewDocument(captureService, editorSession, false);
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, StringComparison.OrdinalIgnoreCase))
+                return BuildSurvivorFocusedEditorDocument(state, definition);
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, StringComparison.OrdinalIgnoreCase))
                 return null;
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
@@ -1865,10 +2113,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
-            AutoCaptureCurrentFamily(captureService, editorSession, definition);
+            AutoCaptureCurrentFamily(captureService, state, editorSession, definition);
             bool showAdvancedDetails = ShowAdvancedDetails(state);
             List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems();
-            currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Refresh from World", "Refresh the starting cast from current live survivors.", true, false, "RF")));
+            currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Refresh from World", "Preview additions, changes, and removals before replacing the starting cast from current live survivors.", true, false, "RF")));
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null && history.CanUndo)
+                currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Last Capture", "Restore the roster from before the last capture or edit snapshot.", true, false, "UN")));
 
             List<ScenarioAuthoringInspectorItem> startingItems = new List<ScenarioAuthoringInspectorItem>();
             startingItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, "Add Starting Survivor", "Create a new editable starting crew member.", true, true, "S+")));
@@ -1877,10 +2128,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
                 {
                     FamilyMemberConfig member = definition.FamilySetup.Members[i];
-                    AddFamilyMemberEditorItems(
+                    AddFamilyMemberCardItems(
                         startingItems,
                         member,
                         i,
+                        ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix,
                         ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix,
                         true,
                         showAdvancedDetails);
@@ -1932,7 +2184,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection[] BuildStockpileWindowSections(ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> liveItems = BuildLiveInventoryItems();
-            liveItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureInventory, "Capture Current Stockpile", "Snapshot every current shelter item stack into the starting stockpile.", true, true, "IV")));
+            liveItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureInventory, "Capture Current Stockpile", "Preview additions, quantity changes, and removals before replacing the starting stockpile.", true, true, "IV")));
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             StartingInventoryDefinition inventory = definition != null ? definition.StartingInventory : null;
@@ -2052,39 +2304,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AutoCaptureCurrentFamily(
             ScenarioAuthoringCaptureService captureService,
+            ScenarioAuthoringState state,
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
-            if (captureService == null || editorSession == null || definition == null || IsLiveFamilyAlreadyCaptured(definition))
+            if (captureService == null || editorSession == null || definition == null || !IsStartingRosterEmpty(definition))
                 return;
 
-            string ignored;
-            captureService.CaptureCurrentFamily(editorSession, out ignored);
+            string message;
+            if (captureService.CaptureCurrentFamilyIfEmpty(editorSession, out message) && state != null)
+                state.StatusMessage = message + " Use Undo to restore the previous roster.";
         }
 
-        private static bool IsLiveFamilyAlreadyCaptured(ScenarioDefinition definition)
+        private static bool IsStartingRosterEmpty(ScenarioDefinition definition)
         {
-            FamilyManager manager = FamilyManager.Instance;
-            List<FamilyMember> liveMembers = manager != null ? manager.GetAllFamilyMembers() : null;
             FamilySetupDefinition family = definition != null ? definition.FamilySetup : null;
-            if (liveMembers == null || liveMembers.Count == 0)
-                return true;
-            if (family == null || family.Members == null || family.Members.Count != liveMembers.Count)
-                return false;
-
-            for (int i = 0; i < liveMembers.Count; i++)
-            {
-                FamilyMember live = liveMembers[i];
-                FamilyMemberConfig captured = family.Members[i];
-                if (live == null || captured == null)
-                    return false;
-                string liveName = live.firstName ?? string.Empty;
-                if (!string.Equals(liveName, captured.Name ?? string.Empty, StringComparison.Ordinal)
-                    || (live.isMale ? ScenarioGender.Male : ScenarioGender.Female) != captured.Gender)
-                    return false;
-            }
-
-            return true;
+            return family == null || family.Members == null || family.Members.Count == 0;
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveInventoryItems()
@@ -2101,10 +2336,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(stack.m_type);
                 items.Add(Property(
-                    "Current shelter item",
                     catalogEntry.DisplayName,
-                    catalogEntry.Detail,
                     "x" + stack.m_count.ToString(CultureInfo.InvariantCulture),
+                    catalogEntry.Detail,
+                    null,
                     null,
                     catalogEntry.PreviewSprite));
                 total += stack.m_count;
@@ -2128,18 +2363,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + index.ToString(), "Remove Future Survivor", "Remove this future survivor arrival.", true, false, "RM")));
             if (survivor.Survivor != null)
             {
-                AddFamilyMemberEditorItems(
+                AddFamilyMemberCardItems(
                     items,
                     survivor.Survivor,
                     index,
-                    ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix,
+                    ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix,
+                    ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix,
                     false,
                     showAdvancedDetails);
             }
         }
 
+        private static void AddFamilyMemberCardItems(
+            List<ScenarioAuthoringInspectorItem> items,
+            FamilyMemberConfig member,
+            int index,
+            string openEditorPrefix,
+            string removeOrStartingPrefix,
+            bool includeOrdering,
+            bool showAdvancedDetails)
+        {
+            if (items == null)
+                return;
+
+            if (member == null)
+                member = new FamilyMemberConfig();
+
+            string indexText = index.ToString(CultureInfo.InvariantCulture);
+            items.Add(Property(
+                (index + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(member.Name),
+                BuildFamilyMemberSummary(member)));
+            items.Add(ActionItem(Action(openEditorPrefix + indexText, "Edit", "Open this survivor in the focused survivor editor.", true, false, "ED", FormatAppearance(member))));
+            if (includeOrdering)
+            {
+                items.Add(ActionItem(Action(removeOrStartingPrefix + "move." + indexText + ".-1", "Move Up", "Move this starting survivor earlier in the crew order.", true, false, "UP")));
+                items.Add(ActionItem(Action(removeOrStartingPrefix + "move." + indexText + ".1", "Move Down", "Move this starting survivor later in the crew order.", true, false, "DN")));
+                items.Add(ActionItem(Action(removeOrStartingPrefix + "remove." + indexText, "Remove", "Remove this starting survivor from the start crew.", true, false, "RM")));
+            }
+            else
+            {
+                items.Add(ActionItem(Action(removeOrStartingPrefix + indexText, "Remove", "Remove this future survivor arrival.", true, false, "RM")));
+            }
+        }
+
         private static void AddFamilyMemberEditorItems(
             List<ScenarioAuthoringInspectorItem> items,
+            ScenarioAuthoringState state,
             FamilyMemberConfig member,
             int index,
             string actionPrefix,
@@ -2169,17 +2438,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 int rawValue = FindStatValue(member, statId, 5);
                 int displayValue = ClampStatDisplay(rawValue);
                 string statDetail = FormatStatDisplayDetail(rawValue, displayValue);
-                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".1", statId + " +", "Increase " + statId + ".", true, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, statDetail)));
-                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".-1", statId + " -", "Decrease " + statId + ".", true, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, statDetail)));
+                bool canIncrease = displayValue < 20;
+                bool canDecrease = displayValue > 0;
+                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".1", statId + " +", "Increase " + statId + ".", canIncrease, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canIncrease ? statDetail : "Stats are limited to 0-20.")));
+                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".-1", statId + " -", "Decrease " + statId + ".", canDecrease, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canDecrease ? statDetail : "Stats are limited to 0-20.")));
             }
 
-            items.Add(ActionItem(Action(indexedPrefix + "strength_trait", "Strength Trait", "Cycle this survivor's strength characteristic.", true, false, "ST", FindTrait(member, "Strength:"))));
-            items.Add(ActionItem(Action(indexedPrefix + "weakness_trait", "Weakness Trait", "Cycle this survivor's weakness characteristic.", true, false, "WT", FindTrait(member, "Weakness:"))));
+            items.Add(ActionItem(Action(indexedPrefix + "strength_trait", "Strength Trait", "Cycle this survivor's strength characteristic. Vanilla paired trait conflicts are skipped.", true, false, "ST", FindTrait(member, "Strength:"))));
+            items.Add(ActionItem(Action(indexedPrefix + "weakness_trait", "Weakness Trait", "Cycle this survivor's weakness characteristic. Vanilla paired trait conflicts are skipped.", true, false, "WT", FindTrait(member, "Weakness:"))));
             items.Add(ActionItem(Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND")));
             items.Add(ActionItem(Action(indexedPrefix + "randomize_look", "Randomize Look", "Randomize head, top, bottom, and color choices.", true, false, "RLK", FormatAppearance(member))));
             AddAppearanceCycleActions(items, indexedPrefix, member, showAdvancedDetails);
-            items.Add(ActionItem(Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", true, false, "ID")));
-            items.Add(ActionItem(Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", true, false, "LK", FormatAppearance(member))));
+            string copyReason;
+            bool canCopySelected = CanCopySelectedFamilyMember(state, out copyReason);
+            items.Add(ActionItem(Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", canCopySelected, false, "ID", canCopySelected ? "Selected live family member" : null, null, null, copyReason)));
+            items.Add(ActionItem(Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", canCopySelected, false, "LK", FormatAppearance(member), null, null, copyReason)));
             items.Add(ActionItem(Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored mesh, texture, and color overrides.", true, false, "CL", FormatAppearance(member))));
 
             if (includeOrdering)
@@ -2210,6 +2483,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(indexedPrefix + "color.pants.1", "Next Pants Color", "Switch to the next vanilla pants/bottom color.", true, false, "BC>", FormatColor(appearance, ScenarioCharacterColorPart.Pants))));
         }
 
+        private static bool CanCopySelectedFamilyMember(ScenarioAuthoringState state, out string reason)
+        {
+            reason = null;
+            ScenarioAuthoringTarget target = state != null ? state.SelectedTarget : null;
+            if (target == null)
+            {
+                reason = "No live family member is selected.";
+                return false;
+            }
+
+            GameObject gameObject = ResolveGameObject(target);
+            if (gameObject == null)
+            {
+                reason = "Selected target is not a live family member.";
+                return false;
+            }
+
+            FamilyMember member = gameObject.GetComponentInParent<FamilyMember>();
+            if (member == null)
+            {
+                reason = "No live family member matches this entry.";
+                return false;
+            }
+
+            return true;
+        }
+
         private static void AddInventoryChangeItems(List<ScenarioAuthoringInspectorItem> items, TimedInventoryChangeDefinition change, int index)
         {
             if (items == null || change == null)
@@ -2226,7 +2526,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 change.Kind == ScenarioInventoryChangeKind.Add));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this timed change to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this timed change to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
-            AddInventoryPickerActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix, index, change.ItemId);
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringLocalActionIds.ActionInventorySchedulePickerOpenPrefix + index.ToString(CultureInfo.InvariantCulture),
+                "Choose Item",
+                "Open the searchable stockpile item picker for this timed change.",
+                true,
+                false,
+                "IT",
+                catalogEntry.ItemId)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleKindPrefix + index.ToString(CultureInfo.InvariantCulture), "Toggle Add/Remove", "Switch this timed change between adding and removing items.", true, change.Kind == ScenarioInventoryChangeKind.Add, "AR", change.Kind.ToString())));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this timed change quantity by one.", true, false, "+", change.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this timed change quantity by one.", true, false, "-", change.Quantity.ToString(CultureInfo.InvariantCulture))));
@@ -2252,7 +2559,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this starting stack to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this starting stack to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
-            AddInventoryPickerActions(items, ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, index, entry.ItemId);
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringLocalActionIds.ActionInventoryStartingPickerOpenPrefix + index.ToString(CultureInfo.InvariantCulture),
+                "Choose Item",
+                "Open the searchable stockpile item picker for this starting stack.",
+                true,
+                false,
+                "IT",
+                catalogEntry.ItemId)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this starting stack by one.", true, false, "+", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this starting stack by one.", true, false, "-", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".10", "Quantity +10", "Increase this starting stack by ten.", true, false, "+10", entry.Quantity.ToString(CultureInfo.InvariantCulture))));

@@ -710,9 +710,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             switch (actionId)
             {
                 case ScenarioAuthoringActionIds.ActionCaptureFamily:
-                    return Capture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentFamily(session, out text); }, out message);
+                    return OpenCapturePreview(state, ScenarioAuthoringLocalActionIds.FocusedKindCaptureFamily, out message);
+                case ScenarioAuthoringLocalActionIds.ActionCaptureFamilyConfirm:
+                    return ConfirmCapture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentFamily(session, out text); }, out message);
                 case ScenarioAuthoringActionIds.ActionCaptureInventory:
-                    return Capture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentInventory(session, out text); }, out message);
+                    return OpenCapturePreview(state, ScenarioAuthoringLocalActionIds.FocusedKindCaptureInventory, out message);
+                case ScenarioAuthoringLocalActionIds.ActionCaptureInventoryConfirm:
+                    return ConfirmCapture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentInventory(session, out text); }, out message);
                 case ScenarioAuthoringActionIds.ActionCaptureShelterObjects:
                     if (_scopeService.ResolveActiveScope(state) != ScenarioTargetScope.BunkerInside)
                     {
@@ -738,6 +742,31 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     handled = false;
                     return false;
             }
+        }
+
+        private bool OpenCapturePreview(ScenarioAuthoringState state, string kind, out string message)
+        {
+            message = "Review the world capture preview, then confirm or cancel.";
+            if (state != null)
+            {
+                state.FocusedEditorKind = kind;
+                state.FocusedEditorIndex = 0;
+                state.FocusedEditorIsNew = false;
+                state.StatusMessage = message;
+            }
+            return true;
+        }
+
+        private bool ConfirmCapture(ScenarioAuthoringState state, CaptureAction action, out string message)
+        {
+            bool captured = Capture(state, action, out message);
+            if (state != null)
+            {
+                state.FocusedEditorKind = null;
+                state.FocusedEditorIndex = -1;
+                state.FocusedEditorIsNew = false;
+            }
+            return captured;
         }
 
         private bool Capture(ScenarioAuthoringState state, CaptureAction action, out string message)
@@ -797,10 +826,70 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled || _service == null)
                 return false;
 
+            int pickerIndex;
+            if (TryOpenIndexedFocusedEditor(
+                state,
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionInventoryStartingPickerOpenPrefix,
+                ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker,
+                out pickerIndex))
+            {
+                message = "Opened searchable starting item picker.";
+                return true;
+            }
+
+            if (TryOpenIndexedFocusedEditor(
+                state,
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionInventorySchedulePickerOpenPrefix,
+                ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker,
+                out pickerIndex))
+            {
+                message = "Opened searchable timed item picker.";
+                return true;
+            }
+
             bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
             if (changed)
+            {
                 FocusGameplayEditor(state, _editorService.CurrentSession, actionId);
+                CloseInventoryPickerAfterSelection(state, actionId);
+            }
             return changed;
+        }
+
+        private static bool TryOpenIndexedFocusedEditor(ScenarioAuthoringState state, string actionId, string prefix, string kind, out int index)
+        {
+            index = -1;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            if (!int.TryParse(actionId.Substring(prefix.Length), out index) || index < 0)
+                return false;
+
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = false;
+            return true;
+        }
+
+        private static void CloseInventoryPickerAfterSelection(ScenarioAuthoringState state, string actionId)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || string.IsNullOrEmpty(actionId))
+                return;
+
+            bool pickerOpen = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, StringComparison.OrdinalIgnoreCase);
+            if (!pickerOpen)
+                return;
+
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, StringComparison.Ordinal)
+                && !actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix, StringComparison.Ordinal))
+                return;
+
+            state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
         }
 
         private static void FocusGameplayEditor(ScenarioAuthoringState state, ScenarioEditorSession session, string actionId)
@@ -812,6 +901,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, StringComparison.Ordinal)
                 && definition.TriggersAndEvents != null)
                 SetFocusedEditor(state, "weather", definition.TriggersAndEvents.WeatherEvents.Count - 1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal)
+                && definition.FamilySetup != null)
+                SetFocusedEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, definition.FamilySetup.FutureSurvivors.Count - 1, true);
         }
 
         private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
@@ -895,6 +987,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             handled = actionId != null
                 && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix, StringComparison.Ordinal));
             message = null;

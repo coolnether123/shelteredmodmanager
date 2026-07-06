@@ -440,6 +440,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCaptureService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringLocalActionIds.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBaseModeAuthoringActions.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringContextMenuService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringDraftRepository.cs" />
