@@ -68,7 +68,11 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             {
                 try
                 {
+                    string seedMessage;
+                    ScenarioSeedPolicy.TryApplyForScenario(session.WorkingDefinition, "playtest", out seedMessage);
                     result = _applier.ApplyAll(session.WorkingDefinition, scenarioFilePath);
+                    if (!string.IsNullOrEmpty(seedMessage))
+                        result.AddMessage(seedMessage);
                 }
                 catch (Exception ex)
                 {

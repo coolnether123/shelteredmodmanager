@@ -89,6 +89,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionDraftCopyPath = "editor.draft.copy_path";
         public const string ActionDraftTitlePrefix = "editor.draft.title.";
         public const string ActionPlaytest = "editor.playtest.toggle";
+        public const string ActionPlaytestRestart = "editor.playtest.restart";
+        public const string ActionScenarioSeedRandom = "editor.seed.random";
+        public const string ActionScenarioSeedFixed = "editor.seed.fixed";
+        public const string ActionScenarioSeedReroll = "editor.seed.reroll";
+        public const string ActionScenarioSeedValuePrefix = "editor.seed.value.";
         public const string ActionPublishExport = "publish.export";
         public const string ActionOpenPauseMenu = "editor.pause_menu.open";
         public const string ActionCloseEditor = "editor.close";

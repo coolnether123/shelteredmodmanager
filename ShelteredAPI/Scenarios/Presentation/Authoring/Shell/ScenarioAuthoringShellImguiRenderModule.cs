@@ -126,10 +126,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool wasVisible = _visible;
             _snapshot = snapshot ?? _snapshot;
             bool vanillaBlockingPanelOpen = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>().HasBlockingPanelOpen();
+            bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
-                && snapshot.State.ShellVisible
+                && (snapshot.State.ShellVisible || isPlaytesting)
                 && snapshot.ShellViewModel != null
                 && !vanillaBlockingPanelOpen;
 
@@ -233,6 +234,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
                 Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
+                if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
+                {
+                    DrawPlaytestControlStripCore(statusRect, shell);
+                    inputCapture.RegisterInteractiveRect(statusRect);
+                    inputCapture.SetTextFieldFocused(false);
+                    inputCapture.SetKeyboardCaptured(false);
+                    inputCapture.SetPopupOpen(false);
+                    inputCapture.SetTransitionActive(_animations.TransitionActive);
+                    DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
+                    return;
+                }
+
                 Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell);
                 RegisterTopBarMoreMenu(inputCapture);
                 Rect collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
@@ -402,11 +415,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect);
                 }
-
-                inputCapture.CompleteFrame();
             }
             finally
             {
+                inputCapture.CompleteFrame();
                 GUI.matrix = oldMatrix;
             }
         }
@@ -766,7 +778,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             if (Event.current != null && Event.current.type == EventType.Repaint)
-                GUI.Label(new Rect(rect.x - 5f, rect.y + 8f, 10f, 44f), "|", _mutedTextStyle);
+            {
+                Color oldColor = GUI.color;
+                GUI.color = new Color(0.86f, 0.78f, 0.64f, 0.70f);
+                GUI.DrawTexture(new Rect(Mathf.Max(0f, rect.x - 1f), rect.y + 10f, 2f, 40f), Texture2D.whiteTexture);
+                GUI.color = oldColor;
+            }
 
             return rect;
         }

@@ -83,6 +83,59 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawStatusToastCore(rect, message);
         }
 
+        private void DrawPlaytestControlStripCore(Rect rect, ScenarioAuthoringShellViewModel shell)
+        {
+            DrawChromePanel(rect, _statusStyle);
+            ScenarioAuthoringInspectorAction stopAction = new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionPlaytest,
+                Label = "Stop Playtest",
+                Hint = "Stop playtest and restore frozen authoring.",
+                Enabled = true,
+                Emphasized = true
+            };
+            ScenarioAuthoringInspectorAction restartAction = new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionPlaytestRestart,
+                Label = "Restart",
+                Hint = "Save the draft and reload the authored world. This is a full restart, not an in-place tick rewind.",
+                Enabled = true,
+                Emphasized = false
+            };
+
+            float rightPadding = 16f;
+            float stopWidth = Math.Max(132f, MeasureButtonWidth(stopAction, false, 34f));
+            float restartWidth = Math.Max(104f, MeasureButtonWidth(restartAction, false, 34f));
+            Rect stopRect = new Rect(rect.xMax - stopWidth - rightPadding, rect.y + 8f, stopWidth, 30f);
+            Rect restartRect = new Rect(stopRect.x - restartWidth - 8f, rect.y + 8f, restartWidth, 30f);
+            float statusRight = restartRect.x - 14f;
+
+            float x = rect.x + 26f;
+            DrawStatusLabel(new Rect(x, rect.y + 14f, 124f, 20f), "Playtest running", false);
+            x += 142f;
+            DrawStatusLabel(new Rect(x, rect.y + 14f, 160f, 20f), "Day " + GameTime.Day + " " + GameTime.Hour.ToString("D2") + ":" + GameTime.Minute.ToString("D2"), false);
+            x += 178f;
+            string seed = "ModRandom seed: " + ModRandom.CurrentSeed.ToString();
+            if (statusRight - x > 140f)
+                DrawStatusLabel(new Rect(x, rect.y + 14f, statusRight - x, 20f), seed, true);
+
+            DrawButton(restartRect, restartAction, false);
+            DrawButton(stopRect, stopAction, false);
+
+            string message = null;
+            for (int i = 0; shell != null && shell.StatusEntries != null && i < shell.StatusEntries.Length; i++)
+            {
+                string value = shell.StatusEntries[i] ?? string.Empty;
+                if (!IsPrimaryStatusFact(value) && !IsSecondaryStatusFact(value))
+                {
+                    message = value;
+                    break;
+                }
+            }
+
+            DrawStatusToastCore(rect, message);
+        }
+
         private static bool IsPrimaryStatusFact(string value)
         {
             return StartsWithStatusPrefix(value, "Workspace:")

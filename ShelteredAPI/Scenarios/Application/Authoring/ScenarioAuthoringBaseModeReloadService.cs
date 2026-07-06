@@ -64,36 +64,42 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(newBaseMode);
-            ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
-            ScenarioAuthoringSession pending = bootstrap.QueueExistingDraft(draftId, launchSaveType);
-            if (pending == null)
+            return QueueSavedDraftReload(draftId, draftStartupSave, ScenarioSelectionIds.GetDefaultSaveType(newBaseMode), newBaseMode, "as " + FormatBaseMode(newBaseMode), out message);
+        }
+
+        public bool SaveAndReloadCurrentWorld(ScenarioEditorSession editorSession, out string message)
+        {
+            message = null;
+            if (editorSession == null || editorSession.WorkingDefinition == null)
             {
-                message = "Draft saved, but the authoring reload could not be queued.";
-                MMLog.WriteWarning("[ScenarioAuthoringBaseModeReload] QueueExistingDraft failed for draftId=" + draftId + ".");
+                message = "No active scenario definition is available.";
                 return true;
             }
 
-            string error;
-            if (!_launchCoordinator.QueueAuthoringDraftSceneReload(
-                    ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
-                    draftStartupSave,
-                    launchSaveType,
-                    "authoring draft '" + draftId + "'",
-                    newBaseMode,
-                    out error))
+            ScenarioDefinition definition = editorSession.WorkingDefinition;
+            string draftId = definition.Id;
+            if (string.IsNullOrEmpty(draftId))
             {
-                bootstrap.CancelPendingDraft("Authoring base-mode reload launch failed.", false);
-                message = "Draft saved, but world reload failed: " + (string.IsNullOrEmpty(error) ? "unknown error" : error);
-                MMLog.WriteWarning("[ScenarioAuthoringBaseModeReload] Launch failed for draftId=" + draftId
-                    + " baseMode=" + newBaseMode + " error=" + (error ?? "<null>") + ".");
+                message = "The active draft does not have an id.";
                 return true;
             }
 
-            bootstrap.RequestCloseActiveSession("Reloading authoring world for " + FormatBaseMode(newBaseMode) + " base mode.", false);
+            SaveEntry draftStartupSave;
+            if (!_draftRepository.TryGetDraftSaveEntry(draftId, out draftStartupSave) || draftStartupSave == null)
+            {
+                message = "Could not resolve the draft authoring save.";
+                return true;
+            }
 
-            message = "Scenario draft saved. Reloading world as " + FormatBaseMode(newBaseMode) + ".";
-            return true;
+            ScenarioValidationResult validation = _editorService.CommitChanges(null);
+            if (validation == null || !validation.IsValid)
+            {
+                message = "Restart save failed validation: " + FormatValidationSummary(validation);
+                return true;
+            }
+
+            SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
+            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", out message);
         }
 
         public bool SaveBaseModeOnly(ScenarioEditorSession editorSession, ScenarioBaseGameMode newBaseMode, out string message)
@@ -157,6 +163,44 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return "Unknown validation error.";
+        }
+
+        private bool QueueSavedDraftReload(
+            string draftId,
+            SaveEntry draftStartupSave,
+            SaveManager.SaveType launchSaveType,
+            ScenarioBaseGameMode baseMode,
+            string label,
+            out string message)
+        {
+            ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+            ScenarioAuthoringSession pending = bootstrap.QueueExistingDraft(draftId, launchSaveType);
+            if (pending == null)
+            {
+                message = "Draft saved, but the authoring reload could not be queued.";
+                MMLog.WriteWarning("[ScenarioAuthoringBaseModeReload] QueueExistingDraft failed for draftId=" + draftId + ".");
+                return true;
+            }
+
+            string error;
+            if (!_launchCoordinator.QueueAuthoringDraftSceneReload(
+                    ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                    draftStartupSave,
+                    launchSaveType,
+                    "authoring draft '" + draftId + "'",
+                    baseMode,
+                    out error))
+            {
+                bootstrap.CancelPendingDraft("Authoring reload launch failed.", false);
+                message = "Draft saved, but world reload failed: " + (string.IsNullOrEmpty(error) ? "unknown error" : error);
+                MMLog.WriteWarning("[ScenarioAuthoringBaseModeReload] Launch failed for draftId=" + draftId
+                    + " baseMode=" + baseMode + " error=" + (error ?? "<null>") + ".");
+                return true;
+            }
+
+            bootstrap.RequestCloseActiveSession("Reloading authoring world " + label + ".", false);
+            message = "Scenario draft saved. Reloading world " + label + ".";
+            return true;
         }
 
         private sealed class BaseModeSnapshot

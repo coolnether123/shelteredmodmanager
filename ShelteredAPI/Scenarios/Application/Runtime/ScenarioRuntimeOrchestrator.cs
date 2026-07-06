@@ -133,7 +133,11 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
             try
             {
+                string seedMessage;
+                ScenarioSeedPolicy.TryApplyForScenario(definition, "runtime binding apply", out seedMessage);
                 ScenarioApplyResult apply = _applier.ApplyAll(definition, scenarioFilePath);
+                if (!string.IsNullOrEmpty(seedMessage))
+                    apply.AddMessage(seedMessage);
                 _lastAppliedKey = applyKey;
                 ClearApplyBlocked();
                 MMLog.WriteInfo("[ScenarioRuntimeOrchestrator] Applied active scenario binding: " + binding.ScenarioId

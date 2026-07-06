@@ -494,6 +494,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFamilyMemberFactory.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioApplyResult.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioPlaytestOrchestrator.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioSeedPolicy.cs" />
     <Compile Include="Scenarios\Domain\Assets\ScenarioPlaceableAssetClassification.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeContracts.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeDefinitionOverrideProvider.cs" />

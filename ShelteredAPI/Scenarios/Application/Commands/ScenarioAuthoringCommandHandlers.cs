@@ -1080,6 +1080,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     return CopyDraftPath(state, out message);
                 case ScenarioAuthoringActionIds.ActionPlaytest:
                     return TogglePlaytest(state, out message);
+                case ScenarioAuthoringActionIds.ActionPlaytestRestart:
+                    return RestartPlaytest(state, out message);
+                case ScenarioAuthoringActionIds.ActionScenarioSeedRandom:
+                    return SetScenarioSeedRandom(out message);
+                case ScenarioAuthoringActionIds.ActionScenarioSeedFixed:
+                    return SetScenarioSeedFixed(out message);
+                case ScenarioAuthoringActionIds.ActionScenarioSeedReroll:
+                    return RerollScenarioSeed(out message);
                 case ScenarioAuthoringActionIds.ActionOpenPauseMenu:
                     return OpenPauseMenu(out message);
                 case ScenarioAuthoringActionIds.ActionConvertToNormal:
@@ -1097,6 +1105,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 default:
                     if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionDraftTitlePrefix, StringComparison.Ordinal))
                         return CommitDraftTitle(actionId, out message);
+
+                    if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionScenarioSeedValuePrefix, StringComparison.Ordinal))
+                        return CommitScenarioSeed(actionId, out message);
 
                     ScenarioBaseGameMode reloadBaseMode;
                     if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
@@ -1189,6 +1200,107 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.FocusedEditorIsNew = false;
             message = discard ? "New timeline entry discarded." : "Timeline entry saved.";
             return true;
+        }
+
+        private bool RestartPlaytest(ScenarioAuthoringState state, out string message)
+        {
+            if (_baseModeReloadService == null)
+            {
+                message = "Playtest restart service is unavailable.";
+                return true;
+            }
+
+            return _baseModeReloadService.SaveAndReloadCurrentWorld(_editorService.CurrentSession, out message);
+        }
+
+        private bool SetScenarioSeedRandom(out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            if (!definition.SeedOverride.HasValue)
+            {
+                message = "Scenario seed is already Random.";
+                return true;
+            }
+
+            definition.SeedOverride = null;
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario seed set to Random.";
+            return true;
+        }
+
+        private bool SetScenarioSeedFixed(out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            if (!definition.SeedOverride.HasValue)
+            {
+                definition.SeedOverride = GenerateScenarioSeed();
+                session.MarkDraftChanged(ScenarioDirtySection.Meta);
+                message = "Scenario seed set to fixed value " + definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) + ".";
+                return true;
+            }
+
+            message = "Scenario seed is already Fixed.";
+            return true;
+        }
+
+        private bool RerollScenarioSeed(out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            definition.SeedOverride = GenerateScenarioSeed();
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario fixed seed rerolled to " + definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private bool CommitScenarioSeed(string actionId, out string message)
+        {
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+            {
+                message = "No active scenario draft is available.";
+                return true;
+            }
+
+            string value = ScenarioAuthoringActionCodec.DecodeToken(actionId.Substring(ScenarioAuthoringActionIds.ActionScenarioSeedValuePrefix.Length));
+            int seed;
+            if (!int.TryParse(value != null ? value.Trim() : string.Empty, NumberStyles.Integer, CultureInfo.InvariantCulture, out seed))
+            {
+                message = "Fixed scenario seed must be a signed 32-bit integer.";
+                return true;
+            }
+
+            definition.SeedOverride = seed;
+            session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            message = "Scenario fixed seed updated to " + seed.ToString(CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private static int GenerateScenarioSeed()
+        {
+            int seed = ModRandom.Range(1, int.MaxValue);
+            return seed == 0 ? 1 : seed;
         }
 
         private bool OpenBaseModeDialog(ScenarioAuthoringState state, int direction, out string message)

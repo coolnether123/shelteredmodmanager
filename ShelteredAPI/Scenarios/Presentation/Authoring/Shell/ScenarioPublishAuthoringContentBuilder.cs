@@ -369,6 +369,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioDefinition definition = context != null ? context.Definition : null;
             ScenarioAuthoringValidationSnapshot validation = ScenarioPublishAuthoringContentBuilder.EvaluateValidation(authoringState, definition);
             List<ScenarioAuthoringInspectorItem> controlItems = BuildPlaytestControlItems(editorSession, validation);
+            List<ScenarioAuthoringInspectorItem> runSettingItems = BuildRunSettingItems(definition);
             List<ScenarioAuthoringInspectorItem> preflightItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
             List<ScenarioAuthoringInspectorItem> resultItems = BuildPlaytestResultItems(editorSession);
             List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
@@ -383,6 +384,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                     Items = controlItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "test_run_settings",
+                    Title = "Run Settings",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = runSettingItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
                 {
@@ -452,7 +461,65 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!action.Enabled)
                 action.DisabledReason = "Blocking validation errors must be fixed before playtest.";
             items.Add(Item.ActionItem(action));
+            if (isPlaytesting)
+            {
+                items.Add(Item.ActionItem(Item.Action(
+                    ScenarioAuthoringActionIds.ActionPlaytestRestart,
+                    "Restart",
+                    "Save the draft and reload the authored world. This is a full restart, not an in-place tick rewind.",
+                    true,
+                    false,
+                    "RS",
+                    "Reloads through the safe authoring launch path.")));
+            }
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if there are no blocking errors.", true, false, "SV")));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildRunSettingItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool fixedSeed = definition != null && definition.SeedOverride.HasValue;
+            string seedValue = fixedSeed ? definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture) : "Random";
+
+            items.Add(Item.Property("Seed Policy", fixedSeed ? "Fixed" : "Random"));
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedRandom,
+                "Random",
+                "Use the current save's ModAPI.ModRandom seed. This is the schema default when no fixed seed is saved.",
+                definition != null,
+                !fixedSeed,
+                "RD")));
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedFixed,
+                "Fixed",
+                "Persist a signed 32-bit seed and reset ModAPI.ModRandom when the scenario applies.",
+                definition != null,
+                fixedSeed,
+                "FX")));
+
+            ScenarioAuthoringInspectorItem seedItem = Item.Property("Fixed Seed", seedValue);
+            seedItem.Editable = fixedSeed;
+            seedItem.HoverHint = fixedSeed
+                ? "Enter a signed 32-bit integer seed."
+                : "Switch to Fixed before editing the seed value.";
+            seedItem.Action = Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedValuePrefix,
+                "Set Seed",
+                seedItem.HoverHint,
+                fixedSeed,
+                false,
+                "SD");
+            items.Add(seedItem);
+
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionScenarioSeedReroll,
+                fixedSeed ? "Reroll Fixed Seed" : "Set Random Fixed Seed",
+                "Generate a new fixed seed using ModAPI.ModRandom.",
+                definition != null,
+                false,
+                "RR")));
+            items.Add(Item.Text("Fixed seeds reset ModAPI.ModRandom when playtest or runtime apply starts. Vanilla UnityEngine.Random and System.Random consumers are not controlled."));
             return items;
         }
 

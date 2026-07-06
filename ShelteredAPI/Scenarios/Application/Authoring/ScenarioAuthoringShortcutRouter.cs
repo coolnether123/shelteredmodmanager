@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
@@ -27,6 +28,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool TryRoute(ScenarioAuthoringState state, out bool changed)
         {
             changed = false;
+            if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
+                return false;
             ShortcutChord chord = ReadChord();
             if (chord.Kind == ShortcutChordKind.None)
                 return false;
