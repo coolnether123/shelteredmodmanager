@@ -165,11 +165,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             RegisterScrollRegion(window.Id, bodyRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+            if (IsHomeWorkshopPage(window))
             {
-                DrawSection(window.Sections[i]);
-                if (i < window.Sections.Length - 1)
-                    GUILayout.Space(8f);
+                DrawHomeWorkshopPage(window);
+            }
+            else
+            {
+                for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
+                {
+                    DrawSection(window.Sections[i]);
+                    if (i < window.Sections.Length - 1)
+                        GUILayout.Space(8f);
+                }
             }
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -1194,6 +1201,302 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 candidateFilter = value;
         }
 
+        private static bool IsHomeWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
+        {
+            return window != null
+                && string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(window.Title, "Test", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void DrawHomeWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
+        {
+            ScenarioAuthoringInspectorSection identity = FindSection(window, "home_identity");
+            ScenarioAuthoringInspectorSection setup = FindSection(window, "home_setup_checklist");
+            ScenarioAuthoringInspectorSection baseMode = FindSection(window, "home_base_mode");
+            ScenarioAuthoringInspectorSection quickActions = FindSection(window, "home_quick_actions");
+            ScenarioAuthoringInspectorSection advanced = FindSection(window, "home_advanced");
+
+            if (identity != null)
+            {
+                DrawHomeIdentityHeader(identity);
+                GUILayout.Space(12f);
+            }
+
+            if (setup != null || baseMode != null)
+            {
+                bool twoColumns = GetSectionContentWidth() >= 760f && setup != null && baseMode != null;
+                if (twoColumns)
+                    GUILayout.BeginHorizontal();
+
+                if (setup != null)
+                {
+                    if (twoColumns)
+                        GUILayout.BeginVertical(GUILayout.Width((GetSectionContentWidth() - 12f) * 0.5f));
+                    DrawHomeSetupChecklist(setup);
+                    if (twoColumns)
+                        GUILayout.EndVertical();
+                }
+
+                if (twoColumns)
+                    GUILayout.Space(12f);
+
+                if (baseMode != null)
+                {
+                    if (twoColumns)
+                        GUILayout.BeginVertical(GUILayout.Width((GetSectionContentWidth() - 12f) * 0.5f));
+                    DrawHomeBaseSelector(baseMode);
+                    if (twoColumns)
+                        GUILayout.EndVertical();
+                }
+
+                if (twoColumns)
+                    GUILayout.EndHorizontal();
+
+                GUILayout.Space(16f);
+            }
+
+            DrawHomeQuestionGrid(window);
+
+            if (quickActions != null)
+            {
+                GUILayout.Space(12f);
+                DrawSection(quickActions);
+            }
+
+            if (advanced != null)
+            {
+                GUILayout.Space(8f);
+                DrawSection(advanced);
+            }
+        }
+
+        private static ScenarioAuthoringInspectorSection FindSection(ScenarioAuthoringShellWindowViewModel window, string id)
+        {
+            for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                if (section != null && string.Equals(section.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return section;
+            }
+
+            return null;
+        }
+
+        private void DrawHomeIdentityHeader(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            ScenarioAuthoringInspectorItem titleItem = null;
+            List<ScenarioAuthoringInspectorAction> chips = new List<ScenarioAuthoringInspectorAction>();
+            ScenarioAuthoringInspectorItem pathItem = null;
+            ScenarioAuthoringInspectorAction copyPath = null;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+                if (item.Editable)
+                    titleItem = item;
+                else if (item.Action != null && string.Equals(item.Action.Id, ScenarioAuthoringActionIds.ActionDraftCopyPath, StringComparison.Ordinal))
+                    copyPath = item.Action;
+                else if (item.Action != null)
+                    chips.Add(item.Action);
+                else if (string.Equals(item.Label, "Draft Path", StringComparison.OrdinalIgnoreCase))
+                    pathItem = item;
+            }
+
+            DrawHomeHeadlineField(titleItem);
+            GUILayout.Space(8f);
+            DrawHomeStatusChips(chips);
+            if (pathItem != null)
+            {
+                GUILayout.Space(7f);
+                DrawHomeDraftPath(pathItem, copyPath);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void DrawHomeHeadlineField(ScenarioAuthoringInspectorItem item)
+        {
+            string label = item != null ? item.Label ?? "Title" : "Title";
+            string value = item != null ? item.Value ?? string.Empty : string.Empty;
+            Rect rect = GUILayoutUtility.GetRect(240f, 38f, GUILayout.ExpandWidth(true), GUILayout.Height(38f));
+            GUIStyle style = new GUIStyle(_uiContext.Styles.Field);
+            style.fontSize = Math.Max(style.fontSize, 22);
+            style.fontStyle = FontStyle.Bold;
+            string controlName = "editable." + label;
+            string focusedName = GUI.GetNameOfFocusedControl();
+            bool wasFocused = string.Equals(focusedName, controlName, StringComparison.Ordinal);
+            string draft;
+            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || !wasFocused)
+                draft = value;
+            GUI.SetNextControlName(controlName);
+            string next = GUI.TextField(rect, draft, style);
+            _editableFieldDrafts[controlName] = next;
+            bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+            _editableFieldFocused = _editableFieldFocused || focused;
+            if (focused || (Event.current != null && rect.Contains(Event.current.mousePosition)))
+                DrawFieldFocusBorder(rect);
+        }
+
+        private void DrawHomeStatusChips(List<ScenarioAuthoringInspectorAction> chips)
+        {
+            float rowLimit = GetSectionContentWidth();
+            float rowWidth = 0f;
+            GUILayout.BeginHorizontal();
+            for (int i = 0; chips != null && i < chips.Count; i++)
+            {
+                ScenarioAuthoringInspectorAction action = chips[i];
+                if (action == null)
+                    continue;
+
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 18f), 82f, Math.Min(220f, rowLimit));
+                if (rowWidth > 0f && rowWidth + width > rowLimit)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(4f);
+                    GUILayout.BeginHorizontal();
+                    rowWidth = 0f;
+                }
+
+                Rect rect = GUILayoutUtility.GetRect(width, 24f, GUILayout.Width(width), GUILayout.Height(24f));
+                DrawButton(rect, action, false);
+                GUILayout.Space(6f);
+                rowWidth += width + 6f;
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawHomeDraftPath(ScenarioAuthoringInspectorItem pathItem, ScenarioAuthoringInspectorAction copyPath)
+        {
+            Rect rowRect = GUILayoutUtility.GetRect(240f, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
+            float copyWidth = copyPath != null ? Mathf.Clamp(MeasureButtonWidth(copyPath, false, 18f), 78f, 120f) : 0f;
+            Rect labelRect = new Rect(rowRect.x, rowRect.y + 4f, Math.Max(90f, rowRect.width - copyWidth - 10f), 18f);
+            string path = pathItem != null ? pathItem.Value ?? string.Empty : string.Empty;
+            const string prefix = "Draft: ";
+            float pathWidth = Math.Max(12f, labelRect.width - _mutedTextStyle.CalcSize(new GUIContent(prefix)).x);
+            GUI.Label(labelRect, new GUIContent(prefix + MiddleTruncate(path, pathWidth, _mutedTextStyle), pathItem != null ? pathItem.HoverHint ?? path : path), _mutedTextStyle);
+            if (copyPath != null)
+                DrawButton(new Rect(rowRect.xMax - copyWidth, rowRect.y, copyWidth, 24f), copyPath, false);
+        }
+
+        private void DrawHomeBaseSelector(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            GUILayout.Label(section.Title ?? "Scenario Base", _sectionTitleStyle);
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            string hint = null;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+                if (item.Action != null)
+                    actions.Add(item.Action);
+                else if (string.IsNullOrEmpty(hint))
+                    hint = item.Value ?? item.Label;
+            }
+
+            float width = GetSectionContentWidth();
+            float gap = 4f;
+            float segmentWidth = (width - (gap * Math.Max(0, actions.Count - 1))) / Math.Max(1, actions.Count);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < actions.Count; i++)
+            {
+                Rect rect = GUILayoutUtility.GetRect(segmentWidth, 30f, GUILayout.Width(segmentWidth), GUILayout.Height(30f));
+                DrawButton(rect, actions[i], true);
+                if (i < actions.Count - 1)
+                    GUILayout.Space(gap);
+            }
+            GUILayout.EndHorizontal();
+            if (!string.IsNullOrEmpty(hint))
+            {
+                GUILayout.Space(8f);
+                GUILayout.Label(hint, _mutedTextStyle);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void DrawHomeSetupChecklist(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label(section.Title ?? "Set Up Your Scenario", _sectionTitleStyle);
+            GUILayout.FlexibleSpace();
+            ScenarioAuthoringInspectorAction dismiss = FindAction(section, ScenarioAuthoringActionIds.ActionSetupDismiss);
+            if (dismiss != null)
+            {
+                float width = Mathf.Clamp(MeasureButtonWidth(dismiss, false, 18f), 70f, 100f);
+                DrawButton(GUILayoutUtility.GetRect(width, 24f, GUILayout.Width(width), GUILayout.Height(24f)), dismiss, false);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.Action == null || string.Equals(item.Action.Id, ScenarioAuthoringActionIds.ActionSetupDismiss, StringComparison.Ordinal))
+                    continue;
+                Rect rect = GUILayoutUtility.GetRect(180f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+                DrawButton(rect, item.Action, false);
+                GUILayout.Space(4f);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private static ScenarioAuthoringInspectorAction FindAction(ScenarioAuthoringInspectorSection section, string actionId)
+        {
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item != null && item.Action != null && string.Equals(item.Action.Id, actionId, StringComparison.Ordinal))
+                    return item.Action;
+            }
+
+            return null;
+        }
+
+        private void DrawHomeQuestionGrid(ScenarioAuthoringShellWindowViewModel window)
+        {
+            List<ScenarioAuthoringInspectorSection> questions = new List<ScenarioAuthoringInspectorSection>();
+            for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                if (IsHomeQuestionSection(section))
+                    questions.Add(section);
+            }
+
+            if (questions.Count == 0)
+                return;
+
+            float availableWidth = GetSectionContentWidth();
+            float gap = 12f;
+            int columns = availableWidth >= 760f ? 2 : 1;
+            float cardWidth = columns == 2 ? (availableWidth - gap) * 0.5f : availableWidth;
+            for (int i = 0; i < questions.Count; i += columns)
+            {
+                GUILayout.BeginHorizontal();
+                for (int column = 0; column < columns; column++)
+                {
+                    int index = i + column;
+                    if (index < questions.Count)
+                    {
+                        Rect rect = GUILayoutUtility.GetRect(cardWidth, 82f, GUILayout.Width(cardWidth), GUILayout.Height(82f));
+                        DrawHomeQuestionCard(rect, questions[index]);
+                    }
+                    else
+                    {
+                        GUILayout.Space(cardWidth);
+                    }
+
+                    if (column < columns - 1)
+                        GUILayout.Space(gap);
+                }
+                GUILayout.EndHorizontal();
+                if (i + columns < questions.Count)
+                    GUILayout.Space(10f);
+            }
+        }
+
         private void DrawSection(ScenarioAuthoringInspectorSection section)
         {
             DrawSection(section, false);
@@ -1336,11 +1639,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !string.IsNullOrEmpty(section.Id)
                 && section.Id.StartsWith("home_", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(section.Id, "home_identity", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(section.Id, "home_setup_checklist", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(section.Id, "home_base_mode", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(section.Id, "home_advanced", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(section.Id, "home_quick_actions", StringComparison.OrdinalIgnoreCase)
                 && section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip;
         }
 
         private void DrawHomeQuestionCard(ScenarioAuthoringInspectorSection section)
+        {
+            Rect rect = GUILayoutUtility.GetRect(120f, 82f, GUILayout.ExpandWidth(true), GUILayout.Height(82f));
+            DrawHomeQuestionCard(rect, section);
+        }
+
+        private void DrawHomeQuestionCard(Rect rect, ScenarioAuthoringInspectorSection section)
         {
             ScenarioAuthoringInspectorAction action = null;
             string detail = string.Empty;
@@ -1350,7 +1662,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringInspectorItem item = section.Items[i];
                 if (item == null)
                     continue;
-                if (item.Action != null)
+                if (item.Action != null && action == null)
                     action = item.Action;
                 else if (string.IsNullOrEmpty(detail))
                     detail = item.Value ?? item.Label ?? string.Empty;
@@ -1361,7 +1673,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return;
 
-            Rect rect = GUILayoutUtility.GetRect(120f, 82f, GUILayout.ExpandWidth(true), GUILayout.Height(82f));
             DrawButton(rect, new ScenarioAuthoringInspectorAction
             {
                 Id = action.Id,
@@ -1849,6 +2160,39 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string ShortenToFit(string value, float maxWidth, GUIStyle style)
         {
+            return ScenarioUiMeasuredLabel.FitLabelWithEllipsis(value, maxWidth, style);
+        }
+
+        private static string MiddleTruncate(string value, float maxWidth, GUIStyle style)
+        {
+            if (string.IsNullOrEmpty(value) || style == null)
+                return value ?? string.Empty;
+            if (style.CalcSize(new GUIContent(value)).x <= maxWidth)
+                return value;
+
+            const string ellipsis = "...";
+            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
+            if (ellipsisWidth >= maxWidth)
+                return string.Empty;
+
+            int left = Math.Min(12, value.Length);
+            int right = Math.Min(18, Math.Max(0, value.Length - left));
+            while (left + right > 0)
+            {
+                string candidate = value.Substring(0, left) + ellipsis + value.Substring(value.Length - right);
+                if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
+                    return candidate;
+
+                if (left > right && left > 4)
+                    left--;
+                else if (right > 6)
+                    right--;
+                else if (left > 4)
+                    left--;
+                else
+                    break;
+            }
+
             return ScenarioUiMeasuredLabel.FitLabelWithEllipsis(value, maxWidth, style);
         }
 

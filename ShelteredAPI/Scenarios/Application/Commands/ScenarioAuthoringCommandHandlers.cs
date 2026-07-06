@@ -1032,6 +1032,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             {
                 case ScenarioAuthoringActionIds.ActionSave:
                     return SaveDraft(state, out message);
+                case ScenarioAuthoringActionIds.ActionDraftCopyPath:
+                    return CopyDraftPath(state, out message);
                 case ScenarioAuthoringActionIds.ActionPlaytest:
                     return TogglePlaytest(state, out message);
                 case ScenarioAuthoringActionIds.ActionOpenPauseMenu:
@@ -1073,6 +1075,20 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     handled = false;
                     return false;
             }
+        }
+
+        private static bool CopyDraftPath(ScenarioAuthoringState state, out string message)
+        {
+            string path = state != null ? state.ActiveScenarioFilePath : null;
+            if (string.IsNullOrEmpty(path))
+            {
+                message = "No draft path is active.";
+                return true;
+            }
+
+            GUIUtility.systemCopyBuffer = path;
+            message = "Draft path copied.";
+            return true;
         }
 
         private bool CloseFocusedEditor(ScenarioAuthoringState state, bool cancel, out string message)

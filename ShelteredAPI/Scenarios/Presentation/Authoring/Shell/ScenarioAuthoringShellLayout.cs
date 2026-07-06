@@ -136,7 +136,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildWorkshopPageRect(Rect contentRect)
         {
-            float pageWidth = Mathf.Clamp(contentRect.width - (Margin * 2f), 720f, 1180f);
+            float pageWidth = Mathf.Clamp(contentRect.width - (Margin * 2f), 720f, 1100f);
             float x = contentRect.x + ((contentRect.width - pageWidth) * 0.5f);
             return new Rect(x, contentRect.y + 18f, pageWidth, Math.Max(240f, contentRect.height - 36f));
         }

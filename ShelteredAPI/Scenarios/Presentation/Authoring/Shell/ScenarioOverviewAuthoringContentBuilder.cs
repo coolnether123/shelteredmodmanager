@@ -77,13 +77,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             ScenarioAuthoringValidationSnapshot validation = GetCachedValidation(state, editorSession, definition);
+            string draftPath = state != null ? state.ActiveScenarioFilePath : null;
+            string validationLabel = FormatValidationChip(validation);
+            string playtestLabel = FormatPlaytestReadiness(editorSession, validation);
+            int dirtyCount = Item.CountDirtyFlags(editorSession);
             items.Add(EditableProperty("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
-            items.Add(Item.Property("Base", FormatBaseMode(definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival)));
-            items.Add(Item.Property("Save State", Item.CountDirtyFlags(editorSession) == 0 ? "Saved" : "Unsaved changes"));
-            items.Add(Item.Property("Validation", FormatValidation(validation)));
-            items.Add(Item.Property("Active Stage", state != null ? ScenarioAuthoringWorkflowLabels.GetStageLabel(state.ActiveStage, false) : "Workshop"));
-            items.Add(Item.Property("Draft Path", !string.IsNullOrEmpty(state != null ? state.ActiveScenarioFilePath : null) ? state.ActiveScenarioFilePath : "No draft file is active."));
-            items.Add(Item.Property("Playtest", FormatPlaytestReadiness(editorSession, validation)));
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionSave,
+                dirtyCount == 0 ? "Saved" : "Unsaved changes",
+                dirtyCount == 0 ? "No unsaved draft changes." : "Save the current scenario draft.",
+                dirtyCount > 0,
+                dirtyCount > 0,
+                "SV")));
+            items.Add(Item.ActionItem(Item.Action(
+                "stage.select." + ScenarioStageKind.Publish,
+                validationLabel,
+                validation != null && validation.WarningCount > 0 ? "Open Publish to review warnings." : "Open Publish to validate and export.",
+                true,
+                validation != null && validation.ErrorCount > 0,
+                validation != null && validation.ErrorCount > 0 ? "!" : "OK")));
+            items.Add(Item.ActionItem(Item.Action(
+                "stage.select." + ScenarioStageKind.Test,
+                playtestLabel,
+                "Open the Test workspace.",
+                true,
+                string.Equals(playtestLabel, "Ready to test", StringComparison.OrdinalIgnoreCase),
+                "TS")));
+            ScenarioAuthoringInspectorItem pathItem = Item.Property("Draft Path", !string.IsNullOrEmpty(draftPath) ? draftPath : "No draft file is active.");
+            pathItem.HoverHint = draftPath;
+            items.Add(pathItem);
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionDraftCopyPath,
+                "Copy Path",
+                !string.IsNullOrEmpty(draftPath) ? "Copy the full draft path to the clipboard." : "No draft path is active.",
+                !string.IsNullOrEmpty(draftPath),
+                false,
+                "CP",
+                draftPath)));
             return items.ToArray();
         }
 
@@ -133,6 +163,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return "Ready";
         }
 
+        private static string FormatValidationChip(ScenarioAuthoringValidationSnapshot validation)
+        {
+            if (validation == null || !validation.ValidationAvailable)
+                return "Validation unavailable";
+            if (validation.ErrorCount > 0)
+                return validation.ErrorCount.ToString(CultureInfo.InvariantCulture) + " errors";
+            if (validation.WarningCount > 0)
+                return validation.WarningCount.ToString(CultureInfo.InvariantCulture) + " warnings";
+            return "OK";
+        }
+
         private static string FormatPlaytestReadiness(
             ScenarioEditorSession editorSession,
             ScenarioAuthoringValidationSnapshot validation)
@@ -155,25 +196,50 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioBaseGameMode mode = definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival;
             ScenarioBaseGameMode worldMode = authoringSession != null ? authoringSession.BaseMode : mode;
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Item.Property("Current", FormatBaseMode(mode)));
+            items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Survival));
+            items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Stasis));
+            items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Surrounded));
+            string hint = "Base game rules and starting scene this scenario builds on. Quests and world map data stay as authored.";
             if (worldMode != mode)
-                items.Add(Item.Text("World shows " + FormatBaseMode(worldMode) + "; reopens as " + FormatBaseMode(mode) + "."));
-            items.Add(Item.Property("Changes", "Base game rules and starting scene this scenario builds on."));
-            items.Add(Item.Property("Map Data", "Quests and world map data are kept as authored."));
-            items.Add(Item.Property("Supported Bases",
-                "Standard " + (mode == ScenarioBaseGameMode.Survival ? "selected" : "available")
-                + " / Stasis " + (mode == ScenarioBaseGameMode.Stasis ? "selected" : "available")
-                + " / Surrounded " + (mode == ScenarioBaseGameMode.Surrounded ? "selected" : "available")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "Prev: " + ResolveAdjacentModeName(definition, -1), "Choose how to switch to the previous supported base.", true, false, "M-")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, "Next: " + ResolveAdjacentModeName(definition, 1), "Choose how to switch to the next supported base.", true, false, "M+")));
+                hint = "World shows " + FormatBaseMode(worldMode) + "; reopens as " + FormatBaseMode(mode) + ". " + hint;
+            items.Add(Item.Text(hint));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "home_base_mode",
                 Title = "Scenario Base",
                 Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = items.ToArray()
             };
+        }
+
+        private static ScenarioAuthoringInspectorItem BuildBaseModeOption(ScenarioBaseGameMode current, ScenarioBaseGameMode target)
+        {
+            bool selected = current == target;
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ResolveBaseModeActionId(current, target),
+                FormatBaseMode(target),
+                selected ? FormatBaseMode(target) + " is the current base." : "Choose how to switch this scenario to " + FormatBaseMode(target) + ".",
+                !selected,
+                selected,
+                selected ? "OK" : null);
+            if (selected)
+                action.DisabledReason = FormatBaseMode(target) + " is already selected.";
+            return Item.ActionItem(action);
+        }
+
+        private static string ResolveBaseModeActionId(ScenarioBaseGameMode current, ScenarioBaseGameMode target)
+        {
+            if (current == target)
+                return ScenarioAuthoringActionIds.ActionScenarioModeNext;
+
+            int currentIndex = (int)current;
+            int targetIndex = (int)target;
+            int count = Enum.GetValues(typeof(ScenarioBaseGameMode)).Length;
+            int nextIndex = (currentIndex + 1 + count) % count;
+            return targetIndex == nextIndex
+                ? ScenarioAuthoringActionIds.ActionScenarioModeNext
+                : ScenarioAuthoringActionIds.ActionScenarioModePrevious;
         }
 
         private static ScenarioAuthoringInspectorItem EditableProperty(string label, string value)
@@ -231,7 +297,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Item.Text("Set up your scenario"));
             items.Add(BuildChecklistAction("Name", named, ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicSetup, "Review title and draft identity."));
             items.Add(BuildChecklistAction("Base", baseSelected, ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicBaseModes, "Review the selected base mode."));
             items.Add(BuildChecklistAction("World Tour", worldTourDone, ScenarioAuthoringActionIds.ActionTourStartPrefix + TutorialContent.TourEditorBasics, "Walk through the world and shell basics."));

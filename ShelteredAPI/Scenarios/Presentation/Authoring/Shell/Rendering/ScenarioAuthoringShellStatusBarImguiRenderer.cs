@@ -98,7 +98,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (count == 0)
                 return RuntimeCompat.ZeroRect();
 
-            float width = Math.Min(620f, Math.Max(220f, count * 132f + 18f));
+            float measuredWidth = 18f;
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = windows[i];
+                if (window == null || !window.Collapsed)
+                    continue;
+
+                measuredWidth += Math.Max(96f, ScenarioUiMeasuredLabel.Width(window.Title ?? string.Empty, _buttonStyle, 24f)) + 6f;
+            }
+
+            float width = Math.Min(Math.Max(220f, measuredWidth), Math.Max(220f, statusRect.width - 28f));
             Rect stripRect = new Rect(
                 statusRect.x + 14f,
                 statusRect.y - 36f,
@@ -116,14 +126,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (window == null || !window.Collapsed)
                     continue;
 
-                float buttonWidth = Math.Min(126f, stripRect.xMax - x - 6f);
+                float buttonWidth = Math.Max(96f, ScenarioUiMeasuredLabel.Width(window.Title ?? string.Empty, _buttonStyle, 24f));
+                buttonWidth = Math.Min(buttonWidth, stripRect.xMax - x - 6f);
                 if (buttonWidth < 56f)
                     break;
 
                 DrawButton(new Rect(x, stripRect.y + 4f, buttonWidth, 22f), new ScenarioAuthoringInspectorAction
                 {
                     Id = ScenarioAuthoringActionIds.ActionWindowRestorePrefix + window.Id,
-                    Label = Shorten(window.Title, 16),
+                    Label = window.Title,
                     Hint = "Restore the " + window.Title + " window.",
                     Enabled = true
                 }, false);
