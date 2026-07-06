@@ -29,7 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures{
             return texture;
         }
 
-        /// <summary>Returns an 8x8 flat-colour texture with transparent 2px corner cuts.</summary>
+        /// <summary>Returns a flat-colour texture with transparent chamfered corner cuts.</summary>
         public Texture2D GetCornerCut(Color color)
         {
             int key = ColorKey(color);
@@ -48,10 +48,10 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures{
                 for (int x = 0; x < size; x++)
                 {
                     bool cornerCut =
-                        (x < cut && y < cut)
-                        || (x >= size - cut && y < cut)
-                        || (x < cut && y >= size - cut)
-                        || (x >= size - cut && y >= size - cut);
+                        IsChamferCornerPixel(x, y, cut)
+                        || IsChamferCornerPixel(size - x - 1, y, cut)
+                        || IsChamferCornerPixel(x, size - y - 1, cut)
+                        || IsChamferCornerPixel(size - x - 1, size - y - 1, cut);
                     texture.SetPixel(x, y, cornerCut ? new Color(0f, 0f, 0f, 0f) : color);
                 }
             }
@@ -89,6 +89,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures{
             int b = Mathf.Clamp(Mathf.RoundToInt(color.b * 255f), 0, 255);
             int a = Mathf.Clamp(Mathf.RoundToInt(color.a * 255f), 0, 255);
             return (r << 24) | (g << 16) | (b << 8) | a;
+        }
+
+        private static bool IsChamferCornerPixel(int x, int y, int cut)
+        {
+            return x < cut && y < cut && x + y < cut;
         }
     }
 }

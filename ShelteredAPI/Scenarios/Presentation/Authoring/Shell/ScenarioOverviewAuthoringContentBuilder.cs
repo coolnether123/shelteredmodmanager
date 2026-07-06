@@ -99,7 +99,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 playtestLabel,
                 "Open the Test workspace.",
                 true,
-                false,
+                string.Equals(playtestLabel, "Ready to test", StringComparison.OrdinalIgnoreCase),
                 "TS")));
             ScenarioAuthoringInspectorItem pathItem = Item.Property("Draft Path", !string.IsNullOrEmpty(draftPath) ? draftPath : "No draft file is active.");
             pathItem.HoverHint = draftPath;
@@ -259,19 +259,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddQuestionSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioHomeProgressFacts facts)
         {
-            sections.Add(BuildQuestionSection("home_world", "Where does your story take place?", "Build rooms, objects, and scenery in the shelter world.", facts.WorldBadge, "stage.select." + ScenarioStageKind.Bunker, "Open World", "WORLD", TutorialContent.TopicWorldCamera, TutorialContent.TourEditorBasics));
-            sections.Add(BuildQuestionSection("home_people", "Who lives in this world?", "Create the starting family and future arrivals.", facts.PeopleBadge, "stage.select." + ScenarioStageKind.People, "Open Cast", "CAST", TutorialContent.TopicCast, null));
-            sections.Add(BuildQuestionSection("home_inventory", "What do they start with?", "Set starting supplies and scheduled deliveries.", facts.InventoryBadge, "stage.select." + ScenarioStageKind.InventoryStorage, "Open Supplies", "SUP", TutorialContent.TopicSupplies, null));
-            sections.Add(BuildQuestionSection("home_events", "What happens, and when?", "Schedule events, triggers, and story beats.", facts.EventsBadge, "stage.select." + ScenarioStageKind.Events, "Open Timeline", "TIME", TutorialContent.TopicTimelineConditions, TutorialContent.TourTimelineEvent));
-            sections.Add(BuildQuestionSection("home_art", "How does it look?", "Browse, replace, and edit sprites.", facts.ArtBadge, ScenarioAuthoringActionIds.ActionToolAssets, "Open Art", "ART", TutorialContent.TopicArtPixelEditor, TutorialContent.TourEditSprite));
-            sections.Add(BuildQuestionSection("home_test", "Ready to try it?", "Playtest your scenario live.", facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test", "TEST", TutorialContent.TopicTest, null));
-            sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Publish", "PUB", TutorialContent.TopicPublish, null));
+            sections.Add(BuildQuestionSection("home_world", "Where does your story take place?", "Build rooms, objects, and scenery in the shelter world.", facts.WorldBadge, "stage.select." + ScenarioStageKind.Bunker, "Open World", "MAP", false, TutorialContent.TopicWorldCamera, TutorialContent.TourEditorBasics));
+            sections.Add(BuildQuestionSection("home_people", "Who lives in this world?", "Create the starting family and future arrivals.", facts.PeopleBadge, "stage.select." + ScenarioStageKind.People, "Open Cast", "CAST", false, TutorialContent.TopicCast, null));
+            sections.Add(BuildQuestionSection("home_inventory", "What do they start with?", "Set starting supplies and scheduled deliveries.", facts.InventoryBadge, "stage.select." + ScenarioStageKind.InventoryStorage, "Open Supplies", "BOX", false, TutorialContent.TopicSupplies, null));
+            sections.Add(BuildQuestionSection("home_events", "What happens, and when?", "Schedule events, triggers, and story beats.", facts.EventsBadge, "stage.select." + ScenarioStageKind.Events, "Open Timeline", "TIME", false, TutorialContent.TopicTimelineConditions, TutorialContent.TourTimelineEvent));
+            sections.Add(BuildQuestionSection("home_art", "How does it look?", "Browse, replace, and edit sprites.", facts.ArtBadge, ScenarioAuthoringActionIds.ActionToolAssets, "Open Art", "ART", false, TutorialContent.TopicArtPixelEditor, TutorialContent.TourEditSprite));
+            sections.Add(BuildQuestionSection("home_test", "Ready to try it?", "Playtest your scenario live.", facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test", "TEST", string.Equals(facts.PlaytestBadge, "Saved", StringComparison.OrdinalIgnoreCase), TutorialContent.TopicTest, null));
+            sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Publish", "FLAG", false, TutorialContent.TopicPublish, null));
         }
 
-        private static ScenarioAuthoringInspectorSection BuildQuestionSection(string id, string question, string answer, string badge, string actionId, string actionLabel, string iconText, string topicId, string tourId)
+        private static ScenarioAuthoringInspectorSection BuildQuestionSection(string id, string question, string answer, string badge, string actionId, string actionLabel, string iconText, bool emphasized, string topicId, string tourId)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Item.ActionItem(Item.Action(actionId, actionLabel, answer, true, false, iconText)));
+            items.Add(Item.ActionItem(Item.Action(actionId, actionLabel, answer, true, emphasized, iconText)));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + topicId, "Learn More", "Open help for this setup area.", true, false, "HELP")));
             if (!string.IsNullOrEmpty(tourId))
                 items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTourStartPrefix + tourId, "Walk Me Through It", "Start the related spotlight tour.", true, true, "TO")));

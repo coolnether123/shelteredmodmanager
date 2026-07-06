@@ -1428,27 +1428,71 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 Rect rect = GUILayoutUtility.GetRect(width, 26f, GUILayout.Width(width), GUILayout.Height(26f));
-                ScenarioAuthoringInspectorAction chromeAction = new ScenarioAuthoringInspectorAction
-                {
-                    Id = action.Id,
-                    Label = string.Empty,
-                    Hint = action.Hint,
-                    Detail = action.Detail,
-                    Enabled = action.Enabled,
-                    Emphasized = false,
-                    DisabledReason = action.DisabledReason
-                };
-                DrawButton(rect, chromeAction, false);
-                GUIStyle chipText = new GUIStyle(action.Enabled ? _textStyle : _mutedTextStyle);
-                chipText.alignment = TextAnchor.MiddleCenter;
-                chipText.wordWrap = false;
-                chipText.clipping = TextClipping.Clip;
-                Rect textRect = new Rect(rect.x + 8f, rect.y, Math.Max(0f, rect.width - 16f), rect.height);
-                GUI.Label(textRect, ShortenToFit(action.Label ?? string.Empty, textRect.width, chipText), chipText);
+                DrawHomeStatusChip(rect, action);
                 GUILayout.Space(6f);
                 rowWidth += width + 6f;
             }
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawHomeStatusChip(Rect rect, ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null || _uiContext == null || _uiContext.Styles == null)
+                return;
+
+            GUIStyle style = ResolveHomeChipStyle(action);
+            string tooltip = action.Enabled
+                ? (action.Hint ?? action.Detail ?? string.Empty)
+                : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (action.Hint ?? action.Detail ?? string.Empty));
+            GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, Math.Max(0f, rect.width - 14f), style), tooltip);
+            RegisterInteractiveRegion(rect);
+            if (!string.IsNullOrEmpty(action.Id))
+                RegisterTourTarget("action:" + action.Id, rect);
+            if (action.Enabled)
+            {
+                if (GUI.Button(rect, content, style))
+                {
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                    if (Event.current != null)
+                        Event.current.Use();
+                }
+            }
+            else
+            {
+                GUI.Box(rect, content, style);
+            }
+        }
+
+        private GUIStyle ResolveHomeChipStyle(ScenarioAuthoringInspectorAction action)
+        {
+            ScenarioUiPillEmphasis emphasis = ResolveHomeChipEmphasis(action);
+            switch (emphasis)
+            {
+                case ScenarioUiPillEmphasis.Success:
+                    return _uiContext.Styles.PillSuccess;
+                case ScenarioUiPillEmphasis.Warning:
+                    return _uiContext.Styles.PillWarning;
+                case ScenarioUiPillEmphasis.Danger:
+                    return _uiContext.Styles.PillDanger;
+                case ScenarioUiPillEmphasis.Active:
+                    return _uiContext.Styles.PillEmphasized;
+                default:
+                    return _uiContext.Styles.Pill;
+            }
+        }
+
+        private static ScenarioUiPillEmphasis ResolveHomeChipEmphasis(ScenarioAuthoringInspectorAction action)
+        {
+            string label = action != null ? action.Label ?? string.Empty : string.Empty;
+            if (StringContains(label, "error") || StringContains(label, "fix validation"))
+                return ScenarioUiPillEmphasis.Danger;
+            if (StringContains(label, "warning") || StringContains(label, "unsaved") || StringContains(label, "unavailable") || StringContains(label, "save draft"))
+                return ScenarioUiPillEmphasis.Warning;
+            if (StringContains(label, "saved") || string.Equals(label, "OK", StringComparison.OrdinalIgnoreCase) || StringContains(label, "running"))
+                return ScenarioUiPillEmphasis.Success;
+            if (StringContains(label, "ready to test"))
+                return ScenarioUiPillEmphasis.Active;
+            return ScenarioUiPillEmphasis.Default;
         }
 
         private void DrawHomeDraftPath(ScenarioAuthoringInspectorItem pathItem, ScenarioAuthoringInspectorAction copyPath)
@@ -1610,7 +1654,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
             Rect markRect = new Rect(rect.x + 8f, rect.y + 4f, 32f, rect.height - 8f);
             Rect textRect = new Rect(markRect.xMax + 8f, rect.y + 3f, rect.width - 48f, rect.height - 6f);
-            ScenarioUiWidgets.DrawPill(markRect, "OK", _uiContext.Styles, ScenarioUiPillEmphasis.Active);
+            ScenarioUiWidgets.DrawPill(markRect, "OK", _uiContext.Styles, ScenarioUiPillEmphasis.Success);
             string label = action.Label.Substring("Done:".Length).Trim();
             GUI.Label(textRect, label, _textStyle);
         }
@@ -1885,8 +1929,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Hint = action.Hint ?? action.Detail,
                 Detail = action.Detail,
                 Enabled = action.Enabled,
-                Emphasized = action.Emphasized
+                Emphasized = action.Emphasized,
+                IconText = action.IconText
             }, false);
+            if (action.Emphasized && _uiContext != null && _uiContext.Styles != null)
+                ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderStrongTexture);
 
             GUIStyle actionStyle = new GUIStyle(_mutedTextStyle);
             actionStyle.alignment = TextAnchor.MiddleRight;
@@ -1901,16 +1948,56 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             sideWidth = Mathf.Clamp(sideWidth, 108f, Math.Min(240f, rect.width * 0.46f));
-            Rect textRect = new Rect(rect.x + 14f, rect.y + 8f, rect.width - sideWidth - 32f, rect.height - 16f);
+            Rect glyphRect = new Rect(rect.x + 12f, rect.y + 16f, 38f, 38f);
+            DrawHomeQuestionGlyph(glyphRect, section, action);
+            Rect textRect = new Rect(glyphRect.xMax + 10f, rect.y + 8f, Math.Max(24f, rect.width - sideWidth - glyphRect.width - 42f), rect.height - 16f);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 24f), ShortenToFit(section.Title ?? string.Empty, textRect.width, _sectionTitleStyle), _sectionTitleStyle);
             GUI.Label(new Rect(textRect.x, textRect.y + 26f, textRect.width, 32f), detail ?? string.Empty, _mutedTextStyle);
             if (!string.IsNullOrEmpty(badge))
             {
                 Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 14f, sideWidth, 22f);
-                ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+                ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ResolveHomeBadgeEmphasis(badge));
             }
             Rect actionRect = new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 32f, sideWidth, 20f);
             GUI.Label(actionRect, ShortenToFit(action.Label ?? string.Empty, actionRect.width, actionStyle), actionStyle);
+        }
+
+        private void DrawHomeQuestionGlyph(Rect rect, ScenarioAuthoringInspectorSection section, ScenarioAuthoringInspectorAction action)
+        {
+            if (_uiContext == null || _uiContext.Styles == null)
+                return;
+
+            GUI.Box(rect, GUIContent.none, action != null && action.Emphasized ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Field);
+            Rect iconRect = new Rect(rect.x + 6f, rect.y + 5f, rect.width - 12f, rect.height - 10f);
+            string role = ResolveHomeIconRole(section);
+            if (!string.IsNullOrEmpty(role) && ScenarioUiAtlasSkin.DrawIcon(iconRect, role))
+                return;
+
+            GUIStyle glyphStyle = new GUIStyle(action != null && action.Emphasized ? _uiContext.Styles.PillEmphasized : _uiContext.Styles.Pill);
+            glyphStyle.alignment = TextAnchor.MiddleCenter;
+            glyphStyle.fontSize = Math.Max(10, glyphStyle.fontSize);
+            glyphStyle.clipping = TextClipping.Clip;
+            GUI.Label(iconRect, ShortenToFit(action != null ? action.IconText ?? string.Empty : string.Empty, iconRect.width, glyphStyle), glyphStyle);
+        }
+
+        private static string ResolveHomeIconRole(ScenarioAuthoringInspectorSection section)
+        {
+            if (section == null || string.IsNullOrEmpty(section.Id))
+                return null;
+            return section.Id;
+        }
+
+        private static ScenarioUiPillEmphasis ResolveHomeBadgeEmphasis(string badge)
+        {
+            if (StringContains(badge, "unsaved") || StringContains(badge, "warning"))
+                return ScenarioUiPillEmphasis.Warning;
+            if (StringContains(badge, "saved") || StringContains(badge, "ready"))
+                return ScenarioUiPillEmphasis.Success;
+            if (StringContains(badge, "review"))
+                return ScenarioUiPillEmphasis.Active;
+            if (StringContains(badge, "error"))
+                return ScenarioUiPillEmphasis.Danger;
+            return ScenarioUiPillEmphasis.Default;
         }
 
         private void DrawItem(ScenarioAuthoringInspectorItem item)

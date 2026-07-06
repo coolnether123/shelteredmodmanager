@@ -74,6 +74,12 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
                 case ScenarioUiPillEmphasis.Danger:
                     box = styles.PillDanger;
                     break;
+                case ScenarioUiPillEmphasis.Success:
+                    box = styles.PillSuccess;
+                    break;
+                case ScenarioUiPillEmphasis.Warning:
+                    box = styles.PillWarning;
+                    break;
                 default:
                     box = styles.Pill;
                     break;
@@ -171,6 +177,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
     {
         Default = 0,
         Active = 1,
-        Danger = 2
+        Danger = 2,
+        Success = 3,
+        Warning = 4
     }
 }

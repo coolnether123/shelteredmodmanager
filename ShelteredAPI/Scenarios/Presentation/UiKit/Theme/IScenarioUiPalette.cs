@@ -23,6 +23,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         Color AccentHover { get; }
         Color AccentDanger { get; }
         Color AccentMuted { get; }
+        Color AccentSuccess { get; }
+        Color AccentWarning { get; }
+        Color AccentNeutral { get; }
         Color DisabledSurface { get; }
 
         // Text roles
@@ -32,5 +35,6 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         Color TextMuted { get; }
         Color TextDisabled { get; }
         Color TextOnAccent { get; }
+        Color TextOnLight { get; }
     }
 }

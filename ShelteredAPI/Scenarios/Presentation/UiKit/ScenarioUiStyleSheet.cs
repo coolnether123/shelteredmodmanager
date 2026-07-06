@@ -55,6 +55,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         public GUIStyle Pill { get; private set; }
         public GUIStyle PillEmphasized { get; private set; }
         public GUIStyle PillDanger { get; private set; }
+        public GUIStyle PillSuccess { get; private set; }
+        public GUIStyle PillWarning { get; private set; }
 
         // Text styles
         public GUIStyle BrandTitleText { get; private set; }
@@ -116,7 +118,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             Texture2D accentHoverCorner = _textures.GetCornerCut(_theme.WithRaisedOpacity(palette.AccentHover));
             Texture2D dangerCorner       = _textures.GetCornerCut(palette.AccentDanger);
             Texture2D disabledCorner     = _textures.GetCornerCut(_theme.WithPanelOpacity(palette.DisabledSurface));
-            Texture2D accentMutedCorner  = _textures.GetCornerCut(palette.AccentMuted);
+            Texture2D accentSuccessCorner = _textures.GetCornerCut(palette.AccentSuccess);
+            Texture2D accentWarningCorner = _textures.GetCornerCut(palette.AccentWarning);
+            Texture2D accentNeutralCorner = _textures.GetCornerCut(palette.AccentNeutral);
             Texture2D borderStrongCorner = _textures.GetCornerCut(palette.BorderStrong);
 
             int padXs = Mathf.RoundToInt(metrics.PaddingXs);
@@ -136,9 +140,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             Field        = BuildField(panelInsetCorner, accentHoverCorner, palette.TextBody, metrics, padSm, padXs);
             Divider      = BuildBox(BorderSubtleTexture, 0);
 
-            Pill           = BuildPill(accentMutedCorner, palette.TextOnAccent, metrics, pillPadX);
+            Pill           = BuildPill(accentNeutralCorner, palette.TextOnLight, metrics, pillPadX);
             PillEmphasized = BuildPill(accentActiveCorner, palette.TextOnAccent, metrics, pillPadX);
             PillDanger     = BuildPill(dangerCorner, palette.TextOnAccent, metrics, pillPadX);
+            PillSuccess    = BuildPill(accentSuccessCorner, palette.TextOnAccent, metrics, pillPadX);
+            PillWarning    = BuildPill(accentWarningCorner, palette.TextOnLight, metrics, pillPadX);
 
             BrandTitleText   = BuildText(metrics.FontSizeBrand,    FontStyle.Bold,   palette.TextTitle);
             TitleText        = BuildText(metrics.FontSizeTitle,    FontStyle.Bold,   palette.TextSubtitle);

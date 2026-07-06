@@ -8,9 +8,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 {
     internal static class ScenarioUiAtlasSkin
     {
-        public const int CornerRadiusPixels = 2;
-        public const float CornerInsetPixels = 6f;
-        public const int CornerTextureSize = 8;
+        public const int CornerRadiusPixels = 4;
+        public const float CornerInsetPixels = 7f;
+        public const int CornerTextureSize = 12;
         public const float ShadowOffset = 2f;
 
         private static readonly Dictionary<string, AtlasSprite> Cache = new Dictionary<string, AtlasSprite>(StringComparer.OrdinalIgnoreCase);
@@ -18,28 +18,22 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
         public static bool DrawPanel(Rect rect)
         {
-            return DrawRole(rect, "panel", true);
+            return false;
         }
 
         public static bool DrawHeader(Rect rect)
         {
-            return DrawRole(rect, "header", true);
+            return false;
         }
 
         public static bool DrawStatus(Rect rect)
         {
-            return DrawRole(rect, "rule", false);
+            return false;
         }
 
         public static bool DrawButton(Rect rect, bool active, bool enabled, bool pressed, bool tab)
         {
-            if (active)
-                return false;
-
-            string role = tab
-                ? (active ? "tabActive" : "tab")
-                : (!enabled ? "buttonDisabled" : (pressed ? "buttonPressed" : (active ? "buttonHover" : "button")));
-            return DrawRole(rect, role, true);
+            return false;
         }
 
         public static bool DrawIcon(Rect rect, string role)
@@ -59,9 +53,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
                 return;
             }
 
-            DrawTextureIfVisible(new Rect(rect.x + cut, rect.y, rect.width - (cut * 2f), cut), texture);
+            for (int row = 0; row < cut; row++)
+            {
+                float inset = cut - row;
+                DrawTextureIfVisible(new Rect(rect.x + inset, rect.y + row, rect.width - (inset * 2f), 1f), texture);
+                DrawTextureIfVisible(new Rect(rect.x + inset, rect.yMax - row - 1f, rect.width - (inset * 2f), 1f), texture);
+            }
             DrawTextureIfVisible(new Rect(rect.x, rect.y + cut, rect.width, rect.height - (cut * 2f)), texture);
-            DrawTextureIfVisible(new Rect(rect.x + cut, rect.yMax - cut, rect.width - (cut * 2f), cut), texture);
         }
 
         public static void DrawCornerCutShadow(Rect rect)
@@ -82,10 +80,17 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
 
             Texture topLeft = strong != null ? strong : Texture2D.whiteTexture;
             Texture bottomRight = subtle != null ? subtle : topLeft;
-            DrawTextureIfVisible(new Rect(rect.x + cut, rect.y + 1f, rect.width - (cut * 2f), 1f), topLeft);
-            DrawTextureIfVisible(new Rect(rect.x + cut, rect.yMax - 2f, rect.width - (cut * 2f), 1f), bottomRight);
-            DrawTextureIfVisible(new Rect(rect.x + 1f, rect.y + cut, 1f, rect.height - (cut * 2f)), topLeft);
-            DrawTextureIfVisible(new Rect(rect.xMax - 2f, rect.y + cut, 1f, rect.height - (cut * 2f)), bottomRight);
+            DrawTextureIfVisible(new Rect(rect.x + cut, rect.y, rect.width - (cut * 2f), 1f), topLeft);
+            DrawTextureIfVisible(new Rect(rect.x + cut, rect.yMax - 1f, rect.width - (cut * 2f), 1f), bottomRight);
+            DrawTextureIfVisible(new Rect(rect.x, rect.y + cut, 1f, rect.height - (cut * 2f)), topLeft);
+            DrawTextureIfVisible(new Rect(rect.xMax - 1f, rect.y + cut, 1f, rect.height - (cut * 2f)), bottomRight);
+            for (int i = 0; i < cut; i++)
+            {
+                DrawTextureIfVisible(new Rect(rect.x + i, rect.y + cut - i, 1f, 1f), topLeft);
+                DrawTextureIfVisible(new Rect(rect.xMax - i - 1f, rect.y + cut - i, 1f, 1f), topLeft);
+                DrawTextureIfVisible(new Rect(rect.x + i, rect.yMax - cut + i - 1f, 1f, 1f), bottomRight);
+                DrawTextureIfVisible(new Rect(rect.xMax - i - 1f, rect.yMax - cut + i - 1f, 1f, 1f), bottomRight);
+            }
         }
 
         public static string WriteDump(string outputPath)
@@ -193,6 +198,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
             RegisterRole(atlases, "close", "Close", "close", "x", "cross");
             RegisterRole(atlases, "check", "Check", "check", "tick", "ok");
             RegisterRole(atlases, "pin", "Pin", "pin", "clip", "paperclip");
+            RegisterRole(atlases, "home_world", "Map", "WorldMap", "Location", "Town");
+            RegisterRole(atlases, "home_people", "Survivor", "Person", "People", "Character", "Portrait");
+            RegisterRole(atlases, "home_inventory", "Crate", "Box", "Inventory", "Backpack", "Item");
+            RegisterRole(atlases, "home_events", "Clock", "Calendar", "Timeline", "Event");
+            RegisterRole(atlases, "home_art", "Brush", "Paint", "Palette", "Sprite");
+            RegisterRole(atlases, "home_test", "Flag", "Play", "Check", "Test");
+            RegisterRole(atlases, "home_publish", "Radio", "Upload", "Flag", "Publish");
         }
 
         private static void RegisterRole(UIAtlas[] atlases, string role, params string[] candidates)
