@@ -282,7 +282,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool replacementAllowed = scopeAllowed && target.SupportsReplace;
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            sections.Add(BuildObjectSummarySection(target, classification, objectPlacement, hasCapturedPlacement, ShowAdvancedDetails(state)));
+            sections.Add(BuildObjectSummarySection(state, target, classification, objectPlacement, hasCapturedPlacement, ShowAdvancedDetails(state)));
             sections.Add(BuildScenarioBehaviorSection(target, objectPlacement, linkedTimelineEntries));
             if (replacementAllowed)
             {
@@ -309,6 +309,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         }
 
         private ScenarioAuthoringInspectorSection BuildObjectSummarySection(
+            ScenarioAuthoringState state,
             ScenarioAuthoringTarget target,
             ScenarioTargetClassification classification,
             ObjectPlacement objectPlacement,
@@ -327,6 +328,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Property("Name", Safe(target.DisplayName)));
             items.Add(Property("Kind", friendlyKind));
             items.Add(Property("Layer", _targetClassifier.FormatScopeLabel(classification)));
+            int stackCount = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
+            if (stackCount > 0)
+            {
+                int activeIndex = Mathf.Clamp(state.ActiveSelectionStackIndex, 0, stackCount - 1);
+                items.Add(Property(
+                    "Target",
+                    "Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + stackCount.ToString(CultureInfo.InvariantCulture)));
+
+                List<string> candidateNames = new List<string>();
+                int displayCount = Mathf.Min(stackCount, 6);
+                for (int i = 0; i < displayCount; i++)
+                {
+                    ScenarioAuthoringTarget candidate = state.SelectionStack[i];
+                    string prefix = i == activeIndex ? "* " : string.Empty;
+                    candidateNames.Add(prefix + (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(candidate != null ? candidate.DisplayName : null));
+                }
+
+                if (stackCount > displayCount)
+                    candidateNames.Add("+" + (stackCount - displayCount).ToString(CultureInfo.InvariantCulture) + " more");
+
+                items.Add(Text("Under cursor: " + string.Join(" | ", candidateNames.ToArray())));
+            }
             if (showAdvancedDetails)
                 items.Add(Property("Draft Object Id", Safe(ResolveScenarioObjectId(target, objectPlacement, hasCapturedPlacement))));
             items.Add(Property("Draft State", ResolveDraftStatus(target, objectPlacement, hasCapturedPlacement)));
@@ -1133,7 +1156,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
                 ScenarioBuildPlacementAuthoringService.StatusModel status = _sectionHub.BuildPlacement.GetStatusModel(state, editorSession);
-                sections.Add(BuildPlacementStatusSection(status));
+                if (status != null && status.PlacementActive)
+                    sections.Add(BuildPlacementStatusSection(status));
 
                 List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _sectionHub.BuildPlacement.GetPaletteSections(
                     state,
@@ -1163,11 +1187,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection BuildPlacementStatusSection(ScenarioBuildPlacementAuthoringService.StatusModel model)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(Property("Mode", model != null && model.PlacementActive ? "Placement Active" : "Ready"));
             if (model != null && !string.IsNullOrEmpty(model.Guidance))
                 items.Add(Text(model.Guidance));
-            if (model != null && !string.IsNullOrEmpty(model.Detail))
-                items.Add(Text(model.Detail));
+            if (model != null && model.PlacementActive)
+            {
+                if (!string.IsNullOrEmpty(model.TargetCell))
+                    items.Add(Property("Target Cell", model.TargetCell));
+                if (model.CanPlace.HasValue)
+                    items.Add(Property("Placement", model.CanPlace.Value ? "Valid" : "Invalid"));
+                if (!string.IsNullOrEmpty(model.ValidationReason))
+                    items.Add(Text(model.ValidationReason));
+            }
             if (model != null && model.CanCancel)
             {
                 items.Add(ActionItem(Action(
@@ -1296,30 +1326,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return sections.ToArray();
             }
 
-            sections.Add(_workflowAuthoringContentBuilder.BuildToolPickerSection(state.ActiveTool));
-            sections.Add(_workflowAuthoringContentBuilder.BuildToolSection(
+            List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _sectionHub.BuildPlacement.GetPaletteSections(
                 state,
-                editorSession,
-                state.ActiveTool,
-                definition,
-                state.SelectedTarget,
-                false,
-                false,
-                null));
-            sections.Add(new ScenarioAuthoringInspectorSection
+                editorSession);
+            for (int i = 0; paletteSections != null && i < paletteSections.Count; i++)
+                sections.Add(BuildPlacementPaletteSection(paletteSections[i]));
+
+            ScenarioBuildPlacementAuthoringService.StatusModel buildStatus = _sectionHub.BuildPlacement.GetStatusModel(state, editorSession);
+            if (buildStatus != null && buildStatus.PlacementActive)
+                sections.Add(BuildPlacementStatusSection(buildStatus));
+
+            if (ShowAdvancedDetails(state))
             {
-                Id = "snap",
-                Title = "Snap",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = new[]
+                sections.Add(new ScenarioAuthoringInspectorSection
                 {
-                    Property("Grid", state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On" : "Off"),
-                    Property("Snap", state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "On" : "Off"),
-                    Property("Scroll", state.Settings != null ? state.Settings.GetFloat("input.scroll_speed", 1f).ToString("0.00", CultureInfo.InvariantCulture) + "x" : "1.00x")
-                }
-            });
-            sections.Add(BuildBunkerRuntimeSection(definition, state));
+                    Id = "snap",
+                    Title = "Snap",
+                    Expanded = false,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[]
+                    {
+                        Property("Grid", state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On" : "Off"),
+                        Property("Snap", state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "On" : "Off"),
+                        Property("Scroll", state.Settings != null ? state.Settings.GetFloat("input.scroll_speed", 1f).ToString("0.00", CultureInfo.InvariantCulture) + "x" : "1.00x")
+                    }
+                });
+                sections.Add(BuildBunkerRuntimeSection(definition, state));
+            }
             return sections.ToArray();
         }
 

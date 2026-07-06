@@ -82,12 +82,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool hasSelection = state != null && state.SelectedTarget != null;
             return new[]
             {
-                CreateToolButton(state, ScenarioAuthoringTool.Select, ScenarioAuthoringActionIds.ActionToolSelect, "Select", "PICK", "Pick and inspect shelter objects."),
-                CreateToolButton(state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "OBJ", "Place or capture shelter objects."),
-                CreateToolButton(state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "Rooms", "ROOM", "Author rooms, ladders, lights, and structure."),
-                CreateToolButton(state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "Walls", "WALL", "Edit wall and wiring layers."),
-                CreateToolButton(state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "Art", "ART", hasSelection ? "Edit or place scenario art for the selection." : "Place snapped scene art."),
-                CreateToolButton(state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "Victory", "WIN", "Define win and loss conditions.")
+                CreateToolButton(state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "OBJ", "Filter palette and click priority to shelter objects."),
+                CreateToolButton(state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "Rooms", "ROOM", "Filter palette and click priority to rooms, ladders, lights, and structure."),
+                CreateToolButton(state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "Walls", "WALL", "Filter palette and click priority to wall and wiring layers."),
+                CreateToolButton(state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "Art", "ART", hasSelection ? "Filter palette and click priority to scene art for the selection." : "Filter palette and click priority to snapped scene art."),
+                CreateToolButton(state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "Victory", "WIN", "Filter the workspace to win and loss conditions.")
             };
         }
 

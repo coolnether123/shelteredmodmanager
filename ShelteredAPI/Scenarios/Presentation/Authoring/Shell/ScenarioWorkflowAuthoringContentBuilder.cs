@@ -84,15 +84,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.TabStrip,
                 Items = new[]
                 {
-                    Item.Text("Tools cover gameplay capture, shelter placement, and visual asset authoring."),
+                    Item.Text("Domains filter palettes and click priority while selection stays available."),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolFamily, "Family", "Capture the current live family roster, stats, and traits.", true, activeTool == ScenarioAuthoringTool.Family, "FM", "Family roster and stats.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolInventory, "Inventory", "Capture the current live shelter inventory.", true, activeTool == ScenarioAuthoringTool.Inventory, "IV", "Shelter inventory snapshot.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolShelter, "Structure", "Place new shelter rooms, ladders, and lights with vanilla build ghosts.", true, activeTool == ScenarioAuthoringTool.Shelter, "ST", "Shelter layout editing.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "Place workbenches, shelter systems, and furniture or capture live spawned objects.", true, activeTool == ScenarioAuthoringTool.Objects, "OB", "Interactive shelter objects.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolWiring, "Walls & Wiring", "Apply room wall and wiring sprites to the selected shelter tile.", true, activeTool == ScenarioAuthoringTool.Wiring, "WW", "Room finish editing.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolAssets, "Assets", "Swap existing visuals or place new snapped scene sprites.", true, activeTool == ScenarioAuthoringTool.Assets, "AS", "Sprite replacements and scene art.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolWinLoss, "Win/Loss", "Author scenario outcome conditions.", true, activeTool == ScenarioAuthoringTool.WinLoss, "WL", "Scenario outcome rules.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolSelect, "Select", "Stay in world selection mode while using the current workflow.", true, activeTool == ScenarioAuthoringTool.Select, "SL", "Selection-only mode."))
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolWinLoss, "Win/Loss", "Author scenario outcome conditions.", true, activeTool == ScenarioAuthoringTool.WinLoss, "WL", "Scenario outcome rules."))
                 }
             };
         }
@@ -100,6 +99,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
         {
             ScenarioTargetScope activeScope = _selectionScopeService.ResolveActiveScope(state);
+            int stackCount = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
+            string activeStackTarget = stackCount > 0
+                ? "Target " + (UnityEngine.Mathf.Clamp(state.ActiveSelectionStackIndex, 0, stackCount - 1) + 1).ToString() + " of " + stackCount.ToString()
+                : "<none>";
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "selection",
@@ -110,6 +113,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Item.Property("Scope", ScenarioTargetClassifier.FormatScopeLabel(activeScope)),
                     Item.Property("Selection Mode", state.SelectionModeActive ? "Active" : "Inactive"),
+                    Item.Property("Stack Target", activeStackTarget),
                     Item.Property("Hovered", Item.FormatTarget(state.HoveredTarget)),
                     Item.Property("Selected", Item.FormatTarget(state.SelectedTarget))
                 }

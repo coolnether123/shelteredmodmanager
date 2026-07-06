@@ -40,10 +40,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             ScenarioAuthoringTarget hovered = null;
             List<ScenarioAuthoringTarget> stack = null;
-            bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection()
-                && (state.ActiveTool == ScenarioAuthoringTool.Select
-                    || ScenarioAuthoringInputActions.IsSelectionModifierHeld()
-                    || IsAddSelectionHeld());
+            bool selectionMode = ScenarioAuthoringRuntimeGuards.ShouldResolveSelection();
             bool changed = state.SelectionModeActive != selectionMode;
             state.SelectionModeActive = selectionMode;
             changed |= _scopeService.ClearSelectionIfOutOfScope(state);
@@ -92,7 +89,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     }
                 }
 
-                if (ScenarioAuthoringInputActions.IsConfirmSelectionDown()
+                bool placementActive = ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
+                if (!placementActive
+                    && ScenarioAuthoringInputActions.IsConfirmSelectionDown()
                     && hovered != null
                     && _scopeService.CanSelectTargetForCurrentStage(state, hovered))
                 {
@@ -231,6 +230,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringTarget target;
             if (!_adapterRegistry.TryCreateTarget(context, out target) || target == null)
                 return;
+            if (IsGlobalBackdropTarget(state, target))
+                return;
             if (!_scopeService.CanSelectTargetForCurrentStage(state, target))
                 return;
 
@@ -239,7 +240,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Target = target,
                 SourceRank = sourceRank,
                 Distance = distance,
-                ToolScore = ScoreToolRelevance(state, target),
+                ToolScore = ScoreDomainRelevance(state, target),
                 StageScore = ScoreStageRelevance(state, target),
                 KindScore = ScoreKind(target.Kind),
                 SortingLayer = spriteRenderer != null ? SortingLayer.GetLayerValueFromID(spriteRenderer.sortingLayerID) : ResolveSortingLayer(target),
@@ -331,7 +332,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return left.Area.CompareTo(right.Area);
         }
 
-        private static int ScoreToolRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        private static int ScoreDomainRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
             if (state == null || target == null)
                 return 0;
@@ -339,12 +340,38 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             switch (state.ActiveTool)
             {
                 case ScenarioAuthoringTool.Objects:
-                    return target.Kind == ScenarioAuthoringTargetKind.PlaceableObject ? 80 : target.Kind == ScenarioAuthoringTargetKind.SceneSprite ? 30 : 0;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Character)
+                        return 140;
+                    if (target.Kind == ScenarioAuthoringTargetKind.PlaceableObject || target.Kind == ScenarioAuthoringTargetKind.Vehicle)
+                        return 130;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Light || IsNamedLike(target, "ladder"))
+                        return 120;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
+                        return 90;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wire)
+                        return 70;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wall)
+                        return 60;
+                    return 0;
                 case ScenarioAuthoringTool.Shelter:
-                    return target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile || target.Kind == ScenarioAuthoringTargetKind.Light ? 80 : 0;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
+                        return 140;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire)
+                        return 90;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Light || IsNamedLike(target, "ladder"))
+                        return 80;
+                    return 0;
                 case ScenarioAuthoringTool.Wiring:
-                    return target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire || target.Kind == ScenarioAuthoringTargetKind.Light ? 80 : 0;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire)
+                        return 140;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Light)
+                        return 90;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
+                        return 70;
+                    return 0;
                 case ScenarioAuthoringTool.Assets:
+                    if (target.Kind == ScenarioAuthoringTargetKind.SceneSprite || target.Kind == ScenarioAuthoringTargetKind.Background)
+                        return 140;
                     return target.SupportsReplace ? 80 : 0;
                 case ScenarioAuthoringTool.Family:
                 case ScenarioAuthoringTool.People:
@@ -352,6 +379,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 default:
                     return 20;
             }
+        }
+
+        private static bool IsGlobalBackdropTarget(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
+        {
+            if (state == null || target == null || state.ActiveStage == ScenarioStageKind.BunkerBackground)
+                return false;
+
+            if (target.Kind == ScenarioAuthoringTargetKind.Background)
+                return true;
+
+            return target.Kind == ScenarioAuthoringTargetKind.SceneSprite
+                && IsNamedLike(target, "sun", "sky", "backdrop", "farback", "far back");
+        }
+
+        private static bool IsNamedLike(ScenarioAuthoringTarget target, params string[] parts)
+        {
+            if (target == null || parts == null)
+                return false;
+
+            return ContainsSelectionText(target.DisplayName, parts)
+                || ContainsSelectionText(target.GameObjectName, parts)
+                || ContainsSelectionText(target.TransformPath, parts)
+                || ContainsSelectionText(target.Description, parts);
         }
 
         private static int ScoreStageRelevance(ScenarioAuthoringState state, ScenarioAuthoringTarget target)

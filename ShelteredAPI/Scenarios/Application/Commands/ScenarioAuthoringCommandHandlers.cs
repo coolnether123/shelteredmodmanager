@@ -1241,7 +1241,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             switch (actionId)
             {
                 case ScenarioAuthoringActionIds.ActionToolSelect:
-                    return SetTool(state, ScenarioAuthoringTool.Select, out message);
+                    return FocusSelection(state, out message);
                 case ScenarioAuthoringActionIds.ActionToolFamily:
                     return SetTool(state, ScenarioAuthoringTool.Family, out message);
                 case ScenarioAuthoringActionIds.ActionToolInventory:
@@ -1291,6 +1291,36 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     : message;
             }
             return true;
+        }
+
+        private bool FocusSelection(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (state == null)
+                return false;
+
+            bool changed = false;
+            string placementMessage;
+            ScenarioBuildPlacementAuthoringService buildPlacement = ScenarioCompositionRoot.Resolve<ScenarioBuildPlacementAuthoringService>();
+            if (buildPlacement != null && buildPlacement.HasActivePlacement && buildPlacement.CancelForToolSwitch(out placementMessage))
+            {
+                message = placementMessage;
+                changed = true;
+            }
+
+            if (state.ActiveTool == ScenarioAuthoringTool.Select)
+                return changed;
+
+            ScenarioAuthoringWorkflowTransition transition = _layoutService.SelectTool(state, ScenarioAuthoringTool.Select);
+            if (transition.Changed)
+            {
+                message = string.IsNullOrEmpty(message)
+                    ? "Selection focused."
+                    : message + " Selection focused.";
+                changed = true;
+            }
+
+            return changed;
         }
 
         private static string BuildToolStatus(ScenarioAuthoringState state, ScenarioAuthoringTool requestedTool, bool stageChanged)

@@ -69,9 +69,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Vector2 _dragStartMouse = Vector2.zero;
         private Rect _dragStartRect = RuntimeCompat.ZeroRect();
         private Rect _dragLastRect = RuntimeCompat.ZeroRect();
-        private string _assetBrowserSearchText = string.Empty;
-        private string _assetBrowserCandidateFilter = CandidateFilterAll;
-        private bool _assetBrowserSearchFocused;
+        private string _buildPaletteSearchText = string.Empty;
+        private bool _buildPaletteSearchFocused;
         private string _toolRailActiveKey;
         private float _toolRailIndicatorY = -1f;
         private string _spritePickerSearchText = string.Empty;
@@ -324,7 +323,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             inputCapture.SetKeyboardCaptured(
                 shell.SpritePickerDocument != null
                 || shell.Help != null
-                || _assetBrowserSearchFocused
+                || _buildPaletteSearchFocused
                 || _spritePickerSearchFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
             inputCapture.SetTransitionActive(_animations.TransitionActive);

@@ -347,15 +347,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state = context != null ? context.State : null;
             List<ScenarioAuthoringInspectorItem> summary = new List<ScenarioAuthoringInspectorItem>();
             int count = state != null && state.SelectionStack != null ? state.SelectionStack.Count : 0;
+            int activeIndex = count > 0 ? Mathf.Clamp(state.ActiveSelectionStackIndex, 0, count - 1) : -1;
             summary.Add(Item.Property("Candidates", count.ToString(CultureInfo.InvariantCulture)));
-            summary.Add(Item.Property("Active Row", count > 0 ? (Mathf.Clamp(state.ActiveSelectionStackIndex, 0, count - 1) + 1).ToString(CultureInfo.InvariantCulture) : "<none>"));
+            summary.Add(Item.Property("Target", count > 0 ? ("Target " + (activeIndex + 1).ToString(CultureInfo.InvariantCulture) + " of " + count.ToString(CultureInfo.InvariantCulture)) : "<none>"));
             summary.Add(Item.Property("Hovered", Item.FormatTarget(state != null ? state.HoveredTarget : null)));
             summary.Add(Item.Property("Selected", Item.FormatTarget(state != null ? state.SelectedTarget : null)));
 
             List<ScenarioAuthoringInspectorItem> rows = new List<ScenarioAuthoringInspectorItem>();
             if (count == 0)
             {
-                rows.Add(Item.Text("Hold Ctrl and hover the bunker view to list selectable objects under the cursor."));
+                rows.Add(Item.Text("Hover the bunker view to list selectable objects under the cursor."));
             }
             else
             {

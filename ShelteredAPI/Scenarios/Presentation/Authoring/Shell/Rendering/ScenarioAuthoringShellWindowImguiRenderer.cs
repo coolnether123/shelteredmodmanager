@@ -238,16 +238,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ? new Rect(pickerRect.xMax + 16f, bodyRect.y, bodyRect.xMax - pickerRect.xMax - 16f, bodyRect.height)
                 : RuntimeCompat.ZeroRect();
 
-            Rect filterRect = new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 64f);
-            DrawCandidateFilterControls(
+            Rect filterRect = new Rect(pickerRect.x, pickerRect.y, pickerRect.width, 30f);
+            DrawCandidateSearchControl(
                 filterRect,
-                "asset_browser_search",
-                ref _assetBrowserSearchText,
-                ref _assetBrowserCandidateFilter,
-                ref _assetBrowserSearchFocused);
+                "build_palette_search",
+                ref _buildPaletteSearchText,
+                ref _buildPaletteSearchFocused);
 
-            float pickerScrollHeight = ResolveRowBoundedScrollHeight(pickerRect.height - 74f);
-            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 74f, pickerRect.width, pickerScrollHeight));
+            float pickerScrollHeight = ResolveRowBoundedScrollHeight(pickerRect.height - 40f);
+            GUILayout.BeginArea(new Rect(pickerRect.x, pickerRect.y + 40f, pickerRect.width, pickerScrollHeight));
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, pickerRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
@@ -261,7 +260,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     || section.Layout != ScenarioAuthoringInspectorSectionLayout.CandidateGrid)
                     continue;
 
-                DrawSection(section, !showDetailsPane, _assetBrowserSearchText, _assetBrowserCandidateFilter);
+                DrawSection(section, !showDetailsPane, _buildPaletteSearchText, CandidateFilterAll);
                 GUILayout.Space(6f);
                 drewCandidateGrid = true;
             }
@@ -874,6 +873,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             searchFocused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
         }
 
+        private void DrawCandidateSearchControl(
+            Rect rect,
+            string controlName,
+            ref string searchText,
+            ref bool searchFocused)
+        {
+            GUILayout.BeginArea(rect);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
+            GUI.SetNextControlName(controlName);
+            string nextSearchText = GUILayout.TextField(searchText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Height(26f));
+            if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
+                searchText = nextSearchText;
+
+            if (GUILayout.Button("Clear", _buttonStyle, GUILayout.Width(64f), GUILayout.Height(26f)))
+                searchText = string.Empty;
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
+            searchFocused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+        }
+
         private void DrawCandidateFilterButton(string label, string value, ref string candidateFilter)
         {
             bool active = string.Equals(candidateFilter, value, StringComparison.OrdinalIgnoreCase);
@@ -975,7 +995,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 cardWidth = Mathf.Clamp(cardWidth, 128f, preferredCardWidth);
                 int count = 0;
                 if (visibleCandidates == 0)
-                    GUILayout.Label("No assets match the current search and filters.", _mutedTextStyle);
+                    GUILayout.Label("No candidates match the current search.", _mutedTextStyle);
 
                 GUILayout.BeginHorizontal();
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)

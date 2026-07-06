@@ -135,9 +135,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 model.PlacementActive = true;
                 model.CanCancel = true;
-                model.Title = "Placing " + (_activePlacement.Label ?? "Item");
-                model.Guidance = "Left-click to place instantly into the scenario draft. Right-click or Escape cancels.";
-                model.Detail = "This uses Sheltered ghost previews and placement rules before committing the final edit.";
+                model.Title = "Placing: " + (_activePlacement.Label ?? "Item");
+                model.Guidance = "Left-click place - Right-click/Esc cancel";
                 PlacementValidationResult validation = _activePlacement.Validation ?? EvaluateActivePlacement();
                 if (validation != null)
                 {

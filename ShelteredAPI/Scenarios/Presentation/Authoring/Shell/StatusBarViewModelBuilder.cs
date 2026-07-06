@@ -19,13 +19,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string stageLabel)
         {
             List<string> entries = new List<string>();
+            ScenarioBuildPlacementAuthoringService.StatusModel placementStatus =
+                ScenarioBuildPlacementAuthoringService.Instance.GetStatusModel(state, editorSession);
             entries.Add("Workspace: " + (string.IsNullOrEmpty(stageLabel) ? "Workshop" : stageLabel));
-            entries.Add("Layer: " + ScenarioTargetClassifier.FormatScopeLabel(_selectionScopeService.ResolveSelectionScope(state)));
-            entries.Add("Tool: " + (state != null ? ScenarioAuthoringWorkflowLabels.GetToolLabel(state.ActiveTool) : "Unknown"));
+            entries.Add(BuildModeEntry(placementStatus));
+            ScenarioTargetScope scope = _selectionScopeService.ResolveSelectionScope(state);
+            if (scope != ScenarioTargetScope.Unknown)
+                entries.Add("Layer: " + ScenarioTargetClassifier.FormatScopeLabel(scope));
+            if (state != null && state.HoveredTarget != null)
+                entries.Add("Hover: " + state.HoveredTarget.DisplayName);
             entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On (32px)" : "Off"));
+            if (placementStatus != null && placementStatus.PlacementActive)
+                entries.Add("Left-click place - Right-click/Esc cancel");
             if (!string.IsNullOrEmpty(state != null ? state.StatusMessage : null))
                 entries.Add(FormatStatusMessage(state.StatusMessage));
             return entries.ToArray();
+        }
+
+        private static string BuildModeEntry(ScenarioBuildPlacementAuthoringService.StatusModel placementStatus)
+        {
+            if (placementStatus != null && placementStatus.PlacementActive)
+                return placementStatus.Title;
+
+            return "Mode: Select";
         }
 
         private static string FormatStatusMessage(string statusMessage)
