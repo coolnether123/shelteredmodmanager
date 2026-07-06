@@ -1297,8 +1297,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             message = null;
             if (!IsPickerOpen(state))
             {
-                message = "Asset editor is not open.";
-                return false;
+                message = "Asset editor is already closed.";
+                return true;
             }
 
             string targetDisplay = state.SpriteSwapPicker.Target != null

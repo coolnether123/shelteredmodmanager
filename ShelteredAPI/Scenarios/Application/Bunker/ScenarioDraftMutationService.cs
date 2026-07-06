@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios.Application.Bunker{
         void MarkDirty(ScenarioDirtySection section, ScenarioEditCategory category);
         void UpsertPlacement(ObjectPlacement placement);
         bool TryUpsertPlacement(ObjectPlacement placement);
+        bool TryFindSinglePlacement(Predicate<ObjectPlacement> predicate, out ObjectPlacement placement);
         bool TryRemovePlacement(Predicate<ObjectPlacement> predicate);
         void UpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate);
         bool TryUpsertRoomEdit(int gridX, int gridY, Action<RoomEdit> applyUpdate);
@@ -127,6 +128,47 @@ namespace ShelteredAPI.Scenarios.Application.Bunker{
                 LogMutationFailure("Object placement mutation failed: " + ex.Message);
                 return false;
             }
+        }
+
+        public bool TryFindSinglePlacement(Predicate<ObjectPlacement> predicate, out ObjectPlacement placement)
+        {
+            placement = null;
+            if (predicate == null)
+            {
+                LogMutationFailure("Object placement lookup was ignored because the predicate was null.");
+                return false;
+            }
+
+            string ignored;
+            if (!CanMutateActiveDraft(out ignored))
+            {
+                LogMutationFailure(ignored);
+                return false;
+            }
+
+            ScenarioEditorSession session = _sessionStore.Current;
+            BunkerEditsDefinition bunkerEdits = session != null && session.WorkingDefinition != null
+                ? session.WorkingDefinition.BunkerEdits
+                : null;
+            if (bunkerEdits == null || bunkerEdits.ObjectPlacements == null)
+                return false;
+
+            for (int i = 0; i < bunkerEdits.ObjectPlacements.Count; i++)
+            {
+                ObjectPlacement candidate = bunkerEdits.ObjectPlacements[i];
+                if (candidate == null || !predicate(candidate))
+                    continue;
+
+                if (placement != null)
+                {
+                    placement = null;
+                    return false;
+                }
+
+                placement = candidate;
+            }
+
+            return placement != null;
         }
 
         public bool TryRemovePlacement(Predicate<ObjectPlacement> predicate)

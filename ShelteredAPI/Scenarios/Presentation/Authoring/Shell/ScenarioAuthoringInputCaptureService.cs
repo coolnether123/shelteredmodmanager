@@ -80,7 +80,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public void SuppressWorldInputForAction()
         {
             PointerOverAuthoringUi = true;
-            PointerOverAuthoringUiLastFrame = true;
         }
 
         public void CompleteFrame()

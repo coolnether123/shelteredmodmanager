@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 using ShelteredAPI.Content;
+using ShelteredAPI.Core;
 using ShelteredAPI.Saves.Runtime;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
@@ -200,6 +201,38 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public void RequestCloseActiveSession(string reason, bool resumeGame)
         {
             CloseActiveSession(reason ?? "Closed from authoring shell.", resumeGame);
+        }
+
+        public bool RequestCloseActiveSessionToMainMenu(string reason, out string message)
+        {
+            message = null;
+            ScenarioAuthoringSession active = GetActiveSession();
+            if (!IsEditingDraftSession(active))
+            {
+                message = "Scenario editor is already closed.";
+                return true;
+            }
+
+            ScenarioEditorSession editorSession = _editorService.CurrentSession;
+            if (HasUnsavedDraftChanges(editorSession))
+            {
+                MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "UI.Save", new MessageBoxResponse(delegate(int response)
+                {
+                    if (response != 1)
+                    {
+                        MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Close-to-menu canceled by unsaved-changes prompt.");
+                        return;
+                    }
+
+                    CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
+                }));
+                message = "Close requested; confirm saving the draft before returning to the main menu.";
+                return true;
+            }
+
+            CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
+            message = "Closed from authoring shell and returning to the main menu.";
+            return true;
         }
 
         public void PrepareActiveSessionForVanillaShutdown(string reason)
@@ -522,6 +555,71 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Closed active authoring session '" + previous.DraftId
                 + "'. Reason=" + (reason ?? "unspecified") + ", resumeGame=" + resumeGame
                 + ", scene=" + SceneManager.GetActiveScene().name + ".");
+        }
+
+        private void CloseActiveSessionToMainMenu(string reason)
+        {
+            ScenarioAuthoringSession active = GetActiveSession();
+            if (!IsEditingDraftSession(active))
+                return;
+
+            if (!CommitActiveDraftForClose(active))
+                return;
+
+            CloseActiveSession(reason, false);
+            ReturnToMainMenu();
+        }
+
+        private bool CommitActiveDraftForClose(ScenarioAuthoringSession active)
+        {
+            if (active == null)
+                return false;
+
+            try
+            {
+                ScenarioValidationResult validation = _editorService.CommitChanges(active.ScenarioFilePath);
+                if (validation != null && validation.IsValid)
+                    return true;
+
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Close-to-menu blocked by draft validation.");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Close-to-menu save failed: " + ex.Message);
+                return false;
+            }
+        }
+
+        private static bool HasUnsavedDraftChanges(ScenarioEditorSession session)
+        {
+            return session != null
+                && session.DirtyFlags != null
+                && session.DirtyFlags.Count > 0;
+        }
+
+        private static void ReturnToMainMenu()
+        {
+            try
+            {
+                if (LoadingScreen.Instance != null)
+                {
+                    PauseManager.Resume();
+                    LoadingScreen.Instance.ShowLoadingScreen("MenuScene");
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Requested MenuScene through LoadingScreen after editor close.");
+                    return;
+                }
+
+                if (LoadingTransitionRuntime.TryReturnToMainMenu())
+                    return;
+
+                SceneManager.LoadScene("MenuScene");
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Requested MenuScene through SceneManager after editor close.");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Failed to return to main menu after editor close: " + ex.Message);
+            }
         }
 
         private void CleanupPendingDraftArtifacts(ScenarioAuthoringSession pending, string reason)

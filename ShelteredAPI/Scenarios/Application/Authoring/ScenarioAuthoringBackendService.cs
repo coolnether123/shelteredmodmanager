@@ -247,8 +247,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionCloseEditor, StringComparison.Ordinal))
             {
-                ScenarioAuthoringBootstrapService.Instance.RequestCloseActiveSession("Closed from authoring shell.", true);
-                return ScenarioAuthoringActionExecutionResult.Success(actionId, true, "Closed from authoring shell.");
+                string closeMessage;
+                bool closeRequested = ScenarioAuthoringBootstrapService.Instance.RequestCloseActiveSessionToMainMenu("Closed from authoring shell.", out closeMessage);
+                return ScenarioAuthoringActionExecutionResult.Success(actionId, closeRequested, closeMessage);
             }
 
             ScenarioAuthoringState snapshot;

@@ -898,7 +898,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(viewportRect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = new Rect(viewportRect.x + 10f, viewportRect.y + 10f, viewportRect.width - 20f, viewportRect.height - 20f);
-            RegisterScrollRegion("pixel_editor.canvas.zoom", inner);
+            RegisterInteractiveRegion(inner);
             if (editor.Width <= 0 || editor.Height <= 0)
             {
                 GUI.Label(inner, "No sprite pixels available.", _mutedTextStyle);

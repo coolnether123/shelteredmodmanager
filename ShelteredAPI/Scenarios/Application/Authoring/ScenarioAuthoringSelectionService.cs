@@ -5,6 +5,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -12,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringSelectionService
     {
@@ -210,6 +212,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             AddSpriteRendererCandidates(state, candidates, camera, ray, worldPoint, hitTolerance);
+            AddAuthoredStructuralCandidates(state, candidates, worldPoint);
 
             ScenarioAuthoringTargetContext gridContext = new ScenarioAuthoringTargetContext
             {
@@ -285,6 +288,151 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 };
                 AddCandidate(state, candidates, context, 220, 0f, spriteRenderer);
             }
+        }
+
+        private void AddAuthoredStructuralCandidates(
+            ScenarioAuthoringState state,
+            List<SelectionCandidate> candidates,
+            Vector3 worldPoint)
+        {
+            int pointerGridX;
+            int pointerGridY;
+            if (!ScenarioGridSnapService.TryGetCell(worldPoint, out pointerGridX, out pointerGridY))
+                return;
+
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            BunkerEditsDefinition bunkerEdits = session != null && session.WorkingDefinition != null
+                ? session.WorkingDefinition.BunkerEdits
+                : null;
+            List<ObjectPlacement> placements = bunkerEdits != null ? bunkerEdits.ObjectPlacements : null;
+            for (int i = 0; placements != null && i < placements.Count; i++)
+            {
+                ObjectPlacement placement = placements[i];
+                int gridX;
+                int gridY;
+                if (!TryGetStructuralPlacementGrid(placement, out gridX, out gridY)
+                    || gridX != pointerGridX
+                    || gridY != pointerGridY)
+                {
+                    continue;
+                }
+
+                ScenarioAuthoringTarget target = BuildAuthoredStructuralTarget(placement, gridX, gridY);
+                if (target == null || !_scopeService.CanSelectTargetForCurrentStage(state, target))
+                    continue;
+
+                candidates.Add(new SelectionCandidate
+                {
+                    Target = target,
+                    SourceRank = 240,
+                    Distance = 0f,
+                    ToolScore = ScoreDomainRelevance(state, target),
+                    StageScore = ScoreStageRelevance(state, target),
+                    KindScore = ScoreKind(target.Kind),
+                    SortingLayer = ResolveSortingLayer(target),
+                    SortingOrder = ResolveSortingOrder(target),
+                    Z = target.WorldPosition.z,
+                    Area = ResolveArea(target)
+                });
+            }
+        }
+
+        private static bool TryGetStructuralPlacementGrid(ObjectPlacement placement, out int gridX, out int gridY)
+        {
+            gridX = -1;
+            gridY = -1;
+            ScenarioPlacementDefinitionKind kind;
+            return placement != null
+                && ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out kind)
+                && ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridX, out gridX)
+                && ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridY, out gridY);
+        }
+
+        private static ScenarioAuthoringTarget BuildAuthoredStructuralTarget(ObjectPlacement placement, int gridX, int gridY)
+        {
+            ScenarioPlacementDefinitionKind placementKind;
+            if (placement == null || !ScenarioPlacementDefinitions.TryParseSpecialKind(placement.DefinitionReference, out placementKind))
+                return null;
+
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            ShelterRoomGrid.GridCell cell = grid != null ? grid.GetCell(gridX, gridY) : null;
+            GameObject cellObject = cell != null ? cell.prefab : null;
+            Vector3 cellCenter = ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY);
+            ScenarioAuthoringTargetKind targetKind = ResolveStructuralTargetKind(placementKind);
+            string label = FormatStructuralTargetLabel(placementKind, gridX, gridY);
+            string reference = placement.DefinitionReference ?? placementKind.ToString();
+
+            return new ScenarioAuthoringTarget
+            {
+                Id = "structure:" + reference + ":" + gridX + ":" + gridY,
+                Kind = targetKind,
+                DisplayName = label,
+                Description = "Authored " + label.ToLowerInvariant() + ".",
+                AdapterId = "ShelteredAPI.AuthoredStructure",
+                GameObjectName = cellObject != null ? cellObject.name : label,
+                TransformPath = cellObject != null ? BuildTransformPath(cellObject.transform) : ("ShelterGrid/" + gridX + "/" + gridY),
+                RuntimeObject = cellObject,
+                HighlightObject = cellObject,
+                WorldPosition = cellCenter,
+                GridX = gridX,
+                GridY = gridY,
+                SupportsInspect = true,
+                SupportsReplace = true
+            };
+        }
+
+        private static ScenarioAuthoringTargetKind ResolveStructuralTargetKind(ScenarioPlacementDefinitionKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioPlacementDefinitionKind.Room:
+                    return ScenarioAuthoringTargetKind.Room;
+                case ScenarioPlacementDefinitionKind.RoomLight:
+                    return ScenarioAuthoringTargetKind.Light;
+                case ScenarioPlacementDefinitionKind.Ladder:
+                    return ScenarioAuthoringTargetKind.Tile;
+                default:
+                    return ScenarioAuthoringTargetKind.Tile;
+            }
+        }
+
+        private static string FormatStructuralTargetLabel(ScenarioPlacementDefinitionKind kind, int gridX, int gridY)
+        {
+            string name;
+            switch (kind)
+            {
+                case ScenarioPlacementDefinitionKind.Room:
+                    name = "Room";
+                    break;
+                case ScenarioPlacementDefinitionKind.Ladder:
+                    name = "Ladder";
+                    break;
+                case ScenarioPlacementDefinitionKind.RoomLight:
+                    name = "Room Light";
+                    break;
+                default:
+                    name = "Structure";
+                    break;
+            }
+
+            return name + " " + gridX + "," + gridY;
+        }
+
+        private static string BuildTransformPath(Transform transform)
+        {
+            if (transform == null)
+                return string.Empty;
+
+            List<string> names = new List<string>();
+            Transform current = transform;
+            while (current != null)
+            {
+                names.Add(current.name);
+                current = current.parent;
+            }
+
+            names.Reverse();
+            return string.Join("/", names.ToArray());
         }
 
         private static List<ScenarioAuthoringTarget> BuildSortedTargets(ScenarioAuthoringState state, List<SelectionCandidate> candidates)

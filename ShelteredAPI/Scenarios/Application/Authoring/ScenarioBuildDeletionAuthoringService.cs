@@ -34,7 +34,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid.GridCell cell;
             int gridX;
             int gridY;
-            if (!TryResolveGridCell(target, out cell, out gridX, out gridY, out reason))
+            if (!TryResolveGridCellOrSingleDraftPlacement(target, ScenarioPlacementDefinitionKind.Room, out cell, out gridX, out gridY, out reason))
                 return false;
 
             if (!IsRoomCell(cell))
@@ -55,7 +55,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid.GridCell cell;
             int gridX;
             int gridY;
-            if (!TryResolveGridCell(target, out cell, out gridX, out gridY, out reason))
+            if (!TryResolveGridCellOrSingleDraftPlacement(target, ScenarioPlacementDefinitionKind.Ladder, out cell, out gridX, out gridY, out reason))
                 return false;
 
             ShelterRoomGrid grid = ShelterRoomGrid.Instance;
@@ -74,7 +74,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ShelterRoomGrid.GridCell cell;
             int gridX;
             int gridY;
-            if (!TryResolveGridCell(target, out cell, out gridX, out gridY, out reason))
+            if (!TryResolveGridCellOrSingleDraftPlacement(target, ScenarioPlacementDefinitionKind.RoomLight, out cell, out gridX, out gridY, out reason))
                 return false;
 
             if (cell == null || (UnityEngine.Object)cell.lightObject == (UnityEngine.Object)null)
@@ -149,7 +149,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int gridX;
             int gridY;
             string reason;
-            if (!TryResolveGridCell(target, out cell, out gridX, out gridY, out reason) || !IsRoomCell(cell))
+            if (!TryResolveGridCellOrSingleDraftPlacement(target, ScenarioPlacementDefinitionKind.Room, out cell, out gridX, out gridY, out reason) || !IsRoomCell(cell))
             {
                 message = reason ?? "Select a room tile before deleting a room.";
                 return false;
@@ -196,7 +196,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int gridX;
             int gridY;
             string reason;
-            if (!TryResolveGridCell(target, out cell, out gridX, out gridY, out reason))
+            if (!TryResolveGridCellOrSingleDraftPlacement(target, ScenarioPlacementDefinitionKind.Ladder, out cell, out gridX, out gridY, out reason))
             {
                 message = reason;
                 return false;
@@ -222,7 +222,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             int gridX;
             int gridY;
             string reason;
-            if (!TryResolveGridCell(target, out cell, out gridX, out gridY, out reason))
+            if (!TryResolveGridCellOrSingleDraftPlacement(target, ScenarioPlacementDefinitionKind.RoomLight, out cell, out gridX, out gridY, out reason))
             {
                 message = reason;
                 return false;
@@ -297,6 +297,87 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             message = "Cleared wiring at " + gridX + "," + gridY + " and stored the authored clear.";
             return true;
+        }
+
+        private bool TryResolveGridCellOrSingleDraftPlacement(
+            ScenarioAuthoringTarget target,
+            ScenarioPlacementDefinitionKind fallbackKind,
+            out ShelterRoomGrid.GridCell cell,
+            out int gridX,
+            out int gridY,
+            out string reason)
+        {
+            if (TryResolveGridCell(target, out cell, out gridX, out gridY, out reason))
+                return true;
+
+            if (target != null)
+                return false;
+
+            return TryResolveSingleDraftStructuralGrid(fallbackKind, out cell, out gridX, out gridY, out reason);
+        }
+
+        private bool TryResolveSingleDraftStructuralGrid(
+            ScenarioPlacementDefinitionKind fallbackKind,
+            out ShelterRoomGrid.GridCell cell,
+            out int gridX,
+            out int gridY,
+            out string reason)
+        {
+            cell = null;
+            gridX = -1;
+            gridY = -1;
+            reason = null;
+
+            ObjectPlacement placement;
+            if (!_objectPlacementService.TryFindSinglePlacement(delegate(ObjectPlacement candidate)
+            {
+                ScenarioPlacementDefinitionKind candidateKind;
+                return ScenarioPlacementDefinitions.TryParseSpecialKind(candidate != null ? candidate.DefinitionReference : null, out candidateKind)
+                    && candidateKind == fallbackKind;
+            }, out placement))
+            {
+                reason = "Select a shelter grid target first.";
+                return false;
+            }
+
+            if (!ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridX, out gridX)
+                || !ScenarioPropertyBag.TryGetInt(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyGridY, out gridY))
+            {
+                reason = "The single authored structural placement is missing grid coordinates.";
+                return false;
+            }
+
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            if (grid == null || !grid.isInitialized)
+            {
+                reason = "ShelterRoomGrid is not ready.";
+                return false;
+            }
+
+            cell = grid.GetCell(gridX, gridY);
+            if (cell == null)
+            {
+                reason = "The authored structural placement is outside the shelter grid.";
+                return false;
+            }
+
+            reason = "Using the only authored " + FormatStructuralKind(fallbackKind) + " at " + gridX + "," + gridY + ".";
+            return true;
+        }
+
+        private static string FormatStructuralKind(ScenarioPlacementDefinitionKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioPlacementDefinitionKind.Room:
+                    return "room";
+                case ScenarioPlacementDefinitionKind.Ladder:
+                    return "ladder";
+                case ScenarioPlacementDefinitionKind.RoomLight:
+                    return "room light";
+                default:
+                    return "structural placement";
+            }
         }
 
         private static bool TryResolveObject(ScenarioAuthoringTarget target, out Obj_Base obj, out string reason)

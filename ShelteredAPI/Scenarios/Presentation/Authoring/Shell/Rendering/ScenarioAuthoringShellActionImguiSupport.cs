@@ -70,6 +70,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
+        private void RegisterInteractiveRegion(Rect rect)
+        {
+            try
+            {
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                if (inputCapture != null)
+                    inputCapture.RegisterInteractiveRect(rect);
+            }
+            catch
+            {
+            }
+        }
+
         private void RegisterTourTarget(string targetId, Rect rect)
         {
             if (string.IsNullOrEmpty(targetId) || rect.width <= 0f || rect.height <= 0f)
