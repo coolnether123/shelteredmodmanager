@@ -30,7 +30,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (actions == null || actions.Length == 0)
                 return RuntimeCompat.ZeroRect();
 
-            float width = Mathf.Clamp(24f + (actions.Length * 116f), 360f, 560f);
+            float gap = 8f;
+            float buttonsWidth = 0f;
+            for (int i = 0; i < actions.Length; i++)
+                buttonsWidth += Mathf.Clamp(MeasureButtonWidth(actions[i], false, 24f), 104f, 168f);
+            float width = Mathf.Clamp(20f + buttonsWidth + (gap * (actions.Length - 1)), 360f, Math.Min(760f, contentRect.width - 40f));
             Rect rect = new Rect(
                 contentRect.x + ((contentRect.width - width) * 0.5f),
                 contentRect.yMax - CommandDockHeight - 22f,
@@ -44,11 +48,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             using (ScenarioUiGuiScope.Apply(appear * Mathf.Clamp01(swap), rect, 1f))
             {
             DrawChromePanel(rect, _rootPanelStyle);
-            float gap = 8f;
-            float buttonWidth = (rect.width - 20f - (gap * (actions.Length - 1))) / actions.Length;
             float x = rect.x + 10f;
             for (int i = 0; i < actions.Length; i++)
             {
+                float buttonWidth = Mathf.Clamp(MeasureButtonWidth(actions[i], false, 24f), 104f, 168f);
                 DrawButton(new Rect(x, rect.y + 8f, buttonWidth, 32f), actions[i], false);
                 x += buttonWidth + gap;
             }

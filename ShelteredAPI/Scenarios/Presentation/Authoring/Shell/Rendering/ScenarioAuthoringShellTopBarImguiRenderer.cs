@@ -23,7 +23,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect DrawTopBarCore(Rect rect, ScenarioAuthoringShellViewModel shell)
         {
             DrawChromePanel(rect, _rootPanelStyle);
-            bool compact = IsCompactTopBar(rect);
+            bool compact = IsCompactTopBar(rect, shell);
             float primaryRowY = compact ? 42f : 10f;
             float primaryRowHeight = compact ? 24f : 36f;
             float secondaryRowY = compact ? 68f : 54f;
@@ -44,7 +44,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float toolbarX = Math.Max(primaryRowLeft, actionRight - toolbarWidth);
             Rect windowMenuButtonRect = DrawTopBarWindowAction(
                 compact
-                    ? new Rect(rect.xMax - 94f, rect.y + 10f, 84f, 28f)
+                    ? new Rect(rect.xMax - 122f, rect.y + 10f, 112f, 28f)
                     : new Rect(primaryRowLeft, rect.y + secondaryRowY, actionRight - primaryRowLeft, secondaryRowHeight),
                 shell);
 
@@ -67,7 +67,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             DrawTopBarToolbarActions(
                 compact
-                    ? new Rect(Math.Min(rect.x + 228f, rect.xMax - 188f), rect.y + 10f, Math.Max(0f, windowMenuButtonRect.x - Math.Min(rect.x + 228f, rect.xMax - 188f) - 8f), 28f)
+                    ? new Rect(Math.Min(rect.x + 228f, rect.xMax - 220f), rect.y + 10f, Math.Max(0f, windowMenuButtonRect.x - Math.Min(rect.x + 228f, rect.xMax - 220f) - 8f), 28f)
                     : new Rect(toolbarX, rect.y + primaryRowY + 3f, actionRight - toolbarX, secondaryRowHeight),
                 shell,
                 compact);
@@ -85,7 +85,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (!IsChildStageTab(tab))
                     continue;
 
-                ScenarioAuthoringInspectorAction displayTab = CloneWithLabel(tab, CleanChildStageLabel(tab.Label));
+                string childLabel = CleanChildStageLabel(tab.Label);
+                ScenarioAuthoringInspectorAction displayTab = CloneWithLabel(tab, compact ? CompactStageLabel(childLabel) : childLabel);
                 float width = ResolveChildStageTabWidth(displayTab, compact);
                 Rect tabRect = new Rect(childX, childTabsRect.y, width, childTabsRect.height);
                 if (tabRect.xMax > childTabsRect.xMax)
@@ -108,11 +109,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (compact && IsLowPriorityTopBarAction(action))
                     continue;
 
-                float width = ResolveToolbarActionWidth(action, compact);
+                ScenarioAuthoringInspectorAction displayAction = compact ? CloneWithLabel(action, CompactToolbarLabel(action)) : action;
+                float width = ResolveToolbarActionWidth(displayAction, compact);
                 Rect actionRect = new Rect(x, rect.y, width, rect.height);
                 if (actionRect.xMax > rect.xMax)
                     break;
-                DrawButton(actionRect, action, false);
+                DrawButton(actionRect, displayAction, false);
                 x = actionRect.xMax + (compact ? 3f : 4f);
             }
         }
@@ -126,9 +128,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 ScenarioAuthoringInspectorAction displayAction = _windowMenuOpen ? CloneEmphasized(action) : action;
-                Rect actionRect = rect.width <= 90f
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 22f), 104f, 132f);
+                Rect actionRect = rect.width <= width
                     ? rect
-                    : new Rect(rect.xMax - 106f, rect.y, 106f, rect.height);
+                    : new Rect(rect.xMax - width, rect.y, width, rect.height);
                 DrawButton(actionRect, displayAction, false);
                 return actionRect;
             }
@@ -160,30 +163,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return width;
         }
 
+        private static bool IsCompactTopBar(Rect rect, ScenarioAuthoringShellViewModel shell)
+        {
+            return rect.width < 1280f;
+        }
+
         private static bool IsCompactTopBar(Rect rect)
         {
-            return rect.width < 1040f;
+            return IsCompactTopBar(rect, null);
         }
 
         private float ResolvePrimaryStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
             return compact
-                ? Mathf.Clamp(MeasureButtonWidth(action, true, 14f), 48f, 72f)
-                : Mathf.Clamp(MeasureButtonWidth(action, true, 30f), 92f, 170f);
+                ? Mathf.Clamp(MeasureButtonWidth(action, true, 14f), 62f, 96f)
+                : Mathf.Clamp(MeasureButtonWidth(action, true, 30f), 96f, 196f);
         }
 
         private float ResolveChildStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
             return compact
-                ? Mathf.Clamp(MeasureButtonWidth(action, true, 14f), 64f, 82f)
-                : Mathf.Clamp(MeasureButtonWidth(action, true, 26f), 94f, 122f);
+                ? Mathf.Clamp(MeasureButtonWidth(action, true, 14f), 62f, 96f)
+                : Mathf.Clamp(MeasureButtonWidth(action, true, 26f), 96f, 148f);
         }
 
         private float ResolveToolbarActionWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
             return compact
-                ? Mathf.Clamp(MeasureButtonWidth(action, false, 16f), 78f, 92f)
-                : Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 96f, 126f);
+                ? Mathf.Clamp(MeasureButtonWidth(action, false, 16f), 76f, 108f)
+                : Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 104f, 156f);
         }
 
         private static bool IsLowPriorityTopBarAction(ScenarioAuthoringInspectorAction action)
@@ -203,8 +211,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "Time";
             if (string.Equals(label, "Publish", StringComparison.OrdinalIgnoreCase))
                 return "Pub";
+            if (string.Equals(label, "Backdrop", StringComparison.OrdinalIgnoreCase))
+                return "Back";
+            if (string.Equals(label, "Interior", StringComparison.OrdinalIgnoreCase))
+                return "Inside";
 
             return label;
+        }
+
+        private static string CompactToolbarLabel(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Label))
+                return string.Empty;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionSave, StringComparison.Ordinal))
+                return "Save";
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionShellOpenTimeline, StringComparison.Ordinal))
+                return "Time";
+            return action.Label;
         }
 
     }

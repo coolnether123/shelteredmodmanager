@@ -23,7 +23,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "home_identity",
-                Title = "Home",
+                Title = string.Empty,
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = BuildIdentityItems(editorSession, definition)

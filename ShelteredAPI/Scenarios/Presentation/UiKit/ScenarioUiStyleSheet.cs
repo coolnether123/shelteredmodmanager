@@ -1,6 +1,7 @@
 using UnityEngine;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+using ShelteredAPI.UI.Compatibility;
 namespace ShelteredAPI.Scenarios.Presentation.UiKit{
     /// <summary>
     /// Cached <see cref="GUIStyle"/>s for the scenario authoring UiKit. Built
@@ -171,6 +172,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         private static GUIStyle BuildText(int size, FontStyle fontStyle, Color color)
         {
             GUIStyle style = new GUIStyle(GUI.skin.label);
+            style.font = ResolveRuntimeFont();
             style.fontSize = size;
             style.fontStyle = fontStyle;
             style.normal.textColor = color;
@@ -181,6 +183,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         private static GUIStyle BuildButton(Texture2D background, Texture2D hover, Texture2D active, Color textColor, IScenarioUiMetrics metrics, int padX, int padY)
         {
             GUIStyle style = new GUIStyle(GUI.skin.button);
+            style.font = ResolveRuntimeFont();
             style.normal.background = background;
             style.hover.background = hover;
             style.active.background = active;
@@ -208,6 +211,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         private static GUIStyle BuildPill(Texture2D background, Color textColor, IScenarioUiMetrics metrics, int padX)
         {
             GUIStyle style = new GUIStyle(GUI.skin.box);
+            style.font = ResolveRuntimeFont();
             style.normal.background = background;
             style.normal.textColor = textColor;
             style.alignment = TextAnchor.MiddleCenter;
@@ -217,6 +221,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             style.padding = new RectOffset(padX, padX, 0, 0);
             style.margin = new RectOffset(0, 0, 0, 0);
             return style;
+        }
+
+        private static Font ResolveRuntimeFont()
+        {
+            UIFontCache.RefreshIfMissing();
+            UIFontCache.FontResult fonts = UIFontCache.GetFonts();
+            return fonts.TTF;
         }
     }
 }

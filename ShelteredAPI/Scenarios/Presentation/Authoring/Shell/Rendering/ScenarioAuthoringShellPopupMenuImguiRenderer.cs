@@ -15,6 +15,7 @@ using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 using ShelteredAPI.UI.FieldManual.Tooltips;
@@ -129,11 +130,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUIStyle style = tab
                 ? (!action.Enabled ? _uiContext.Styles.TabDisabled : (action.Emphasized ? _activeTabStyle : _tabStyle))
                 : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
-            GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, rect.width - 10f, style), tooltip);
+            bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
+            GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
+            GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, rect.width - 10f, drawStyle), tooltip);
 
             if (IsWindowMenuAction(action))
             {
-                if (GUI.Button(visualRect, content, style) && action.Enabled)
+                if (GUI.Button(visualRect, content, drawStyle) && action.Enabled)
                 {
                     _windowMenuOpen = !_windowMenuOpen;
                     if (Event.current != null)
@@ -143,7 +146,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            if (GUI.Button(visualRect, content, style) && action.Enabled)
+            if (GUI.Button(visualRect, content, drawStyle) && action.Enabled)
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
@@ -152,6 +155,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             DrawButtonAnimationOverlay(visualRect, action.Id, action.Enabled, hovered, pressed);
             DrawActionPulseOverlay(visualRect, action);
+        }
+
+        private GUIStyle ResolveContentButtonStyle(ScenarioAuthoringInspectorAction action, bool tab)
+        {
+            if (tab)
+                return !action.Enabled ? _disabledTabContentStyle : (action.Emphasized ? _activeTabContentStyle : _tabContentStyle);
+
+            return !action.Enabled ? _disabledButtonContentStyle : (action.Emphasized ? _activeButtonContentStyle : _buttonContentStyle);
         }
 
         private void DrawButtonAnimationOverlay(Rect rect, string actionId, bool enabled, bool hovered, bool pressed)

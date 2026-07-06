@@ -1096,7 +1096,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(section.Title))
                 GUILayout.Label(section.Title, _sectionTitleStyle);
 
-            if (section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip || section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip)
+            if (IsHomeQuestionSection(section))
+            {
+                DrawHomeQuestionCard(section);
+            }
+            else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip || section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip)
             {
                 bool renderAsTabs = section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip;
                 float rowLimit = GetSectionContentWidth();
@@ -1199,6 +1203,66 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     DrawItem(section.Items[i], compactInspector);
             }
             GUILayout.EndVertical();
+        }
+
+        private static bool IsHomeQuestionSection(ScenarioAuthoringInspectorSection section)
+        {
+            return section != null
+                && !string.IsNullOrEmpty(section.Id)
+                && section.Id.StartsWith("home_", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(section.Id, "home_identity", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(section.Id, "home_quick_actions", StringComparison.OrdinalIgnoreCase)
+                && section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip;
+        }
+
+        private void DrawHomeQuestionCard(ScenarioAuthoringInspectorSection section)
+        {
+            ScenarioAuthoringInspectorAction action = null;
+            string detail = string.Empty;
+            string badge = string.Empty;
+            for (int i = 0; section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+                if (item.Action != null)
+                    action = item.Action;
+                else if (string.IsNullOrEmpty(detail))
+                    detail = item.Value ?? item.Label ?? string.Empty;
+                else if (string.IsNullOrEmpty(badge))
+                    badge = item.Value ?? item.Label ?? string.Empty;
+            }
+
+            if (action == null)
+                return;
+
+            Rect rect = GUILayoutUtility.GetRect(120f, 82f, GUILayout.ExpandWidth(true), GUILayout.Height(82f));
+            DrawButton(rect, new ScenarioAuthoringInspectorAction
+            {
+                Id = action.Id,
+                Label = string.Empty,
+                Hint = action.Hint ?? action.Detail,
+                Detail = action.Detail,
+                Enabled = action.Enabled,
+                Emphasized = action.Emphasized
+            }, false);
+
+            float sideWidth = 92f;
+            if (!string.IsNullOrEmpty(badge))
+            {
+                Vector2 measuredBadge = _mutedTextStyle.CalcSize(new GUIContent(badge));
+                sideWidth = Mathf.Clamp(measuredBadge.x + 24f, 92f, Math.Min(220f, rect.width * 0.36f));
+            }
+
+            Rect textRect = new Rect(rect.x + 14f, rect.y + 9f, rect.width - sideWidth - 32f, rect.height - 18f);
+            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 24f), ShortenToFit(section.Title ?? string.Empty, textRect.width, _sectionTitleStyle), _sectionTitleStyle);
+            GUI.Label(new Rect(textRect.x, textRect.y + 27f, textRect.width, 34f), detail ?? string.Empty, _mutedTextStyle);
+            if (!string.IsNullOrEmpty(badge))
+            {
+                Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 16f, sideWidth, 22f);
+                ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+            }
+            GUI.Label(new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 34f, sideWidth, 20f), action.Label ?? string.Empty, _mutedTextStyle);
         }
 
         private void DrawItem(ScenarioAuthoringInspectorItem item)

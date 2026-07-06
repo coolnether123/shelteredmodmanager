@@ -14,6 +14,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 using ShelteredAPI.UI.FieldManual.Tooltips;
@@ -54,7 +55,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ? (action != null && action.Emphasized ? _activeTabStyle : _tabStyle)
                 : (action != null && action.Emphasized ? _activeButtonStyle : _buttonStyle);
             Vector2 size = style.CalcSize(new GUIContent(action != null ? action.Label ?? string.Empty : string.Empty));
-            return size.x + extraPadding;
+            return size.x + extraPadding + ResolveButtonHorizontalPadding(style);
+        }
+
+        private static float ResolveButtonHorizontalPadding(GUIStyle style)
+        {
+            return style != null && style.padding != null ? style.padding.left + style.padding.right : 0f;
         }
 
         private void DrawChromePanel(Rect rect, GUIStyle style)
@@ -70,11 +76,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.DrawTexture(new Rect(rect.x + 2f, rect.y + 2f, rect.width, rect.height), Texture2D.whiteTexture);
             GUI.color = oldColor;
 
-            GUI.Box(rect, GUIContent.none, style ?? _rootPanelStyle);
-            GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, 1f), _uiContext.Styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(rect.x + 1f, rect.yMax - 2f, rect.width - 2f, 1f), _uiContext.Styles.BorderSubtleTexture);
-            GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, 1f, rect.height - 2f), _uiContext.Styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(rect.xMax - 2f, rect.y + 1f, 1f, rect.height - 2f), _uiContext.Styles.BorderSubtleTexture);
+            bool drewNative = style == _headerStyle
+                ? ScenarioUiAtlasSkin.DrawHeader(rect)
+                : (style == _statusStyle ? ScenarioUiAtlasSkin.DrawStatus(rect) : ScenarioUiAtlasSkin.DrawPanel(rect));
+            if (!drewNative)
+            {
+                GUI.Box(rect, GUIContent.none, style ?? _rootPanelStyle);
+                GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, 1f), _uiContext.Styles.BorderStrongTexture);
+                GUI.DrawTexture(new Rect(rect.x + 1f, rect.yMax - 2f, rect.width - 2f, 1f), _uiContext.Styles.BorderSubtleTexture);
+                GUI.DrawTexture(new Rect(rect.x + 1f, rect.y + 1f, 1f, rect.height - 2f), _uiContext.Styles.BorderStrongTexture);
+                GUI.DrawTexture(new Rect(rect.xMax - 2f, rect.y + 1f, 1f, rect.height - 2f), _uiContext.Styles.BorderSubtleTexture);
+            }
         }
     }
 }

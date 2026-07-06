@@ -56,8 +56,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private GUIStyle _mutedTextStyle;
         private GUIStyle _buttonStyle;
         private GUIStyle _activeButtonStyle;
+        private GUIStyle _buttonContentStyle;
+        private GUIStyle _activeButtonContentStyle;
+        private GUIStyle _disabledButtonContentStyle;
         private GUIStyle _tabStyle;
         private GUIStyle _activeTabStyle;
+        private GUIStyle _tabContentStyle;
+        private GUIStyle _activeTabContentStyle;
+        private GUIStyle _disabledTabContentStyle;
         private GUIStyle _sectionTitleStyle;
         private GUIStyle _statusStyle;
         private float _styleOpacity = -1f;
@@ -745,6 +751,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeButtonStyle = styles.ButtonActive;
             _tabStyle = styles.Tab;
             _activeTabStyle = styles.TabActive;
+            _buttonContentStyle = BuildContentOnlyStyle(styles.Button);
+            _activeButtonContentStyle = BuildContentOnlyStyle(styles.ButtonActive);
+            _disabledButtonContentStyle = BuildContentOnlyStyle(styles.ButtonDisabled);
+            _tabContentStyle = BuildContentOnlyStyle(styles.Tab);
+            _activeTabContentStyle = BuildContentOnlyStyle(styles.TabActive);
+            _disabledTabContentStyle = BuildContentOnlyStyle(styles.TabDisabled);
         }
 
         private void DisposeUiContext()
@@ -761,11 +773,30 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _mutedTextStyle = null;
             _buttonStyle = null;
             _activeButtonStyle = null;
+            _buttonContentStyle = null;
+            _activeButtonContentStyle = null;
+            _disabledButtonContentStyle = null;
             _tabStyle = null;
             _activeTabStyle = null;
+            _tabContentStyle = null;
+            _activeTabContentStyle = null;
+            _disabledTabContentStyle = null;
             _sectionTitleStyle = null;
             _statusStyle = null;
             _styleOpacity = -1f;
+        }
+
+        private static GUIStyle BuildContentOnlyStyle(GUIStyle source)
+        {
+            GUIStyle style = new GUIStyle(source ?? GUI.skin.button);
+            style.normal.background = null;
+            style.hover.background = null;
+            style.active.background = null;
+            style.focused.background = null;
+            style.onNormal.background = null;
+            style.onHover.background = null;
+            style.onActive.background = null;
+            return style;
         }
 
         private static bool HasVisibleWindow(ScenarioAuthoringShellWindowViewModel[] windows, ScenarioAuthoringShellDock dock)

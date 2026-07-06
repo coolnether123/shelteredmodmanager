@@ -80,21 +80,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawStatusToastCore(Rect statusRect, string message)
         {
-            float progress = _animations.GetToastProgress(message);
-            if (string.IsNullOrEmpty(message) || progress <= 0.001f)
-                return;
-
-            float width = Mathf.Clamp((message.Length * 7.5f) + 34f, 220f, 520f);
-            Rect rect = new Rect(
-                statusRect.x + 24f,
-                statusRect.y - Mathf.Lerp(0f, 40f, progress),
-                width,
-                30f);
-            using (ScenarioUiGuiScope.Apply(progress, rect, 1f))
-            {
-                GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 6f, rect.width - 24f, 18f), ShortenToFit(message, rect.width - 24f, _mutedTextStyle), _mutedTextStyle);
-            }
+            _animations.GetToastProgress(message);
         }
 
         private Rect DrawCollapsedWindowStripCore(Rect statusRect, ScenarioAuthoringShellWindowViewModel[] windows)

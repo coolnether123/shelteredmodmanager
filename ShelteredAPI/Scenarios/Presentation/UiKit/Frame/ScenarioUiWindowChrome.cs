@@ -1,6 +1,7 @@
 using UnityEngine;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Layout;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
@@ -67,17 +68,23 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Frame{
             GUI.color = new Color(0f, 0f, 0f, 0.42f);
             GUI.DrawTexture(new Rect(outer.x + 2f, outer.y + 2f, outer.width, outer.height), Texture2D.whiteTexture);
             GUI.color = oldColor;
-            GUI.Box(outer, GUIContent.none, _styles.PanelBase);
-            GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, outer.width - 2f, 1f), _styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(outer.x + 1f, outer.yMax - 2f, outer.width - 2f, 1f), _styles.BorderSubtleTexture);
-            GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderStrongTexture);
-            GUI.DrawTexture(new Rect(outer.xMax - 2f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderSubtleTexture);
+            if (!ScenarioUiAtlasSkin.DrawPanel(outer))
+            {
+                GUI.Box(outer, GUIContent.none, _styles.PanelBase);
+                GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, outer.width - 2f, 1f), _styles.BorderStrongTexture);
+                GUI.DrawTexture(new Rect(outer.x + 1f, outer.yMax - 2f, outer.width - 2f, 1f), _styles.BorderSubtleTexture);
+                GUI.DrawTexture(new Rect(outer.x + 1f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderStrongTexture);
+                GUI.DrawTexture(new Rect(outer.xMax - 2f, outer.y + 1f, 1f, outer.height - 2f), _styles.BorderSubtleTexture);
+            }
         }
 
         private void DrawHeader(Rect rect, string title, string subtitle, IScenarioUiMetrics metrics, float titleRightInset)
         {
-            GUI.Box(rect, GUIContent.none, _styles.Header);
-            GUI.DrawTexture(new Rect(rect.x, rect.yMax - metrics.DividerThickness, rect.width, metrics.DividerThickness), _styles.BorderSubtleTexture);
+            if (!ScenarioUiAtlasSkin.DrawHeader(rect))
+            {
+                GUI.Box(rect, GUIContent.none, _styles.Header);
+                GUI.DrawTexture(new Rect(rect.x, rect.yMax - metrics.DividerThickness, rect.width, metrics.DividerThickness), _styles.BorderSubtleTexture);
+            }
             Rect inner = ScenarioUiLayoutEngine.Inset(
                 rect,
                 metrics.HeaderPaddingX,

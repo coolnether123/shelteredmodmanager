@@ -405,6 +405,7 @@
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiGuiScope.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiTween.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiTweenSet.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Textures\ScenarioUiAtlasSkin.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Textures\ScenarioUiTextureCache.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\ScenarioUiStyleSheet.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Layout\ScenarioUiLayoutEngine.cs" />
