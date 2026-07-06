@@ -434,10 +434,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int e = 0; day.Entries != null && e < day.Entries.Length; e++)
                 {
                     ScenarioTimelineEntryViewModel entry = day.Entries[e];
+                    ScenarioAuthoringInspectorItem fact = Item.Property(
+                        entry.Time + " " + entry.Title,
+                        entry.Type + " / " + entry.OwnerStage + " / " + entry.Status);
+                    fact.Detail = string.IsNullOrEmpty(entry.Warning) ? entry.OwnerStage : entry.Warning;
+                    fact.Badge = StatusBadge(entry.Status);
+                    if (state != null && string.Equals(state.TimelineSelectedEntryId, entry.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        fact.PulseKey = "timeline.entry." + entry.Id;
+                        fact.PulseSignature = entry.Id + ":" + entry.Status;
+                    }
+                    entries.Add(fact);
                     entries.Add(Item.ActionItem(Item.Action(
                         entry.ActionId,
-                        entry.Time + " " + entry.Title,
-                        entry.Type + " / " + entry.OwnerStage + " / " + entry.Status,
+                        "Edit",
+                        "Open this timeline entry.",
                         true,
                         entry.Status == "Blocked" || entry.Status == "Failed",
                         StatusBadge(entry.Status),
@@ -449,12 +460,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "timeline_day_" + day.Day.ToString(CultureInfo.InvariantCulture),
                     Title = "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = entries.ToArray()
                 });
             }
 
-            ScenarioAuthoringInspectorSection[] triggerSections = ScenarioAuthoringPresentationBuilder.BuildTriggerWindowSections(definition);
+            ScenarioAuthoringInspectorSection[] triggerSections = ScenarioAuthoringPresentationBuilder.BuildTriggerWindowSections(state, definition);
             for (int i = 0; triggerSections != null && i < triggerSections.Length; i++)
                 sections.Add(triggerSections[i]);
 

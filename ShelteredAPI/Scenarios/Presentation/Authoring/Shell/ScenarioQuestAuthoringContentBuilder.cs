@@ -57,7 +57,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Id = "story_flow_status",
                 Title = "Story Flow",
                 Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
             };
         }
@@ -77,7 +77,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Id = "story_flow_tools",
                 Title = "Stage Tools",
                 Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
             };
         }
@@ -157,7 +157,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Id = "story_stage_" + indexText,
                 Title = "Stage " + (index + 1).ToString(CultureInfo.InvariantCulture) + " / " + Safe(stage.Id),
                 Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
             });
 

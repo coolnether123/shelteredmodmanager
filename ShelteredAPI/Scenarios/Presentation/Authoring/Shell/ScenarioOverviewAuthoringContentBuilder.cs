@@ -28,6 +28,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = BuildIdentityItems(editorSession, definition)
             });
+            sections.Add(BuildBaseModeSection(definition));
             AddQuestionSections(sections, facts);
             sections.Add(new ScenarioAuthoringInspectorSection
             {
@@ -37,8 +38,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = new[]
                 {
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "Mode: " + ResolveAdjacentModeName(definition, -1), "Switch to the previous scenario base mode.", true, false, "M-")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, "Mode: " + ResolveAdjacentModeName(definition, 1), "Switch to the next scenario base mode.", true, false, "M+")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "Persist the current scenario draft XML.", true, false, "SV")),
                     Item.ActionItem(Item.Action("stage.select." + ScenarioStageKind.Quests, "Story", "Open the story workspace for quests and dialogue beats.", true, false, "STORY")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionPlaytest, editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Test" : "Start Test Scenario", "Toggle scenario playtest mode.", true, false, "TS"))
@@ -65,9 +64,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(EditableProperty("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
-            items.Add(Item.Property("Base Mode", definition != null ? definition.BaseGameMode.ToString() : "Unknown"));
+            items.Add(Item.Property("Base", FormatBaseMode(definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival)));
             items.Add(Item.Property("Save State", Item.CountDirtyFlags(editorSession) == 0 ? "Saved" : "Unsaved changes"));
             return items.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildBaseModeSection(ScenarioDefinition definition)
+        {
+            ScenarioBaseGameMode mode = definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival;
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Item.Property("Current", FormatBaseMode(mode)));
+            items.Add(Item.Property("Changes", "Base game rules and starting scene this scenario builds on."));
+            items.Add(Item.Property("Supported Bases",
+                "Standard " + (mode == ScenarioBaseGameMode.Survival ? "selected" : "available")
+                + " / Stasis " + (mode == ScenarioBaseGameMode.Stasis ? "selected" : "available")
+                + " / Surrounded " + (mode == ScenarioBaseGameMode.Surrounded ? "selected" : "available")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModePrevious, "< " + ResolveAdjacentModeName(definition, -1), "Switch to the previous supported base.", true, false, "M-")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScenarioModeNext, ResolveAdjacentModeName(definition, 1) + " >", "Switch to the next supported base.", true, false, "M+")));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "home_base_mode",
+                Title = "Scenario Base",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = items.ToArray()
+            };
         }
 
         private static ScenarioAuthoringInspectorItem EditableProperty(string label, string value)
@@ -127,7 +148,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioBaseGameMode mode = definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival;
             int count = Enum.GetValues(typeof(ScenarioBaseGameMode)).Length;
             int next = ((int)mode + direction + count) % count;
-            return ((ScenarioBaseGameMode)next).ToString();
+            return FormatBaseMode((ScenarioBaseGameMode)next);
+        }
+
+        private static string FormatBaseMode(ScenarioBaseGameMode mode)
+        {
+            if (mode == ScenarioBaseGameMode.Survival)
+                return "Standard";
+            return mode.ToString();
         }
 
         private static string FormatAppliedState(ScenarioEditorSession editorSession)

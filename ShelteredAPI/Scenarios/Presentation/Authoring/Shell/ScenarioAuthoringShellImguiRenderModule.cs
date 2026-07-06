@@ -298,7 +298,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Event.current.Use();
             }
 
-            if (shell.SpritePickerDocument != null)
+            ScenarioAuthoringInspectorDocument modalDocument = shell.FocusedEditorDocument ?? shell.SpritePickerDocument;
+            string modalScrollId = shell.FocusedEditorDocument != null ? "focused_editor" : "sprite_picker";
+            if (modalDocument != null)
             {
                 float dimAlpha = _animations.GetModalDimAlpha(true);
                 if (dimAlpha > 0.001f)
@@ -309,19 +311,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     GUI.color = oldColor;
                 }
 
+                float targetWidth = shell.FocusedEditorDocument != null ? 720f : 980f;
+                float targetHeight = shell.FocusedEditorDocument != null ? 520f : 680f;
                 Rect pickerRect = new Rect(
-                    Math.Max(Margin, (scaledWidth - 980f) * 0.5f),
-                    Math.Max(topRect.yMax + Gutter, (scaledHeight - 680f) * 0.5f),
-                    Math.Min(980f, scaledWidth - (Margin * 2f)),
-                    Math.Min(680f, scaledHeight - topRect.height - StatusHeight - (Margin * 3f)));
+                    Math.Max(Margin, (scaledWidth - targetWidth) * 0.5f),
+                    Math.Max(topRect.yMax + Gutter, (scaledHeight - targetHeight) * 0.5f),
+                    Math.Min(targetWidth, scaledWidth - (Margin * 2f)),
+                    Math.Min(targetHeight, scaledHeight - topRect.height - StatusHeight - (Margin * 3f)));
                 float panelProgress = _animations.GetModalPanelProgress(true);
                 float panelScale = Mathf.Lerp(0.975f, 1f, panelProgress);
                 Rect pickerScrollRect;
                 using (ScenarioUiGuiScope.Apply(panelProgress, pickerRect, panelScale))
-                    pickerScrollRect = DrawDocumentModalCore(pickerRect, shell.SpritePickerDocument, "sprite_picker");
+                    pickerScrollRect = DrawDocumentModalCore(pickerRect, modalDocument, modalScrollId);
                 inputCapture.RegisterInteractiveRect(pickerRect);
                 if (pickerScrollRect.width > 0f && pickerScrollRect.height > 0f)
-                    inputCapture.RegisterScrollRect("sprite_picker", pickerScrollRect);
+                    inputCapture.RegisterScrollRect(modalScrollId, pickerScrollRect);
                 inputCapture.SetPopupOpen(true);
             }
             else
@@ -336,7 +340,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
 
             inputCapture.SetKeyboardCaptured(
-                shell.SpritePickerDocument != null
+                modalDocument != null
                 || shell.Help != null
                 || _buildPaletteSearchFocused
                 || _spritePickerSearchFocused

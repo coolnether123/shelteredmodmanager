@@ -283,6 +283,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionToolWinLoss = "tool.win_loss";
         public const string ActionScenarioModePrevious = "scenario.mode.previous";
         public const string ActionScenarioModeNext = "scenario.mode.next";
+        public const string ActionFocusedEditorSave = "scenario.focused_editor.save";
+        public const string ActionFocusedEditorCancel = "scenario.focused_editor.cancel";
     }
 
     internal enum ScenarioAuthoringTool
@@ -466,6 +468,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string TimelineSelectionId { get; set; }
         public string TimelineSelectedDayId { get; set; }
         public string TimelineSelectedEntryId { get; set; }
+        public string FocusedEditorKind { get; set; }
+        public int FocusedEditorIndex { get; set; }
+        public bool FocusedEditorIsNew { get; set; }
         public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
         public string FilterText { get; set; }
         public string SearchText { get; set; }
@@ -501,6 +506,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 TimelineSelectionId = TimelineSelectionId,
                 TimelineSelectedDayId = TimelineSelectedDayId,
                 TimelineSelectedEntryId = TimelineSelectedEntryId,
+                FocusedEditorKind = FocusedEditorKind,
+                FocusedEditorIndex = FocusedEditorIndex,
+                FocusedEditorIsNew = FocusedEditorIsNew,
                 InspectorTab = InspectorTab,
                 FilterText = FilterText,
                 SearchText = SearchText,
@@ -880,6 +888,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringInspectorAction[] WindowMenuActions { get; set; }
         public ScenarioAuthoringShellWindowViewModel[] Windows { get; set; }
         public ScenarioAuthoringInspectorDocument SpritePickerDocument { get; set; }
+        public ScenarioAuthoringInspectorDocument FocusedEditorDocument { get; set; }
         internal ScenarioSpriteSwapAuthoringService.CustomEditorModel CustomSpriteEditor { get; set; }
         public ScenarioAuthoringSettingsViewModel Settings { get; set; }
         public ScenarioAuthoringHelpViewModel Help { get; set; }
@@ -952,7 +961,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         ActionStrip = 4,
         TabStrip = 5,
         Summary = 6,
-        CandidateGrid = 7
+        CandidateGrid = 7,
+        FactGrid = 8
     }
 
     internal sealed class ScenarioAuthoringInspectorSection
@@ -982,6 +992,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public Sprite PreviewSprite { get; set; }
         public bool Emphasized { get; set; }
         public bool Editable { get; set; }
+        public string HoverHint { get; set; }
+        public string PulseKey { get; set; }
+        public string PulseSignature { get; set; }
         public ScenarioAuthoringInspectorAction Action { get; set; }
     }
 

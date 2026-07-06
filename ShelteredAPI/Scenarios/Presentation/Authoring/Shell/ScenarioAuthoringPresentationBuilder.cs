@@ -131,6 +131,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 WindowMenuActions = _stageNavigationBuilder.BuildWindowMenuActions(state, _windowRegistry),
                 Windows = windows.ToArray(),
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
+                FocusedEditorDocument = BuildFocusedEditorDocument(state, definition),
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
                 Help = state != null && state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
@@ -1201,7 +1202,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.BuildTools, delegate(ScenarioAuthoringWindowContentContext context) { return BuildBuildToolsWindowSections(context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.PixelEditor, delegate(ScenarioAuthoringWindowContentContext context) { return BuildPixelEditorWindowSections(context.State); });
             builders[ScenarioAuthoringWindowContentKind.Triggers] = _timelineAuthoringContentBuilder;
-            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(context.State, context.Definition); });
+            RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Survivors, delegate(ScenarioAuthoringWindowContentContext context) { return BuildSurvivorWindowSections(_captureService, context.State, context.EditorSession, context.Definition); });
             RegisterWindowContentBuilder(builders, ScenarioAuthoringWindowContentKind.Stockpile, delegate(ScenarioAuthoringWindowContentContext context) { return BuildStockpileWindowSections(context.Definition); });
             builders[ScenarioAuthoringWindowContentKind.Quests] = _questAuthoringContentBuilder;
             builders[ScenarioAuthoringWindowContentKind.Map] = _mapAuthoringContentBuilder;
@@ -1527,6 +1528,138 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
+        private static ScenarioAuthoringInspectorDocument BuildFocusedEditorDocument(
+            ScenarioAuthoringState state,
+            ScenarioDefinition definition)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || definition == null)
+                return null;
+
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            string title = "Edit Timeline Entry";
+            string subtitle = "Use the compact fields below, then save or cancel.";
+            if (string.Equals(state.FocusedEditorKind, "weather", StringComparison.OrdinalIgnoreCase))
+            {
+                WeatherEventDefinition weather = definition.TriggersAndEvents != null
+                    && state.FocusedEditorIndex >= 0
+                    && state.FocusedEditorIndex < definition.TriggersAndEvents.WeatherEvents.Count
+                        ? definition.TriggersAndEvents.WeatherEvents[state.FocusedEditorIndex]
+                        : null;
+                if (weather == null)
+                    return null;
+
+                title = "Weather Event";
+                subtitle = "Schedule a weather change for a scenario day and hour.";
+                List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+                facts.Add(Fact("Type", Safe(weather.WeatherState), "Weather state to apply."));
+                facts.Add(Fact("When", FormatSchedule(weather.When), "Scenario day and time."));
+                facts.Add(Fact("Duration", weather.DurationHours.ToString(CultureInfo.InvariantCulture) + " hour(s)", "Zero leaves weather unchanged until another event."));
+                sections.Add(FactSection("focused_weather_facts", "Weather", facts));
+
+                List<ScenarioAuthoringInspectorItem> controls = new List<ScenarioAuthoringInspectorItem>();
+                AddWeatherStateActions(controls, state.FocusedEditorIndex, weather.WeatherState);
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture) + ".1", "Duration +", "Increase weather duration by one hour.", true, false, "DU+")));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture) + ".-1", "Duration -", "Decrease weather duration by one hour.", true, false, "DU-")));
+                AddScheduleActions(controls, ScenarioAuthoringActionIds.ActionWeatherScheduleDayPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleHourPrefix, ScenarioAuthoringActionIds.ActionWeatherScheduleMinutePrefix, state.FocusedEditorIndex);
+                sections.Add(ActionSection("focused_weather_controls", "Fields", controls));
+            }
+            else if (string.Equals(state.FocusedEditorKind, "trigger", StringComparison.OrdinalIgnoreCase))
+            {
+                TriggerDef trigger = definition.TriggersAndEvents != null
+                    && state.FocusedEditorIndex >= 0
+                    && state.FocusedEditorIndex < definition.TriggersAndEvents.Triggers.Count
+                        ? definition.TriggersAndEvents.Triggers[state.FocusedEditorIndex]
+                        : null;
+                if (trigger == null)
+                    return null;
+
+                title = "Trigger";
+                subtitle = "Define what starts a timeline event.";
+                List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+                facts.Add(Fact("Name", Safe(trigger.Id), "Stable trigger id saved in the scenario XML."));
+                facts.Add(Fact("Condition", Safe(trigger.Type), "What the trigger listens for."));
+                facts.Add(Fact("When", FormatTriggerSchedule(trigger), "Only used by timed triggers."));
+                sections.Add(FactSection("focused_trigger_facts", "Trigger", facts));
+
+                List<ScenarioAuthoringInspectorItem> controls = new List<ScenarioAuthoringInspectorItem>();
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTypePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Cycle Condition", "Switch between manual, timed, flag, quest, and item trigger templates.", true, false, "TY")));
+                AddTriggerTargetActions(controls, definition, trigger, state.FocusedEditorIndex);
+                AddScheduleActions(controls, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, ScenarioAuthoringActionIds.ActionTriggerMinutePrefix, state.FocusedEditorIndex);
+                sections.Add(ActionSection("focused_trigger_controls", "Fields", controls));
+            }
+            else if (string.Equals(state.FocusedEditorKind, "scheduled_action", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions != null
+                    && state.FocusedEditorIndex >= 0
+                    && state.FocusedEditorIndex < definition.ScheduledActions.Count
+                        ? definition.ScheduledActions[state.FocusedEditorIndex]
+                        : null;
+                if (action == null)
+                    return null;
+
+                title = "Scheduled Change";
+                subtitle = "Choose when this change happens and what it does.";
+                string condition = string.IsNullOrEmpty(action.GateId) ? "<none>" : action.GateId;
+                string repeat = action.Policy != null && action.Policy.Repeatable ? "Repeat" : "Once";
+                List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+                facts.Add(Fact("Kind", Safe(action.ActionType), "Primary effect template."));
+                facts.Add(Fact("When", FormatSchedule(action.DueTime), "Scenario day and time."));
+                facts.Add(Fact("Condition", condition, "The event only fires while this is true."));
+                facts.Add(Fact("Repeat", repeat, "Whether the scheduled change can fire more than once."));
+                sections.Add(FactSection("focused_action_facts", "Scheduled Change", facts));
+
+                List<ScenarioAuthoringInspectorItem> controls = new List<ScenarioAuthoringInspectorItem>();
+                AddScheduleActions(controls, ScenarioAuthoringActionIds.ActionScheduledActionDayPrefix, ScenarioAuthoringActionIds.ActionScheduledActionHourPrefix, state.FocusedEditorIndex);
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionTypePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Cycle Kind", "Cycle the primary effect template for this scheduled change.", true, false, "TY")));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Cycle Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "CN", condition)));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionRepeatPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Toggle Repeat", "Switch this change between once-only and repeatable execution.", true, action.Policy != null && action.Policy.Repeatable, "RP")));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectAddPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Add Effect", "Add another effect to this scheduled change.", true, false, "E+")));
+                for (int e = 0; action.Effects != null && e < action.Effects.Count; e++)
+                    AddEffectItems(controls, definition, action.Effects[e], state.FocusedEditorIndex, e);
+                sections.Add(ActionSection("focused_action_controls", "Fields", controls));
+            }
+            else if (string.Equals(state.FocusedEditorKind, "gate", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioGateDefinition gate = definition.Gates != null
+                    && state.FocusedEditorIndex >= 0
+                    && state.FocusedEditorIndex < definition.Gates.Count
+                        ? definition.Gates[state.FocusedEditorIndex]
+                        : null;
+                if (gate == null)
+                    return null;
+
+                title = "Condition";
+                subtitle = "The event only fires while this is true.";
+                ScenarioConditionGroup group = gate.Conditions;
+                List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+                facts.Add(Fact("Name", Safe(gate.Id), "Stable condition id saved in the scenario XML."));
+                facts.Add(Fact("Match", group != null ? group.Mode.ToString() : "All", "Whether all checks or any check must pass."));
+                facts.Add(Fact("Checks", CountConditions(group).ToString(CultureInfo.InvariantCulture), "Individual condition checks."));
+                sections.Add(FactSection("focused_condition_facts", "Condition", facts));
+
+                List<ScenarioAuthoringInspectorItem> controls = new List<ScenarioAuthoringInspectorItem>();
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateModePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Match All/Any", "Switch this condition between requiring all checks and any check.", true, group != null && group.Mode == ScenarioConditionGroupMode.Any, "ANY")));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionAddPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Add Check", "Add another check to this condition.", true, false, "C+")));
+                for (int c = 0; group != null && group.Conditions != null && c < group.Conditions.Count; c++)
+                    AddConditionItems(controls, definition, group.Conditions[c], state.FocusedEditorIndex, c);
+                sections.Add(ActionSection("focused_condition_controls", "Fields", controls));
+            }
+
+            sections.Add(ActionSection("focused_editor_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
+            {
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorSave, "Save", "Close this focused editor and keep the entry.", true, true, "SV")),
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", state.FocusedEditorIsNew ? "Discard this new entry and close the editor." : "Close this editor.", true, false, "CL"))
+            }));
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = title,
+                Subtitle = subtitle,
+                HeaderActions = new ScenarioAuthoringInspectorAction[0],
+                Sections = sections.ToArray()
+            };
+        }
+
         private static bool IsWorldSubstageActive(ScenarioAuthoringState state)
         {
             if (state == null)
@@ -1560,17 +1693,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        internal static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioDefinition definition)
+        internal static ScenarioAuthoringInspectorSection[] BuildTriggerWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> triggerItems = new List<ScenarioAuthoringInspectorItem>();
             triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddManual, "Add Manual Trigger", "Create a trigger that can be fired by code or another scheduled effect.", true, true, "T+")));
-            triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Add Scheduled Trigger", "Create a trigger that fires on a specific scenario day and hour.", true, true, "TS")));
+            triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Add Timed Trigger", "Create a trigger that fires on a specific scenario day and hour.", true, true, "TS")));
             if (definition != null && definition.TriggersAndEvents != null)
             {
                 for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
                 {
                     TriggerDef trigger = definition.TriggersAndEvents.Triggers[i];
-                    AddTriggerItems(triggerItems, definition, trigger, i);
+                    AddTriggerItems(triggerItems, state, definition, trigger, i);
                 }
             }
 
@@ -1583,11 +1716,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (definition != null && definition.TriggersAndEvents != null)
             {
                 for (int i = 0; i < definition.TriggersAndEvents.WeatherEvents.Count; i++)
-                    AddWeatherEventItems(weatherItems, definition.TriggersAndEvents.WeatherEvents[i], i);
+                    AddWeatherEventItems(weatherItems, state, definition.TriggersAndEvents.WeatherEvents[i], i);
             }
 
-            List<ScenarioAuthoringInspectorItem> actionItems = BuildScheduledActionItems(definition);
-            List<ScenarioAuthoringInspectorItem> gateItems = BuildGateItems(definition);
+            List<ScenarioAuthoringInspectorItem> actionItems = BuildScheduledActionItems(state, definition);
+            List<ScenarioAuthoringInspectorItem> gateItems = BuildGateItems(state, definition);
             List<ScenarioAuthoringInspectorItem> graphItems = BuildEventGraphItems(definition);
 
             return new[]
@@ -1619,7 +1752,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "scheduled_actions",
-                    Title = "Scheduled Actions",
+                    Title = "Scheduled Changes",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = actionItems.ToArray()
@@ -1627,7 +1760,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "scenario_gates",
-                    Title = "Scenario Gates / Flags",
+                    Title = "Conditions / Flags",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = gateItems.ToArray()
@@ -1663,11 +1796,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return effect.Kind.ToString();
         }
 
-        private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(ScenarioAuthoringState state, ScenarioDefinition definition)
+        private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(
+            ScenarioAuthoringCaptureService captureService,
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition)
         {
+            AutoCaptureCurrentFamily(captureService, editorSession, definition);
             bool showAdvancedDetails = ShowAdvancedDetails(state);
             List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems();
-            currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Capture Current Survivors", "Snapshot every current live family member into the starting survivor list.", true, true, "FM")));
+            currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Refresh from World", "Refresh the starting cast from current live survivors.", true, false, "RF")));
 
             List<ScenarioAuthoringInspectorItem> startingItems = new List<ScenarioAuthoringInspectorItem>();
             startingItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, "Add Starting Survivor", "Create a new editable starting crew member.", true, true, "S+")));
@@ -1706,7 +1844,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "current_survivors",
                     Title = "Current Survivors",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = currentItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -1714,7 +1852,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "starting_survivors",
                     Title = "Starting Survivors",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = startingItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -1722,7 +1860,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "future_survivors",
                     Title = "Future Survivors",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = futureItems.ToArray()
                 }
             };
@@ -1773,7 +1911,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "current_stockpile",
                     Title = "Current Shelter Items",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = liveItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -1781,7 +1919,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "starting_stockpile",
                     Title = "Starting Items",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = items.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -1789,7 +1927,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "scheduled_stockpile",
                     Title = "Timed Item Changes",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                     Items = scheduledItems.ToArray()
                 }
             };
@@ -1808,12 +1946,82 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 string status = member.isDead ? "Dead" : member.isAway ? "Away" : member.IsUnconscious ? "Unconscious" : member.isCatatonic ? "Catatonic" : "Active";
-                items.Add(Property(Safe(member.firstName), status));
+                items.Add(Property(Safe(member.firstName), BuildLiveSurvivorSummary(member, status)));
             }
 
             if (items.Count == 0)
                 items.Add(Text("No live survivors are available from FamilyManager."));
             return items;
+        }
+
+        private static string BuildLiveSurvivorSummary(FamilyMember member, string status)
+        {
+            if (member == null)
+                return Safe(status);
+
+            string body = (member.isChild ? "Child " : "Adult ") + (member.isMale ? "Male" : "Female");
+            BaseStats stats = member.BaseStats;
+            string statSummary = stats != null
+                ? "Str " + stats.Strength.Level.ToString(CultureInfo.InvariantCulture)
+                  + ", Dex " + stats.Dexterity.Level.ToString(CultureInfo.InvariantCulture)
+                  + ", Int " + stats.Intelligence.Level.ToString(CultureInfo.InvariantCulture)
+                : "stats unavailable";
+            string traitSummary = BuildLiveTraitSummary(member.traits);
+            return body + " / " + Safe(status) + " / " + statSummary + " / " + traitSummary;
+        }
+
+        private static string BuildLiveTraitSummary(Traits traits)
+        {
+            if (traits == null)
+                return "traits unavailable";
+
+            List<string> names = traits.GetLocalizedStrengthNames(true);
+            List<string> weaknesses = traits.GetLocalizedWeaknessNames(true);
+            if (names == null)
+                names = new List<string>();
+            if (weaknesses != null)
+                names.AddRange(weaknesses);
+
+            if (names.Count == 0)
+                return "no visible traits";
+            return string.Join(", ", names.ToArray());
+        }
+
+        private static void AutoCaptureCurrentFamily(
+            ScenarioAuthoringCaptureService captureService,
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition)
+        {
+            if (captureService == null || editorSession == null || definition == null || IsLiveFamilyAlreadyCaptured(definition))
+                return;
+
+            string ignored;
+            captureService.CaptureCurrentFamily(editorSession, out ignored);
+        }
+
+        private static bool IsLiveFamilyAlreadyCaptured(ScenarioDefinition definition)
+        {
+            FamilyManager manager = FamilyManager.Instance;
+            List<FamilyMember> liveMembers = manager != null ? manager.GetAllFamilyMembers() : null;
+            FamilySetupDefinition family = definition != null ? definition.FamilySetup : null;
+            if (liveMembers == null || liveMembers.Count == 0)
+                return true;
+            if (family == null || family.Members == null || family.Members.Count != liveMembers.Count)
+                return false;
+
+            for (int i = 0; i < liveMembers.Count; i++)
+            {
+                FamilyMember live = liveMembers[i];
+                FamilyMemberConfig captured = family.Members[i];
+                if (live == null || captured == null)
+                    return false;
+                string liveName = live.firstName ?? string.Empty;
+                if (!string.Equals(liveName, captured.Name ?? string.Empty, StringComparison.Ordinal)
+                    || (live.isMale ? ScenarioGender.Male : ScenarioGender.Female) != captured.Gender)
+                    return false;
+            }
+
+            return true;
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveInventoryItems()
@@ -1989,12 +2197,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix + index.ToString(CultureInfo.InvariantCulture), "Remove Starting Item", "Remove this stack from the starting stockpile.", true, false, "RM")));
         }
 
-        private static void AddWeatherEventItems(List<ScenarioAuthoringInspectorItem> items, WeatherEventDefinition weather, int index)
+        private static void AddWeatherEventItems(List<ScenarioAuthoringInspectorItem> items, ScenarioAuthoringState state, WeatherEventDefinition weather, int index)
         {
             if (items == null || weather == null)
                 return;
 
-            items.Add(Property(Safe(weather.WeatherState), FormatSchedule(weather.When), weather.DurationHours > 0 ? "Restores at " + FormatSchedule(AddHours(weather.When, weather.DurationHours)) : "No restore event"));
+            items.Add(TimelineFact(state, "weather", index, Safe(weather.WeatherState), FormatSchedule(weather.When), weather.DurationHours > 0 ? "Restores at " + FormatSchedule(AddHours(weather.When, weather.DurationHours)) : "No restore event"));
             AddWeatherStateActions(items, index, weather.WeatherState);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Duration +", "Increase weather duration by one hour.", true, false, "DU+")));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDurationPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Duration -", "Decrease weather duration by one hour.", true, false, "DU-")));
@@ -2002,13 +2210,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWeatherScheduleDeletePrefix + index.ToString(), "Remove Weather Event", "Remove this scheduled weather event.", true, false, "RM")));
         }
 
-        private static void AddTriggerItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, TriggerDef trigger, int index)
+        private static void AddTriggerItems(List<ScenarioAuthoringInspectorItem> items, ScenarioAuthoringState state, ScenarioDefinition definition, TriggerDef trigger, int index)
         {
             if (items == null || trigger == null)
                 return;
 
             string schedule = FormatTriggerSchedule(trigger);
-            items.Add(Property(string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, Safe(trigger.Type) + " / " + schedule));
+            items.Add(TimelineFact(state, "trigger", index, string.IsNullOrEmpty(trigger.Id) ? ("Trigger " + (index + 1).ToString(CultureInfo.InvariantCulture)) : trigger.Id, Safe(trigger.Type) + " / " + schedule, "Defines what starts a timeline event."));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerTypePrefix + index.ToString(CultureInfo.InvariantCulture), "Cycle Trigger Type", "Switch between manual, scheduled, flag, quest, and item trigger templates.", true, false, "TY")));
             AddTriggerTargetActions(items, definition, trigger, index);
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionTriggerDayPrefix, ScenarioAuthoringActionIds.ActionTriggerHourPrefix, ScenarioAuthoringActionIds.ActionTriggerMinutePrefix, index);
@@ -2596,53 +2804,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static List<ScenarioAuthoringInspectorItem> BuildGateItems(ScenarioDefinition definition)
+        private static List<ScenarioAuthoringInspectorItem> BuildGateItems(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateAdd, "Add Gate", "Create a reusable gate with editable conditions for scheduled actions and unlocks.", true, true, "G+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateAdd, "Add Condition", "The event only fires while this is true.", true, true, "C+")));
             for (int i = 0; definition != null && definition.Gates != null && i < definition.Gates.Count; i++)
             {
                 ScenarioGateDefinition gate = definition.Gates[i];
                 if (gate == null)
                     continue;
                 ScenarioConditionGroup group = gate.Conditions;
-                items.Add(Property(Safe(gate.Id), (group != null ? group.Mode.ToString() : "All") + " / " + CountConditions(group).ToString() + " condition(s)"));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateModePrefix + i.ToString(CultureInfo.InvariantCulture), "Toggle Gate Mode", "Switch this gate between requiring all conditions and any condition.", true, group != null && group.Mode == ScenarioConditionGroupMode.Any, "GM")));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Gate Condition", "Add another condition to this gate.", true, false, "C+")));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Gate", "Remove this gate and clear scheduled action references to it.", true, false, "RM")));
+                items.Add(TimelineFact(state, "gate", i, Safe(gate.Id), (group != null ? group.Mode.ToString() : "All") + " / " + CountConditions(group).ToString() + " condition(s)", "The event only fires while this is true."));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateModePrefix + i.ToString(CultureInfo.InvariantCulture), "Match All/Any", "Switch this condition between requiring all checks and any check.", true, group != null && group.Mode == ScenarioConditionGroupMode.Any, "ANY")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Check", "Add another check to this condition.", true, false, "C+")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Condition", "Remove this condition and clear scheduled change references to it.", true, false, "RM")));
                 for (int c = 0; group != null && group.Conditions != null && c < group.Conditions.Count; c++)
                     AddConditionItems(items, definition, group.Conditions[c], i, c);
             }
             if (items.Count == 1)
-                items.Add(Text("No shared gates or scenario flags have been authored yet."));
+                items.Add(Text("No reusable conditions or scenario flags have been authored yet."));
             return items;
         }
 
-        private static List<ScenarioAuthoringInspectorItem> BuildScheduledActionItems(ScenarioDefinition definition)
+        private static List<ScenarioAuthoringInspectorItem> BuildScheduledActionItems(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Add Scheduled Action", "Create a first-class scheduled action with gate, repeat policy, and effects.", true, true, "A+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Add Scheduled Change", "Create a timed scenario change with an optional condition, repeat policy, and effects.", true, true, "A+")));
             for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action == null)
                     continue;
-                string gate = string.IsNullOrEmpty(action.GateId) ? "no gate" : "gate " + action.GateId;
+                string gate = string.IsNullOrEmpty(action.GateId) ? "no condition" : "condition " + action.GateId;
                 string repeat = action.Policy != null && action.Policy.Repeatable ? "repeat " + action.Policy.CooldownMinutes.ToString(CultureInfo.InvariantCulture) + "m" : "once";
-                items.Add(Property(Safe(action.Id), Safe(action.ActionType) + " / " + FormatSchedule(action.DueTime) + " / " + gate + " / " + repeat));
+                items.Add(TimelineFact(state, "scheduled_action", i, Safe(action.Id), Safe(action.ActionType) + " / " + FormatSchedule(action.DueTime) + " / " + gate + " / " + repeat, "Timed scenario change."));
                 AddScheduleActions(items, ScenarioAuthoringActionIds.ActionScheduledActionDayPrefix, ScenarioAuthoringActionIds.ActionScheduledActionHourPrefix, i);
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionTypePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Action Type", "Cycle the primary effect template for this scheduled action.", true, false, "TY")));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Gate", "Attach the next authored gate, or clear the gate when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "GT", gate)));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "CN", gate)));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionRepeatPrefix + i.ToString(CultureInfo.InvariantCulture), "Toggle Repeat", "Switch this action between once-only and repeatable execution.", true, action.Policy != null && action.Policy.Repeatable, "RP")));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + i.ToString(CultureInfo.InvariantCulture) + ".30", "Cooldown +30", "Increase repeat cooldown by 30 game minutes.", true, false, "C+")));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + i.ToString(CultureInfo.InvariantCulture) + ".-30", "Cooldown -30", "Decrease repeat cooldown by 30 game minutes.", true, false, "C-")));
                 items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectAddPrefix + i.ToString(CultureInfo.InvariantCulture), "Add Effect", "Add another effect to this scheduled action.", true, false, "E+")));
-                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Scheduled Action", "Remove this first-class scheduled action.", true, false, "RM")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Scheduled Change", "Remove this scheduled scenario change.", true, false, "RM")));
                 for (int e = 0; action.Effects != null && e < action.Effects.Count; e++)
                     AddEffectItems(items, definition, action.Effects[e], i, e);
             }
             if (items.Count == 1)
-                items.Add(Text("No shared scheduled actions have been authored yet. Legacy schedules are converted at runtime."));
+                items.Add(Text("No scheduled changes have been authored yet. Legacy schedules are converted at runtime."));
             return items;
         }
 
@@ -2952,6 +3160,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 IconText = iconText,
                 PreviewSprite = previewSprite,
                 Emphasized = emphasized
+            };
+        }
+
+        private static ScenarioAuthoringInspectorItem Fact(string label, string value, string hoverHint = null, string pulseKey = null, string pulseSignature = null)
+        {
+            ScenarioAuthoringInspectorItem item = Property(label, value);
+            item.HoverHint = hoverHint;
+            item.PulseKey = pulseKey;
+            item.PulseSignature = pulseSignature;
+            return item;
+        }
+
+        private static ScenarioAuthoringInspectorItem TimelineFact(ScenarioAuthoringState state, string kind, int index, string label, string value, string hoverHint)
+        {
+            ScenarioAuthoringInspectorItem item = Fact(label, value, hoverHint);
+            if (state != null
+                && string.Equals(state.TimelineSelectedEntryId, kind + ":" + index.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))
+            {
+                item.PulseKey = "timeline." + kind + "." + index.ToString(CultureInfo.InvariantCulture);
+                item.PulseSignature = kind + ":" + index.ToString(CultureInfo.InvariantCulture) + ":" + value;
+            }
+
+            return item;
+        }
+
+        private static ScenarioAuthoringInspectorSection FactSection(string id, string title, List<ScenarioAuthoringInspectorItem> items)
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = id,
+                Title = title,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = items != null ? items.ToArray() : new ScenarioAuthoringInspectorItem[0]
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection ActionSection(string id, string title, List<ScenarioAuthoringInspectorItem> items)
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = id,
+                Title = title,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = items != null ? items.ToArray() : new ScenarioAuthoringInspectorItem[0]
             };
         }
 

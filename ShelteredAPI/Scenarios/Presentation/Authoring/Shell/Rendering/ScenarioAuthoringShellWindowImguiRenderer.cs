@@ -1160,8 +1160,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 float availableWidth = GetSectionContentWidth();
                 float cardGap = 4f;
-                float preferredCardWidth = compactInspector ? 160f : 176f;
-                float minCardWidth = compactInspector ? 148f : 160f;
+                float preferredCardWidth = compactInspector ? 190f : 224f;
+                float minCardWidth = compactInspector ? 176f : 196f;
                 int maxColumns = compactInspector ? 2 : 4;
                 int columns = Mathf.Clamp(
                     Mathf.FloorToInt((availableWidth + cardGap) / (minCardWidth + cardGap)),
@@ -1182,7 +1182,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     if (!CandidateActionMatches(section, item.Action, candidateSearchText, candidateFilter))
                         continue;
 
-                    Rect rect = GUILayoutUtility.GetRect(cardWidth, 84f, GUILayout.Width(cardWidth), GUILayout.Height(84f));
+                    Rect rect = GUILayoutUtility.GetRect(cardWidth, 94f, GUILayout.Width(cardWidth), GUILayout.Height(94f));
                     DrawCandidateCard(rect, item.Action);
                     count++;
                     if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, candidateSearchText, candidateFilter))
@@ -1196,6 +1196,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     }
                 }
                 GUILayout.EndHorizontal();
+            }
+            else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.FactGrid)
+            {
+                DrawFactGrid(section, compactInspector);
             }
             else
             {
@@ -1443,10 +1447,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 textRect = new Rect(rect.x + 10f, rect.y + 8f, rect.width - 20f, rect.height - 16f);
             }
 
-            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 20f), ShortenToFit(action.Label ?? string.Empty, textRect.width, _textStyle), _textStyle);
+            GUIContent labelContent = new GUIContent(action.Label ?? string.Empty, action.Hint ?? action.Detail ?? string.Empty);
+            GUIStyle labelStyle = new GUIStyle(_textStyle);
+            labelStyle.wordWrap = true;
+            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 38f), labelContent, labelStyle);
             string detail = !string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint;
             if (!string.IsNullOrEmpty(detail))
-                GUI.Label(new Rect(textRect.x, textRect.y + 22f, textRect.width, 30f), detail, _mutedTextStyle);
+                GUI.Label(new Rect(textRect.x, textRect.y + 42f, textRect.width, 30f), detail, _mutedTextStyle);
 
             if (!string.IsNullOrEmpty(action.Badge))
             {
@@ -1471,6 +1478,113 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private float GetSectionContentWidth()
         {
             return Math.Max(120f, _activeContentWidth - 24f);
+        }
+
+        private void DrawFactGrid(ScenarioAuthoringInspectorSection section, bool compactInspector)
+        {
+            float availableWidth = GetSectionContentWidth();
+            float gap = 6f;
+            bool twoColumns = !compactInspector && availableWidth >= 420f;
+            float cellWidth = twoColumns ? (availableWidth - gap) * 0.5f : availableWidth;
+            float cellHeight = 64f;
+            int column = 0;
+            int actionColumn = 0;
+            bool actionRow = false;
+            int actionColumns = availableWidth >= 720f ? 4 : (availableWidth >= 460f ? 3 : 2);
+            float actionWidth = (availableWidth - (gap * (actionColumns - 1))) / actionColumns;
+            GUILayout.BeginHorizontal();
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+
+                if (item.Action != null)
+                {
+                    if (!actionRow)
+                    {
+                        if (column != 0)
+                        {
+                            GUILayout.EndHorizontal();
+                            GUILayout.BeginHorizontal();
+                        }
+                        column = 0;
+                        actionColumn = 0;
+                        actionRow = true;
+                    }
+
+                    if (actionColumn >= actionColumns)
+                    {
+                        GUILayout.EndHorizontal();
+                        GUILayout.BeginHorizontal();
+                        actionColumn = 0;
+                    }
+
+                    float width = Mathf.Clamp(MeasureButtonWidth(item.Action, false, 24f), 86f, actionWidth);
+                    Rect actionRect = GUILayoutUtility.GetRect(width, 28f, GUILayout.Width(width), GUILayout.Height(28f));
+                    DrawButton(actionRect, item.Action, false);
+                    actionColumn++;
+                    if (actionColumn < actionColumns)
+                        GUILayout.Space(gap);
+                    continue;
+                }
+
+                if (actionRow)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    actionRow = false;
+                    actionColumn = 0;
+                    column = 0;
+                }
+
+                Rect cellRect = GUILayoutUtility.GetRect(cellWidth, cellHeight, GUILayout.Width(cellWidth), GUILayout.Height(cellHeight));
+                DrawFactCell(cellRect, item);
+                column++;
+                if (twoColumns && column < 2)
+                {
+                    GUILayout.Space(gap);
+                }
+                else if (i + 1 < section.Items.Length)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    column = 0;
+                }
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawFactCell(Rect rect, ScenarioAuthoringInspectorItem item)
+        {
+            if (item == null)
+                return;
+
+            if (!string.IsNullOrEmpty(item.PulseKey))
+                DrawItemPulseOverlay(rect, item);
+
+            GUIContent label = new GUIContent(item.Label ?? string.Empty, item.HoverHint ?? item.Detail ?? item.Value ?? string.Empty);
+            GUIContent value = new GUIContent(item.Value ?? string.Empty, item.HoverHint ?? item.Detail ?? string.Empty);
+            Rect labelRect = new Rect(rect.x + 8f, rect.y + 4f, rect.width - 16f, 16f);
+            Rect valueRect = new Rect(rect.x + 8f, rect.y + 20f, rect.width - 16f, rect.height - 24f);
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+            GUI.Label(labelRect, label, _mutedTextStyle);
+            GUIStyle valueStyle = new GUIStyle(_textStyle);
+            valueStyle.wordWrap = true;
+            GUI.Label(valueRect, value, valueStyle);
+        }
+
+        private void DrawItemPulseOverlay(Rect rect, ScenarioAuthoringInspectorItem item)
+        {
+            string signature = item.PulseSignature ?? item.Value ?? item.Label ?? string.Empty;
+            float pulse = _animations.GetPulseProgress(item.PulseKey, signature, 0.70f, ScenarioUiEasing.EaseOut);
+            if (pulse <= 0.001f)
+                return;
+
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.94f, 0.80f, 0.52f, 0.32f * pulse);
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
         }
 
         private static bool HasMoreVisibleCandidate(

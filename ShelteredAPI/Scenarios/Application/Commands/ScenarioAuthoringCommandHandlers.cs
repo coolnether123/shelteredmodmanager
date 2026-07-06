@@ -18,6 +18,7 @@ using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -792,7 +793,31 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled || _service == null)
                 return false;
 
-            return _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            if (changed)
+                FocusGameplayEditor(state, _editorService.CurrentSession, actionId);
+            return changed;
+        }
+
+        private static void FocusGameplayEditor(ScenarioAuthoringState state, ScenarioEditorSession session, string actionId)
+        {
+            if (state == null || session == null || session.WorkingDefinition == null)
+                return;
+
+            ScenarioDefinition definition = session.WorkingDefinition;
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, StringComparison.Ordinal)
+                && definition.TriggersAndEvents != null)
+                SetFocusedEditor(state, "weather", definition.TriggersAndEvents.WeatherEvents.Count - 1, true);
+        }
+
+        private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
+        {
+            if (index < 0)
+                return;
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = isNew;
+            state.TimelineSelectedEntryId = kind + ":" + index.ToString(CultureInfo.InvariantCulture);
         }
     }
 
@@ -816,7 +841,36 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled)
                 return false;
 
-            return _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
+            if (changed)
+                FocusEventEditor(state, _editorService.CurrentSession, actionId);
+            return changed;
+        }
+
+        private static void FocusEventEditor(ScenarioAuthoringState state, ScenarioEditorSession session, string actionId)
+        {
+            if (state == null || session == null || session.WorkingDefinition == null)
+                return;
+
+            ScenarioDefinition definition = session.WorkingDefinition;
+            if (definition.TriggersAndEvents != null
+                && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTriggerAddManual, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTriggerAddScheduled, StringComparison.Ordinal)))
+                SetFocusedEditor(state, "trigger", definition.TriggersAndEvents.Triggers.Count - 1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionGateAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, "gate", definition.Gates != null ? definition.Gates.Count - 1 : -1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionScheduledActionAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+        }
+
+        private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
+        {
+            if (index < 0)
+                return;
+            state.FocusedEditorKind = kind;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = isNew;
+            state.TimelineSelectedEntryId = kind + ":" + index.ToString(CultureInfo.InvariantCulture);
         }
     }
 
@@ -867,7 +921,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             handled = actionId != null
                 && (actionId.StartsWith("editor.", StringComparison.Ordinal)
-                    || actionId.StartsWith("scenario.mode.", StringComparison.Ordinal));
+                    || actionId.StartsWith("scenario.mode.", StringComparison.Ordinal)
+                    || actionId.StartsWith("scenario.focused_editor.", StringComparison.Ordinal));
             message = null;
             if (!handled)
                 return false;
@@ -888,9 +943,88 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     return CycleBaseMode(-1, out message);
                 case ScenarioAuthoringActionIds.ActionScenarioModeNext:
                     return CycleBaseMode(1, out message);
+                case ScenarioAuthoringActionIds.ActionFocusedEditorSave:
+                    return CloseFocusedEditor(state, false, out message);
+                case ScenarioAuthoringActionIds.ActionFocusedEditorCancel:
+                    return CloseFocusedEditor(state, true, out message);
                 default:
                     handled = false;
                     return false;
+            }
+        }
+
+        private bool CloseFocusedEditor(ScenarioAuthoringState state, bool cancel, out string message)
+        {
+            message = null;
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
+            {
+                message = "No focused editor is open.";
+                return true;
+            }
+
+            string kind = state.FocusedEditorKind;
+            int index = state.FocusedEditorIndex;
+            bool discard = cancel && state.FocusedEditorIsNew;
+            if (discard)
+                DiscardFocusedEntry(kind, index);
+
+            state.TimelineSelectedEntryId = discard ? null : kind + ":" + index.ToString(CultureInfo.InvariantCulture);
+            state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
+            message = discard ? "New timeline entry discarded." : "Timeline entry saved.";
+            return true;
+        }
+
+        private void DiscardFocusedEntry(string kind, int index)
+        {
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null || index < 0)
+                return;
+
+            if (string.Equals(kind, "weather", StringComparison.OrdinalIgnoreCase)
+                && definition.TriggersAndEvents != null
+                && index < definition.TriggersAndEvents.WeatherEvents.Count)
+            {
+                definition.TriggersAndEvents.WeatherEvents.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, "trigger", StringComparison.OrdinalIgnoreCase)
+                && definition.TriggersAndEvents != null
+                && index < definition.TriggersAndEvents.Triggers.Count)
+            {
+                definition.TriggersAndEvents.Triggers.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, "gate", StringComparison.OrdinalIgnoreCase)
+                && definition.Gates != null
+                && index < definition.Gates.Count)
+            {
+                string id = definition.Gates[index] != null ? definition.Gates[index].Id : null;
+                definition.Gates.RemoveAt(index);
+                ClearGateReferences(definition, id);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+            else if (string.Equals(kind, "scheduled_action", StringComparison.OrdinalIgnoreCase)
+                && definition.ScheduledActions != null
+                && index < definition.ScheduledActions.Count)
+            {
+                definition.ScheduledActions.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
+        }
+
+        private static void ClearGateReferences(ScenarioDefinition definition, string gateId)
+        {
+            if (definition == null || string.IsNullOrEmpty(gateId) || definition.ScheduledActions == null)
+                return;
+
+            for (int i = 0; i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                if (action != null && string.Equals(action.GateId, gateId, StringComparison.OrdinalIgnoreCase))
+                    action.GateId = null;
             }
         }
 

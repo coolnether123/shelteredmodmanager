@@ -83,10 +83,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
                 new StoryAuthoringCommandHandler(storyAuthoringService, editorService),
+                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioPublishCommandHandler(publishExportService),
-                new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new SelectionCommandHandler(),
                 new ToolCommandHandler(layoutService)
             };
