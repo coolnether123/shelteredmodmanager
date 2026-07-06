@@ -1112,19 +1112,35 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     ScenarioBaseGameMode reloadBaseMode;
                     if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
                         actionId,
-                        ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchReloadKeepCastPrefix,
                         out reloadBaseMode))
                     {
-                        return SaveAndReloadBaseMode(state, reloadBaseMode, out message);
+                        return SaveAndReloadBaseMode(state, reloadBaseMode, ScenarioBaseFamilyChoices.KeepCurrentCast, out message);
+                    }
+
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchReloadDefaultFamilyPrefix,
+                        out reloadBaseMode))
+                    {
+                        return SaveAndReloadBaseMode(state, reloadBaseMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, out message);
                     }
 
                     ScenarioBaseGameMode switchOnlyBaseMode;
                     if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
                         actionId,
-                        ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchOnlyKeepCastPrefix,
                         out switchOnlyBaseMode))
                     {
-                        return SwitchBaseModeOnly(state, switchOnlyBaseMode, out message);
+                        return SwitchBaseModeOnly(state, switchOnlyBaseMode, ScenarioBaseFamilyChoices.KeepCurrentCast, out message);
+                    }
+
+                    if (ScenarioBaseModeAuthoringActions.TryParseBaseMode(
+                        actionId,
+                        ScenarioBaseModeAuthoringActions.ActionSwitchOnlyDefaultFamilyPrefix,
+                        out switchOnlyBaseMode))
+                    {
+                        return SwitchBaseModeOnly(state, switchOnlyBaseMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, out message);
                     }
 
                     if (string.Equals(actionId, ScenarioBaseModeAuthoringActions.ActionSwitchCancel, StringComparison.Ordinal))
@@ -1329,7 +1345,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
-        private bool SaveAndReloadBaseMode(ScenarioAuthoringState state, ScenarioBaseGameMode baseMode, out string message)
+        private bool SaveAndReloadBaseMode(
+            ScenarioAuthoringState state,
+            ScenarioBaseGameMode baseMode,
+            string familyChoice,
+            out string message)
         {
             CloseBaseModeDialogState(state);
             if (_baseModeReloadService == null)
@@ -1338,10 +1358,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            return _baseModeReloadService.SaveAndReload(_editorService.CurrentSession, baseMode, out message);
+            return _baseModeReloadService.SaveAndReload(_editorService.CurrentSession, baseMode, familyChoice, out message);
         }
 
-        private bool SwitchBaseModeOnly(ScenarioAuthoringState state, ScenarioBaseGameMode baseMode, out string message)
+        private bool SwitchBaseModeOnly(
+            ScenarioAuthoringState state,
+            ScenarioBaseGameMode baseMode,
+            string familyChoice,
+            out string message)
         {
             CloseBaseModeDialogState(state);
             if (_baseModeReloadService == null)
@@ -1350,7 +1374,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
-            return _baseModeReloadService.SaveBaseModeOnly(_editorService.CurrentSession, baseMode, out message);
+            return _baseModeReloadService.SaveBaseModeOnly(_editorService.CurrentSession, baseMode, familyChoice, out message);
         }
 
         private static bool CloseBaseModeDialog(ScenarioAuthoringState state, string closeMessage, out string message)

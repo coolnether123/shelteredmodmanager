@@ -24,6 +24,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
         Stasis = 2
     }
 
+    internal static class ScenarioBaseFamilyChoices
+    {
+        public const string KeepCurrentCast = "KeepCurrentCast";
+        public const string UseBaseDefaultFamily = "UseBaseDefaultFamily";
+    }
+
     /// <summary>
     /// Gender selector for authored family members or NPCs.
     /// Use <see cref="Any"/> when the runtime should keep or choose the default value.
@@ -72,6 +78,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<string> Dependencies { get; private set; }
         public List<ScenarioModDependencyDefinition> ModDependencies { get; private set; }
         public ScenarioBaseGameMode BaseGameMode { get; set; }
+        internal string BaseFamilyChoice { get; set; }
         public long? SeedOverride { get; set; }
         public ScenarioSelectionRulesDefinition SelectionRules { get; set; }
         public List<ScenarioNpcDefinition> ScenarioCharacters { get; private set; }

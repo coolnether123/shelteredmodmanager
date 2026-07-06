@@ -1954,18 +1954,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioBaseGameMode targetMode = (ScenarioBaseGameMode)state.FocusedEditorIndex;
                 string targetLabel = FormatBaseMode(targetMode);
                 title = "Switch base to " + targetLabel + "?";
-                subtitle = "Choose when the authoring world should move to the " + targetLabel + " map.";
+                subtitle = "Choose the " + targetLabel + " scene theme and what to do with the starting family.";
                 List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
                 facts.Add(Fact("Current Draft Base", FormatBaseMode(definition.BaseGameMode), "Base saved in the scenario XML."));
-                facts.Add(Fact("Target Base", targetLabel, "The scene used after the world reloads."));
-                facts.Add(Text("Saving and reloading closes this authoring world, loads the " + targetLabel + " map, then reopens the editor on the same draft."));
-                facts.Add(Text("Authored content is kept. Out-of-map placements remain in the draft and can be reviewed after reload."));
-                facts.Add(Text("Quests and world map data are kept as authored."));
+                facts.Add(Fact("Target Theme", targetLabel, "Backdrop and shelter scene used after the world reloads."));
+                facts.Add(Fact("Default Family", targetLabel + " family", "Optional. Keeping your cast is the default."));
+                facts.Add(Text("This changes the backdrop and starting shelter scene theme. Rooms, placed objects, supplies, timeline, story, map, art, and authored cast stay in the draft."));
+                facts.Add(Text("Keep current cast preserves authored starting survivors. If none are authored yet, the live family is captured before switching."));
+                facts.Add(Text("Swap to the default family clears authored starting survivors only; future survivor schedules stay authored."));
+                facts.Add(Text("If a saved placement cannot fit the target scene grid, the reload/playtest apply reports that exact placement instead of deleting it."));
                 sections.Add(FactSection("base_mode_scope", "Scope", facts));
 
                 List<ScenarioAuthoringInspectorItem> actions = new List<ScenarioAuthoringInspectorItem>();
-                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode), "Save & reload world now", "Save the draft and reload the authoring world into the " + targetLabel + " scene.", true, true, "RL")));
-                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchOnly(targetMode), "Switch base only - world reloads next open", "Save the base choice and keep the currently loaded world until the draft is reopened.", true, false, "SW")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode, ScenarioBaseFamilyChoices.KeepCurrentCast), "Reload, keep current cast", "Save the draft, keep your current cast, and reload into the " + targetLabel + " scene.", true, true, "KEEP")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily), "Reload, use default family", "Save the draft, replace starting survivors with the " + targetLabel + " default family, and reload.", true, false, "DF")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchOnly(targetMode, ScenarioBaseFamilyChoices.KeepCurrentCast), "Save base only, keep cast", "Save the base choice and current-cast choice; reload happens next open.", true, false, "SW")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchOnly(targetMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily), "Save base only, use default family", "Save the base choice and default-family choice; reload happens next open.", true, false, "FAM")));
                 actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.ActionSwitchCancel, "Cancel", "Keep the current base mode.", true, false, "CL")));
                 sections.Add(ActionSection("base_mode_choices", string.Empty, actions));
 

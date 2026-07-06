@@ -265,6 +265,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
 
             definition.BaseGameMode = ReadEnum(root, "BaseMode", ScenarioBaseGameMode.Survival);
+            definition.BaseFamilyChoice = ReadText(root, "BaseFamilyChoice");
             definition.SeedOverride = ReadNullableLong(root, "SeedOverride");
             XmlElement selectionRules = Child(root, "SelectionRules");
             definition.SelectionRules = selectionRules != null
@@ -1056,6 +1057,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteEndElement();
 
             WriteElement(writer, "BaseMode", definition.BaseGameMode.ToString());
+            if (!string.IsNullOrEmpty(definition.BaseFamilyChoice))
+                WriteElement(writer, "BaseFamilyChoice", definition.BaseFamilyChoice.ToString());
             if (definition.SeedOverride.HasValue)
                 WriteElement(writer, "SeedOverride", definition.SeedOverride.Value.ToString(CultureInfo.InvariantCulture));
             WriteSelectionRules(writer, definition.SelectionRules, definition.BaseGameMode);

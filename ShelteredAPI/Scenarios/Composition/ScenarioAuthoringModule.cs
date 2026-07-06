@@ -127,7 +127,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioAuthoringBaseModeReloadService(
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<ScenarioAuthoringDraftRepository>(),
-                    resolver.Get<ScenarioLaunchCoordinator>());
+                    resolver.Get<ScenarioLaunchCoordinator>(),
+                    resolver.Get<ScenarioAuthoringCaptureService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

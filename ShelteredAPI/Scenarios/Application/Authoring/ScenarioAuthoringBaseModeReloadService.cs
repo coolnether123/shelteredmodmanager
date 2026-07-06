@@ -6,6 +6,7 @@ using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringBaseModeReloadService
@@ -13,12 +14,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioEditorService _editorService;
         private readonly ScenarioAuthoringDraftRepository _draftRepository;
         private readonly ScenarioLaunchCoordinator _launchCoordinator;
+        private readonly ScenarioAuthoringCaptureService _captureService;
         private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
 
         public ScenarioAuthoringBaseModeReloadService(
             IScenarioEditorService editorService,
             ScenarioAuthoringDraftRepository draftRepository,
-            ScenarioLaunchCoordinator launchCoordinator)
+            ScenarioLaunchCoordinator launchCoordinator,
+            ScenarioAuthoringCaptureService captureService)
         {
             if (editorService == null) throw new ArgumentNullException("editorService");
             if (draftRepository == null) throw new ArgumentNullException("draftRepository");
@@ -27,9 +30,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _editorService = editorService;
             _draftRepository = draftRepository;
             _launchCoordinator = launchCoordinator;
+            _captureService = captureService;
         }
 
-        public bool SaveAndReload(ScenarioEditorSession editorSession, ScenarioBaseGameMode newBaseMode, out string message)
+        public bool SaveAndReload(
+            ScenarioEditorSession editorSession,
+            ScenarioBaseGameMode newBaseMode,
+            string familyChoice,
+            out string message)
         {
             message = null;
             if (editorSession == null || editorSession.WorkingDefinition == null)
@@ -55,6 +63,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             BaseModeSnapshot snapshot = BaseModeSnapshot.Capture(definition);
             ApplyBaseMode(definition, newBaseMode);
+            if (!ApplyFamilyChoice(editorSession, definition, newBaseMode, familyChoice, out message))
+            {
+                snapshot.Restore(definition);
+                return true;
+            }
             editorSession.MarkDraftChanged(ScenarioDirtySection.Meta);
 
             ScenarioValidationResult validation = _editorService.CommitChanges(null);
@@ -65,7 +78,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            return QueueSavedDraftReload(draftId, draftStartupSave, ScenarioSelectionIds.GetDefaultSaveType(newBaseMode), newBaseMode, "as " + FormatBaseMode(newBaseMode), false, out message);
+            return QueueSavedDraftReload(draftId, draftStartupSave, ScenarioSelectionIds.GetDefaultSaveType(newBaseMode), newBaseMode, "as " + FormatBaseMode(newBaseMode) + " (" + FormatFamilyChoice(familyChoice) + ")", false, out message);
         }
 
         public bool SaveAndReloadCurrentWorld(ScenarioEditorSession editorSession, out string message)
@@ -110,7 +123,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, out message);
         }
 
-        public bool SaveBaseModeOnly(ScenarioEditorSession editorSession, ScenarioBaseGameMode newBaseMode, out string message)
+        public bool SaveBaseModeOnly(
+            ScenarioEditorSession editorSession,
+            ScenarioBaseGameMode newBaseMode,
+            string familyChoice,
+            out string message)
         {
             message = null;
             if (editorSession == null || editorSession.WorkingDefinition == null)
@@ -122,6 +139,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioDefinition definition = editorSession.WorkingDefinition;
             BaseModeSnapshot snapshot = BaseModeSnapshot.Capture(definition);
             ApplyBaseMode(definition, newBaseMode);
+            if (!ApplyFamilyChoice(editorSession, definition, newBaseMode, familyChoice, out message))
+            {
+                snapshot.Restore(definition);
+                return true;
+            }
             editorSession.MarkDraftChanged(ScenarioDirtySection.Meta);
 
             ScenarioValidationResult validation = _editorService.CommitChanges(null);
@@ -133,6 +155,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             message = "Base mode saved as " + FormatBaseMode(newBaseMode)
+                + " with " + FormatFamilyChoice(familyChoice)
                 + ". The current world stays loaded; this draft reopens in that base next time.";
             return true;
         }
@@ -149,6 +172,78 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 definition.SelectionRules.Availability = new ScenarioModeAvailabilityDefinition();
 
             definition.SelectionRules.Availability.UseOnly(baseMode);
+        }
+
+        private bool ApplyFamilyChoice(
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
+            ScenarioBaseGameMode baseMode,
+            string familyChoice,
+            out string message)
+        {
+            message = null;
+            if (definition == null)
+                return true;
+
+            string normalizedChoice = NormalizeFamilyChoice(familyChoice);
+            definition.BaseFamilyChoice = normalizedChoice;
+
+            if (string.Equals(normalizedChoice, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal))
+            {
+                FamilySetupDefinition family = EnsureFamily(definition);
+                family.OverrideVanillaFamily = false;
+                family.Members.Clear();
+                if (editorSession != null)
+                    editorSession.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+                return true;
+            }
+
+            FamilySetupDefinition setup = EnsureFamily(definition);
+            if (setup.Members.Count > 0)
+            {
+                setup.OverrideVanillaFamily = true;
+                if (editorSession != null)
+                    editorSession.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+                return true;
+            }
+
+            if (_captureService == null)
+            {
+                message = "Could not keep current cast while switching to " + FormatBaseMode(baseMode)
+                    + ": family capture service is unavailable. Choose the default family option or add authored cast first.";
+                return false;
+            }
+
+            string captureMessage;
+            if (!_captureService.CaptureCurrentFamily(editorSession, out captureMessage))
+            {
+                message = "Could not keep current cast while switching to " + FormatBaseMode(baseMode)
+                    + ": " + (string.IsNullOrEmpty(captureMessage) ? "live family capture failed." : captureMessage);
+                return false;
+            }
+
+            return true;
+        }
+
+        private static FamilySetupDefinition EnsureFamily(ScenarioDefinition definition)
+        {
+            if (definition.FamilySetup == null)
+                definition.FamilySetup = new FamilySetupDefinition();
+            return definition.FamilySetup;
+        }
+
+        private static string NormalizeFamilyChoice(string familyChoice)
+        {
+            return string.Equals(familyChoice, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal)
+                ? ScenarioBaseFamilyChoices.UseBaseDefaultFamily
+                : ScenarioBaseFamilyChoices.KeepCurrentCast;
+        }
+
+        private static string FormatFamilyChoice(string familyChoice)
+        {
+            return string.Equals(NormalizeFamilyChoice(familyChoice), ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal)
+                ? "the base default family"
+                : "the current cast";
         }
 
         public static string FormatBaseMode(ScenarioBaseGameMode mode)
@@ -210,76 +305,37 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            bootstrap.RequestReloadActiveSession(pending, "Restarting playtest. Reloading authoring world " + label + ".");
+            string reloadReason = reenterPlaytest
+                ? "Restarting playtest. Reloading authoring world " + label + "."
+                : "Reloading authoring world " + label + ".";
+            bootstrap.RequestReloadActiveSession(pending, reloadReason);
             message = "Scenario draft saved. Reloading world " + label + ".";
             return true;
         }
 
         private sealed class BaseModeSnapshot
         {
-            private readonly ScenarioBaseGameMode _baseMode;
-            private readonly bool _hadSelectionRules;
-            private readonly bool _hadAvailability;
-            private readonly bool _survival;
-            private readonly bool _surrounded;
-            private readonly bool _stasis;
+            private readonly ScenarioDefinition _definition;
 
-            private BaseModeSnapshot(
-                ScenarioBaseGameMode baseMode,
-                bool hadSelectionRules,
-                bool hadAvailability,
-                bool survival,
-                bool surrounded,
-                bool stasis)
+            private BaseModeSnapshot(ScenarioDefinition definition)
             {
-                _baseMode = baseMode;
-                _hadSelectionRules = hadSelectionRules;
-                _hadAvailability = hadAvailability;
-                _survival = survival;
-                _surrounded = surrounded;
-                _stasis = stasis;
+                _definition = definition;
             }
 
             public static BaseModeSnapshot Capture(ScenarioDefinition definition)
             {
-                ScenarioSelectionRulesDefinition rules = definition != null ? definition.SelectionRules : null;
-                ScenarioModeAvailabilityDefinition availability = rules != null ? rules.Availability : null;
-                return new BaseModeSnapshot(
-                    definition != null ? definition.BaseGameMode : ScenarioBaseGameMode.Survival,
-                    rules != null,
-                    availability != null,
-                    availability != null && availability.Survival,
-                    availability != null && availability.Surrounded,
-                    availability != null && availability.Stasis);
+                return new BaseModeSnapshot(ScenarioDefinitionCloner.Clone(definition));
             }
 
             public void Restore(ScenarioDefinition definition)
             {
-                if (definition == null)
+                if (definition == null || _definition == null)
                     return;
 
-                definition.BaseGameMode = _baseMode;
-                if (!_hadSelectionRules)
-                {
-                    definition.SelectionRules = null;
-                    return;
-                }
-
-                if (definition.SelectionRules == null)
-                    definition.SelectionRules = new ScenarioSelectionRulesDefinition();
-
-                if (!_hadAvailability)
-                {
-                    definition.SelectionRules.Availability = null;
-                    return;
-                }
-
-                if (definition.SelectionRules.Availability == null)
-                    definition.SelectionRules.Availability = new ScenarioModeAvailabilityDefinition();
-
-                definition.SelectionRules.Availability.Survival = _survival;
-                definition.SelectionRules.Availability.Surrounded = _surrounded;
-                definition.SelectionRules.Availability.Stasis = _stasis;
+                definition.BaseGameMode = _definition.BaseGameMode;
+                definition.BaseFamilyChoice = _definition.BaseFamilyChoice;
+                definition.SelectionRules = _definition.SelectionRules;
+                definition.FamilySetup = _definition.FamilySetup;
             }
         }
     }

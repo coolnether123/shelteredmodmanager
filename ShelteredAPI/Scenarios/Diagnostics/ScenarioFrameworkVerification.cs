@@ -69,6 +69,12 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(loaded.Scoring.Rules.Count == 1, "Score rule was not parsed.", result);
             Assert(loaded.Scoring.Rules.Count > 0 && string.Equals(loaded.Scoring.Rules[0].Source, "daysSurvived", StringComparison.OrdinalIgnoreCase), "Score rule source was not parsed.", result);
 
+            ScenarioDefinition familyChoice = CreateDefinition("Scenario.BaseFamilyChoice");
+            familyChoice.BaseFamilyChoice = ScenarioBaseFamilyChoices.KeepCurrentCast;
+            ScenarioDefinition familyChoiceRoundTrip = serializer.FromXml(serializer.ToXml(familyChoice));
+            Assert(string.Equals(familyChoiceRoundTrip.BaseFamilyChoice, ScenarioBaseFamilyChoices.KeepCurrentCast, StringComparison.Ordinal),
+                "Base family choice did not round-trip through scenario XML.", result);
+
             ScenarioDefinition missingScoring = serializer.FromXml("<Scenario><Meta><Id>Scenario.NoScoring</Id><DisplayName>No Scoring</DisplayName></Meta></Scenario>");
             Assert(missingScoring.Scoring != null, "Missing <Scoring> did not create a default scoring definition.", result);
             Assert(!missingScoring.Scoring.Enabled && missingScoring.Scoring.Rules.Count == 0,

@@ -212,7 +212,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Survival));
             items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Stasis));
             items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Surrounded));
-            string hint = "Base game rules and starting scene this scenario builds on. Quests and world map data stay as authored.";
+            string hint = "Base backdrop and starting shelter scene theme. Switching preserves authored rooms, objects, supplies, timeline, story, map, art, and cast unless you opt into the base default family.";
             if (worldMode != mode)
                 hint = "World shows " + FormatBaseMode(worldMode) + "; reopens as " + FormatBaseMode(mode) + ". " + hint;
             items.Add(Item.Text(hint));
