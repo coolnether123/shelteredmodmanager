@@ -28,7 +28,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioEventAuthoringService eventAuthoringService,
             ScenarioPublishExportService publishExportService,
             ScenarioAuthoringBaseModeReloadService baseModeReloadService,
-            ScenarioAuthoringTutorialService tutorialService)
+            ScenarioAuthoringTutorialService tutorialService,
+            ScenarioAuthoringSetupStateService setupStateService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -44,7 +45,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 eventAuthoringService,
                 publishExportService,
                 baseModeReloadService,
-                tutorialService));
+                tutorialService,
+                setupStateService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -73,13 +75,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioEventAuthoringService eventAuthoringService,
             ScenarioPublishExportService publishExportService,
             ScenarioAuthoringBaseModeReloadService baseModeReloadService,
-            ScenarioAuthoringTutorialService tutorialService)
+            ScenarioAuthoringTutorialService tutorialService,
+            ScenarioAuthoringSetupStateService setupStateService)
         {
             return new IScenarioCommandHandler[]
             {
                 new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService),
                 new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),
                 new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
+                new ScenarioHelpCommandHandler(tutorialService, layoutService, setupStateService),
                 new ShellCommandHandler(layoutService, settingsService),
                 new TutorialCommandHandler(tutorialService, editorService, layoutService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),

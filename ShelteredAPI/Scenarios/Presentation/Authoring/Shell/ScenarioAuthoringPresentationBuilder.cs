@@ -136,7 +136,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
                 Help = state != null && state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
-                Tutorial = state != null && state.HelpWindowOpen ? null : BuildTutorialViewModel(state, editorSession),
+                Tour = BuildTourViewModel(),
+                Tutorial = state != null && (state.HelpWindowOpen || (_tutorialService != null && _tutorialService.CurrentTour() != null)) ? null : BuildTutorialViewModel(state, editorSession),
                 ContextMenu = contextMenu,
                 StatusEntries = _statusBarViewModelBuilder.BuildEntries(state, editorSession, session, _stageNavigationBuilder.BuildStageLabel(state))
             };
@@ -144,6 +145,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return viewModel;
         }
 
+        private ScenarioAuthoringTourViewModel BuildTourViewModel()
+        {
+            if (_tutorialService == null)
+                return null;
+
+            ScenarioAuthoringTourDefinition tour = _tutorialService.CurrentTour();
+            ScenarioAuthoringTourStep step = _tutorialService.CurrentTourStep();
+            if (tour == null || step == null)
+                return null;
+
+            int stepIndex = _tutorialService.CurrentTourStepIndex;
+            int stepCount = tour.Steps != null ? tour.Steps.Length : 0;
+            return new ScenarioAuthoringTourViewModel
+            {
+                Visible = true,
+                TourId = tour.Id,
+                StepIndex = stepIndex,
+                StepCount = stepCount,
+                TargetId = step.TargetId,
+                Title = step.Title,
+                Body = step.Body,
+                BackAction = Item.Action(ScenarioAuthoringActionIds.ActionTourBack, "BACK", "Go to the previous tour step.", stepIndex > 0, false, "BK"),
+                NextAction = Item.Action(ScenarioAuthoringActionIds.ActionTourNext, stepIndex + 1 >= stepCount ? "DONE" : "NEXT", "Continue the spotlight tour.", true, true, "NX"),
+                ExitAction = Item.Action(ScenarioAuthoringActionIds.ActionTourExit, "EXIT", "Close the spotlight tour.", true, false, "EX")
+            };
+        }
         private ScenarioAuthoringTutorialViewModel BuildTutorialViewModel(ScenarioAuthoringState state, ScenarioEditorSession editorSession)
         {
             if (_tutorialService == null)

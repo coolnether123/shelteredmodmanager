@@ -30,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioStageCoordinator _stageCoordinator;
         private readonly ScenarioSelectionScopeService _selectionScopeService;
         private readonly ScenarioAuthoringTutorialService _tutorialService;
+        private readonly ScenarioAuthoringSetupStateService _setupStateService;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
 
@@ -63,7 +64,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringLayoutService layoutService,
             ScenarioStageCoordinator stageCoordinator,
             ScenarioSelectionScopeService selectionScopeService,
-            ScenarioAuthoringTutorialService tutorialService)
+            ScenarioAuthoringTutorialService tutorialService,
+            ScenarioAuthoringSetupStateService setupStateService)
         {
             _selectionService = selectionService;
             _sessionStore = sessionStore;
@@ -77,6 +79,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _stageCoordinator = stageCoordinator;
             _selectionScopeService = selectionScopeService;
             _tutorialService = tutorialService;
+            _setupStateService = setupStateService;
         }
 
         internal void SetActiveSession(ScenarioAuthoringSession session)
@@ -102,7 +105,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     ActiveDraftId = session.DraftId,
                     ActiveScenarioFilePath = session.ScenarioFilePath,
                     StatusMessage = "Scenario authoring shell is active. Use playtest to make live shelter changes, then capture them back into the draft.",
-                    Settings = _settingsService.Load()
+                    Settings = _settingsService.Load(),
+                    SetupState = _setupStateService != null ? _setupStateService.LoadForScenarioFile(session.ScenarioFilePath) : new ScenarioAuthoringSetupState()
                 };
                 _layoutService.InitializeState(_state);
             }
@@ -128,7 +132,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     IsActive = false,
                     StatusMessage = reason ?? string.Empty,
-                    Settings = _settingsService.Load()
+                    Settings = _settingsService.Load(),
+                    SetupState = new ScenarioAuthoringSetupState()
                 };
             }
 
@@ -171,6 +176,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSave);
             if (InputActionRegistry.IsDown(ScenarioAuthoringActionIds.TogglePlaytest))
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionPlaytest);
+            if (_tutorialService != null && _tutorialService.CurrentTour() != null && UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape))
+                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionTourExit);
 
             if (ScenarioAuthoringInputActions.IsUndoDown())
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionHistoryUndo);

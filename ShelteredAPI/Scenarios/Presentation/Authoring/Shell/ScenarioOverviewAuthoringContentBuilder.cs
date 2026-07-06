@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -29,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = BuildIdentityItems(editorSession, definition)
             });
+            AddSetupChecklistSection(sections, state, definition);
             sections.Add(BuildBaseModeSection(definition, authoringSession));
             AddQuestionSections(sections, facts);
             sections.Add(new ScenarioAuthoringInspectorSection
@@ -107,30 +109,91 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddQuestionSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioHomeProgressFacts facts)
         {
-            sections.Add(BuildQuestionSection("home_world", "Where does your story take place?", "Build rooms, objects, and scenery in the shelter world.", facts.WorldBadge, "stage.select." + ScenarioStageKind.Bunker, "Open World", "WORLD"));
-            sections.Add(BuildQuestionSection("home_people", "Who lives in this world?", "Create the starting family and future arrivals.", facts.PeopleBadge, "stage.select." + ScenarioStageKind.People, "Open Cast", "CAST"));
-            sections.Add(BuildQuestionSection("home_inventory", "What do they start with?", "Set starting supplies and scheduled deliveries.", facts.InventoryBadge, "stage.select." + ScenarioStageKind.InventoryStorage, "Open Supplies", "SUP"));
-            sections.Add(BuildQuestionSection("home_events", "What happens, and when?", "Schedule events, triggers, and story beats.", facts.EventsBadge, "stage.select." + ScenarioStageKind.Events, "Open Timeline", "TIME"));
-            sections.Add(BuildQuestionSection("home_art", "How does it look?", "Browse, replace, and edit sprites.", facts.ArtBadge, ScenarioAuthoringActionIds.ActionToolAssets, "Open Art", "ART"));
-            sections.Add(BuildQuestionSection("home_test", "Ready to try it?", "Playtest your scenario live.", facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test", "TEST"));
-            sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Publish", "PUB"));
+            sections.Add(BuildQuestionSection("home_world", "Where does your story take place?", "Build rooms, objects, and scenery in the shelter world.", facts.WorldBadge, "stage.select." + ScenarioStageKind.Bunker, "Open World", "WORLD", TutorialContent.TopicWorldCamera, TutorialContent.TourEditorBasics));
+            sections.Add(BuildQuestionSection("home_people", "Who lives in this world?", "Create the starting family and future arrivals.", facts.PeopleBadge, "stage.select." + ScenarioStageKind.People, "Open Cast", "CAST", TutorialContent.TopicCast, null));
+            sections.Add(BuildQuestionSection("home_inventory", "What do they start with?", "Set starting supplies and scheduled deliveries.", facts.InventoryBadge, "stage.select." + ScenarioStageKind.InventoryStorage, "Open Supplies", "SUP", TutorialContent.TopicSupplies, null));
+            sections.Add(BuildQuestionSection("home_events", "What happens, and when?", "Schedule events, triggers, and story beats.", facts.EventsBadge, "stage.select." + ScenarioStageKind.Events, "Open Timeline", "TIME", TutorialContent.TopicTimelineConditions, TutorialContent.TourTimelineEvent));
+            sections.Add(BuildQuestionSection("home_art", "How does it look?", "Browse, replace, and edit sprites.", facts.ArtBadge, ScenarioAuthoringActionIds.ActionToolAssets, "Open Art", "ART", TutorialContent.TopicArtPixelEditor, TutorialContent.TourEditSprite));
+            sections.Add(BuildQuestionSection("home_test", "Ready to try it?", "Playtest your scenario live.", facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test", "TEST", TutorialContent.TopicTest, null));
+            sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Publish", "PUB", TutorialContent.TopicPublish, null));
         }
 
-        private static ScenarioAuthoringInspectorSection BuildQuestionSection(string id, string question, string answer, string badge, string actionId, string actionLabel, string iconText)
+        private static ScenarioAuthoringInspectorSection BuildQuestionSection(string id, string question, string answer, string badge, string actionId, string actionLabel, string iconText, string topicId, string tourId)
         {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Item.ActionItem(Item.Action(actionId, actionLabel, answer, true, false, iconText)));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + topicId, "Learn More", "Open help for this setup area.", true, false, "HELP")));
+            if (!string.IsNullOrEmpty(tourId))
+                items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTourStartPrefix + tourId, "Walk Me Through It", "Start the related spotlight tour.", true, true, "TO")));
+            items.Add(Item.Text(answer));
+            items.Add(Item.Text(badge));
+
             return new ScenarioAuthoringInspectorSection
             {
                 Id = id,
                 Title = question,
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = new[]
-                {
-                    Item.ActionItem(Item.Action(actionId, actionLabel, answer, true, false, iconText)),
-                    Item.Text(answer),
-                    Item.Text(badge)
-                }
+                Items = items.ToArray()
             };
+        }
+
+        private static void AddSetupChecklistSection(
+            List<ScenarioAuthoringInspectorSection> sections,
+            ScenarioAuthoringState state,
+            ScenarioDefinition definition)
+        {
+            ScenarioAuthoringSetupState setup = state != null ? state.SetupState : null;
+            if (setup == null || !setup.SetupFlowEnabled || setup.ChecklistDismissed)
+                return;
+
+            bool named = HasCustomName(definition);
+            bool baseSelected = definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode);
+            bool worldTourDone = setup.HasCompletedTour(TutorialContent.TourEditorBasics);
+            bool firstSurvivor = HasNamedStartingSurvivor(definition);
+            if (named && baseSelected && worldTourDone && firstSurvivor)
+                return;
+
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Item.Text("Set up your scenario"));
+            items.Add(BuildChecklistAction("Name", named, ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicSetup, "Review title and draft identity."));
+            items.Add(BuildChecklistAction("Base", baseSelected, ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicBaseModes, "Review the selected base mode."));
+            items.Add(BuildChecklistAction("World Tour", worldTourDone, ScenarioAuthoringActionIds.ActionTourStartPrefix + TutorialContent.TourEditorBasics, "Walk through the world and shell basics."));
+            items.Add(BuildChecklistAction("First Survivor", firstSurvivor, "stage.select." + ScenarioStageKind.People, "Open Cast and add a starting survivor."));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSetupDismiss, "Dismiss", "Hide this setup checklist for the draft.", true, false, "X")));
+
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "home_setup_checklist",
+                Title = "Set Up Your Scenario",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = items.ToArray()
+            });
+        }
+
+        private static ScenarioAuthoringInspectorItem BuildChecklistAction(string label, bool complete, string actionId, string hint)
+        {
+            return Item.ActionItem(Item.Action(actionId, (complete ? "Done: " : "Start: ") + label, hint, !complete, !complete, complete ? "OK" : "GO"));
+        }
+
+        private static bool HasCustomName(ScenarioDefinition definition)
+        {
+            return definition != null
+                && !string.IsNullOrEmpty(definition.DisplayName)
+                && !string.Equals(definition.DisplayName.Trim(), "Untitled Scenario", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasNamedStartingSurvivor(ScenarioDefinition definition)
+        {
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
+            {
+                FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                if (member != null && !string.IsNullOrEmpty(member.Name) && member.Name.Trim().Length > 0)
+                    return true;
+            }
+
+            return false;
         }
 
         private static ScenarioAuthoringInspectorItem[] BuildAdvancedItems(

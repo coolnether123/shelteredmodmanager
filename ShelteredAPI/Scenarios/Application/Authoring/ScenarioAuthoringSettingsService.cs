@@ -108,7 +108,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     TutorialContent.CompletedKey,
                     TutorialContent.SkippedKey,
                     TutorialContent.StepKey,
-                    TutorialContent.HelpPageKey
+                    TutorialContent.HelpPageKey,
+                    TutorialContent.HelpTopicKey
                 };
 
                 for (int i = 0; i < preservedKeys.Length; i++)

@@ -280,6 +280,7 @@
     <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialContent.cs" />
     <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialProgress.cs" />
     <Compile Include="Scenarios\Application\Authoring\Tutorial\TutorialStep.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSetupState.cs" />
     <Compile Include="Scenarios\Application\Authoring\WallWiringEditService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioDraftMutationService.cs" />
     <Compile Include="Scenarios\Application\Bunker\ScenarioBunkerGridCaptureService.cs" />
@@ -295,6 +296,7 @@
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthoringCommandHandlers.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioHelpCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioStoryFocusedEditorCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioPublishCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioWinLossCommandHandler.cs" />
@@ -396,6 +398,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScheduleFormatter.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringWindowContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringShellLayout.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringTourTargetRegistry.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ShellChromeViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\StageNavigationViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\StatusBarViewModelBuilder.cs" />

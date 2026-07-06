@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -51,6 +52,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(6f);
             GUILayout.Label(help.Body ?? string.Empty, _textStyle);
             GUILayout.Space(12f);
+            DrawHelpTopicActions(help.TopicActions);
+            GUILayout.Space(8f);
             GUILayout.BeginHorizontal();
             DrawButton(GUILayoutUtility.GetRect(92f, 28f, GUILayout.Width(92f), GUILayout.Height(28f)), help.PreviousAction, false);
             GUILayout.FlexibleSpace();
@@ -62,6 +65,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawButton(GUILayoutUtility.GetRect(180f, 30f, GUILayout.Width(180f), GUILayout.Height(30f)), help.ReplayAction, false);
             GUILayout.EndVertical();
             GUILayout.EndArea();
+        }
+
+        private void DrawHelpTopicActions(ScenarioAuthoringInspectorAction[] actions)
+        {
+            if (actions == null || actions.Length == 0)
+                return;
+
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
+
+                DrawButton(GUILayoutUtility.GetRect(160f, 28f, GUILayout.Width(160f), GUILayout.Height(28f)), action, false);
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
         }
 
         private void DrawHelpHeaderActions(Rect headerRect, ScenarioAuthoringInspectorAction[] actions)
@@ -87,6 +108,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInputCaptureService inputCapture)
         {
             ScenarioAuthoringTutorialViewModel tutorial = shell != null ? shell.Tutorial : null;
+            ScenarioAuthoringTourViewModel tour = shell != null ? shell.Tour : null;
+            if (tour != null && tour.Visible)
+            {
+                DrawSpotlightTourOverlay(availableRect, topRect, statusRect, windowRects, shell, tour, inputCapture);
+                return;
+            }
+
             bool visible = tutorial != null && tutorial.Visible;
             float progress = _animations.GetTutorialOverlayProgress(visible);
             if (!visible || progress <= 0.001f)
@@ -103,6 +131,127 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             inputCapture.RegisterInteractiveRect(calloutRect);
             inputCapture.SetPopupOpen(true);
+        }
+
+        private void DrawSpotlightTourOverlay(
+            Rect availableRect,
+            Rect topRect,
+            Rect statusRect,
+            Dictionary<string, Rect> windowRects,
+            ScenarioAuthoringShellViewModel shell,
+            ScenarioAuthoringTourViewModel tour,
+            ScenarioAuthoringInputCaptureService inputCapture)
+        {
+            bool visible = tour != null && tour.Visible;
+            float progress = _animations.GetTutorialOverlayProgress(visible);
+            if (!visible || progress <= 0.001f)
+                return;
+
+            Rect targetRect = ResolveTourTargetRect(tour.TargetId, topRect, statusRect, windowRects, shell);
+            DrawSpotlightDimming(availableRect, targetRect, progress);
+
+            if (targetRect.width > 0f && targetRect.height > 0f)
+                DrawSpotlightBorder(targetRect, progress);
+
+            Rect calloutRect = BuildTutorialCalloutRect(availableRect, targetRect);
+            Rect animatedRect = new Rect(calloutRect.x, calloutRect.y - ((1f - progress) * 8f), calloutRect.width, calloutRect.height);
+            using (ScenarioUiGuiScope.Apply(progress, animatedRect, 1f))
+                DrawTourCallout(animatedRect, tour);
+
+            inputCapture.RegisterInteractiveRect(calloutRect);
+            inputCapture.SetPopupOpen(true);
+        }
+
+        private Rect ResolveTourTargetRect(
+            string targetId,
+            Rect topRect,
+            Rect statusRect,
+            Dictionary<string, Rect> windowRects,
+            ScenarioAuthoringShellViewModel shell)
+        {
+            if (string.IsNullOrEmpty(targetId))
+                return ZeroRect();
+
+            ScenarioAuthoringTourTargetRegistry registry = ScenarioCompositionRoot.Resolve<ScenarioAuthoringTourTargetRegistry>();
+            Rect registered;
+            if (registry != null && registry.TryGet(targetId, out registered))
+                return registered;
+
+            if (targetId.StartsWith("window:", StringComparison.Ordinal))
+            {
+                string windowId = targetId.Substring("window:".Length);
+                Rect rect;
+                return windowRects != null && windowRects.TryGetValue(windowId, out rect) ? rect : ZeroRect();
+            }
+
+            if (targetId.StartsWith("stage:", StringComparison.Ordinal))
+            {
+                string stage = targetId.Substring("stage:".Length);
+                return ResolveTopBarActionRect(topRect, shell, ScenarioAuthoringActionIds.ActionStageSelectPrefix + stage);
+            }
+
+            if (targetId.StartsWith("action:", StringComparison.Ordinal))
+            {
+                string actionId = targetId.Substring("action:".Length);
+                if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionPlaytest, StringComparison.Ordinal))
+                    return BuildStatusPlaytestRect(statusRect);
+                return ResolveTopBarActionRect(topRect, shell, actionId);
+            }
+
+            return ZeroRect();
+        }
+
+        private void DrawSpotlightDimming(Rect availableRect, Rect targetRect, float progress)
+        {
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0f, 0f, 0f, 0.64f * progress);
+
+            if (targetRect.width <= 0f || targetRect.height <= 0f)
+            {
+                GUI.DrawTexture(availableRect, Texture2D.whiteTexture);
+                GUI.color = oldColor;
+                return;
+            }
+
+            Rect cutout = new Rect(targetRect.x - 8f, targetRect.y - 8f, targetRect.width + 16f, targetRect.height + 16f);
+            cutout.xMin = Mathf.Clamp(cutout.xMin, availableRect.xMin, availableRect.xMax);
+            cutout.xMax = Mathf.Clamp(cutout.xMax, availableRect.xMin, availableRect.xMax);
+            cutout.yMin = Mathf.Clamp(cutout.yMin, availableRect.yMin, availableRect.yMax);
+            cutout.yMax = Mathf.Clamp(cutout.yMax, availableRect.yMin, availableRect.yMax);
+
+            GUI.DrawTexture(new Rect(availableRect.x, availableRect.y, availableRect.width, Mathf.Max(0f, cutout.yMin - availableRect.y)), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(availableRect.x, cutout.yMax, availableRect.width, Mathf.Max(0f, availableRect.yMax - cutout.yMax)), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(availableRect.x, cutout.yMin, Mathf.Max(0f, cutout.xMin - availableRect.x), cutout.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(cutout.xMax, cutout.yMin, Mathf.Max(0f, availableRect.xMax - cutout.xMax), cutout.height), Texture2D.whiteTexture);
+            GUI.color = oldColor;
+        }
+
+        private void DrawSpotlightBorder(Rect targetRect, float progress)
+        {
+            Rect rect = new Rect(targetRect.x - 8f, targetRect.y - 8f, targetRect.width + 16f, targetRect.height + 16f);
+            float pulse = 0.75f + (Mathf.Sin(Time.realtimeSinceStartup * 5f) * 0.25f);
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.98f, 0.78f, 0.28f, pulse * progress);
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+            GUI.color = oldColor;
+        }
+
+        private void DrawTourCallout(Rect rect, ScenarioAuthoringTourViewModel tour)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
+            GUILayout.BeginArea(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, rect.height - 24f));
+            GUILayout.Label("STEP " + (tour.StepIndex + 1) + " / " + tour.StepCount, _mutedTextStyle);
+            GUILayout.Label(tour.Title ?? "TOUR", _sectionTitleStyle);
+            GUILayout.Space(4f);
+            GUILayout.Label(tour.Body ?? string.Empty, _textStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.BeginHorizontal();
+            DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tour.BackAction, false);
+            GUILayout.FlexibleSpace();
+            DrawButton(GUILayoutUtility.GetRect(76f, 30f, GUILayout.Width(76f), GUILayout.Height(30f)), tour.ExitAction, false);
+            DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tour.NextAction, false);
+            GUILayout.EndHorizontal();
+            GUILayout.EndArea();
         }
 
         private Rect ResolveTutorialTargetRect(
@@ -190,8 +339,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (tab == null || IsChildStageTab(tab))
                     continue;
 
-                ScenarioAuthoringInspectorAction displayTab = compact ? CloneWithLabel(tab, CompactStageLabel(tab.Label)) : tab;
-                float width = ResolvePrimaryStageTabWidth(displayTab, compact);
+                float width = ResolvePrimaryStageTabWidth(tab, compact);
                 Rect rect = new Rect(x, topRect.y + primaryRowY, width, primaryRowHeight);
                 if (rect.xMax > right)
                     break;

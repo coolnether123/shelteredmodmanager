@@ -10,14 +10,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
     internal sealed class ScenarioAuthoringTutorialService
     {
         private readonly ScenarioAuthoringSettingsService _settingsService;
+        private readonly ScenarioAuthoringSetupStateService _setupStateService;
         private string _activationDraftId;
         private int _activationStep = -1;
         private bool _lastPredicateSatisfied;
         private bool _activationRendered;
+        private string _activeTourId;
+        private int _activeTourStep;
 
-        public ScenarioAuthoringTutorialService(ScenarioAuthoringSettingsService settingsService)
+        public ScenarioAuthoringTutorialService(
+            ScenarioAuthoringSettingsService settingsService,
+            ScenarioAuthoringSetupStateService setupStateService)
         {
             _settingsService = settingsService;
+            _setupStateService = setupStateService;
         }
 
         public TutorialProgress Load(ScenarioAuthoringSettingsSnapshot settings)
@@ -30,6 +36,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             progress.Skipped = settings.GetBool(TutorialContent.SkippedKey, false);
             progress.Step = ClampStep(settings.GetInt(TutorialContent.StepKey, 0));
             progress.HelpPage = ClampHelpPage(settings.GetInt(TutorialContent.HelpPageKey, 0));
+            progress.HelpTopicId = settings.Get(TutorialContent.HelpTopicKey, ResolveHelpTopicId(progress.HelpPage));
             return progress;
         }
 
@@ -110,6 +117,112 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
                 return StepHelpPage(state, -1, out message);
 
             return false;
+        }
+
+        public bool OpenHelpTopic(
+            ScenarioAuthoringState state,
+            string topicId,
+            ScenarioAuthoringLayoutService layoutService,
+            out string message)
+        {
+            message = null;
+            if (state == null || state.Settings == null)
+                return false;
+
+            int pageIndex = TutorialContent.FindHelpPageIndex(topicId);
+            if (pageIndex < 0)
+            {
+                message = "Help topic is not available.";
+                return true;
+            }
+
+            ScenarioAuthoringHelpPage page = TutorialContent.GetHelpPages()[pageIndex];
+            TutorialProgress progress = Load(state.Settings);
+            progress.HelpPage = pageIndex;
+            progress.HelpTopicId = page != null ? page.Id : topicId;
+            Save(state, progress);
+            state.HelpWindowOpen = true;
+            ApplyHelpNavigation(state, page, layoutService);
+            message = page != null ? "Help opened: " + page.Title + "." : "Workshop help opened.";
+            return true;
+        }
+
+        public bool StartTour(
+            ScenarioAuthoringState state,
+            string tourId,
+            ScenarioAuthoringLayoutService layoutService,
+            out string message)
+        {
+            message = null;
+            ScenarioAuthoringTourDefinition tour = TutorialContent.FindTour(tourId);
+            if (state == null || tour == null || tour.Steps == null || tour.Steps.Length == 0)
+            {
+                message = "Tour is not available.";
+                return true;
+            }
+
+            _activeTourId = tour.Id;
+            _activeTourStep = 0;
+            state.HelpWindowOpen = false;
+            ApplyTourOpenAction(state, CurrentTourStep(), layoutService);
+            message = "Tour started: " + tour.Title + ".";
+            return true;
+        }
+
+        public bool StepTour(
+            ScenarioAuthoringState state,
+            int direction,
+            ScenarioAuthoringLayoutService layoutService,
+            out string message)
+        {
+            message = null;
+            ScenarioAuthoringTourDefinition tour = CurrentTour();
+            if (tour == null)
+                return false;
+
+            int next = _activeTourStep + direction;
+            if (next < 0)
+                next = 0;
+
+            if (next >= tour.Steps.Length)
+                return CompleteTour(state, out message);
+
+            _activeTourStep = next;
+            ApplyTourOpenAction(state, CurrentTourStep(), layoutService);
+            message = "Tour step " + (_activeTourStep + 1) + " of " + tour.Steps.Length + ".";
+            return true;
+        }
+
+        public bool ExitTour(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (CurrentTour() == null)
+                return false;
+
+            string title = CurrentTour().Title;
+            ClearTour();
+            message = "Tour closed: " + title + ".";
+            return true;
+        }
+
+        public ScenarioAuthoringTourDefinition CurrentTour()
+        {
+            return TutorialContent.FindTour(_activeTourId);
+        }
+
+        public ScenarioAuthoringTourStep CurrentTourStep()
+        {
+            ScenarioAuthoringTourDefinition tour = CurrentTour();
+            if (tour == null || tour.Steps == null || tour.Steps.Length == 0)
+                return null;
+
+            int index = Math.Max(0, Math.Min(tour.Steps.Length - 1, _activeTourStep));
+            return tour.Steps[index];
+        }
+
+        public int CurrentTourStepIndex
+        {
+            get { return _activeTourStep; }
         }
 
         public bool IsStepSatisfied(ScenarioAuthoringState state, ScenarioEditorSession editorSession, TutorialStep step)
@@ -240,6 +353,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
                 return false;
 
             progress.HelpPage = next;
+            progress.HelpTopicId = ResolveHelpTopicId(next);
             Save(state, progress);
             message = "Help page " + (next + 1) + " of " + TutorialContent.GetHelpPages().Length + ".";
             return true;
@@ -251,8 +365,119 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             state.Settings.Set(TutorialContent.SkippedKey, progress.Skipped ? "true" : "false");
             state.Settings.Set(TutorialContent.StepKey, progress.Step.ToString());
             state.Settings.Set(TutorialContent.HelpPageKey, progress.HelpPage.ToString());
+            state.Settings.Set(TutorialContent.HelpTopicKey, progress.HelpTopicId ?? ResolveHelpTopicId(progress.HelpPage));
             if (_settingsService != null)
                 _settingsService.Save(state.Settings);
+        }
+
+        private bool CompleteTour(ScenarioAuthoringState state, out string message)
+        {
+            ScenarioAuthoringTourDefinition tour = CurrentTour();
+            message = null;
+            if (tour == null)
+                return false;
+
+            if (state != null && state.SetupState != null)
+            {
+                state.SetupState.AddCompletedTour(tour.Id);
+                if (_setupStateService != null)
+                    _setupStateService.SaveActive(state);
+            }
+
+            ClearTour();
+            message = "Tour complete: " + tour.Title + ".";
+            return true;
+        }
+
+        private void ClearTour()
+        {
+            _activeTourId = null;
+            _activeTourStep = 0;
+        }
+
+        private static void ApplyHelpNavigation(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringHelpPage page,
+            ScenarioAuthoringLayoutService layoutService)
+        {
+            if (state == null || page == null || layoutService == null)
+                return;
+
+            if (page.Stage != ScenarioStageKind.None)
+                layoutService.SelectStage(state, page.Stage);
+            if (!string.IsNullOrEmpty(page.WindowId))
+                layoutService.SetWindowOpen(state, page.WindowId, true);
+        }
+
+        private static void ApplyTourOpenAction(
+            ScenarioAuthoringState state,
+            ScenarioAuthoringTourStep step,
+            ScenarioAuthoringLayoutService layoutService)
+        {
+            if (state == null || step == null || layoutService == null || string.IsNullOrEmpty(step.OpenAction))
+                return;
+
+            if (step.OpenAction.StartsWith(ScenarioAuthoringActionIds.ActionStageSelectPrefix, StringComparison.Ordinal))
+            {
+                string token = step.OpenAction.Substring(ScenarioAuthoringActionIds.ActionStageSelectPrefix.Length);
+                ScenarioStageKind stage;
+                if (TryParseStageKind(token, out stage))
+                    layoutService.SelectStage(state, stage);
+                return;
+            }
+
+            if (step.OpenAction.StartsWith(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix, StringComparison.Ordinal))
+            {
+                string topicId = step.OpenAction.Substring(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix.Length);
+                ApplyHelpNavigation(state, TutorialContent.FindHelpPage(topicId), layoutService);
+                return;
+            }
+
+            if (step.OpenAction.StartsWith(ScenarioAuthoringActionIds.ActionWindowTogglePrefix, StringComparison.Ordinal))
+            {
+                layoutService.SetWindowOpen(state, step.OpenAction.Substring(ScenarioAuthoringActionIds.ActionWindowTogglePrefix.Length), true);
+                return;
+            }
+
+            if (string.Equals(step.OpenAction, ScenarioAuthoringActionIds.ActionToolSelect, StringComparison.Ordinal))
+                layoutService.SelectTool(state, ScenarioAuthoringTool.Select);
+            else if (string.Equals(step.OpenAction, ScenarioAuthoringActionIds.ActionToolObjects, StringComparison.Ordinal))
+                layoutService.SelectTool(state, ScenarioAuthoringTool.Objects);
+            else if (string.Equals(step.OpenAction, ScenarioAuthoringActionIds.ActionToolAssets, StringComparison.Ordinal))
+                layoutService.SelectTool(state, ScenarioAuthoringTool.Assets);
+        }
+
+        private static bool TryParseStageKind(string token, out ScenarioStageKind stage)
+        {
+            stage = ScenarioStageKind.None;
+            if (string.IsNullOrEmpty(token))
+                return false;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(ScenarioStageKind), token, true);
+                if (parsed != null && Enum.IsDefined(typeof(ScenarioStageKind), parsed))
+                {
+                    stage = (ScenarioStageKind)parsed;
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private static string ResolveHelpTopicId(int pageIndex)
+        {
+            ScenarioAuthoringHelpPage[] pages = TutorialContent.GetHelpPages();
+            if (pages == null || pages.Length == 0)
+                return null;
+
+            int index = Math.Max(0, Math.Min(pages.Length - 1, pageIndex));
+            ScenarioAuthoringHelpPage page = pages[index];
+            return page != null ? page.Id : null;
         }
 
         private void EnsureActivation(ScenarioAuthoringState state, TutorialStep step, bool satisfied)

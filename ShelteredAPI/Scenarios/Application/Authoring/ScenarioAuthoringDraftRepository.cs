@@ -85,6 +85,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 string scenarioFilePath = Path.Combine(draftRoot, ScenarioDefinitionSerializer.DefaultFileName);
                 _serializer.Save(definition, scenarioFilePath);
+                new ScenarioAuthoringSetupStateService().CreateInitialForScenarioFile(scenarioFilePath);
                 MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Created draft '" + scenarioId + "' in save-system slot " + slot
                     + " at " + scenarioFilePath + ".");
                 return new DraftRecord

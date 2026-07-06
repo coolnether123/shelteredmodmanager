@@ -55,6 +55,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionTutorialOpenTarget = "tutorial.open_target";
         public const string ActionHelpPagePrevious = "tutorial.help_page.previous";
         public const string ActionHelpPageNext = "tutorial.help_page.next";
+        public const string ActionHelpOpenTopicPrefix = "help.open.";
+        public const string ActionTourStartPrefix = "tour.start.";
+        public const string ActionTourNext = "tour.next";
+        public const string ActionTourBack = "tour.back";
+        public const string ActionTourExit = "tour.exit";
+        public const string ActionSetupDismiss = "setup.dismiss";
         public const string ActionShellToggleWindowMenu = "shell.menu.windows";
         public const string ActionWindowTogglePrefix = "shell.window.toggle.";
         public const string ActionWindowCollapsePrefix = "shell.window.collapse.";
@@ -443,6 +449,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             SelectionStack = new List<ScenarioAuthoringTarget>();
             ScrollStates = new List<ScenarioAuthoringPanelScrollState>();
             Settings = new ScenarioAuthoringSettingsSnapshot();
+            SetupState = new ScenarioAuthoringSetupState();
         }
 
         public bool IsActive { get; set; }
@@ -481,6 +488,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
         public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
         public ScenarioAuthoringSettingsSnapshot Settings { get; set; }
+        public ScenarioAuthoringSetupState SetupState { get; set; }
 
         public ScenarioAuthoringState Copy()
         {
@@ -517,7 +525,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 HelpWindowOpen = HelpWindowOpen,
                 WindowMenuOpen = WindowMenuOpen,
                 SpriteSwapPicker = SpriteSwapPicker != null ? SpriteSwapPicker.Copy() : null,
-                Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot()
+                Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot(),
+                SetupState = SetupState != null ? SetupState.Copy() : new ScenarioAuthoringSetupState()
             };
 
             for (int i = 0; MultiSelection != null && i < MultiSelection.Count; i++)
@@ -896,6 +905,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringSettingsViewModel Settings { get; set; }
         public ScenarioAuthoringHelpViewModel Help { get; set; }
         public ScenarioAuthoringTutorialViewModel Tutorial { get; set; }
+        public ScenarioAuthoringTourViewModel Tour { get; set; }
         public ScenarioAuthoringContextMenuModel ContextMenu { get; set; }
         public string[] StatusEntries { get; set; }
     }
@@ -907,11 +917,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public int PageIndex { get; set; }
         public int PageCount { get; set; }
         public string PageTitle { get; set; }
+        public string TopicId { get; set; }
         public string Body { get; set; }
         public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] TopicActions { get; set; }
         public ScenarioAuthoringInspectorAction PreviousAction { get; set; }
         public ScenarioAuthoringInspectorAction NextAction { get; set; }
         public ScenarioAuthoringInspectorAction ReplayAction { get; set; }
+    }
+
+    internal sealed class ScenarioAuthoringTourViewModel
+    {
+        public bool Visible { get; set; }
+        public string TourId { get; set; }
+        public int StepIndex { get; set; }
+        public int StepCount { get; set; }
+        public string TargetId { get; set; }
+        public string Title { get; set; }
+        public string Body { get; set; }
+        public ScenarioAuthoringInspectorAction BackAction { get; set; }
+        public ScenarioAuthoringInspectorAction NextAction { get; set; }
+        public ScenarioAuthoringInspectorAction ExitAction { get; set; }
     }
 
     internal sealed class ScenarioAuthoringTutorialViewModel
