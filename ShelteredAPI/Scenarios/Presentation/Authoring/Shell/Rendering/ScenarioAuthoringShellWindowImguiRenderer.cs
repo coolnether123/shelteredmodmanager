@@ -1272,14 +1272,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (identity != null)
             {
                 DrawHomeIdentityHeader(identity);
-                GUILayout.Space(12f);
+                GUILayout.Space(8f);
             }
 
             if (setup != null || baseMode != null)
             {
                 float contentWidth = GetSectionContentWidth();
                 bool twoColumns = contentWidth >= 760f && setup != null && baseMode != null;
-                float columnWidth = twoColumns ? (contentWidth - 12f) * 0.5f : contentWidth;
+                float columnGap = 10f;
+                float columnWidth = twoColumns ? (contentWidth - columnGap) * 0.5f : contentWidth;
                 if (twoColumns)
                     GUILayout.BeginHorizontal();
 
@@ -1298,7 +1299,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 if (twoColumns)
-                    GUILayout.Space(12f);
+                    GUILayout.Space(columnGap);
 
                 if (baseMode != null)
                 {
@@ -1317,14 +1318,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (twoColumns)
                     GUILayout.EndHorizontal();
 
-                GUILayout.Space(16f);
+                GUILayout.Space(10f);
             }
 
             DrawHomeQuestionGrid(window);
 
             if (quickActions != null)
             {
-                GUILayout.Space(12f);
+                GUILayout.Space(8f);
                 DrawSection(quickActions);
             }
 
@@ -1370,11 +1371,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             DrawHomeHeadlineField(titleItem);
-            GUILayout.Space(8f);
+            GUILayout.Space(6f);
             DrawHomeStatusChips(chips);
             if (pathItem != null)
             {
-                GUILayout.Space(7f);
+                GUILayout.Space(5f);
                 DrawHomeDraftPath(pathItem, copyPath);
             }
             GUILayout.EndVertical();
@@ -1417,7 +1418,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (action == null)
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 18f), 82f, Math.Min(220f, rowLimit));
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 26f), 84f, Math.Min(240f, rowLimit));
                 if (rowWidth > 0f && rowWidth + width > rowLimit)
                 {
                     GUILayout.EndHorizontal();
@@ -1426,8 +1427,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     rowWidth = 0f;
                 }
 
-                Rect rect = GUILayoutUtility.GetRect(width, 24f, GUILayout.Width(width), GUILayout.Height(24f));
-                DrawButton(rect, action, false);
+                Rect rect = GUILayoutUtility.GetRect(width, 26f, GUILayout.Width(width), GUILayout.Height(26f));
+                ScenarioAuthoringInspectorAction chromeAction = new ScenarioAuthoringInspectorAction
+                {
+                    Id = action.Id,
+                    Label = string.Empty,
+                    Hint = action.Hint,
+                    Detail = action.Detail,
+                    Enabled = action.Enabled,
+                    Emphasized = false,
+                    DisabledReason = action.DisabledReason
+                };
+                DrawButton(rect, chromeAction, false);
+                GUIStyle chipText = new GUIStyle(action.Enabled ? _textStyle : _mutedTextStyle);
+                chipText.alignment = TextAnchor.MiddleCenter;
+                chipText.wordWrap = false;
+                chipText.clipping = TextClipping.Clip;
+                Rect textRect = new Rect(rect.x + 8f, rect.y, Math.Max(0f, rect.width - 16f), rect.height);
+                GUI.Label(textRect, ShortenToFit(action.Label ?? string.Empty, textRect.width, chipText), chipText);
                 GUILayout.Space(6f);
                 rowWidth += width + 6f;
             }
@@ -1437,15 +1454,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawHomeDraftPath(ScenarioAuthoringInspectorItem pathItem, ScenarioAuthoringInspectorAction copyPath)
         {
             float rowLimit = GetSectionContentWidth();
-            float copyWidth = copyPath != null ? Mathf.Clamp(MeasureButtonWidth(copyPath, false, 18f), 78f, 120f) : 0f;
-            bool inlineCopy = copyPath == null || rowLimit - copyWidth - 10f >= 180f;
+            float copyWidth = copyPath != null ? Mathf.Clamp(MeasureButtonWidth(copyPath, false, 22f), 88f, 132f) : 0f;
+            bool inlineCopy = copyPath == null || rowLimit - copyWidth - 12f >= 180f;
             float rowHeight = inlineCopy ? 26f : 54f;
             Rect rowRect = GUILayoutUtility.GetRect(240f, rowHeight, GUILayout.ExpandWidth(true), GUILayout.Height(rowHeight));
-            Rect labelRect = new Rect(rowRect.x, rowRect.y + 4f, inlineCopy ? Math.Max(90f, rowRect.width - copyWidth - 10f) : rowRect.width, 18f);
+            Rect labelRect = new Rect(rowRect.x, rowRect.y + 4f, inlineCopy ? Math.Max(90f, rowRect.width - copyWidth - 12f) : rowRect.width, 18f);
             string path = pathItem != null ? pathItem.Value ?? string.Empty : string.Empty;
             const string prefix = "Draft: ";
-            float pathWidth = Math.Max(12f, labelRect.width - _mutedTextStyle.CalcSize(new GUIContent(prefix)).x);
-            GUI.Label(labelRect, new GUIContent(prefix + MiddleTruncate(path, pathWidth, _mutedTextStyle), pathItem != null ? pathItem.HoverHint ?? path : path), _mutedTextStyle);
+            GUIStyle pathStyle = new GUIStyle(_mutedTextStyle);
+            pathStyle.wordWrap = false;
+            pathStyle.clipping = TextClipping.Clip;
+            float pathWidth = Math.Max(12f, labelRect.width - pathStyle.CalcSize(new GUIContent(prefix)).x);
+            GUI.Label(labelRect, new GUIContent(prefix + MiddleTruncate(path, pathWidth, pathStyle), pathItem != null ? pathItem.HoverHint ?? path : path), pathStyle);
             if (copyPath != null)
             {
                 float copyX = inlineCopy ? rowRect.xMax - copyWidth : rowRect.x;
@@ -1494,7 +1514,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.EndHorizontal();
             if (!string.IsNullOrEmpty(hint))
             {
-                GUILayout.Space(8f);
+                GUILayout.Space(6f);
                 GUILayout.Label(hint, _mutedTextStyle);
             }
             GUILayout.EndVertical();
@@ -1543,21 +1563,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawButton(GUILayoutUtility.GetRect(width, 24f, GUILayout.Width(width), GUILayout.Height(24f)), dismiss, false);
             }
             GUILayout.EndHorizontal();
-            GUILayout.Space(4f);
+            GUILayout.Space(3f);
+
+            string recommendedActionId = null;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.Action == null || string.Equals(item.Action.Id, ScenarioAuthoringActionIds.ActionSetupDismiss, StringComparison.Ordinal))
+                    continue;
+                if (recommendedActionId == null && item.Action.Enabled)
+                    recommendedActionId = item.Action.Id;
+            }
 
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
             {
                 ScenarioAuthoringInspectorItem item = section.Items[i];
                 if (item == null || item.Action == null || string.Equals(item.Action.Id, ScenarioAuthoringActionIds.ActionSetupDismiss, StringComparison.Ordinal))
                     continue;
-                Rect rect = GUILayoutUtility.GetRect(180f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
-                DrawChecklistItem(rect, item.Action);
-                GUILayout.Space(4f);
+                Rect rect = GUILayoutUtility.GetRect(180f, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
+                DrawChecklistItem(rect, item.Action, string.Equals(item.Action.Id, recommendedActionId, StringComparison.Ordinal));
+                GUILayout.Space(3f);
             }
             GUILayout.EndVertical();
         }
 
-        private void DrawChecklistItem(Rect rect, ScenarioAuthoringInspectorAction action)
+        private void DrawChecklistItem(Rect rect, ScenarioAuthoringInspectorAction action, bool recommended)
         {
             if (action == null)
                 return;
@@ -1566,12 +1596,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!complete)
             {
                 DrawButton(rect, action, false);
+                if (recommended && _uiContext != null && _uiContext.Styles != null)
+                {
+                    float pulse = 0.45f + (Mathf.Sin(Time.realtimeSinceStartup * 2.1f) * 0.20f);
+                    Color oldColor = GUI.color;
+                    GUI.color = new Color(0.94f, 0.80f, 0.52f, pulse);
+                    ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
+                    GUI.color = oldColor;
+                }
                 return;
             }
 
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
-            Rect markRect = new Rect(rect.x + 8f, rect.y + 5f, 32f, rect.height - 10f);
-            Rect textRect = new Rect(markRect.xMax + 8f, rect.y + 4f, rect.width - 48f, rect.height - 8f);
+            Rect markRect = new Rect(rect.x + 8f, rect.y + 4f, 32f, rect.height - 8f);
+            Rect textRect = new Rect(markRect.xMax + 8f, rect.y + 3f, rect.width - 48f, rect.height - 6f);
             ScenarioUiWidgets.DrawPill(markRect, "OK", _uiContext.Styles, ScenarioUiPillEmphasis.Active);
             string label = action.Label.Substring("Done:".Length).Trim();
             GUI.Label(textRect, label, _textStyle);
@@ -1603,7 +1641,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             float availableWidth = GetSectionContentWidth();
-            float gap = 12f;
+            float gap = 10f;
             int columns = availableWidth >= 760f ? 2 : 1;
             float cardWidth = columns == 2 ? (availableWidth - gap) * 0.5f : availableWidth;
             for (int i = 0; i < questions.Count; i += columns)
@@ -1614,7 +1652,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     int index = i + column;
                     if (index < questions.Count)
                     {
-                        Rect rect = GUILayoutUtility.GetRect(cardWidth, 82f, GUILayout.Width(cardWidth), GUILayout.Height(82f));
+                        Rect rect = GUILayoutUtility.GetRect(cardWidth, 78f, GUILayout.Width(cardWidth), GUILayout.Height(78f));
                         DrawHomeQuestionCard(rect, questions[index]);
                     }
                     else
@@ -1627,7 +1665,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
                 GUILayout.EndHorizontal();
                 if (i + columns < questions.Count)
-                    GUILayout.Space(10f);
+                    GUILayout.Space(8f);
             }
         }
 
@@ -1782,7 +1820,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawHomeQuestionCard(ScenarioAuthoringInspectorSection section)
         {
-            Rect rect = GUILayoutUtility.GetRect(120f, 82f, GUILayout.ExpandWidth(true), GUILayout.Height(82f));
+            Rect rect = GUILayoutUtility.GetRect(120f, 78f, GUILayout.ExpandWidth(true), GUILayout.Height(78f));
             DrawHomeQuestionCard(rect, section);
         }
 
@@ -1817,22 +1855,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Emphasized = action.Emphasized
             }, false);
 
-            float sideWidth = 92f;
+            GUIStyle actionStyle = new GUIStyle(_mutedTextStyle);
+            actionStyle.alignment = TextAnchor.MiddleRight;
+            actionStyle.wordWrap = false;
+            actionStyle.clipping = TextClipping.Clip;
+            float actionLabelWidth = actionStyle.CalcSize(new GUIContent(action.Label ?? string.Empty)).x + 12f;
+            float sideWidth = Mathf.Max(108f, actionLabelWidth);
             if (!string.IsNullOrEmpty(badge))
             {
                 Vector2 measuredBadge = _mutedTextStyle.CalcSize(new GUIContent(badge));
-                sideWidth = Mathf.Clamp(measuredBadge.x + 24f, 92f, Math.Min(220f, rect.width * 0.36f));
+                sideWidth = Mathf.Max(sideWidth, measuredBadge.x + 24f);
             }
 
-            Rect textRect = new Rect(rect.x + 14f, rect.y + 9f, rect.width - sideWidth - 32f, rect.height - 18f);
+            sideWidth = Mathf.Clamp(sideWidth, 108f, Math.Min(240f, rect.width * 0.46f));
+            Rect textRect = new Rect(rect.x + 14f, rect.y + 8f, rect.width - sideWidth - 32f, rect.height - 16f);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 24f), ShortenToFit(section.Title ?? string.Empty, textRect.width, _sectionTitleStyle), _sectionTitleStyle);
-            GUI.Label(new Rect(textRect.x, textRect.y + 27f, textRect.width, 34f), detail ?? string.Empty, _mutedTextStyle);
+            GUI.Label(new Rect(textRect.x, textRect.y + 26f, textRect.width, 32f), detail ?? string.Empty, _mutedTextStyle);
             if (!string.IsNullOrEmpty(badge))
             {
-                Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 16f, sideWidth, 22f);
+                Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 14f, sideWidth, 22f);
                 ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ScenarioUiPillEmphasis.Default);
             }
-            GUI.Label(new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 34f, sideWidth, 20f), action.Label ?? string.Empty, _mutedTextStyle);
+            Rect actionRect = new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 32f, sideWidth, 20f);
+            GUI.Label(actionRect, ShortenToFit(action.Label ?? string.Empty, actionRect.width, actionStyle), actionStyle);
         }
 
         private void DrawItem(ScenarioAuthoringInspectorItem item)

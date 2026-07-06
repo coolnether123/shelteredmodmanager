@@ -45,14 +45,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "home_quick_actions",
-                Title = "Scenario Setup",
+                Title = "Quick Actions",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = new[]
                 {
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft", "Persist the current scenario draft XML.", true, false, "SV")),
-                    Item.ActionItem(Item.Action("stage.select." + ScenarioStageKind.Quests, "Story", "Open the story workspace for quests and dialogue beats.", true, false, "STORY")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionPlaytest, editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting ? "Stop Test" : "Start Test Scenario", "Toggle scenario playtest mode.", true, false, "TS"))
+                    Item.ActionItem(Item.Action("stage.select." + ScenarioStageKind.Quests, "Open Story", "Open the story workspace for quests and dialogue beats.", true, false, "STORY"))
                 }
             });
             if (showAdvancedDetails)
@@ -94,14 +92,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 validationLabel,
                 validation != null && validation.WarningCount > 0 ? "Open Publish to review warnings." : "Open Publish to validate and export.",
                 true,
-                validation != null && validation.ErrorCount > 0,
+                false,
                 validation != null && validation.ErrorCount > 0 ? "!" : "OK")));
             items.Add(Item.ActionItem(Item.Action(
                 "stage.select." + ScenarioStageKind.Test,
                 playtestLabel,
                 "Open the Test workspace.",
                 true,
-                string.Equals(playtestLabel, "Ready to test", StringComparison.OrdinalIgnoreCase),
+                false,
                 "TS")));
             ScenarioAuthoringInspectorItem pathItem = Item.Property("Draft Path", !string.IsNullOrEmpty(draftPath) ? draftPath : "No draft file is active.");
             pathItem.HoverHint = draftPath;
@@ -325,7 +323,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static ScenarioAuthoringInspectorItem BuildChecklistAction(string label, bool complete, string actionId, string hint)
         {
-            return Item.ActionItem(Item.Action(actionId, (complete ? "Done: " : "Start: ") + label, hint, !complete, !complete, complete ? "OK" : "GO"));
+            return Item.ActionItem(Item.Action(actionId, (complete ? "Done: " : "Start: ") + label, hint, !complete, false, complete ? "OK" : "GO"));
         }
 
         private static bool HasCustomName(ScenarioDefinition definition)
