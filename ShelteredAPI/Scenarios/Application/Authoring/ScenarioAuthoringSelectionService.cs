@@ -21,6 +21,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioSelectionScopeService _scopeService;
         private readonly ScenarioAuthoringTargetAdapterRegistry _adapterRegistry = new ScenarioAuthoringTargetAdapterRegistry();
         private const float MinHitTestTolerance = 0.04f;
+        private const int PrimaryDomainScore = 420;
+        private const int SecondaryDomainScore = 220;
+        private const int TertiaryDomainScore = 120;
+        private const int SuppressedDomainScore = 80;
 
         public ScenarioAuthoringSelectionService(
             ScenarioCharacterAppearanceService characterAppearanceService,
@@ -494,37 +498,40 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 case ScenarioAuthoringTool.Objects:
                     if (target.Kind == ScenarioAuthoringTargetKind.Character)
-                        return 140;
+                        return PrimaryDomainScore;
                     if (target.Kind == ScenarioAuthoringTargetKind.PlaceableObject || target.Kind == ScenarioAuthoringTargetKind.Vehicle)
-                        return 130;
+                        return PrimaryDomainScore;
                     if (target.Kind == ScenarioAuthoringTargetKind.Light || IsNamedLike(target, "ladder"))
-                        return 120;
+                        return TertiaryDomainScore;
                     if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
-                        return 90;
+                        return SuppressedDomainScore;
                     if (target.Kind == ScenarioAuthoringTargetKind.Wire)
                         return 70;
                     if (target.Kind == ScenarioAuthoringTargetKind.Wall)
                         return 60;
                     return 0;
                 case ScenarioAuthoringTool.Shelter:
-                    if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
-                        return 140;
+                    if (target.Kind == ScenarioAuthoringTargetKind.Room
+                        || target.Kind == ScenarioAuthoringTargetKind.Tile
+                        || target.Kind == ScenarioAuthoringTargetKind.Light
+                        || IsNamedLike(target, "ladder"))
+                    {
+                        return PrimaryDomainScore;
+                    }
                     if (target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire)
-                        return 90;
-                    if (target.Kind == ScenarioAuthoringTargetKind.Light || IsNamedLike(target, "ladder"))
-                        return 80;
+                        return SecondaryDomainScore;
                     return 0;
                 case ScenarioAuthoringTool.Wiring:
                     if (target.Kind == ScenarioAuthoringTargetKind.Wall || target.Kind == ScenarioAuthoringTargetKind.Wire)
-                        return 140;
+                        return PrimaryDomainScore;
                     if (target.Kind == ScenarioAuthoringTargetKind.Light)
-                        return 90;
+                        return SecondaryDomainScore;
                     if (target.Kind == ScenarioAuthoringTargetKind.Room || target.Kind == ScenarioAuthoringTargetKind.Tile)
-                        return 70;
+                        return TertiaryDomainScore;
                     return 0;
                 case ScenarioAuthoringTool.Assets:
                     if (target.Kind == ScenarioAuthoringTargetKind.SceneSprite || target.Kind == ScenarioAuthoringTargetKind.Background)
-                        return 140;
+                        return PrimaryDomainScore;
                     return target.SupportsReplace ? 80 : 0;
                 case ScenarioAuthoringTool.Family:
                 case ScenarioAuthoringTool.People:

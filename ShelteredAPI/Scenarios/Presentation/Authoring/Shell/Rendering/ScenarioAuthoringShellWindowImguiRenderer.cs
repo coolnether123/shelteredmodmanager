@@ -923,6 +923,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Event current = Event.current;
             if (current != null && inner.Contains(current.mousePosition))
             {
+                if (TryHandlePixelCanvasWheel(inner, current))
+                    return;
+
                 bool panButton = current.button == 2 || (current.button == 0 && current.modifiers == EventModifiers.Alt);
                 if (current.type == EventType.MouseDown && panButton && (overflow.x > 0f || overflow.y > 0f))
                 {
@@ -972,15 +975,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Event current = Event.current;
             if (current != null && rect.Contains(current.mousePosition))
             {
-                if (current.type == EventType.ScrollWheel)
-                {
-                    string zoomActionId = current.delta.y < 0f
-                        ? ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn
-                        : ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut;
-                    ScenarioAuthoringBackendService.Instance.ExecuteAction(zoomActionId);
-                    current.Use();
+                if (TryHandlePixelCanvasWheel(rect, current))
                     return;
-                }
 
                 int pixelX;
                 int pixelY;
@@ -1015,6 +1011,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     current.Use();
                 }
             }
+        }
+
+        private static bool TryHandlePixelCanvasWheel(Rect rect, Event current)
+        {
+            if (current == null || current.type != EventType.ScrollWheel || !rect.Contains(current.mousePosition))
+                return false;
+
+            string zoomActionId = current.delta.y < 0f
+                ? ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn
+                : ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut;
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(zoomActionId);
+            current.Use();
+            return true;
         }
 
         private static bool TryGetCanvasPixel(
