@@ -62,7 +62,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             else
             {
-                if (TryResolveCandidateStack(state, out stack))
+                ScenarioAuthoringInputCaptureService inputCapture = ScenarioCompositionRoot.Resolve<ScenarioAuthoringInputCaptureService>();
+                bool worldSelectionSuppressedByUi = UICamera.hoveredObject != null
+                    || (inputCapture != null && inputCapture.ShouldSuppressWorldInputNow());
+                if (worldSelectionSuppressedByUi)
+                {
+                    if (state.SelectionStack != null && state.SelectionStack.Count > 0)
+                        hovered = state.SelectionStack[Mathf.Clamp(state.ActiveSelectionStackIndex, 0, state.SelectionStack.Count - 1)];
+                }
+                else if (TryResolveCandidateStack(state, out stack))
                 {
                     changed |= SynchronizeSelectionStack(state, stack);
                     if (state.SelectionStack != null && state.SelectionStack.Count > 0)
@@ -100,6 +108,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 bool dragPanConsumedClick = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().ShouldSuppressSelectionClickThisFrame();
                 if (!placementActive
                     && !dragPanConsumedClick
+                    && !worldSelectionSuppressedByUi
                     && ScenarioAuthoringInputActions.IsConfirmSelectionDown()
                     && hovered != null
                     && _scopeService.CanSelectTargetForCurrentStage(state, hovered))

@@ -456,12 +456,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     bool activeSelected = SameTarget(state.SelectedTarget, target);
                     bool selected = activeSelected || IsInMultiSelection(state, target);
                     bool hovered = !selected && SameTarget(state.HoveredTarget, target);
+                    bool emphasized = activeSelected || (state.SelectedTarget == null && active);
                     rows.Add(Item.ActionItem(Item.Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
                         (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + Item.Safe(target.DisplayName),
                         FormatStackDetail(target, activeSelected, selected, hovered, active, showAdvancedDetails),
                         true,
-                        activeSelected || active,
+                        emphasized,
                         selected ? "SEL" : (hovered ? "HOV" : (active ? "ON" : "ST")),
                         FormatGrid(target))));
                 }

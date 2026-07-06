@@ -370,13 +370,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         continue;
 
                     bool active = i == activeIndex;
+                    bool selected = SameTarget(state.SelectedTarget, candidate);
+                    bool emphasized = selected || (state.SelectedTarget == null && active);
                     items.Add(ActionItem(Action(
                         ScenarioAuthoringActionIds.ActionSelectionStackSelectPrefix + i.ToString(CultureInfo.InvariantCulture),
                         FormatSelectionStackRowLabel(i, candidate),
-                        FormatSelectionStackRowHint(candidate, active),
+                        FormatSelectionStackRowHint(candidate, selected || active),
                         true,
-                        active,
-                        active ? "ON" : "ST",
+                        emphasized,
+                        selected ? "SEL" : (active ? "ON" : "ST"),
                         FormatTargetCell(candidate))));
                 }
 
@@ -1239,6 +1241,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioSpriteSwapAuthoringService.CustomEditorModel pixelEditor = _sectionHub.SpriteSwap.GetCustomEditorModel(state);
                 bool forcePixelEditor = pixelEditor != null
                     && pixelEditor.Visible
+                    && windowState.Visible
                     && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase);
                 if (!forcePixelEditor
                     && string.Equals(definitionEntry.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase))

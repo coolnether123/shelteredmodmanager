@@ -1023,7 +1023,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool contains = current != null && rect.Contains(current.mousePosition);
 
             if (current == null || !contains)
+            {
+                ResetPixelCanvasWheelAxisIfIdle();
                 return false;
+            }
 
             int deltaSign;
             if (!TryAcceptPixelCanvasWheel(current, out deltaSign))
@@ -1041,55 +1044,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool TryAcceptPixelCanvasWheel(Event current, out int deltaSign)
         {
             deltaSign = 0;
-            if (current == null)
+            if (current == null || current.type != EventType.Repaint)
                 return false;
 
-            bool genuineWheel = current.type == EventType.ScrollWheel || current.rawType == EventType.ScrollWheel;
-            bool hasDelta = Mathf.Abs(current.delta.y) > 0.01f;
-            if (!genuineWheel)
+            float wheel = UnityEngine.Input.GetAxis("Mouse ScrollWheel");
+            if (Mathf.Abs(wheel) <= 0.0001f)
             {
-                if (!hasDelta)
-                {
-                    _pixelEditorWheelDeltaActive = false;
-                    _pixelEditorWheelDeltaSign = 0;
-                }
+                _pixelEditorWheelAxisActive = false;
                 return false;
             }
 
-            if (!hasDelta)
-            {
-                if (current.type == EventType.Repaint && _pixelEditorPendingWheelFrame == Time.frameCount)
-                    deltaSign = _pixelEditorPendingWheelSign;
-                else
-                    return false;
-            }
-            else
-            {
-                deltaSign = current.delta.y < 0f ? -1 : 1;
-            }
-
-            if (current.type == EventType.Layout)
-            {
-                _pixelEditorPendingWheelFrame = Time.frameCount;
-                _pixelEditorPendingWheelSign = deltaSign;
-                return false;
-            }
-
-            if (_pixelEditorWheelHandledFrame == Time.frameCount)
+            if (_pixelEditorWheelHandledFrame == Time.frameCount || _pixelEditorWheelAxisActive)
                 return false;
 
-            if (_pixelEditorWheelDeltaActive
-                && _pixelEditorWheelDeltaSign == deltaSign
-                && Time.realtimeSinceStartup - _pixelEditorWheelAcceptedAt < 0.12f)
-            {
-                return false;
-            }
-
-            _pixelEditorWheelDeltaActive = true;
-            _pixelEditorWheelDeltaSign = deltaSign;
+            deltaSign = wheel > 0f ? -1 : 1;
+            _pixelEditorWheelAxisActive = true;
             _pixelEditorWheelHandledFrame = Time.frameCount;
-            _pixelEditorWheelAcceptedAt = Time.realtimeSinceStartup;
             return true;
+        }
+
+        private void ResetPixelCanvasWheelAxisIfIdle()
+        {
+            if (Mathf.Abs(UnityEngine.Input.GetAxis("Mouse ScrollWheel")) <= 0.0001f)
+                _pixelEditorWheelAxisActive = false;
         }
 
         private static bool TryGetCanvasPixel(
