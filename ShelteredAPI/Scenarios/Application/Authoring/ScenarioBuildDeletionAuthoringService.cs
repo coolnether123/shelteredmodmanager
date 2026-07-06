@@ -6,7 +6,6 @@ using ModAPI.Scenarios;
 using UnityEngine;
 
 using ShelteredAPI.Scenarios.Definitions;
-using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioBuildDeletionAuthoringService
@@ -506,29 +505,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static bool MatchesObjectPlacement(ObjectPlacement placement, Obj_Base obj)
         {
-            if (placement == null || obj == null)
-                return false;
-
-            ScenarioObjectPlacementRuntimeBinding binding = obj.GetComponent<ScenarioObjectPlacementRuntimeBinding>();
-            if (binding != null)
-            {
-                if (!string.IsNullOrEmpty(binding.ScenarioObjectId)
-                    && string.Equals(placement.ScenarioObjectId, binding.ScenarioObjectId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-                if (!string.IsNullOrEmpty(binding.RuntimeBindingKey)
-                    && string.Equals(placement.RuntimeBindingKey, binding.RuntimeBindingKey, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
-            if (obj.objectId > 0 && string.Equals(sourceObjectId, obj.objectId.ToString(), StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            if (!string.Equals(placement.DefinitionReference, obj.GetObjectType().ToString(), StringComparison.OrdinalIgnoreCase) || placement.Position == null)
-                return false;
-
-            Vector3 placementPosition = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
-            return Vector3.Distance(placementPosition, obj.transform.position) <= 0.15f;
+            return ScenarioBunkerDraftService.MatchesPlacement(placement, obj);
         }
 
         private static GameObject ResolveGameObject(ScenarioAuthoringTarget target)

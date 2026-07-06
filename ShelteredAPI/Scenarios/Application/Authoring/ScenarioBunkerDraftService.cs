@@ -5,6 +5,7 @@ using UnityEngine;
 
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal static class ScenarioBunkerDraftService
@@ -176,36 +177,49 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (placements == null || obj == null)
                 return -1;
 
-            string objectId = obj.objectId > 0 ? obj.objectId.ToString() : null;
-            string definitionReference = obj.GetObjectType().ToString();
-            Vector3 position = obj.transform.position;
-
             for (int i = 0; i < placements.Count; i++)
             {
                 ObjectPlacement placement = placements[i];
-                if (placement == null)
-                    continue;
-
-                string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
-                if (!string.IsNullOrEmpty(objectId)
-                    && !string.IsNullOrEmpty(sourceObjectId)
-                    && string.Equals(sourceObjectId, objectId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return i;
-                }
-
-                if (!string.Equals(placement.DefinitionReference, definitionReference, StringComparison.OrdinalIgnoreCase)
-                    || placement.Position == null)
-                {
-                    continue;
-                }
-
-                Vector3 placementPosition = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
-                if (Vector3.Distance(position, placementPosition) <= PlacementMatchTolerance)
+                if (MatchesPlacement(placement, obj))
                     return i;
             }
 
             return -1;
+        }
+
+        public static bool MatchesPlacement(ObjectPlacement placement, Obj_Base obj)
+        {
+            if (placement == null || obj == null)
+                return false;
+
+            ScenarioObjectPlacementRuntimeBinding binding = obj.GetComponent<ScenarioObjectPlacementRuntimeBinding>();
+            if (binding != null)
+            {
+                if (!string.IsNullOrEmpty(binding.ScenarioObjectId)
+                    && string.Equals(placement.ScenarioObjectId, binding.ScenarioObjectId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (!string.IsNullOrEmpty(binding.RuntimeBindingKey)
+                    && string.Equals(placement.RuntimeBindingKey, binding.RuntimeBindingKey, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            string objectId = obj.objectId > 0 ? obj.objectId.ToString() : null;
+            string sourceObjectId = ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertySourceObjectId);
+            if (!string.IsNullOrEmpty(objectId)
+                && !string.IsNullOrEmpty(sourceObjectId)
+                && string.Equals(sourceObjectId, objectId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!string.Equals(placement.DefinitionReference, obj.GetObjectType().ToString(), StringComparison.OrdinalIgnoreCase)
+                || placement.Position == null)
+            {
+                return false;
+            }
+
+            Vector3 placementPosition = new Vector3(placement.Position.X, placement.Position.Y, placement.Position.Z);
+            return Vector3.Distance(obj.transform.position, placementPosition) <= PlacementMatchTolerance;
         }
 
         public static int FindPlacementIndex(List<ObjectPlacement> placements, ObjectPlacement placement)

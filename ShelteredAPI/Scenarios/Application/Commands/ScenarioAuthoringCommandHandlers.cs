@@ -734,14 +734,30 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement:
                     {
                         if (!_scopeService.CanSelectTargetForCurrentStage(state, state.SelectedTarget, out message))
-                            return true;
+                        {
+                            string status = message;
+                            return FailWithoutChange(state, status, out message);
+                        }
                         bool removed = _captureService.RemoveSelectedObjectPlacement(_editorService.CurrentSession, state.SelectedTarget, out message);
-                        return removed || !string.IsNullOrEmpty(message);
+                        if (!removed)
+                        {
+                            string status = message;
+                            return FailWithoutChange(state, status, out message);
+                        }
+                        return true;
                     }
                 default:
                     handled = false;
                     return false;
             }
+        }
+
+        private static bool FailWithoutChange(ScenarioAuthoringState state, string statusMessage, out string message)
+        {
+            if (state != null && !string.IsNullOrEmpty(statusMessage))
+                state.StatusMessage = statusMessage;
+            message = null;
+            return false;
         }
 
         private bool OpenCapturePreview(ScenarioAuthoringState state, string kind, out string message)

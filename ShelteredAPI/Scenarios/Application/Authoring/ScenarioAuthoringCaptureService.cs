@@ -290,23 +290,44 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool RemoveSelectedObjectPlacement(ScenarioEditorSession session, ScenarioAuthoringTarget target, out string message)
         {
             message = null;
-            if (session == null || session.WorkingDefinition == null || session.WorkingDefinition.BunkerEdits == null)
+            if (session == null || session.WorkingDefinition == null)
             {
                 message = "No captured shelter object placements are available.";
                 return false;
             }
 
+            BunkerEditsDefinition bunkerEdits;
+            if (!_draftMutationService.TryEnsureBunkerEdits(out bunkerEdits) || bunkerEdits == null || bunkerEdits.ObjectPlacements == null)
+            {
+                message = "No active scenario draft is available for selected-object placement removal.";
+                return false;
+            }
+
             string displayName;
-            int index = FindPlacementIndexForTarget(session.WorkingDefinition.BunkerEdits.ObjectPlacements, target, out displayName);
+            int beforeCount = bunkerEdits.ObjectPlacements.Count;
+            int index = FindPlacementIndexForTarget(bunkerEdits.ObjectPlacements, target, out displayName);
             if (index < 0)
             {
                 message = "The selected object does not have a captured scenario placement.";
                 return false;
             }
 
-            session.WorkingDefinition.BunkerEdits.ObjectPlacements.RemoveAt(index);
-            _draftMutationService.MarkDirty(ScenarioDirtySection.Bunker, ScenarioEditCategory.Bunker);
-            message = "Removed captured placement for '" + Safe(displayName) + "'.";
+            ObjectPlacement matchedPlacement = bunkerEdits.ObjectPlacements[index];
+            string placementName = FormatPlacementName(matchedPlacement, displayName);
+            bool removed = _draftMutationService.TryRemovePlacement(delegate(ObjectPlacement placement)
+            {
+                return ReferenceEquals(placement, matchedPlacement) || PlacementMatchesTarget(placement, target);
+            });
+
+            int afterCount = bunkerEdits.ObjectPlacements.Count;
+            if (!removed || afterCount >= beforeCount)
+            {
+                message = "No matching draft placement was removed for '" + Safe(placementName) + "'.";
+                MMLog.WriteWarning("[ScenarioAuthoringCapture] " + message + " before=" + beforeCount + " after=" + afterCount + ".");
+                return false;
+            }
+
+            message = "Removed placement '" + Safe(placementName) + "' from the scenario draft.";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
         }
@@ -627,16 +648,50 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (placement == null)
                     continue;
 
-                if (StringEquals(placement.ScenarioObjectId, reference)
-                    || StringEquals(placement.RuntimeBindingKey, reference)
-                    || StringEquals(ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity), reference))
+                if (PlacementMatchesReference(placement, reference))
                 {
-                    displayName = FirstNonEmpty(displayName, placement.ScenarioObjectId, placement.DefinitionReference, placement.PrefabReference);
+                    displayName = FormatPlacementName(placement, displayName);
                     return i;
                 }
             }
 
             return -1;
+        }
+
+        private static bool PlacementMatchesTarget(ObjectPlacement placement, ScenarioAuthoringTarget target)
+        {
+            if (placement == null || target == null)
+                return false;
+
+            Obj_Base obj = ResolveShelterObject(target);
+            if (obj != null)
+                return ScenarioBunkerDraftService.MatchesPlacement(placement, obj);
+
+            string reference = FirstNonEmpty(target.ScenarioReferenceId, target.Id);
+            return PlacementMatchesReference(placement, reference);
+        }
+
+        private static bool PlacementMatchesReference(ObjectPlacement placement, string reference)
+        {
+            if (placement == null || string.IsNullOrEmpty(reference))
+                return false;
+
+            return StringEquals(placement.ScenarioObjectId, reference)
+                || StringEquals(placement.RuntimeBindingKey, reference)
+                || StringEquals(ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyAuthoringIdentity), reference);
+        }
+
+        private static string FormatPlacementName(ObjectPlacement placement, string fallback)
+        {
+            if (placement == null)
+                return fallback;
+
+            return FirstNonEmpty(
+                fallback,
+                ScenarioPropertyBag.GetString(placement.CustomProperties, ScenarioPlacementDefinitions.PropertyCapturedName),
+                placement.ScenarioObjectId,
+                placement.DefinitionReference,
+                placement.PrefabReference);
         }
 
         private static Obj_Base ResolveShelterObject(ScenarioAuthoringTarget target)
