@@ -491,8 +491,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             };
 
             ScenarioSpriteRuntimeMutationService.TryApply(model.Target, previewSprite);
-            FrameCustomEditorTarget(state);
-            PositionPixelEditorWindowBesideTarget(state);
+            Rect editorWindowRect = PositionPixelEditorWindowBesideTarget(state);
+            BeginCustomEditorCameraSession(state, editorWindowRect);
             state.SpriteSwapPicker.PreviewCandidateToken = null;
             state.SpriteSwapPicker.PreviewCandidateLabel = "Custom Sprite Draft";
             message = "Custom pixel editor opened from '" + SafeLabel(sourceLabel) + "'.";
@@ -545,6 +545,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 CharacterPart = part,
                 CharacterFamilyIndex = target.FamilyIndex
             };
+            Rect editorWindowRect = PositionPixelEditorWindowBesideTarget(state);
+            BeginCustomEditorCameraSession(state, editorWindowRect);
 
             _characterAppearanceService.ApplyPreviewTexture(target, part, customTextureId, editableTexture, out message);
             if (!string.IsNullOrEmpty(message))
@@ -1603,6 +1605,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
         private void ClearCustomEditorSession()
         {
+            bool hadSession = _customEditorSession != null;
             if (_customEditorSession != null)
             {
                 if (_customEditorSession.PreviewSprite != null)
@@ -1614,6 +1617,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             _customEditorSession = null;
+            if (hadSession)
+                EndCustomEditorCameraSession();
         }
 
         private void ClosePickerState(ScenarioAuthoringState state, bool restorePreview)
@@ -2125,39 +2130,46 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 ScenarioSpriteRuntimeMutationService.TryApply(model.Target, _customEditorSession.PreviewSprite);
         }
 
-        private static void FrameCustomEditorTarget(ScenarioAuthoringState state)
+        private static void BeginCustomEditorCameraSession(ScenarioAuthoringState state, Rect editorWindowRect)
         {
             try
             {
                 ScenarioAuthoringEditorCameraService cameraService = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>();
                 if (cameraService != null && state != null && state.SpriteSwapPicker != null)
-                    cameraService.FrameTarget(state.SpriteSwapPicker.Target);
+                    cameraService.BeginPixelEditorSession(state.SpriteSwapPicker.Target, editorWindowRect);
             }
             catch
             {
             }
         }
 
-        private static void PositionPixelEditorWindowBesideTarget(ScenarioAuthoringState state)
+        private static void EndCustomEditorCameraSession()
+        {
+            try
+            {
+                ScenarioAuthoringEditorCameraService cameraService = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>();
+                if (cameraService != null)
+                    cameraService.EndPixelEditorSession();
+            }
+            catch
+            {
+            }
+        }
+
+        private static Rect PositionPixelEditorWindowBesideTarget(ScenarioAuthoringState state)
         {
             if (state == null || state.WindowStates == null || state.SpriteSwapPicker == null || state.SpriteSwapPicker.Target == null)
-                return;
-
-            Camera camera = Camera.main;
-            if (camera == null)
-                return;
+                return new Rect(0f, 0f, 760f, 560f);
 
             ScenarioAuthoringWindowState window = FindWindowState(state, "pixel_editor");
             if (window == null)
-                return;
+                return new Rect(0f, 0f, 760f, 560f);
 
-            Vector3 screen = camera.WorldToScreenPoint(state.SpriteSwapPicker.Target.WorldPosition);
-            float uiY = Screen.height - screen.y;
             float width = Math.Max(620f, window.Width > 0f ? window.Width : 760f);
             float height = Math.Max(420f, window.Height > 0f ? window.Height : 560f);
-            bool placeRight = screen.x < Screen.width * 0.55f;
-            float x = placeRight ? screen.x + 48f : screen.x - width - 48f;
-            float y = uiY - (height * 0.5f);
+            Rect workspace = ResolveFreeWorkspaceRect();
+            float x = workspace.x + Math.Max(0f, workspace.width - width - 18f);
+            float y = workspace.y + Math.Max(0f, (workspace.height * 0.20f) - (height * 0.5f));
 
             window.HasCustomBounds = true;
             window.Width = width;
@@ -2166,6 +2178,18 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             window.Y = Mathf.Clamp(y, 112f, Math.Max(112f, Screen.height - height - 64f));
             window.Visible = true;
             window.Collapsed = false;
+            return new Rect(window.X, window.Y, window.Width, window.Height);
+        }
+
+        private static Rect ResolveFreeWorkspaceRect()
+        {
+            float top = 112f;
+            float bottom = 64f;
+            return new Rect(
+                18f,
+                top,
+                Math.Max(320f, Screen.width - 36f),
+                Math.Max(240f, Screen.height - top - bottom));
         }
 
         private static ScenarioAuthoringWindowState FindWindowState(ScenarioAuthoringState state, string id)

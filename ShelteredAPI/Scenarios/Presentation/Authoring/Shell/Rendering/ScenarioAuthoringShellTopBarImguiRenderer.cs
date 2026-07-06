@@ -24,8 +24,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             DrawChromePanel(rect, _rootPanelStyle);
             bool compact = IsCompactTopBar(rect, shell);
-            float primaryRowY = compact ? 42f : 10f;
-            float primaryRowHeight = compact ? 24f : 36f;
+            float primaryRowY = compact ? 38f : 10f;
+            float primaryRowHeight = compact ? 30f : 36f;
             float utilityRowY = compact ? 10f : 54f;
             float utilityRowHeight = compact ? 28f : 30f;
 
@@ -58,8 +58,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_snapshot != null && IsWorldStage(_snapshot.State))
             {
                 Rect worldControlsRect = compact
-                    ? new Rect(primaryRowLeft, rect.y + 70f, primaryTabsRight - primaryRowLeft, 20f)
-                    : new Rect(primaryRowLeft, rect.y + 56f, Math.Max(0f, saveX - primaryRowLeft - 12f), 24f);
+                    ? new Rect(primaryRowLeft, rect.y + 68f, primaryTabsRight - primaryRowLeft, 26f)
+                    : new Rect(primaryRowLeft, rect.y + 56f, Math.Max(0f, saveX - primaryRowLeft - 12f), 28f);
                 DrawWorldSurfaceControls(worldControlsRect, shell, compact);
             }
 
@@ -128,15 +128,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (tabs.Count == 0)
                 return;
 
-            float moreWidth = Mathf.Clamp(ScenarioUiMeasuredLabel.Width("More >", _buttonStyle, 20f), 74f, 104f);
-            int visibleCount = ResolveVisibleStageTabCount(tabs, rect.width, moreWidth);
-            bool overflow = visibleCount < tabs.Count;
+            float moreWidth = Mathf.Clamp(ScenarioUiMeasuredLabel.Width("More >", _buttonStyle, 28f), 82f, 112f);
+            List<StageTabLayout> visibleTabs;
+            List<StageTabLayout> overflowLayouts;
+            ResolveStageTabOverflow(tabs, rect.width, moreWidth, out visibleTabs, out overflowLayouts);
+            bool overflow = overflowLayouts.Count > 0;
             float availableRight = overflow ? rect.xMax - moreWidth - 4f : rect.xMax;
             float x = rect.x;
             bool drewMain = false;
-            for (int i = 0; i < visibleCount; i++)
+            for (int i = 0; i < visibleTabs.Count; i++)
             {
-                StageTabLayout tab = tabs[i];
+                StageTabLayout tab = visibleTabs[i];
                 if (tab.Finish && drewMain && x + 8f < availableRight)
                 {
                     ScenarioUiWidgets.DrawVerticalDivider(new Rect(x + 2f, rect.y + 5f, 1f, rect.height - 10f), _uiContext.Styles);
@@ -160,8 +162,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             List<ScenarioAuthoringInspectorAction> overflowTabs = new List<ScenarioAuthoringInspectorAction>();
-            for (int i = visibleCount; i < tabs.Count; i++)
-                overflowTabs.Add(tabs[i].Action);
+            for (int i = 0; i < overflowLayouts.Count; i++)
+                overflowTabs.Add(overflowLayouts[i].Action);
             _topBarOverflowTabs = overflowTabs.ToArray();
 
             _topBarMoreButtonRect = new Rect(rect.xMax - moreWidth, rect.y, moreWidth, rect.height);
@@ -195,48 +197,57 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 });
             }
 
-            result.Sort(delegate(StageTabLayout left, StageTabLayout right)
-            {
-                if (left.Finish == right.Finish)
-                    return 0;
-                return left.Finish ? 1 : -1;
-            });
             return result;
         }
 
-        private static int ResolveVisibleStageTabCount(List<StageTabLayout> tabs, float availableWidth, float moreWidth)
+        private static void ResolveStageTabOverflow(
+            List<StageTabLayout> tabs,
+            float availableWidth,
+            float moreWidth,
+            out List<StageTabLayout> visibleTabs,
+            out List<StageTabLayout> overflowTabs)
         {
-            float fullWidth = MeasureStageTabRunWidth(tabs, tabs.Count);
-            if (fullWidth <= availableWidth)
-                return tabs.Count;
+            visibleTabs = new List<StageTabLayout>();
+            overflowTabs = new List<StageTabLayout>();
+            if (tabs == null || tabs.Count == 0)
+                return;
 
-            float limit = Math.Max(0f, availableWidth - moreWidth - 4f);
-            int visible = 0;
-            while (visible < tabs.Count)
+            bool[] overflow = new bool[tabs.Count];
+            if (MeasureStageTabRunWidth(tabs, overflow) > availableWidth)
             {
-                float width = MeasureStageTabRunWidth(tabs, visible + 1);
-                if (width > limit)
-                    break;
-                visible++;
+                float limit = Math.Max(0f, availableWidth - moreWidth - 4f);
+                for (int i = tabs.Count - 1; i >= 1 && MeasureStageTabRunWidth(tabs, overflow) > limit; i--)
+                    overflow[i] = true;
             }
 
-            return Math.Max(0, visible);
+            for (int i = 0; i < tabs.Count; i++)
+            {
+                if (overflow[i])
+                    overflowTabs.Add(tabs[i]);
+                else
+                    visibleTabs.Add(tabs[i]);
+            }
         }
 
-        private static float MeasureStageTabRunWidth(List<StageTabLayout> tabs, int count)
+        private static float MeasureStageTabRunWidth(List<StageTabLayout> tabs, bool[] overflow)
         {
             float width = 0f;
             bool drewMain = false;
-            for (int i = 0; i < count && i < tabs.Count; i++)
+            bool first = true;
+            for (int i = 0; i < tabs.Count; i++)
             {
+                if (overflow != null && i < overflow.Length && overflow[i])
+                    continue;
+
                 StageTabLayout tab = tabs[i];
-                if (i > 0)
+                if (!first)
                     width += 2f;
                 if (tab.Finish && drewMain)
                     width += 10f;
                 width += tab.Width;
                 if (!tab.Finish)
                     drewMain = true;
+                first = false;
             }
 
             return width;
@@ -258,13 +269,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; overflowTabs != null && i < overflowTabs.Length; i++)
                 width = Math.Max(width, MeasureButtonWidth(overflowTabs[i], false, 26f));
             width = Mathf.Clamp(width, 180f, 260f);
-            float height = 16f + ((overflowTabs != null ? overflowTabs.Length : 0) * 30f);
+            float height = 16f + ((overflowTabs != null ? overflowTabs.Length : 0) * 32f);
             _topBarMoreMenuRect = new Rect(anchor.xMax - width, anchor.yMax + 4f, width, height);
             GUI.Box(_topBarMoreMenuRect, GUIContent.none, _uiContext.Styles.Menu);
             GUILayout.BeginArea(new Rect(_topBarMoreMenuRect.x + 8f, _topBarMoreMenuRect.y + 8f, _topBarMoreMenuRect.width - 16f, _topBarMoreMenuRect.height - 16f));
             for (int i = 0; overflowTabs != null && i < overflowTabs.Length; i++)
             {
-                Rect buttonRect = GUILayoutUtility.GetRect(_topBarMoreMenuRect.width - 16f, 24f, GUILayout.Height(24f));
+                Rect buttonRect = GUILayoutUtility.GetRect(_topBarMoreMenuRect.width - 16f, 32f, GUILayout.Height(32f));
                 DrawButton(buttonRect, overflowTabs[i], false);
                 RegisterTopBarActionAliases(overflowTabs[i], buttonRect);
             }
@@ -329,13 +340,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private float ResolvePrimaryStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
-            float minimum = compact ? 58f : 76f;
-            return Mathf.Max(minimum, MeasureButtonWidth(action, true, compact ? 18f : 30f));
+            float minimum = compact ? 66f : 80f;
+            return Mathf.Max(minimum, MeasureButtonWidth(action, true, compact ? 28f : 30f));
         }
 
         private float ResolveChildStageTabWidth(ScenarioAuthoringInspectorAction action, bool compact)
         {
-            return Mathf.Max(compact ? 62f : 86f, MeasureButtonWidth(action, true, compact ? 14f : 26f));
+            return Mathf.Max(compact ? 70f : 90f, MeasureButtonWidth(action, true, compact ? 28f : 30f));
         }
 
         private float ResolveToolbarActionWidth(ScenarioAuthoringInspectorAction action, bool compact)

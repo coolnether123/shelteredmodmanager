@@ -22,10 +22,13 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
+        private const float PopupMenuRowHeight = 32f;
+        private const float PopupMenuPadding = 8f;
+
         private void DrawContextMenuCore(Rect rect, ScenarioAuthoringContextMenuModel menu)
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
-            GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f));
+            GUILayout.BeginArea(new Rect(rect.x + PopupMenuPadding, rect.y + PopupMenuPadding, rect.width - (PopupMenuPadding * 2f), rect.height - (PopupMenuPadding * 2f)));
             GUILayout.Label(menu.Title ?? "Context", _sectionTitleStyle);
             if (!string.IsNullOrEmpty(menu.Detail))
                 GUILayout.Label(menu.Detail, _mutedTextStyle);
@@ -36,28 +39,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (action == null)
                     continue;
 
-                Rect buttonRect = GUILayoutUtility.GetRect(rect.width - 24f, 24f, GUILayout.Height(24f));
-                DrawButton(buttonRect, action, false);
-                if (!action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
-                {
-                    float reasonHeight = MeasureDisabledReasonHeight(action.DisabledReason, rect.width - 24f);
-                    Rect reasonRect = GUILayoutUtility.GetRect(rect.width - 24f, reasonHeight, GUILayout.Height(reasonHeight));
-                    GUI.Label(reasonRect, action.DisabledReason, _mutedTextStyle);
-                }
+                Rect buttonRect = GUILayoutUtility.GetRect(rect.width - 24f, PopupMenuRowHeight, GUILayout.Height(PopupMenuRowHeight));
+                DrawMenuActionRow(buttonRect, action);
             }
             GUILayout.EndArea();
         }
 
         private Rect BuildPopupRectCore(ScenarioAuthoringContextMenuModel menu, float width, float height, Rect hudReserveRect)
         {
-            float rectWidth = 220f;
-            float rectHeight = 54f + ((menu.Actions != null ? menu.Actions.Length : 0) * 28f);
+            float rectWidth = Math.Max(220f, ScenarioUiMeasuredLabel.Width(menu != null ? menu.Title : null, _sectionTitleStyle, 24f));
             for (int i = 0; menu.Actions != null && i < menu.Actions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = menu.Actions[i];
-                if (action != null && !action.Enabled && !string.IsNullOrEmpty(action.DisabledReason))
-                    rectHeight += MeasureDisabledReasonHeight(action.DisabledReason, rectWidth - 24f) + 2f;
+                if (action != null)
+                    rectWidth = Math.Max(rectWidth, MeasureButtonWidth(action, false, 32f) + 24f);
             }
+            rectWidth = Mathf.Clamp(rectWidth, 220f, 360f);
+            float rectHeight = 44f + (!string.IsNullOrEmpty(menu.Detail) ? 18f : 0f) + ((menu.Actions != null ? menu.Actions.Length : 0) * PopupMenuRowHeight);
             if (menu.CenterOnScreen)
                 return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(width, height, rectWidth, rectHeight, hudReserveRect);
 
@@ -69,26 +67,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ClampAwayFromHud(rect, width, height, hudReserveRect);
         }
 
-        private float MeasureDisabledReasonHeight(string reason, float width)
-        {
-            if (string.IsNullOrEmpty(reason))
-                return 0f;
-
-            GUIStyle style = _mutedTextStyle ?? GUI.skin.label;
-            float measured = style.CalcHeight(new GUIContent(reason), Mathf.Max(80f, width));
-            return Mathf.Clamp(measured + 2f, 16f, 64f);
-        }
-
         private Rect BuildWindowMenuRectCore(Rect buttonRect, ScenarioAuthoringInspectorAction[] actions, float width, float height, Rect hudReserveRect)
         {
             // TODO(centralize): Window menu is still a panel-management popup from the
             // multi-window shell. Fold these choices into central workspace navigation.
             float rectWidth = 220f;
             for (int i = 0; actions != null && i < actions.Length; i++)
-                rectWidth = Math.Max(rectWidth, MeasureButtonWidth(actions[i], false, 26f) + 24f);
+                rectWidth = Math.Max(rectWidth, MeasureMenuActionWidth(actions[i]) + 24f);
 
             rectWidth = Mathf.Clamp(rectWidth, 220f, 320f);
-            float rectHeight = 16f + ((actions != null ? actions.Length : 0) * 28f);
+            float rectHeight = 16f + ((actions != null ? actions.Length : 0) * PopupMenuRowHeight);
             float rectX = buttonRect.width > 0f
                 ? buttonRect.xMax - rectWidth
                 : buttonRect.x;
@@ -103,17 +91,48 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawWindowMenuCore(Rect rect, ScenarioAuthoringInspectorAction[] actions)
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
-            GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f));
+            GUILayout.BeginArea(new Rect(rect.x + PopupMenuPadding, rect.y + PopupMenuPadding, rect.width - (PopupMenuPadding * 2f), rect.height - (PopupMenuPadding * 2f)));
             for (int i = 0; actions != null && i < actions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = actions[i];
                 if (action == null)
                     continue;
 
-                Rect buttonRect = GUILayoutUtility.GetRect(rect.width - 24f, 24f, GUILayout.Height(24f));
-                DrawButton(buttonRect, action, false);
+                Rect buttonRect = GUILayoutUtility.GetRect(rect.width - 24f, PopupMenuRowHeight, GUILayout.Height(PopupMenuRowHeight));
+                DrawMenuActionRow(buttonRect, action);
             }
             GUILayout.EndArea();
+        }
+
+        private float MeasureMenuActionWidth(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return 0f;
+
+            if (IsMenuGroupAction(action))
+                return ScenarioUiMeasuredLabel.Width(action.Label, _sectionTitleStyle, 24f);
+
+            return MeasureButtonWidth(action, false, 32f);
+        }
+
+        private void DrawMenuActionRow(Rect rect, ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return;
+
+            if (IsMenuGroupAction(action))
+            {
+                GUI.Label(new Rect(rect.x + 4f, rect.y + 7f, rect.width - 8f, rect.height - 8f), action.Label ?? string.Empty, _sectionTitleStyle);
+                return;
+            }
+
+            DrawButton(rect, action, false);
+        }
+
+        private static bool IsMenuGroupAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && string.Equals(action.Badge, "GROUP", StringComparison.OrdinalIgnoreCase);
         }
 
         private void DrawButton(Rect rect, ScenarioAuthoringInspectorAction action, bool tab)
@@ -139,7 +158,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));
             bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
             GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
-            GUIContent content = new GUIContent(ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, rect.width - 10f, drawStyle), tooltip);
+            GUIContent content = new GUIContent(
+                ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle),
+                tooltip);
 
             if (IsWindowMenuAction(action))
             {
@@ -172,6 +193,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return !action.Enabled ? _disabledTabContentStyle : (action.Emphasized ? _activeTabContentStyle : _tabContentStyle);
 
             return !action.Enabled ? _disabledButtonContentStyle : (action.Emphasized ? _activeButtonContentStyle : _buttonContentStyle);
+        }
+
+        private static float ResolveButtonContentWidth(Rect rect, GUIStyle style, bool tab)
+        {
+            float stylePadding = style != null && style.padding != null
+                ? style.padding.left + style.padding.right
+                : 0f;
+            float minimumPadding = tab ? 28f : 20f;
+            return Math.Max(0f, rect.width - Math.Max(stylePadding, minimumPadding));
         }
 
         private void DrawButtonAnimationOverlay(Rect rect, string actionId, bool enabled, bool hovered, bool pressed)

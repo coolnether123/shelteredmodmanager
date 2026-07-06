@@ -27,6 +27,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private int _suppressSelectionFrame = -1;
         private bool _assetFrameActive;
         private Vector3 _assetFrameTarget;
+        private bool _cameraLockActive;
+        private bool _hasSavedCameraState;
+        private Vector3 _savedCameraPosition;
+        private float _savedOrthographicSize;
 
         public ScenarioAuthoringEditorCameraService(
             ScenarioAuthoringInputCaptureService inputCapture,
@@ -53,6 +57,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             if (_targetOrthographicSize < 0f)
                 _targetOrthographicSize = camera.orthographicSize;
+
+            if (_cameraLockActive)
+            {
+                ResetDragState();
+                _keyboardPanVelocity = Vector2.zero;
+                ApplyAssetFrame(camera, basicCamera);
+                ApplyEasedZoom(camera, basicCamera);
+                camera.transform.position = ClampCameraPosition(camera, basicCamera, camera.transform.position);
+                return;
+            }
 
             Vector3 translation = ResolveKeyboardPan(camera);
             translation += ResolveMouseDragPan(camera);
@@ -90,6 +104,42 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             _assetFrameActive = true;
             ResetDragState();
             return true;
+        }
+
+        public bool BeginPixelEditorSession(ScenarioAuthoringTarget target, Rect editorWindowRect)
+        {
+            Camera camera = Camera.main;
+            if (camera == null || !camera.orthographic)
+                return false;
+
+            if (!_cameraLockActive)
+            {
+                _savedCameraPosition = camera.transform.position;
+                _savedOrthographicSize = camera.orthographicSize;
+                _hasSavedCameraState = true;
+            }
+
+            _cameraLockActive = true;
+            ResetDragState();
+            _keyboardPanVelocity = Vector2.zero;
+            return FrameTargetLeftOfWindow(target, editorWindowRect, camera, ResolveBasicCamera());
+        }
+
+        public void EndPixelEditorSession()
+        {
+            Camera camera = Camera.main;
+            if (camera != null && camera.orthographic && _hasSavedCameraState)
+            {
+                camera.transform.position = _savedCameraPosition;
+                camera.orthographicSize = _savedOrthographicSize;
+            }
+
+            _cameraLockActive = false;
+            _hasSavedCameraState = false;
+            _targetOrthographicSize = -1f;
+            _assetFrameActive = false;
+            ResetDragState();
+            _keyboardPanVelocity = Vector2.zero;
         }
 
         private bool CanRunCameraUpdate()
@@ -306,6 +356,42 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (camera != null)
                 position.z = camera.transform.position.z;
             return position;
+        }
+
+        private bool FrameTargetLeftOfWindow(
+            ScenarioAuthoringTarget target,
+            Rect editorWindowRect,
+            Camera camera,
+            BasicCamera basicCamera)
+        {
+            if (target == null || camera == null)
+                return false;
+
+            Bounds bounds;
+            if (!TryResolveTargetBounds(target, out bounds))
+                return false;
+
+            float regionWidth = Mathf.Clamp(editorWindowRect.x - 18f, Screen.width * 0.30f, Screen.width);
+            float regionHeight = Mathf.Max(240f, Screen.height - 36f);
+            float regionAspect = regionWidth / Mathf.Max(1f, regionHeight);
+            float fitHeight = Mathf.Max(bounds.size.y, bounds.size.x / Mathf.Max(0.25f, regionAspect));
+            float orthographicSize = ClampZoom(camera, basicCamera, Mathf.Clamp(Mathf.Max(MinZoom, fitHeight * 1.12f), MinZoom, 8f));
+
+            camera.orthographicSize = orthographicSize;
+            _targetOrthographicSize = orthographicSize;
+
+            float desiredScreenX = regionWidth * 0.5f;
+            float desiredScreenY = Screen.height * 0.5f;
+            float pixelsToWorld = (camera.orthographicSize * 2f) / Mathf.Max(1f, camera.pixelHeight);
+            Vector3 screenOffsetWorld = new Vector3(
+                (desiredScreenX - (camera.pixelWidth * 0.5f)) * pixelsToWorld,
+                (desiredScreenY - (camera.pixelHeight * 0.5f)) * pixelsToWorld,
+                0f);
+            Vector3 position = new Vector3(bounds.center.x, bounds.center.y, camera.transform.position.z) - screenOffsetWorld;
+            camera.transform.position = ClampCameraPosition(camera, basicCamera, PreserveCameraZ(camera, position));
+            _assetFrameTarget = camera.transform.position;
+            _assetFrameActive = false;
+            return true;
         }
 
         private static bool TryResolveTargetBounds(ScenarioAuthoringTarget target, out Bounds bounds)

@@ -295,7 +295,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ref _buildPaletteSearchText,
                 ref _buildPaletteSearchFocused);
 
-            float pickerScrollHeight = ResolveRowBoundedScrollHeight(pickerRect.height - 40f, 98f);
+            float pickerScrollHeight = Math.Max(98f, pickerRect.height - 40f);
             Rect pickerScrollRect = new Rect(pickerRect.x, pickerRect.y + 40f, pickerRect.width, pickerScrollHeight);
             GUILayout.BeginArea(pickerScrollRect);
             float previousContentWidth = _activeContentWidth;
@@ -365,7 +365,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (showDetailsPane)
             {
-                float detailsScrollHeight = ResolveRowBoundedScrollHeight(detailsRect.height, 30f);
+                float detailsScrollHeight = Math.Max(30f, detailsRect.height);
                 Rect detailsScrollRect = new Rect(detailsRect.x, detailsRect.y, detailsRect.width, detailsScrollHeight);
                 GUILayout.BeginArea(detailsScrollRect);
                 previousContentWidth = _activeContentWidth;
@@ -441,15 +441,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return "Previewing";
-        }
-
-        private static float ResolveRowBoundedScrollHeight(float height, float rowQuantum)
-        {
-            rowQuantum = Math.Max(1f, rowQuantum);
-            if (height <= rowQuantum)
-                return Math.Max(rowQuantum, height);
-
-            return Math.Max(rowQuantum, Mathf.Floor(height / rowQuantum) * rowQuantum);
         }
 
         private Rect DrawDocumentModalCore(Rect rect, ScenarioAuthoringInspectorDocument document, string scrollId)

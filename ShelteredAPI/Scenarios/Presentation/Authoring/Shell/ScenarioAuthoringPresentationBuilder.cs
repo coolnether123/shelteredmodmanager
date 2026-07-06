@@ -1145,7 +1145,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (contextMenuService == null)
                 return;
 
-            if (state == null || target == null)
+            if (state == null)
             {
                 contextMenuService.Close();
                 return;
@@ -1156,10 +1156,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float anchorY = Screen.height - mouse.y;
             ScenarioAuthoringInspectorAction[] actions = BuildContextMenuActions(state, target);
             contextMenuService.Open(
-                Safe(target.DisplayName),
-                state.MultiSelection != null && state.MultiSelection.Count > 1
-                    ? state.MultiSelection.Count + " placements selected."
-                    : Safe(target.Description),
+                target != null ? Safe(target.DisplayName) : "World",
+                target != null ? FriendlyKindLabel(target.Kind) : "Empty world",
                 anchorX,
                 anchorY,
                 centerOnScreen,
@@ -3525,67 +3523,85 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private ScenarioAuthoringInspectorAction[] BuildContextMenuActions(ScenarioAuthoringState state, ScenarioAuthoringTarget target)
         {
-            if (state == null || target == null)
+            if (state == null)
                 return new ScenarioAuthoringInspectorAction[0];
 
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            if (target == null || target.Kind == ScenarioAuthoringTargetKind.None || target.Kind == ScenarioAuthoringTargetKind.Unknown)
+                return actions.ToArray();
+
             string scopeReason;
             bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason);
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionShellShow, "Inspect Placement", "Open the inspector for the selected target.", true, false));
+            string disabledScopeReason = !scopeAllowed ? ShortMenuReason(scopeReason, "Outside active workspace.") : null;
 
-            actions.Add(Action(
-                ScenarioAuthoringActionIds.ActionToolAssets,
-                "Replace Look...",
-                "Switch to art workflow for the selected target.",
-                scopeAllowed && target.SupportsReplace,
-                false,
-                null,
-                null,
-                null,
-                null,
-                !scopeAllowed ? scopeReason : (!target.SupportsReplace ? "This target does not expose replaceable art." : null)));
+            if (target.SupportsInspect)
+                actions.Add(Action(
+                    ScenarioAuthoringActionIds.ActionShellShow,
+                    "Inspect",
+                    "Open the inspector for this target.",
+                    scopeAllowed,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    disabledScopeReason));
 
-            string captureReason;
-            bool canCapture = _captureService.CanCaptureTarget(target, out captureReason);
-            actions.Add(Action(
-                ScenarioAuthoringActionIds.ActionCaptureSelectedObject,
-                "Capture Placement",
-                "Capture the selected live placement into the scenario draft.",
-                scopeAllowed && canCapture,
-                false,
-                null,
-                null,
-                null,
-                null,
-                !scopeAllowed ? scopeReason : (!canCapture ? captureReason : null)));
+            if (target.SupportsReplace)
+            {
+                actions.Add(Action(
+                    ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
+                    "Replace Look",
+                    "Open the asset editor for this target.",
+                    scopeAllowed,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    disabledScopeReason));
 
-            bool authoredSceneSprite = target.Kind == ScenarioAuthoringTargetKind.SceneSprite && !string.IsNullOrEmpty(target.ScenarioReferenceId);
-            actions.Add(Action(
-                ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove,
-                "Remove Scene Sprite Placement",
-                "Remove the authored scene sprite placement from the draft.",
-                scopeAllowed && authoredSceneSprite,
-                false,
-                null,
-                null,
-                null,
-                null,
-                !scopeAllowed ? scopeReason : (!authoredSceneSprite ? "Only authored scene sprite placements can be removed here." : null)));
+                actions.Add(Action(
+                    ScenarioAuthoringActionIds.ActionSpriteSwapCopy,
+                    "Copy Look",
+                    "Copy this target's current authored look.",
+                    scopeAllowed,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    disabledScopeReason));
+            }
 
-            actions.Add(Action(
-                ScenarioAuthoringActionIds.ActionSpriteSwapCopy,
-                "Copy Look",
-                "Copy the selected target's current authored look.",
-                scopeAllowed && target.SupportsReplace,
-                false,
-                null,
-                null,
-                null,
-                null,
-                !scopeAllowed ? scopeReason : (!target.SupportsReplace ? "This target does not expose copyable art." : null)));
+            if (target.Kind == ScenarioAuthoringTargetKind.SceneSprite
+                && !string.IsNullOrEmpty(target.ScenarioReferenceId))
+            {
+                actions.Add(Action(
+                    ScenarioAuthoringActionIds.ActionSceneSpritePlacementRemove,
+                    "Remove Scene Sprite",
+                    "Remove this authored scene sprite from the draft.",
+                    scopeAllowed,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    disabledScopeReason));
+            }
 
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionSelectionClear, "Clear Selection", "Clear the current authoring selection.", true, false));
             return actions.ToArray();
+        }
+
+        private static string ShortMenuReason(string reason, string fallback)
+        {
+            string value = !string.IsNullOrEmpty(reason) ? reason : fallback;
+            if (string.IsNullOrEmpty(value))
+                return null;
+            if (value.Length <= 64)
+                return value;
+
+            return value.Substring(0, 61) + "...";
         }
 
         private static string FormatClockTime()

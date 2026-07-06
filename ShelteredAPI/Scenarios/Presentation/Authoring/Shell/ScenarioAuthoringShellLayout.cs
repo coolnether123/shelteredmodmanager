@@ -33,7 +33,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float InspectorTopOffset = 30f;
         public const float WorkspaceTabReserveHeight = 42f;
         public const float FloatingWindowStartY = 46f;
-        public const float FloatingWindowCascade = 28f;
+        public const float FloatingWindowCascade = 24f;
         public const float CommandDockBottomOffset = 22f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
@@ -222,7 +222,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             Rect defaultBounds = BuildDefaultWindowBounds(contentRect);
             float x = defaultBounds.x + ((defaultBounds.width - width) * 0.5f);
-            float y = defaultBounds.y + ((defaultBounds.height - height) * 0.5f);
+            float y = defaultBounds.y + Math.Max(0f, (defaultBounds.height * 0.20f) - (height * 0.5f));
             Vector2 offset = ResolveDefaultWindowOffset(window, contentRect, visibleFloatingIndex);
             return new Rect(x + offset.x, y + offset.y, width, height);
         }
@@ -241,36 +241,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect contentRect,
             int visibleFloatingIndex)
         {
-            if (window == null || string.IsNullOrEmpty(window.Id))
-                return CascadeOffset(visibleFloatingIndex);
-
-            float horizontal = Math.Min(280f, contentRect.width * 0.18f);
-            float vertical = Math.Min(170f, contentRect.height * 0.18f);
-
-            if (window.WorkspaceStage != ScenarioStageKind.None)
-                return Vector2.zero;
-
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(horizontal, -18f);
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(0f, vertical);
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Hierarchy, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(-horizontal, -vertical * 0.45f);
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.SelectionStack, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(-horizontal, vertical * 0.55f);
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(-horizontal * 0.5f, -vertical * 0.5f);
-            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase))
-                return new Vector2(0f, 0f);
-
             return CascadeOffset(visibleFloatingIndex);
         }
 
         private static Vector2 CascadeOffset(int visibleFloatingIndex)
         {
-            int slot = Math.Max(0, visibleFloatingIndex % 5);
-            float offset = (slot - 2) * FloatingWindowCascade;
-            return new Vector2(offset, offset * 0.75f);
+            int slot = Math.Max(0, visibleFloatingIndex % 6);
+            float offset = slot * FloatingWindowCascade;
+            return new Vector2(offset, offset);
         }
 
         public static Rect ClampWindowRect(Rect rect, Rect bounds, float minWidth, float minHeight)
