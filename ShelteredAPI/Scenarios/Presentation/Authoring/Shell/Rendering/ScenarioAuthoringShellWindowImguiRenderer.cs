@@ -209,7 +209,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             // Merge this into the central workspace once selection/edit panels are assigned.
             if (IsEmptyInspector(window))
             {
-                DrawEmptyInspectorChip(rect);
                 return RuntimeCompat.ZeroRect();
             }
 

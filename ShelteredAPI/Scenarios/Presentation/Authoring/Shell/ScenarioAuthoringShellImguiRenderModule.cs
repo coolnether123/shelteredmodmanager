@@ -249,12 +249,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell);
                 RegisterTopBarMoreMenu(inputCapture);
-                Rect collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
+                Rect collapsedStripRect = RuntimeCompat.ZeroRect();
                 DrawStatusBarCore(statusRect, shell);
                 inputCapture.RegisterInteractiveRect(topRect);
                 inputCapture.RegisterInteractiveRect(statusRect);
-                if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
-                    inputCapture.RegisterInteractiveRect(collapsedStripRect);
 
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
 
@@ -268,21 +266,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
                 windowMenuButtonRect = DrawTopBarCore(topRect, shell);
                 RegisterTopBarMoreMenu(inputCapture);
-                collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
                 DrawStatusBarCore(statusRect, shell);
                 if (pageRect.width > 0f && pageRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(pageRect);
-                if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
-                    inputCapture.RegisterInteractiveRect(collapsedStripRect);
             }
             else
             {
                 // TODO(centralize): This is the legacy multi-surface path. Merge the tool rail,
                 // command dock, docked windows, and floating overlays into the central workspace
                 // once the remaining scenario editor migration plan is defined.
-                Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State);
+                int restoreChipCount = CountCollapsedWorldToolWindows(shell.Windows);
+                Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State, restoreChipCount);
                 if (toolRailRect.width > 0f && toolRailRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(toolRailRect);
+                Rect restoreChipsRect = DrawWorldToolRestoreChips(contentRect, toolRailRect, shell.Windows);
+                if (restoreChipsRect.width > 0f && restoreChipsRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(restoreChipsRect);
 
                 if (activeWorkspaceId == null)
                 {
@@ -296,6 +295,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             DrawWindowSet(shell.Windows, windowRects, true, contentRect, inputCapture);
+            if (!workshopSurface)
+            {
+                collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
+                if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(collapsedStripRect);
+            }
 
             Rect windowMenuRect = RuntimeCompat.ZeroRect();
             // TODO(centralize): Window menu still exposes separate panel toggles. Re-home these
@@ -479,14 +484,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 // TODO(centralize): Right-side inspector remains outside the central workspace.
                 // Marked for merge once selection details have a central panel destination.
-                Rect inspectorRect = IsEmptyInspector(inspectorWindow)
-                    ? ScenarioAuthoringShellLayout.BuildEmptyInspectorChipRect(contentRect, inspectorWidth)
-                    : ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect, inspectorWidth);
-                AppendStackRect(
-                    rects,
-                    windows,
-                    ScenarioAuthoringWindowIds.Inspector,
-                    inspectorRect);
+                if (!IsEmptyInspector(inspectorWindow))
+                {
+                    AppendStackRect(
+                        rects,
+                        windows,
+                        ScenarioAuthoringWindowIds.Inspector,
+                        ScenarioAuthoringShellLayout.BuildInspectorRect(contentRect, inspectorWidth));
+                }
             }
 
             if (showBottomTray)

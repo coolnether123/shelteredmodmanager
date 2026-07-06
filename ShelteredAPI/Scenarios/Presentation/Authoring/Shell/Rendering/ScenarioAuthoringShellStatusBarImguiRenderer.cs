@@ -178,7 +178,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; windows != null && i < windows.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
-                if (window != null && window.Collapsed)
+                if (ShouldRenderCollapsedStatusChip(window))
                     count++;
             }
 
@@ -189,7 +189,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; windows != null && i < windows.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
-                if (window == null || !window.Collapsed)
+                if (!ShouldRenderCollapsedStatusChip(window))
                     continue;
 
                 measuredWidth += Math.Max(96f, ScenarioUiMeasuredLabel.Width(window.Title ?? string.Empty, _buttonStyle, 24f)) + 6f;
@@ -210,7 +210,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; windows != null && i < windows.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = windows[i];
-                if (window == null || !window.Collapsed)
+                if (!ShouldRenderCollapsedStatusChip(window))
                     continue;
 
                 float buttonWidth = Math.Max(96f, ScenarioUiMeasuredLabel.Width(window.Title ?? string.Empty, _buttonStyle, 24f));
@@ -230,6 +230,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return stripRect;
+        }
+
+        private static bool ShouldRenderCollapsedStatusChip(ScenarioAuthoringShellWindowViewModel window)
+        {
+            if (window == null || !window.Collapsed)
+                return false;
+
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return true;
         }
 
     }

@@ -3446,7 +3446,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 bool canClose = editor == null || !editor.Dirty;
                 actions.Add(Action(
                     ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
-                    "x",
+                    "X",
                     canClose ? "Close the pixel editor." : "Save or discard pixel edits before closing.",
                     canClose,
                     false,
@@ -3458,8 +3458,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return actions.ToArray();
             }
 
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix + windowDefinition.Id, "_", "Collapse this panel into the Windows list.", true, false, "CL"));
-            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + windowDefinition.Id, "x", "Hide this panel.", true, false, "HD"));
+            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix + windowDefinition.Id, "-", "Collapse this panel into the Windows list.", true, false, "CL"));
+            actions.Add(Action(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + windowDefinition.Id, "X", "Hide this panel.", true, false, "HD"));
             return actions.ToArray();
         }
 
@@ -3730,7 +3730,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             return new[]
             {
-                Action(actionId, "x", hint, true, false, "HD")
+                Action(actionId, "X", hint, true, false, "HD")
             };
         }
 

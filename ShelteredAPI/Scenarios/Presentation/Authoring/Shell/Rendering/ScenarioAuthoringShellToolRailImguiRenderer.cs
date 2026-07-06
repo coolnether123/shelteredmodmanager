@@ -21,11 +21,22 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
+        private const float RailRestoreChipHeight = 30f;
+        private const float RailRestoreChipGap = 6f;
+
         private Rect DrawToolRailCore(Rect contentRect, ScenarioAuthoringShellViewModel shell, ScenarioAuthoringState state)
+        {
+            return DrawToolRailCore(contentRect, shell, state, 0);
+        }
+
+        private Rect DrawToolRailCore(Rect contentRect, ScenarioAuthoringShellViewModel shell, ScenarioAuthoringState state, int restoreChipCount)
         {
             ScenarioAuthoringToolButtonViewModel[] buttons = shell != null ? shell.ToolButtons : null;
             int count = buttons != null ? buttons.Length : 0;
-            Rect rect = ScenarioAuthoringShellLayout.BuildToolRailRect(contentRect, count);
+            float restoreReserve = restoreChipCount > 0
+                ? (restoreChipCount * RailRestoreChipHeight) + (restoreChipCount * RailRestoreChipGap)
+                : 0f;
+            Rect rect = ScenarioAuthoringShellLayout.BuildToolRailRect(contentRect, count, restoreReserve);
             DrawChromePanel(rect, _rootPanelStyle);
 
             float buttonHeight;
@@ -43,6 +54,71 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 y += buttonStep;
             }
             return rect;
+        }
+
+        private Rect DrawWorldToolRestoreChips(Rect contentRect, Rect railRect, ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            List<ScenarioAuthoringShellWindowViewModel> collapsed = GetCollapsedWorldToolWindows(windows);
+            if (collapsed.Count == 0)
+                return RuntimeCompat.ZeroRect();
+
+            Rect combined = RuntimeCompat.ZeroRect();
+            for (int i = 0; i < collapsed.Count; i++)
+            {
+                ScenarioAuthoringShellWindowViewModel window = collapsed[i];
+                Rect chipRect = ScenarioAuthoringShellLayout.BuildRailRestoreChipRect(contentRect, railRect, i, collapsed.Count);
+                DrawButton(chipRect, new ScenarioAuthoringInspectorAction
+                {
+                    Id = ScenarioAuthoringActionIds.ActionWindowRestorePrefix + window.Id,
+                    Label = "+ " + (window.Title ?? "Panel"),
+                    Hint = "Restore the " + (window.Title ?? "panel") + " panel.",
+                    Enabled = true
+                }, false);
+
+                combined = combined.width <= 0f || combined.height <= 0f ? chipRect : Union(combined, chipRect);
+            }
+
+            return combined;
+        }
+
+        private static Rect Union(Rect first, Rect second)
+        {
+            float xMin = Math.Min(first.xMin, second.xMin);
+            float yMin = Math.Min(first.yMin, second.yMin);
+            float xMax = Math.Max(first.xMax, second.xMax);
+            float yMax = Math.Max(first.yMax, second.yMax);
+            return new Rect(xMin, yMin, xMax - xMin, yMax - yMin);
+        }
+
+        private static int CountCollapsedWorldToolWindows(ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            return GetCollapsedWorldToolWindows(windows).Count;
+        }
+
+        private static List<ScenarioAuthoringShellWindowViewModel> GetCollapsedWorldToolWindows(ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            List<ScenarioAuthoringShellWindowViewModel> collapsed = new List<ScenarioAuthoringShellWindowViewModel>();
+            AddCollapsedWorldToolWindow(collapsed, windows, ScenarioAuthoringWindowIds.Inspector);
+            AddCollapsedWorldToolWindow(collapsed, windows, ScenarioAuthoringWindowIds.BuildTools);
+            return collapsed;
+        }
+
+        private static void AddCollapsedWorldToolWindow(
+            List<ScenarioAuthoringShellWindowViewModel> collapsed,
+            ScenarioAuthoringShellWindowViewModel[] windows,
+            string windowId)
+        {
+            ScenarioAuthoringShellWindowViewModel window = FindWindow(windows, windowId);
+            if (window == null || !window.Collapsed)
+                return;
+
+            if (string.Equals(windowId, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase)
+                && IsEmptyInspector(window))
+            {
+                return;
+            }
+
+            collapsed.Add(window);
         }
 
         private static void ResolveToolRailButtonMetrics(Rect railRect, int buttonCount, out float buttonHeight, out float buttonStep)

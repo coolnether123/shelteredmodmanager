@@ -143,8 +143,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static Rect BuildToolRailRect(Rect contentRect, int buttonCount)
         {
+            return BuildToolRailRect(contentRect, buttonCount, 0f);
+        }
+
+        public static Rect BuildToolRailRect(Rect contentRect, int buttonCount, float bottomReserveHeight)
+        {
             float portraitSafeY = Math.Max(contentRect.y + 26f, ResolvePortraitReserveHeight(contentRect));
-            float availableHeight = Math.Max(112f, contentRect.yMax - portraitSafeY - Gutter);
+            float availableHeight = Math.Max(112f, contentRect.yMax - portraitSafeY - Gutter - Math.Max(0f, bottomReserveHeight));
             float minimumButtonStack = ToolRailVerticalPadding
                 + (Math.Max(0, buttonCount) * MinToolRailButtonHeight)
                 + (Math.Max(0, buttonCount - 1) * ToolRailCompactGap);
@@ -154,6 +159,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (buttonCount > 0 && height < minimumButtonStack)
                 height = Math.Min(availableHeight, targetHeight);
             return new Rect(contentRect.x + 4f, portraitSafeY, ToolRailWidth, height);
+        }
+
+        public static Rect BuildRailRestoreChipRect(Rect contentRect, Rect railRect, int chipIndex, int chipCount)
+        {
+            const float chipHeight = 30f;
+            const float chipGap = 6f;
+            int safeIndex = Math.Max(0, chipIndex);
+            float y = railRect.yMax + chipGap + (safeIndex * (chipHeight + chipGap));
+            float lastAllowedY = contentRect.yMax - chipHeight - 4f;
+            return new Rect(
+                railRect.x,
+                Math.Min(y, Math.Max(railRect.y, lastAllowedY - Math.Max(0, chipCount - safeIndex - 1) * (chipHeight + chipGap))),
+                railRect.width,
+                chipHeight);
         }
 
         private static float ResolvePortraitReserveHeight(Rect contentRect)
