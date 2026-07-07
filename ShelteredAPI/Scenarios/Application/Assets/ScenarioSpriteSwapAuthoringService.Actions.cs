@@ -62,6 +62,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayPause, StringComparison.Ordinal))
                 return ToggleAnimationPlayback(state, out message);
 
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayInWorld, StringComparison.Ordinal))
+                return ToggleAnimationWorldPlayback(state, out message);
+
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepPrevious, StringComparison.Ordinal))
                 return StepAnimationFrame(state, -1, out message);
 
@@ -186,6 +189,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCopyPrefix, StringComparison.Ordinal))
                 return TryHandleAnimationCopyAction(state, actionId, out message);
 
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationSpeedPrefix, StringComparison.Ordinal))
+                return TryHandleAnimationSpeedAction(state, actionId, out message);
+
             handled = false;
             return false;
         }
@@ -287,6 +293,22 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             return CopyAnimationFrameFrom(state, frameIndex, out message);
+        }
+
+        private bool TryHandleAnimationSpeedAction(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            float speed;
+            if (!float.TryParse(
+                actionId.Substring(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationSpeedPrefix.Length),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out speed))
+            {
+                message = "Animation speed could not be decoded.";
+                return false;
+            }
+
+            return SetAnimationPlaybackSpeed(state, speed, out message);
         }
 
         private bool TryHandlePixelAction(

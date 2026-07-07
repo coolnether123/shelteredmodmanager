@@ -554,10 +554,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
                 rect,
-                editor != null && editor.Dirty ? "Pixel Editor *" : "Pixel Editor",
-                editor != null ? editor.SourceLabel : null,
+                string.Empty,
+                null,
                 false,
-                34f,
+                40f,
                 12f + (chromeActions.Length * 24f));
             Rect headerRect = regions.Header;
             float actionX = headerRect.xMax - 28f;
@@ -567,6 +567,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawButton(actionRect, chromeActions[i], false);
                 actionX -= 24f;
             }
+
+            DrawPixelEditorHeader(headerRect, editor, actionX - headerRect.x);
 
             Rect bodyRect = regions.Body;
             if (editor == null || !editor.Visible)
@@ -581,80 +583,203 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return bodyRect;
         }
 
+        private void DrawPixelEditorHeader(Rect headerRect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float titleWidth)
+        {
+            string title = editor != null && !string.IsNullOrEmpty(editor.SourceLabel)
+                ? "Pixel Editor - " + editor.SourceLabel
+                : "Pixel Editor";
+            if (editor != null && editor.Dirty)
+                title += " *";
+
+            string secondary = string.Empty;
+            if (editor != null && editor.IsAnimationEditor)
+            {
+                secondary = "Frame "
+                    + (editor.AnimationFrameIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + "/"
+                    + editor.AnimationFrameCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + " - "
+                    + FormatSeconds(editor.AnimationFrameDurationSeconds);
+            }
+            else if (editor != null)
+            {
+                secondary = editor.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + "x"
+                    + editor.Height.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            Rect inner = new Rect(headerRect.x + 12f, headerRect.y + 4f, Math.Max(80f, titleWidth - 18f), headerRect.height - 8f);
+            float secondaryWidth = !string.IsNullOrEmpty(secondary)
+                ? Mathf.Clamp(ScenarioUiMeasuredLabel.Width(secondary, _mutedTextStyle, 12f), 96f, Math.Min(220f, inner.width * 0.42f))
+                : 0f;
+            Rect titleRect = new Rect(inner.x, inner.y + 3f, Math.Max(40f, inner.width - secondaryWidth - 10f), 24f);
+            Rect secondaryRect = new Rect(titleRect.xMax + 10f, inner.y + 7f, secondaryWidth, 18f);
+            GUI.Label(titleRect, ShortenToFit(title, titleRect.width, _smallTitleStyle), _smallTitleStyle);
+            if (secondaryWidth > 0f)
+                GUI.Label(secondaryRect, secondary, _mutedTextStyle);
+        }
+
         private void DrawCustomSpriteEditorDedicated(Rect bodyRect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
         {
-            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.34f, 304f, 344f);
-            controlsWidth = Math.Min(controlsWidth, Math.Max(224f, bodyRect.width - 170f));
-            float controlsContentWidth = Math.Max(180f, controlsWidth - 24f);
-            float footerHeight = editor.IsAnimationEditor ? 116f : 42f;
+            float controlsWidth = Mathf.Clamp(bodyRect.width * 0.26f, 248f, 288f);
+            controlsWidth = Math.Min(controlsWidth, Math.Max(224f, bodyRect.width - 360f));
+            float controlsContentWidth = Math.Max(196f, controlsWidth - 20f);
+            float footerHeight = editor.IsAnimationEditor ? 76f : 0f;
             Rect toolsRect = new Rect(bodyRect.x, bodyRect.y, controlsWidth, Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect canvasPane = new Rect(toolsRect.xMax + 10f, bodyRect.y, Math.Max(160f, bodyRect.xMax - toolsRect.xMax - 10f), Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect footerRect = new Rect(bodyRect.x, bodyRect.yMax - footerHeight, bodyRect.width, footerHeight);
 
             GUILayout.BeginArea(toolsRect);
-            RegisterScrollRegion("pixel_editor.tools", toolsRect);
-            Vector2 toolsScroll = GetWindowScrollPosition("pixel_editor.tools");
-            toolsScroll = GUILayout.BeginScrollView(toolsScroll, false, true, GUILayout.Width(toolsRect.width), GUILayout.Height(toolsRect.height));
-            GUILayout.BeginVertical(_uiContext.Styles.Section, GUILayout.Width(Math.Max(180f, toolsRect.width - 18f)));
-            GUILayout.Label(editor.IsCharacterEditor ? "Character Pixels" : "Sprite Pixels", _sectionTitleStyle);
-            GUILayout.Label(editor.Dirty ? "Unsaved changes" : "No unsaved changes", _mutedTextStyle);
+            RegisterInteractiveRegion(toolsRect);
+            GUILayout.BeginVertical(_uiContext.Styles.Section, GUILayout.Width(Math.Max(180f, toolsRect.width)));
+            DrawPixelEditorPrimaryControls(editor, controlsContentWidth);
+            GUILayout.Space(4f);
             if (editor.IsCharacterEditor)
             {
                 DrawCharacterPartToolbar(editor, controlsContentWidth);
-                GUILayout.Space(6f);
+                GUILayout.Space(4f);
             }
             if (editor.IsAnimationEditor)
             {
-                DrawAnimationToolbar(editor, controlsContentWidth);
-                GUILayout.Space(6f);
+                DrawPixelEditorAnimationGroup(editor, controlsContentWidth);
+                GUILayout.Space(4f);
             }
-            DrawCustomEditorToolbar(editor, controlsContentWidth);
-            GUILayout.Space(6f);
-            DrawCustomClipboardToolbar(editor, controlsContentWidth);
-            GUILayout.Space(6f);
-            DrawCustomZoomToolbar(editor, controlsContentWidth);
-            GUILayout.Space(6f);
-            GUILayout.Label("Zoom " + Mathf.RoundToInt(Mathf.Max(1f, editor.Zoom) * 100f) + "%", _smallTitleStyle);
-            GUILayout.Label("Color", _smallTitleStyle);
-            Rect colorRect = GUILayoutUtility.GetRect(112f, 40f, GUILayout.Width(112f), GUILayout.Height(40f));
-            DrawColorPreview(colorRect, editor.ActiveColor);
-            GUILayout.Label("#" + (editor.ActiveColorHex ?? "000000FF"), _textStyle);
-            GUILayout.BeginHorizontal();
-            for (int i = 0; editor.BrushPalette != null && i < editor.BrushPalette.Length; i++)
-            {
-                Rect swatchRect = GUILayoutUtility.GetRect(22f, 22f, GUILayout.Width(22f), GUILayout.Height(22f));
-                DrawBrushSwatch(swatchRect, editor.BrushPalette[i], i == editor.ActiveBrushIndex, i);
-                GUILayout.Space(3f);
-            }
-            GUILayout.EndHorizontal();
-            GUILayout.Space(6f);
-            DrawColorSlider("R", editor, 0);
-            DrawColorSlider("G", editor, 1);
-            DrawColorSlider("B", editor, 2);
-            DrawColorSlider("A", editor, 3);
-            GUILayout.Space(6f);
-            GUILayout.Label(BuildSelectionSummary(editor), _mutedTextStyle);
-            GUILayout.Label(BuildClipboardSummary(editor), _mutedTextStyle);
+            DrawPixelEditorClipboardGroup(editor, controlsContentWidth);
+            GUILayout.Space(4f);
+            DrawPixelEditorColorGroup(editor, controlsContentWidth);
             GUILayout.EndVertical();
-            GUILayout.EndScrollView();
-            SetWindowScrollPosition("pixel_editor.tools", toolsScroll);
             GUILayout.EndArea();
 
             DrawPixelCanvasViewport(canvasPane, editor);
 
-            GUILayout.BeginArea(footerRect);
-            if (editor.IsAnimationEditor)
+            if (editor.IsAnimationEditor && footerRect.height > 0f)
             {
+                GUILayout.BeginArea(footerRect);
                 DrawAnimationTimeline(editor, footerRect.width);
-                GUILayout.Space(4f);
+                GUILayout.EndArea();
             }
+        }
+
+        private void DrawPixelEditorPrimaryControls(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            DrawCustomEditorToolbar(editor, contentWidth);
+            GUILayout.Space(4f);
+            DrawCustomZoomToolbar(editor, contentWidth);
+            GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
-            GUILayout.FlexibleSpace();
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, 96f, editor.IsAnimationEditor ? "Save edited animation frames. Ctrl+S" : "Save the current pixel edit. Ctrl+S");
-            GUILayout.Space(8f);
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, 96f, "Discard the current pixel edit.", editor.Dirty);
+            float saveWidth = (contentWidth - 6f) * 0.5f;
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, saveWidth, editor.IsAnimationEditor ? "Save edited animation frames. Ctrl+S" : "Save the current pixel edit. Ctrl+S");
+            GUILayout.Space(6f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, saveWidth, "Discard the current pixel edit.", editor.Dirty);
             GUILayout.EndHorizontal();
-            GUILayout.EndArea();
+        }
+
+        private void DrawPixelEditorAnimationGroup(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            if (!DrawPixelEditorGroupHeader("pixel_editor.group.animation", "Animation", true))
+                return;
+
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepPrevious, "<", false, 34f, "Previous frame.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayPause, editor.AnimationPlaying ? "Pause" : "Play", editor.AnimationPlaying, 62f, "Preview inside the editor.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepNext, ">", false, 34f, "Next frame.");
+            GUILayout.EndHorizontal();
+            GUILayout.Space(3f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayInWorld, editor.AnimationPlayingInWorld ? "Stop World" : "Play In World", editor.AnimationPlayingInWorld, Math.Min(contentWidth, 118f), "Play the edited animation on the selected world asset.");
+            GUILayout.Space(3f);
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationOnionToggle, "Onion", editor.OnionSkin, 68f, "Ghost neighboring frames under the current frame.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCompareToggle, "Original", editor.CompareOriginal, 78f, "Toggle the original frame overlay.");
+            GUILayout.EndHorizontal();
+            GUILayout.Space(2f);
+            DrawAnimationSpeedSlider(editor, contentWidth);
+            if (DrawPixelEditorGroupHeader("pixel_editor.group.animation.more", "More", false))
+            {
+                GUILayout.BeginHorizontal();
+                DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertFrame, "Revert Frame", false, Math.Max(104f, (contentWidth - 6f) * 0.5f), "Revert the current frame.");
+                GUILayout.Space(6f);
+                DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertAll, "Revert Animation", false, Math.Max(126f, (contentWidth - 6f) * 0.5f), "Revert all edited frames.");
+                GUILayout.EndHorizontal();
+            }
+        }
+
+        private void DrawPixelEditorClipboardGroup(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            if (!DrawPixelEditorGroupHeader("pixel_editor.group.clipboard", "Clipboard", false))
+                return;
+
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomCopy, "Copy", false, 58f, "Copy the current selection. If nothing is selected, copy the whole sprite. Ctrl+C", true);
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomPaste, "Paste", editor.HasClipboard, 62f, editor.HasClipboard ? "Paste the pixel clipboard into the canvas. Ctrl+V" : "Pixel clipboard is empty.", editor.HasClipboard);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(3f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomSelectionClear, "Clear Selection", editor.HasSelection, Math.Min(contentWidth, 132f), editor.HasSelection ? "Clear the current pixel selection." : "There is no active selection.", editor.HasSelection);
+            GUILayout.Label(BuildSelectionSummary(editor), _mutedTextStyle);
+            GUILayout.Label(BuildClipboardSummary(editor), _mutedTextStyle);
+        }
+
+        private void DrawPixelEditorColorGroup(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            if (!DrawPixelEditorGroupHeader("pixel_editor.group.color", "Color", true))
+                return;
+
+            GUILayout.BeginHorizontal();
+            Rect colorRect = GUILayoutUtility.GetRect(48f, 28f, GUILayout.Width(48f), GUILayout.Height(28f));
+            DrawColorPreview(colorRect, editor.ActiveColor);
+            GUILayout.Label("#" + (editor.ActiveColorHex ?? "000000FF"), _textStyle, GUILayout.Width(Math.Max(92f, contentWidth - 112f)));
+            GUILayout.EndHorizontal();
+            GUILayout.Space(3f);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; editor.BrushPalette != null && i < editor.BrushPalette.Length; i++)
+            {
+                Rect swatchRect = GUILayoutUtility.GetRect(20f, 20f, GUILayout.Width(20f), GUILayout.Height(20f));
+                DrawBrushSwatch(swatchRect, editor.BrushPalette[i], i == editor.ActiveBrushIndex, i);
+                GUILayout.Space(2f);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(3f);
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPick, "Picker", editor.ActiveTool == ScenarioSpriteSwapAuthoringService.CustomEditorTool.Pick, 70f, "Use the picker tool to sample a color from the sprite.");
+            GUILayout.Label("Sample on canvas", _mutedTextStyle, GUILayout.Width(Math.Max(88f, contentWidth - 78f)));
+            GUILayout.EndHorizontal();
+        }
+
+        private bool DrawPixelEditorGroupHeader(string key, string label, bool defaultExpanded)
+        {
+            bool expanded = GetPixelEditorGroupExpanded(key, defaultExpanded);
+            Rect rect = GUILayoutUtility.GetRect(120f, 22f, GUILayout.ExpandWidth(true), GUILayout.Height(22f));
+            ScenarioAuthoringInspectorAction action = new ScenarioAuthoringInspectorAction
+            {
+                Id = key,
+                Label = (expanded ? "v " : "> ") + label,
+                Hint = expanded ? "Collapse " + label + "." : "Expand " + label + ".",
+                Enabled = true,
+                Emphasized = expanded
+            };
+            if (DrawPlainButton(rect, new GUIContent(action.Label, action.Hint), expanded ? _activeButtonStyle : _buttonStyle, true))
+            {
+                _pixelEditorGroupExpanded[key] = !expanded;
+                if (Event.current != null)
+                    Event.current.Use();
+                expanded = !expanded;
+            }
+
+            DrawButtonAnimationOverlay(rect, key, true, IsInteractiveHoverAllowed(rect), IsInteractiveMouseDownAllowed(rect));
+            return expanded;
+        }
+
+        private bool GetPixelEditorGroupExpanded(string key, bool defaultExpanded)
+        {
+            bool expanded;
+            if (_pixelEditorGroupExpanded.TryGetValue(key, out expanded))
+                return expanded;
+
+            _pixelEditorGroupExpanded[key] = defaultExpanded;
+            return defaultExpanded;
         }
 
         private void DrawAnimationToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
@@ -689,11 +814,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawAnimationTimeline(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepPrevious, "<", false, 34f, "Previous frame.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayPause, editor.AnimationPlaying ? "Pause" : "Play", editor.AnimationPlaying, 62f, "Preview inside the editor.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepNext, ">", false, 34f, "Next frame.");
+            GUILayout.Space(8f);
             GUILayout.Label(
                 (editor.AnimationClipName ?? "Animation")
                 + " | " + editor.AnimationFrameCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                + " frames | " + FormatSeconds(editor.AnimationClipLengthSeconds),
+                + " frames | "
+                + editor.AnimationSpeed.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                + "x",
                 _mutedTextStyle);
+            GUILayout.EndHorizontal();
             GUILayout.BeginHorizontal();
             for (int i = 0; editor.AnimationFrames != null && i < editor.AnimationFrames.Count; i++)
             {
@@ -820,7 +955,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCustomEditorToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
-            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 88f);
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 62f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomToolPaint,
@@ -877,28 +1012,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCustomZoomToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
         {
-            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 88f);
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 42f);
             GUILayout.BeginHorizontal();
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomOut,
-                "Zoom -",
+                "-",
                 false,
-                buttonWidth,
+                42f,
                 "Zoom out of the canvas.",
                 editor.Zoom > 1);
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomReset,
-                editor.Zoom + "x",
+                Mathf.RoundToInt(Mathf.Max(1f, editor.Zoom) * 100f).ToString(System.Globalization.CultureInfo.InvariantCulture) + "%",
                 false,
-                Math.Max(68f, buttonWidth - 20f),
+                Math.Max(76f, contentWidth - 92f),
                 "Reset canvas zoom to 8x.");
             GUILayout.Space(4f);
             DrawInlineAction(
                 ScenarioAuthoringActionIds.ActionSpriteSwapCustomZoomIn,
-                "Zoom +",
+                "+",
                 false,
-                buttonWidth,
+                42f,
                 "Zoom into the canvas.",
                 editor.Zoom < 48);
             GUILayout.EndHorizontal();
@@ -972,7 +1107,33 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawButton(rect, action, false);
         }
 
+        private void DrawAnimationSpeedSlider(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            float currentValue = Mathf.Clamp(editor != null ? editor.AnimationSpeed : 1f, 0.25f, 2f);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Speed", _textStyle, GUILayout.Width(44f));
+            float sliderWidth = Math.Max(72f, contentWidth - 94f);
+            float nextValue = GUILayout.HorizontalSlider(currentValue, 0.25f, 2f, GUILayout.Width(sliderWidth));
+            GUILayout.Label(currentValue.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "x", _mutedTextStyle, GUILayout.Width(42f));
+            GUILayout.EndHorizontal();
+
+            if (Mathf.Abs(nextValue - currentValue) <= 0.01f)
+                return;
+
+            float rounded = Mathf.Round(nextValue * 100f) / 100f;
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(
+                ScenarioAuthoringActionIds.ActionSpriteSwapAnimationSpeedPrefix
+                + rounded.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            if (Event.current != null)
+                Event.current.Use();
+        }
+
         private void DrawColorSlider(string label, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, int channel)
+        {
+            DrawColorSlider(label, editor, 236f, channel);
+        }
+
+        private void DrawColorSlider(string label, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth, int channel)
         {
             Color activeColor = editor.ActiveColor;
             float currentValue = channel == 0
@@ -980,7 +1141,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (channel == 1 ? activeColor.g : (channel == 2 ? activeColor.b : activeColor.a));
             GUILayout.BeginHorizontal();
             GUILayout.Label(label, _textStyle, GUILayout.Width(18f));
-            float nextValue = GUILayout.HorizontalSlider(currentValue, 0f, 1f, GUILayout.Width(184f));
+            float nextValue = GUILayout.HorizontalSlider(currentValue, 0f, 1f, GUILayout.Width(Math.Max(70f, contentWidth - 60f)));
             GUILayout.Label(Mathf.RoundToInt(nextValue * 255f).ToString(), _mutedTextStyle, GUILayout.Width(34f));
             GUILayout.EndHorizontal();
 

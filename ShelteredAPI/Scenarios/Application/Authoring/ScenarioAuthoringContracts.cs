@@ -325,6 +325,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSpriteSwapAnimationCompareToggle = "sprite_swap.anim.compare";
         public const string ActionSpriteSwapAnimationRevertFrame = "sprite_swap.anim.revert_frame";
         public const string ActionSpriteSwapAnimationRevertAll = "sprite_swap.anim.revert_all";
+        public const string ActionSpriteSwapAnimationPlayInWorld = "sprite_swap.anim.play_world";
+        public const string ActionSpriteSwapAnimationSpeedPrefix = "sprite_swap.anim.speed.";
         public const string ActionSpriteSwapCharacterPartHead = "sprite_swap.character.part.head";
         public const string ActionSpriteSwapCharacterPartTorso = "sprite_swap.character.part.torso";
         public const string ActionSpriteSwapCharacterPartLegs = "sprite_swap.character.part.legs";
@@ -603,6 +605,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string ActiveLayoutPreset { get; set; }
         public bool MinimalMode { get; set; }
         public bool FocusSelectionMode { get; set; }
+        public bool PixelEditorChromeSuppressed { get; set; }
+        public bool PixelEditorRestoreBuildToolsVisible { get; set; }
+        public bool PixelEditorRestoreInspectorVisible { get; set; }
+        public bool PixelEditorRestoreBuildToolsCollapsed { get; set; }
+        public bool PixelEditorRestoreInspectorCollapsed { get; set; }
         public string ActiveDraftId { get; set; }
         public string ActiveScenarioFilePath { get; set; }
         public string StatusMessage { get; set; }
@@ -658,6 +665,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ActiveLayoutPreset = ActiveLayoutPreset,
                 MinimalMode = MinimalMode,
                 FocusSelectionMode = FocusSelectionMode,
+                PixelEditorChromeSuppressed = PixelEditorChromeSuppressed,
+                PixelEditorRestoreBuildToolsVisible = PixelEditorRestoreBuildToolsVisible,
+                PixelEditorRestoreInspectorVisible = PixelEditorRestoreInspectorVisible,
+                PixelEditorRestoreBuildToolsCollapsed = PixelEditorRestoreBuildToolsCollapsed,
+                PixelEditorRestoreInspectorCollapsed = PixelEditorRestoreInspectorCollapsed,
                 ActiveDraftId = ActiveDraftId,
                 ActiveScenarioFilePath = ActiveScenarioFilePath,
                 StatusMessage = StatusMessage,

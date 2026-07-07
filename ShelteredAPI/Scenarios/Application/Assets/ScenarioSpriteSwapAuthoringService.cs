@@ -76,6 +76,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public float AnimationFrameDurationSeconds;
             public float AnimationClipLengthSeconds;
             public bool AnimationPlaying;
+            public bool AnimationPlayingInWorld;
+            public float AnimationSpeed;
             public bool OnionSkin;
             public bool CompareOriginal;
             public List<AnimationFrameModel> AnimationFrames;
@@ -129,7 +131,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public List<AnimationFrameEdit> AnimationFrames;
             public int AnimationFrameIndex;
             public bool AnimationPlaying;
+            public bool AnimationPlayingInWorld;
             public float AnimationPlaybackAccumulator;
+            public float AnimationPlaybackSpeed;
             public bool OnionSkin;
             public bool CompareOriginal;
         }
@@ -291,6 +295,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 AnimationFrameDurationSeconds = currentFrame != null ? currentFrame.DurationSeconds : 0f,
                 AnimationClipLengthSeconds = _customEditorSession.AnimationMetadata != null ? _customEditorSession.AnimationMetadata.ClipLengthSeconds : 0f,
                 AnimationPlaying = _customEditorSession.AnimationPlaying,
+                AnimationPlayingInWorld = _customEditorSession.AnimationPlayingInWorld,
+                AnimationSpeed = ResolveAnimationPlaybackSpeed(),
                 OnionSkin = _customEditorSession.OnionSkin,
                 CompareOriginal = _customEditorSession.CompareOriginal,
                 AnimationFrames = BuildAnimationFrameModels()
@@ -580,6 +586,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 BaseSpriteId = baseSpriteId,
                 BaseRelativePath = baseRelativePath,
                 BaseRuntimeSpriteKey = baseRuntimeSpriteKey,
+                AnimationPlaybackSpeed = 1f,
                 LastInteractionX = 0,
                 LastInteractionY = 0
             };
@@ -634,6 +641,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 Dirty = false,
                 CustomSpriteId = customTextureId,
                 BaseRuntimeSpriteKey = ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(editableTexture, sourceId),
+                AnimationPlaybackSpeed = 1f,
                 LastInteractionX = 0,
                 LastInteractionY = 0,
                 IsCharacterEditor = true,
@@ -1720,6 +1728,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         {
             bool hadSession = _customEditorSession != null;
             if (_customEditorSession != null)
+                StopWorldAnimationPreview(null);
+            if (_customEditorSession != null)
             {
                 if (_customEditorSession.PreviewSprite != null)
                     UnityEngine.Object.Destroy(_customEditorSession.PreviewSprite);
@@ -2180,7 +2190,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             _customEditorSession.AnimationPlaying = false;
             _customEditorSession.AnimationFrameIndex = frameIndex;
             SyncAnimationFrameToSession();
-            ApplyCustomEditorPreview(state);
+            if (_customEditorSession.AnimationPlayingInWorld)
+                UpdateWorldAnimationPreview(state);
+            else
+                ApplyCustomEditorPreview(state);
             message = "Selected frame " + (frameIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + "/" + _customEditorSession.AnimationFrames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
             return true;
@@ -2214,6 +2227,50 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             _customEditorSession.AnimationPlaying = !_customEditorSession.AnimationPlaying;
             _customEditorSession.AnimationPlaybackAccumulator = 0f;
             message = _customEditorSession.AnimationPlaying ? "Animation preview playing." : "Animation preview paused.";
+            return true;
+        }
+
+        private bool ToggleAnimationWorldPlayback(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            _customEditorSession.AnimationPlayingInWorld = !_customEditorSession.AnimationPlayingInWorld;
+            if (_customEditorSession.AnimationPlayingInWorld)
+            {
+                UpdateWorldAnimationPreview(state);
+                message = "World animation preview playing.";
+            }
+            else
+            {
+                StopWorldAnimationPreview(state);
+                message = "World animation preview stopped.";
+            }
+
+            return true;
+        }
+
+        private bool SetAnimationPlaybackSpeed(ScenarioAuthoringState state, float speed, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            float normalized = Mathf.Clamp(speed, 0.25f, 2f);
+            if (Mathf.Abs(ResolveAnimationPlaybackSpeed() - normalized) <= 0.001f)
+                return false;
+
+            _customEditorSession.AnimationPlaybackSpeed = normalized;
+            if (_customEditorSession.AnimationPlayingInWorld)
+                UpdateWorldAnimationPreview(state);
+            message = "Animation preview speed set to " + normalized.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "x.";
             return true;
         }
 
@@ -2274,7 +2331,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             target.PreviewSprite = CreatePreviewSprite(target.Texture, target.OriginalSprite);
             target.Dirty = true;
             SyncAnimationFrameToSession();
-            ApplyCustomEditorPreview(state);
+            if (_customEditorSession.AnimationPlayingInWorld)
+                UpdateWorldAnimationPreview(state);
+            else
+                ApplyCustomEditorPreview(state);
             message = "Copied frame " + (sourceFrameIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + " into frame " + (target.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
             return true;
@@ -2301,7 +2361,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
             frame.Dirty = false;
             SyncAnimationFrameToSession();
-            ApplyCustomEditorPreview(state);
+            if (_customEditorSession.AnimationPlayingInWorld)
+                UpdateWorldAnimationPreview(state);
+            else
+                ApplyCustomEditorPreview(state);
             message = "Reverted frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
             return true;
         }
@@ -2328,7 +2391,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             SyncAnimationFrameToSession();
-            ApplyCustomEditorPreview(state);
+            if (_customEditorSession.AnimationPlayingInWorld)
+                UpdateWorldAnimationPreview(state);
+            else
+                ApplyCustomEditorPreview(state);
             message = "Reverted all animation frames.";
             return true;
         }
@@ -2342,7 +2408,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (frame == null)
                 return;
 
-            _customEditorSession.AnimationPlaybackAccumulator += Time.unscaledDeltaTime;
+            _customEditorSession.AnimationPlaybackAccumulator += Time.unscaledDeltaTime * ResolveAnimationPlaybackSpeed();
             if (_customEditorSession.AnimationPlaybackAccumulator < Mathf.Max(0.01f, frame.DurationSeconds))
                 return;
 
@@ -2350,7 +2416,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             int count = _customEditorSession.AnimationFrames.Count;
             _customEditorSession.AnimationFrameIndex = (_customEditorSession.AnimationFrameIndex + 1) % count;
             SyncAnimationFrameToSession();
-            ApplyCustomEditorPreview(state);
+            if (!_customEditorSession.AnimationPlayingInWorld)
+                ApplyCustomEditorPreview(state);
+        }
+
+        private float ResolveAnimationPlaybackSpeed()
+        {
+            if (_customEditorSession == null || _customEditorSession.AnimationPlaybackSpeed <= 0f)
+                return 1f;
+
+            return Mathf.Clamp(_customEditorSession.AnimationPlaybackSpeed, 0.25f, 2f);
         }
 
         private bool HasDirtyAnimationFrames()
@@ -2938,11 +3013,60 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (!HasCustomEditor(state) || state.SpriteSwapPicker == null || _customEditorSession.PreviewSprite == null)
                 return;
 
+            if (IsAnimationEditor() && _customEditorSession.AnimationPlayingInWorld)
+            {
+                UpdateWorldAnimationPreview(state);
+                return;
+            }
+
             ScenarioEditorSession session;
             SpritePickerModel model;
             string message;
             if (TryGetOpenPickerModel(state, out session, out model, out message) && model != null && model.Target != null)
                 ScenarioSpriteRuntimeMutationService.TryApply(model.Target, _customEditorSession.PreviewSprite);
+        }
+
+        private void UpdateWorldAnimationPreview(ScenarioAuthoringState state)
+        {
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+                return;
+
+            ScenarioEditorSession session;
+            SpritePickerModel model;
+            string message;
+            if (!TryGetOpenPickerModel(state, out session, out model, out message) || model == null || model.Target == null)
+                return;
+
+            List<Sprite> sprites = new List<Sprite>();
+            List<float> durations = new List<float>();
+            for (int i = 0; i < _customEditorSession.AnimationFrames.Count; i++)
+            {
+                AnimationFrameEdit frame = _customEditorSession.AnimationFrames[i];
+                if (frame == null || frame.PreviewSprite == null)
+                    continue;
+
+                sprites.Add(frame.PreviewSprite);
+                durations.Add(Mathf.Max(0.01f, frame.DurationSeconds));
+            }
+
+            ScenarioSpriteRuntimeMutationService.TryPlayEditedAnimation(
+                model.Target,
+                sprites,
+                durations,
+                ResolveAnimationPlaybackSpeed());
+        }
+
+        private void StopWorldAnimationPreview(ScenarioAuthoringState state)
+        {
+            string targetPath = _customEditorSession != null ? _customEditorSession.TargetPath : null;
+            if (state != null && state.SpriteSwapPicker != null && !string.IsNullOrEmpty(state.SpriteSwapPicker.TargetPath))
+                targetPath = state.SpriteSwapPicker.TargetPath;
+            if (string.IsNullOrEmpty(targetPath))
+                return;
+
+            ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget;
+            if (_runtimeResolver.TryResolve(targetPath, ScenarioSpriteTargetComponentKind.SpriteRenderer, out runtimeTarget) && runtimeTarget != null)
+                ScenarioSpriteRuntimeMutationService.StopEditedAnimation(runtimeTarget);
         }
 
         private static void BeginCustomEditorCameraSession(ScenarioAuthoringState state, Rect editorWindowRect)
@@ -2974,14 +3098,14 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private static Rect PositionPixelEditorWindowBesideTarget(ScenarioAuthoringState state)
         {
             if (state == null || state.WindowStates == null || state.SpriteSwapPicker == null || state.SpriteSwapPicker.Target == null)
-                return new Rect(0f, 0f, 760f, 560f);
+                return new Rect(0f, 0f, 1060f, 560f);
 
             ScenarioAuthoringWindowState window = FindWindowState(state, "pixel_editor");
             if (window == null)
-                return new Rect(0f, 0f, 760f, 560f);
+                return new Rect(0f, 0f, 1060f, 560f);
 
-            float width = Math.Max(620f, window.Width > 0f ? window.Width : 760f);
-            float height = Math.Max(420f, window.Height > 0f ? window.Height : 560f);
+            float width = Math.Max(900f, window.Width > 0f ? window.Width : 1060f);
+            float height = Math.Max(500f, window.Height > 0f ? window.Height : 560f);
             Rect workspace = ResolveFreeWorkspaceRect();
             float x = workspace.x + Math.Max(0f, workspace.width - width - 18f);
             float y = workspace.y + Math.Max(0f, (workspace.height * 0.20f) - (height * 0.5f));

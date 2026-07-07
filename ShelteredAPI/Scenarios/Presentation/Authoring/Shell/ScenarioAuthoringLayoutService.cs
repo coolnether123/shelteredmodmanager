@@ -163,6 +163,65 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return changed;
         }
 
+        public void BeginPixelEditorFocus(ScenarioAuthoringState state)
+        {
+            if (state == null)
+                return;
+
+            ScenarioAuthoringWindowState buildTools = FindWindow(state, ScenarioAuthoringWindowIds.BuildTools);
+            ScenarioAuthoringWindowState inspector = FindWindow(state, ScenarioAuthoringWindowIds.Inspector);
+            if (!state.PixelEditorChromeSuppressed)
+            {
+                state.PixelEditorRestoreBuildToolsVisible = buildTools != null && buildTools.Visible;
+                state.PixelEditorRestoreBuildToolsCollapsed = buildTools != null && buildTools.Collapsed;
+                state.PixelEditorRestoreInspectorVisible = inspector != null && inspector.Visible;
+                state.PixelEditorRestoreInspectorCollapsed = inspector != null && inspector.Collapsed;
+            }
+
+            state.PixelEditorChromeSuppressed = true;
+            if (buildTools != null)
+            {
+                buildTools.Visible = false;
+                buildTools.Collapsed = false;
+            }
+
+            if (inspector != null)
+            {
+                inspector.Visible = false;
+                inspector.Collapsed = false;
+            }
+
+            state.WindowMenuOpen = false;
+            PersistIfEnabled(state);
+        }
+
+        public void EndPixelEditorFocus(ScenarioAuthoringState state)
+        {
+            if (state == null || !state.PixelEditorChromeSuppressed)
+                return;
+
+            ScenarioAuthoringWindowState buildTools = FindWindow(state, ScenarioAuthoringWindowIds.BuildTools);
+            ScenarioAuthoringWindowState inspector = FindWindow(state, ScenarioAuthoringWindowIds.Inspector);
+            state.PixelEditorChromeSuppressed = false;
+            if (buildTools != null)
+            {
+                buildTools.Visible = state.PixelEditorRestoreBuildToolsVisible;
+                buildTools.Collapsed = state.PixelEditorRestoreBuildToolsCollapsed && !buildTools.Visible;
+            }
+
+            if (inspector != null)
+            {
+                inspector.Visible = state.PixelEditorRestoreInspectorVisible;
+                inspector.Collapsed = state.PixelEditorRestoreInspectorCollapsed && !inspector.Visible;
+            }
+
+            state.PixelEditorRestoreBuildToolsVisible = false;
+            state.PixelEditorRestoreInspectorVisible = false;
+            state.PixelEditorRestoreBuildToolsCollapsed = false;
+            state.PixelEditorRestoreInspectorCollapsed = false;
+            PersistIfEnabled(state);
+        }
+
         public bool ToggleWindowCollapsed(ScenarioAuthoringState state, string windowId)
         {
             ScenarioAuthoringWindowState window = FindWindow(state, windowId);
@@ -323,7 +382,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 }
 
-                if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
+                if (state.PixelEditorChromeSuppressed
+                    && (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase)))
+                {
+                    window.Visible = false;
+                    window.Collapsed = false;
+                }
+                else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
                     window.Visible = showBuild && !window.Collapsed;
                 else if (string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
                     window.Visible = showWorldInspector && !window.Collapsed;

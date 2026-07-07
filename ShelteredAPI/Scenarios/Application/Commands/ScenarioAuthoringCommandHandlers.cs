@@ -153,7 +153,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             bool changed = _spriteSwap != null
                 && _spriteSwap.TryHandleAction(state, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, out handled, out message);
             if (changed && _layoutService != null)
+            {
+                _layoutService.BeginPixelEditorFocus(state);
                 changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, true);
+            }
             return changed;
         }
 
@@ -225,8 +228,20 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 _buildPlacement.Reset();
             }
 
+            if (changed
+                && handled
+                && string.Equals(actionId, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, StringComparison.Ordinal)
+                && _layoutService != null)
+            {
+                _layoutService.BeginPixelEditorFocus(state);
+                changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, true);
+            }
+
             if (handled && IsPixelEditorTerminalAction(actionId) && _service.GetCustomEditorModel(state) == null && _layoutService != null)
+            {
                 changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, false);
+                _layoutService.EndPixelEditorFocus(state);
+            }
             return changed;
         }
 

@@ -19,15 +19,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             private SpriteRenderer _spriteRenderer;
             private UI2DSprite _ui2DSprite;
             private List<Sprite> _replacementSprites = new List<Sprite>();
+            private List<Sprite> _previewFrames = new List<Sprite>();
+            private List<float> _previewDurations = new List<float>();
+            private Sprite _previewRestoreSprite;
+            private int _previewFrameIndex;
+            private float _previewAccumulator;
+            private float _previewSpeed = 1f;
+            private bool _previewPlaying;
 
             public void Configure(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget, Dictionary<string, Sprite> replacements)
             {
                 _swaps.Clear();
                 _replacementSprites.Clear();
-                _spriteRenderer = runtimeTarget != null ? runtimeTarget.SpriteRenderer : null;
-                _ui2DSprite = runtimeTarget != null ? runtimeTarget.Ui2DSprite : null;
+                BindTarget(runtimeTarget);
 
-                foreach (KeyValuePair<string, Sprite> pair in replacements)
+                foreach (KeyValuePair<string, Sprite> pair in replacements ?? new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase))
                 {
                     if (string.IsNullOrEmpty(pair.Key) || pair.Value == null)
                         continue;
@@ -41,8 +47,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 }
             }
 
+            public void BindTarget(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
+            {
+                _spriteRenderer = runtimeTarget != null ? runtimeTarget.SpriteRenderer : null;
+                _ui2DSprite = runtimeTarget != null ? runtimeTarget.Ui2DSprite : null;
+            }
+
             public void ClearAndRestore()
             {
+                StopPreview();
                 Sprite current = GetCurrentSprite();
                 if (current != null)
                 {
@@ -69,8 +82,53 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 Destroy(this);
             }
 
+            public void ConfigurePreview(IList<Sprite> frames, IList<float> durations, float speed)
+            {
+                if (!_previewPlaying)
+                    _previewRestoreSprite = GetCurrentSprite();
+
+                _previewFrames.Clear();
+                _previewDurations.Clear();
+                for (int i = 0; frames != null && i < frames.Count; i++)
+                {
+                    Sprite frame = frames[i];
+                    if (frame == null)
+                        continue;
+
+                    _previewFrames.Add(frame);
+                    float duration = durations != null && i < durations.Count ? durations[i] : 0.167f;
+                    _previewDurations.Add(Mathf.Max(0.01f, duration));
+                }
+
+                _previewSpeed = Mathf.Clamp(speed <= 0f ? 1f : speed, 0.25f, 2f);
+                _previewPlaying = _previewFrames.Count > 0;
+                _previewFrameIndex = Mathf.Clamp(_previewFrameIndex, 0, Math.Max(0, _previewFrames.Count - 1));
+                _previewAccumulator = 0f;
+                if (_previewPlaying)
+                    ApplySprite(_previewFrames[_previewFrameIndex]);
+            }
+
+            public void StopPreview()
+            {
+                if (_previewPlaying && _previewRestoreSprite != null)
+                    ApplySprite(_previewRestoreSprite);
+
+                _previewPlaying = false;
+                _previewRestoreSprite = null;
+                _previewFrameIndex = 0;
+                _previewAccumulator = 0f;
+                _previewFrames.Clear();
+                _previewDurations.Clear();
+            }
+
             private void LateUpdate()
             {
+                if (_previewPlaying)
+                {
+                    TickPreview();
+                    return;
+                }
+
                 Sprite current = GetCurrentSprite();
                 if (current == null || _swaps.Count == 0)
                     return;
@@ -81,6 +139,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     return;
 
                 ApplySprite(swap.Replacement);
+            }
+
+            private void TickPreview()
+            {
+                if (_previewFrames.Count == 0)
+                    return;
+
+                _previewFrameIndex = Mathf.Clamp(_previewFrameIndex, 0, _previewFrames.Count - 1);
+                ApplySprite(_previewFrames[_previewFrameIndex]);
+                float duration = _previewFrameIndex < _previewDurations.Count ? _previewDurations[_previewFrameIndex] : 0.167f;
+                _previewAccumulator += Time.unscaledDeltaTime * Mathf.Clamp(_previewSpeed, 0.25f, 2f);
+                if (_previewAccumulator < Mathf.Max(0.01f, duration))
+                    return;
+
+                _previewAccumulator = 0f;
+                _previewFrameIndex = (_previewFrameIndex + 1) % _previewFrames.Count;
+                ApplySprite(_previewFrames[_previewFrameIndex]);
             }
 
             private Sprite GetCurrentSprite()
@@ -159,6 +234,40 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             driver.Configure(runtimeTarget, replacements);
             return true;
+        }
+
+        public static bool TryPlayEditedAnimation(
+            ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget,
+            IList<Sprite> frames,
+            IList<float> durations,
+            float speed)
+        {
+            if (runtimeTarget == null || runtimeTarget.Transform == null || frames == null || frames.Count == 0)
+                return false;
+
+            if (runtimeTarget.Kind != ScenarioSpriteTargetComponentKind.SpriteRenderer
+                && runtimeTarget.Kind != ScenarioSpriteTargetComponentKind.UI2DSprite)
+            {
+                return false;
+            }
+
+            AnimatedFrameSwapDriver driver = runtimeTarget.Transform.GetComponent<AnimatedFrameSwapDriver>();
+            if (driver == null)
+                driver = runtimeTarget.Transform.gameObject.AddComponent<AnimatedFrameSwapDriver>();
+
+            driver.BindTarget(runtimeTarget);
+            driver.ConfigurePreview(frames, durations, speed);
+            return true;
+        }
+
+        public static void StopEditedAnimation(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
+        {
+            if (runtimeTarget == null || runtimeTarget.Transform == null)
+                return;
+
+            AnimatedFrameSwapDriver driver = runtimeTarget.Transform.GetComponent<AnimatedFrameSwapDriver>();
+            if (driver != null)
+                driver.StopPreview();
         }
 
         public static void ClearAnimatedFrameSwaps(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget)
