@@ -116,26 +116,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (assignedActors > 0)
                 MMLog.WriteInfo("[ScenarioEditorController] Assigned " + assignedActors + " missing scenario actor ref(s) before validation.");
 
-            ScenarioValidationResult validation = _validator.Validate(session.WorkingDefinition, path);
-            if (validation == null)
-            {
-                validation = new ScenarioValidationResult();
-                validation.AddError("Scenario validation did not return a result.");
-                MMLog.WriteWarning("[ScenarioEditorController] Save blocked because validation returned no result.");
-                return validation;
-            }
-
-            if (!validation.IsValid)
-            {
-                MMLog.WriteWarning("[ScenarioEditorController] Save blocked by scenario validation for " + path + ".");
-                return validation;
-            }
+            ScenarioValidationResult validation = ValidateForSave(session.WorkingDefinition, path);
 
             _serializer.Save(session.WorkingDefinition, path);
             session.OriginalDefinition = ScenarioDefinitionCloner.Clone(session.WorkingDefinition);
             session.DirtyFlags.Clear();
             _sessionStore.Set(session, path);
-            MMLog.WriteInfo("[ScenarioEditorController] Saved scenario definition to " + path + ".");
+            if (validation != null && !validation.IsValid)
+                MMLog.WriteWarning("[ScenarioEditorController] Saved scenario definition with validation errors to " + path + ".");
+            else
+                MMLog.WriteInfo("[ScenarioEditorController] Saved scenario definition to " + path + ".");
             return validation;
         }
 
@@ -288,6 +278,28 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (session == null)
                 throw new InvalidOperationException("No scenario editor session is active.");
             return session;
+        }
+
+        private ScenarioValidationResult ValidateForSave(ScenarioDefinition definition, string path)
+        {
+            try
+            {
+                ScenarioValidationResult validation = _validator.Validate(definition, path);
+                if (validation != null)
+                    return validation;
+
+                ScenarioValidationResult missing = new ScenarioValidationResult();
+                missing.AddError("Scenario validation did not return a result.");
+                MMLog.WriteWarning("[ScenarioEditorController] Validation returned no result while saving " + path + "; saving draft anyway.");
+                return missing;
+            }
+            catch (Exception ex)
+            {
+                ScenarioValidationResult failed = new ScenarioValidationResult();
+                failed.AddError("Scenario validation failed before save: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioEditorController] Validation failed while saving " + path + "; saving draft anyway. " + ex.Message);
+                return failed;
+            }
         }
 
         private void PauseForEditor()

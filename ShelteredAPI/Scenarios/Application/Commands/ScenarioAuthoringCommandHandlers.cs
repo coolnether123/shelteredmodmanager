@@ -1667,16 +1667,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             try
             {
                 ScenarioValidationResult validation = _editorService.CommitChanges(null);
-                if (validation != null && validation.IsValid)
-                {
-                    ScenarioEditorSession session = _editorService.CurrentSession;
-                    message = session != null && session.HasUnappliedDraftChanges
-                        ? "Scenario draft saved. Running playtest predates recent edits; stop and restart playtest to verify the saved draft."
-                        : "Scenario draft saved.";
-                    return true;
-                }
-
-                message = "Scenario draft save failed validation: " + FormatValidationSummary(validation);
+                ScenarioEditorSession session = _editorService.CurrentSession;
+                string savedMessage = session != null && session.HasUnappliedDraftChanges
+                    ? "Scenario draft saved. Running playtest predates recent edits; stop and restart playtest to verify the saved draft."
+                    : "Scenario draft saved.";
+                message = validation != null && !validation.IsValid
+                    ? savedMessage + " Validation has errors: " + FormatValidationSummary(validation)
+                    : savedMessage;
                 return true;
             }
             catch (Exception ex)

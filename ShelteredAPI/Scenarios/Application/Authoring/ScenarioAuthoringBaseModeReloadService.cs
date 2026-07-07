@@ -73,12 +73,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             editorSession.MarkDraftChanged(ScenarioDirtySection.Meta);
 
             ScenarioValidationResult validation = _editorService.CommitChanges(null);
-            if (validation == null || !validation.IsValid)
-            {
-                snapshot.Restore(definition);
-                message = "Base switch save failed validation: " + FormatValidationSummary(validation);
-                return true;
-            }
 
             return QueueSavedDraftReload(
                 draftId,
@@ -89,6 +83,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 false,
                 string.Equals(NormalizeFamilyChoice(familyChoice), ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal),
                 true,
+                validation,
                 out message);
         }
 
@@ -126,13 +121,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioValidationResult validation = _editorService.CommitChanges(null);
             if (validation == null || !validation.IsValid)
             {
-                message = "Restart save failed validation: " + FormatValidationSummary(validation);
+                message = "Draft saved, but playtest restart is blocked by validation: " + FormatValidationSummary(validation);
                 return true;
             }
 
             SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
             ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
-            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, out message);
+            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, validation, out message);
         }
 
         public bool SaveAndReloadBaseline(
@@ -164,11 +159,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ScenarioValidationResult validation = _editorService.CommitChanges(null);
-            if (validation == null || !validation.IsValid)
-            {
-                message = "Baseline save failed validation: " + FormatValidationSummary(validation);
-                return true;
-            }
 
             ScenarioBaseGameMode reloadMode = Enum.IsDefined(typeof(ScenarioBaseGameMode), baseMode)
                 ? baseMode
@@ -184,6 +174,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 false,
                 false,
                 true,
+                validation,
                 out message);
         }
 
@@ -213,16 +204,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             editorSession.MarkDraftChanged(ScenarioDirtySection.Meta);
 
             ScenarioValidationResult validation = _editorService.CommitChanges(null);
-            if (validation == null || !validation.IsValid)
-            {
-                snapshot.Restore(definition);
-                message = "Base switch save failed validation: " + FormatValidationSummary(validation);
-                return true;
-            }
 
             message = "Base mode saved as " + FormatBaseMode(newBaseMode)
                 + " with " + FormatFamilyChoice(familyChoice)
-                + ". The target backend world is saved and will load next time this draft opens.";
+                + ". The target backend world is saved and will load next time this draft opens."
+                + FormatValidationSuffix(validation);
             return true;
         }
 
@@ -334,6 +320,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return "Unknown validation error.";
         }
 
+        private static string FormatValidationSuffix(ScenarioValidationResult validation)
+        {
+            if (validation == null || validation.IsValid)
+                return string.Empty;
+
+            return " Validation has errors: " + FormatValidationSummary(validation);
+        }
+
         private bool QueueSavedDraftReload(
             string draftId,
             SaveEntry draftStartupSave,
@@ -343,6 +337,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             bool reenterPlaytest,
             bool captureBaseDefaultFamily,
             bool suppressIntroCutscene,
+            ScenarioValidationResult validation,
             out string message)
         {
             ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
@@ -381,7 +376,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ? "Restarting playtest. Reloading authoring world " + label + "."
                 : "Reloading authoring world " + label + ".";
             bootstrap.RequestReloadActiveSession(pending, reloadReason);
-            message = "Scenario draft saved. Reloading world " + label + ".";
+            message = "Scenario draft saved. Reloading world " + label + "." + FormatValidationSuffix(validation);
             return true;
         }
 

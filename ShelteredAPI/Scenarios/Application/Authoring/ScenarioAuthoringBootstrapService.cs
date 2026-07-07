@@ -293,7 +293,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 : CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
             message = closed
                 ? "Closed from authoring shell and returning to the main menu."
-                : "Close blocked: fix the draft validation/save issue, then try Exit Editor again.";
+                : "Close blocked: the draft could not be serialized. Check the log, then try Exit Editor again.";
             return true;
         }
 
@@ -306,15 +306,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             try
             {
                 ScenarioValidationResult validation = _editorService.CommitChanges(active.ScenarioFilePath);
-                if (validation != null && validation.IsValid)
-                {
+                if (validation != null && !validation.IsValid)
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Saved active draft with validation errors before vanilla shutdown. draftId="
+                        + active.DraftId + ".");
+                else
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Saved active draft before vanilla shutdown. draftId="
                         + active.DraftId + ".");
-                }
-                else
-                {
-                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Active draft save before vanilla shutdown was blocked by validation.");
-                }
             }
             catch (Exception ex)
             {
@@ -566,16 +563,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             try
             {
                 ScenarioValidationResult validation = _editorService.CommitChanges(pending.ScenarioFilePath);
-                if (validation != null && validation.IsValid)
-                {
+                if (validation != null && !validation.IsValid)
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Captured base default family and saved draft with validation errors for draft '"
+                        + pending.DraftId + "'.");
+                else
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Captured base default family for draft '"
                         + pending.DraftId + "'. " + (captureMessage ?? string.Empty));
-                }
-                else
-                {
-                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Captured base default family but save validation failed for draft '"
-                        + pending.DraftId + "'.");
-                }
             }
             catch (Exception ex)
             {
@@ -839,7 +832,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (!CommitActiveDraftForClose(active))
             {
-                _backend.SetStatusMessage("Close blocked: the draft could not be saved. Fix validation errors, then try Exit Editor again.");
+                _backend.SetStatusMessage("Close blocked: the draft could not be serialized. Check the log, then try Exit Editor again.");
                 return false;
             }
 
@@ -853,7 +846,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string scenarioFilePath = state != null ? state.ActiveScenarioFilePath : null;
             if (!CommitActiveDraftForClose(scenarioFilePath))
             {
-                _backend.SetStatusMessage("Close blocked: the draft could not be saved. Fix validation errors, then try Exit Editor again.");
+                _backend.SetStatusMessage("Close blocked: the draft could not be serialized. Check the log, then try Exit Editor again.");
                 return false;
             }
 
@@ -895,11 +888,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             try
             {
                 ScenarioValidationResult validation = _editorService.CommitChanges(scenarioFilePath);
-                if (validation != null && validation.IsValid)
-                    return true;
-
-                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Close-to-menu blocked by draft validation.");
-                return false;
+                if (validation != null && !validation.IsValid)
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Close-to-menu saved draft with validation errors.");
+                return true;
             }
             catch (Exception ex)
             {
