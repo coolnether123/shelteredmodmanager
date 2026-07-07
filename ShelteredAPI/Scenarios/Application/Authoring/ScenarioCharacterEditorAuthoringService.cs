@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Actors;
 using ModAPI.Scenarios;
 using UnityEngine;
 using ShelteredAPI.Hooks;
@@ -454,6 +455,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
+            if (command.StartsWith(ScenarioActorAuthoringFieldStore.FieldCommandPrefix, StringComparison.Ordinal))
+                return HandleModFieldCommand(session, config, command.Substring(ScenarioActorAuthoringFieldStore.FieldCommandPrefix.Length), label, out message);
+
             if (string.Equals(command, "copy_look", StringComparison.Ordinal))
                 return CopyLookFromSelected(session, state, config, label, out message);
 
@@ -873,6 +877,99 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return false;
+        }
+
+        private bool HandleModFieldCommand(
+            ScenarioEditorSession session,
+            FamilyMemberConfig config,
+            string command,
+            string label,
+            out string message)
+        {
+            message = null;
+            string verb;
+            string token;
+            string argument;
+            if (!TrySplitModFieldCommand(command, out verb, out token, out argument))
+            {
+                message = "Mod field editor action was not recognized.";
+                return true;
+            }
+
+            string fieldKey = ScenarioAuthoringActionCodec.DecodeToken(token);
+            ActorAuthoringFieldDefinition field;
+            if (!ScenarioActorAuthoringFieldStore.TryFindField(config, fieldKey, out field))
+            {
+                message = "The mod field provider for this actor field is not loaded.";
+                return true;
+            }
+
+            string current = ScenarioActorAuthoringFieldStore.GetValue(config, field);
+            string next = current;
+            if (string.Equals(verb, "toggle", StringComparison.OrdinalIgnoreCase))
+                next = string.Equals(ScenarioActorAuthoringFieldStore.NormalizeValue(field, current), "true", StringComparison.OrdinalIgnoreCase) ? "false" : "true";
+            else if (string.Equals(verb, "step", StringComparison.OrdinalIgnoreCase))
+                next = StepModField(field, current, argument);
+            else if (string.Equals(verb, "enum", StringComparison.OrdinalIgnoreCase))
+                next = ScenarioActorAuthoringFieldStore.NextEnumValue(field, current);
+            else if (string.Equals(verb, "text", StringComparison.OrdinalIgnoreCase))
+                next = ScenarioAuthoringActionCodec.DecodeToken(argument) ?? string.Empty;
+            else if (string.Equals(verb, "color", StringComparison.OrdinalIgnoreCase))
+                next = "#" + (argument ?? string.Empty);
+            else
+            {
+                message = "The mod field command was not supported.";
+                return true;
+            }
+
+            if (!ScenarioActorAuthoringFieldStore.SetValue(config, field, next))
+            {
+                message = "Could not update the mod field payload.";
+                return true;
+            }
+
+            MarkDirty(session);
+            message = "Changed " + label + " mod field " + field.Label + ".";
+            return true;
+        }
+
+        private static string StepModField(ActorAuthoringFieldDefinition field, string current, string argument)
+        {
+            int direction;
+            if (!int.TryParse(argument ?? "1", out direction))
+                direction = 1;
+            direction = direction < 0 ? -1 : 1;
+
+            if (field != null && field.ValueType == ActorAuthoringFieldValueType.Float)
+            {
+                float value;
+                float.TryParse(current ?? field.DefaultValue ?? "0", System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out value);
+                float step = field.FloatStep <= 0f ? 1f : field.FloatStep;
+                return ScenarioActorAuthoringFieldStore.NormalizeValue(field, (value + (step * direction)).ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+            }
+
+            int intValue;
+            int.TryParse(current ?? field.DefaultValue ?? "0", out intValue);
+            int intStep = field != null && field.IntStep > 0 ? field.IntStep : 1;
+            return ScenarioActorAuthoringFieldStore.NormalizeValue(field, (intValue + (intStep * direction)).ToString());
+        }
+
+        private static bool TrySplitModFieldCommand(string command, out string verb, out string token, out string argument)
+        {
+            verb = null;
+            token = null;
+            argument = null;
+            if (string.IsNullOrEmpty(command))
+                return false;
+
+            string[] parts = command.Split(new[] { '.' }, 3);
+            if (parts.Length < 2)
+                return false;
+
+            verb = parts[0];
+            token = parts[1];
+            argument = parts.Length > 2 ? parts[2] : null;
+            return !string.IsNullOrEmpty(verb) && !string.IsNullOrEmpty(token);
         }
 
         private static bool TrySplitIndexedCommand(string value, out int index, out string command)

@@ -146,6 +146,11 @@ namespace ShelteredAPI.Core
             RegisterApi(ShelteredApiAliasIds.ActorEvents, (IActorEvents)actors);
             RegisterApi(GameRuntimeApiIds.ActorSerialization, (IActorSerializationService)actors);
             RegisterApi(ShelteredApiAliasIds.ActorSerialization, (IActorSerializationService)actors);
+            IActorAuthoringCapabilityRegistry actorAuthoringCapabilities = new ScenarioActorAuthoringCapabilityRegistry();
+            if (ScenarioFeatureToggles.IsDevActorAuthoringProviderEnabled())
+                actorAuthoringCapabilities.RegisterProvider(new ScenarioDevActorAuthoringCapabilityProvider());
+            RegisterApi(GameRuntimeApiIds.ActorAuthoringCapabilities, actorAuthoringCapabilities);
+            RegisterApi(ShelteredApiAliasIds.ActorAuthoringCapabilities, actorAuthoringCapabilities);
 
             ICustomScenarioService customScenarios = ScenarioCompositionRoot.ResolveRuntime<ICustomScenarioService>();
             ScenarioCompositionRoot.ResolveRuntime<IScenarioRuntimeBindingService>().EnsureHooked();

@@ -59,6 +59,7 @@
   <ItemGroup>
     <Compile Include="Actors\Abstractions\IActorSystem.cs" />
     <Compile Include="Actors\Abstractions\ActorAdapterBase.cs" />
+    <Compile Include="Actors\Authoring\ActorAuthoringCapabilities.cs" />
     <Compile Include="Actors\Models\ActorModels.cs" />
     <Compile Include="Actors\Models\ActorComponents.cs" />
     <Compile Include="Actors\Models\ActorRuntimeModels.cs" />

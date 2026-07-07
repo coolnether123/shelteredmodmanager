@@ -1905,6 +1905,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     starting ? "Starting survivor" : "Future arrival")
             });
 
+            ScenarioAuthoringInspectorSection modFields = BuildSurvivorModFieldsSection(member, actionPrefix, index);
+            if (modFields != null)
+                sections.Add(modFields);
+
             if (future && futureSurvivor != null)
             {
                 List<ScenarioAuthoringInspectorItem> schedule = new List<ScenarioAuthoringInspectorItem>();
@@ -3085,6 +3089,188 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return rows;
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildSurvivorModFieldsSection(
+            FamilyMemberConfig member,
+            string actionPrefix,
+            int index)
+        {
+            List<ScenarioSurvivorModFieldRowViewModel> rows = new List<ScenarioSurvivorModFieldRowViewModel>();
+            string indexedPrefix = actionPrefix + index.ToString(CultureInfo.InvariantCulture) + ".";
+            IList<ActorAuthoringFieldDefinition> fields = ScenarioActorAuthoringFieldStore.GetApplicableFields(member);
+            for (int i = 0; fields != null && i < fields.Count; i++)
+            {
+                ScenarioSurvivorModFieldRowViewModel row = BuildSurvivorModFieldRow(member, fields[i], indexedPrefix);
+                if (row != null)
+                    rows.Add(row);
+            }
+
+            AddMissingModFieldNotices(rows, member, fields);
+            if (rows.Count == 0)
+                return null;
+
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (HasMissingModFieldNotice(rows))
+            {
+                items.Add(ActionItem(Action(
+                    ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicModGating,
+                    "Resolve Mod Gating",
+                    "Open guidance for required mods and missing actor-authoring providers.",
+                    true,
+                    false,
+                    "MOD")));
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "survivor_mod_fields",
+                Title = "Mod Fields",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ModFieldList,
+                ModFieldRows = rows.ToArray(),
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioSurvivorModFieldRowViewModel BuildSurvivorModFieldRow(
+            FamilyMemberConfig member,
+            ActorAuthoringFieldDefinition field,
+            string indexedPrefix)
+        {
+            if (field == null)
+                return null;
+
+            string value = ScenarioActorAuthoringFieldStore.NormalizeValue(field, ScenarioActorAuthoringFieldStore.GetValue(member, field));
+            string token = ScenarioAuthoringActionCodec.EncodeToken(ScenarioActorAuthoringFieldStore.BuildFieldToken(field));
+            string commandPrefix = indexedPrefix + ScenarioActorAuthoringFieldStore.FieldCommandPrefix;
+            string help = !string.IsNullOrEmpty(field.HelpText)
+                ? field.HelpText
+                : "Authored by " + field.RequiredModId + " and stored in " + field.ComponentId + ".";
+
+            if (field.ValueType == ActorAuthoringFieldValueType.Bool)
+            {
+                bool enabled = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
+                return new ScenarioSurvivorModFieldRowViewModel
+                {
+                    Kind = ScenarioSurvivorModFieldControlKind.Toggle,
+                    Label = field.Label,
+                    ValueText = enabled ? "On" : "Off",
+                    HelpText = help,
+                    ToggleAction = Action(commandPrefix + "toggle." + token, enabled ? "On" : "Off", help, true, enabled, enabled ? "ON" : "OFF", field.ComponentId)
+                };
+            }
+
+            if (field.ValueType == ActorAuthoringFieldValueType.Int || field.ValueType == ActorAuthoringFieldValueType.Float)
+            {
+                return new ScenarioSurvivorModFieldRowViewModel
+                {
+                    Kind = ScenarioSurvivorModFieldControlKind.Stepper,
+                    Label = field.Label,
+                    ValueText = value,
+                    HelpText = help,
+                    DecreaseAction = Action(commandPrefix + "step." + token + ".-1", "-", "Decrease " + field.Label + ".", true, false, "-", value),
+                    IncreaseAction = Action(commandPrefix + "step." + token + ".1", "+", "Increase " + field.Label + ".", true, false, "+", value)
+                };
+            }
+
+            if (field.ValueType == ActorAuthoringFieldValueType.String)
+            {
+                return new ScenarioSurvivorModFieldRowViewModel
+                {
+                    Kind = ScenarioSurvivorModFieldControlKind.Text,
+                    Label = field.Label,
+                    ValueText = value,
+                    HelpText = help,
+                    TextAction = Action(commandPrefix + "text." + token + ".", field.Label, help, true, false, "TXT")
+                };
+            }
+
+            if (field.ValueType == ActorAuthoringFieldValueType.StringEnum)
+            {
+                return new ScenarioSurvivorModFieldRowViewModel
+                {
+                    Kind = ScenarioSurvivorModFieldControlKind.Enum,
+                    Label = field.Label,
+                    ValueText = value,
+                    HelpText = help,
+                    CycleAction = Action(commandPrefix + "enum." + token, value, help, true, false, "EN", field.ComponentId)
+                };
+            }
+
+            if (field.ValueType == ActorAuthoringFieldValueType.Color)
+            {
+                Color color;
+                if (!ScenarioCharacterAppearanceService.TryParseColorHex(value, out color))
+                    color = Color.white;
+                return new ScenarioSurvivorModFieldRowViewModel
+                {
+                    Kind = ScenarioSurvivorModFieldControlKind.Color,
+                    Label = field.Label,
+                    ValueText = value,
+                    HelpText = help,
+                    ColorRow = new ScenarioSurvivorColorRowViewModel
+                    {
+                        Channel = "mod:" + token,
+                        Label = field.Label,
+                        Hex = value,
+                        Color = color,
+                        OpenColorPickerActionId = commandPrefix + "open_color." + token,
+                        ApplyColorActionPrefix = commandPrefix + "color." + token + "."
+                    }
+                };
+            }
+
+            return null;
+        }
+
+        private static void AddMissingModFieldNotices(
+            List<ScenarioSurvivorModFieldRowViewModel> rows,
+            FamilyMemberConfig member,
+            IList<ActorAuthoringFieldDefinition> registeredFields)
+        {
+            for (int i = 0; member != null && member.ActorComponents != null && i < member.ActorComponents.Count; i++)
+            {
+                ScenarioActorComponentDefinition component = member.ActorComponents[i];
+                if (component == null || string.IsNullOrEmpty(component.ComponentId) || string.IsNullOrEmpty(component.OwnerModId))
+                    continue;
+                if (ScenarioActorAuthoringFieldStore.IsProviderModLoaded(component.OwnerModId))
+                    continue;
+                if (HasRegisteredFieldForComponent(registeredFields, component.ComponentId))
+                    continue;
+
+                rows.Add(new ScenarioSurvivorModFieldRowViewModel
+                {
+                    Kind = ScenarioSurvivorModFieldControlKind.Notice,
+                    Label = "Missing provider: " + component.OwnerModId,
+                    HelpText = "Payload for " + component.ComponentId + " is preserved but hidden until that mod/API is registered.",
+                    Badge = "MOD",
+                    Emphasized = true
+                });
+            }
+        }
+
+        private static bool HasRegisteredFieldForComponent(IList<ActorAuthoringFieldDefinition> fields, string componentId)
+        {
+            for (int i = 0; fields != null && i < fields.Count; i++)
+            {
+                ActorAuthoringFieldDefinition field = fields[i];
+                if (field != null && string.Equals(field.ComponentId, componentId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool HasMissingModFieldNotice(List<ScenarioSurvivorModFieldRowViewModel> rows)
+        {
+            for (int i = 0; rows != null && i < rows.Count; i++)
+            {
+                if (rows[i] != null && rows[i].Kind == ScenarioSurvivorModFieldControlKind.Notice)
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool CanCopySelectedFamilyMember(ScenarioAuthoringState state, out string reason)

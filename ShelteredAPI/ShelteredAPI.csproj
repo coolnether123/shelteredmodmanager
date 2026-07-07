@@ -330,7 +330,10 @@
     <Compile Include="Scenarios\Application\Objects\ScenarioObjectIdentityAssignmentService.cs" />
     <Compile Include="Scenarios\Application\Validation\PublishValidationSummaryBuilder.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContext.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioActorAuthoringCapabilityRegistry.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioActorAuthoringFieldStore.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioCastMemberReferenceCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioDevActorAuthoringCapabilityProvider.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSectionHub.cs" />
     <Compile Include="Scenarios\Composition\ServiceCollectionExtensions.cs" />
     <Compile Include="Scenarios\Composition\ScenarioAuthoringModule.cs" />

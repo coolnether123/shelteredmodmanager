@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios.Domain.Compatibility{
         TimelineEntry = 7,
         BunkerObject = 8,
         SurvivorTraitOrStat = 9,
-        UnknownReference = 10
+        ActorAuthoringComponent = 10,
+        UnknownReference = 11
     }
 }

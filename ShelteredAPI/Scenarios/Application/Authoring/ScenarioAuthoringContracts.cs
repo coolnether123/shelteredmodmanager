@@ -1104,7 +1104,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         FactGrid = 8,
         CastCardGrid = 9,
         SurvivorEditor = 10,
-        InventorySlotGrid = 11
+        InventorySlotGrid = 11,
+        ModFieldList = 12
     }
 
     internal sealed class ScenarioAuthoringInspectorSection
@@ -1115,6 +1116,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringInspectorSectionLayout Layout { get; set; }
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
         public ScenarioSurvivorEditorViewModel SurvivorEditor { get; set; }
+        public ScenarioSurvivorModFieldRowViewModel[] ModFieldRows { get; set; }
         public ScenarioInventorySlotGridViewModel InventorySlotGrid { get; set; }
     }
 
@@ -1247,6 +1249,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Label { get; set; }
         public string Value { get; set; }
         public ScenarioAuthoringInspectorAction CycleAction { get; set; }
+    }
+
+    internal enum ScenarioSurvivorModFieldControlKind
+    {
+        Notice = 0,
+        Toggle = 1,
+        Stepper = 2,
+        Text = 3,
+        Enum = 4,
+        Color = 5
+    }
+
+    internal sealed class ScenarioSurvivorModFieldRowViewModel
+    {
+        public ScenarioSurvivorModFieldControlKind Kind { get; set; }
+        public string Label { get; set; }
+        public string ValueText { get; set; }
+        public string HelpText { get; set; }
+        public string Badge { get; set; }
+        public bool Emphasized { get; set; }
+        public ScenarioAuthoringInspectorAction ToggleAction { get; set; }
+        public ScenarioAuthoringInspectorAction DecreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction IncreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction CycleAction { get; set; }
+        public ScenarioAuthoringInspectorAction TextAction { get; set; }
+        public ScenarioSurvivorColorRowViewModel ColorRow { get; set; }
     }
 
     internal sealed class ScenarioAuthoringTargetContext

@@ -111,6 +111,12 @@ namespace ModAPI.Core
             return TryGet(GameRuntimeApiIds.ActorSerialization, out api);
         }
 
+        /// <summary>Attempts to resolve the scenario actor-authoring capability registry.</summary>
+        public static bool TryGetActorAuthoringCapabilities(out IActorAuthoringCapabilityRegistry api)
+        {
+            return TryGet(GameRuntimeApiIds.ActorAuthoringCapabilities, out api);
+        }
+
         /// <summary>Attempts to resolve the custom scenario service.</summary>
         public static bool TryGetCustomScenarios(out ICustomScenarioService api)
         {

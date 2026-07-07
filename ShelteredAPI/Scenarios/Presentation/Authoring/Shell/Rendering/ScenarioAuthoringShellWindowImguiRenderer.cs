@@ -1600,6 +1600,91 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawButton(buttonRect, row.CycleAction, false);
         }
 
+        private void DrawModFieldSection(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Section);
+            if (!string.IsNullOrEmpty(section.Title))
+                GUILayout.Label(section.Title, _sectionTitleStyle);
+
+            for (int i = 0; section.ModFieldRows != null && i < section.ModFieldRows.Length; i++)
+                DrawModFieldRow(section.ModFieldRows[i]);
+
+            for (int i = 0; section.Items != null && i < section.Items.Length; i++)
+                DrawItem(section.Items[i]);
+
+            GUILayout.EndVertical();
+        }
+
+        private void DrawModFieldRow(ScenarioSurvivorModFieldRowViewModel row)
+        {
+            if (row == null)
+                return;
+
+            if (row.Kind == ScenarioSurvivorModFieldControlKind.Text)
+            {
+                DrawEditableProperty(new ScenarioAuthoringInspectorItem
+                {
+                    Kind = ScenarioAuthoringInspectorItemKind.Property,
+                    Label = row.Label,
+                    Value = row.ValueText,
+                    Editable = true,
+                    HoverHint = row.HelpText,
+                    Action = row.TextAction
+                }, false);
+                return;
+            }
+
+            float height = row.Kind == ScenarioSurvivorModFieldControlKind.Notice ? 46f : 34f;
+            Rect rect = GUILayoutUtility.GetRect(0f, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            if (row.Kind == ScenarioSurvivorModFieldControlKind.Notice)
+            {
+                GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+                Rect labelRect = new Rect(rect.x + 8f, rect.y + 5f, rect.width - 16f, 18f);
+                Rect helpRect = new Rect(rect.x + 8f, rect.y + 24f, rect.width - 16f, 18f);
+                GUI.Label(labelRect, new GUIContent(row.Label ?? string.Empty, row.HelpText ?? string.Empty), row.Emphasized ? _textStyle : _mutedTextStyle);
+                GUI.Label(helpRect, ShortenToFit(row.HelpText ?? string.Empty, helpRect.width, _mutedTextStyle), _mutedTextStyle);
+                return;
+            }
+
+            float labelWidth = Mathf.Clamp(rect.width * 0.34f, 120f, 210f);
+            GUI.Label(new Rect(rect.x, rect.y + 7f, labelWidth, 20f), new GUIContent(row.Label ?? string.Empty, row.HelpText ?? string.Empty), _textStyle);
+
+            if (row.Kind == ScenarioSurvivorModFieldControlKind.Toggle)
+            {
+                float width = Mathf.Clamp(MeasureButtonWidth(row.ToggleAction, false, 20f), 84f, 126f);
+                DrawButton(new Rect(rect.xMax - width, rect.y + 3f, width, 28f), row.ToggleAction, false);
+                return;
+            }
+
+            if (row.Kind == ScenarioSurvivorModFieldControlKind.Stepper)
+            {
+                float buttonWidth = 30f;
+                float valueWidth = Mathf.Clamp(rect.width - labelWidth - (buttonWidth * 2f) - 24f, 70f, 160f);
+                DrawButton(new Rect(rect.x + labelWidth + 8f, rect.y + 3f, buttonWidth, 28f), row.DecreaseAction, false);
+                GUI.Label(new Rect(rect.x + labelWidth + buttonWidth + 14f, rect.y + 4f, valueWidth, 26f), row.ValueText ?? string.Empty, _uiContext.Styles.Field);
+                DrawButton(new Rect(rect.x + labelWidth + buttonWidth + valueWidth + 20f, rect.y + 3f, buttonWidth, 28f), row.IncreaseAction, false);
+                return;
+            }
+
+            if (row.Kind == ScenarioSurvivorModFieldControlKind.Enum)
+            {
+                Rect buttonRect = new Rect(rect.x + labelWidth + 8f, rect.y + 3f, Math.Max(120f, rect.width - labelWidth - 8f), 28f);
+                DrawButton(buttonRect, row.CycleAction, false);
+                return;
+            }
+
+            if (row.Kind == ScenarioSurvivorModFieldControlKind.Color && row.ColorRow != null)
+            {
+                Rect swatchRect = new Rect(rect.x + labelWidth + 8f, rect.y + 4f, 62f, 26f);
+                DrawColorPreview(swatchRect, row.ColorRow.Color);
+                RegisterTourTarget("action:" + row.ColorRow.OpenColorPickerActionId, swatchRect);
+                if (DrawPlainButton(swatchRect, GUIContent.none, GUIStyle.none, true))
+                    OpenSurvivorColorPicker(row.ColorRow);
+                Rect valueRect = new Rect(swatchRect.xMax + 8f, rect.y + 7f, Math.Max(40f, rect.xMax - swatchRect.xMax - 8f), 20f);
+                GUI.Label(valueRect, ShortenToFit(row.ValueText ?? string.Empty, valueRect.width, _mutedTextStyle), _mutedTextStyle);
+            }
+        }
+
         private void DrawSurvivorEditorFooter(Rect rect, ScenarioSurvivorEditorViewModel editor)
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
@@ -2050,6 +2135,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Rect rect = GUILayoutUtility.GetRect(0f, 520f, GUILayout.ExpandWidth(true), GUILayout.Height(520f));
                 DrawSurvivorEditor(rect, section.SurvivorEditor);
+                return;
+            }
+
+            if (section.Layout == ScenarioAuthoringInspectorSectionLayout.ModFieldList)
+            {
+                DrawModFieldSection(section);
                 return;
             }
 
