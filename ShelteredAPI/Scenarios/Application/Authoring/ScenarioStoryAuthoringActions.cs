@@ -63,6 +63,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryStageAdd, StringComparison.Ordinal);
         }
 
+        public static bool IsAddCharacter(string actionId)
+        {
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterAdd, StringComparison.Ordinal);
+        }
+
+        public static string CharacterEditPrefix(int characterIndex, string field)
+        {
+            return ScenarioAuthoringActionIds.ActionStoryCharacterEditPrefix
+                + (field ?? string.Empty)
+                + "."
+                + characterIndex.ToString(CultureInfo.InvariantCulture)
+                + ".";
+        }
+
+        public static string CharacterDelete(int characterIndex)
+        {
+            return Index(ScenarioAuthoringActionIds.ActionStoryCharacterDeletePrefix, characterIndex);
+        }
+
         public static string StageDelete(int stageIndex)
         {
             return Index(ScenarioAuthoringActionIds.ActionStoryStageDeletePrefix, stageIndex);

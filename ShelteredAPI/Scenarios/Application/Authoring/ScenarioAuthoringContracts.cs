@@ -187,6 +187,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionStoryStageChangeDelayPrefix = "scenario.story.stage_change.delay.";
         public const string ActionStoryRecruitTogglePrefix = "scenario.story.recruit.";
         public const string ActionStoryRecruitFamilyPrefix = "scenario.story.recruit_family.";
+        public const string ActionStoryCharacterAdd = "scenario.story.character.add";
+        public const string ActionStoryCharacterEditPrefix = "scenario.story.character.edit.";
+        public const string ActionStoryCharacterDeletePrefix = "scenario.story.character.delete.";
         public const string ActionStoryCharacterActorPrefix = "scenario.story.character.actor.";
         public const string ActionStoryCharacterActorClearPrefix = "scenario.story.character.actor.clear.";
         public const string ActionStoryEndTypePrefix = "scenario.story.end.type.";

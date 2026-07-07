@@ -227,7 +227,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddIntercomTypeActions(items, stageIndex, intercomIndex, intercom.Type);
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.DialogueAdd(stageIndex, intercomIndex), "Add Dialogue", "Add a dialogue key.", true, false, "D+")));
             for (int i = 0; intercom.Dialogue != null && i < intercom.Dialogue.Count; i++)
-                AddDialogueActions(items, stage, intercom.Dialogue[i], stageIndex, intercomIndex, i);
+                AddDialogueActions(items, definition, stage, intercom.Dialogue[i], stageIndex, intercomIndex, i);
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.OptionAdd(stageIndex, intercomIndex), "Add Option", "Add a response option.", true, false, "O+")));
             for (int i = 0; intercom.Options != null && i < intercom.Options.Count; i++)
                 AddOptionActions(items, stage, intercom.Options[i], stageIndex, intercomIndex, i);
@@ -543,12 +543,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.IntercomType(stageIndex, intercomIndex, types[i]), types[i], "Set vanilla encounter branch type.", true, string.Equals(current, types[i], StringComparison.OrdinalIgnoreCase), "TY")));
         }
 
-        private static void AddDialogueActions(List<ScenarioAuthoringInspectorItem> items, ScenarioFlowStageDefinition stage, ScenarioDialogueLineDefinition line, int stageIndex, int intercomIndex, int lineIndex)
+        private static void AddDialogueActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioDialogueLineDefinition line, int stageIndex, int intercomIndex, int lineIndex)
         {
-            items.Add(ScenarioInspectorItemFactory.Property("Dialogue " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture), Safe(line != null ? line.TextKey : null), Safe(line != null ? line.Character : null)));
-            string[] speakers = { "Player", "LeadNpc", "Npc2", "Npc3", "Npc4", "BackgroundNpc" };
-            for (int i = 0; i < speakers.Length; i++)
-                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.DialogueSpeaker(stageIndex, intercomIndex, lineIndex, speakers[i]), speakers[i], "Set dialogue speaker.", true, line != null && string.Equals(line.Character, speakers[i], StringComparison.OrdinalIgnoreCase), "SP")));
+            items.Add(ScenarioInspectorItemFactory.Property("Dialogue " + (lineIndex + 1).ToString(CultureInfo.InvariantCulture), Safe(line != null ? line.TextKey : null), Safe(line != null ? FormatCharacterLabel(definition, line.Character) : null)));
+            List<string> speakers = BuildCharacterIds(definition);
+            for (int i = 0; i < speakers.Count; i++)
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.DialogueSpeaker(stageIndex, intercomIndex, lineIndex, speakers[i]), FormatCharacterLabel(definition, speakers[i]), "Set dialogue speaker.", true, line != null && string.Equals(line.Character, speakers[i], StringComparison.OrdinalIgnoreCase), "SP")));
             string key = line != null && !string.IsNullOrEmpty(line.TextKey) ? line.TextKey : "dialogue";
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.DialogueKey(stageIndex, intercomIndex, lineIndex, key + "_copy"), "Key " + key + "_copy", "Use the next localization-key pattern.", true, false, "KY")));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.DialogueDelete(stageIndex, intercomIndex, lineIndex), "Remove Dialogue", "Remove this dialogue line.", true, false, "RM")));
@@ -633,7 +633,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (!string.IsNullOrEmpty(id) && !Contains(ids, id))
                     ids.Add(id);
             }
-            string[] vanillaSlots = { "LeadNpc", "Npc2", "Npc3", "Npc4", "BackgroundNpc" };
+            string[] vanillaSlots = { "LeadNpc", "Npc2", "Npc3", "Npc4", "BackgroundNpc", "Player" };
             for (int i = 0; i < vanillaSlots.Length; i++)
                 if (!Contains(ids, vanillaSlots[i]))
                     ids.Add(vanillaSlots[i]);
@@ -758,10 +758,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (character == null || !string.Equals(character.CharacterId, characterId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                if (character.ActorRef == null)
-                    return characterId;
+                string label = !string.IsNullOrEmpty(character.DisplayName) ? character.DisplayName + " [" + characterId + "]" : characterId;
 
-                return characterId + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, characterId);
+                if (character.ActorRef == null)
+                    return label;
+
+                return label + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, label);
             }
 
             return characterId;

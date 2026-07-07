@@ -502,8 +502,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             }
             else if (npc != null)
             {
-                displayName = npc.CharacterId;
-                profile.FirstName = npc.CharacterId;
+                displayName = !string.IsNullOrEmpty(npc.DisplayName) ? npc.DisplayName : npc.CharacterId;
+                profile.FirstName = displayName;
                 profile.MeshId = npc.PresetId;
                 if (npc.Stats != null)
                 {

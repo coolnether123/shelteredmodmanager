@@ -242,6 +242,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
         }
 
         public string CharacterId { get; set; }
+        public string DisplayName { get; set; }
         public ScenarioActorRef ActorRef { get; set; }
         public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public string PresetId { get; set; }

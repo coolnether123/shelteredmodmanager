@@ -107,7 +107,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Property("Branching type", Empty(intercom != null ? intercom.Type : null, "No type stored - vanilla will use its default."), "Use exact vanilla branch type names."));
             AddIntercomTypeActions(items, stageIndex, intercomIndex, intercom != null ? intercom.Type : null);
 
-            AddDialogueItems(items, stage, intercom, stageIndex, intercomIndex);
+            AddDialogueItems(items, definition, stage, intercom, stageIndex, intercomIndex);
             AddOptionItems(items, stage, intercom, stageIndex, intercomIndex);
             AddIntercomRoutePicker(items, stage, intercom, stageIndex, intercomIndex, false, "Success route");
             AddIntercomRoutePicker(items, stage, intercom, stageIndex, intercomIndex, true, "Failure / alternate route");
@@ -158,7 +158,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return Section("story_focused_footer", string.Empty, ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
-        private static void AddDialogueItems(List<ScenarioAuthoringInspectorItem> items, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
+        private static void AddDialogueItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
         {
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueAdd(stageIndex, intercomIndex), "Add Dialogue Line", "Add a line the NPC/intercom can say.", true, false, "D+")));
             if (intercom == null || intercom.Dialogue == null || intercom.Dialogue.Count == 0)
@@ -167,15 +167,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            string[] speakers = { "Player", "LeadNpc", "Npc2", "Npc3", "Npc4", "BackgroundNpc" };
+            List<string> speakers = BuildCharacterIds(definition);
             for (int i = 0; i < intercom.Dialogue.Count; i++)
             {
                 ScenarioDialogueLineDefinition line = intercom.Dialogue[i];
                 string textKey = line != null && !string.IsNullOrEmpty(line.TextKey) ? line.TextKey : "Dialogue text is blank - add a localization key.";
-                string speaker = line != null && !string.IsNullOrEmpty(line.Character) ? line.Character : "No speaker selected - choose a speaker.";
+                string speaker = line != null && !string.IsNullOrEmpty(line.Character) ? FormatCharacterLabel(definition, line.Character) : "No speaker selected - choose a speaker.";
                 items.Add(Property("Dialogue " + (i + 1).ToString(CultureInfo.InvariantCulture), textKey, speaker));
-                for (int s = 0; s < speakers.Length; s++)
-                    items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueSpeaker(stageIndex, intercomIndex, i, speakers[s]), speakers[s], "Use this speaker.", true, line != null && string.Equals(line.Character, speakers[s], StringComparison.OrdinalIgnoreCase), "SP")));
+                for (int s = 0; s < speakers.Count; s++)
+                    items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueSpeaker(stageIndex, intercomIndex, i, speakers[s]), FormatCharacterLabel(definition, speakers[s]), "Use this speaker.", true, line != null && string.Equals(line.Character, speakers[s], StringComparison.OrdinalIgnoreCase), "SP")));
                 string key = line != null && !string.IsNullOrEmpty(line.TextKey) ? line.TextKey : "dialogue_" + (i + 1).ToString(CultureInfo.InvariantCulture);
                 items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueKey(stageIndex, intercomIndex, i, key + "_copy"), "Use Next Text Key", "Use the next localization-key pattern.", true, false, "KY")));
                 items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.DialogueDelete(stageIndex, intercomIndex, i), "Remove Dialogue", "Remove this dialogue line.", true, false, "RM")));
@@ -484,10 +484,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (character == null || !string.Equals(character.CharacterId, characterId, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                if (character.ActorRef == null)
-                    return characterId;
+                string label = !string.IsNullOrEmpty(character.DisplayName) ? character.DisplayName + " [" + characterId + "]" : characterId;
 
-                return characterId + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, characterId);
+                if (character.ActorRef == null)
+                    return label;
+
+                return label + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, label);
             }
 
             return characterId;

@@ -445,6 +445,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 ScenarioNpcDefinition character = new ScenarioNpcDefinition();
                 character.CharacterId = AttributeOrChild(node, "id", "Id");
+                character.DisplayName = AttributeOrChild(node, "displayName", "DisplayName");
                 character.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
                 ScenarioActorXmlSerializer.ReadActorComponents(node, character.ActorComponents);
                 character.PresetId = AttributeOrChild(node, "presetId", "PresetId");
@@ -1280,6 +1281,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 writer.WriteStartElement("Character");
                 WriteAttribute(writer, "id", character.CharacterId);
+                WriteAttribute(writer, "displayName", character.DisplayName);
                 WriteAttribute(writer, "presetId", character.PresetId);
                 WriteAttribute(writer, "weapon", character.WeaponItemId);
                 WriteAttribute(writer, "equippedItem1", character.EquippedItem1Id);

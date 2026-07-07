@@ -24,11 +24,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioFlowDefinition flow = EnsureFlow(definition);
             if (ScenarioStoryAuthoringActions.IsAddStage(actionId))
                 return AddStage(session, flow, out message);
+            if (ScenarioStoryAuthoringActions.IsAddCharacter(actionId))
+                return AddCharacter(session, definition, out message);
 
             int stageIndex;
             int delta;
             string token;
-            int storyCharacterCount = definition.ScenarioCharacters != null ? definition.ScenarioCharacters.Count : 0;
+            int storyCharacterCount = EnsureCharacters(definition).Count;
+            if (TryHandleCharacterEdit(session, definition, actionId, storyCharacterCount, out message))
+                return true;
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterDeletePrefix, storyCharacterCount, out stageIndex))
+                return DeleteCharacter(session, definition, stageIndex, out message);
+
             if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterActorPrefix, storyCharacterCount, out stageIndex, out token))
             {
                 ScenarioCastMemberReferenceCandidate candidate;
@@ -476,6 +483,101 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
+        private static bool AddCharacter(ScenarioEditorSession session, ScenarioDefinition definition, out string message)
+        {
+            List<ScenarioNpcDefinition> characters = EnsureCharacters(definition);
+            int index = characters.Count + 1;
+            string characterId;
+            do
+            {
+                characterId = "StoryCharacter" + index.ToString();
+                index++;
+            }
+            while (HasCharacterId(definition, characterId));
+
+            ScenarioNpcDefinition character = new ScenarioNpcDefinition();
+            character.CharacterId = characterId;
+            character.DisplayName = "Story Character " + (characters.Count + 1).ToString();
+            character.PresetId = "Default";
+            characters.Add(character);
+            MarkDirty(session);
+            message = "Added story character '" + character.DisplayName + "' (" + character.CharacterId + ").";
+            return true;
+        }
+
+        private static bool TryHandleCharacterEdit(ScenarioEditorSession session, ScenarioDefinition definition, string actionId, int characterCount, out string message)
+        {
+            message = null;
+            string field;
+            int characterIndex;
+            string value;
+            if (!TryParseCharacterEditAction(actionId, out field, out characterIndex, out value))
+                return false;
+            if (characterIndex < 0 || characterIndex >= characterCount)
+            {
+                message = "Story character no longer exists.";
+                return true;
+            }
+
+            ScenarioNpcDefinition character = definition.ScenarioCharacters[characterIndex];
+            if (character == null)
+            {
+                message = "Story character row is empty.";
+                return true;
+            }
+
+            string normalized = value != null ? value.Trim() : string.Empty;
+            if (string.Equals(field, "displayName", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrEmpty(normalized))
+                {
+                    message = "Story character display name cannot be empty.";
+                    return true;
+                }
+                character.DisplayName = normalized;
+            }
+            else if (string.Equals(field, "presetId", StringComparison.OrdinalIgnoreCase))
+                character.PresetId = normalized;
+            else if (string.Equals(field, "personality", StringComparison.OrdinalIgnoreCase))
+                character.Personality = normalized;
+            else if (string.Equals(field, "species", StringComparison.OrdinalIgnoreCase))
+                character.Species = normalized;
+            else
+            {
+                message = "Unknown story character field '" + field + "'.";
+                return true;
+            }
+
+            MarkDirty(session);
+            message = "Updated story character '" + DisplayCharacterName(character) + "'. CharacterId remains '" + character.CharacterId + "'.";
+            return true;
+        }
+
+        private static bool DeleteCharacter(ScenarioEditorSession session, ScenarioDefinition definition, int characterIndex, out string message)
+        {
+            message = null;
+            List<ScenarioNpcDefinition> characters = EnsureCharacters(definition);
+            if (characterIndex < 0 || characterIndex >= characters.Count)
+            {
+                message = "Story character no longer exists.";
+                return true;
+            }
+
+            ScenarioNpcDefinition character = characters[characterIndex];
+            string characterId = character != null ? character.CharacterId : null;
+            string reason;
+            if (!CanRemoveCharacter(definition, characterId, out reason))
+            {
+                message = reason;
+                return true;
+            }
+
+            characters.RemoveAt(characterIndex);
+            MarkDirty(session);
+            message = "Removed story character '" + DisplayCharacterName(character) + "'.";
+            return true;
+        }
+
         private static bool AddStage(ScenarioEditorSession session, ScenarioFlowDefinition flow, out string message)
         {
             ScenarioFlowStageDefinition stage = new ScenarioFlowStageDefinition();
@@ -676,6 +778,46 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
+        private static bool CanRemoveCharacter(ScenarioDefinition definition, string characterId, out string reason)
+        {
+            reason = null;
+            if (string.IsNullOrEmpty(characterId))
+                return true;
+
+            List<string> references = new List<string>();
+            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
+            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            {
+                ScenarioFlowStageDefinition stage = flow.Stages[i];
+                string stageLabel = FormatStageReferenceLabel(stage, i);
+                if (Contains(stage != null ? stage.CharacterIds : null, characterId))
+                    references.Add(stageLabel + " stage cast");
+
+                for (int s = 0; stage != null && stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
+                {
+                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[s];
+                    string intercomLabel = stageLabel + "/" + FormatIntercomReferenceLabel(intercom, s);
+                    for (int d = 0; intercom != null && intercom.Dialogue != null && d < intercom.Dialogue.Count; d++)
+                    {
+                        ScenarioDialogueLineDefinition line = intercom.Dialogue[d];
+                        if (line != null && string.Equals(line.Character, characterId, StringComparison.OrdinalIgnoreCase))
+                            references.Add(intercomLabel + " dialogue " + (d + 1).ToString() + " speaker");
+                    }
+
+                    if (Contains(intercom != null ? intercom.CharacterIdsToRecruit : null, characterId))
+                        references.Add(intercomLabel + " recruit list");
+                }
+            }
+
+            if (references.Count == 0)
+                return true;
+
+            reason = "Cannot remove story character '" + characterId + "' because it is referenced by: "
+                + string.Join(", ", references.ToArray())
+                + ". Open those story stage rows, clear the stage cast, dialogue speaker, or recruit toggle, then remove the character.";
+            return false;
+        }
+
         private static void ReplaceIntercomReferences(ScenarioFlowStageDefinition stage, string oldId, string newId)
         {
             if (string.IsNullOrEmpty(oldId))
@@ -740,6 +882,44 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
+        private static bool HasCharacterId(ScenarioDefinition definition, string id)
+        {
+            for (int i = 0; definition != null && definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
+                if (definition.ScenarioCharacters[i] != null && string.Equals(definition.ScenarioCharacters[i].CharacterId, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static List<ScenarioNpcDefinition> EnsureCharacters(ScenarioDefinition definition)
+        {
+            return definition.ScenarioCharacters;
+        }
+
+        private static string DisplayCharacterName(ScenarioNpcDefinition character)
+        {
+            if (character == null)
+                return "<missing>";
+            if (!string.IsNullOrEmpty(character.DisplayName))
+                return character.DisplayName;
+            if (!string.IsNullOrEmpty(character.CharacterId))
+                return character.CharacterId;
+            return "<unnamed>";
+        }
+
+        private static string FormatStageReferenceLabel(ScenarioFlowStageDefinition stage, int index)
+        {
+            return stage != null && !string.IsNullOrEmpty(stage.Id)
+                ? stage.Id
+                : "stage #" + (index + 1).ToString();
+        }
+
+        private static string FormatIntercomReferenceLabel(ScenarioIntercomStageDefinition intercom, int index)
+        {
+            return intercom != null && !string.IsNullOrEmpty(intercom.Id)
+                ? intercom.Id
+                : "step #" + (index + 1).ToString();
+        }
+
         private static string FirstOtherIntercomId(ScenarioFlowStageDefinition stage, string current)
         {
             for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
@@ -766,6 +946,40 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
             values.Add(value);
+        }
+
+        private static bool Contains(List<string> values, string value)
+        {
+            for (int i = 0; values != null && i < values.Count; i++)
+                if (string.Equals(values[i], value, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static bool TryParseCharacterEditAction(string actionId, out string field, out int characterIndex, out string value)
+        {
+            field = null;
+            characterIndex = -1;
+            value = null;
+            string prefix = ScenarioAuthoringActionIds.ActionStoryCharacterEditPrefix;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            string body = actionId.Substring(prefix.Length);
+            int firstDot = body.IndexOf('.');
+            if (firstDot <= 0)
+                return false;
+
+            int secondDot = body.IndexOf('.', firstDot + 1);
+            if (secondDot <= firstDot)
+                return false;
+
+            field = body.Substring(0, firstDot);
+            if (!int.TryParse(body.Substring(firstDot + 1, secondDot - firstDot - 1), out characterIndex))
+                return false;
+
+            value = Decode(body.Substring(secondDot + 1));
+            return true;
         }
 
         private static string Decode(string token)
