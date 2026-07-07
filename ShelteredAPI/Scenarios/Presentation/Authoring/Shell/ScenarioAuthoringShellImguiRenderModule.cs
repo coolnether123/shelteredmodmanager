@@ -126,6 +126,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly List<string> _richHoverTopicBackStack = new List<string>();
         private SurvivorColorPickerPopup _survivorColorPicker;
         private string _lastSurvivorColorPickerRequestKey;
+        private bool _tutorialCardDragging;
+        private string _tutorialCardDragKey;
+        private Vector2 _tutorialCardDragOffset = Vector2.zero;
+        private Rect _tutorialCardManualRect = RuntimeCompat.ZeroRect();
 
         public string ModuleId
         {
@@ -156,12 +160,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool vanillaBlockingPanelOpen = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>().HasBlockingPanelOpen();
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
             bool reloadPending = snapshot != null && snapshot.State != null && snapshot.State.ReloadPending;
+            bool mapAuthoringActive = snapshot != null && snapshot.State != null && snapshot.State.MapAuthoringActive;
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
-                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending)
+                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending || mapAuthoringActive)
                 && snapshot.ShellViewModel != null
-                && !vanillaBlockingPanelOpen;
+                && (!vanillaBlockingPanelOpen || mapAuthoringActive);
 
             if (_runtime != null)
                 _runtime.enabled = _visible || wasVisible || _rootAlpha > 0.001f;
@@ -302,6 +307,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return;
                 }
 
+                if (_snapshot.State != null && _snapshot.State.MapAuthoringActive)
+                {
+                    DrawMapAuthoringOverlayCore(scaledWidth, scaledHeight, inputCapture);
+                    inputCapture.SetTextFieldFocused(false);
+                    inputCapture.SetKeyboardCaptured(false);
+                    inputCapture.SetPopupOpen(false);
+                    inputCapture.SetTransitionActive(false);
+                    return;
+                }
+
                 RegisterVisualSurface("chrome.top", topRect);
                 RegisterVisualSurface("chrome.status", statusRect);
                 Rect windowMenuButtonRect;
@@ -338,6 +353,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 RegisterVisualSurface("popup.survivor-color-picker", BuildSurvivorColorPickerRect(scaledWidth, scaledHeight, hudReserveRect));
             if (shell.Help != null)
                 RegisterVisualSurface("modal.help", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
+            if (shell.Help == null && ((shell.Tutorial != null && shell.Tutorial.Visible) || (shell.Tour != null && shell.Tour.Visible)))
+                RegisterVisualSurface("modal.tutorial", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
             if (IsRichHoverHelpActive() && _activeRichHoverPopupRect.width > 0f && _activeRichHoverPopupRect.height > 0f)
                 RegisterVisualSurface("popup.rich-help", _activeRichHoverPopupRect);
 

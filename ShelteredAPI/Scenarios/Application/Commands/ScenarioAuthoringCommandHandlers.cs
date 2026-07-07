@@ -759,6 +759,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (state.HelpWindowOpen
                 && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialOpenTarget, StringComparison.Ordinal)
                     || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialNext, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialBack, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkipPrompt, StringComparison.Ordinal)
+                    || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkipCancel, StringComparison.Ordinal)
                     || string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkip, StringComparison.Ordinal)))
             {
                 message = "Close help before continuing the tutorial.";

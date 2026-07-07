@@ -193,9 +193,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Body = step.Body,
                 PrimaryCallout = satisfied ? "NEXT" : step.PendingCallout,
                 WaitingForAction = !satisfied && string.Equals(step.PendingCallout, "WAITING FOR ACTION", StringComparison.Ordinal),
+                TargetId = step.TargetId,
                 TargetWindowId = step.TargetWindowId,
                 TargetActionId = step.TargetActionId,
                 TargetStage = step.TargetStage,
+                SkipPromptVisible = _tutorialService.SkipPromptVisible,
                 PrimaryAction = Item.Action(
                     ScenarioAuthoringActionIds.ActionTutorialOpenTarget,
                     satisfied ? "NEXT" : step.PendingCallout,
@@ -203,8 +205,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     true,
                     true,
                     "GO"),
+                BackAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialBack, "BACK", "Go to the previous tutorial step.", step.Index > 0, false, "BK"),
                 NextAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialNext, "NEXT", "Continue to the next tutorial step.", true, false, "NX"),
-                SkipAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialSkip, "SKIP", "End the guided tour.", true, false, "SK"),
+                SkipAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialSkip, "SKIP TOUR", "End the guided tour.", true, false, "SK"),
+                SkipPromptAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialSkipPrompt, "SKIP TOUR", "Ask before ending the guided tour.", true, false, "SK"),
+                SkipCancelAction = Item.Action(ScenarioAuthoringActionIds.ActionTutorialSkipCancel, "KEEP GOING", "Return to the guided tour.", true, true, "NO"),
                 HelpAction = Item.Action(ScenarioAuthoringActionIds.ActionShellOpenHelp, "HELP", "Open the workshop help pages.", true, false, "HP")
             };
         }

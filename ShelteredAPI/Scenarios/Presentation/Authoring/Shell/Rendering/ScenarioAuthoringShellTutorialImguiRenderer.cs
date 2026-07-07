@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ModAPI.Core;
 using UnityEngine;
 
 using ShelteredAPI.Scenarios.Composition;
@@ -122,15 +123,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Rect targetRect = ResolveTutorialTargetRect(tutorial, topRect, statusRect, windowRects, shell);
+            DrawSpotlightDimming(availableRect, targetRect, progress);
+
             if (targetRect.width > 0f && targetRect.height > 0f)
-                DrawTutorialTargetHighlight(targetRect, progress);
+                DrawSpotlightBorder(targetRect, progress);
 
             Rect calloutRect = BuildTutorialCalloutRect(availableRect, targetRect);
+            calloutRect = ResolveTutorialCardRect("tutorial:" + (tutorial.StepId ?? tutorial.StepIndex.ToString()), calloutRect, availableRect);
+            calloutRect = _animations.GetAnimatedRect("tutorial.card.rect", calloutRect, 0.18f);
             Rect animatedRect = new Rect(calloutRect.x, calloutRect.y - ((1f - progress) * 8f), calloutRect.width, calloutRect.height);
+            DrawSpotlightPointer(animatedRect, targetRect, progress);
             using (ScenarioUiGuiScope.Apply(progress, animatedRect, 1f))
                 DrawTutorialCallout(animatedRect, tutorial);
 
+            HandleSpotlightTargetClick(tutorial.TargetId, targetRect, true);
+            inputCapture.RegisterInteractiveRect(availableRect);
             inputCapture.RegisterInteractiveRect(calloutRect);
+            if (targetRect.width > 0f && targetRect.height > 0f)
+                inputCapture.RegisterInteractiveRect(targetRect);
             inputCapture.SetPopupOpen(true);
         }
 
@@ -155,11 +165,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawSpotlightBorder(targetRect, progress);
 
             Rect calloutRect = BuildTutorialCalloutRect(availableRect, targetRect);
+            calloutRect = ResolveTutorialCardRect("tour:" + (tour.TourId ?? string.Empty) + ":" + tour.StepIndex.ToString(), calloutRect, availableRect);
+            calloutRect = _animations.GetAnimatedRect("tour.card.rect", calloutRect, 0.18f);
             Rect animatedRect = new Rect(calloutRect.x, calloutRect.y - ((1f - progress) * 8f), calloutRect.width, calloutRect.height);
+            DrawSpotlightPointer(animatedRect, targetRect, progress);
             using (ScenarioUiGuiScope.Apply(progress, animatedRect, 1f))
                 DrawTourCallout(animatedRect, tour);
 
+            HandleSpotlightTargetClick(tour.TargetId, targetRect, false);
+            inputCapture.RegisterInteractiveRect(availableRect);
             inputCapture.RegisterInteractiveRect(calloutRect);
+            if (targetRect.width > 0f && targetRect.height > 0f)
+                inputCapture.RegisterInteractiveRect(targetRect);
             inputCapture.SetPopupOpen(true);
         }
 
@@ -202,6 +219,54 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ZeroRect();
         }
 
+        private void HandleSpotlightTargetClick(string targetId, Rect targetRect, bool tutorial)
+        {
+            Event evt = Event.current;
+            if (evt == null
+                || evt.type != EventType.MouseDown
+                || evt.button != 0
+                || targetRect.width <= 0f
+                || targetRect.height <= 0f
+                || !targetRect.Contains(evt.mousePosition))
+            {
+                return;
+            }
+
+            string actionId = ResolveSpotlightTargetActionId(targetId);
+            if (!string.IsNullOrEmpty(actionId))
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(actionId);
+
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(tutorial ? ScenarioAuthoringActionIds.ActionTutorialNext : ScenarioAuthoringActionIds.ActionTourNext);
+            evt.Use();
+        }
+
+        private static string ResolveSpotlightTargetActionId(string targetId)
+        {
+            if (string.IsNullOrEmpty(targetId))
+                return null;
+
+            if (targetId.StartsWith("action:", StringComparison.Ordinal))
+                return targetId.Substring("action:".Length);
+
+            if (targetId.StartsWith("stage:", StringComparison.Ordinal))
+                return ScenarioAuthoringActionIds.ActionStageSelectPrefix + targetId.Substring("stage:".Length);
+
+            if (targetId.StartsWith("tool:", StringComparison.Ordinal))
+            {
+                string tool = targetId.Substring("tool:".Length);
+                if (string.Equals(tool, ScenarioAuthoringTool.Select.ToString(), StringComparison.OrdinalIgnoreCase))
+                    return ScenarioAuthoringActionIds.ActionToolSelect;
+                if (string.Equals(tool, ScenarioAuthoringTool.Objects.ToString(), StringComparison.OrdinalIgnoreCase))
+                    return ScenarioAuthoringActionIds.ActionToolObjects;
+                if (string.Equals(tool, ScenarioAuthoringTool.Assets.ToString(), StringComparison.OrdinalIgnoreCase))
+                    return ScenarioAuthoringActionIds.ActionToolAssets;
+                if (string.Equals(tool, ScenarioAuthoringTool.Family.ToString(), StringComparison.OrdinalIgnoreCase))
+                    return ScenarioAuthoringActionIds.ActionToolFamily;
+            }
+
+            return null;
+        }
+
         private void DrawSpotlightDimming(Rect availableRect, Rect targetRect, float progress)
         {
             Color oldColor = GUI.color;
@@ -227,6 +292,54 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = oldColor;
         }
 
+        private void DrawSpotlightPointer(Rect cardRect, Rect targetRect, float progress)
+        {
+            if (targetRect.width <= 0f || targetRect.height <= 0f || cardRect.width <= 0f || cardRect.height <= 0f)
+                return;
+
+            Vector2 from = ClosestPointOnRect(cardRect, targetRect.center);
+            Vector2 to = ClosestPointOnRect(targetRect, cardRect.center);
+            DrawGoldLine(from, to, 2f, progress);
+
+            Color oldColor = GUI.color;
+            GUI.color = new Color(1f, 0.76f, 0.20f, 0.95f * progress);
+            GUI.DrawTexture(new Rect(to.x - 4f, to.y - 4f, 8f, 8f), Texture2D.whiteTexture);
+            GUI.color = oldColor;
+        }
+
+        private static Vector2 ClosestPointOnRect(Rect rect, Vector2 point)
+        {
+            float x = Mathf.Clamp(point.x, rect.xMin, rect.xMax);
+            float y = Mathf.Clamp(point.y, rect.yMin, rect.yMax);
+            float left = Math.Abs(x - rect.xMin);
+            float right = Math.Abs(rect.xMax - x);
+            float top = Math.Abs(y - rect.yMin);
+            float bottom = Math.Abs(rect.yMax - y);
+            float min = Math.Min(Math.Min(left, right), Math.Min(top, bottom));
+            if (min == left)
+                x = rect.xMin;
+            else if (min == right)
+                x = rect.xMax;
+            else if (min == top)
+                y = rect.yMin;
+            else
+                y = rect.yMax;
+            return new Vector2(x, y);
+        }
+
+        private static void DrawGoldLine(Vector2 start, Vector2 end, float width, float alpha)
+        {
+            Matrix4x4 matrix = GUI.matrix;
+            Color color = GUI.color;
+            float angle = Mathf.Atan2(end.y - start.y, end.x - start.x) * Mathf.Rad2Deg;
+            float length = Vector2.Distance(start, end);
+            GUI.color = new Color(1f, 0.76f, 0.20f, 0.90f * alpha);
+            GUIUtility.RotateAroundPivot(angle, start);
+            GUI.DrawTexture(new Rect(start.x, start.y - (width * 0.5f), length, width), Texture2D.whiteTexture);
+            GUI.matrix = matrix;
+            GUI.color = color;
+        }
+
         private void DrawSpotlightBorder(Rect targetRect, float progress)
         {
             Rect rect = new Rect(targetRect.x - 8f, targetRect.y - 8f, targetRect.width + 16f, targetRect.height + 16f);
@@ -239,7 +352,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawTourCallout(Rect rect, ScenarioAuthoringTourViewModel tour)
         {
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
+            DrawTutorialCardChrome(rect);
             GUILayout.BeginArea(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, rect.height - 24f));
             GUILayout.Label("STEP " + (tour.StepIndex + 1) + " / " + tour.StepCount, _mutedTextStyle);
             GUILayout.Label(tour.Title ?? "TOUR", _sectionTitleStyle);
@@ -264,6 +377,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (tutorial == null)
                 return ZeroRect();
+
+            if (!string.IsNullOrEmpty(tutorial.TargetId))
+                return ResolveTourTargetRect(tutorial.TargetId, topRect, statusRect, windowRects, shell);
 
             if (!string.IsNullOrEmpty(tutorial.TargetWindowId))
             {
@@ -442,21 +558,89 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawTutorialCallout(Rect rect, ScenarioAuthoringTutorialViewModel tutorial)
         {
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
+            DrawTutorialCardChrome(rect);
             GUILayout.BeginArea(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, rect.height - 24f));
-            GUILayout.Label("STEP " + (tutorial.StepIndex + 1) + " / " + tutorial.StepCount, _mutedTextStyle);
-            GUILayout.Label(tutorial.Title ?? "TUTORIAL", _sectionTitleStyle);
+            GUILayout.Label((tutorial.SkipPromptVisible ? "SKIP TOUR?" : "STEP " + (tutorial.StepIndex + 1) + " / " + tutorial.StepCount), _mutedTextStyle);
+            GUILayout.Label(tutorial.SkipPromptVisible ? "END THE TOUR" : (tutorial.Title ?? "TUTORIAL"), _sectionTitleStyle);
             GUILayout.Space(4f);
-            GUILayout.Label(tutorial.Body ?? string.Empty, _textStyle);
+            GUILayout.Label(tutorial.SkipPromptVisible ? "You can replay this from Workshop Help later." : (tutorial.Body ?? string.Empty), _textStyle);
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
-            DrawButton(GUILayoutUtility.GetRect(136f, 30f, GUILayout.Width(136f), GUILayout.Height(30f)), tutorial.PrimaryAction, false);
-            GUILayout.FlexibleSpace();
-            DrawButton(GUILayoutUtility.GetRect(70f, 28f, GUILayout.Width(70f), GUILayout.Height(28f)), tutorial.HelpAction, false);
-            DrawButton(GUILayoutUtility.GetRect(70f, 28f, GUILayout.Width(70f), GUILayout.Height(28f)), tutorial.SkipAction, false);
-            DrawButton(GUILayoutUtility.GetRect(70f, 28f, GUILayout.Width(70f), GUILayout.Height(28f)), tutorial.NextAction, false);
+            if (tutorial.SkipPromptVisible)
+            {
+                DrawButton(GUILayoutUtility.GetRect(112f, 30f, GUILayout.Width(112f), GUILayout.Height(30f)), tutorial.SkipCancelAction, false);
+                GUILayout.FlexibleSpace();
+                DrawButton(GUILayoutUtility.GetRect(112f, 30f, GUILayout.Width(112f), GUILayout.Height(30f)), tutorial.SkipAction, false);
+            }
+            else
+            {
+                DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tutorial.BackAction, false);
+                GUILayout.FlexibleSpace();
+                DrawButton(GUILayoutUtility.GetRect(70f, 28f, GUILayout.Width(70f), GUILayout.Height(28f)), tutorial.HelpAction, false);
+                DrawButton(GUILayoutUtility.GetRect(94f, 28f, GUILayout.Width(94f), GUILayout.Height(28f)), tutorial.SkipPromptAction, false);
+                DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tutorial.NextAction, false);
+            }
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+        }
+
+        private void DrawTutorialCardChrome(Rect rect)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Menu);
+            Color oldColor = GUI.color;
+            GUI.color = new Color(1f, 0.76f, 0.20f, 0.95f);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 2f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y, 2f, rect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - 2f, rect.y, 2f, rect.height), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 0.76f, 0.20f, 0.18f);
+            GUI.DrawTexture(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, 28f), Texture2D.whiteTexture);
+            GUI.color = oldColor;
+        }
+
+        private Rect ResolveTutorialCardRect(string key, Rect preferredRect, Rect bounds)
+        {
+            if (!string.Equals(_tutorialCardDragKey, key, StringComparison.Ordinal))
+            {
+                _tutorialCardDragKey = key;
+                _tutorialCardDragging = false;
+                _tutorialCardManualRect = RuntimeCompat.ZeroRect();
+            }
+
+            Rect rect = _tutorialCardManualRect.width > 0f && _tutorialCardManualRect.height > 0f
+                ? _tutorialCardManualRect
+                : preferredRect;
+
+            Event evt = Event.current;
+            Rect dragRect = new Rect(rect.x, rect.y, rect.width, 34f);
+            if (evt != null && evt.type == EventType.MouseDown && evt.button == 0 && dragRect.Contains(evt.mousePosition))
+            {
+                _tutorialCardDragging = true;
+                _tutorialCardDragOffset = new Vector2(evt.mousePosition.x - rect.x, evt.mousePosition.y - rect.y);
+                evt.Use();
+            }
+            else if (evt != null && evt.type == EventType.MouseUp && evt.button == 0)
+            {
+                _tutorialCardDragging = false;
+            }
+
+            if (_tutorialCardDragging)
+            {
+                Vector2 mouse = Event.current != null ? Event.current.mousePosition : new Vector2(UnityEngine.Input.mousePosition.x, Screen.height - UnityEngine.Input.mousePosition.y);
+                rect.x = mouse.x - _tutorialCardDragOffset.x;
+                rect.y = mouse.y - _tutorialCardDragOffset.y;
+                rect = ClampRectToBounds(rect, bounds);
+                _tutorialCardManualRect = rect;
+            }
+
+            return ClampRectToBounds(rect, bounds);
+        }
+
+        private static Rect ClampRectToBounds(Rect rect, Rect bounds)
+        {
+            rect.x = Mathf.Clamp(rect.x, bounds.xMin + Margin, bounds.xMax - rect.width - Margin);
+            rect.y = Mathf.Clamp(rect.y, bounds.yMin + Margin, bounds.yMax - rect.height - Margin);
+            return rect;
         }
     }
 }

@@ -17,6 +17,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
         private bool _activationRendered;
         private string _activeTourId;
         private int _activeTourStep;
+        private bool _skipPromptVisible;
 
         public ScenarioAuthoringTutorialService(
             ScenarioAuthoringSettingsService settingsService,
@@ -104,8 +105,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialNext, StringComparison.Ordinal))
                 return Advance(state, true, out message);
 
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialBack, StringComparison.Ordinal))
+                return Back(state, out message);
+
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkip, StringComparison.Ordinal))
                 return Skip(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkipPrompt, StringComparison.Ordinal))
+                return ShowSkipPrompt(out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialSkipCancel, StringComparison.Ordinal))
+                return HideSkipPrompt(out message);
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionTutorialReset, StringComparison.Ordinal))
                 return Reset(state, out message);
@@ -163,6 +173,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
 
             _activeTourId = tour.Id;
             _activeTourStep = 0;
+            _skipPromptVisible = false;
             state.HelpWindowOpen = false;
             ApplyTourOpenAction(state, CurrentTourStep(), layoutService);
             message = "Tour started: " + tour.Title + ".";
@@ -188,6 +199,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
                 return CompleteTour(state, out message);
 
             _activeTourStep = next;
+            _skipPromptVisible = false;
             ApplyTourOpenAction(state, CurrentTourStep(), layoutService);
             message = "Tour step " + (_activeTourStep + 1) + " of " + tour.Steps.Length + ".";
             return true;
@@ -223,6 +235,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
         public int CurrentTourStepIndex
         {
             get { return _activeTourStep; }
+        }
+
+        public bool SkipPromptVisible
+        {
+            get { return _skipPromptVisible; }
         }
 
         public bool IsStepSatisfied(ScenarioAuthoringState state, ScenarioEditorSession editorSession, TutorialStep step)
@@ -304,8 +321,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
 
             progress.Step = next;
             Save(state, progress);
+            _skipPromptVisible = false;
             ClearActivation();
             message = manual ? "Tutorial advanced." : "Tutorial step complete.";
+            return true;
+        }
+
+        private bool Back(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (state == null || state.Settings == null)
+                return false;
+
+            TutorialProgress progress = Load(state.Settings);
+            int current = ClampStep(progress.Step);
+            if (current <= 0)
+            {
+                message = "Already at the first tutorial step.";
+                return true;
+            }
+
+            progress.Completed = false;
+            progress.Skipped = false;
+            progress.Step = current - 1;
+            Save(state, progress);
+            _skipPromptVisible = false;
+            ClearActivation();
+            message = "Tutorial moved back.";
             return true;
         }
 
@@ -318,8 +360,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             TutorialProgress progress = Load(state.Settings);
             progress.Skipped = true;
             Save(state, progress);
+            _skipPromptVisible = false;
             ClearActivation();
             message = "Tutorial skipped. Help remains available.";
+            return true;
+        }
+
+        private bool ShowSkipPrompt(out string message)
+        {
+            _skipPromptVisible = true;
+            message = "Skip the guided tutorial? Choose Skip Tour to confirm.";
+            return true;
+        }
+
+        private bool HideSkipPrompt(out string message)
+        {
+            _skipPromptVisible = false;
+            message = "Tutorial resumed.";
             return true;
         }
 
@@ -335,6 +392,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             progress.Step = 0;
             state.HelpWindowOpen = false;
             Save(state, progress);
+            _skipPromptVisible = false;
             ClearActivation();
             message = "Tutorial replay started.";
             return true;

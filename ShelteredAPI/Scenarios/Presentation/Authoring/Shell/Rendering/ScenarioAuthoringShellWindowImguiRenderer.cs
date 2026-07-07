@@ -2260,6 +2260,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (RegisterRichHoverHelpSource(rect, action))
                 tooltip = string.Empty;
             RegisterInteractiveRegion(rect);
+            if (section != null && !string.IsNullOrEmpty(section.Id))
+                RegisterTourTarget("section:" + section.Id, rect);
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
             bool clicked = DrawPlainButton(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card, action.Enabled);

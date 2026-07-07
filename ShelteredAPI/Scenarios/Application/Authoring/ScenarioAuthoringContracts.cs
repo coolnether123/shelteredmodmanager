@@ -51,7 +51,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellCloseHelp = "shell.help.close";
         public const string ActionShellSettingsReset = "shell.settings.reset";
         public const string ActionTutorialNext = "tutorial.next";
+        public const string ActionTutorialBack = "tutorial.back";
         public const string ActionTutorialSkip = "tutorial.skip";
+        public const string ActionTutorialSkipPrompt = "tutorial.skip.prompt";
+        public const string ActionTutorialSkipCancel = "tutorial.skip.cancel";
         public const string ActionTutorialReset = "tutorial.reset";
         public const string ActionTutorialOpenTarget = "tutorial.open_target";
         public const string ActionHelpPagePrevious = "tutorial.help_page.previous";
@@ -1027,10 +1030,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool WaitingForAction { get; set; }
         public string TargetWindowId { get; set; }
         public string TargetActionId { get; set; }
+        public string TargetId { get; set; }
         public ScenarioStageKind TargetStage { get; set; }
+        public bool SkipPromptVisible { get; set; }
         public ScenarioAuthoringInspectorAction PrimaryAction { get; set; }
+        public ScenarioAuthoringInspectorAction BackAction { get; set; }
         public ScenarioAuthoringInspectorAction NextAction { get; set; }
         public ScenarioAuthoringInspectorAction SkipAction { get; set; }
+        public ScenarioAuthoringInspectorAction SkipPromptAction { get; set; }
+        public ScenarioAuthoringInspectorAction SkipCancelAction { get; set; }
         public ScenarioAuthoringInspectorAction HelpAction { get; set; }
     }
 
@@ -1068,7 +1076,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         CandidateGrid = 7,
         FactGrid = 8,
         CastCardGrid = 9,
-        SurvivorEditor = 10
+        SurvivorEditor = 10,
+        InventorySlotGrid = 11
     }
 
     internal sealed class ScenarioAuthoringInspectorSection
@@ -1079,6 +1088,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioAuthoringInspectorSectionLayout Layout { get; set; }
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
         public ScenarioSurvivorEditorViewModel SurvivorEditor { get; set; }
+        public ScenarioInventorySlotGridViewModel InventorySlotGrid { get; set; }
     }
 
     internal enum ScenarioAuthoringInspectorItemKind
@@ -1104,6 +1114,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string PulseSignature { get; set; }
         public ScenarioCastCardViewModel CastCard { get; set; }
         public ScenarioAuthoringInspectorAction Action { get; set; }
+    }
+
+    internal sealed class ScenarioInventorySlotGridViewModel
+    {
+        public string EmptyMessage { get; set; }
+        public bool ReadOnly { get; set; }
+        public ScenarioInventorySlotViewModel[] Slots { get; set; }
+    }
+
+    internal sealed class ScenarioInventorySlotViewModel
+    {
+        public string Id { get; set; }
+        public string ItemId { get; set; }
+        public string DisplayName { get; set; }
+        public string Detail { get; set; }
+        public string QuantityText { get; set; }
+        public string Badge { get; set; }
+        public string ScheduleText { get; set; }
+        public bool Empty { get; set; }
+        public bool ReadOnly { get; set; }
+        public bool Emphasized { get; set; }
+        public Sprite PreviewSprite { get; set; }
+        public ScenarioAuthoringInspectorAction PrimaryAction { get; set; }
+        public ScenarioAuthoringInspectorAction QuantityIncreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction QuantityDecreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction RemoveAction { get; set; }
+        public ScenarioAuthoringInspectorAction KindAction { get; set; }
+        public ScenarioAuthoringInspectorAction[] TimeActions { get; set; }
     }
 
     internal sealed class ScenarioCastCardViewModel

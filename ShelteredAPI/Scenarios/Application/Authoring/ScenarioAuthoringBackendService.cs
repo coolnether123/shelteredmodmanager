@@ -233,6 +233,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionPlaytest);
             if (_tutorialService != null && _tutorialService.CurrentTour() != null && UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape))
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionTourExit);
+            else if (_tutorialService != null && _tutorialService.GetActiveStep(snapshot) != null && UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape))
+                changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionTutorialSkipPrompt);
 
             bool shortcutChanged;
             if (_shortcutRouter != null && _shortcutRouter.TryRoute(snapshot, out shortcutChanged))

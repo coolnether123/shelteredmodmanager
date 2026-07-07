@@ -300,6 +300,29 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             return GetBinaryProgress(TutorialOverlayKey, visible, PopupDuration, ScenarioUiEasing.PopupOut, true);
         }
 
+        public Rect GetAnimatedRect(string key, Rect target, float duration)
+        {
+            if (string.IsNullOrEmpty(key) || !_enabled)
+                return target;
+
+            string xKey = key + ".x";
+            string yKey = key + ".y";
+            string wKey = key + ".w";
+            string hKey = key + ".h";
+            _tweens.PlayFromCurrent(xKey, target.x, duration, ScenarioUiEasing.EaseOut, target.x);
+            _tweens.PlayFromCurrent(yKey, target.y, duration, ScenarioUiEasing.EaseOut, target.y);
+            _tweens.PlayFromCurrent(wKey, target.width, duration, ScenarioUiEasing.EaseOut, target.width);
+            _tweens.PlayFromCurrent(hKey, target.height, duration, ScenarioUiEasing.EaseOut, target.height);
+            if (_tweens.IsRunning(xKey) || _tweens.IsRunning(yKey) || _tweens.IsRunning(wKey) || _tweens.IsRunning(hKey))
+                TransitionActive = true;
+
+            return new Rect(
+                _tweens.GetValue(xKey, target.x),
+                _tweens.GetValue(yKey, target.y),
+                _tweens.GetValue(wKey, target.width),
+                _tweens.GetValue(hKey, target.height));
+        }
+
         public float GetToastProgress(string status)
         {
             if (!string.Equals(_lastStatus, status, StringComparison.Ordinal))

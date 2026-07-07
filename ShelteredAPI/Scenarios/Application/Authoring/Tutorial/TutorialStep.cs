@@ -9,6 +9,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             string title,
             string body,
             string pendingCallout,
+            string targetId,
             string targetWindowId,
             ScenarioStageKind targetStage,
             string targetActionId)
@@ -18,6 +19,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             Title = title;
             Body = body;
             PendingCallout = pendingCallout;
+            TargetId = targetId;
             TargetWindowId = targetWindowId;
             TargetStage = targetStage;
             TargetActionId = targetActionId;
@@ -28,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
         public string Title { get; private set; }
         public string Body { get; private set; }
         public string PendingCallout { get; private set; }
+        public string TargetId { get; private set; }
         public string TargetWindowId { get; private set; }
         public ScenarioStageKind TargetStage { get; private set; }
         public string TargetActionId { get; private set; }
