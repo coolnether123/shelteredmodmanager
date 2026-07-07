@@ -25,10 +25,10 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Theme{
         public Color AccentSuccess { get { return new Color(0.31f, 0.48f, 0.24f, 1f); } }
         public Color AccentWarning { get { return new Color(0.65f, 0.43f, 0.12f, 1f); } }
         public Color AccentNeutral { get { return new Color(0.81f, 0.71f, 0.53f, 1f); } }
-        public Color DisabledSurface { get { return new Color(0.22f, 0.20f, 0.18f, 1f); } }
+        public Color DisabledSurface { get { return new Color(0.24f, 0.20f, 0.15f, 1f); } }
 
         public Color TextTitle     { get { return new Color(0.96f, 0.79f, 0.44f, 1f); } }
-        public Color TextSubtitle  { get { return new Color(0.88f, 0.74f, 0.49f, 1f); } }
+        public Color TextSubtitle  { get { return new Color(0.90f, 0.72f, 0.42f, 1f); } }
         public Color TextBody      { get { return new Color(0.92f, 0.89f, 0.82f, 1f); } }
         public Color TextMuted     { get { return new Color(0.77f, 0.72f, 0.63f, 1f); } }
         public Color TextDisabled  { get { return new Color(0.48f, 0.45f, 0.39f, 1f); } }
