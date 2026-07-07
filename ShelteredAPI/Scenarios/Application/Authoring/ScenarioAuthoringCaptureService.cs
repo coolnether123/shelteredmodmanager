@@ -84,6 +84,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return true;
         }
 
+        public bool CaptureCurrentFamilyIfEmpty(ScenarioEditorSession session, out string message)
+        {
+            message = null;
+            if (session == null || session.WorkingDefinition == null)
+            {
+                message = "No active authoring session is available.";
+                return false;
+            }
+
+            FamilySetupDefinition existing = session.WorkingDefinition.FamilySetup;
+            if (existing != null && existing.Members != null && existing.Members.Count > 0)
+            {
+                message = "Starting cast already has authored survivors; auto-populate skipped.";
+                return true;
+            }
+
+            return CaptureCurrentFamily(session, out message);
+        }
+
         public bool BuildFamilyCapturePreview(ScenarioEditorSession session, out ScenarioCapturePreview preview, out string message)
         {
             preview = null;

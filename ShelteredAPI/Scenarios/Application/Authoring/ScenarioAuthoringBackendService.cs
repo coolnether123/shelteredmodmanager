@@ -130,6 +130,103 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             RaiseStateChanged();
         }
 
+        internal void BeginWorldLoadingSession(ScenarioAuthoringSession session, string statusMessage)
+        {
+            if (session == null)
+                return;
+
+            string status = string.IsNullOrEmpty(statusMessage)
+                ? "Loading game..."
+                : statusMessage;
+            lock (_sync)
+            {
+                _activeSession = session;
+                _state = new ScenarioAuthoringState
+                {
+                    IsActive = true,
+                    ShellVisible = true,
+                    SelectionModeActive = false,
+                    WorldLoading = true,
+                    WorldLoadingStatus = status,
+                    ActiveStage = ScenarioStageKind.None,
+                    ActiveBunkerStage = ScenarioStageKind.BunkerInside,
+                    ActiveTool = ScenarioAuthoringTool.Objects,
+                    ActiveShellTab = ScenarioAuthoringShellTab.Shell,
+                    AssetMode = ScenarioAssetAuthoringMode.ReplaceExisting,
+                    ActiveLayoutPreset = "default",
+                    InspectorTab = ScenarioAuthoringInspectorTab.Properties,
+                    ActiveDraftId = session.DraftId,
+                    ActiveScenarioFilePath = session.ScenarioFilePath,
+                    StatusMessage = status,
+                    Settings = _settingsService.Load(),
+                    SetupState = _setupStateService != null ? _setupStateService.LoadForScenarioFile(session.ScenarioFilePath) : new ScenarioAuthoringSetupState()
+                };
+                _layoutService.InitializeState(_state);
+            }
+
+            ResetInteractiveSubsystems();
+            RefreshAuthoringArtifacts();
+            _historyService.BindSession(session.DraftId);
+            ScenarioSpriteSwapClipboard.Clear();
+            ScenarioHoverVisualService.Instance.ClearSecondary();
+            _layoutService.ApplyStageWorkspace(_state);
+            _stageCoordinator.Synchronize(BuildContext(CurrentState, session));
+            MMLog.WriteInfo("[ScenarioAuthoringBackend] World-loading shell opened. DraftId=" + session.DraftId
+                + ", ScenarioFile=" + session.ScenarioFilePath + ".");
+            RaiseStateChanged();
+        }
+
+        internal void SetWorldLoadingStatus(string statusMessage)
+        {
+            lock (_sync)
+            {
+                if (_state == null || !_state.IsActive || !_state.WorldLoading)
+                    return;
+
+                string status = string.IsNullOrEmpty(statusMessage)
+                    ? "Loading game..."
+                    : statusMessage;
+                _state.WorldLoadingStatus = status;
+                _state.StatusMessage = status;
+            }
+
+            RaiseStateChanged();
+        }
+
+        internal void CompleteWorldLoadingSession(ScenarioAuthoringSession session, string statusMessage)
+        {
+            if (session == null)
+                return;
+
+            lock (_sync)
+            {
+                _activeSession = session;
+                if (_state == null || !_state.IsActive)
+                    _state = new ScenarioAuthoringState();
+
+                _state.IsActive = true;
+                _state.ReloadPending = false;
+                _state.ReloadPendingReason = null;
+                _state.WorldLoading = false;
+                _state.WorldLoadingStatus = null;
+                _state.ShellVisible = true;
+                _state.ActiveDraftId = session.DraftId;
+                _state.ActiveScenarioFilePath = session.ScenarioFilePath;
+                _state.StatusMessage = string.IsNullOrEmpty(statusMessage)
+                    ? ResolveInitialStatusMessage(_sessionStore.Current)
+                    : statusMessage;
+                if (_state.Settings == null)
+                    _state.Settings = _settingsService.Load();
+                if (_state.SetupState == null)
+                    _state.SetupState = _setupStateService != null ? _setupStateService.LoadForScenarioFile(session.ScenarioFilePath) : new ScenarioAuthoringSetupState();
+            }
+
+            _layoutService.ApplyStageWorkspace(_state);
+            _stageCoordinator.Synchronize(BuildContext(CurrentState, session));
+            MMLog.WriteInfo("[ScenarioAuthoringBackend] World-loading shell completed. DraftId=" + session.DraftId + ".");
+            RaiseStateChanged();
+        }
+
         private static string ResolveInitialStatusMessage(ScenarioEditorSession editorSession)
         {
             if (editorSession != null && !string.IsNullOrEmpty(editorSession.LoadWarning))
@@ -230,7 +327,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionShellToggle);
             if (InputActionRegistry.IsDown(ScenarioAuthoringActionIds.SaveDraft))
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionSave);
-            if (InputActionRegistry.IsDown(ScenarioAuthoringActionIds.TogglePlaytest))
+            if (!snapshot.WorldLoading && InputActionRegistry.IsDown(ScenarioAuthoringActionIds.TogglePlaytest))
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionPlaytest);
             if (_tutorialService != null && _tutorialService.CurrentTour() != null && UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape))
                 changed |= _commandService.Execute(snapshot, ScenarioAuthoringActionIds.ActionTourExit);
@@ -242,14 +339,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 changed |= shortcutChanged;
 
             string sectionMessage;
-            if (_sectionHub.Update(context, out sectionMessage))
+            if (!snapshot.WorldLoading && _sectionHub.Update(context, out sectionMessage))
             {
                 changed = true;
                 if (!string.IsNullOrEmpty(sectionMessage))
                     snapshot.StatusMessage = sectionMessage;
             }
 
-            if (_sectionHub.ShouldSuppressSelection)
+            if (snapshot.WorldLoading)
+            {
+                ScenarioHoverVisualService.Instance.Clear();
+            }
+            else if (_sectionHub.ShouldSuppressSelection)
             {
                 changed |= ClearTransientSelection(snapshot);
                 ScenarioHoverVisualService.Instance.UpdateFromState(snapshot);
@@ -260,7 +361,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ScenarioMapAuthoringRuntimeService mapAuthoring = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
-            if (mapAuthoring != null && mapAuthoring.Synchronize(snapshot, _sessionStore.Current))
+            if (!snapshot.WorldLoading && mapAuthoring != null && mapAuthoring.Synchronize(snapshot, _sessionStore.Current))
                 changed = true;
 
             _stageCoordinator.Synchronize(context);
@@ -351,6 +452,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, reason);
             }
 
+            if (snapshot.WorldLoading && IsWorldDependentAction(actionId))
+            {
+                string reason = string.IsNullOrEmpty(snapshot.WorldLoadingStatus)
+                    ? "Loading game... world actions are disabled until the shelter is ready."
+                    : snapshot.WorldLoadingStatus;
+                return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, reason);
+            }
+
             ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
             string beforeStatus = snapshot.StatusMessage;
             ScenarioAuthoringActionExecutionResult result = _commandService.ExecuteWithResult(snapshot, actionId);
@@ -367,7 +476,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             string sectionMessage;
-            if (_sectionHub.SynchronizeAfterAction(snapshot, out sectionMessage))
+            if (!snapshot.WorldLoading && _sectionHub.SynchronizeAfterAction(snapshot, out sectionMessage))
             {
                 changed = true;
                 if (!string.IsNullOrEmpty(sectionMessage))
@@ -400,6 +509,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (changed || !string.Equals(beforeStatus, snapshot.StatusMessage))
                 RaiseStateChanged();
             return result;
+        }
+
+        private static bool IsWorldDependentAction(string actionId)
+        {
+            if (string.IsNullOrEmpty(actionId))
+                return false;
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionPlaytest, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionPlaytestRestart, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionConvertToNormal, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionCaptureFamily, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionCaptureShelterObjects, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionCaptureSelectedObject, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionRemoveSelectedObjectPlacement, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserPlaceSelected, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserEditSelected, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioBaseModeAuthoringActions.ActionWatchOpeningCutscene, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return actionId.StartsWith("build.", StringComparison.Ordinal)
+                || actionId.StartsWith("scene_sprite.", StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringOpen, StringComparison.Ordinal)
+                || actionId.StartsWith("scenario.map.", StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix, StringComparison.Ordinal);
         }
 
         internal bool UpdateWindowFrame(string windowId, float x, float y, float width, float height, bool persist)

@@ -550,6 +550,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool IsActive { get; set; }
         public bool ReloadPending { get; set; }
         public string ReloadPendingReason { get; set; }
+        public bool WorldLoading { get; set; }
+        public string WorldLoadingStatus { get; set; }
         public bool ShellVisible { get; set; }
         public bool SelectionModeActive { get; set; }
         public ScenarioStageKind ActiveStage { get; set; }
@@ -603,6 +605,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 IsActive = IsActive,
                 ReloadPending = ReloadPending,
                 ReloadPendingReason = ReloadPendingReason,
+                WorldLoading = WorldLoading,
+                WorldLoadingStatus = WorldLoadingStatus,
                 ShellVisible = ShellVisible,
                 SelectionModeActive = SelectionModeActive,
                 ActiveStage = ActiveStage,

@@ -39,6 +39,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string familyChoice,
             out string message)
         {
+            return SaveAndReload(editorSession, newBaseMode, familyChoice, false, out message);
+        }
+
+        public bool SaveAndReload(
+            ScenarioEditorSession editorSession,
+            ScenarioBaseGameMode newBaseMode,
+            string familyChoice,
+            bool autoPopulateStartingCastAfterReload,
+            out string message)
+        {
             message = null;
             if (editorSession == null || editorSession.WorkingDefinition == null)
             {
@@ -82,6 +92,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 "as " + FormatBaseMode(newBaseMode) + " backend (" + FormatFamilyChoice(familyChoice) + ")",
                 false,
                 string.Equals(NormalizeFamilyChoice(familyChoice), ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal),
+                autoPopulateStartingCastAfterReload,
                 true,
                 validation,
                 out message);
@@ -127,7 +138,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
             ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
-            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, validation, out message);
+            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, false, validation, out message);
         }
 
         public bool SaveAndReloadBaseline(
@@ -171,6 +182,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 launchSaveType,
                 reloadMode,
                 reloadLabel,
+                false,
                 false,
                 false,
                 true,
@@ -259,21 +271,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            if (_captureService == null)
-            {
-                message = "Could not keep current cast while switching to " + FormatBaseMode(baseMode)
-                    + ": family capture service is unavailable. Choose the default family option or add authored cast first.";
-                return false;
-            }
-
-            string captureMessage;
-            if (!_captureService.CaptureCurrentFamily(editorSession, out captureMessage))
-            {
-                message = "Could not keep current cast while switching to " + FormatBaseMode(baseMode)
-                    + ": " + (string.IsNullOrEmpty(captureMessage) ? "live family capture failed." : captureMessage);
-                return false;
-            }
-
+            setup.OverrideVanillaFamily = false;
             return true;
         }
 
@@ -336,6 +334,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string label,
             bool reenterPlaytest,
             bool captureBaseDefaultFamily,
+            bool autoPopulateStartingCast,
             bool suppressIntroCutscene,
             ScenarioValidationResult validation,
             out string message)
@@ -353,6 +352,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 pending.RequestPlaytestAfterBootstrap();
             if (captureBaseDefaultFamily)
                 pending.RequestBaseDefaultFamilyCaptureAfterBootstrap();
+            if (autoPopulateStartingCast)
+                pending.RequestStartingCastAutoPopulateAfterBootstrap();
             if (suppressIntroCutscene)
                 pending.RequestSuppressIntroCutsceneAfterSceneLoad();
 

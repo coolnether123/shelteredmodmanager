@@ -27,6 +27,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool ReenterPlaytestAfterBootstrap { get; private set; }
         public bool CaptureBaseDefaultFamilyAfterBootstrap { get; private set; }
         public bool SuppressIntroCutsceneAfterSceneLoad { get; private set; }
+        public bool AutoPopulateStartingCastAfterBootstrap { get; private set; }
 
         public static ScenarioAuthoringSession Create(
             ScenarioInfo draftInfo,
@@ -71,6 +72,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public void RequestSuppressIntroCutsceneAfterSceneLoad()
         {
             SuppressIntroCutsceneAfterSceneLoad = true;
+        }
+
+        public void RequestStartingCastAutoPopulateAfterBootstrap()
+        {
+            AutoPopulateStartingCastAfterBootstrap = true;
         }
 
         private static string ResolveExpectedSceneName(ScenarioBaseGameMode baseMode)

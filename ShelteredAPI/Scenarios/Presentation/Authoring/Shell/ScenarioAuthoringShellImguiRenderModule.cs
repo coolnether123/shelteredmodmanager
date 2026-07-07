@@ -127,6 +127,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _richHoverSourceHoveredThisFrame;
         private string _richHoverSourceKeyThisFrame;
         private readonly List<string> _richHoverTopicBackStack = new List<string>();
+        private readonly List<Rect> _richHoverSiblingAvoidRects = new List<Rect>();
         private SurvivorColorPickerPopup _survivorColorPicker;
         private string _lastSurvivorColorPickerRequestKey;
         private bool _tutorialCardDragging;
@@ -163,13 +164,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool vanillaBlockingPanelOpen = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>().HasBlockingPanelOpen();
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
             bool reloadPending = snapshot != null && snapshot.State != null && snapshot.State.ReloadPending;
+            bool worldLoading = snapshot != null && snapshot.State != null && snapshot.State.WorldLoading;
             bool mapAuthoringActive = snapshot != null && snapshot.State != null && snapshot.State.MapAuthoringActive;
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
-                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending || mapAuthoringActive)
+                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending || worldLoading || mapAuthoringActive)
                 && snapshot.ShellViewModel != null
-                && (!vanillaBlockingPanelOpen || mapAuthoringActive);
+                && (!vanillaBlockingPanelOpen || worldLoading || mapAuthoringActive);
 
             if (_runtime != null)
                 _runtime.enabled = _visible || wasVisible || _rootAlpha > 0.001f;
@@ -271,6 +273,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                 float scaledWidth = Screen.width / uiScale;
                 float scaledHeight = Screen.height / uiScale;
+                if (_snapshot.State != null && _snapshot.State.WorldLoading)
+                    inputCapture.RegisterInteractiveRect(new Rect(0f, 0f, scaledWidth, scaledHeight));
                 _chromeViewportRect = new Rect(0f, 0f, scaledWidth, scaledHeight);
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);

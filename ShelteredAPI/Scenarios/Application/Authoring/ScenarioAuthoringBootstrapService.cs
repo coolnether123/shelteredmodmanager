@@ -38,6 +38,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private string _lastPendingBlockingReason;
         private string _warmupDraftId;
         private float _warmupElapsedSeconds;
+        private string _worldLoadingShellDraftId;
 
         public static ScenarioAuthoringBootstrapService Instance
         {
@@ -97,6 +98,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     _pendingSession = null;
                     _lastPendingDraftId = null;
                     _lastPendingBlockingReason = null;
+                    _worldLoadingShellDraftId = null;
                     ResetPendingWarmup();
                     MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Discarding pending draft '" + obsolete.DraftId
                         + "' (mode=" + obsolete.BaseMode + ") to create new " + baseMode + " draft.");
@@ -111,6 +113,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     draft.Slot,
                     draft.StartupSave,
                     launchSaveType);
+                _pendingSession.RequestStartingCastAutoPopulateAfterBootstrap();
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Queued draft authoring bootstrap: " + _pendingSession.DraftId + ".");
                 result = _pendingSession;
             }
@@ -154,6 +157,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     _pendingSession = null;
                     _lastPendingDraftId = null;
                     _lastPendingBlockingReason = null;
+                    _worldLoadingShellDraftId = null;
                     ResetPendingWarmup();
                 }
 
@@ -180,6 +184,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public void CancelPendingDraft(string reason, bool cleanupDraftArtifacts)
         {
             ScenarioAuthoringSession pending = null;
+            bool clearedActiveShell = false;
             lock (_sync)
             {
                 if (_pendingSession == null)
@@ -189,12 +194,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Cleared pending draft bootstrap '" + _pendingSession.DraftId
                     + "'. Reason=" + (reason ?? "unspecified") + ".");
                 _pendingSession = null;
+                if (_activeSession != null && string.Equals(_activeSession.DraftId, pending.DraftId, StringComparison.Ordinal))
+                {
+                    _activeSession = null;
+                    clearedActiveShell = true;
+                }
                 _lastPendingDraftId = null;
                 _lastPendingBlockingReason = null;
+                _worldLoadingShellDraftId = null;
                 ResetPendingWarmup();
             }
 
             ClearLaunchRedirects(pending, reason);
+            if (clearedActiveShell)
+                _backend.ClearActiveSession(reason ?? "Pending draft canceled.");
             if (_entryFlowService != null)
                 _entryFlowService.Hide("Pending draft canceled.");
             if (cleanupDraftArtifacts && pending != null)
@@ -233,6 +246,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 previous = _activeSession;
                 _activeSession = null;
+                _worldLoadingShellDraftId = null;
             }
 
             _backend.BeginReloadPending(pendingSession, reason ?? "Reloading authoring world.");
@@ -425,11 +439,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     }
                 }
 
+                if (!TryOpenWorldLoadingShell(pending))
+                    return;
+
                 if (!ScenarioWorldReady.Evaluate(out blockingReason))
                 {
                     if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
                     {
                         _lastPendingBlockingReason = blockingReason;
+                        if (_backend != null)
+                            _backend.SetWorldLoadingStatus("Loading game... " + blockingReason);
                         if (_entryFlowService != null)
                             _entryFlowService.SetLoadingStatus("Status: world loading - " + blockingReason);
                         MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId + "' is waiting for world readiness. Reason="
@@ -460,7 +479,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioEditorSession editorSession;
             try
             {
-                editorSession = _editorService.LoadEditMode(pending.ScenarioFilePath);
+                editorSession = IsEditorSessionForDraft(pending)
+                    ? _editorService.CurrentSession
+                    : _editorService.LoadEditMode(pending.ScenarioFilePath);
             }
             catch (Exception ex)
             {
@@ -480,18 +501,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Editor session loaded for draft '" + pending.DraftId + "'. DefinitionId="
                 + (editorSession != null && editorSession.WorkingDefinition != null ? editorSession.WorkingDefinition.Id : "<null>") + ".");
             CaptureBaseDefaultFamilyIfRequested(pending, editorSession);
+            AutoPopulateStartingCastIfRequested(pending, editorSession);
             ActivateScenarioBinding(pending);
             ClearLaunchRedirects(pending, "Authoring bootstrap completed.");
+            bool worldLoadingShellOpen = string.Equals(_worldLoadingShellDraftId, pending.DraftId, StringComparison.Ordinal);
             lock (_sync)
             {
                 _activeSession = pending;
                 _pendingSession = null;
                 _lastPendingDraftId = null;
                 _lastPendingBlockingReason = null;
+                _worldLoadingShellDraftId = null;
                 ResetPendingWarmup();
             }
 
-            _backend.SetActiveSession(pending);
+            if (worldLoadingShellOpen)
+                _backend.CompleteWorldLoadingSession(pending, null);
+            else
+                _backend.SetActiveSession(pending);
             if (_entryFlowService != null)
                 _entryFlowService.MarkEditorReady(pending);
             ProjectStartingInventoryAfterBootstrap(pending, editorSession);
@@ -501,7 +528,53 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ReenterPlaytest(pending);
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Activated authoring session for draft '" + pending.DraftId
                 + "'. Opening authoring shell.");
+            if (!worldLoadingShellOpen)
+                _menuService.Open(pending, true);
+        }
+
+        private bool TryOpenWorldLoadingShell(ScenarioAuthoringSession pending)
+        {
+            if (pending == null || pending.ReenterPlaytestAfterBootstrap)
+                return true;
+
+            if (string.Equals(_worldLoadingShellDraftId, pending.DraftId, StringComparison.Ordinal))
+                return true;
+
+            ScenarioEditorSession editorSession;
+            try
+            {
+                editorSession = IsEditorSessionForDraft(pending)
+                    ? _editorService.CurrentSession
+                    : _editorService.LoadEditMode(pending.ScenarioFilePath);
+            }
+            catch (Exception ex)
+            {
+                string loadFailureMessage = (ex != null
+                    && !string.IsNullOrEmpty(ex.Message)
+                    && ex.Message.IndexOf("recovery copy could not be loaded", StringComparison.OrdinalIgnoreCase) >= 0)
+                    ? "This draft could not be opened: its scenario file and backup are both unreadable."
+                    : "Could not load draft session. " + (ex != null ? ex.Message : "unknown error");
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Early editor session load failed for draft '"
+                    + pending.DraftId + "': " + (ex != null ? ex.Message : "unknown error"));
+                _backend.SetStatusMessage(loadFailureMessage);
+                CancelPendingDraft(loadFailureMessage);
+                return false;
+            }
+
+            lock (_sync)
+            {
+                _activeSession = pending;
+                _worldLoadingShellDraftId = pending.DraftId;
+            }
+
+            string status = "Loading game... waiting for the shelter world to finish loading.";
+            _backend.BeginWorldLoadingSession(pending, status);
+            if (_entryFlowService != null)
+                _entryFlowService.MarkEditorReady(pending);
             _menuService.Open(pending, true);
+            MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Opened navigable draft shell while world loads. draftId="
+                + pending.DraftId + " definitionLoaded=" + (editorSession != null && editorSession.WorkingDefinition != null) + ".");
+            return true;
         }
 
         private void ReenterPlaytest(ScenarioAuthoringSession pending)
@@ -577,6 +650,50 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Captured base default family but failed to save draft '"
+                    + pending.DraftId + "': " + ex.Message);
+            }
+        }
+
+        private void AutoPopulateStartingCastIfRequested(ScenarioAuthoringSession pending, ScenarioEditorSession editorSession)
+        {
+            if (pending == null || !pending.AutoPopulateStartingCastAfterBootstrap)
+                return;
+
+            if (_captureService == null || editorSession == null || editorSession.WorkingDefinition == null)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Starting cast auto-populate skipped because the capture service or editor session was unavailable. draftId="
+                    + (pending != null ? pending.DraftId : "<none>") + ".");
+                return;
+            }
+
+            string captureMessage;
+            if (!_captureService.CaptureCurrentFamilyIfEmpty(editorSession, out captureMessage))
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Starting cast auto-populate failed for draft '"
+                    + pending.DraftId + "': " + (captureMessage ?? "unknown error") + ".");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(captureMessage)
+                && captureMessage.IndexOf("skipped", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] " + captureMessage + " draftId=" + pending.DraftId + ".");
+                return;
+            }
+
+            try
+            {
+                ScenarioValidationResult validation = _editorService.CommitChanges(pending.ScenarioFilePath);
+                if (validation != null && !validation.IsValid)
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Auto-populated starting cast and saved draft with validation errors for draft '"
+                        + pending.DraftId + "'.");
+                else
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Auto-populated starting cast for draft '"
+                        + pending.DraftId + "'. " + (captureMessage ?? string.Empty));
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Auto-populated starting cast but failed to save draft '"
                     + pending.DraftId + "': " + ex.Message);
             }
         }
@@ -669,6 +786,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 _warmupDraftId = pending.DraftId;
                 _warmupElapsedSeconds = 0f;
+                if (_backend != null)
+                    _backend.SetWorldLoadingStatus("Loading game... shelter ready, letting the first moments settle.");
                 if (_entryFlowService != null)
                     _entryFlowService.SetLoadingStatus("Status: world ready - letting the shelter settle before opening tools.");
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId
@@ -789,10 +908,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
+            ScenarioAuthoringSession pending;
+            lock (_sync)
+            {
+                pending = _pendingSession;
+            }
+            bool activeStillPending = pending != null
+                && string.Equals(pending.DraftId, active.DraftId, StringComparison.Ordinal);
+
             if (IsNormalSavePlaying(active))
             {
-                CloseActiveSession("Draft scenario binding is no longer active; normal save play resumed.", true);
-                return;
+                if (!activeStillPending)
+                {
+                    CloseActiveSession("Draft scenario binding is no longer active; normal save play resumed.", true);
+                    return;
+                }
             }
 
             if (!ScenarioWorldReady.IsShelterSceneActive())
@@ -815,6 +945,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 previous = _activeSession;
                 _activeSession = null;
+                _worldLoadingShellDraftId = null;
             }
 
             try
@@ -983,12 +1114,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private bool IsEditingDraftSession(ScenarioAuthoringSession session)
         {
-            if (!IsDraftAuthoringSession(session) || !IsEditorSessionForDraft(session) || IsNormalSavePlaying(session))
+            if (!IsDraftAuthoringSession(session) || !IsEditorSessionForDraft(session))
                 return false;
 
             ScenarioAuthoringState state = _backend.CurrentState;
             return state != null
                 && state.IsActive
+                && (state.WorldLoading || !IsNormalSavePlaying(session))
                 && string.Equals(state.ActiveDraftId, session.DraftId, StringComparison.OrdinalIgnoreCase);
         }
 

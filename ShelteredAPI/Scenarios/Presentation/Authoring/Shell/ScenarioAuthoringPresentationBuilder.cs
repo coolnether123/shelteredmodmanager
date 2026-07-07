@@ -1322,11 +1322,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringSession session,
             ScenarioDefinition definition)
         {
+            if (IsWorldLoadingWindow(windowDefinition, state))
+                return BuildWorldLoadingSections(state);
+
             IScenarioAuthoringWindowContentBuilder builder;
             if (windowDefinition == null || !_windowSectionBuilders.TryGetValue(windowDefinition.ContentKind, out builder))
                 return BuildEmptyWindowSections();
 
             return builder.Build(new ScenarioAuthoringWindowContentContext(state, editorSession, session, definition));
+        }
+
+        private static bool IsWorldLoadingWindow(ScenarioAuthoringWindowDefinition windowDefinition, ScenarioAuthoringState state)
+        {
+            if (windowDefinition == null || state == null || !state.WorldLoading)
+                return false;
+
+            if (windowDefinition.ContentKind == ScenarioAuthoringWindowContentKind.Map
+                || windowDefinition.ContentKind == ScenarioAuthoringWindowContentKind.TilesPalette
+                || windowDefinition.ContentKind == ScenarioAuthoringWindowContentKind.BuildTools
+                || windowDefinition.ContentKind == ScenarioAuthoringWindowContentKind.Inspector)
+            {
+                return true;
+            }
+
+            return windowDefinition.ContentKind == ScenarioAuthoringWindowContentKind.Scenario
+                && state.ActiveStage == ScenarioStageKind.Test;
+        }
+
+        private static ScenarioAuthoringInspectorSection[] BuildWorldLoadingSections(ScenarioAuthoringState state)
+        {
+            string status = state != null && !string.IsNullOrEmpty(state.WorldLoadingStatus)
+                ? state.WorldLoadingStatus
+                : "Loading game... world actions are disabled until the shelter is ready.";
+            return new[]
+            {
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "world_loading",
+                    Title = "Game Loading",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[]
+                    {
+                        Text(status),
+                        Text("Draft-only pages remain available. World view, placement, playtest, and map actions will enable when the shelter finishes loading.")
+                    }
+                }
+            };
         }
 
         private Dictionary<ScenarioAuthoringWindowContentKind, IScenarioAuthoringWindowContentBuilder> CreateWindowSectionBuilders()
@@ -2267,7 +2309,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : 0;
 
             List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems(definition);
-            currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionCaptureFamily, "Refresh from World", "Preview additions, changes, and removals before replacing the starting cast from current live survivors.", true, false, "RF")));
             ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
             if (history != null && history.CanUndo)
                 currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Last Capture", "Restore the roster from before the last capture or edit snapshot.", true, false, "UN")));
@@ -2294,7 +2335,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!ScenarioPlayStartReadiness.HasStartingSurvivor(definition))
                 startingItems.Add(Text(
                     "No starting cast has been authored yet.",
-                    "Playtest is gated until at least one starting survivor exists. Use Add Starting Survivor, or add a live-world person from the reference strip below.",
+                    "Playtest is gated until at least one starting survivor exists. New drafts auto-populate from the vanilla setup family once the world is ready; you can also add one manually.",
                     "Blocks Playtest",
                     "!",
                     null,

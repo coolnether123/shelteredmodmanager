@@ -312,7 +312,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             string message = null;
             if (_baseModeReloadService == null
-                || !_baseModeReloadService.SaveAndReload(session, mode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, out message))
+                || !_baseModeReloadService.SaveAndReload(session, mode, ScenarioBaseFamilyChoices.KeepCurrentCast, true, out message))
             {
                 SetPickerStatus("Status: baseline blocked - " + Safe(message, "scenario world could not be loaded."));
                 return;

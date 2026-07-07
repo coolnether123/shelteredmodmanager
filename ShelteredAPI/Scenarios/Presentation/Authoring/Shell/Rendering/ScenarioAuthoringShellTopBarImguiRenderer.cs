@@ -46,9 +46,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float primaryRowLeft = compact ? animatedRect.x + 12f : brandRect.xMax + 20f;
             float actionRight = animatedRect.xMax - 10f;
+            Rect loadingChipRect = DrawWorldLoadingChip(animatedRect, compact);
+            if (loadingChipRect.width > 0f)
+                actionRight = loadingChipRect.x - (compact ? 4f : 8f);
             windowMenuButtonRect = DrawTopBarWindowAction(
                 compact
-                    ? new Rect(animatedRect.xMax - 122f, animatedRect.y + 6f, 112f, 26f)
+                    ? new Rect(Mathf.Max(primaryRowLeft, actionRight - 112f), animatedRect.y + 6f, Mathf.Min(112f, Math.Max(0f, actionRight - primaryRowLeft)), 26f)
                     : new Rect(primaryRowLeft, animatedRect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),
                 shell);
 
@@ -71,6 +74,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             }
             return windowMenuButtonRect;
+        }
+
+        private Rect DrawWorldLoadingChip(Rect animatedRect, bool compact)
+        {
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            if (state == null || !state.WorldLoading)
+                return RuntimeCompat.ZeroRect();
+
+            string status = string.IsNullOrEmpty(state.WorldLoadingStatus) ? "Loading game..." : state.WorldLoadingStatus;
+            string label = compact ? "Loading game..." : ShortenToFit(status, 260f, _statusStyle);
+            float width = compact ? 132f : Mathf.Clamp(ScenarioUiMeasuredLabel.Width(label, _statusStyle, 28f), 148f, 280f);
+            Rect rect = new Rect(animatedRect.xMax - width - 10f, animatedRect.y + (compact ? 36f : 8f), width, compact ? 24f : 28f);
+            GUI.Box(rect, label, _statusStyle);
+            return rect;
         }
 
         private void DrawWorldSurfaceControls(Rect rect, ScenarioAuthoringShellViewModel shell, bool compact)
