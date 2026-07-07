@@ -257,6 +257,19 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return false;
             }
 
+            string directSceneName;
+            if (TryGetAuthoringLaunchScene(virtualSaveType, out directSceneName))
+            {
+                if (!BeginDirectSceneTransition(directSceneName, launchTargetLabel, virtualSaveType))
+                {
+                    error = "Could not launch the " + directSceneName + " scene for the draft.";
+                    _saveLibrary.ClearQueuedNewGameSave(virtualSaveType);
+                    return false;
+                }
+
+                return true;
+            }
+
             if (!BeginCustomisationTransition(adapter, launchTargetLabel, virtualSaveType))
             {
                 error = "Could not push the customisation panel for the draft.";
@@ -609,6 +622,22 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             return TryGetDirectLaunchScene(baseGameMode, out sceneName);
+        }
+
+        private static bool TryGetAuthoringLaunchScene(SaveManager.SaveType saveType, out string sceneName)
+        {
+            switch (saveType)
+            {
+                case SaveManager.SaveType.SlotSurrounded:
+                    sceneName = "ShelterScene_Surrounded";
+                    return true;
+                case SaveManager.SaveType.SlotStasis:
+                    sceneName = "ShelterScene_Stasis";
+                    return true;
+                default:
+                    sceneName = null;
+                    return false;
+            }
         }
 
         private static bool BeginDirectSceneTransition(

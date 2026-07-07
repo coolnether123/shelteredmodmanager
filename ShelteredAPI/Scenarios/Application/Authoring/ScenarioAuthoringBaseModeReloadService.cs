@@ -78,7 +78,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            return QueueSavedDraftReload(draftId, draftStartupSave, ScenarioSelectionIds.GetDefaultSaveType(newBaseMode), newBaseMode, "as " + FormatBaseMode(newBaseMode) + " (" + FormatFamilyChoice(familyChoice) + ")", false, out message);
+            return QueueSavedDraftReload(
+                draftId,
+                draftStartupSave,
+                ScenarioSelectionIds.GetDefaultSaveType(newBaseMode),
+                newBaseMode,
+                "as " + FormatBaseMode(newBaseMode) + " (" + FormatFamilyChoice(familyChoice) + ")",
+                false,
+                string.Equals(NormalizeFamilyChoice(familyChoice), ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal),
+                out message);
         }
 
         public bool SaveAndReloadCurrentWorld(ScenarioEditorSession editorSession, out string message)
@@ -120,7 +128,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
-            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, out message);
+            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, out message);
         }
 
         public bool SaveBaseModeOnly(
@@ -275,6 +283,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioBaseGameMode baseMode,
             string label,
             bool reenterPlaytest,
+            bool captureBaseDefaultFamily,
             out string message)
         {
             ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
@@ -288,6 +297,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (reenterPlaytest)
                 pending.RequestPlaytestAfterBootstrap();
+            if (captureBaseDefaultFamily)
+                pending.RequestBaseDefaultFamilyCaptureAfterBootstrap();
 
             string error;
             if (!_launchCoordinator.QueueAuthoringDraftSceneReload(

@@ -25,6 +25,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public SaveType LaunchSaveType { get; private set; }
         public string ExpectedSceneName { get; private set; }
         public bool ReenterPlaytestAfterBootstrap { get; private set; }
+        public bool CaptureBaseDefaultFamilyAfterBootstrap { get; private set; }
 
         public static ScenarioAuthoringSession Create(
             ScenarioInfo draftInfo,
@@ -59,6 +60,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public void RequestPlaytestAfterBootstrap()
         {
             ReenterPlaytestAfterBootstrap = true;
+        }
+
+        public void RequestBaseDefaultFamilyCaptureAfterBootstrap()
+        {
+            CaptureBaseDefaultFamilyAfterBootstrap = true;
         }
 
         private static string ResolveExpectedSceneName(ScenarioBaseGameMode baseMode)

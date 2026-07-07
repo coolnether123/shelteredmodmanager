@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     {
         private static readonly FieldInfo BaseCharacterFirstNameField = typeof(BaseCharacter).GetField("m_firstName", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo FamilyManagerGameOverField = typeof(FamilyManager).GetField("game_over", BindingFlags.NonPublic | BindingFlags.Instance);
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
 
         public FamilyApplyService(ScenarioCharacterAppearanceService characterAppearanceService)
@@ -33,7 +34,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             List<FamilyMember> members = FamilyManager.Instance.GetAllFamilyMembers();
-            if (members == null || members.Count == 0)
+            if (members == null)
+                members = new List<FamilyMember>();
+
+            if (members.Count == 0 && definition.FamilySetup.OverrideVanillaFamily)
+            {
+                int spawnedCount = SpawnMissingMembers(definition, scenarioFilePath, result, 0);
+                if (spawnedCount > 0)
+                    ClearGameOverAfterFamilySpawn();
+                else
+                    result.AddMessage("No spawned family members found; authored family spawn failed.");
+                return;
+            }
+
+            if (members.Count == 0)
             {
                 result.AddMessage("No spawned family members found; family changes skipped.");
                 return;
@@ -69,22 +83,46 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             if (definition.FamilySetup.OverrideVanillaFamily && definition.FamilySetup.Members.Count > members.Count)
+                SpawnMissingMembers(definition, scenarioFilePath, result, members.Count);
+        }
+
+        private int SpawnMissingMembers(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, int startIndex)
+        {
+            int spawnedCount = 0;
+            if (definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null)
+                return spawnedCount;
+
+            for (int i = Math.Max(0, startIndex); i < definition.FamilySetup.Members.Count; i++)
             {
-                for (int i = members.Count; i < definition.FamilySetup.Members.Count; i++)
+                FamilyMemberConfig config = definition.FamilySetup.Members[i];
+                FamilyMember spawned;
+                string spawnMessage;
+                if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
                 {
-                    FamilyMemberConfig config = definition.FamilySetup.Members[i];
-                    FamilyMember spawned;
-                    string spawnMessage;
-                    if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
-                    {
-                        result.FamilyChanges++;
-                        ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
-                    }
-                    else if (!string.IsNullOrEmpty(spawnMessage))
-                    {
-                        result.AddMessage(spawnMessage);
-                    }
+                    spawnedCount++;
+                    result.FamilyChanges++;
+                    ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
                 }
+                else if (!string.IsNullOrEmpty(spawnMessage))
+                {
+                    result.AddMessage(spawnMessage);
+                }
+            }
+
+            return spawnedCount;
+        }
+
+        private static void ClearGameOverAfterFamilySpawn()
+        {
+            if (FamilyManager.Instance == null || FamilyManagerGameOverField == null)
+                return;
+
+            try
+            {
+                FamilyManagerGameOverField.SetValue(FamilyManager.Instance, false);
+            }
+            catch
+            {
             }
         }
 

@@ -29,6 +29,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioEditorService _editorService;
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
+        private readonly ScenarioAuthoringCaptureService _captureService;
         private ScenarioAuthoringSession _pendingSession;
         private ScenarioAuthoringSession _activeSession;
         private string _lastPendingDraftId;
@@ -48,7 +49,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringPresentationService presentation,
             IScenarioEditorService editorService,
             IScenarioSaveLibrary saveLibrary,
-            IScenarioRuntimeBindingService runtimeBindingService)
+            IScenarioRuntimeBindingService runtimeBindingService,
+            ScenarioAuthoringCaptureService captureService)
         {
             _backend = backend;
             _draftRepository = draftRepository;
@@ -57,6 +59,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _editorService = editorService;
             _saveLibrary = saveLibrary;
             _runtimeBindingService = runtimeBindingService;
+            _captureService = captureService;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }
         }
@@ -422,6 +425,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Editor session loaded for draft '" + pending.DraftId + "'. DefinitionId="
                 + (editorSession != null && editorSession.WorkingDefinition != null ? editorSession.WorkingDefinition.Id : "<null>") + ".");
+            CaptureBaseDefaultFamilyIfRequested(pending, editorSession);
             ActivateScenarioBinding(pending);
             ClearLaunchRedirects(pending, "Authoring bootstrap completed.");
             lock (_sync)
@@ -468,6 +472,48 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Failed to re-enter playtest after authoring reload: " + ex.Message);
                 FailPlaytestRestartBackToEditor("Playtest restart failed: " + ex.Message);
+            }
+        }
+
+        private void CaptureBaseDefaultFamilyIfRequested(ScenarioAuthoringSession pending, ScenarioEditorSession editorSession)
+        {
+            if (pending == null || !pending.CaptureBaseDefaultFamilyAfterBootstrap)
+                return;
+
+            if (_captureService == null || editorSession == null || editorSession.WorkingDefinition == null)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Base default family capture skipped because the capture service or editor session was unavailable. draftId="
+                    + (pending != null ? pending.DraftId : "<none>") + ".");
+                return;
+            }
+
+            string captureMessage;
+            if (!_captureService.CaptureCurrentFamily(editorSession, out captureMessage))
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Base default family capture failed for draft '"
+                    + pending.DraftId + "': " + (captureMessage ?? "unknown error") + ".");
+                return;
+            }
+
+            editorSession.WorkingDefinition.BaseFamilyChoice = ScenarioBaseFamilyChoices.UseBaseDefaultFamily;
+            try
+            {
+                ScenarioValidationResult validation = _editorService.CommitChanges(pending.ScenarioFilePath);
+                if (validation != null && validation.IsValid)
+                {
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Captured base default family for draft '"
+                        + pending.DraftId + "'. " + (captureMessage ?? string.Empty));
+                }
+                else
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Captured base default family but save validation failed for draft '"
+                        + pending.DraftId + "'.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Captured base default family but failed to save draft '"
+                    + pending.DraftId + "': " + ex.Message);
             }
         }
 
