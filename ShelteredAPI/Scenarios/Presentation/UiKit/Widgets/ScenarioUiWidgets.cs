@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Layout;
@@ -84,7 +85,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
                     box = styles.Pill;
                     break;
             }
-            GUI.Box(rect, label ?? string.Empty, box);
+
+            string fitted;
+            string tooltip;
+            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(label ?? string.Empty, Math.Max(0f, rect.width - 10f), box, out fitted, out tooltip);
+            GUI.Box(rect, new GUIContent(fitted, tooltip), box);
         }
 
         /// <summary>

@@ -37,6 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float CommandDockBottomOffset = 22f;
         public const float WorkshopPageInset = 8f;
         public const float WorkshopPageTopInset = 18f;
+        public const float HomeWorkshopPageTopInset = 4f;
 
         // Top bar sizing. Reserves room on the left for the vanilla portrait and
         // on the right for the HUD so labels never collide with the game UI.
@@ -140,6 +141,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             float horizontalInset = contentRect.width >= 760f ? WorkshopPageInset : 0f;
             float verticalInset = contentRect.height >= 300f ? WorkshopPageTopInset : Gutter;
+            float pageWidth = Math.Max(240f, contentRect.width - (horizontalInset * 2f));
+            return new Rect(
+                contentRect.x + horizontalInset,
+                contentRect.y + verticalInset,
+                pageWidth,
+                Math.Max(120f, contentRect.height - (verticalInset * 2f)));
+        }
+
+        public static Rect BuildHomeWorkshopPageRect(Rect contentRect)
+        {
+            float horizontalInset = contentRect.width >= 760f ? WorkshopPageInset : 0f;
+            float verticalInset = contentRect.height >= 300f ? HomeWorkshopPageTopInset : 0f;
             float pageWidth = Math.Max(240f, contentRect.width - (horizontalInset * 2f));
             return new Rect(
                 contentRect.x + horizontalInset,

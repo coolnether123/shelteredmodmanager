@@ -317,6 +317,15 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             return BuildEllipsisCandidate(label, low, ellipsis);
         }
 
+        public static bool TryFitLabelWithTooltip(string label, float maxWidth, GUIStyle style, out string fitted, out string tooltip)
+        {
+            string safeLabel = label ?? string.Empty;
+            fitted = FitLabelWithEllipsis(safeLabel, maxWidth, style);
+            bool shortened = !string.Equals(fitted, safeLabel, StringComparison.Ordinal);
+            tooltip = shortened ? safeLabel : string.Empty;
+            return shortened;
+        }
+
         private static string BuildEllipsisCandidate(string label, int length, string ellipsis)
         {
             if (string.IsNullOrEmpty(label) || length <= 0)

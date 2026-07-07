@@ -160,9 +160,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool nativeButton = ScenarioUiAtlasSkin.DrawButton(visualRect, action.Emphasized, action.Enabled, pressed, tab);
             GUIStyle drawStyle = nativeButton ? ResolveContentButtonStyle(action, tab) : style;
             bool chromeGlyph = IsWindowHeaderChromeGlyphAction(action, visualRect);
-            GUIContent content = new GUIContent(
-                chromeGlyph ? string.Empty : ScenarioUiMeasuredLabel.FitLabelWithEllipsis(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle),
-                tooltip);
+            string fittedLabel = string.Empty;
+            string fitTooltip = string.Empty;
+            if (!chromeGlyph)
+                ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle, out fittedLabel, out fitTooltip);
+            if (!string.IsNullOrEmpty(fitTooltip))
+                tooltip = string.IsNullOrEmpty(tooltip) ? fitTooltip : tooltip + "\n" + fitTooltip;
+            GUIContent content = new GUIContent(fittedLabel, tooltip);
 
             if (IsWindowMenuAction(action))
             {

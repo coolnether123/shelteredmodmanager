@@ -4,6 +4,7 @@ using ModAPI.Scenarios;
 using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 
@@ -119,7 +120,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.Label(new Rect(rect.x + 8f, rect.y + 5f, rect.width - 16f, 18f), label, _smallTitleStyle);
             string baseline = day != null ? day.Baseline : null;
             if (!string.IsNullOrEmpty(baseline))
-                GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 16f), ShortenToFit(baseline, rect.width - 16f, _mutedTextStyle), _mutedTextStyle);
+            {
+                string fitted;
+                string tooltip;
+                ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(baseline, rect.width - 16f, _mutedTextStyle, out fitted, out tooltip);
+                GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 16f), new GUIContent(fitted, tooltip), _mutedTextStyle);
+            }
         }
 
         private void DrawTimelineChipsForDay(Rect dayRect, TimelineDayInfo day, TimelineChipInfo[] chips)
@@ -173,7 +179,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect iconRect = new Rect(rect.x + 5f, rect.y + 5f, 18f, 18f);
             DrawTimelineChipGlyph(iconRect, chip);
             Rect labelRect = new Rect(rect.x + 27f, rect.y + 5f, rect.width - 58f, 18f);
-            GUI.Label(labelRect, ShortenToFit(chip.Action.Label ?? string.Empty, labelRect.width, _textStyle), _textStyle);
+            string fittedLabel;
+            string labelTooltip;
+            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(chip.Action.Label ?? string.Empty, labelRect.width, _textStyle, out fittedLabel, out labelTooltip);
+            GUI.Label(labelRect, new GUIContent(fittedLabel, labelTooltip), _textStyle);
             if (!string.IsNullOrEmpty(chip.Action.Badge))
                 ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 5f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));
         }

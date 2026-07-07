@@ -5,6 +5,7 @@ using UnityEngine;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
@@ -90,7 +91,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string safeLabel = string.IsNullOrEmpty(label) ? "Assets" : label;
             string display = safeLabel + "  " + count;
             Rect rect = GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
-            if (DrawPlainButton(rect, new GUIContent(ShortenToFit(display, 140f, _buttonStyle), safeLabel), active ? _activeButtonStyle : _buttonStyle, true))
+            string fitted;
+            string fitTooltip;
+            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(display, Math.Max(0f, rect.width - 14f), _buttonStyle, out fitted, out fitTooltip);
+            if (DrawPlainButton(rect, new GUIContent(fitted, string.IsNullOrEmpty(fitTooltip) ? safeLabel : fitTooltip), active ? _activeButtonStyle : _buttonStyle, true))
                 _assetBrowserCategoryFilter = filter;
             GUILayout.Space(4f);
         }

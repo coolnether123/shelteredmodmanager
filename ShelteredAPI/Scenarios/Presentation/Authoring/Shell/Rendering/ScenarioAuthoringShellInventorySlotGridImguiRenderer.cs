@@ -214,7 +214,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 emphasis = ScenarioUiPillEmphasis.Active;
             else if (StringContains(slot.Badge, "-"))
                 emphasis = ScenarioUiPillEmphasis.Warning;
-            ScenarioUiWidgets.DrawPill(badgeRect, ShortenToFit(slot.Badge, badgeRect.width - 6f, _mutedTextStyle), _uiContext.Styles, emphasis);
+            ScenarioUiWidgets.DrawPill(badgeRect, slot.Badge, _uiContext.Styles, emphasis);
         }
 
         private void DrawInventoryQuantityBadge(Rect slotRect, ScenarioInventorySlotViewModel slot)
@@ -223,7 +223,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Rect qtyRect = new Rect(slotRect.xMax - 36f, slotRect.yMax - 21f, 32f, 17f);
-            ScenarioUiWidgets.DrawPill(qtyRect, ShortenToFit(slot.QuantityText, qtyRect.width - 4f, _mutedTextStyle), _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+            ScenarioUiWidgets.DrawPill(qtyRect, slot.QuantityText, _uiContext.Styles, ScenarioUiPillEmphasis.Default);
         }
 
         private void DrawInventoryEmptyAddGlyph(Rect slotRect)

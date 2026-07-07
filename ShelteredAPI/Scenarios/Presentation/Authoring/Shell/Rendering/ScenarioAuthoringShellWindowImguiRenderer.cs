@@ -157,8 +157,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.DrawTexture(backdropRect, Texture2D.whiteTexture);
             GUI.color = oldColor;
 
-            Rect pageRect = ScenarioAuthoringShellLayout.BuildWorkshopPageRect(contentRect);
             bool homeWorkshopPage = IsHomeWorkshopPage(window);
+            Rect pageRect = homeWorkshopPage
+                ? ScenarioAuthoringShellLayout.BuildHomeWorkshopPageRect(contentRect)
+                : ScenarioAuthoringShellLayout.BuildWorkshopPageRect(contentRect);
             Rect bodyRect;
             if (homeWorkshopPage)
             {
@@ -2122,7 +2124,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (action == null)
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 26f), 84f, Math.Min(240f, rowLimit));
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 26f), 84f, Math.Min(300f, rowLimit));
                 if (rowWidth > 0f && rowWidth + width > rowLimit)
                 {
                     GUILayout.EndHorizontal();
@@ -2150,7 +2152,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (action.Hint ?? action.Detail ?? string.Empty));
             if (RegisterRichHoverHelpSource(rect, action))
                 tooltip = string.Empty;
-            GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, Math.Max(0f, rect.width - 14f), style), tooltip);
+            string fitted;
+            string fitTooltip;
+            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(action.Label ?? string.Empty, Math.Max(0f, rect.width - 14f), style, out fitted, out fitTooltip);
+            if (!string.IsNullOrEmpty(fitTooltip))
+                tooltip = string.IsNullOrEmpty(tooltip) ? fitTooltip : tooltip + "\n" + fitTooltip;
+            GUIContent content = new GUIContent(fitted, tooltip);
             RegisterInteractiveRegion(rect);
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
@@ -2410,7 +2417,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int column = 0; column < rowCount; column++)
                 {
                     int index = i + column;
-                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, 108f, GUILayout.Width(rowCardWidth), GUILayout.Height(108f));
+                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, 124f, GUILayout.Width(rowCardWidth), GUILayout.Height(124f));
                     DrawHomeQuestionCard(rect, questions[index]);
 
                     if (column < rowCount - 1)
@@ -2631,7 +2638,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawHomeQuestionCard(ScenarioAuthoringInspectorSection section)
         {
-            Rect rect = GUILayoutUtility.GetRect(120f, 108f, GUILayout.ExpandWidth(true), GUILayout.Height(108f));
+            Rect rect = GUILayoutUtility.GetRect(120f, 124f, GUILayout.ExpandWidth(true), GUILayout.Height(124f));
             DrawHomeQuestionCard(rect, section);
         }
 
@@ -2686,21 +2693,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             detailStyle.wordWrap = true;
             detailStyle.clipping = TextClipping.Clip;
             float fixWidth = fixAction != null ? Mathf.Clamp(MeasureButtonWidth(fixAction, false, 20f), 104f, Math.Min(168f, rect.width * 0.34f)) : 0f;
-            float sideWidth = fixWidth > 0f ? fixWidth : 116f;
+            float sideWidth = fixWidth > 0f ? fixWidth : (!string.IsNullOrEmpty(badge) ? 116f : 0f);
             if (!string.IsNullOrEmpty(badge))
             {
                 Vector2 measuredBadge = _mutedTextStyle.CalcSize(new GUIContent(badge));
                 sideWidth = Mathf.Max(sideWidth, measuredBadge.x + 24f);
             }
 
-            sideWidth = Mathf.Clamp(sideWidth, 116f, Math.Min(190f, rect.width * 0.38f));
+            if (sideWidth > 0f)
+                sideWidth = Mathf.Clamp(sideWidth, 116f, Math.Min(190f, rect.width * 0.38f));
             Rect glyphRect = new Rect(rect.x + 12f, rect.y + 14f, 42f, 42f);
             bool drewGlyph = DrawHomeQuestionGlyph(glyphRect, section, action);
             float textX = drewGlyph ? glyphRect.xMax + 10f : rect.x + 14f;
-            float textReservedWidth = drewGlyph ? glyphRect.width + 44f : 32f;
+            float textReservedWidth = drewGlyph ? glyphRect.width + 44f : 28f;
             Rect textRect = new Rect(textX, rect.y + 9f, Math.Max(24f, rect.width - sideWidth - textReservedWidth), rect.height - 18f);
-            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 24f), ShortenToFit(section.Title ?? string.Empty, textRect.width, _uiContext.Styles.PaperTitleText), _uiContext.Styles.PaperTitleText);
-            GUI.Label(new Rect(textRect.x, textRect.y + 28f, textRect.width, rect.height - 44f), detail ?? string.Empty, detailStyle);
+            GUIStyle titleStyle = new GUIStyle(_uiContext.Styles.PaperTitleText);
+            titleStyle.wordWrap = true;
+            titleStyle.clipping = TextClipping.Clip;
+            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 38f), section.Title ?? string.Empty, titleStyle);
+            GUI.Label(new Rect(textRect.x, textRect.y + 42f, textRect.width, rect.height - 58f), detail ?? string.Empty, detailStyle);
             if (!string.IsNullOrEmpty(badge))
             {
                 Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 14f, sideWidth, 22f);
