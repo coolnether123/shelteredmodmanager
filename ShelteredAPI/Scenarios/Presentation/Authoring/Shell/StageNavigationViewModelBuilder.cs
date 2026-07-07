@@ -38,6 +38,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Events);
             AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Quests);
             AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Map);
+            AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Assets);
             AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Test);
             AddTopLevelTab(actions, activeStageKind, ScenarioStageKind.Publish);
 
@@ -158,6 +159,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Stockpile, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Quests, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Map, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(definition.Id, ScenarioAuthoringWindowIds.AssetBrowser, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Publish, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(definition.Id, ScenarioAuthoringWindowIds.Scenario, StringComparison.OrdinalIgnoreCase))
             {
@@ -306,6 +308,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return "Story";
                 case ScenarioStageKind.Map:
                     return "Map";
+                case ScenarioStageKind.Assets:
+                    return "Assets";
                 case ScenarioStageKind.Test:
                     return "Test";
                 case ScenarioStageKind.Publish:
@@ -337,6 +341,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return "STORY";
                 case ScenarioStageKind.Map:
                     return "MAP";
+                case ScenarioStageKind.Assets:
+                    return "AST";
                 case ScenarioStageKind.Test:
                     return "TEST";
                 case ScenarioStageKind.Publish:
@@ -368,6 +374,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return "Author story beats and quest entries.";
                 case ScenarioStageKind.Map:
                     return "Author map-facing scenario setup.";
+                case ScenarioStageKind.Assets:
+                    return "Browse all placeable and editable art assets in the workshop.";
                 case ScenarioStageKind.Test:
                     return "Apply the draft into the live shelter and test it.";
                 case ScenarioStageKind.Publish:

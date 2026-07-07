@@ -26,6 +26,156 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 namespace ShelteredAPI.Scenarios.Application.Commands{
+    internal sealed class AssetBrowserCommandHandler : IScenarioCommandHandler
+    {
+        private readonly ScenarioBuildPlacementAuthoringService _buildPlacement;
+        private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacement;
+        private readonly ScenarioSpriteSwapAuthoringService _spriteSwap;
+        private readonly ScenarioAuthoringLayoutService _layoutService;
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
+
+        public AssetBrowserCommandHandler(
+            ScenarioBuildPlacementAuthoringService buildPlacement,
+            ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacement,
+            ScenarioSpriteSwapAuthoringService spriteSwap,
+            ScenarioAuthoringLayoutService layoutService,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+        {
+            _buildPlacement = buildPlacement;
+            _sceneSpritePlacement = sceneSpritePlacement;
+            _spriteSwap = spriteSwap;
+            _layoutService = layoutService;
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = false;
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith("asset_browser.", StringComparison.Ordinal))
+                return false;
+
+            handled = true;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, StringComparison.Ordinal))
+                return SelectAsset(state, actionId, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserPlaceSelected, StringComparison.Ordinal))
+                return PlaceSelectedAsset(state, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserEditSelected, StringComparison.Ordinal))
+                return EditSelectedAsset(state, out message);
+
+            handled = false;
+            return false;
+        }
+
+        private static bool SelectAsset(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            string sourceActionId;
+            if (!ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, out sourceActionId))
+            {
+                message = "Asset browser selection could not be decoded.";
+                return false;
+            }
+
+            state.AssetBrowserSelectedActionId = sourceActionId;
+            message = "Asset selected in browser.";
+            return true;
+        }
+
+        private bool PlaceSelectedAsset(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            string sourceActionId = state != null ? state.AssetBrowserSelectedActionId : null;
+            if (string.IsNullOrEmpty(sourceActionId))
+            {
+                message = "Select an asset before placing it in the world.";
+                return false;
+            }
+
+            bool handled;
+            if (sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionSceneSpritePlacementApplyPrefix, StringComparison.Ordinal))
+            {
+                if (_layoutService != null)
+                    _layoutService.SelectTool(state, ScenarioAuthoringTool.Assets);
+                bool changed = _sceneSpritePlacement != null && _sceneSpritePlacement.TryHandleAction(state, sourceActionId, out handled, out message);
+                if (changed && _buildPlacement != null)
+                    _buildPlacement.Reset();
+                return changed;
+            }
+
+            if (sourceActionId.StartsWith("build.", StringComparison.Ordinal))
+            {
+                if (_layoutService != null)
+                    _layoutService.SelectTool(state, ResolveBuildTool(sourceActionId));
+                bool changed = _buildPlacement != null && _buildPlacement.TryHandleAction(state, sourceActionId, out handled, out message);
+                if (changed && _sceneSpritePlacement != null)
+                    _sceneSpritePlacement.Reset();
+                return changed;
+            }
+
+            message = "The selected asset is not placeable.";
+            return false;
+        }
+
+        private bool EditSelectedAsset(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            string sourceActionId = state != null ? state.AssetBrowserSelectedActionId : null;
+            if (string.IsNullOrEmpty(sourceActionId))
+            {
+                message = "Select an editable art asset before opening the pixel editor.";
+                return false;
+            }
+
+            if (!sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix, StringComparison.Ordinal))
+            {
+                message = "The selected asset does not expose an editable sprite target.";
+                return false;
+            }
+
+            string targetId = sourceActionId.Substring(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix.Length);
+            ScenarioAuthoringTarget target;
+            if (_weatherEffectSpriteCatalog == null || !_weatherEffectSpriteCatalog.TryFindTarget(targetId, out target) || target == null)
+            {
+                message = "Editable art target is not loaded: " + targetId + ".";
+                return false;
+            }
+
+            state.SelectedTarget = target.Copy();
+            state.HoveredTarget = target.Copy();
+            state.MultiSelection.Clear();
+            state.MultiSelection.Add(target.Copy());
+
+            bool handled;
+            bool changed = _spriteSwap != null
+                && _spriteSwap.TryHandleAction(state, ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditStart, out handled, out message);
+            if (changed && _layoutService != null)
+                changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, true);
+            return changed;
+        }
+
+        private static ScenarioAuthoringTool ResolveBuildTool(string sourceActionId)
+        {
+            if (string.Equals(sourceActionId, ScenarioAuthoringActionIds.ActionBuildStructureRoom, StringComparison.Ordinal)
+                || string.Equals(sourceActionId, ScenarioAuthoringActionIds.ActionBuildStructureLadder, StringComparison.Ordinal)
+                || string.Equals(sourceActionId, ScenarioAuthoringActionIds.ActionBuildStructureLight, StringComparison.Ordinal))
+            {
+                return ScenarioAuthoringTool.Shelter;
+            }
+
+            if (!string.IsNullOrEmpty(sourceActionId)
+                && (sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix, StringComparison.Ordinal)
+                    || sourceActionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix, StringComparison.Ordinal)))
+            {
+                return ScenarioAuthoringTool.Wiring;
+            }
+
+            return ScenarioAuthoringTool.Objects;
+        }
+    }
+
     internal sealed class SpriteCommandHandler : IScenarioCommandHandler
     {
         private readonly ScenarioSpriteSwapAuthoringService _service;

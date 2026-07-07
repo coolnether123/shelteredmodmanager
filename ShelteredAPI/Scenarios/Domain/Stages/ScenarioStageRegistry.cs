@@ -25,8 +25,9 @@ namespace ShelteredAPI.Scenarios.Domain.Stages{
             Register(new ScenarioStageDefinition(ScenarioStageKind.Events, "Timeline", 3, ScenarioStageKind.None, true, true, "Triggers and event authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Quests, "Story", 4, ScenarioStageKind.None, true, true, "Quest authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Map, "Map", 5, ScenarioStageKind.None, true, true, "Map-facing scenario authoring."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.Test, "Test", 6, ScenarioStageKind.None, true, true, "Playtest and live-apply workflow."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.Publish, "Publish", 7, ScenarioStageKind.None, true, true, "Validation and publish readiness."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Assets, "Assets", 6, ScenarioStageKind.None, true, true, "Full-page browser for placeable and editable scenario assets."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Test, "Test", 7, ScenarioStageKind.None, true, true, "Playtest and live-apply workflow."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Publish, "Publish", 8, ScenarioStageKind.None, true, true, "Validation and publish readiness."));
         }
 
         public ScenarioStageDefinition[] GetAll()

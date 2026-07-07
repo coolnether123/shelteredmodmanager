@@ -19,6 +19,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
         public const string Stockpile = "stockpile";
         public const string Quests = "quests";
         public const string Map = "map";
+        public const string AssetBrowser = "asset_browser";
         public const string Publish = "publish";
         public const string Settings = "editor_settings";
         public const string PixelEditor = "pixel_editor";
@@ -41,8 +42,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Windows{
             Register(Create(ScenarioAuthoringWindowIds.Stockpile, "Supplies", ScenarioAuthoringShellDock.Overlay, ScenarioAuthoringWindowContentKind.Stockpile, 9, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.InventoryStorage, false, false, false, false, true));
             Register(Create(ScenarioAuthoringWindowIds.Quests, "Story", ScenarioAuthoringShellDock.Overlay, ScenarioAuthoringWindowContentKind.Quests, 10, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Quests, false, false, false, false, true));
             Register(Create(ScenarioAuthoringWindowIds.Map, "Map", ScenarioAuthoringShellDock.Overlay, ScenarioAuthoringWindowContentKind.Map, 11, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Map, false, false, false, false, true));
-            Register(Create(ScenarioAuthoringWindowIds.Publish, "Publish", ScenarioAuthoringShellDock.Overlay, ScenarioAuthoringWindowContentKind.Publish, 12, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Publish, false, false, false, false, true));
-            Register(Create(ScenarioAuthoringWindowIds.PixelEditor, "Pixel Editor", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.PixelEditor, 13, 860f, 620f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, false, false));
+            Register(Create(ScenarioAuthoringWindowIds.AssetBrowser, "Assets", ScenarioAuthoringShellDock.Overlay, ScenarioAuthoringWindowContentKind.AssetBrowser, 12, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Assets, false, false, false, false, true));
+            Register(Create(ScenarioAuthoringWindowIds.Publish, "Publish", ScenarioAuthoringShellDock.Overlay, ScenarioAuthoringWindowContentKind.Publish, 13, 920f, 600f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.Publish, false, false, false, false, true));
+            Register(Create(ScenarioAuthoringWindowIds.PixelEditor, "Pixel Editor", ScenarioAuthoringShellDock.Floating, ScenarioAuthoringWindowContentKind.PixelEditor, 14, 860f, 620f, 620f, 420f, ScenarioAuthoringShellRendererKind.Standard, ScenarioStageKind.None, false, false, false, false, false));
         }
 
         public ScenarioAuthoringWindowDefinition[] GetDefinitions()

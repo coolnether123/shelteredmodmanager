@@ -289,6 +289,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionBuildResetWire = "build.reset.wire";
         public const string ActionBuildWallApplyPrefix = "build.wall.apply.";
         public const string ActionBuildWireApplyPrefix = "build.wire.apply.";
+        public const string ActionAssetBrowserSelectPrefix = "asset_browser.select.";
+        public const string ActionAssetBrowserPlaceSelected = "asset_browser.place_selected";
+        public const string ActionAssetBrowserEditSelected = "asset_browser.edit_selected";
         public const string ActionToolSelect = "tool.select";
         public const string ActionToolFamily = "tool.family";
         public const string ActionToolInventory = "tool.inventory";
@@ -381,6 +384,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Quests = 9,
         Map = 10,
         Publish = 11,
+        AssetBrowser = 12,
         Hierarchy = 13,
         SelectionStack = 14,
         PixelEditor = 15
@@ -537,6 +541,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string TimelineSelectionId { get; set; }
         public string TimelineSelectedDayId { get; set; }
         public string TimelineSelectedEntryId { get; set; }
+        public string AssetBrowserSelectedActionId { get; set; }
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
@@ -580,6 +585,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 TimelineSelectionId = TimelineSelectionId,
                 TimelineSelectedDayId = TimelineSelectedDayId,
                 TimelineSelectedEntryId = TimelineSelectedEntryId,
+                AssetBrowserSelectedActionId = AssetBrowserSelectedActionId,
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,

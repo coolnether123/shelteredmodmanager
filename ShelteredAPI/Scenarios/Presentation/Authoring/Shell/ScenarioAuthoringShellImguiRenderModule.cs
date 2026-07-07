@@ -92,6 +92,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _spritePickerSearchText = string.Empty;
         private string _spritePickerCandidateFilter = CandidateFilterAll;
         private bool _spritePickerSearchFocused;
+        private string _assetBrowserSearchText = string.Empty;
+        private string _assetBrowserCategoryFilter = CandidateFilterAll;
+        private bool _assetBrowserSearchFocused;
         private float _activeContentWidth;
         private float _activeUiScale = 1f;
         private int _scaledWindowDrawDepth;
@@ -425,6 +428,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             bool textFieldFocused = _buildPaletteSearchFocused
                 || _spritePickerSearchFocused
+                || _assetBrowserSearchFocused
                 || _editableFieldFocused;
             inputCapture.SetTextFieldFocused(textFieldFocused);
             inputCapture.SetKeyboardCaptured(

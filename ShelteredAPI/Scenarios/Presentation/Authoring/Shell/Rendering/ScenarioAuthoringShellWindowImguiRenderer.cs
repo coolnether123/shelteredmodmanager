@@ -169,6 +169,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     GUI.Label(new Rect(pageRect.x, pageRect.y + 30f, pageRect.width, 20f), window.Subtitle, _mutedTextStyle);
                 bodyRect = new Rect(pageRect.x, pageRect.y + 58f, pageRect.width, Math.Max(120f, pageRect.height - 58f));
             }
+            if (IsAssetBrowserWorkshopPage(window))
+                return DrawAssetBrowserWorkshopPage(bodyRect, window);
+
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);

@@ -8,11 +8,14 @@ using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioAssetAuthoringContentBuilder
     {
+        private readonly IScenarioAuthoringSectionHub _sectionHub;
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
         private readonly ScenarioAssetPlacementContentBuilder _placementContentBuilder;
         private readonly ScenarioSelectedAssetEditorContentBuilder _editorContentBuilder;
 
@@ -22,6 +25,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioSpriteRuntimeResolver runtimeResolver,
             ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
         {
+            _sectionHub = sectionHub;
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
             _placementContentBuilder = new ScenarioAssetPlacementContentBuilder(
                 sectionHub,
                 selectionScopeService,
@@ -57,6 +62,391 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public ScenarioSpriteSwapAuthoringService.CustomEditorModel BuildCustomEditorModel(ScenarioAuthoringState state)
         {
             return _editorContentBuilder.BuildCustomEditorModel(state);
+        }
+
+        public ScenarioAuthoringInspectorSection[] BuildAssetBrowserSections(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession)
+        {
+            return new ScenarioAssetBrowserCatalogContentBuilder(_sectionHub, _weatherEffectSpriteCatalog).Build(state, editorSession).ToArray();
+        }
+    }
+
+    internal sealed class ScenarioAssetBrowserCatalogContentBuilder
+    {
+        private readonly IScenarioAuthoringSectionHub _sectionHub;
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
+
+        public ScenarioAssetBrowserCatalogContentBuilder(
+            IScenarioAuthoringSectionHub sectionHub,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+        {
+            _sectionHub = sectionHub;
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
+        }
+
+        public List<ScenarioAuthoringInspectorSection> Build(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession)
+        {
+            List<BrowserAssetEntry> entries = new List<BrowserAssetEntry>();
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            sections.Add(BuildIntroSection());
+            AddBuildPaletteSections(sections, entries, state, editorSession, ScenarioAuthoringTool.Objects, "Objects", "OBJ");
+            AddBuildPaletteSections(sections, entries, state, editorSession, ScenarioAuthoringTool.Shelter, "Rooms", "ROOM");
+            AddBuildPaletteSections(sections, entries, state, editorSession, ScenarioAuthoringTool.Wiring, "Walls", "WALL");
+            AddSceneSpriteSections(sections, entries, state, editorSession);
+            AddWeatherEffectSection(sections, entries, state);
+            sections.Insert(1, BuildSelectedAssetSection(state, entries));
+            return sections;
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildIntroSection()
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "asset_browser_intro",
+                Title = "Asset Browser",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                Items = new[]
+                {
+                    ScenarioInspectorItemFactory.Text("Browse the same object, room, wall, scene-sprite, and editable effect catalogs used by the in-world Tool Workspace. Select an asset here, then place or edit it from the detail pane.")
+                }
+            };
+        }
+
+        private void AddBuildPaletteSections(
+            List<ScenarioAuthoringInspectorSection> sections,
+            List<BrowserAssetEntry> entries,
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession,
+            ScenarioAuthoringTool tool,
+            string category,
+            string iconText)
+        {
+            if (_sectionHub == null || _sectionHub.BuildPlacement == null)
+                return;
+
+            ScenarioAuthoringState toolState = state != null ? state.Copy() : new ScenarioAuthoringState();
+            toolState.ActiveTool = tool;
+            toolState.ActiveStage = tool == ScenarioAuthoringTool.Wiring ? ScenarioStageKind.BunkerBackground : ScenarioStageKind.BunkerInside;
+            List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _sectionHub.BuildPlacement.GetPaletteSections(toolState, editorSession);
+            for (int i = 0; paletteSections != null && i < paletteSections.Count; i++)
+                sections.Add(BuildPaletteSection(paletteSections[i], entries, state, category, iconText));
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildPaletteSection(
+            ScenarioBuildPlacementAuthoringService.PaletteSectionModel model,
+            List<BrowserAssetEntry> entries,
+            ScenarioAuthoringState state,
+            string category,
+            string iconText)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            int count = model != null && model.Entries != null ? model.Entries.Count : 0;
+            items.Add(ScenarioInspectorItemFactory.Property("Count", count.ToString()));
+            if (count == 0)
+            {
+                items.Add(ScenarioInspectorItemFactory.Text(model != null ? ScenarioInspectorItemFactory.Safe(model.EmptyMessage) : "No entries are available."));
+            }
+            else
+            {
+                for (int i = 0; model != null && model.Entries != null && i < model.Entries.Count; i++)
+                {
+                    ScenarioBuildPlacementAuthoringService.PaletteEntryModel entry = model.Entries[i];
+                    if (entry == null || string.IsNullOrEmpty(entry.ActionId))
+                        continue;
+
+                    BrowserAssetEntry browserEntry = new BrowserAssetEntry
+                    {
+                        SourceActionId = entry.ActionId,
+                        Label = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(entry.Label),
+                        Category = !string.IsNullOrEmpty(model.Title) ? model.Title : category,
+                        Descriptor = !string.IsNullOrEmpty(entry.Badge) ? entry.Badge : iconText,
+                        Detail = entry.Source,
+                        Hint = entry.Hint,
+                        PreviewSprite = entry.Preview,
+                        Enabled = entry.Enabled,
+                        Active = entry.Active,
+                        CanPlace = IsPlaceableBuildAction(entry.ActionId),
+                        CanApply = IsRoomVisualAction(entry.ActionId)
+                    };
+                    entries.Add(browserEntry);
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(BuildBrowserSelectAction(browserEntry, state)));
+                }
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "asset_browser_" + SafeSectionId(model != null ? model.Id : null, category),
+                Title = !string.IsNullOrEmpty(model != null ? model.Title : null) ? model.Title : category,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.CandidateGrid,
+                Items = items.ToArray()
+            };
+        }
+
+        private void AddSceneSpriteSections(
+            List<ScenarioAuthoringInspectorSection> sections,
+            List<BrowserAssetEntry> entries,
+            ScenarioAuthoringState state,
+            ScenarioEditorSession editorSession)
+        {
+            if (_sectionHub == null || _sectionHub.SceneSpritePlacement == null)
+                return;
+
+            ScenarioSceneSpritePlacementAuthoringService.PlacementPickerModel model = _sectionHub.SceneSpritePlacement.GetPickerModel(
+                editorSession,
+                state != null ? state.SelectedTarget : null,
+                state != null ? state.ActiveScenarioFilePath : null);
+            if (model == null)
+                return;
+
+            sections.Add(BuildSpriteCandidateSection("asset_browser_scene_vanilla", "Scene Sprites - Vanilla", model.VanillaCandidates, entries, state));
+            sections.Add(BuildSpriteCandidateSection("asset_browser_scene_scenario", "Scene Sprites - Scenario", model.ModdedCandidates, entries, state));
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildSpriteCandidateSection(
+            string id,
+            string title,
+            List<ScenarioSpriteCatalogService.SpriteCandidate> candidates,
+            List<BrowserAssetEntry> entries,
+            ScenarioAuthoringState state)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ScenarioInspectorItemFactory.Property("Count", ScenarioAssetAuthoringContentMetrics.CountCandidates(candidates).ToString()));
+            if (candidates == null || candidates.Count == 0)
+            {
+                items.Add(ScenarioInspectorItemFactory.Text("No scene sprite assets are currently available for this source."));
+            }
+            else
+            {
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    ScenarioSpriteCatalogService.SpriteCandidate candidate = candidates[i];
+                    if (candidate == null)
+                        continue;
+
+                    BrowserAssetEntry entry = new BrowserAssetEntry
+                    {
+                        SourceActionId = ScenarioSceneSpritePlacementAuthoringService.BuildApplyActionId(candidate.Token),
+                        Label = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(candidate.Label),
+                        Category = title,
+                        Descriptor = ScenarioAuthoringPresentationBuilder.BuildCandidateBadge(candidate),
+                        Detail = candidate.SourceName,
+                        Hint = candidate.Hint,
+                        PreviewSprite = candidate.Sprite,
+                        Enabled = candidate.CanPlaceAsSceneSprite,
+                        Active = false,
+                        CanPlace = candidate.CanPlaceAsSceneSprite,
+                        CanApply = false
+                    };
+                    entries.Add(entry);
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(BuildBrowserSelectAction(entry, state)));
+                }
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = id,
+                Title = title,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.CandidateGrid,
+                Items = items.ToArray()
+            };
+        }
+
+        private void AddWeatherEffectSection(
+            List<ScenarioAuthoringInspectorSection> sections,
+            List<BrowserAssetEntry> entries,
+            ScenarioAuthoringState state)
+        {
+            List<ScenarioWeatherEffectSpriteCatalogService.WeatherEffectSpriteTarget> targets =
+                _weatherEffectSpriteCatalog != null
+                    ? _weatherEffectSpriteCatalog.GetTargets()
+                    : new List<ScenarioWeatherEffectSpriteCatalogService.WeatherEffectSpriteTarget>();
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ScenarioInspectorItemFactory.Property("Count", targets.Count.ToString()));
+            if (targets.Count == 0)
+            {
+                items.Add(ScenarioInspectorItemFactory.Text("No loaded weather or particle effects currently expose a sprite-editable material texture."));
+            }
+            else
+            {
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    ScenarioWeatherEffectSpriteCatalogService.WeatherEffectSpriteTarget target = targets[i];
+                    if (target == null || target.Target == null)
+                        continue;
+
+                    BrowserAssetEntry entry = new BrowserAssetEntry
+                    {
+                        SourceActionId = ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix + target.Target.Id,
+                        Label = ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(target.Target.DisplayName),
+                        Category = "Weather & Effects",
+                        Descriptor = "FX",
+                        Detail = target.Group,
+                        Hint = target.Source + " | Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
+                        PreviewSprite = target.PreviewSprite,
+                        Enabled = true,
+                        Active = state != null
+                            && state.SelectedTarget != null
+                            && string.Equals(state.SelectedTarget.Id, target.Target.Id, StringComparison.OrdinalIgnoreCase),
+                        CanPlace = false,
+                        CanApply = false,
+                        CanEdit = true
+                    };
+                    entries.Add(entry);
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(BuildBrowserSelectAction(entry, state)));
+                }
+            }
+
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "asset_browser_weather_effects",
+                Title = "Weather & Effects",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.CandidateGrid,
+                Items = items.ToArray()
+            });
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildSelectedAssetSection(
+            ScenarioAuthoringState state,
+            List<BrowserAssetEntry> entries)
+        {
+            BrowserAssetEntry selected = FindEntry(entries, state != null ? state.AssetBrowserSelectedActionId : null);
+            if (selected == null)
+            {
+                return new ScenarioAuthoringInspectorSection
+                {
+                    Id = "asset_browser_selected",
+                    Title = "Selected Asset",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
+                    Items = new[]
+                    {
+                        ScenarioInspectorItemFactory.Text("Select an asset card to see a larger preview, category, and available actions.")
+                    }
+                };
+            }
+
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ScenarioInspectorItemFactory.Text(selected.Label, selected.Hint, selected.Descriptor, selected.Descriptor, selected.PreviewSprite, true));
+            items.Add(ScenarioInspectorItemFactory.Property("Category", selected.Category));
+            items.Add(ScenarioInspectorItemFactory.Property("Source", ScenarioInspectorItemFactory.Safe(selected.Detail)));
+            items.Add(ScenarioInspectorItemFactory.Property("Action", ResolveActionSummary(selected)));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionAssetBrowserPlaceSelected,
+                selected.CanApply ? "Apply To Room" : "Place In World",
+                selected.CanApply ? "Apply this wall or wiring sprite to the selected shelter room." : "Switch to World placement mode with this asset armed.",
+                selected.CanPlace || selected.CanApply,
+                selected.CanPlace,
+                selected.CanApply ? "AP" : "PL",
+                null,
+                null,
+                null,
+                selected.CanPlace || selected.CanApply ? null : "This catalog item is editable but not placeable.")));
+            items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionAssetBrowserEditSelected,
+                "Edit Sprite",
+                "Open this editable art asset in the existing pixel editor flow.",
+                selected.CanEdit,
+                selected.CanEdit,
+                "PX",
+                null,
+                null,
+                null,
+                selected.CanEdit ? null : "This catalog item does not expose an editable sprite target.")));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "asset_browser_selected",
+                Title = "Selected Asset",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorAction BuildBrowserSelectAction(BrowserAssetEntry entry, ScenarioAuthoringState state)
+        {
+            bool selected = entry != null
+                && state != null
+                && string.Equals(state.AssetBrowserSelectedActionId, entry.SourceActionId, StringComparison.Ordinal);
+            return ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, entry != null ? entry.SourceActionId : null),
+                entry != null ? entry.Label : "<asset>",
+                entry != null ? entry.Hint : null,
+                entry == null || entry.Enabled,
+                selected || (entry != null && entry.Active),
+                entry != null ? entry.Descriptor : null,
+                entry != null ? entry.Detail : null,
+                entry != null ? entry.Descriptor : null,
+                entry != null ? entry.PreviewSprite : null);
+        }
+
+        private static BrowserAssetEntry FindEntry(List<BrowserAssetEntry> entries, string sourceActionId)
+        {
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                BrowserAssetEntry entry = entries[i];
+                if (entry != null && string.Equals(entry.SourceActionId, sourceActionId, StringComparison.Ordinal))
+                    return entry;
+            }
+
+            return null;
+        }
+
+        private static bool IsPlaceableBuildAction(string actionId)
+        {
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureRoom, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureLadder, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionBuildStructureLight, StringComparison.Ordinal)
+                || (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildObjectPlacePrefix, StringComparison.Ordinal));
+        }
+
+        private static bool IsRoomVisualAction(string actionId)
+        {
+            return !string.IsNullOrEmpty(actionId)
+                && (actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWallApplyPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionBuildWireApplyPrefix, StringComparison.Ordinal));
+        }
+
+        private static string ResolveActionSummary(BrowserAssetEntry entry)
+        {
+            if (entry == null)
+                return "<none>";
+            if (entry.CanEdit)
+                return "Editable sprite asset";
+            if (entry.CanApply)
+                return "Applies to selected room";
+            if (entry.CanPlace)
+                return "Placeable in World";
+            return "Browse only";
+        }
+
+        private static string SafeSectionId(string id, string fallback)
+        {
+            string value = !string.IsNullOrEmpty(id) ? id : fallback;
+            return (value ?? "assets").Replace(" ", "_").ToLowerInvariant();
+        }
+
+        private sealed class BrowserAssetEntry
+        {
+            public string SourceActionId;
+            public string Label;
+            public string Category;
+            public string Descriptor;
+            public string Detail;
+            public string Hint;
+            public Sprite PreviewSprite;
+            public bool Enabled;
+            public bool Active;
+            public bool CanPlace;
+            public bool CanApply;
+            public bool CanEdit;
         }
     }
 

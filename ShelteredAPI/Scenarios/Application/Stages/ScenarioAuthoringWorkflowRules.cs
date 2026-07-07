@@ -52,12 +52,12 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                     return ScenarioStageKind.Quests;
                 case ScenarioAuthoringShellTab.Map:
                     return ScenarioStageKind.Map;
+                case ScenarioAuthoringShellTab.Art:
+                    return ScenarioStageKind.Assets;
                 case ScenarioAuthoringShellTab.Test:
                     return ScenarioStageKind.Test;
                 case ScenarioAuthoringShellTab.Publish:
                     return ScenarioStageKind.Publish;
-                case ScenarioAuthoringShellTab.Art:
-                    return ResolveArtStage(state);
                 default:
                     return ScenarioStageKind.None;
             }
@@ -81,6 +81,7 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                 case ScenarioStageKind.Events:
                 case ScenarioStageKind.Quests:
                 case ScenarioStageKind.Map:
+                case ScenarioStageKind.Assets:
                 case ScenarioStageKind.Test:
                 case ScenarioStageKind.Publish:
                     return requestedKind;
@@ -284,6 +285,10 @@ namespace ShelteredAPI.Scenarios.Application.Stages{
                 case ScenarioStageKind.Map:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Map;
                     state.ActiveTool = ScenarioAuthoringTool.Select;
+                    break;
+                case ScenarioStageKind.Assets:
+                    state.ActiveShellTab = ScenarioAuthoringShellTab.Art;
+                    state.ActiveTool = ScenarioAuthoringTool.Assets;
                     break;
                 case ScenarioStageKind.Test:
                     state.ActiveShellTab = ScenarioAuthoringShellTab.Test;

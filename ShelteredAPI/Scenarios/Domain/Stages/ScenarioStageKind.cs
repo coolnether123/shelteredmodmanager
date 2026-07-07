@@ -19,6 +19,7 @@ namespace ShelteredAPI.Scenarios.Domain.Stages{
         Quests = 8,
         Map = 9,
         Test = 10,
-        Publish = 11
+        Publish = 11,
+        Assets = 12
     }
 }
