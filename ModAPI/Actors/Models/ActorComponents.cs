@@ -114,6 +114,8 @@ namespace ModAPI.Actors
         public string MeshId;
         public Color SkinColor;
         public Color HairColor;
+        public Color ShirtColor;
+        public Color PantsColor;
         public int StrengthLevel;
         public int DexterityLevel;
         public int IntelligenceLevel;

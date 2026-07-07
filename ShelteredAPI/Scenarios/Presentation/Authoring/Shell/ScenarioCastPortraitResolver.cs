@@ -119,6 +119,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 hair = profile.HairColor;
             if (profile.SkinColor.a > 0f)
                 skin = profile.SkinColor;
+            if (profile.ShirtColor.a > 0f)
+                shirt = profile.ShirtColor;
+            if (profile.PantsColor.a > 0f)
+                pants = profile.PantsColor;
         }
 
         private static FamilyMemberConfig ToFamilyMemberConfig(ActorProfileComponent profile)

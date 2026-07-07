@@ -3,9 +3,11 @@ using System.Collections.Generic;
 
 using ModAPI.Actors;
 using ModAPI.Core;
+using UnityEngine;
 
 using ShelteredAPI.Actors;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
@@ -497,7 +499,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 profile.FirstName = familyMember.Name;
                 profile.IsMale = familyMember.Gender == ScenarioGender.Male;
                 if (familyMember.Appearance != null)
+                {
                     profile.MeshId = familyMember.Appearance.MeshId;
+                    Color color;
+                    if (ScenarioCharacterAppearanceService.TryParseColorHex(familyMember.Appearance.HairColorHex, out color))
+                        profile.HairColor = color;
+                    if (ScenarioCharacterAppearanceService.TryParseColorHex(familyMember.Appearance.SkinColorHex, out color))
+                        profile.SkinColor = color;
+                    if (ScenarioCharacterAppearanceService.TryParseColorHex(familyMember.Appearance.ShirtColorHex, out color))
+                        profile.ShirtColor = color;
+                    if (ScenarioCharacterAppearanceService.TryParseColorHex(familyMember.Appearance.PantsColorHex, out color))
+                        profile.PantsColor = color;
+                }
                 ApplyFamilyStats(profile, familyMember);
             }
             else if (npc != null)
