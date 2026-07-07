@@ -249,6 +249,7 @@
     <Compile Include="Scenarios\Definitions\ScenarioDefinitionIndex.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioDefinition.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioBackendWorldMaterializer.cs" />
+    <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioActorXmlSerializer.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />

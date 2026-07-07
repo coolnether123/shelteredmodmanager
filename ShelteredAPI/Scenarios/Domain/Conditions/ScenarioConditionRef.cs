@@ -21,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Domain.Conditions{
         public string Id { get; set; }
         public ScenarioConditionKind Kind { get; set; }
         public string TargetId { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
         public string Comparison { get; set; }
         public int Quantity { get; set; }
         public string StatId { get; set; }

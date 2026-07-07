@@ -42,6 +42,33 @@ namespace ShelteredAPI.Scenarios.Definitions{
     }
 
     /// <summary>
+    /// Optional actor-system reference for scenario-authored people and actor-bound conditions or effects.
+    /// Actor identity is tried first, then binding, then scenario-owned synthetic fallback.
+    /// </summary>
+    public sealed class ScenarioActorRef
+    {
+        public string Kind { get; set; }
+        public int LocalId { get; set; }
+        public string Domain { get; set; }
+        public string BindingType { get; set; }
+        public string BindingKey { get; set; }
+        public string DisplayNameFallback { get; set; }
+        public string RequiredModId { get; set; }
+    }
+
+    /// <summary>
+    /// Persisted actor component payload envelope. Unknown component payloads stay as JSON text so
+    /// scenarios can round-trip when the owning mod is temporarily unavailable.
+    /// </summary>
+    public sealed class ScenarioActorComponentDefinition
+    {
+        public string ComponentId { get; set; }
+        public string OwnerModId { get; set; }
+        public int Version { get; set; }
+        public string PayloadJson { get; set; }
+    }
+
+    /// <summary>
     /// Persistent scenario definition. This type is deliberately a neutral data holder:
     /// it must not grow Sheltered or Unity references, because mod tools and the editor
     /// need to read scenario packs without booting a game scene.
@@ -211,9 +238,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
             StatSetting = "Random_Low";
             Stats = new ScenarioNpcStatsDefinition();
             CarriedItems = new List<ItemEntry>();
+            ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
         public string CharacterId { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public string PresetId { get; set; }
         public string WeaponItemId { get; set; }
         public string EquippedItem1Id { get; set; }
@@ -480,9 +510,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Traits = new List<string>();
             Skills = new List<SkillOverride>();
             Appearance = new FamilyMemberAppearanceConfig();
+            ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
         public string Name { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public ScenarioGender Gender { get; set; }
         public int? ExactAge { get; set; }
         public int? MinAge { get; set; }
@@ -577,9 +610,12 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Arrival = new ScenarioScheduleTime();
             Survivor = new FamilyMemberConfig();
             AskToJoin = true;
+            ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
         public string Id { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public List<ScenarioActorComponentDefinition> ActorComponents { get; private set; }
         public ScenarioScheduleTime Arrival { get; set; }
         public bool AskToJoin { get; set; }
         public FamilyMemberConfig Survivor { get; set; }

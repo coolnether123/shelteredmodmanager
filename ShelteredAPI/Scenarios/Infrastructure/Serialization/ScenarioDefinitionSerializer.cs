@@ -445,6 +445,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 ScenarioNpcDefinition character = new ScenarioNpcDefinition();
                 character.CharacterId = AttributeOrChild(node, "id", "Id");
+                character.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
+                ScenarioActorXmlSerializer.ReadActorComponents(node, character.ActorComponents);
                 character.PresetId = AttributeOrChild(node, "presetId", "PresetId");
                 character.WeaponItemId = AttributeOrChild(node, "weapon", "Weapon");
                 character.EquippedItem1Id = AttributeOrChild(node, "equippedItem1", "EquippedItem1");
@@ -1278,6 +1280,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 writer.WriteStartElement("Character");
                 WriteAttribute(writer, "id", character.CharacterId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, character.ActorRef);
+                ScenarioActorXmlSerializer.WriteActorComponents(writer, character.ActorComponents);
                 WriteAttribute(writer, "presetId", character.PresetId);
                 WriteAttribute(writer, "weapon", character.WeaponItemId);
                 WriteAttribute(writer, "equippedItem1", character.EquippedItem1Id);
@@ -2219,6 +2223,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 condition.Id = AttributeOrChild(node, "id", "Id");
                 condition.Kind = ReadEnumAttribute(node, "kind", ScenarioConditionKind.TimeReached);
                 condition.TargetId = AttributeOrChild(node, "targetId", "TargetId");
+                condition.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
                 condition.Comparison = AttributeOrChild(node, "comparison", "Comparison");
                 condition.Quantity = ReadIntAttribute(node, "quantity", 0);
                 condition.StatId = AttributeOrChild(node, "statId", "StatId");
@@ -2244,6 +2249,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "id", condition.Id);
                 writer.WriteAttributeString("kind", condition.Kind.ToString());
                 WriteAttribute(writer, "targetId", condition.TargetId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, condition.ActorRef);
                 WriteAttribute(writer, "comparison", condition.Comparison);
                 writer.WriteAttributeString("quantity", condition.Quantity.ToString(CultureInfo.InvariantCulture));
                 WriteAttribute(writer, "statId", condition.StatId);
@@ -2274,6 +2280,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 effect.Id = AttributeOrChild(node, "id", "Id");
                 effect.Kind = ReadEnumAttribute(node, "kind", ScenarioEffectKind.SetScenarioFlag);
                 effect.TargetId = AttributeOrChild(node, "targetId", "TargetId");
+                effect.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(node);
                 effect.ItemId = AttributeOrChild(node, "itemId", "ItemId");
                 effect.Quantity = ReadIntAttribute(node, "quantity", 0);
                 effect.WeatherState = AttributeOrChild(node, "weatherState", "WeatherState");
@@ -2302,6 +2309,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "id", effect.Id);
                 writer.WriteAttributeString("kind", effect.Kind.ToString());
                 WriteAttribute(writer, "targetId", effect.TargetId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, effect.ActorRef);
                 WriteAttribute(writer, "itemId", effect.ItemId);
                 writer.WriteAttributeString("quantity", effect.Quantity.ToString(CultureInfo.InvariantCulture));
                 WriteAttribute(writer, "weatherState", effect.WeatherState);

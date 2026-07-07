@@ -40,6 +40,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                     FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
                     survivor.Id = ScenarioXmlSerializerUtil.AttributeOrChild(futureElement, "id", "Id");
+                    survivor.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(futureElement);
+                    ScenarioActorXmlSerializer.ReadActorComponents(futureElement, survivor.ActorComponents);
                     survivor.AskToJoin = ScenarioXmlSerializerUtil.ReadBoolAttribute(futureElement, "askToJoin", true);
                     survivor.Arrival = ScenarioXmlSerializerUtil.ReadScheduleTime(ScenarioXmlSerializerUtil.Child(futureElement, "Arrival"));
                     XmlElement survivorElement = ScenarioXmlSerializerUtil.Child(futureElement, "Survivor");
@@ -79,6 +81,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteStartElement("FutureSurvivor");
                 ScenarioXmlSerializerUtil.WriteAttribute(writer, "id", survivor.Id);
                 writer.WriteAttributeString("askToJoin", survivor.AskToJoin.ToString());
+                ScenarioActorXmlSerializer.WriteActorRef(writer, survivor.ActorRef);
+                ScenarioActorXmlSerializer.WriteActorComponents(writer, survivor.ActorComponents);
                 ScenarioXmlSerializerUtil.WriteScheduleTime(writer, "Arrival", survivor.Arrival);
                 WriteFamilyMember(writer, "Survivor", survivor.Survivor);
                 writer.WriteEndElement();
@@ -94,6 +98,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 return member;
 
             member.Name = ScenarioXmlSerializerUtil.ReadText(memberElement, "Name");
+            member.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(memberElement);
+            ScenarioActorXmlSerializer.ReadActorComponents(memberElement, member.ActorComponents);
             member.Gender = ScenarioXmlSerializerUtil.ReadEnum(memberElement, "Gender", ScenarioGender.Any);
             XmlElement age = ScenarioXmlSerializerUtil.Child(memberElement, "Age");
             if (age != null)
@@ -201,6 +207,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
             writer.WriteStartElement(elementName);
             ScenarioXmlSerializerUtil.WriteElement(writer, "Name", member.Name);
+            ScenarioActorXmlSerializer.WriteActorRef(writer, member.ActorRef);
+            ScenarioActorXmlSerializer.WriteActorComponents(writer, member.ActorComponents);
             ScenarioXmlSerializerUtil.WriteElement(writer, "Gender", member.Gender.ToString());
             writer.WriteStartElement("Age");
             ScenarioXmlSerializerUtil.WriteNullableElement(writer, "Exact", member.ExactAge);

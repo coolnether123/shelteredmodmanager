@@ -20,6 +20,7 @@ namespace ShelteredAPI.Scenarios.Domain.Effects{
         public string Id { get; set; }
         public ScenarioEffectKind Kind { get; set; }
         public string TargetId { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
         public string ItemId { get; set; }
         public int Quantity { get; set; }
         public string WeatherState { get; set; }
