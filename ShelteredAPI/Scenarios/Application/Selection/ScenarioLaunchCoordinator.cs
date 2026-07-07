@@ -663,6 +663,8 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 return false;
             }
 
+            ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplySaveFlowCritical("ScenarioLaunchCoordinator.BeginDirectSceneTransition");
+            ShelteredAPI.Harmony.ShelteredDeferredPatchTriggers.ApplyGameplayDeferred("ScenarioLaunchCoordinator.BeginDirectSceneTransition");
             ScenarioLoadingTransitionGuard.PrepareForManagedTransition(launchTargetLabel);
             saveManager.SetCurrentSlot(GetSlotNumber(virtualSaveType));
             DifficultyManager.StoreMenuDifficultySettings(1, 1, 1, 1, 1, 0, false);

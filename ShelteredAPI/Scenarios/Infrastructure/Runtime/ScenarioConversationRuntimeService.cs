@@ -61,23 +61,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             ScenarioDefinition definition = _activeDefinition;
             ScenarioConversationAuthoringDefinition authoring = definition != null ? definition.Conversations : null;
             ScenarioConversationSuppressionDefinition settings = authoring != null ? authoring.Settings : null;
+            FamilyMember partner = FindNearestIdlePartner(initiator);
+            ScenarioRuntimeState state = _stateService != null ? _stateService.State : null;
+            ScenarioConversationDefinition conversation = SelectRandomConversation(definition, initiator, partner, state);
+            if (conversation != null && TryStartConversation(definition, conversation, initiator, partner, state, "random", out message))
+                return true;
+
             if (settings != null && settings.SuppressVanillaRandomChatter)
             {
                 message = "Vanilla random chatter suppressed by scenario conversation settings.";
                 return true;
             }
-
-            FamilyMember partner = FindNearestIdlePartner(initiator);
-            if (partner == null)
-                return false;
-
-            ScenarioRuntimeState state = _stateService != null ? _stateService.State : null;
-            ScenarioConversationDefinition conversation = SelectRandomConversation(definition, initiator, partner, state);
-            if (conversation == null)
-                return false;
-
-            if (TryStartConversation(definition, conversation, initiator, partner, state, "random", out message))
-                return true;
 
             return false;
         }

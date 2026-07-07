@@ -16,6 +16,38 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         StartupTiming = PatchStartupTiming.GameplayDeferred)]
     internal static class ScenarioConversationChatterPatches
     {
+        [HarmonyPatch(typeof(FamilyMember), "RandomIdle")]
+        [HarmonyPrefix]
+        private static bool RandomIdlePrefix(FamilyMember __instance)
+        {
+            try
+            {
+                if (__instance == null || __instance.isSpeaking || __instance.isSpeechBubbleActive || GameTime.Day <= 4)
+                    return true;
+                if (CutsceneManager.Instance != null && CutsceneManager.Instance.CutSceneActive)
+                    return true;
+
+                float roll = UnityEngine.Random.value;
+                if (roll < 0.37f || roll >= 0.4f)
+                    return true;
+
+                ScenarioConversationRuntimeService service = ResolveService();
+                if (service == null)
+                    return true;
+
+                string ignoredSpeech;
+                if (!service.TryHandleRandomComment(__instance, out ignoredSpeech))
+                    return true;
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioConversationChatter] RandomIdle patch failed: " + ex.Message);
+                return true;
+            }
+        }
+
         [HarmonyPatch(typeof(FamilyMember), "SayRandomComment")]
         [HarmonyPrefix]
         private static bool SayRandomCommentPrefix(FamilyMember __instance, ref string __result)
