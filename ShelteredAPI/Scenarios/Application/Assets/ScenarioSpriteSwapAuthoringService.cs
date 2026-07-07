@@ -591,7 +591,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 LastInteractionY = 0
             };
 
-            AttachAnimationFramesIfAvailable(model.Target);
+            AttachAnimationFramesIfAvailable(model.Target, session.WorkingDefinition, model);
             ScenarioSpriteRuntimeMutationService.TryApply(model.Target, previewSprite);
             Rect editorWindowRect = PositionPixelEditorWindowBesideTarget(state);
             BeginCustomEditorCameraSession(state, editorWindowRect);
@@ -1450,22 +1450,36 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private bool ClearActiveSwap(ScenarioAuthoringState state, out string message)
         {
             message = null;
-            ClosePickerState(state, true);
 
             ScenarioEditorSession session = _editorService.CurrentSession;
             ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
-            if (definition == null || state.SelectedTarget == null)
+            if (definition == null)
             {
                 message = "No active sprite swap is available for the selected target.";
                 return false;
             }
 
-            SpritePickerModel model = GetPickerModel(session, state.SelectedTarget, state.ActiveScenarioFilePath);
-            string targetPath = model != null && model.Target != null ? model.Target.TargetPath : state.SelectedTarget.TransformPath;
-            string targetDisplay = state.SelectedTarget.DisplayName;
+            ScenarioAuthoringTarget authoringTarget = state.SelectedTarget;
+            if (authoringTarget == null && state.SpriteSwapPicker != null)
+                authoringTarget = state.SpriteSwapPicker.Target;
+
+            SpritePickerModel model = authoringTarget != null
+                ? GetPickerModel(session, authoringTarget, state.ActiveScenarioFilePath)
+                : null;
+            string targetPath = ResolveSpriteSwapTargetPath(state, model, authoringTarget);
+            string targetDisplay = ResolveSpriteSwapTargetDisplay(state, model, authoringTarget);
+            if (string.IsNullOrEmpty(targetPath))
+            {
+                ClosePickerState(state, true);
+                message = "No active sprite swap is available for the selected target.";
+                return false;
+            }
+
+            ClosePickerState(state, true);
 
             _historyService.RecordVisualChange(definition, "Revert sprite on " + SafeLabel(targetDisplay));
-            if (!ScenarioSpriteSwapRuleEditor.ClearActiveRule(definition, targetPath, GetCurrentDay()))
+            int removed = ScenarioSpriteSwapRuleEditor.ClearActiveRulesForTarget(definition, targetPath, GetCurrentDay());
+            if (removed <= 0)
             {
                 message = "The selected target does not have an active sprite swap.";
                 string ignored;
@@ -1476,7 +1490,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             MarkAssetsDirty(session);
             _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
             Invalidate();
-            message = "Reverted the active sprite swap on '" + SafeLabel(targetDisplay) + "'.";
+            message = removed == 1
+                ? "Reverted the active sprite swap on '" + SafeLabel(targetDisplay) + "'."
+                : "Reverted " + removed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + " active sprite swaps on '" + SafeLabel(targetDisplay) + "'.";
             MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
             return true;
         }
@@ -2102,7 +2119,10 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return result;
         }
 
-        private void AttachAnimationFramesIfAvailable(ScenarioSpriteRuntimeResolver.ResolvedTarget target)
+        private void AttachAnimationFramesIfAvailable(
+            ScenarioSpriteRuntimeResolver.ResolvedTarget target,
+            ScenarioDefinition definition,
+            SpritePickerModel model)
         {
             if (_customEditorSession == null || target == null || _animationMetadataService == null)
                 return;
@@ -2139,11 +2159,57 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (frames.Count <= 1)
                 return;
 
+            ApplyPersistedAnimationFrameOverrides(definition, target, model, frames);
             _customEditorSession.AnimationMetadata = metadata;
             _customEditorSession.AnimationFrames = frames;
             _customEditorSession.AnimationFrameIndex = FindAnimationFrameIndex(frames, ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(target.CurrentSprite));
             SyncAnimationFrameToSession();
             _customEditorSession.SourceLabel = (metadata.ClipName ?? "Animation") + " (" + frames.Count + " frames)";
+        }
+
+        private static void ApplyPersistedAnimationFrameOverrides(
+            ScenarioDefinition definition,
+            ScenarioSpriteRuntimeResolver.ResolvedTarget target,
+            SpritePickerModel model,
+            List<AnimationFrameEdit> frames)
+        {
+            if (definition == null || target == null || model == null || frames == null)
+                return;
+
+            int currentDay = GetCurrentDay();
+            for (int i = 0; i < frames.Count; i++)
+            {
+                AnimationFrameEdit frame = frames[i];
+                if (frame == null)
+                    continue;
+
+                SpriteSwapRule rule = ScenarioSpriteSwapRuleEditor.FindAnimationFrameRule(
+                    definition,
+                    target.TargetPath,
+                    frame.Index,
+                    frame.SourceRuntimeSpriteKey,
+                    currentDay);
+                if (rule == null)
+                    continue;
+
+                ScenarioSpriteCatalogService.SpriteCandidate candidate = FindMatchingCandidate(model.ModdedCandidates, rule);
+                if (candidate == null || candidate.Sprite == null)
+                    candidate = FindMatchingCandidate(model.VanillaCandidates, rule);
+                if (candidate == null || candidate.Sprite == null)
+                    continue;
+
+                Texture2D edited = CreateEditableTexture(candidate.Sprite);
+                if (edited == null)
+                    continue;
+
+                if (frame.Texture != null)
+                    UnityEngine.Object.Destroy(frame.Texture);
+                if (frame.PreviewSprite != null)
+                    UnityEngine.Object.Destroy(frame.PreviewSprite);
+                frame.Texture = edited;
+                frame.PreviewSprite = CreatePreviewSprite(edited, frame.OriginalSprite);
+                frame.Dirty = false;
+            }
         }
 
         private static int FindAnimationFrameIndex(List<AnimationFrameEdit> frames, string currentRuntimeSpriteKey)
@@ -2361,11 +2427,13 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
             frame.Dirty = false;
             SyncAnimationFrameToSession();
+            int removed = ClearPersistedAnimationFrameRule(state, frame);
             if (_customEditorSession.AnimationPlayingInWorld)
                 UpdateWorldAnimationPreview(state);
             else
                 ApplyCustomEditorPreview(state);
-            message = "Reverted frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
+            message = "Reverted frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + (removed > 0 ? " and cleared its saved override." : ".");
             return true;
         }
 
@@ -2391,12 +2459,89 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
 
             SyncAnimationFrameToSession();
+            int removed = ClearPersistedAnimationFrameRules(state);
             if (_customEditorSession.AnimationPlayingInWorld)
                 UpdateWorldAnimationPreview(state);
             else
                 ApplyCustomEditorPreview(state);
-            message = "Reverted all animation frames.";
+            message = removed > 0
+                ? "Reverted all animation frames and cleared "
+                    + removed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + " saved frame override(s)."
+                : "Reverted all animation frames.";
             return true;
+        }
+
+        private int ClearPersistedAnimationFrameRule(ScenarioAuthoringState state, AnimationFrameEdit frame)
+        {
+            if (state == null || frame == null || _customEditorSession == null)
+                return 0;
+
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+                return 0;
+
+            string targetPath = ResolveCustomEditorTargetPath(state);
+            if (string.IsNullOrEmpty(targetPath))
+                return 0;
+
+            int currentDay = GetCurrentDay();
+            if (!ScenarioSpriteSwapRuleEditor.HasAnimationFrameRule(definition, targetPath, frame.Index, frame.SourceRuntimeSpriteKey, currentDay))
+                return 0;
+
+            _historyService.RecordVisualChange(
+                definition,
+                "Revert animation frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + " on " + SafeLabel(ResolveCustomEditorTargetDisplay(state, targetPath)));
+            int removed = ScenarioSpriteSwapRuleEditor.ClearAnimationFrameRule(
+                definition,
+                targetPath,
+                frame.Index,
+                frame.SourceRuntimeSpriteKey,
+                currentDay);
+            if (removed <= 0)
+            {
+                string ignored;
+                _historyService.Undo(definition, out ignored);
+                return 0;
+            }
+
+            MarkAssetsDirty(session);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
+            Invalidate();
+            return removed;
+        }
+
+        private int ClearPersistedAnimationFrameRules(ScenarioAuthoringState state)
+        {
+            if (state == null || _customEditorSession == null)
+                return 0;
+
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null)
+                return 0;
+
+            string targetPath = ResolveCustomEditorTargetPath(state);
+            if (string.IsNullOrEmpty(targetPath))
+                return 0;
+
+            _historyService.RecordVisualChange(
+                definition,
+                "Revert animation on " + SafeLabel(ResolveCustomEditorTargetDisplay(state, targetPath)));
+            int removed = ScenarioSpriteSwapRuleEditor.ClearAnimationFrameRules(definition, targetPath, GetCurrentDay());
+            if (removed <= 0)
+            {
+                string ignored;
+                _historyService.Undo(definition, out ignored);
+                return 0;
+            }
+
+            MarkAssetsDirty(session);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
+            Invalidate();
+            return removed;
         }
 
         public void TickAnimationPreview(ScenarioAuthoringState state)
@@ -2685,6 +2830,71 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return string.Equals(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
         }
 
+        private static string ResolveSpriteSwapTargetPath(
+            ScenarioAuthoringState state,
+            SpritePickerModel model,
+            ScenarioAuthoringTarget authoringTarget)
+        {
+            if (model != null && model.Target != null && !string.IsNullOrEmpty(model.Target.TargetPath))
+                return model.Target.TargetPath;
+
+            if (state != null && state.SpriteSwapPicker != null && !string.IsNullOrEmpty(state.SpriteSwapPicker.TargetPath))
+                return state.SpriteSwapPicker.TargetPath;
+
+            return authoringTarget != null ? authoringTarget.TransformPath : null;
+        }
+
+        private static string ResolveSpriteSwapTargetDisplay(
+            ScenarioAuthoringState state,
+            SpritePickerModel model,
+            ScenarioAuthoringTarget authoringTarget)
+        {
+            if (authoringTarget != null && !string.IsNullOrEmpty(authoringTarget.DisplayName))
+                return authoringTarget.DisplayName;
+
+            if (state != null
+                && state.SpriteSwapPicker != null
+                && state.SpriteSwapPicker.Target != null
+                && !string.IsNullOrEmpty(state.SpriteSwapPicker.Target.DisplayName))
+            {
+                return state.SpriteSwapPicker.Target.DisplayName;
+            }
+
+            if (model != null && model.Target != null && !string.IsNullOrEmpty(model.Target.TargetPath))
+                return model.Target.TargetPath;
+
+            if (state != null && state.SpriteSwapPicker != null)
+                return state.SpriteSwapPicker.TargetPath;
+
+            return "target";
+        }
+
+        private string ResolveCustomEditorTargetPath(ScenarioAuthoringState state)
+        {
+            if (_customEditorSession != null && !string.IsNullOrEmpty(_customEditorSession.TargetPath))
+                return _customEditorSession.TargetPath;
+
+            if (state != null && state.SpriteSwapPicker != null && !string.IsNullOrEmpty(state.SpriteSwapPicker.TargetPath))
+                return state.SpriteSwapPicker.TargetPath;
+
+            return state != null && state.SpriteSwapPicker != null && state.SpriteSwapPicker.Target != null
+                ? state.SpriteSwapPicker.Target.TransformPath
+                : null;
+        }
+
+        private string ResolveCustomEditorTargetDisplay(ScenarioAuthoringState state, string fallback)
+        {
+            if (state != null
+                && state.SpriteSwapPicker != null
+                && state.SpriteSwapPicker.Target != null
+                && !string.IsNullOrEmpty(state.SpriteSwapPicker.Target.DisplayName))
+            {
+                return state.SpriteSwapPicker.Target.DisplayName;
+            }
+
+            return !string.IsNullOrEmpty(fallback) ? fallback : "target";
+        }
+
         private bool IsCustomEditorBoundToPickerTarget(ScenarioAuthoringState state)
         {
             if (_customEditorSession == null || state == null || state.SpriteSwapPicker == null)
@@ -2958,20 +3168,12 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             int currentDay = GetCurrentDay();
             ScenarioSpriteSwapRuleEditor.EnsureAssetReferences(definition);
-            SpriteSwapRule rule = null;
-            for (int i = 0; i < definition.AssetReferences.SpriteSwaps.Count; i++)
-            {
-                SpriteSwapRule candidate = definition.AssetReferences.SpriteSwaps[i];
-                if (candidate == null)
-                    continue;
-                if (string.Equals(candidate.TargetPath, target.TargetPath, StringComparison.OrdinalIgnoreCase)
-                    && candidate.AnimationFrameIndex.HasValue
-                    && candidate.AnimationFrameIndex.Value == frame.Index)
-                {
-                    rule = candidate;
-                    break;
-                }
-            }
+            SpriteSwapRule rule = ScenarioSpriteSwapRuleEditor.FindAnimationFrameRule(
+                definition,
+                target.TargetPath,
+                frame.Index,
+                frame.SourceRuntimeSpriteKey,
+                currentDay);
 
             if (rule == null)
             {

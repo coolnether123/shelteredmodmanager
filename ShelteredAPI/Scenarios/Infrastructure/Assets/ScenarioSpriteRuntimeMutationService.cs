@@ -29,6 +29,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             public void Configure(ScenarioSpriteRuntimeResolver.ResolvedTarget runtimeTarget, Dictionary<string, Sprite> replacements)
             {
+                RestoreRemovedReplacement(replacements);
                 _swaps.Clear();
                 _replacementSprites.Clear();
                 BindTarget(runtimeTarget);
@@ -59,22 +60,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 Sprite current = GetCurrentSprite();
                 if (current != null)
                 {
-                    for (int i = 0; i < _replacementSprites.Count; i++)
-                    {
-                        if ((UnityEngine.Object)current == (UnityEngine.Object)_replacementSprites[i])
-                        {
-                            foreach (AnimatedFrameSwap swap in _swaps.Values)
-                            {
-                                Sprite original;
-                                if (ScenarioSpriteReferenceLibrary.TryFindLoadedSprite(swap.SourceRuntimeSpriteKey, out original) && original != null)
-                                {
-                                    ApplySprite(original);
-                                    break;
-                                }
-                            }
-                            break;
-                        }
-                    }
+                    AnimatedFrameSwap currentSwap = FindSwapByReplacement(current);
+                    if (currentSwap != null)
+                        RestoreOriginal(currentSwap);
                 }
 
                 _swaps.Clear();
@@ -173,6 +161,51 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     _spriteRenderer.sprite = sprite;
                 else if (_ui2DSprite != null)
                     _ui2DSprite.sprite2D = sprite;
+            }
+
+            private void RestoreRemovedReplacement(Dictionary<string, Sprite> replacements)
+            {
+                Sprite current = GetCurrentSprite();
+                if (current == null || _swaps.Count == 0)
+                    return;
+
+                AnimatedFrameSwap currentSwap = FindSwapByReplacement(current);
+                if (currentSwap == null)
+                    return;
+
+                Sprite nextReplacement;
+                if (replacements != null
+                    && replacements.TryGetValue(currentSwap.SourceRuntimeSpriteKey, out nextReplacement)
+                    && (UnityEngine.Object)nextReplacement == (UnityEngine.Object)currentSwap.Replacement)
+                {
+                    return;
+                }
+
+                RestoreOriginal(currentSwap);
+            }
+
+            private AnimatedFrameSwap FindSwapByReplacement(Sprite replacement)
+            {
+                if (replacement == null)
+                    return null;
+
+                foreach (AnimatedFrameSwap swap in _swaps.Values)
+                {
+                    if (swap != null && (UnityEngine.Object)swap.Replacement == (UnityEngine.Object)replacement)
+                        return swap;
+                }
+
+                return null;
+            }
+
+            private void RestoreOriginal(AnimatedFrameSwap swap)
+            {
+                if (swap == null || string.IsNullOrEmpty(swap.SourceRuntimeSpriteKey))
+                    return;
+
+                Sprite original;
+                if (ScenarioSpriteReferenceLibrary.TryFindLoadedSprite(swap.SourceRuntimeSpriteKey, out original) && original != null)
+                    ApplySprite(original);
             }
         }
 

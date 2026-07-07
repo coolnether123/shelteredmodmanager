@@ -148,6 +148,133 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return true;
         }
 
+        public static int ClearActiveRulesForTarget(ScenarioDefinition definition, string targetPath, int currentDay)
+        {
+            if (definition == null || definition.AssetReferences == null || definition.AssetReferences.SpriteSwaps == null)
+                return 0;
+
+            int removed = 0;
+            SpriteSwapRule activeRule = FindActiveRule(definition, targetPath, currentDay);
+            if (activeRule != null && definition.AssetReferences.SpriteSwaps.Remove(activeRule))
+                removed++;
+
+            removed += ClearAnimationFrameRules(definition, targetPath, currentDay);
+            return removed;
+        }
+
+        public static bool HasAnimationFrameRule(
+            ScenarioDefinition definition,
+            string targetPath,
+            int? frameIndex,
+            string runtimeSpriteKey,
+            int currentDay)
+        {
+            return FindAnimationFrameRule(definition, targetPath, frameIndex, runtimeSpriteKey, currentDay) != null;
+        }
+
+        public static SpriteSwapRule FindAnimationFrameRule(
+            ScenarioDefinition definition,
+            string targetPath,
+            int? frameIndex,
+            string runtimeSpriteKey,
+            int currentDay)
+        {
+            if (definition == null
+                || definition.AssetReferences == null
+                || definition.AssetReferences.SpriteSwaps == null
+                || string.IsNullOrEmpty(targetPath))
+                return null;
+
+            List<SpriteSwapRule> rules = definition.AssetReferences.SpriteSwaps;
+            for (int i = 0; i < rules.Count; i++)
+            {
+                SpriteSwapRule rule = rules[i];
+                if (!IsActiveAnimationFrameRule(rule, targetPath, currentDay))
+                    continue;
+
+                if (FrameIdentityMatches(rule, frameIndex, runtimeSpriteKey))
+                    return rule;
+            }
+
+            return null;
+        }
+
+        public static int ClearAnimationFrameRule(
+            ScenarioDefinition definition,
+            string targetPath,
+            int? frameIndex,
+            string runtimeSpriteKey,
+            int currentDay)
+        {
+            if (definition == null || definition.AssetReferences == null || definition.AssetReferences.SpriteSwaps == null)
+                return 0;
+
+            int removed = 0;
+            List<SpriteSwapRule> rules = definition.AssetReferences.SpriteSwaps;
+            for (int i = rules.Count - 1; i >= 0; i--)
+            {
+                SpriteSwapRule rule = rules[i];
+                if (!IsActiveAnimationFrameRule(rule, targetPath, currentDay))
+                    continue;
+
+                if (!FrameIdentityMatches(rule, frameIndex, runtimeSpriteKey))
+                    continue;
+
+                rules.RemoveAt(i);
+                removed++;
+            }
+
+            return removed;
+        }
+
+        public static int ClearAnimationFrameRules(ScenarioDefinition definition, string targetPath, int currentDay)
+        {
+            if (definition == null || definition.AssetReferences == null || definition.AssetReferences.SpriteSwaps == null)
+                return 0;
+
+            int removed = 0;
+            List<SpriteSwapRule> rules = definition.AssetReferences.SpriteSwaps;
+            for (int i = rules.Count - 1; i >= 0; i--)
+            {
+                if (!IsActiveAnimationFrameRule(rules[i], targetPath, currentDay))
+                    continue;
+
+                rules.RemoveAt(i);
+                removed++;
+            }
+
+            return removed;
+        }
+
+        private static bool IsActiveAnimationFrameRule(SpriteSwapRule rule, string targetPath, int currentDay)
+        {
+            if (rule == null
+                || !rule.AnimationFrameIndex.HasValue
+                || string.IsNullOrEmpty(targetPath)
+                || !string.Equals(rule.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int effectiveDay = rule.Day.HasValue ? Math.Max(1, rule.Day.Value) : 1;
+            return effectiveDay <= currentDay;
+        }
+
+        private static bool FrameIdentityMatches(SpriteSwapRule rule, int? frameIndex, string runtimeSpriteKey)
+        {
+            if (rule == null)
+                return false;
+
+            if (frameIndex.HasValue
+                && rule.AnimationFrameIndex.HasValue
+                && rule.AnimationFrameIndex.Value == frameIndex.Value)
+            {
+                return true;
+            }
+
+            return !string.IsNullOrEmpty(runtimeSpriteKey)
+                && !string.IsNullOrEmpty(rule.AnimationFrameRuntimeSpriteKey)
+                && string.Equals(rule.AnimationFrameRuntimeSpriteKey, runtimeSpriteKey, StringComparison.OrdinalIgnoreCase);
+        }
+
         public static SpriteSwapRule CloneRule(SpriteSwapRule source)
         {
             if (source == null)

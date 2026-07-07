@@ -104,6 +104,9 @@ $scenarioActorAuthoringRegistry = Read-RepoFile "ShelteredAPI\Scenarios\Applicat
 $scenarioActorAuthoringStore = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioActorAuthoringFieldStore.cs"
 $scenarioDevActorAuthoringProvider = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioDevActorAuthoringCapabilityProvider.cs"
 $scenarioAuthoringContracts = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs"
+$scenarioSpriteSwapRuleEditor = Read-RepoFile "ShelteredAPI\Scenarios\Application\Assets\ScenarioSpriteSwapRuleEditor.cs"
+$scenarioSpriteSwapAuthoringService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Assets\ScenarioSpriteSwapAuthoringService.cs"
+$scenarioSpriteRuntimeMutationService = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeMutationService.cs"
 $scenarioAuthoringCaptureService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthoringCaptureService.cs"
 $scenarioGameplayScheduleAuthoringService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs"
 $scenarioCastMemberReferenceCatalog = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioCastMemberReferenceCatalog.cs"
@@ -485,6 +488,13 @@ Assert-Contains "runtime API compatibility gate" $pluginManager "FindLoadedRunti
 Assert-Contains "runtime object panels" $runtimeObjectPanels "CreateContext\(registration,\s*target,\s*member\)" "object panel callbacks must receive a context built from the clicked target object."
 Assert-Contains "runtime object panels" $runtimeObjectPanels "target\.objectId\.ToString\(\)" "object panel context ObjectId must resolve to the clicked object's stable objectId when available."
 Assert-Contains "runtime object panels" $runtimeUiContracts "public ObjectManager\.ObjectType ObjectType" "object panel context must expose the clicked object's ObjectType for store and workstation routing."
+
+Assert-Contains "animated sprite frame override clear" $scenarioSpriteSwapRuleEditor "ClearActiveRulesForTarget.*ClearAnimationFrameRules" "sprite_swap clear must remove saved animated frame rules as well as static target swaps."
+Assert-Contains "animated sprite frame identity" $scenarioSpriteSwapRuleEditor "FrameIdentityMatches.*AnimationFrameIndex.*AnimationFrameRuntimeSpriteKey" "frame override lookup must match by frame index or runtime frame key."
+Assert-Contains "animated sprite frame revert" $scenarioSpriteSwapAuthoringService "RevertAnimationFrame.*ClearPersistedAnimationFrameRule" "Revert Frame must remove the persisted frame override for the current frame."
+Assert-Contains "animated sprite revert all" $scenarioSpriteSwapAuthoringService "RevertAnimation\(.*ClearPersistedAnimationFrameRules" "Revert Animation must remove all persisted frame overrides for the asset."
+Assert-Contains "animated sprite clear reapply" $scenarioSpriteSwapAuthoringService "ClearActiveRulesForTarget.*_spriteSwapEngine\.Activate" "clearing persisted frame overrides must reapply the sprite swap engine immediately."
+Assert-Contains "animated sprite runtime restore" $scenarioSpriteRuntimeMutationService "Configure\(.*RestoreRemovedReplacement\(replacements\).*_swaps\.Clear" "frame-swap driver must restore a displayed frame when its override is removed or changed."
 
 Assert-Contains "UI extension facade" $uiFacade "public static UICloneResult CloneElement\(GameObject template,\s*Transform parent,\s*UICloneOptions options\)" "ShelteredUI must expose focused safe-clone options and result DTOs."
 Assert-Contains "UI extension facade" $uiFacade "BindButtonClick<TContext>" "ShelteredUI must support safe per-item button context capture."
