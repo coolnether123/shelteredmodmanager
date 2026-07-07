@@ -536,6 +536,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 _snapshot != null && _snapshot.ShellViewModel != null
                     ? _snapshot.ShellViewModel.CustomSpriteEditor
                     : null;
+            if (editor != null && editor.AnimationPlaying && _snapshot != null)
+                ScenarioSpriteSwapAuthoringService.Instance.TickAnimationPreview(_snapshot.State);
 
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
@@ -572,7 +574,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float controlsWidth = Mathf.Clamp(bodyRect.width * 0.34f, 304f, 344f);
             controlsWidth = Math.Min(controlsWidth, Math.Max(224f, bodyRect.width - 170f));
             float controlsContentWidth = Math.Max(180f, controlsWidth - 24f);
-            float footerHeight = 42f;
+            float footerHeight = editor.IsAnimationEditor ? 116f : 42f;
             Rect toolsRect = new Rect(bodyRect.x, bodyRect.y, controlsWidth, Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect canvasPane = new Rect(toolsRect.xMax + 10f, bodyRect.y, Math.Max(160f, bodyRect.xMax - toolsRect.xMax - 10f), Math.Max(120f, bodyRect.height - footerHeight - 8f));
             Rect footerRect = new Rect(bodyRect.x, bodyRect.yMax - footerHeight, bodyRect.width, footerHeight);
@@ -587,6 +589,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (editor.IsCharacterEditor)
             {
                 DrawCharacterPartToolbar(editor, controlsContentWidth);
+                GUILayout.Space(6f);
+            }
+            if (editor.IsAnimationEditor)
+            {
+                DrawAnimationToolbar(editor, controlsContentWidth);
                 GUILayout.Space(6f);
             }
             DrawCustomEditorToolbar(editor, controlsContentWidth);
@@ -624,13 +631,89 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawPixelCanvasViewport(canvasPane, editor);
 
             GUILayout.BeginArea(footerRect);
+            if (editor.IsAnimationEditor)
+            {
+                DrawAnimationTimeline(editor, footerRect.width);
+                GUILayout.Space(4f);
+            }
             GUILayout.BeginHorizontal();
             GUILayout.FlexibleSpace();
-            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, 96f, "Save the current pixel edit. Ctrl+S");
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapPickerSave, "Save", editor.Dirty, 96f, editor.IsAnimationEditor ? "Save edited animation frames. Ctrl+S" : "Save the current pixel edit. Ctrl+S");
             GUILayout.Space(8f);
             DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapCustomEditDiscard, "Discard", false, 96f, "Discard the current pixel edit.", editor.Dirty);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+        }
+
+        private void DrawAnimationToolbar(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            GUILayout.Label("Animation", _smallTitleStyle);
+            GUILayout.Label(
+                "Frame " + (editor.AnimationFrameIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "/" + editor.AnimationFrameCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + " | " + FormatSeconds(editor.AnimationFrameDurationSeconds)
+                + " fixed",
+                _mutedTextStyle);
+            GUILayout.Label("Source timing and frame count are fixed by the vanilla clip.", _mutedTextStyle);
+            float buttonWidth = ResolveToolbarButtonWidth(contentWidth, 3, 4f, 84f);
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepPrevious, "<", false, 42f, "Previous frame.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationPlayPause, editor.AnimationPlaying ? "Pause" : "Play", editor.AnimationPlaying, buttonWidth, "Preview at the source game timing.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationStepNext, ">", false, 42f, "Next frame.");
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+            GUILayout.BeginHorizontal();
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationOnionToggle, "Onion", editor.OnionSkin, buttonWidth, "Ghost neighboring frames under the current frame.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCompareToggle, "Original", editor.CompareOriginal, buttonWidth, "Toggle the original frame overlay.");
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertFrame, "Revert", false, buttonWidth, "Revert the current frame.");
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+            DrawInlineAction(ScenarioAuthoringActionIds.ActionSpriteSwapAnimationRevertAll, "Revert Animation", false, Math.Min(contentWidth, 180f), "Revert all edited frames.");
+        }
+
+        private void DrawAnimationTimeline(ScenarioSpriteSwapAuthoringService.CustomEditorModel editor, float contentWidth)
+        {
+            GUILayout.Label(
+                (editor.AnimationClipName ?? "Animation")
+                + " | " + editor.AnimationFrameCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + " frames | " + FormatSeconds(editor.AnimationClipLengthSeconds),
+                _mutedTextStyle);
+            GUILayout.BeginHorizontal();
+            for (int i = 0; editor.AnimationFrames != null && i < editor.AnimationFrames.Count; i++)
+            {
+                ScenarioSpriteSwapAuthoringService.AnimationFrameModel frame = editor.AnimationFrames[i];
+                Rect frameRect = GUILayoutUtility.GetRect(46f, 44f, GUILayout.Width(46f), GUILayout.Height(44f));
+                DrawAnimationFrameThumb(frameRect, frame, i == editor.AnimationFrameIndex);
+                if (GUI.Button(frameRect, GUIContent.none, GUIStyle.none))
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioSpriteSwapAuthoringService.BuildAnimationFrameActionId(i));
+                GUILayout.Space(4f);
+            }
+            GUILayout.FlexibleSpace();
+            int previous = editor.AnimationFrameIndex > 0 ? editor.AnimationFrameIndex - 1 : Math.Max(0, editor.AnimationFrameCount - 1);
+            DrawInlineAction(ScenarioSpriteSwapAuthoringService.BuildAnimationCopyActionId(previous), "Copy Prev", false, 92f, "Copy the previous frame into the current frame.");
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawAnimationFrameThumb(Rect rect, ScenarioSpriteSwapAuthoringService.AnimationFrameModel frame, bool selected)
+        {
+            GUI.Box(rect, GUIContent.none, selected ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Field);
+            Rect imageRect = new Rect(rect.x + 5f, rect.y + 4f, rect.width - 10f, rect.height - 16f);
+            Sprite sprite = frame != null ? frame.EditedSprite : null;
+            if (sprite != null && sprite.texture != null)
+                GUI.DrawTextureWithTexCoords(imageRect, sprite.texture, new Rect(0f, 0f, 1f, 1f), true);
+            string label = frame != null
+                ? ((frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + (frame.Dirty ? "*" : string.Empty))
+                : "?";
+            GUI.Label(new Rect(rect.x, rect.yMax - 14f, rect.width, 12f), label, _mutedTextStyle);
+        }
+
+        private static string FormatSeconds(float seconds)
+        {
+            return Math.Max(0f, seconds).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + "s";
         }
 
         private void DrawCustomSpriteEditor()
@@ -993,6 +1076,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (editor.Checkerboard)
                 DrawCheckerboard(rect, Mathf.RoundToInt(displayZoom));
 
+            DrawAnimationReferenceOverlays(rect, editor);
             GUI.DrawTextureWithTexCoords(rect, editor.PreviewSprite.texture, new Rect(0f, 0f, 1f, 1f), true);
             DrawPixelGrid(rect, editor, displayZoom);
             DrawSelectionOverlay(rect, editor, displayZoom);
@@ -1042,6 +1126,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     current.Use();
                 }
             }
+        }
+
+        private void DrawAnimationReferenceOverlays(Rect rect, ScenarioSpriteSwapAuthoringService.CustomEditorModel editor)
+        {
+            if (editor == null || !editor.IsAnimationEditor || editor.AnimationFrames == null || editor.AnimationFrames.Count == 0)
+                return;
+
+            Color previousColor = GUI.color;
+            if (editor.OnionSkin && editor.AnimationFrames.Count > 1)
+            {
+                int previous = editor.AnimationFrameIndex > 0 ? editor.AnimationFrameIndex - 1 : editor.AnimationFrames.Count - 1;
+                int next = (editor.AnimationFrameIndex + 1) % editor.AnimationFrames.Count;
+                DrawAnimationFrameOverlay(rect, editor.AnimationFrames[previous], 0.28f, new Color(0.55f, 0.85f, 1f, 0.28f));
+                if (next != previous)
+                    DrawAnimationFrameOverlay(rect, editor.AnimationFrames[next], 0.18f, new Color(1f, 0.75f, 0.35f, 0.18f));
+            }
+
+            if (editor.CompareOriginal && editor.AnimationFrameIndex >= 0 && editor.AnimationFrameIndex < editor.AnimationFrames.Count)
+                DrawAnimationFrameOverlay(rect, editor.AnimationFrames[editor.AnimationFrameIndex], 0.45f, new Color(1f, 1f, 1f, 0.45f), true);
+            GUI.color = previousColor;
+        }
+
+        private void DrawAnimationFrameOverlay(Rect rect, ScenarioSpriteSwapAuthoringService.AnimationFrameModel frame, float alpha, Color tint)
+        {
+            DrawAnimationFrameOverlay(rect, frame, alpha, tint, false);
+        }
+
+        private void DrawAnimationFrameOverlay(Rect rect, ScenarioSpriteSwapAuthoringService.AnimationFrameModel frame, float alpha, Color tint, bool original)
+        {
+            if (frame == null)
+                return;
+
+            Sprite sprite = original ? frame.OriginalSprite : frame.EditedSprite;
+            if (sprite == null || sprite.texture == null)
+                return;
+
+            GUI.color = tint;
+            GUI.DrawTextureWithTexCoords(rect, sprite.texture, new Rect(0f, 0f, 1f, 1f), true);
+            GUI.color = new Color(1f, 1f, 1f, alpha);
         }
 
         private bool TryHandlePixelCanvasWheel(Rect rect, Event current)

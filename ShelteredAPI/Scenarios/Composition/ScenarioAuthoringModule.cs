@@ -44,6 +44,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioSpriteCatalogService>(),
                     resolver.Get<ScenarioCharacterAppearanceService>(),
                     resolver.Get<ScenarioSpriteRuntimeResolver>(),
+                    resolver.Get<ScenarioSpriteAnimationMetadataService>(),
                     resolver.Get<ScenarioSpritePatchAuthoringService>(),
                     resolver.Get<ScenarioPngImportService>(),
                     resolver.Get<ScenarioAuthoringHistoryService>(),

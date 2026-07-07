@@ -69,6 +69,25 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public bool IsCharacterEditor;
             public ScenarioCharacterTexturePart CharacterPart;
             public string CharacterPartLabel;
+            public bool IsAnimationEditor;
+            public string AnimationClipName;
+            public int AnimationFrameIndex;
+            public int AnimationFrameCount;
+            public float AnimationFrameDurationSeconds;
+            public float AnimationClipLengthSeconds;
+            public bool AnimationPlaying;
+            public bool OnionSkin;
+            public bool CompareOriginal;
+            public List<AnimationFrameModel> AnimationFrames;
+        }
+
+        internal sealed class AnimationFrameModel
+        {
+            public int Index;
+            public Sprite OriginalSprite;
+            public Sprite EditedSprite;
+            public bool Dirty;
+            public float DurationSeconds;
         }
 
         private sealed class PreviewSession
@@ -106,6 +125,25 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public bool IsCharacterEditor;
             public ScenarioCharacterTexturePart CharacterPart;
             public int CharacterFamilyIndex;
+            public ScenarioSpriteAnimationMetadataService.AnimationMetadata AnimationMetadata;
+            public List<AnimationFrameEdit> AnimationFrames;
+            public int AnimationFrameIndex;
+            public bool AnimationPlaying;
+            public float AnimationPlaybackAccumulator;
+            public bool OnionSkin;
+            public bool CompareOriginal;
+        }
+
+        private sealed class AnimationFrameEdit
+        {
+            public int Index;
+            public string SourceRuntimeSpriteKey;
+            public Texture2D BaselineTexture;
+            public Texture2D Texture;
+            public Sprite OriginalSprite;
+            public Sprite PreviewSprite;
+            public float DurationSeconds;
+            public bool Dirty;
         }
 
         private sealed class PixelEditSnapshot
@@ -130,6 +168,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         private readonly ScenarioSpriteCatalogService _catalogService;
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
         private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
+        private readonly ScenarioSpriteAnimationMetadataService _animationMetadataService;
         private readonly ScenarioSpritePatchAuthoringService _spritePatchAuthoringService;
         private readonly ScenarioPngImportService _pngImportService;
         private readonly ScenarioAuthoringHistoryService _historyService;
@@ -155,6 +194,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             ScenarioSpriteCatalogService catalogService,
             ScenarioCharacterAppearanceService characterAppearanceService,
             ScenarioSpriteRuntimeResolver runtimeResolver,
+            ScenarioSpriteAnimationMetadataService animationMetadataService,
             ScenarioSpritePatchAuthoringService spritePatchAuthoringService,
             ScenarioPngImportService pngImportService,
             ScenarioAuthoringHistoryService historyService,
@@ -165,6 +205,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             _catalogService = catalogService;
             _characterAppearanceService = characterAppearanceService;
             _runtimeResolver = runtimeResolver;
+            _animationMetadataService = animationMetadataService;
             _spritePatchAuthoringService = spritePatchAuthoringService;
             _pngImportService = pngImportService;
             _historyService = historyService;
@@ -212,12 +253,15 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 ? Mathf.Clamp(state.Settings.GetInt("sprite.zoom", 8), 1, 48)
                 : 8;
             Color initialColor = _customEditorSession.ActiveColor;
+            AnimationFrameEdit currentFrame = GetCurrentAnimationFrame();
+            Texture2D activeTexture = currentFrame != null ? currentFrame.Texture : _customEditorSession.Texture;
+            Sprite activeSprite = currentFrame != null ? currentFrame.PreviewSprite : _customEditorSession.PreviewSprite;
             return new CustomEditorModel
             {
                 Visible = true,
-                PreviewSprite = _customEditorSession.PreviewSprite,
-                Width = _customEditorSession.Texture != null ? _customEditorSession.Texture.width : 0,
-                Height = _customEditorSession.Texture != null ? _customEditorSession.Texture.height : 0,
+                PreviewSprite = activeSprite,
+                Width = activeTexture != null ? activeTexture.width : 0,
+                Height = activeTexture != null ? activeTexture.height : 0,
                 Zoom = zoom,
                 BrushPalette = CloneBrushPalette(),
                 ActiveBrushIndex = _customEditorSession.ActiveBrushIndex,
@@ -239,7 +283,17 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 CharacterPart = _customEditorSession.CharacterPart,
                 CharacterPartLabel = _customEditorSession.IsCharacterEditor
                     ? ScenarioCharacterAppearanceService.BuildPartLabel(_customEditorSession.CharacterPart)
-                    : null
+                    : null,
+                IsAnimationEditor = IsAnimationEditor(),
+                AnimationClipName = _customEditorSession.AnimationMetadata != null ? _customEditorSession.AnimationMetadata.ClipName : null,
+                AnimationFrameIndex = _customEditorSession.AnimationFrameIndex,
+                AnimationFrameCount = _customEditorSession.AnimationFrames != null ? _customEditorSession.AnimationFrames.Count : 0,
+                AnimationFrameDurationSeconds = currentFrame != null ? currentFrame.DurationSeconds : 0f,
+                AnimationClipLengthSeconds = _customEditorSession.AnimationMetadata != null ? _customEditorSession.AnimationMetadata.ClipLengthSeconds : 0f,
+                AnimationPlaying = _customEditorSession.AnimationPlaying,
+                OnionSkin = _customEditorSession.OnionSkin,
+                CompareOriginal = _customEditorSession.CompareOriginal,
+                AnimationFrames = BuildAnimationFrameModels()
             };
         }
 
@@ -312,6 +366,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         public static string BuildCustomColorActionId(Color color)
         {
             return ScenarioAuthoringActionIds.ActionSpriteSwapCustomColorPrefix + EncodeColor(color);
+        }
+
+        public static string BuildAnimationFrameActionId(int frameIndex)
+        {
+            return ScenarioAuthoringActionIds.ActionSpriteSwapAnimationFramePrefix + frameIndex;
+        }
+
+        public static string BuildAnimationCopyActionId(int frameIndex)
+        {
+            return ScenarioAuthoringActionIds.ActionSpriteSwapAnimationCopyPrefix + frameIndex;
         }
 
         public static string BuildCustomSelectStartActionId(int pixelX, int pixelY)
@@ -510,6 +574,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 LastInteractionY = 0
             };
 
+            AttachAnimationFramesIfAvailable(model.Target);
             ScenarioSpriteRuntimeMutationService.TryApply(model.Target, previewSprite);
             Rect editorWindowRect = PositionPixelEditorWindowBesideTarget(state);
             BeginCustomEditorCameraSession(state, editorWindowRect);
@@ -983,7 +1048,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             _customEditorSession.Texture.SetPixel(pixelX, pixelY, color);
             _customEditorSession.Texture.Apply();
             ApplyCustomEditorPreview(state);
-            _customEditorSession.Dirty = true;
+            MarkCustomEditorDirty();
             message = "Painted custom sprite pixel.";
             return true;
         }
@@ -1174,7 +1239,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             _customEditorSession.Texture.Apply();
             ApplyCustomEditorPreview(state);
-            _customEditorSession.Dirty = true;
+            MarkCustomEditorDirty();
             _customEditorSession.LastInteractionX = targetX;
             _customEditorSession.LastInteractionY = targetY;
             _customEditorSession.HasSelection = true;
@@ -1199,7 +1264,11 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 return false;
 
             if (HasCustomEditor(state))
+            {
+                if (IsAnimationEditor())
+                    return SaveAnimationSprite(state, session, model, out message);
                 return SaveCustomSprite(state, session, model, out message);
+            }
 
             string previewToken = state.SpriteSwapPicker.PreviewCandidateToken;
             string savedToken = state.SpriteSwapPicker.SavedCandidateToken;
@@ -1762,6 +1831,71 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             }
         }
 
+        private bool SaveAnimationSprite(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession session,
+            SpritePickerModel model,
+            out string message)
+        {
+            message = null;
+            ScenarioDefinition definition = session != null ? session.WorkingDefinition : null;
+            if (definition == null || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            int dirtyCount = CountDirtyAnimationFrames();
+            if (dirtyCount == 0)
+            {
+                ClosePickerState(state, false);
+                message = "Closed the animation editor without changes.";
+                return true;
+            }
+
+            string targetDisplay = state.SpriteSwapPicker != null && state.SpriteSwapPicker.Target != null
+                ? state.SpriteSwapPicker.Target.DisplayName
+                : model.Target.TargetPath;
+            _historyService.RecordVisualChange(definition, "Apply animation frames to " + SafeLabel(targetDisplay));
+
+            for (int i = 0; i < _customEditorSession.AnimationFrames.Count; i++)
+            {
+                AnimationFrameEdit frame = _customEditorSession.AnimationFrames[i];
+                if (frame == null || !frame.Dirty)
+                    continue;
+
+                string frameSpriteId = _customEditorSession.CustomSpriteId + "_frame_" + frame.Index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                string patchMessage;
+                string patchId = UpsertPatchSpriteAsset(
+                    definition,
+                    frameSpriteId,
+                    (_customEditorSession.SourceLabel ?? "Animation") + " frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    _customEditorSession.BaseSpriteId,
+                    _customEditorSession.BaseRelativePath,
+                    frame.SourceRuntimeSpriteKey,
+                    frame.BaselineTexture,
+                    frame.Texture,
+                    out patchMessage);
+                if (string.IsNullOrEmpty(patchId))
+                {
+                    message = !string.IsNullOrEmpty(patchMessage) ? patchMessage : "Animation frame patch could not be generated.";
+                    return false;
+                }
+
+                ApplyAnimationFrameRule(definition, model.Target, frame, frameSpriteId);
+            }
+
+            MarkAssetsDirty(session);
+            _spriteSwapEngine.Activate(definition, state.ActiveScenarioFilePath, null);
+            ClosePickerState(state, false);
+            Invalidate();
+
+            message = "Saved " + dirtyCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + " edited animation frame(s) onto '" + SafeLabel(targetDisplay) + "'.";
+            MMLog.WriteInfo("[ScenarioSpriteSwapAuthoring] " + message);
+            return true;
+        }
+
         private void EnsureCustomPixelStrokeSnapshot(string description)
         {
             if (_customPixelStrokeSnapshotRecorded)
@@ -1853,7 +1987,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
 
             _customEditorSession.Texture.SetPixels(snapshot.Pixels);
             _customEditorSession.Texture.Apply();
-            _customEditorSession.Dirty = true;
+            MarkCustomEditorDirty();
             ApplyCustomEditorPreview(state);
             _customPixelStrokeSnapshotRecorded = false;
         }
@@ -1905,6 +2039,341 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             return HasCustomEditor(state)
                 && _customEditorSession != null
                 && _customEditorSession.IsCharacterEditor;
+        }
+
+        private bool IsAnimationEditor()
+        {
+            return _customEditorSession != null
+                && _customEditorSession.AnimationFrames != null
+                && _customEditorSession.AnimationFrames.Count > 1;
+        }
+
+        private AnimationFrameEdit GetCurrentAnimationFrame()
+        {
+            if (!IsAnimationEditor())
+                return null;
+
+            int index = Mathf.Clamp(_customEditorSession.AnimationFrameIndex, 0, _customEditorSession.AnimationFrames.Count - 1);
+            return _customEditorSession.AnimationFrames[index];
+        }
+
+        private List<AnimationFrameModel> BuildAnimationFrameModels()
+        {
+            List<AnimationFrameModel> result = new List<AnimationFrameModel>();
+            if (!IsAnimationEditor())
+                return result;
+
+            for (int i = 0; i < _customEditorSession.AnimationFrames.Count; i++)
+            {
+                AnimationFrameEdit frame = _customEditorSession.AnimationFrames[i];
+                if (frame == null)
+                    continue;
+
+                result.Add(new AnimationFrameModel
+                {
+                    Index = frame.Index,
+                    OriginalSprite = frame.OriginalSprite,
+                    EditedSprite = frame.PreviewSprite,
+                    Dirty = frame.Dirty,
+                    DurationSeconds = frame.DurationSeconds
+                });
+            }
+
+            return result;
+        }
+
+        private void AttachAnimationFramesIfAvailable(ScenarioSpriteRuntimeResolver.ResolvedTarget target)
+        {
+            if (_customEditorSession == null || target == null || _animationMetadataService == null)
+                return;
+
+            ScenarioSpriteAnimationMetadataService.AnimationMetadata metadata = _animationMetadataService.Resolve(target);
+            if (metadata == null || metadata.Frames == null || metadata.Frames.Count <= 1)
+                return;
+
+            List<AnimationFrameEdit> frames = new List<AnimationFrameEdit>();
+            for (int i = 0; i < metadata.Frames.Count; i++)
+            {
+                ScenarioSpriteAnimationMetadataService.AnimationFrame source = metadata.Frames[i];
+                if (source == null || source.Sprite == null)
+                    continue;
+
+                Texture2D editable = CreateEditableTexture(source.Sprite);
+                Texture2D baseline = CreateEditableTexture(source.Sprite);
+                if (editable == null || baseline == null)
+                    continue;
+
+                frames.Add(new AnimationFrameEdit
+                {
+                    Index = frames.Count,
+                    SourceRuntimeSpriteKey = source.RuntimeSpriteKey,
+                    BaselineTexture = baseline,
+                    Texture = editable,
+                    OriginalSprite = source.Sprite,
+                    PreviewSprite = CreatePreviewSprite(editable, source.Sprite),
+                    DurationSeconds = source.DurationSeconds,
+                    Dirty = false
+                });
+            }
+
+            if (frames.Count <= 1)
+                return;
+
+            _customEditorSession.AnimationMetadata = metadata;
+            _customEditorSession.AnimationFrames = frames;
+            _customEditorSession.AnimationFrameIndex = FindAnimationFrameIndex(frames, ScenarioSpriteReferenceLibrary.CreateRuntimeSpriteKey(target.CurrentSprite));
+            SyncAnimationFrameToSession();
+            _customEditorSession.SourceLabel = (metadata.ClipName ?? "Animation") + " (" + frames.Count + " frames)";
+        }
+
+        private static int FindAnimationFrameIndex(List<AnimationFrameEdit> frames, string currentRuntimeSpriteKey)
+        {
+            if (!string.IsNullOrEmpty(currentRuntimeSpriteKey))
+            {
+                for (int i = 0; frames != null && i < frames.Count; i++)
+                {
+                    if (frames[i] != null && string.Equals(frames[i].SourceRuntimeSpriteKey, currentRuntimeSpriteKey, StringComparison.OrdinalIgnoreCase))
+                        return i;
+                }
+            }
+
+            return 0;
+        }
+
+        private void SyncAnimationFrameToSession()
+        {
+            AnimationFrameEdit frame = GetCurrentAnimationFrame();
+            if (frame == null)
+                return;
+
+            _customEditorSession.Texture = frame.Texture;
+            _customEditorSession.BaselineTexture = frame.BaselineTexture;
+            _customEditorSession.PreviewSprite = frame.PreviewSprite;
+            _customEditorSession.Dirty = HasDirtyAnimationFrames();
+        }
+
+        private bool SelectAnimationFrame(ScenarioAuthoringState state, int frameIndex, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            if (frameIndex < 0 || frameIndex >= _customEditorSession.AnimationFrames.Count)
+            {
+                message = "Animation frame is out of range.";
+                return false;
+            }
+
+            _customEditorSession.AnimationPlaying = false;
+            _customEditorSession.AnimationFrameIndex = frameIndex;
+            SyncAnimationFrameToSession();
+            ApplyCustomEditorPreview(state);
+            message = "Selected frame " + (frameIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + "/" + _customEditorSession.AnimationFrames.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private bool StepAnimationFrame(ScenarioAuthoringState state, int delta, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            int count = _customEditorSession.AnimationFrames.Count;
+            int next = (_customEditorSession.AnimationFrameIndex + delta) % count;
+            if (next < 0)
+                next += count;
+            return SelectAnimationFrame(state, next, out message);
+        }
+
+        private bool ToggleAnimationPlayback(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            _customEditorSession.AnimationPlaying = !_customEditorSession.AnimationPlaying;
+            _customEditorSession.AnimationPlaybackAccumulator = 0f;
+            message = _customEditorSession.AnimationPlaying ? "Animation preview playing." : "Animation preview paused.";
+            return true;
+        }
+
+        private bool ToggleOnionSkin(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            _customEditorSession.OnionSkin = !_customEditorSession.OnionSkin;
+            message = _customEditorSession.OnionSkin ? "Onion skin enabled." : "Onion skin disabled.";
+            return true;
+        }
+
+        private bool ToggleOriginalComparison(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            _customEditorSession.CompareOriginal = !_customEditorSession.CompareOriginal;
+            message = _customEditorSession.CompareOriginal ? "Original comparison enabled." : "Original comparison disabled.";
+            return true;
+        }
+
+        private bool CopyAnimationFrameFrom(ScenarioAuthoringState state, int sourceFrameIndex, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            AnimationFrameEdit target = GetCurrentAnimationFrame();
+            if (target == null || sourceFrameIndex < 0 || sourceFrameIndex >= _customEditorSession.AnimationFrames.Count)
+            {
+                message = "Animation frame copy is out of range.";
+                return false;
+            }
+
+            AnimationFrameEdit source = _customEditorSession.AnimationFrames[sourceFrameIndex];
+            if (source == null || source.Texture == null || target.Texture == null || source.Texture.width != target.Texture.width || source.Texture.height != target.Texture.height)
+            {
+                message = "The selected source frame is not compatible with the current frame.";
+                return false;
+            }
+
+            RecordCustomPixelSnapshot("copy frame");
+            target.Texture.SetPixels(source.Texture.GetPixels());
+            target.Texture.Apply();
+            target.PreviewSprite = CreatePreviewSprite(target.Texture, target.OriginalSprite);
+            target.Dirty = true;
+            SyncAnimationFrameToSession();
+            ApplyCustomEditorPreview(state);
+            message = "Copied frame " + (sourceFrameIndex + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + " into frame " + (target.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private bool RevertAnimationFrame(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            AnimationFrameEdit frame = GetCurrentAnimationFrame();
+            if (frame == null || frame.BaselineTexture == null || frame.Texture == null)
+            {
+                message = "Animation frame is unavailable.";
+                return false;
+            }
+
+            frame.Texture.SetPixels(frame.BaselineTexture.GetPixels());
+            frame.Texture.Apply();
+            frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
+            frame.Dirty = false;
+            SyncAnimationFrameToSession();
+            ApplyCustomEditorPreview(state);
+            message = "Reverted frame " + (frame.Index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + ".";
+            return true;
+        }
+
+        private bool RevertAnimation(ScenarioAuthoringState state, out string message)
+        {
+            message = null;
+            if (!HasCustomEditor(state) || !IsAnimationEditor())
+            {
+                message = "Animation editor is not active.";
+                return false;
+            }
+
+            for (int i = 0; i < _customEditorSession.AnimationFrames.Count; i++)
+            {
+                AnimationFrameEdit frame = _customEditorSession.AnimationFrames[i];
+                if (frame == null || frame.BaselineTexture == null || frame.Texture == null)
+                    continue;
+
+                frame.Texture.SetPixels(frame.BaselineTexture.GetPixels());
+                frame.Texture.Apply();
+                frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
+                frame.Dirty = false;
+            }
+
+            SyncAnimationFrameToSession();
+            ApplyCustomEditorPreview(state);
+            message = "Reverted all animation frames.";
+            return true;
+        }
+
+        public void TickAnimationPreview(ScenarioAuthoringState state)
+        {
+            if (!HasCustomEditor(state) || !IsAnimationEditor() || !_customEditorSession.AnimationPlaying)
+                return;
+
+            AnimationFrameEdit frame = GetCurrentAnimationFrame();
+            if (frame == null)
+                return;
+
+            _customEditorSession.AnimationPlaybackAccumulator += Time.unscaledDeltaTime;
+            if (_customEditorSession.AnimationPlaybackAccumulator < Mathf.Max(0.01f, frame.DurationSeconds))
+                return;
+
+            _customEditorSession.AnimationPlaybackAccumulator = 0f;
+            int count = _customEditorSession.AnimationFrames.Count;
+            _customEditorSession.AnimationFrameIndex = (_customEditorSession.AnimationFrameIndex + 1) % count;
+            SyncAnimationFrameToSession();
+            ApplyCustomEditorPreview(state);
+        }
+
+        private bool HasDirtyAnimationFrames()
+        {
+            return CountDirtyAnimationFrames() > 0;
+        }
+
+        private void MarkCustomEditorDirty()
+        {
+            if (_customEditorSession == null)
+                return;
+
+            AnimationFrameEdit frame = GetCurrentAnimationFrame();
+            if (frame != null)
+            {
+                frame.Dirty = true;
+                frame.PreviewSprite = CreatePreviewSprite(frame.Texture, frame.OriginalSprite);
+                _customEditorSession.PreviewSprite = frame.PreviewSprite;
+            }
+
+            _customEditorSession.Dirty = true;
+        }
+
+        private int CountDirtyAnimationFrames()
+        {
+            int count = 0;
+            for (int i = 0; _customEditorSession != null && _customEditorSession.AnimationFrames != null && i < _customEditorSession.AnimationFrames.Count; i++)
+            {
+                if (_customEditorSession.AnimationFrames[i] != null && _customEditorSession.AnimationFrames[i].Dirty)
+                    count++;
+            }
+
+            return count;
         }
 
         private bool TryResolveCharacterEditorTarget(
@@ -2322,6 +2791,36 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 out message);
         }
 
+        private string UpsertPatchSpriteAsset(
+            ScenarioDefinition definition,
+            string spriteId,
+            string displayName,
+            string baseSpriteId,
+            string baseRelativePath,
+            string baseRuntimeSpriteKey,
+            Texture2D baselineTexture,
+            Texture2D editedTexture,
+            out string message)
+        {
+            message = null;
+            if (definition == null || string.IsNullOrEmpty(spriteId))
+            {
+                message = "No animation frame edit was available to save.";
+                return null;
+            }
+
+            return _spritePatchAuthoringService.UpsertPatchSpriteAsset(
+                definition,
+                spriteId,
+                displayName,
+                baseSpriteId,
+                baseRelativePath,
+                baseRuntimeSpriteKey,
+                baselineTexture,
+                editedTexture,
+                out message);
+        }
+
         private static void ApplyCustomSpriteRule(
             ScenarioDefinition definition,
             ScenarioSpriteRuntimeResolver.ResolvedTarget target,
@@ -2349,6 +2848,53 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             rule.RuntimeSpriteKey = null;
             rule.SpriteId = spriteId;
             rule.RelativePath = relativePath;
+            rule.AnimationFrameIndex = null;
+            rule.AnimationFrameRuntimeSpriteKey = null;
+        }
+
+        private static void ApplyAnimationFrameRule(
+            ScenarioDefinition definition,
+            ScenarioSpriteRuntimeResolver.ResolvedTarget target,
+            AnimationFrameEdit frame,
+            string spriteId)
+        {
+            if (definition == null || target == null || frame == null || string.IsNullOrEmpty(frame.SourceRuntimeSpriteKey))
+                return;
+
+            int currentDay = GetCurrentDay();
+            ScenarioSpriteSwapRuleEditor.EnsureAssetReferences(definition);
+            SpriteSwapRule rule = null;
+            for (int i = 0; i < definition.AssetReferences.SpriteSwaps.Count; i++)
+            {
+                SpriteSwapRule candidate = definition.AssetReferences.SpriteSwaps[i];
+                if (candidate == null)
+                    continue;
+                if (string.Equals(candidate.TargetPath, target.TargetPath, StringComparison.OrdinalIgnoreCase)
+                    && candidate.AnimationFrameIndex.HasValue
+                    && candidate.AnimationFrameIndex.Value == frame.Index)
+                {
+                    rule = candidate;
+                    break;
+                }
+            }
+
+            if (rule == null)
+            {
+                rule = new SpriteSwapRule
+                {
+                    Id = ScenarioSpriteSwapRuleEditor.BuildRuleId(target.TargetPath) + "_frame_" + frame.Index.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Day = 1
+                };
+                definition.AssetReferences.SpriteSwaps.Add(rule);
+            }
+
+            rule.TargetPath = target.TargetPath;
+            rule.TargetComponent = target.Kind;
+            rule.RuntimeSpriteKey = null;
+            rule.SpriteId = spriteId;
+            rule.RelativePath = null;
+            rule.AnimationFrameIndex = frame.Index;
+            rule.AnimationFrameRuntimeSpriteKey = frame.SourceRuntimeSpriteKey;
         }
 
         private void ReapplyVisualState(ScenarioDefinition definition, string scenarioFilePath)

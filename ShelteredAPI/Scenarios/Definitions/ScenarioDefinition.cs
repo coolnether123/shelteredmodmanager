@@ -1015,6 +1015,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public string SpriteId { get; set; }
         public string RelativePath { get; set; }
         public string RuntimeSpriteKey { get; set; }
+        public int? AnimationFrameIndex { get; set; }
+        public string AnimationFrameRuntimeSpriteKey { get; set; }
         public int? Day { get; set; }
         public ScenarioSpriteTargetComponentKind TargetComponent { get; set; }
     }

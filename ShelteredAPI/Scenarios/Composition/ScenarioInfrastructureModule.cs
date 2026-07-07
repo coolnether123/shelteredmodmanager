@@ -34,6 +34,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStoryAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioEventAuthoringService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteRuntimeResolver(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpriteAnimationMetadataService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpritePlacementPolicy(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

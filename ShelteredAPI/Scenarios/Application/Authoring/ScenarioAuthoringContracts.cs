@@ -275,6 +275,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSpriteSwapCustomZoomIn = "sprite_swap.custom.zoom_in";
         public const string ActionSpriteSwapCustomZoomOut = "sprite_swap.custom.zoom_out";
         public const string ActionSpriteSwapCustomZoomReset = "sprite_swap.custom.zoom_reset";
+        public const string ActionSpriteSwapAnimationFramePrefix = "sprite_swap.anim.frame.";
+        public const string ActionSpriteSwapAnimationCopyPrefix = "sprite_swap.anim.copy.";
+        public const string ActionSpriteSwapAnimationPlayPause = "sprite_swap.anim.play_pause";
+        public const string ActionSpriteSwapAnimationStepPrevious = "sprite_swap.anim.step_prev";
+        public const string ActionSpriteSwapAnimationStepNext = "sprite_swap.anim.step_next";
+        public const string ActionSpriteSwapAnimationOnionToggle = "sprite_swap.anim.onion";
+        public const string ActionSpriteSwapAnimationCompareToggle = "sprite_swap.anim.compare";
+        public const string ActionSpriteSwapAnimationRevertFrame = "sprite_swap.anim.revert_frame";
+        public const string ActionSpriteSwapAnimationRevertAll = "sprite_swap.anim.revert_all";
         public const string ActionSpriteSwapCharacterPartHead = "sprite_swap.character.part.head";
         public const string ActionSpriteSwapCharacterPartTorso = "sprite_swap.character.part.torso";
         public const string ActionSpriteSwapCharacterPartLegs = "sprite_swap.character.part.legs";

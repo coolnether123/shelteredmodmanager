@@ -26,7 +26,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             for (int i = 0; i < rules.Count; i++)
             {
                 SpriteSwapRule rule = rules[i];
-                if (rule == null || !string.Equals(rule.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase))
+                if (rule == null
+                    || rule.AnimationFrameIndex.HasValue
+                    || !string.Equals(rule.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 int effectiveDay = rule.Day.HasValue ? Math.Max(1, rule.Day.Value) : 1;
@@ -52,7 +54,9 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             for (int i = 0; i < rules.Count; i++)
             {
                 SpriteSwapRule rule = rules[i];
-                if (rule != null && string.Equals(rule.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase))
+                if (rule != null
+                    && !rule.AnimationFrameIndex.HasValue
+                    && string.Equals(rule.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase))
                     return rule;
             }
 
@@ -115,6 +119,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             rule.SpriteId = null;
             rule.RelativePath = null;
             rule.RuntimeSpriteKey = null;
+            rule.AnimationFrameIndex = null;
+            rule.AnimationFrameRuntimeSpriteKey = null;
 
             if (candidate.SourceKind == ScenarioSpriteCatalogService.SpriteCandidateSourceKind.VanillaRuntime)
             {
@@ -154,6 +160,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 SpriteId = source.SpriteId,
                 RelativePath = source.RelativePath,
                 RuntimeSpriteKey = source.RuntimeSpriteKey,
+                AnimationFrameIndex = source.AnimationFrameIndex,
+                AnimationFrameRuntimeSpriteKey = source.AnimationFrameRuntimeSpriteKey,
                 Day = source.Day,
                 TargetComponent = source.TargetComponent
             };
@@ -199,6 +207,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (rule == null)
                 return "No active sprite swap.";
 
+            if (rule.AnimationFrameIndex.HasValue)
+                return "Animation frame " + (rule.AnimationFrameIndex.Value + 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + " swap active.";
             if (!string.IsNullOrEmpty(rule.RuntimeSpriteKey))
                 return "Vanilla/runtime sprite swap active.";
             if (!string.IsNullOrEmpty(rule.SpriteId))
@@ -212,6 +222,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         {
             if (rule == null)
                 return "<none>";
+            if (rule.AnimationFrameIndex.HasValue)
+                return "frame " + (rule.AnimationFrameIndex.Value + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (!string.IsNullOrEmpty(rule.RuntimeSpriteKey))
                 return rule.RuntimeSpriteKey;
             if (!string.IsNullOrEmpty(rule.SpriteId))

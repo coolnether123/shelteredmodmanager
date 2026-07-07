@@ -1088,6 +1088,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                         SpriteId = AttributeOrChild(swapElement, "spriteId", "SpriteId"),
                         RelativePath = AttributeOrChild(swapElement, "path", "Path"),
                         RuntimeSpriteKey = AttributeOrChild(swapElement, "runtimeSpriteKey", "RuntimeSpriteKey"),
+                        AnimationFrameIndex = ReadNullableIntAttribute(swapElement, "animationFrameIndex"),
+                        AnimationFrameRuntimeSpriteKey = AttributeOrChild(swapElement, "animationFrameRuntimeSpriteKey", "AnimationFrameRuntimeSpriteKey"),
                         Day = ReadNullableIntAttribute(swapElement, "day"),
                         TargetComponent = ReadEnumAttribute(swapElement, "targetComponent", ScenarioSpriteTargetComponentKind.Auto)
                     });
@@ -1814,6 +1816,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "spriteId", swap.SpriteId);
                 WriteAttribute(writer, "path", swap.RelativePath);
                 WriteAttribute(writer, "runtimeSpriteKey", swap.RuntimeSpriteKey);
+                if (swap.AnimationFrameIndex.HasValue)
+                    writer.WriteAttributeString("animationFrameIndex", swap.AnimationFrameIndex.Value.ToString(CultureInfo.InvariantCulture));
+                WriteAttribute(writer, "animationFrameRuntimeSpriteKey", swap.AnimationFrameRuntimeSpriteKey);
                 if (swap.Day.HasValue)
                     writer.WriteAttributeString("day", swap.Day.Value.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("targetComponent", swap.TargetComponent.ToString());
