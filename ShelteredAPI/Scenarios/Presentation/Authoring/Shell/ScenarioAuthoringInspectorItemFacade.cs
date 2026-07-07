@@ -11,6 +11,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public static ScenarioAuthoringInspectorItem Text(string value) { return ScenarioAuthoringPresentationUtilities.Text(value); }
         public static ScenarioAuthoringInspectorItem Property(string label, string value) { return ScenarioAuthoringPresentationUtilities.Property(label, value); }
+        public static ScenarioAuthoringInspectorItem Property(string label, string value, string detail) { return ScenarioAuthoringPresentationUtilities.Property(label, value, detail); }
         public static ScenarioAuthoringInspectorItem ActionItem(ScenarioAuthoringInspectorAction action) { return ScenarioAuthoringPresentationUtilities.ActionItem(action); }
         public static string Safe(string value) { return ScenarioAuthoringPresentationUtilities.Safe(value); }
         public static string FormatTarget(ScenarioAuthoringTarget target) { return ScenarioAuthoringPresentationUtilities.FormatTarget(target); }

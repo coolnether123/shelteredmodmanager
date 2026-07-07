@@ -1497,6 +1497,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string tooltip = action.Enabled
                 ? (action.Hint ?? action.Detail ?? string.Empty)
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (action.Hint ?? action.Detail ?? string.Empty));
+            if (RegisterRichHoverHelpSource(rect, action))
+                tooltip = string.Empty;
             GUIContent content = new GUIContent(ShortenToFit(action.Label ?? string.Empty, Math.Max(0f, rect.width - 14f), style), tooltip);
             RegisterInteractiveRegion(rect);
             if (!string.IsNullOrEmpty(action.Id))
@@ -1989,6 +1991,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string tooltip = action.Enabled
                 ? (action.Hint ?? action.Detail ?? string.Empty)
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (action.Hint ?? action.Detail ?? string.Empty));
+            if (RegisterRichHoverHelpSource(rect, action))
+                tooltip = string.Empty;
             RegisterInteractiveRegion(rect);
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
@@ -2312,6 +2316,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (Event.current != null)
                     Event.current.Use();
             }
+            RegisterRichHoverHelpSource(rect, action);
 
             DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, pressed);
 
@@ -2333,7 +2338,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             labelStyle.clipping = TextClipping.Clip;
             float labelHeight = 20f;
             string fittedLabel = ShortenToFit(action.Label ?? string.Empty, textRect.width, labelStyle);
-            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, BuildFullLabelTooltip(action)), labelStyle);
+            string labelTooltip = RegisterRichHoverHelpSource(rect, action) ? string.Empty : BuildFullLabelTooltip(action);
+            GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, labelTooltip), labelStyle);
             string detail = !string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint;
             if (!string.IsNullOrEmpty(detail))
                 GUI.Label(new Rect(textRect.x, textRect.y + labelHeight + 2f, textRect.width, Math.Max(16f, rect.height - labelHeight - 30f)), detail, _mutedTextStyle);

@@ -15,6 +15,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
     {
         private static readonly BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
         private static readonly BindingFlags InstanceAny = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly FieldInfo PanelInputActiveField = typeof(UIPanelManager).GetField("m_bInputActive", InstancePrivate);
+        private static readonly FieldInfo PanelNextFrameInputActiveField = typeof(UIPanelManager).GetField("m_bNextFrameInputActive", InstancePrivate);
+        private static readonly FieldInfo PanelIgnoreInputField = typeof(UIPanelManager).GetField("m_bIgnoreInput", InstancePrivate);
+        private static readonly FieldInfo PanelTimePausedField = typeof(UIPanelManager).GetField("m_bTimePaused", InstancePrivate);
         private static PreviewContext _activePreview;
 
         public static bool IsPreviewActive
@@ -35,6 +39,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 return;
             }
 
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+            {
+                SkipCutscene(preview.Manager, preview.Cutscene, "opening cutscene preview");
+                RestorePreview(preview, "Opening cutscene preview skipped; editor restored.");
+                return;
+            }
+
             Cutscene active = manager.GetActiveCutscene;
             if (manager.CutSceneActive && active != null && active.IsIntro && !active.IsFinished)
                 return;
@@ -43,6 +54,43 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 return;
 
             RestorePreview(preview, "Opening cutscene preview finished; editor restored.");
+        }
+
+        internal static void UpdateAuthoringIntroCutsceneFallback()
+        {
+            if (_activePreview != null || !ScenarioAuthoringRuntimeGuards.IsAuthoringActive())
+                return;
+
+            CutsceneManager manager = CutsceneManager.Instance;
+            Cutscene active = manager != null ? manager.GetActiveCutscene : null;
+            if (manager == null || !manager.CutSceneActive || active == null || !active.IsIntro)
+                return;
+
+            if (!UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+                return;
+
+            SkipCutscene(manager, active, "authoring intro cutscene");
+            RestoreVanillaPanelInputForAuthoring("authoring intro cutscene");
+            ScenarioAuthoringPauseService.Instance.EnsurePaused("Opening cutscene skipped from authoring.");
+            ScenarioAuthoringBackendService.Instance.SetStatusMessage("Opening cutscene skipped; editor restored.");
+        }
+
+        private static void SkipCutscene(CutsceneManager manager, Cutscene cutscene, string reason)
+        {
+            if (manager == null)
+                return;
+
+            try
+            {
+                manager.pauseCutsceneManager = false;
+                if (cutscene != null)
+                    cutscene.SkipCutscene();
+                manager.DeactivateCutscene();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Failed to skip " + (reason ?? "opening cutscene") + ": " + ex + ".");
+            }
         }
 
         public bool TryWatchOpeningCutscene(ScenarioEditorSession session, ScenarioAuthoringState state, out string message)
@@ -171,9 +219,60 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                     preview.State.StatusMessage = statusMessage;
             }
 
+            RestoreVanillaPanelInputForAuthoring("opening cutscene preview");
             ScenarioAuthoringPauseService.Instance.EnsurePaused("Opening cutscene preview finished.");
             MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview restored authoring pause. scene="
                 + SceneManager.GetActiveScene().name + ".");
+        }
+
+        internal static void RestoreStaleCutscenePanelIfAuthoringVisible()
+        {
+            if (!ScenarioAuthoringRuntimeGuards.IsAuthoringActive())
+                return;
+
+            CutsceneManager manager = CutsceneManager.Instance;
+            if (manager != null && manager.CutSceneActive)
+                return;
+
+            UIPanelManager panelManager = UIPanelManager.instance;
+            FadeManager fade = FadeManager.Instance;
+            if (panelManager == null || fade == null || !panelManager.IsPanelOnStack(fade))
+                return;
+
+            BasePanel topPanel = panelManager.GetTopPanel();
+            if (!ReferenceEquals(topPanel, fade))
+                return;
+
+            RestoreVanillaPanelInputForAuthoring("stale cutscene fade panel");
+        }
+
+        private static void RestoreVanillaPanelInputForAuthoring(string reason)
+        {
+            try
+            {
+                UIPanelManager panelManager = UIPanelManager.instance;
+                if (panelManager == null)
+                    return;
+
+                FadeManager fade = FadeManager.Instance;
+                if (fade != null && panelManager.IsPanelOnStack(fade))
+                {
+                    panelManager.PopPanel(fade);
+                    if (fade.gameObject != null)
+                        fade.gameObject.SetActive(false);
+                }
+
+                SetPanelBool(panelManager, PanelInputActiveField, true);
+                SetPanelBool(panelManager, PanelNextFrameInputActiveField, true);
+                SetPanelBool(panelManager, PanelIgnoreInputField, false);
+                SetPanelBool(panelManager, PanelTimePausedField, false);
+                AudioListener.pause = false;
+                MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Restored vanilla panel input after " + (reason ?? "cutscene") + ".");
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Failed to restore panel input after opening cutscene preview: " + ex.Message + ".");
+            }
         }
 
         private static void ResetCutsceneForReplay(Cutscene cutscene)
@@ -222,6 +321,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             FieldInfo field = target.GetType().GetField(fieldName, InstanceAny);
             if (field != null && field.FieldType == typeof(int))
                 field.SetValue(target, value);
+        }
+
+        private static void SetPanelBool(UIPanelManager panelManager, FieldInfo field, bool value)
+        {
+            if (panelManager != null && field != null && field.FieldType == typeof(bool))
+                field.SetValue(panelManager, value);
         }
 
         private sealed class PreviewContext

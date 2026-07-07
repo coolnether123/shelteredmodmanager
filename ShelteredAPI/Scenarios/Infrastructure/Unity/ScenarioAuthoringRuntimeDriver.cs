@@ -56,6 +56,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 {
                     ScenarioAuthoringBootstrapService.Instance.Update();
                     ScenarioOpeningCutsceneAuthoringService.UpdateActivePreview();
+                    ScenarioOpeningCutsceneAuthoringService.UpdateAuthoringIntroCutsceneFallback();
+                    ScenarioOpeningCutsceneAuthoringService.RestoreStaleCutscenePanelIfAuthoringVisible();
                 }
                 ScenarioSpriteSwapService.Instance.Update();
                 ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().Update();

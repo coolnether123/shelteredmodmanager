@@ -7,6 +7,7 @@ using UnityEngine;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
@@ -21,6 +22,11 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
+        private const float RichHoverDwellSeconds = 0.40f;
+        private const float RichHoverGraceSeconds = 0.30f;
+        private const string RichHoverActionBack = "rich.help.back";
+        private const string RichHoverActionTopicPrefix = "rich.help.topic.";
+
         private void DrawTooltipOverlayCore(float scaledWidth, float scaledHeight, Rect hudReserveRect, Rect contentRect)
         {
             string tip = _animations.ResolveTooltip(GUI.tooltip);
@@ -158,6 +164,387 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             rect.x = Mathf.Clamp(rect.x, bounds.x, Math.Max(bounds.x, bounds.xMax - rect.width));
             rect.y = Mathf.Clamp(rect.y, bounds.y, Math.Max(bounds.y, bounds.yMax - rect.height));
             return rect;
+        }
+
+        private void BeginRichHoverFrame()
+        {
+            _richHoverSourceHoveredThisFrame = false;
+            _richHoverSourceKeyThisFrame = null;
+            _richHoverCandidate = null;
+            _richHoverCandidateSourceRect = RuntimeCompat.ZeroRect();
+        }
+
+        private bool RegisterRichHoverHelpSource(Rect rect, ScenarioAuthoringInspectorAction action)
+        {
+            if (!ShouldUseRichHoverHelp(action))
+                return false;
+
+            Event evt = Event.current;
+            if (evt == null || !rect.Contains(evt.mousePosition))
+                return true;
+
+            RichHoverHelpModel model = BuildRichHoverHelpModel(action);
+            if (model == null)
+                return true;
+
+            float now = Time.realtimeSinceStartup;
+            if (!string.Equals(_richHoverCandidateKey, model.Key, StringComparison.Ordinal))
+            {
+                _richHoverCandidateKey = model.Key;
+                _richHoverCandidateSince = now;
+            }
+
+            _richHoverCandidate = model;
+            _richHoverCandidateSourceRect = rect;
+            _richHoverSourceHoveredThisFrame = true;
+            _richHoverSourceKeyThisFrame = model.Key;
+            return true;
+        }
+
+        private bool IsRichHoverHelpActive()
+        {
+            return _activeRichHoverHelp != null;
+        }
+
+        private bool DrawRichHoverHelpOverlayCore(
+            float scaledWidth,
+            float scaledHeight,
+            Rect hudReserveRect,
+            Rect contentRect,
+            ScenarioAuthoringInputCaptureService inputCapture)
+        {
+            UpdateRichHoverHelpState(scaledWidth, scaledHeight, hudReserveRect, contentRect);
+            if (_activeRichHoverHelp == null)
+                return false;
+
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+            {
+                CloseRichHoverHelp();
+                if (inputCapture != null)
+                    inputCapture.MarkKeyboardShortcutHandled();
+                return false;
+            }
+
+            Rect popupRect = _activeRichHoverPopupRect;
+            bool popupHovered = Event.current != null && popupRect.Contains(Event.current.mousePosition);
+            if (popupHovered)
+                _richHoverLastHoveredAt = Time.realtimeSinceStartup;
+
+            DrawRichHoverHelpPopup(popupRect, _activeRichHoverHelp);
+            if (inputCapture != null)
+            {
+                inputCapture.RegisterInteractiveRect(_activeRichHoverSourceRect);
+                inputCapture.RegisterInteractiveRect(popupRect);
+                inputCapture.SetPopupOpen(true);
+            }
+
+            ConsumeRichHoverInput(popupRect);
+            return true;
+        }
+
+        private void UpdateRichHoverHelpState(float scaledWidth, float scaledHeight, Rect hudReserveRect, Rect contentRect)
+        {
+            float now = Time.realtimeSinceStartup;
+            bool activeSourceHovered = _activeRichHoverHelp != null
+                && _richHoverSourceHoveredThisFrame
+                && string.Equals(_richHoverSourceKeyThisFrame, _activeRichHoverHelp.Key, StringComparison.Ordinal);
+            bool popupHovered = _activeRichHoverHelp != null
+                && Event.current != null
+                && _activeRichHoverPopupRect.Contains(Event.current.mousePosition);
+
+            if (_activeRichHoverHelp != null && (activeSourceHovered || popupHovered))
+                _richHoverLastHoveredAt = now;
+
+            if (_richHoverCandidate != null
+                && now - _richHoverCandidateSince >= RichHoverDwellSeconds
+                && (_activeRichHoverHelp == null || !string.Equals(_activeRichHoverHelp.Key, _richHoverCandidate.Key, StringComparison.Ordinal)))
+            {
+                OpenRichHoverHelp(_richHoverCandidate, _richHoverCandidateSourceRect, scaledWidth, scaledHeight, hudReserveRect, contentRect);
+                return;
+            }
+
+            if (_activeRichHoverHelp != null
+                && !activeSourceHovered
+                && !popupHovered
+                && now - _richHoverLastHoveredAt > RichHoverGraceSeconds)
+            {
+                CloseRichHoverHelp();
+            }
+        }
+
+        private void OpenRichHoverHelp(
+            RichHoverHelpModel model,
+            Rect sourceRect,
+            float scaledWidth,
+            float scaledHeight,
+            Rect hudReserveRect,
+            Rect contentRect)
+        {
+            _activeRichHoverHelp = model;
+            _activeRichHoverSourceRect = sourceRect;
+            _activeRichHoverPopupRect = BuildRichHoverPopupRect(model, sourceRect, scaledWidth, scaledHeight, hudReserveRect, contentRect);
+            _richHoverLastHoveredAt = Time.realtimeSinceStartup;
+        }
+
+        private void CloseRichHoverHelp()
+        {
+            _activeRichHoverHelp = null;
+            _activeRichHoverSourceRect = RuntimeCompat.ZeroRect();
+            _activeRichHoverPopupRect = RuntimeCompat.ZeroRect();
+            _richHoverTopicBackStack.Clear();
+        }
+
+        private Rect BuildRichHoverPopupRect(
+            RichHoverHelpModel model,
+            Rect sourceRect,
+            float scaledWidth,
+            float scaledHeight,
+            Rect hudReserveRect,
+            Rect contentRect)
+        {
+            Rect bounds = BuildTooltipBounds(contentRect, scaledWidth, scaledHeight);
+            float width = Mathf.Clamp(bounds.width * 0.34f, 340f, 460f);
+            float bodyHeight = _textStyle != null
+                ? _textStyle.CalcHeight(new GUIContent(model.Body ?? string.Empty), width - 28f)
+                : 96f;
+            float actionRows = model.Actions != null && model.Actions.Length > 0 ? 42f : 8f;
+            float height = Mathf.Clamp(80f + bodyHeight + actionRows, 164f, Math.Min(360f, bounds.height));
+            Rect avoidRect = sourceRect.width > 0f && sourceRect.height > 0f
+                ? sourceRect
+                : BuildTooltipAvoidanceRect(Event.current != null ? Event.current.mousePosition : Vector2.zero, bounds, scaledWidth, false);
+            return PlaceTooltipAroundAvoidance(avoidRect, width, height, bounds, scaledWidth, scaledHeight, hudReserveRect);
+        }
+
+        private void DrawRichHoverHelpPopup(Rect rect, RichHoverHelpModel help)
+        {
+            DrawChromePanel(rect, _uiContext.Styles.Menu);
+            Rect titleRect = new Rect(rect.x + 14f, rect.y + 10f, rect.width - 28f, 24f);
+            GUI.Label(titleRect, (help.Title ?? "Help").ToUpperInvariant(), _sectionTitleStyle);
+            Rect bodyRect = new Rect(rect.x + 14f, titleRect.yMax + 8f, rect.width - 28f, rect.height - 88f);
+            GUI.Label(bodyRect, help.Body ?? string.Empty, _textStyle);
+
+            Rect actionRect = new Rect(rect.x + 12f, rect.yMax - 42f, rect.width - 24f, 30f);
+            DrawRichHoverHelpActions(actionRect, help.Actions);
+        }
+
+        private void DrawRichHoverHelpActions(Rect rect, ScenarioAuthoringInspectorAction[] actions)
+        {
+            float x = rect.x;
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
+
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 74f, 156f);
+                if (x + width > rect.xMax)
+                    break;
+
+                Rect buttonRect = new Rect(x, rect.y, width, rect.height);
+                if (GUI.Button(buttonRect, new GUIContent(action.Label ?? string.Empty), action.Emphasized ? _activeButtonStyle : _buttonStyle))
+                    ExecuteRichHoverHelpAction(action);
+                x += width + 6f;
+            }
+        }
+
+        private void ExecuteRichHoverHelpAction(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id))
+                return;
+
+            if (string.Equals(action.Id, RichHoverActionBack, StringComparison.Ordinal))
+            {
+                if (_richHoverTopicBackStack.Count == 0)
+                    return;
+
+                string topicId = _richHoverTopicBackStack[_richHoverTopicBackStack.Count - 1];
+                _richHoverTopicBackStack.RemoveAt(_richHoverTopicBackStack.Count - 1);
+                ReplaceActiveRichHoverTopic(topicId, false);
+                return;
+            }
+
+            if (action.Id.StartsWith(RichHoverActionTopicPrefix, StringComparison.Ordinal))
+            {
+                string topicId = action.Id.Substring(RichHoverActionTopicPrefix.Length);
+                ReplaceActiveRichHoverTopic(topicId, true);
+                return;
+            }
+
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+            CloseRichHoverHelp();
+            if (Event.current != null)
+                Event.current.Use();
+        }
+
+        private void ReplaceActiveRichHoverTopic(string topicId, bool pushCurrent)
+        {
+            if (pushCurrent && _activeRichHoverHelp != null && !string.IsNullOrEmpty(_activeRichHoverHelp.TopicId))
+                _richHoverTopicBackStack.Add(_activeRichHoverHelp.TopicId);
+
+            RichHoverHelpModel model = BuildTopicRichHoverHelpModel(topicId);
+            if (model == null)
+                return;
+
+            _activeRichHoverHelp = model;
+            if (Event.current != null)
+                Event.current.Use();
+        }
+
+        private void ConsumeRichHoverInput(Rect rect)
+        {
+            Event evt = Event.current;
+            if (evt == null || !rect.Contains(evt.mousePosition))
+                return;
+
+            if (evt.type == EventType.MouseDown
+                || evt.type == EventType.MouseUp
+                || evt.type == EventType.MouseDrag
+                || evt.type == EventType.ScrollWheel)
+            {
+                evt.Use();
+            }
+        }
+
+        private RichHoverHelpModel BuildRichHoverHelpModel(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return null;
+
+            string topicId = ResolveActionTopicId(action);
+            if (!string.IsNullOrEmpty(topicId) && action.Id != null && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix, StringComparison.Ordinal))
+                return BuildTopicRichHoverHelpModel(topicId);
+
+            string body = action.Enabled
+                ? (!string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint)
+                : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint));
+            if (string.IsNullOrEmpty(body))
+                return null;
+
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            if (!string.IsNullOrEmpty(topicId))
+                actions.Add(RichHoverAction(RichHoverActionTopicPrefix + topicId, "More", "Open this help topic in the popup.", true, true));
+            if (!string.IsNullOrEmpty(action.Id) && action.Enabled)
+                actions.Add(RichHoverAction(action.Id, "Open", "Use this control.", true, false));
+
+            return new RichHoverHelpModel
+            {
+                Key = BuildRichHoverKey(action),
+                Title = action.Label,
+                Body = body,
+                TopicId = topicId,
+                Actions = actions.ToArray()
+            };
+        }
+
+        private RichHoverHelpModel BuildTopicRichHoverHelpModel(string topicId)
+        {
+            ScenarioAuthoringHelpPage page = TutorialContent.FindHelpPage(topicId);
+            if (page == null)
+                return null;
+
+            List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
+            if (_richHoverTopicBackStack.Count > 0)
+                actions.Add(RichHoverAction(RichHoverActionBack, "Back", "Return to the previous help card.", true, false));
+            actions.Add(RichHoverAction(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + page.Id, "Open Topic", "Open the full workshop help topic.", true, true));
+            if (page.Stage != ScenarioStageKind.None)
+                actions.Add(RichHoverAction(ScenarioAuthoringActionIds.ActionStageSelectPrefix + page.Stage, "Go", "Open the related workspace.", true, false));
+            else if (!string.IsNullOrEmpty(page.WindowId))
+                actions.Add(RichHoverAction(ScenarioAuthoringActionIds.ActionWindowTogglePrefix + page.WindowId, "Focus", "Focus the related editor panel.", true, false));
+
+            if (!string.IsNullOrEmpty(page.TourId))
+                actions.Add(RichHoverAction(ScenarioAuthoringActionIds.ActionTourStartPrefix + page.TourId, "Tour", "Start the related spotlight tour.", true, false));
+
+            return new RichHoverHelpModel
+            {
+                Key = "topic:" + page.Id,
+                Title = page.Title,
+                Body = page.Body,
+                TopicId = page.Id,
+                Actions = actions.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorAction RichHoverAction(string id, string label, string hint, bool enabled, bool emphasized)
+        {
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = id,
+                Label = label,
+                Hint = hint,
+                Enabled = enabled,
+                Emphasized = emphasized
+            };
+        }
+
+        private static bool ShouldUseRichHoverHelp(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return false;
+
+            if (!string.IsNullOrEmpty(ResolveActionTopicId(action)))
+                return true;
+
+            string text = !string.IsNullOrEmpty(action.DisabledReason)
+                ? action.DisabledReason
+                : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint);
+            return !string.IsNullOrEmpty(text) && text.Length > 90;
+        }
+
+        private static string BuildRichHoverKey(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return null;
+
+            string topicId = ResolveActionTopicId(action);
+            if (!string.IsNullOrEmpty(topicId) && action.Id != null && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix, StringComparison.Ordinal))
+                return "topic:" + topicId;
+
+            return "action:" + (action.Id ?? action.Label ?? string.Empty);
+        }
+
+        private static string ResolveActionTopicId(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id))
+                return null;
+
+            if (action.Id.StartsWith(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix, StringComparison.Ordinal))
+                return action.Id.Substring(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix.Length);
+
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionShellOpenHelp, StringComparison.Ordinal))
+                return TutorialContent.TopicSetup;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionPlaytest, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionPlaytestRestart, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Test, StringComparison.Ordinal))
+                return TutorialContent.TopicTest;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.People, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionToolFamily, StringComparison.Ordinal))
+                return TutorialContent.TopicCast;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.InventoryStorage, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionToolInventory, StringComparison.Ordinal))
+                return TutorialContent.TopicSupplies;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Events, StringComparison.Ordinal))
+                return TutorialContent.TopicTimelineConditions;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests, StringComparison.Ordinal))
+                return TutorialContent.TopicStory;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish, StringComparison.Ordinal))
+                return TutorialContent.TopicPublish;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Bunker, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.BunkerInside, StringComparison.Ordinal))
+                return TutorialContent.TopicWorldCamera;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionToolAssets, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionWindowTogglePrefix + ScenarioAuthoringWindowIds.PixelEditor, StringComparison.Ordinal))
+                return TutorialContent.TopicArtPixelEditor;
+
+            return null;
+        }
+
+        private sealed class RichHoverHelpModel
+        {
+            public string Key;
+            public string Title;
+            public string Body;
+            public string TopicId;
+            public ScenarioAuthoringInspectorAction[] Actions;
         }
 
     }

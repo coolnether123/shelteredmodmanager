@@ -154,6 +154,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string tooltip = action.Enabled
                 ? (action.Hint ?? action.Detail ?? string.Empty)
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : (action.Hint ?? string.Empty)));
+            if (RegisterRichHoverHelpSource(visualRect, action))
+                tooltip = string.Empty;
             GUIStyle style = tab
                 ? (!action.Enabled ? _uiContext.Styles.TabDisabled : (action.Emphasized ? _activeTabStyle : _tabStyle))
                 : (!action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle));

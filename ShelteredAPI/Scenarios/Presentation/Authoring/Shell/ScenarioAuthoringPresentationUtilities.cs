@@ -33,6 +33,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ScenarioInspectorItemFactory.Property(label, value);
         }
 
+        public static ScenarioAuthoringInspectorItem Property(string label, string value, string detail)
+        {
+            return ScenarioInspectorItemFactory.Property(label, value, detail);
+        }
+
         public static ScenarioAuthoringInspectorItem ActionItem(ScenarioAuthoringInspectorAction action)
         {
             return ScenarioInspectorItemFactory.ActionItem(action);

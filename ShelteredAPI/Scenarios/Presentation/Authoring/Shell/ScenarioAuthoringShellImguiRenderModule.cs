@@ -102,6 +102,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _pixelEditorPanning;
         private Vector2 _pixelEditorPanStartMouse = Vector2.zero;
         private Vector2 _pixelEditorPanStart = Vector2.zero;
+        private RichHoverHelpModel _richHoverCandidate;
+        private RichHoverHelpModel _activeRichHoverHelp;
+        private Rect _richHoverCandidateSourceRect = RuntimeCompat.ZeroRect();
+        private Rect _activeRichHoverSourceRect = RuntimeCompat.ZeroRect();
+        private Rect _activeRichHoverPopupRect = RuntimeCompat.ZeroRect();
+        private string _richHoverCandidateKey;
+        private float _richHoverCandidateSince;
+        private float _richHoverLastHoveredAt;
+        private bool _richHoverSourceHoveredThisFrame;
+        private string _richHoverSourceKeyThisFrame;
+        private readonly List<string> _richHoverTopicBackStack = new List<string>();
 
         public string ModuleId
         {
@@ -218,6 +229,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 tourTargets.ClearFrame();
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
             _editableFieldFocused = false;
+            BeginRichHoverFrame();
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
             if (_snapshot.State != null)
                 _windowMenuOpen = _snapshot.State.WindowMenuOpen;
@@ -434,11 +446,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             inputCapture.SetKeyboardCaptured(
                 modalDocument != null
                 || shell.Help != null
+                || IsRichHoverHelpActive()
                 || textFieldFocused
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
             inputCapture.SetTransitionActive(_animations.TransitionActive);
 
-            DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect);
+            bool richHelpOpen = DrawRichHoverHelpOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect, inputCapture);
+            if (!richHelpOpen)
+                DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect);
                 }
             }
             finally
