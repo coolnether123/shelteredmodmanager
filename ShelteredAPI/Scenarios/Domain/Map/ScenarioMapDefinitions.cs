@@ -63,6 +63,7 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         public string BoundaryId { get; set; }
         public string TerrainId { get; set; }
         public string LootTableId { get; set; }
+        public bool ReplaceGeneratedLoot { get; set; }
         public string EncounterTableId { get; set; }
         public string RequiredGateId { get; set; }
         public int Danger { get; set; }
@@ -234,6 +235,8 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         public int MaxQuantity { get; set; }
         public int Weight { get; set; }
         public float Chance { get; set; }
+        public bool Hidden { get; set; }
+        public string HiddenUnlockItemId { get; set; }
     }
 
     /// <summary>
@@ -245,10 +248,18 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         {
             Entries = new List<MapEncounterEntryDefinition>();
             Properties = new List<ScenarioProperty>();
+            OpenGroundChance = -1;
+            SearchNpcRevealChance = -1;
+            AnimalEncounterChance = -1;
+            FactionEncounterChance = -1;
         }
 
         public string Id { get; set; }
         public string DisplayName { get; set; }
+        public int OpenGroundChance { get; set; }
+        public int SearchNpcRevealChance { get; set; }
+        public int AnimalEncounterChance { get; set; }
+        public int FactionEncounterChance { get; set; }
         public List<MapEncounterEntryDefinition> Entries { get; private set; }
         public List<ScenarioProperty> Properties { get; private set; }
     }

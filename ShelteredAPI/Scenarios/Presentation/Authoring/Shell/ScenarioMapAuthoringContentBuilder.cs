@@ -62,6 +62,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "searchable", "Searchable", location.Searchable, "Whether expeditions can search this location.")));
                 items.Add(EditableProperty("Danger", location.Danger.ToString(CultureInfo.InvariantCulture), "danger", location.Id, "Basic encounter danger/risk value for later projection."));
                 items.Add(EditableProperty("Loot Table", location.LootTableId, "lootTableId", location.Id, "References an existing MapLootTableDefinition id."));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "replaceGeneratedLoot", "Replace Generated Loot", location.ReplaceGeneratedLoot, "Clear generated map loot at this location before applying the authored loot table.")));
                 items.Add(EditableProperty("Encounter Table", location.EncounterTableId, "encounterTableId", location.Id, "References an existing MapEncounterTableDefinition id."));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "visibleAtStart", "Visible At Start", location.VisibleAtStart, "Marker is visible before player discovery.")));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "discoveredAtStart", "Discovered At Start", location.DiscoveredAtStart, "Location starts as discovered instead of only visible.")));
@@ -382,7 +383,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(location.TerrainId))
                 parts.Add("terrain " + location.TerrainId);
             if (!string.IsNullOrEmpty(location.LootTableId))
-                parts.Add("loot " + location.LootTableId);
+                parts.Add((location.ReplaceGeneratedLoot ? "replace loot " : "loot ") + location.LootTableId);
             if (!string.IsNullOrEmpty(location.EncounterTableId))
                 parts.Add("encounters " + location.EncounterTableId);
             return parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "no tables";
@@ -521,6 +522,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             location.DiscoveredAtStart = selection.Discovered;
             location.HiddenUntilDiscovered = selection.HiddenUntilDiscovered;
             location.Danger = selection.OpenGroundEncounterChance;
+            location.ReplaceGeneratedLoot = selection.ReplaceGeneratedLoot;
             return location;
         }
 

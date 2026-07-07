@@ -231,6 +231,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (existing != null)
                 return SelectAuthoredLocation(state, existing, out message);
 
+            string placementReason = null;
+            if (_runtimeService == null || !_runtimeService.CanAuthorLocationAtGrid(gridX, gridY, out placementReason))
+            {
+                message = !string.IsNullOrEmpty(placementReason)
+                    ? placementReason
+                    : "Map locations can only be placed on generated vanilla regions.";
+                return false;
+            }
+
             RecordMapUndo(session, "Place map location at " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture));
             MapLocationDefinition location = _draftService.CreateLocationAtGrid(session, gridX, gridY, worldX, worldY);
             if (location == null)
@@ -271,6 +280,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (occupying != null && !string.Equals(occupying.Id, id, StringComparison.OrdinalIgnoreCase))
             {
                 message = "Grid " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture) + " already has authored location " + occupying.Id + ".";
+                return false;
+            }
+
+            string placementReason = null;
+            if (_runtimeService == null || !_runtimeService.CanAuthorLocationAtGrid(gridX, gridY, out placementReason))
+            {
+                message = !string.IsNullOrEmpty(placementReason)
+                    ? placementReason
+                    : "Map locations can only be moved onto generated vanilla regions.";
                 return false;
             }
 
@@ -383,7 +401,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!string.Equals(field, "searchable", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(field, "visibleAtStart", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(field, "discoveredAtStart", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(field, "hiddenUntilDiscovered", StringComparison.OrdinalIgnoreCase))
+                && !string.Equals(field, "hiddenUntilDiscovered", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "replaceGeneratedLoot", StringComparison.OrdinalIgnoreCase))
             {
                 message = "Unknown map location toggle field '" + field + "'.";
                 return false;
@@ -397,6 +416,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 location.DiscoveredAtStart = !location.DiscoveredAtStart;
             else if (string.Equals(field, "hiddenUntilDiscovered", StringComparison.OrdinalIgnoreCase))
                 location.HiddenUntilDiscovered = !location.HiddenUntilDiscovered;
+            else if (string.Equals(field, "replaceGeneratedLoot", StringComparison.OrdinalIgnoreCase))
+                location.ReplaceGeneratedLoot = !location.ReplaceGeneratedLoot;
 
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
             SelectAuthoredLocation(state, location, out message);
@@ -690,6 +711,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             selection.HiddenUntilDiscovered = location.HiddenUntilDiscovered;
             selection.IconId = location.IconId;
             selection.LootTableId = location.LootTableId;
+            selection.ReplaceGeneratedLoot = location.ReplaceGeneratedLoot;
             selection.EncounterTableId = location.EncounterTableId;
             selection.Captured = true;
             selection.CapturedLocationId = location.Id;

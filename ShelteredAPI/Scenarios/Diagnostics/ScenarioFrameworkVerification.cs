@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Xml;
+using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using ShelteredAPI.Saves;
@@ -9,6 +10,7 @@ using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
+using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Application.Scheduling;
@@ -39,6 +41,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyAtomicScenarioWrites(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyInventoryProjectionReconciliation(result);
+                VerifyMapLootProjectionContracts(result);
                 VerifySchedulePolicyWindows(result);
             }
             catch (Exception ex)
@@ -174,6 +177,72 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             }
 
             return 0;
+        }
+
+        private static void VerifyMapLootProjectionContracts(ScenarioValidationResult result)
+        {
+            ModRandom.ResetForSaveSeed(24681357);
+
+            ScenarioDefinition definition = CreateDefinition("Scenario.MapLootProjection");
+            MapLocationDefinition location = new MapLocationDefinition();
+            location.Id = "test-region";
+            location.GridX = 3;
+            location.GridY = 4;
+            location.LootTableId = "weighted";
+            location.ReplaceGeneratedLoot = true;
+            definition.Map.Locations.Add(location);
+
+            MapLootTableDefinition table = new MapLootTableDefinition();
+            table.Id = "weighted";
+            table.Entries.Add(new MapLootEntryDefinition
+            {
+                ItemId = "Water",
+                MinQuantity = 2,
+                MaxQuantity = 4,
+                Weight = 3,
+                Chance = 1f
+            });
+            table.Entries.Add(new MapLootEntryDefinition
+            {
+                ItemId = "Food",
+                MinQuantity = 1,
+                MaxQuantity = 2,
+                Weight = 1,
+                Chance = 1f,
+                Hidden = true,
+                HiddenUnlockItemId = "LockpickSet"
+            });
+            definition.Map.LootTables.Add(table);
+
+            string first = ScenarioMapProjectionApplyService.BuildLootRollSignature(
+                ScenarioMapProjectionApplyService.PlanLootRolls(definition, location, table));
+            string second = ScenarioMapProjectionApplyService.BuildLootRollSignature(
+                ScenarioMapProjectionApplyService.PlanLootRolls(definition, location, table));
+            Assert(string.Equals(first, second, StringComparison.Ordinal), "Map loot rolls must be deterministic for the same scenario seed, location, and table.", result);
+            Assert(first.IndexOf("hidden:", StringComparison.OrdinalIgnoreCase) >= 0, "Map loot rolls must preserve hidden loot entries.", result);
+
+            MapLocationDefinition otherLocation = new MapLocationDefinition();
+            otherLocation.Id = "other-region";
+            otherLocation.GridX = 5;
+            otherLocation.GridY = 4;
+            string third = ScenarioMapProjectionApplyService.BuildLootRollSignature(
+                ScenarioMapProjectionApplyService.PlanLootRolls(definition, otherLocation, table));
+            Assert(!string.Equals(first, third, StringComparison.Ordinal), "Map loot rolls should vary by location identity/grid under the same scenario seed.", result);
+
+            ScenarioDefinition invalid = CreateDefinition("Scenario.InvalidMapLoot");
+            MapLocationDefinition badLocation = new MapLocationDefinition();
+            badLocation.Id = "bad-location";
+            badLocation.ReplaceGeneratedLoot = true;
+            invalid.Map.Locations.Add(badLocation);
+            ScenarioValidationResult validation = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(invalid, null);
+            Assert(ContainsIssue(validation, "cannot replace generated loot without a lootTableId"), "Map validation did not reject replaceGeneratedLoot without a loot table.", result);
+
+            badLocation.LootTableId = "weighted";
+            badLocation.VisibleAtStart = true;
+            badLocation.HiddenUntilDiscovered = true;
+            invalid.Map.LootTables.Add(table);
+            validation = new ScenarioValidator(new VerificationDependencyResolver("Required.Mod", "1.3.0")).Validate(invalid, null);
+            Assert(ContainsIssue(validation, "cannot be both VisibleAtStart and HiddenUntilDiscovered"), "Map validation did not reject contradictory visibility flags.", result);
         }
 
         private static void VerifySchedulePolicyWindows(ScenarioValidationResult result)

@@ -121,7 +121,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return false;
 
             ExpeditionMap.GridRef grid = ExpeditionMap.Instance.WorldPosToGridRef(new Vector2(worldX, worldY));
-            if (grid.x < 0 || grid.y < 0 || grid.x > ExpeditionMap.Instance.width || grid.y > ExpeditionMap.Instance.height)
+            if (grid.x < 0 || grid.y < 0 || grid.x >= ExpeditionMap.Instance.width || grid.y >= ExpeditionMap.Instance.height)
                 return false;
 
             gridX = grid.x;
@@ -129,6 +129,40 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             Vector2 centre = ExpeditionMap.Instance.GetGridRefCentreWorldPos(grid);
             centreWorldX = centre.x;
             centreWorldY = centre.y;
+            return true;
+        }
+
+        public bool CanAuthorLocationAtGrid(int gridX, int gridY, out string reason)
+        {
+            reason = null;
+            if (ExpeditionMap.Instance == null)
+            {
+                reason = "The expedition map is not ready.";
+                return false;
+            }
+
+            if (gridX < 0 || gridY < 0 || gridX >= ExpeditionMap.Instance.width || gridY >= ExpeditionMap.Instance.height)
+            {
+                reason = "Grid " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture)
+                    + " is outside the generated expedition map.";
+                return false;
+            }
+
+            MapRegion region = ExpeditionMap.Instance.GetRegionOnMap(new ExpeditionMap.GridRef(gridX, gridY));
+            if (region == null)
+            {
+                reason = "Grid " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture)
+                    + " has no generated MapRegion. Empty-cell region creation is blocked because ExpeditionMap.CreateRegion is private and depends on private prefab/fog scratchpad setup.";
+                return false;
+            }
+
+            if (region.topography == MapRegion.Topography.NowhereSpecial)
+            {
+                reason = "Grid " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture)
+                    + " is an empty NowhereSpecial cell. Move the location onto a generated vanilla region; creating a new region there would bypass ExpeditionMap.CreateRegion setup.";
+                return false;
+            }
+
             return true;
         }
 

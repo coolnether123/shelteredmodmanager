@@ -114,6 +114,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label("Click the map to select or place locations.", _textStyle);
             GUILayout.Space(6f);
             GUILayout.Label("Mode: " + FormatOverlayMode(state) + ". Escape or Close returns to the Map workshop page.", _mutedTextStyle);
+            GUILayout.Label("Place and Move require an existing vanilla region; empty NowhereSpecial cells are blocked.", _mutedTextStyle);
         }
 
         private void DrawMapAuthoringSelectionEditor(ScenarioMapRegionSelection selection, ScenarioAuthoringState state)
@@ -138,6 +139,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label("Known Icons: " + FormatKnownOverlayIconIds(), _mutedTextStyle);
             DrawOverlayEditableProperty("Danger", selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture), "danger", id, "Basic encounter danger/risk value for later projection.");
             DrawOverlayEditableProperty("Loot Table", selection.LootTableId, "lootTableId", id, "References an existing MapLootTableDefinition id.");
+            DrawOverlayToggle(selection, id, "replaceGeneratedLoot", "Replace Generated Loot", selection.ReplaceGeneratedLoot);
             DrawOverlayEditableProperty("Encounter Table", selection.EncounterTableId, "encounterTableId", id, "References an existing MapEncounterTableDefinition id.");
             DrawOverlayToggle(selection, id, "searchable", "Searchable", selection.Searchable);
             DrawOverlayToggle(selection, id, "visibleAtStart", "Visible", selection.VisibleOnMap);

@@ -19,6 +19,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
         public bool HiddenUntilDiscovered { get; set; }
         public string IconId { get; set; }
         public string LootTableId { get; set; }
+        public bool ReplaceGeneratedLoot { get; set; }
         public string EncounterTableId { get; set; }
         public bool HasItems { get; set; }
         public bool HasQuest { get; set; }
@@ -58,6 +59,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
                 HiddenUntilDiscovered = HiddenUntilDiscovered,
                 IconId = IconId,
                 LootTableId = LootTableId,
+                ReplaceGeneratedLoot = ReplaceGeneratedLoot,
                 EncounterTableId = EncounterTableId,
                 HasItems = HasItems,
                 HasQuest = HasQuest,

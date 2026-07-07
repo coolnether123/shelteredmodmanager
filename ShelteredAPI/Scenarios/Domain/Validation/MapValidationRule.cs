@@ -68,8 +68,12 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     result.AddError("Map location '" + id + "' radius cannot be negative.");
                 if (location.Danger < 0)
                     result.AddError("Map location '" + id + "' danger cannot be negative.");
+                if (location.ReplaceGeneratedLoot && TrimToNull(location.LootTableId) == null)
+                    result.AddError("Map location '" + id + "' cannot replace generated loot without a lootTableId. Fix: assign a loot table or clear Replace Generated Loot.");
                 if (location.DiscoveredAtStart && location.HiddenUntilDiscovered)
                     result.AddError("Map location '" + id + "' cannot be both DiscoveredAtStart and HiddenUntilDiscovered. Fix: either clear Hidden Until Travel Discovery or clear Discovered At Start so vanilla travel discovery can reveal it.");
+                if (location.VisibleAtStart && location.HiddenUntilDiscovered)
+                    result.AddError("Map location '" + id + "' cannot be both VisibleAtStart and HiddenUntilDiscovered. Fix: either clear Hidden Until Travel Discovery or clear Visible At Start.");
                 string iconId = TrimToNull(location.IconId);
                 if (iconId != null && !ScenarioMapIconCatalog.IsKnownIconId(iconId))
                     result.AddError("Map location '" + id + "' has invalid iconId '" + iconId + "'. Fix: choose a known map icon id from the Map location editor or clear the icon field.");
@@ -168,6 +172,8 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     result.AddError("Map loot table '" + tableId + "' entry '" + label + "' weight must be greater than zero.");
                 if (entry != null && (entry.Chance < 0f || entry.Chance > 1f))
                     result.AddError("Map loot table '" + tableId + "' entry '" + label + "' chance must be between 0 and 1.");
+                if (entry != null && entry.Hidden && TrimToNull(entry.HiddenUnlockItemId) == null)
+                    result.AddError("Map loot table '" + tableId + "' entry '" + label + "' is hidden but has no hiddenUnlockItemId. Fix: choose the item required to unlock this hidden loot.");
             }
         }
 
@@ -187,8 +193,18 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 if (table.Entries == null || table.Entries.Count == 0)
                     result.AddWarning("Map encounter table '" + id + "' has no entries.");
 
+                ValidateEncounterChance("Map encounter table '" + id + "' openGroundChance", table.OpenGroundChance, result);
+                ValidateEncounterChance("Map encounter table '" + id + "' searchNpcRevealChance", table.SearchNpcRevealChance, result);
+                ValidateEncounterChance("Map encounter table '" + id + "' animalEncounterChance", table.AnimalEncounterChance, result);
+                ValidateEncounterChance("Map encounter table '" + id + "' factionEncounterChance", table.FactionEncounterChance, result);
                 ValidateEncounterEntries(table, id, result);
             }
+        }
+
+        private static void ValidateEncounterChance(string label, int value, ScenarioValidationResult result)
+        {
+            if (value < -1 || value > 100)
+                result.AddError(label + " must be between 0 and 100, or -1 to leave vanilla unchanged.");
         }
 
         private static void ValidateEncounterEntries(MapEncounterTableDefinition table, string tableId, ScenarioValidationResult result)
