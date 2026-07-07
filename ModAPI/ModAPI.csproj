@@ -97,6 +97,12 @@
     <Compile Include="UI\UIFlowGuard.cs" />
     <Compile Include="UI\TouchInputBridge.cs" />
     <Compile Include="UI\ScrollInputBridge.cs" />
+    <Compile Include="UI\ColorPicker\ModColor.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerTextField.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerPalette.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerPaletteStore.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerSession.cs" />
+    <Compile Include="UI\ColorPicker\ColorPickerImguiControl.cs" />
     <Compile Include="Spine\SettingsEnums.cs" />
     <Compile Include="Spine\SettingDefinition.cs" />
     <Compile Include="Spine\SettingDefinitionFactory.cs" />
