@@ -119,6 +119,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new ScenarioMapAuthoringCommandHandler(mapAuthoringRuntimeService, mapDraftService, layoutService),
                 new TutorialCommandHandler(tutorialService, editorService, layoutService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
+                new StationUpgradeCommandHandler(editorService, selectionScopeService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
                 new ScenarioStoryFocusedEditorCommandHandler(storyAuthoringService, editorService),

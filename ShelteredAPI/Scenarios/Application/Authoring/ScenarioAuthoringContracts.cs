@@ -111,6 +111,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionCaptureShelterObjects = "capture.shelter.objects";
         public const string ActionCaptureSelectedObject = "capture.shelter.selected_object";
         public const string ActionRemoveSelectedObjectPlacement = "capture.shelter.remove_selected_object";
+        public const string ActionStationLevelPrefix = "station.level.";
+        public const string ActionStationUpgradePrefix = "station.upgrade.";
+        public const string ActionStationStatPrefix = "station.stat.";
+        public const string ActionStationStatClearPrefix = "station.stat_clear.";
         public const string ActionLiveSurvivorAddToStartingPrefix = "scenario.live_survivor.add_to_start.";
         public const string ActionStartingSurvivorAdd = "scenario.start_survivor.add";
         public const string ActionStartingSurvivorPrefix = "scenario.start_survivor.";

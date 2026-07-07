@@ -91,6 +91,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Value = SafeObjectName(obj)
             });
             ScenarioObjectStatePropertyService.Capture(obj, placement);
+            ScenarioStationUpgradePropertyService.Capture(obj, placement);
             return placement;
         }
 

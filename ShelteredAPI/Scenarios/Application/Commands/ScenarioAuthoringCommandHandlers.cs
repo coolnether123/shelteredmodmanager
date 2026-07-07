@@ -23,6 +23,7 @@ using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
@@ -1011,6 +1012,162 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         }
 
         private delegate bool CaptureAction(ScenarioEditorSession session, out string message);
+    }
+
+    internal sealed class StationUpgradeCommandHandler : IScenarioCommandHandler
+    {
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioSelectionScopeService _scopeService;
+
+        public StationUpgradeCommandHandler(
+            IScenarioEditorService editorService,
+            ScenarioSelectionScopeService scopeService)
+        {
+            _editorService = editorService;
+            _scopeService = scopeService;
+        }
+
+        public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
+        {
+            handled = IsStationAction(actionId);
+            message = null;
+            if (!handled)
+                return false;
+
+            if (!_scopeService.CanSelectTargetForCurrentStage(state, state != null ? state.SelectedTarget : null, out message))
+                return true;
+
+            Obj_Base obj = ResolveSelectedObject(state);
+            if (obj == null || !ScenarioStationUpgradePropertyService.IsStationObject(obj))
+            {
+                message = "Select a station object before editing station upgrades.";
+                return true;
+            }
+
+            ScenarioEditorSession session = _editorService != null ? _editorService.CurrentSession : null;
+            if (session == null)
+            {
+                message = "No active authoring session is available.";
+                return true;
+            }
+
+            ObjectPlacement placement = EnsurePlacement(session, obj);
+            if (placement == null)
+            {
+                message = "Could not create or locate a station placement record.";
+                return true;
+            }
+
+            bool changed = false;
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationLevelPrefix, StringComparison.Ordinal))
+            {
+                int delta;
+                if (!int.TryParse(actionId.Substring(ScenarioAuthoringActionIds.ActionStationLevelPrefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out delta))
+                {
+                    message = "Station level command is invalid.";
+                    return true;
+                }
+
+                changed = ScenarioStationUpgradePropertyService.TrySetObjectLevel(obj, placement, delta, out message);
+            }
+            else if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationUpgradePrefix, StringComparison.Ordinal))
+            {
+                string payload = actionId.Substring(ScenarioAuthoringActionIds.ActionStationUpgradePrefix.Length);
+                string name;
+                int delta;
+                if (!TrySplitNameDelta(payload, out name, out delta))
+                {
+                    message = "Station upgrade command is invalid.";
+                    return true;
+                }
+
+                changed = ScenarioStationUpgradePropertyService.TrySetUpgradeLevel(obj, placement, name, delta, out message);
+            }
+            else if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatClearPrefix, StringComparison.Ordinal))
+            {
+                string statName = actionId.Substring(ScenarioAuthoringActionIds.ActionStationStatClearPrefix.Length);
+                changed = ScenarioStationUpgradePropertyService.TryClearStat(obj, placement, statName, out message);
+            }
+            else if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatPrefix, StringComparison.Ordinal))
+            {
+                string payload = actionId.Substring(ScenarioAuthoringActionIds.ActionStationStatPrefix.Length);
+                string name;
+                float delta;
+                if (!TrySplitNameDelta(payload, out name, out delta))
+                {
+                    message = "Station stat command is invalid.";
+                    return true;
+                }
+
+                changed = ScenarioStationUpgradePropertyService.TrySetStat(obj, placement, name, delta, out message);
+            }
+
+            if (changed)
+                ScenarioBunkerDraftService.MarkBunkerDirty(session);
+            return true;
+        }
+
+        private static bool IsStationAction(string actionId)
+        {
+            return !string.IsNullOrEmpty(actionId)
+                && (actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationLevelPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationUpgradePrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStationStatClearPrefix, StringComparison.Ordinal));
+        }
+
+        private static ObjectPlacement EnsurePlacement(ScenarioEditorSession session, Obj_Base obj)
+        {
+            BunkerEditsDefinition edits = ScenarioBunkerDraftService.EnsureBunkerEdits(session);
+            int index = ScenarioBunkerDraftService.FindPlacementIndex(edits.ObjectPlacements, obj);
+            if (index >= 0)
+                return edits.ObjectPlacements[index];
+
+            ObjectPlacement placement = ScenarioBunkerDraftService.CreatePlacement(obj);
+            edits.ObjectPlacements.Add(placement);
+            return placement;
+        }
+
+        private static Obj_Base ResolveSelectedObject(ScenarioAuthoringState state)
+        {
+            if (state == null || state.SelectedTarget == null)
+                return null;
+
+            GameObject gameObject = state.SelectedTarget.RuntimeObject as GameObject;
+            if (gameObject == null)
+            {
+                Component component = state.SelectedTarget.RuntimeObject as Component;
+                gameObject = component != null ? component.gameObject : null;
+            }
+
+            return gameObject != null ? gameObject.GetComponent<Obj_Base>() : null;
+        }
+
+        private static bool TrySplitNameDelta(string payload, out string name, out int delta)
+        {
+            delta = 0;
+            float parsed;
+            if (!TrySplitNameDelta(payload, out name, out parsed))
+                return false;
+
+            delta = (int)parsed;
+            return true;
+        }
+
+        private static bool TrySplitNameDelta(string payload, out string name, out float delta)
+        {
+            name = null;
+            delta = 0f;
+            if (string.IsNullOrEmpty(payload))
+                return false;
+
+            int separator = payload.IndexOf('.');
+            if (separator <= 0 || separator >= payload.Length - 1)
+                return false;
+
+            name = payload.Substring(0, separator);
+            return float.TryParse(payload.Substring(separator + 1), NumberStyles.Float, CultureInfo.InvariantCulture, out delta);
+        }
     }
 
     internal sealed class StoryAuthoringCommandHandler : IScenarioCommandHandler

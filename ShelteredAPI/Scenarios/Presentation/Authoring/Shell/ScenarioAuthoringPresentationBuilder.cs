@@ -310,6 +310,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
             ScenarioTargetClassification classification = _targetClassifier.Classify(target);
             ObjectPlacement objectPlacement = FindObjectPlacement(definition, target);
+            GameObject selectedGameObject = ResolveGameObject(target);
+            Obj_Base selectedObject = selectedGameObject != null ? selectedGameObject.GetComponent<Obj_Base>() : null;
+            ScenarioStationUpgradeSnapshot stationSnapshot = ScenarioStationUpgradePropertyService.BuildSnapshot(selectedObject, objectPlacement);
             int linkedTimelineEntries = CountLikelyTriggerReferences(definition, target);
             string scopeReason;
             bool scopeAllowed = _selectionScopeService.CanSelectTargetForCurrentStage(state, target, out scopeReason);
@@ -323,6 +326,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(BuildTargetStripSection(state, target, classification));
             sections.Add(BuildPinnedFactsSection(state, target, classification, objectPlacement, hasCapturedPlacement));
             sections.Add(BuildPrimaryActionsSection(scopeAllowed, scopeReason, canCaptureTarget, captureReason, hasCapturedPlacement, replacementAllowed, target));
+            if (stationSnapshot != null)
+            {
+                sections.Add(BuildStationUpgradeSection(stationSnapshot));
+                sections.Add(BuildStationAdvancedSection(stationSnapshot));
+            }
             if (replacementAllowed)
             {
                 List<ScenarioAuthoringInspectorSection> assetEditorSections = _assetAuthoringContentBuilder.BuildSelectedAssetEditorSections(state, editorSession, target);
@@ -487,6 +495,134 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = items.ToArray()
             };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildStationUpgradeSection(ScenarioStationUpgradeSnapshot snapshot)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Object Level", snapshot.Level.ToString(CultureInfo.InvariantCulture) + "/" + ScenarioStationUpgradePropertyService.ObjectLevelMax.ToString(CultureInfo.InvariantCulture)));
+            AddStepperActions(items, ScenarioAuthoringActionIds.ActionStationLevelPrefix, string.Empty, "Level", snapshot.Level > ScenarioStationUpgradePropertyService.ObjectLevelMin, snapshot.Level < ScenarioStationUpgradePropertyService.ObjectLevelMax, 1);
+
+            for (int i = 0; snapshot.Paths != null && i < snapshot.Paths.Count; i++)
+            {
+                ScenarioStationUpgradePathSnapshot path = snapshot.Paths[i];
+                if (path == null)
+                    continue;
+
+                items.Add(Property(path.Name, path.Level.ToString(CultureInfo.InvariantCulture) + "/" + path.MaxLevel.ToString(CultureInfo.InvariantCulture)));
+                AddStepperActions(items, ScenarioAuthoringActionIds.ActionStationUpgradePrefix, path.Name, path.Name, path.Level > 0, path.Level < path.MaxLevel, 1);
+            }
+
+            if (snapshot.Paths == null || snapshot.Paths.Count == 0)
+                items.Add(Text("This station has no vanilla UpgradeObject paths."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "station_upgrades",
+                Title = "Upgrades",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildStationAdvancedSection(ScenarioStationUpgradeSnapshot snapshot)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; snapshot != null && snapshot.Stats != null && i < snapshot.Stats.Count; i++)
+            {
+                ScenarioStationStatSnapshot stat = snapshot.Stats[i];
+                if (stat == null)
+                    continue;
+
+                items.Add(Property(
+                    stat.Label,
+                    FormatStationStatValue(stat) + (stat.HasOverride ? " override" : string.Empty),
+                    stat.Detail,
+                    stat.HasOverride ? "OVERRIDE" : null));
+                AddStatStepperActions(items, stat);
+                if (stat.HasOverride)
+                {
+                    items.Add(ActionItem(Action(
+                        ScenarioAuthoringActionIds.ActionStationStatClearPrefix + stat.Name,
+                        "Clear " + stat.Label,
+                        "Remove this authored stat override from the placement.",
+                        true,
+                        false,
+                        "CL")));
+                }
+            }
+
+            if (items.Count == 0)
+                items.Add(Text("No advanced stat overrides are safe for this station type."));
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "station_advanced",
+                Title = "Advanced",
+                Expanded = false,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = items.ToArray()
+            };
+        }
+
+        private static void AddStepperActions(
+            List<ScenarioAuthoringInspectorItem> items,
+            string prefix,
+            string name,
+            string label,
+            bool canDecrease,
+            bool canIncrease,
+            int step)
+        {
+            string token = string.IsNullOrEmpty(name) ? string.Empty : name + ".";
+            items.Add(ActionItem(Action(
+                prefix + token + (-step).ToString(CultureInfo.InvariantCulture),
+                label + " -",
+                "Decrease " + label + " within vanilla bounds.",
+                canDecrease,
+                false,
+                "-")));
+            items.Add(ActionItem(Action(
+                prefix + token + step.ToString(CultureInfo.InvariantCulture),
+                label + " +",
+                "Increase " + label + " within vanilla bounds.",
+                canIncrease,
+                false,
+                "+")));
+        }
+
+        private static void AddStatStepperActions(List<ScenarioAuthoringInspectorItem> items, ScenarioStationStatSnapshot stat)
+        {
+            string step = stat.Step.ToString("0.###", CultureInfo.InvariantCulture);
+            string token = stat.Name + ".";
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionStationStatPrefix + token + "-" + step,
+                stat.Label + " -" + step,
+                "Decrease " + stat.Label + " within the safe range.",
+                stat.Value > stat.MinValue,
+                false,
+                "-" + step)));
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionStationStatPrefix + token + step,
+                stat.Label + " +" + step,
+                "Increase " + stat.Label + " within the safe range.",
+                stat.Value < stat.MaxValue,
+                false,
+                "+" + step)));
+        }
+
+        private static string FormatStationStatValue(ScenarioStationStatSnapshot stat)
+        {
+            if (stat == null)
+                return "0";
+
+            return stat.Value.ToString("0.###", CultureInfo.InvariantCulture)
+                + " ("
+                + stat.MinValue.ToString("0.###", CultureInfo.InvariantCulture)
+                + "-"
+                + stat.MaxValue.ToString("0.###", CultureInfo.InvariantCulture)
+                + ")";
         }
 
         private static ScenarioAuthoringInspectorSection BuildPrimaryActionsSection(

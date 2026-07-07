@@ -22,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Imgui{
 
         private readonly Dictionary<string, int> _sectionPages = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _inspectorNotes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _inspectorSectionExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private readonly ScenarioAuthoringUiDebugService _uiDebug = ScenarioAuthoringUiDebugService.Instance;
 
         private ScenarioAuthoringImguiRuntime _runtime;
@@ -295,6 +296,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Imgui{
         {
             ScenarioAuthoringInspectorDocument inspector = _snapshot != null ? _snapshot.InspectorDocument : null;
             ScenarioAuthoringInspectorSection objectSummarySection = FindSection(inspector, "object_summary");
+            ScenarioAuthoringInspectorSection stationUpgradeSection = FindSection(inspector, "station_upgrades");
+            ScenarioAuthoringInspectorSection stationAdvancedSection = FindSection(inspector, "station_advanced");
             ScenarioAuthoringInspectorSection scenarioBehaviorSection = FindSection(inspector, "scenario_behavior");
             ScenarioAuthoringInspectorSection warningsSection = FindSection(inspector, "warnings");
             ScenarioAuthoringInspectorSection fallbackSummarySection = FindPrimaryAssetSummarySection(inspector);
@@ -323,6 +326,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Imgui{
 
             if (scenarioBehaviorSection != null)
                 DrawInspectorScenarioBehaviorCard(scenarioBehaviorSection, target);
+
+            if (stationUpgradeSection != null)
+                DrawInspectorCard(stationUpgradeSection.Title ?? "Upgrades", delegate
+                {
+                    DrawActionStripSection(stationUpgradeSection, 2);
+                });
+
+            if (stationAdvancedSection != null)
+                DrawCollapsibleInspectorCard(stationAdvancedSection.Id ?? "station_advanced", stationAdvancedSection.Title ?? "Advanced", stationAdvancedSection.Expanded, delegate
+                {
+                    DrawActionStripSection(stationAdvancedSection, 2);
+                });
 
             if (warningsSection != null && HasVisibleText(warningsSection))
                 DrawInspectorCard(warningsSection.Title ?? "Warnings", delegate
@@ -459,6 +474,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Imgui{
             GUILayout.Space(8f);
             if (drawContents != null)
                 drawContents();
+            GUILayout.EndVertical();
+            GUILayout.Space(10f);
+        }
+
+        private void DrawCollapsibleInspectorCard(string key, string title, bool defaultExpanded, Action drawContents)
+        {
+            bool expanded;
+            if (!_inspectorSectionExpanded.TryGetValue(key ?? string.Empty, out expanded))
+            {
+                expanded = defaultExpanded;
+                _inspectorSectionExpanded[key ?? string.Empty] = expanded;
+            }
+
+            GUILayout.BeginVertical(_runtime.SectionSurfaceStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label((title ?? string.Empty).ToUpperInvariant(), _runtime.SectionTitleStyle);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button(expanded ? "HIDE" : "SHOW", _runtime.MiniButtonStyle, GUILayout.Width(54f), GUILayout.Height(24f)))
+            {
+                expanded = !expanded;
+                _inspectorSectionExpanded[key ?? string.Empty] = expanded;
+            }
+
+            GUILayout.EndHorizontal();
+
+            if (expanded)
+            {
+                GUILayout.Space(8f);
+                if (drawContents != null)
+                    drawContents();
+            }
+
             GUILayout.EndVertical();
             GUILayout.Space(10f);
         }

@@ -252,6 +252,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             ScenarioObjectPlacementRuntimeBinding.Attach(spawned.gameObject, placement, spawned, index);
             ScenarioObjectStatePropertyService.Apply(spawned, placement);
+            ScenarioStationUpgradePropertyService.Apply(spawned, placement, result);
             if (forceMaterialize)
             {
                 spawned.EnableObject();

@@ -372,6 +372,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioApplyCoordinator.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFlagRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStartStateApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioStationUpgradePropertyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioQuestInstanceResolver.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioSceneSpriteStartStateApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioScheduledGameplayRuntime.cs" />
