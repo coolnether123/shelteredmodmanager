@@ -379,7 +379,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
-            _editorService.MaintainAuthoringPause();
+            ScenarioAuthoringState activeState = _backend.CurrentState;
+            if (activeState == null || !activeState.WorldLoading)
+                _editorService.MaintainAuthoringPause();
             _backend.Update();
             _presentation.Update();
             _menuService.Update(active);
