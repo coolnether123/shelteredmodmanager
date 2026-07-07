@@ -327,7 +327,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Layout = ScenarioAuthoringInspectorSectionLayout.NoteList,
                     Items = new[]
                     {
-                        ScenarioInspectorItemFactory.Text("Select an asset card to see a larger preview, category, and available actions.")
+                        ScenarioInspectorItemFactory.Text("Select an asset to see details")
                     }
                 };
             }

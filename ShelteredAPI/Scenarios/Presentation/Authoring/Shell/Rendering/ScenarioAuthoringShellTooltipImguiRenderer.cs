@@ -186,6 +186,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _richHoverSourceKeyThisFrame = null;
             _richHoverCandidate = null;
             _richHoverCandidateSourceRect = RuntimeCompat.ZeroRect();
+            _richHoverSiblingAvoidRects.Clear();
+        }
+
+        private void RegisterRichHoverSiblingAvoidRect(Rect rect)
+        {
+            if (rect.width > 0f && rect.height > 0f)
+                _richHoverSiblingAvoidRects.Add(rect);
         }
 
         private bool RegisterRichHoverHelpSource(Rect rect, ScenarioAuthoringInspectorAction action)
@@ -649,17 +656,57 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new Rect(sourceRect.x - width - gap, centerY - (height * 0.5f), width, height)
             };
 
+            Rect best = RuntimeCompat.ZeroRect();
+            float bestScore = float.MaxValue;
+            bool found = false;
             for (int i = 0; i < candidates.Length; i++)
             {
                 Rect candidate = ConstrainRichHoverPopupRect(candidates[i], bounds, hudReserveRect);
-                if (!candidate.Overlaps(sourceRect))
-                    return candidate;
+                if (candidate.Overlaps(sourceRect))
+                    continue;
+
+                float score = CalculateRichHoverPlacementScore(candidate, sourceRect);
+                if (!found || score < bestScore)
+                {
+                    best = candidate;
+                    bestScore = score;
+                    found = true;
+                }
             }
+
+            if (found)
+                return best;
 
             Rect fallback = ConstrainRichHoverPopupRect(candidates[0], bounds, hudReserveRect);
             if (fallback.Overlaps(sourceRect))
                 fallback = ConstrainRichHoverPopupRect(candidates[1], bounds, hudReserveRect);
             return fallback;
+        }
+
+        private float CalculateRichHoverPlacementScore(Rect candidate, Rect sourceRect)
+        {
+            float overlap = 0f;
+            for (int i = 0; i < _richHoverSiblingAvoidRects.Count; i++)
+            {
+                Rect avoid = _richHoverSiblingAvoidRects[i];
+                if (avoid.Overlaps(sourceRect))
+                    continue;
+                overlap += CalculateOverlapArea(candidate, avoid);
+            }
+
+            float sourceCenterX = sourceRect.x + (sourceRect.width * 0.5f);
+            float sourceCenterY = sourceRect.y + (sourceRect.height * 0.5f);
+            float candidateCenterX = candidate.x + (candidate.width * 0.5f);
+            float candidateCenterY = candidate.y + (candidate.height * 0.5f);
+            float distance = Mathf.Abs(candidateCenterX - sourceCenterX) + Mathf.Abs(candidateCenterY - sourceCenterY);
+            return (overlap * 1000f) + distance;
+        }
+
+        private static float CalculateOverlapArea(Rect left, Rect right)
+        {
+            float width = Math.Max(0f, Math.Min(left.xMax, right.xMax) - Math.Max(left.x, right.x));
+            float height = Math.Max(0f, Math.Min(left.yMax, right.yMax) - Math.Max(left.y, right.y));
+            return width * height;
         }
 
         private Rect ConstrainRichHoverPopupRect(Rect rect, Rect bounds, Rect hudReserveRect)

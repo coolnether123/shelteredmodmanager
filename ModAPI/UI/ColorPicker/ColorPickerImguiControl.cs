@@ -35,6 +35,7 @@ namespace ModAPI.UI.ColorPicker
         private float _cachedSvAlpha = -1f;
         private float _cachedSaturation = -1f;
         private ModColor _cachedAlphaColor;
+        private string _focusedTextFieldId;
 
         public ColorPickerImguiControl(ColorPickerSession session)
         {
@@ -67,6 +68,7 @@ namespace ModAPI.UI.ColorPicker
             get
             {
                 float rightWidth = PreviewSize * 2f + Margin;
+                rightWidth = Math.Max(rightWidth, 188f);
                 float width = PickerSize + Margin + SliderWidth + Margin + SliderWidth + Margin + rightWidth;
                 float rightHeight = PreviewSize
                     + Margin
@@ -92,7 +94,7 @@ namespace ModAPI.UI.ColorPicker
             }
 
             string focused = GUI.GetNameOfFocusedControl();
-            _session.SyncTextFields(focused, false);
+            _session.SyncTextFields(IsColorPickerTextField(focused) ? focused : null, false);
 
             Rect pickerRect = new Rect(rect.x, rect.y, PickerSize, PickerSize);
             Rect hueRect = new Rect(pickerRect.xMax + Margin, rect.y, SliderWidth, PickerSize);
@@ -103,6 +105,7 @@ namespace ModAPI.UI.ColorPicker
             DrawPickerArea(pickerRect, hueRect, alphaRect);
             DrawRightColumn(rightRect);
             HandleKeyboard();
+            CommitTextFieldFocusChange(GUI.GetNameOfFocusedControl());
 
             if (evt != null && ConsumedInputThisFrame && ShouldUseEvent(evt))
                 evt.Use();
@@ -153,6 +156,7 @@ namespace ModAPI.UI.ColorPicker
             DrawFieldRow(hsv, "HSV", _session.HueField, _session.SaturationField, _session.ValueField, _session.AlphaHsvField);
             DrawFieldRow(rgb, "RGB", _session.RedField, _session.GreenField, _session.BlueField, _session.AlphaRgbField);
             DrawHexRow(hex);
+            CommitTextFieldFocusChange(GUI.GetNameOfFocusedControl());
 
             Rect applyRect = new Rect(rect.x, hex.yMax + Margin, (rect.width - Margin) * 0.5f, ButtonHeight);
             Rect cancelRect = new Rect(applyRect.xMax + Margin, applyRect.y, applyRect.width, ButtonHeight);
@@ -219,7 +223,7 @@ namespace ModAPI.UI.ColorPicker
             float labelWidth = 32f;
             GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), label, LabelStyle);
 
-            float fieldWidth = (rect.width - labelWidth) / 4f;
+            float fieldWidth = Math.Max(36f, (rect.width - labelWidth) / 4f);
             DrawTextField(new Rect(rect.x + labelWidth, rect.y, fieldWidth, rect.height), a);
             DrawTextField(new Rect(rect.x + labelWidth + fieldWidth, rect.y, fieldWidth, rect.height), b);
             DrawTextField(new Rect(rect.x + labelWidth + (fieldWidth * 2f), rect.y, fieldWidth, rect.height), c);
@@ -242,20 +246,21 @@ namespace ModAPI.UI.ColorPicker
             if (!field.IsValid)
                 GUI.color = Style.InvalidFieldTint;
 
+            Event evt = Event.current;
+            if (evt != null && evt.type == EventType.MouseDown && evt.button == 0 && rect.Contains(evt.mousePosition))
+                GUI.FocusControl(field.Id);
             GUI.SetNextControlName(field.Id);
             string next = GUI.TextField(rect, field.Text, FieldStyle);
             GUI.color = oldColor;
 
             bool focused = GUI.GetNameOfFocusedControl() == field.Id;
-            if (focused) field.BeginEdit();
-            else field.EndEdit();
+            if (focused)
+                field.BeginEdit();
 
             if (next != field.Text)
             {
                 field.BeginEdit();
                 field.SetDraft(next);
-                if (field.IsValid)
-                    _session.TryCommitField(field.Id);
             }
         }
 
@@ -326,13 +331,54 @@ namespace ModAPI.UI.ColorPicker
             {
                 string focused = GUI.GetNameOfFocusedControl();
                 if (!string.IsNullOrEmpty(focused))
+                {
                     _session.TryCommitField(focused);
+                    GUI.FocusControl(null);
+                }
+                evt.Use();
             }
             else if (evt.keyCode == KeyCode.Escape)
             {
                 _session.Cancel();
                 evt.Use();
             }
+        }
+
+        private void CommitTextFieldFocusChange(string focused)
+        {
+            string focusedFieldId = IsColorPickerTextField(focused) ? focused : null;
+            if (!string.Equals(_focusedTextFieldId, focusedFieldId, StringComparison.Ordinal))
+            {
+                if (!string.IsNullOrEmpty(_focusedTextFieldId))
+                {
+                    _session.TryCommitField(_focusedTextFieldId);
+                    ColorPickerTextField previous = _session.GetField(_focusedTextFieldId);
+                    if (previous != null)
+                        previous.EndEdit();
+                }
+
+                _focusedTextFieldId = focusedFieldId;
+            }
+
+            if (!string.IsNullOrEmpty(_focusedTextFieldId))
+            {
+                ColorPickerTextField current = _session.GetField(_focusedTextFieldId);
+                if (current != null)
+                    current.BeginEdit();
+            }
+        }
+
+        private static bool IsColorPickerTextField(string controlName)
+        {
+            return string.Equals(controlName, ColorPickerSession.HueFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.SaturationFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.ValueFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.AlphaHsvFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.RedFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.GreenFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.BlueFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.AlphaRgbFieldId, StringComparison.Ordinal)
+                || string.Equals(controlName, ColorPickerSession.HexFieldId, StringComparison.Ordinal);
         }
 
         private void DrawColorPreview(Rect rect, ModColor color)

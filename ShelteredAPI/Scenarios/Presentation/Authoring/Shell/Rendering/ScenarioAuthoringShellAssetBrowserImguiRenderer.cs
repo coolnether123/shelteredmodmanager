@@ -108,7 +108,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = Math.Max(120f, inner.width - 18f);
             Vector2 scroll = GetWindowScrollPosition("asset_browser.grid");
             RegisterScrollRegion("asset_browser.grid", inner);
-            scroll = GUILayout.BeginScrollView(scroll, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scroll = BeginMeasuredScrollView(scroll, inner);
 
             int visibleCount = 0;
             for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
@@ -188,7 +188,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = Math.Max(120f, inner.width - 18f);
             Vector2 scroll = GetWindowScrollPosition("asset_browser.detail");
             RegisterScrollRegion("asset_browser.detail", inner);
-            scroll = GUILayout.BeginScrollView(scroll, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scroll = BeginMeasuredScrollView(scroll, inner);
             DrawAssetBrowserSelectedDetails(selected);
             GUILayout.Space(18f);
             GUILayout.EndScrollView();
@@ -199,12 +199,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawAssetBrowserSelectedDetails(ScenarioAuthoringInspectorSection section)
         {
-            GUILayout.Label(section != null ? section.Title ?? "Selected Asset" : "Selected Asset", _sectionTitleStyle);
+            GUILayout.Label(section != null ? section.Title ?? "Asset Details" : "Asset Details", _sectionTitleStyle);
             ScenarioAuthoringInspectorItem preview = FindFirstPreviewItem(section);
             if (preview == null || preview.PreviewSprite == null)
             {
-                if (section != null)
-                    DrawSection(section);
+                GUILayout.Label("Select an asset to see details", _mutedTextStyle);
                 return;
             }
 

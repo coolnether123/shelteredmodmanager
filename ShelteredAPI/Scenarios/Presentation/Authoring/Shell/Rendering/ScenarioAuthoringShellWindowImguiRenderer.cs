@@ -126,7 +126,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             RegisterScrollRegion(window.Id, bodyRect);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scrollPosition = BeginMeasuredScrollView(scrollPosition, bodyRect);
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
                 DrawSection(window.Sections[i]);
@@ -187,7 +187,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     scrollPosition = Vector2.zero;
             }
             RegisterScrollRegion(window.Id, bodyRect);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scrollPosition = BeginMeasuredScrollView(scrollPosition, bodyRect);
             if (homeWorkshopPage)
             {
                 DrawHomeWorkshopPage(window);
@@ -250,7 +250,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             scrollPosition.x = 0f;
             RegisterScrollRegion(window.Id, bodyRect);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scrollPosition = BeginMeasuredScrollView(scrollPosition, bodyRect);
             GUILayout.BeginVertical(GUILayout.Width(Mathf.Max(120f, bodyRect.width - 18f)));
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
@@ -331,7 +331,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = Math.Max(120f, pickerRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(window.Id);
             RegisterScrollRegion(window.Id + ".picker", pickerScrollRect);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scrollPosition = BeginMeasuredScrollView(scrollPosition, pickerScrollRect);
             bool drewCandidateGrid = false;
             for (int i = 0; window.Sections != null && i < window.Sections.Length; i++)
             {
@@ -501,7 +501,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
             Vector2 scrollPosition = GetWindowScrollPosition(scrollId);
             RegisterScrollRegion(scrollId, bodyRect);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
+            scrollPosition = BeginMeasuredScrollView(scrollPosition, bodyRect);
             if (string.Equals(scrollId, "sprite_picker", StringComparison.Ordinal))
             {
                 DrawCandidateFilterControls(
@@ -528,6 +528,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _activeContentWidth = previousContentWidth;
             SetWindowScrollPosition(scrollId, scrollPosition);
             return bodyRect;
+        }
+
+        private Vector2 BeginMeasuredScrollView(Vector2 scrollPosition, Rect viewportRect)
+        {
+            return GUILayout.BeginScrollView(
+                scrollPosition,
+                false,
+                true,
+                GUILayout.Width(Math.Max(1f, viewportRect.width)),
+                GUILayout.Height(Math.Max(1f, viewportRect.height)));
         }
 
         private Rect DrawPixelEditorWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -1573,8 +1583,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             RegisterInteractiveRegion(rect);
             Rect headerRect = new Rect(rect.x, rect.y, rect.width, 42f);
-            Rect footerRect = new Rect(rect.x, rect.yMax - 72f, rect.width, 72f);
-            Rect contentRect = new Rect(rect.x, headerRect.yMax + 10f, rect.width, Math.Max(120f, footerRect.y - headerRect.yMax - 18f));
+            Rect footerRect = new Rect(rect.x, rect.yMax - 62f, rect.width, 62f);
+            Rect contentRect = new Rect(rect.x, headerRect.yMax + 8f, rect.width, Math.Max(120f, footerRect.y - headerRect.yMax - 14f));
             DrawSurvivorEditorHeader(headerRect, editor);
 
             float gap = 12f;
@@ -1609,27 +1619,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = Inset(rect, 10f);
-            GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), "Appearance", _sectionTitleStyle);
+            RegisterScrollRegion("survivor.appearance", inner);
+            Vector2 scroll = GetWindowScrollPosition("survivor.appearance");
+            float contentHeight = MeasureSurvivorAppearanceContentHeight(editor);
+            Rect viewRect = new Rect(0f, 0f, Math.Max(1f, inner.width - 18f), Math.Max(inner.height, contentHeight));
+            scroll = GUI.BeginScrollView(inner, scroll, viewRect, false, true);
 
-            float portraitHeight = Mathf.Clamp(inner.height * 0.43f, 154f, 214f);
-            Rect portraitRect = new Rect(inner.x + (inner.width - 176f) * 0.5f, inner.y + 30f, 176f, portraitHeight);
+            GUI.Label(new Rect(0f, 0f, viewRect.width, 24f), "Appearance", _sectionTitleStyle);
+
+            float portraitHeight = 176f;
+            Rect portraitRect = new Rect((viewRect.width - 176f) * 0.5f, 30f, 176f, portraitHeight);
             DrawCastPortrait(portraitRect, editor.Portrait);
 
             float y = portraitRect.yMax + 10f;
             for (int i = 0; editor.TextureRows != null && i < editor.TextureRows.Length; i++)
             {
-                DrawSurvivorTextureRow(new Rect(inner.x, y, inner.width, 30f), editor.TextureRows[i]);
+                DrawSurvivorTextureRow(new Rect(0f, y, viewRect.width, 30f), editor.TextureRows[i]);
                 y += 34f;
             }
 
             y += 4f;
-            GUI.Label(new Rect(inner.x, y, inner.width, 22f), "Colors", _smallTitleStyle);
+            GUI.Label(new Rect(0f, y, viewRect.width, 22f), "Colors", _smallTitleStyle);
             y += 26f;
             for (int i = 0; editor.ColorRows != null && i < editor.ColorRows.Length; i++)
             {
-                DrawSurvivorColorRow(new Rect(inner.x, y, inner.width, 30f), editor.ColorRows[i]);
+                DrawSurvivorColorRow(new Rect(0f, y, viewRect.width, 30f), editor.ColorRows[i]);
                 y += 34f;
             }
+
+            GUI.EndScrollView();
+            SetWindowScrollPosition("survivor.appearance", scroll);
+        }
+
+        private static float MeasureSurvivorAppearanceContentHeight(ScenarioSurvivorEditorViewModel editor)
+        {
+            int textureRows = editor != null && editor.TextureRows != null ? editor.TextureRows.Length : 0;
+            int colorRows = editor != null && editor.ColorRows != null ? editor.ColorRows.Length : 0;
+            return 30f + 176f + 10f + (textureRows * 34f) + 4f + 22f + 26f + (colorRows * 34f) + 10f;
         }
 
         private void DrawSurvivorTextureRow(Rect rect, ScenarioSurvivorTextureRowViewModel row)
@@ -2666,6 +2692,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return;
 
+            RegisterRichHoverSiblingAvoidRect(rect);
             string tooltip = action.Enabled
                 ? (action.Hint ?? action.Detail ?? string.Empty)
                 : (!string.IsNullOrEmpty(action.DisabledReason) ? action.DisabledReason : (action.Hint ?? action.Detail ?? string.Empty));
@@ -3046,10 +3073,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             GUIStyle labelStyle = new GUIStyle(_textStyle);
-            labelStyle.wordWrap = false;
+            labelStyle.wordWrap = true;
             labelStyle.clipping = TextClipping.Clip;
-            float labelHeight = 20f;
-            string fittedLabel = ShortenToFit(action.Label ?? string.Empty, textRect.width, labelStyle);
+            float labelHeight = Math.Min(40f, Math.Max(20f, labelStyle.CalcHeight(new GUIContent(action.Label ?? string.Empty), textRect.width)));
+            string fittedLabel = action.Label ?? string.Empty;
             string labelTooltip = RegisterRichHoverHelpSource(rect, action) ? string.Empty : BuildFullLabelTooltip(action);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, labelHeight), new GUIContent(fittedLabel, labelTooltip), labelStyle);
             string detail = !string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint;
