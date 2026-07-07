@@ -36,10 +36,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             SaveManager.SaveType launchSaveType = SaveManager.SaveType.Slot1;
             EnsureEditorRuntime("ScenarioBookBrowser live verification CreateDraftInteractive");
+            // The harness create-draft flow stays non-interactive: it launches a
+            // blank Standard base and auto-opens the editor when the world is
+            // ready, without raising the interactive setup wizard.
             ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(
                 ScenarioBaseGameMode.Survival,
                 launchSaveType,
-                true);
+                false);
             if (draft == null || string.IsNullOrEmpty(draft.StartupSaveId))
                 return "failed: draft session did not provide a startup save";
 

@@ -249,6 +249,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _worldLoadingShellDraftId = null;
             }
 
+            // A base-mode reload re-queues the SAME draftId, so the pending-draft
+            // latch and warmup timer must be cleared here. Otherwise the next
+            // TryBootstrapPendingDraft sees _lastPendingDraftId == draftId, skips
+            // its reset block, and treats the stale warmup latch as satisfied -
+            // binding the editor before the NEW base scene (ShelterScene_Stasis /
+            // ShelterScene_Surrounded) is active. Resetting forces the full
+            // scene-wait + world-ready + warmup sequence to re-run for the new base.
+            _lastPendingDraftId = null;
+            _lastPendingBlockingReason = null;
+            ResetPendingWarmup();
+
             _backend.BeginReloadPending(pendingSession, reason ?? "Reloading authoring world.");
             if (_entryFlowService != null)
                 _entryFlowService.BeginReload(pendingSession, reason ?? "Reloading authoring world.");
@@ -524,7 +535,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             else
                 _backend.SetActiveSession(pending);
             if (_entryFlowService != null)
-                _entryFlowService.MarkEditorReady(pending);
+                _entryFlowService.MarkEditorReady(pending, true);
             ProjectStartingInventoryAfterBootstrap(pending, editorSession);
             if (editorSession != null && !string.IsNullOrEmpty(editorSession.LoadWarning))
                 _backend.SetStatusMessage(editorSession.LoadWarning);
@@ -574,7 +585,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string status = "Loading game... waiting for the shelter world to finish loading.";
             _backend.BeginWorldLoadingSession(pending, status);
             if (_entryFlowService != null)
-                _entryFlowService.MarkEditorReady(pending);
+                _entryFlowService.MarkEditorReady(pending, false);
             _menuService.Open(pending, true);
             ScenarioAuthoringPauseService.Instance.ReleasePause("World-loading shell opened before draft warmup completed.");
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Opened navigable draft shell while world loads. draftId="
