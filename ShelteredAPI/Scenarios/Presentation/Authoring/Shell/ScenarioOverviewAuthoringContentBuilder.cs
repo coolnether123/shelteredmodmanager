@@ -352,15 +352,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool named = HasCustomName(definition);
             bool baseSelected = definition != null && Enum.IsDefined(typeof(ScenarioBaseGameMode), definition.BaseGameMode);
             bool worldTourDone = setup.HasCompletedTour(TutorialContent.TourEditorBasics);
-            bool firstSurvivor = HasNamedStartingSurvivor(definition);
-            if (named && baseSelected && worldTourDone && firstSurvivor)
+            bool hasStartingSurvivor = ScenarioPlayStartReadiness.HasStartingSurvivor(definition);
+            if (named && baseSelected && worldTourDone && hasStartingSurvivor)
                 return;
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(BuildChecklistAction("Name", named, ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicSetup, "Review title and draft identity."));
             items.Add(BuildChecklistAction("Base", baseSelected, ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicBaseModes, "Review the selected base mode."));
             items.Add(BuildChecklistAction("World Tour", worldTourDone, ScenarioAuthoringActionIds.ActionTourStartPrefix + TutorialContent.TourEditorBasics, "Walk through the world and shell basics."));
-            items.Add(BuildChecklistAction("First Survivor", firstSurvivor, "stage.select." + ScenarioStageKind.People, "Open Cast and add a starting survivor."));
+            items.Add(BuildChecklistAction("First Survivor", hasStartingSurvivor, "stage.select." + ScenarioStageKind.People, "Open Cast and add a starting survivor."));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSetupDismiss, "Dismiss", "Hide this setup checklist for the draft.", true, false, "X")));
 
             sections.Add(new ScenarioAuthoringInspectorSection
@@ -383,18 +383,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return definition != null
                 && !string.IsNullOrEmpty(definition.DisplayName)
                 && !string.Equals(definition.DisplayName.Trim(), "Untitled Scenario", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool HasNamedStartingSurvivor(ScenarioDefinition definition)
-        {
-            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
-            {
-                FamilyMemberConfig member = definition.FamilySetup.Members[i];
-                if (member != null && !string.IsNullOrEmpty(member.Name) && member.Name.Trim().Length > 0)
-                    return true;
-            }
-
-            return false;
         }
 
         private static ScenarioAuthoringInspectorItem[] BuildAdvancedItems(

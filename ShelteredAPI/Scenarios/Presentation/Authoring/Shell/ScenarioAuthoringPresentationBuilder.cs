@@ -2292,7 +2292,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
             }
 
-            if (startingItems.Count == 1)
+            if (!ScenarioPlayStartReadiness.HasStartingSurvivor(definition))
                 startingItems.Add(Text(
                     "No starting cast has been authored yet.",
                     "Playtest is gated until at least one starting survivor exists. Use Add Starting Survivor, or add a live-world person from the reference strip below.",
