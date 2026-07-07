@@ -42,6 +42,8 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
             Properties = new List<ScenarioProperty>();
             Searchable = true;
             DiscoveredAtStart = true;
+            VisibleAtStart = true;
+            HiddenUntilDiscovered = false;
         }
 
         public string Id { get; set; }
@@ -49,9 +51,13 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         public string Kind { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
+        public int GridX { get; set; }
+        public int GridY { get; set; }
         public float Radius { get; set; }
         public bool Searchable { get; set; }
         public bool DiscoveredAtStart { get; set; }
+        public bool VisibleAtStart { get; set; }
+        public bool HiddenUntilDiscovered { get; set; }
         public string MarkerId { get; set; }
         public string BoundaryId { get; set; }
         public string TerrainId { get; set; }

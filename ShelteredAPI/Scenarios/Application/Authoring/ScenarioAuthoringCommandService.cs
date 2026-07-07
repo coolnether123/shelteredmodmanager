@@ -2,12 +2,14 @@
 
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCommandService
@@ -31,7 +33,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringBaseModeReloadService baseModeReloadService,
             ScenarioAuthoringTutorialService tutorialService,
             ScenarioAuthoringSetupStateService setupStateService,
-            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
+            ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
+            ScenarioMapDraftService mapDraftService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -49,7 +53,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 baseModeReloadService,
                 tutorialService,
                 setupStateService,
-                weatherEffectSpriteCatalog));
+                weatherEffectSpriteCatalog,
+                mapAuthoringRuntimeService,
+                mapDraftService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -98,7 +104,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringBaseModeReloadService baseModeReloadService,
             ScenarioAuthoringTutorialService tutorialService,
             ScenarioAuthoringSetupStateService setupStateService,
-            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
+            ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
+            ScenarioMapDraftService mapDraftService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -108,6 +116,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),
                 new ScenarioHelpCommandHandler(tutorialService, layoutService, setupStateService),
                 new ShellCommandHandler(layoutService, settingsService),
+                new ScenarioMapAuthoringCommandHandler(mapAuthoringRuntimeService, mapDraftService, layoutService),
                 new TutorialCommandHandler(tutorialService, editorService, layoutService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new CaptureCommandHandler(captureService, editorService, selectionScopeService),

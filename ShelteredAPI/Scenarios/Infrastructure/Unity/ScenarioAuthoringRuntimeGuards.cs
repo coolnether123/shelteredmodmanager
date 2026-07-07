@@ -42,6 +42,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return IsAuthoringActive() && ScenarioOpeningCutsceneAuthoringService.IsPreviewActive;
         }
 
+        public static bool IsMapAuthoringActive()
+        {
+            if (!IsAuthoringActive())
+                return false;
+
+            ScenarioAuthoringState state = GetState();
+            return state != null && state.MapAuthoringActive;
+        }
+
         public static bool ShouldCaptureGameplayInput()
         {
             if (!IsAuthoringActive())
@@ -57,7 +66,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public static bool ShouldResolveSelection()
         {
-            return ShouldCaptureGameplayInput();
+            return ShouldCaptureGameplayInput() && !IsMapAuthoringActive();
         }
 
         public static bool ShouldMaintainPausedSimulation()
@@ -70,7 +79,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public static bool ShouldSuppressGlobalGameplayUi()
         {
-            return ShouldCaptureGameplayInput();
+            return ShouldCaptureGameplayInput() && !IsMapAuthoringActive();
         }
 
         public static bool ShouldBlockGameplayAxis(PlatformInput.InputAxis axis)
@@ -82,6 +91,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             {
                 case PlatformInput.InputAxis.CameraHorizontal:
                 case PlatformInput.InputAxis.CameraVertical:
+                    if (IsMapAuthoringActive())
+                        return false;
                     ScenarioAuthoringState state = GetState();
                     return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCameraGuardService>()
                         .ShouldBlockCameraInput(state, IsPlaytesting());
@@ -93,6 +104,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         public static bool ShouldBlockMenuAxis(PlatformInput.MenuInputAxis axis)
         {
             if (!IsAuthoringActive())
+                return false;
+
+            if (IsMapAuthoringActive())
                 return false;
 
             ScenarioAuthoringState state = GetState();
@@ -109,6 +123,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             switch (button)
             {
                 case PlatformInput.InputButton.Cancel:
+                case PlatformInput.InputButton.OpenMap:
+                case PlatformInput.InputButton.Zoom:
+                case PlatformInput.InputButton.CameraSpeed:
+                    if (IsMapAuthoringActive())
+                        return false;
+                    return true;
                 case PlatformInput.InputButton.CancelJob:
                 case PlatformInput.InputButton.Action:
                 case PlatformInput.InputButton.Interact:
@@ -120,11 +140,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 case PlatformInput.InputButton.AcceptTransmission:
                 case PlatformInput.InputButton.Dismiss:
                 case PlatformInput.InputButton.Pause:
-                case PlatformInput.InputButton.OpenMap:
                 case PlatformInput.InputButton.Clipboard:
                 case PlatformInput.InputButton.Info:
-                case PlatformInput.InputButton.Zoom:
-                case PlatformInput.InputButton.CameraSpeed:
                     return true;
                 default:
                     return false;

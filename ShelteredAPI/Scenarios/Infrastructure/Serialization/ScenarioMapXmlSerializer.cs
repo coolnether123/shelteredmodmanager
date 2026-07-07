@@ -66,9 +66,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 location.Kind = AttributeOrChild(node, "kind", "Kind");
                 location.X = ReadFloatAttribute(node, "x", 0f);
                 location.Y = ReadFloatAttribute(node, "y", 0f);
+                location.GridX = ReadIntAttribute(node, "gridX", 0);
+                location.GridY = ReadIntAttribute(node, "gridY", 0);
                 location.Radius = ReadFloatAttribute(node, "radius", 0f);
                 location.Searchable = ReadBoolAttribute(node, "searchable", true);
                 location.DiscoveredAtStart = ReadBoolAttribute(node, "discoveredAtStart", true);
+                location.VisibleAtStart = ReadBoolAttribute(node, "visibleAtStart", true);
+                location.HiddenUntilDiscovered = ReadBoolAttribute(node, "hiddenUntilDiscovered", false);
                 location.MarkerId = AttributeOrChild(node, "markerId", "MarkerId");
                 location.BoundaryId = AttributeOrChild(node, "boundaryId", "BoundaryId");
                 location.TerrainId = AttributeOrChild(node, "terrainId", "TerrainId");
@@ -96,9 +100,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "kind", location.Kind);
                 writer.WriteAttributeString("x", location.X.ToString(CultureInfo.InvariantCulture));
                 writer.WriteAttributeString("y", location.Y.ToString(CultureInfo.InvariantCulture));
+                WriteNonZeroIntAttribute(writer, "gridX", location.GridX);
+                WriteNonZeroIntAttribute(writer, "gridY", location.GridY);
                 WritePositiveFloatAttribute(writer, "radius", location.Radius);
                 writer.WriteAttributeString("searchable", location.Searchable ? "true" : "false");
                 writer.WriteAttributeString("discoveredAtStart", location.DiscoveredAtStart ? "true" : "false");
+                writer.WriteAttributeString("visibleAtStart", location.VisibleAtStart ? "true" : "false");
+                writer.WriteAttributeString("hiddenUntilDiscovered", location.HiddenUntilDiscovered ? "true" : "false");
                 WriteAttribute(writer, "markerId", location.MarkerId);
                 WriteAttribute(writer, "boundaryId", location.BoundaryId);
                 WriteAttribute(writer, "terrainId", location.TerrainId);

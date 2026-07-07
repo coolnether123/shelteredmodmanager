@@ -301,6 +301,7 @@
     <Compile Include="Scenarios\Application\Conditions\ScenarioConditionEvaluatorRegistry.cs" />
     <Compile Include="Scenarios\Application\Commands\IScenarioCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthoringCommandHandlers.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioMapAuthoringCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioHelpCommandHandler.cs" />
@@ -310,6 +311,7 @@
     <Compile Include="Scenarios\Application\Effects\IScenarioEffectHandler.cs" />
     <Compile Include="Scenarios\Application\Effects\ScenarioEffectDispatcher.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
+    <Compile Include="Scenarios\Application\Map\ScenarioMapRegionSelection.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeExecutionJournal.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeStateService.cs" />
     <Compile Include="Scenarios\Application\Scheduling\IScenarioScheduledActionProvider.cs" />
@@ -436,6 +438,7 @@
     <Compile Include="Scenarios\Shared\ScenarioFeatureToggles.cs" />
     <Compile Include="Scenarios\Lifecycle\ScenarioLifecycleService.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioAuthoringBootstrapPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioMapAuthoringPatches.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutRouter.cs" />
@@ -469,6 +472,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeDriver.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringEditorCameraService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioMapAuthoringRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringVanillaPanelVisibilityService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeGuards.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioLoadingTransitionGuard.cs" />
@@ -484,6 +488,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellPopupMenuImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStatusBarImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellAssetBrowserImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMapOverlayImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellToolRailImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTimelineImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTooltipImguiRenderer.cs" />

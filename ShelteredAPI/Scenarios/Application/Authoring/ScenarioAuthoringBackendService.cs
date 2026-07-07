@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
@@ -258,6 +259,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 changed |= _selectionService.Update(snapshot);
             }
 
+            ScenarioMapAuthoringRuntimeService mapAuthoring = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
+            if (mapAuthoring != null && mapAuthoring.Synchronize(snapshot, _sessionStore.Current))
+                changed = true;
+
             _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
             string tutorialMessage;
@@ -290,6 +295,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (_state == null)
                     _state = new ScenarioAuthoringState();
                 _state.StatusMessage = message ?? string.Empty;
+            }
+
+            RaiseStateChanged();
+        }
+
+        internal void ApplyMapSelection(ScenarioMapRegionSelection selection)
+        {
+            lock (_sync)
+            {
+                if (_state == null || !_state.IsActive)
+                    return;
+
+                _state.MapSelection = selection != null ? selection.Copy() : null;
+                if (_state.MapSelection != null)
+                    _state.StatusMessage = "Selected map region " + _state.MapSelection.DisplayName + ".";
             }
 
             RaiseStateChanged();

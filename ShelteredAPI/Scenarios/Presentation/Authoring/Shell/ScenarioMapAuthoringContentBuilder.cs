@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -23,8 +24,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return new[]
             {
-                BuildRuntimeNoticeSection(),
-                BuildSupportedActionsSection(),
+                BuildRuntimeNoticeSection(context != null ? context.State : null),
+                BuildSelectionSection(context != null ? context.State : null),
+                BuildSupportedActionsSection(context != null ? context.State : null),
                 BuildOverviewSection(definition, map),
                 BuildMarkerSection(map),
                 BuildBoundaryTerrainSection(map),
@@ -34,8 +36,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildRuntimeNoticeSection()
+        private static ScenarioAuthoringInspectorSection BuildRuntimeNoticeSection(ScenarioAuthoringState state)
         {
+            bool active = state != null && state.MapAuthoringActive;
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "map_runtime_notice",
@@ -44,53 +47,94 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = new[]
                 {
-                    ScenarioInspectorItemFactory.Text("Map authoring is not yet supported.", "This page is a read-only review of map-facing scenario data already present in the draft.", "Read-only", "MAP", null, true),
-                    Property("Supported Here", "Review authored map locations, markers, boundaries, terrain, loot tables, encounters, and routes when those records exist."),
-                    Property("Authoring Today", "World-map story events are authored in Story. Runtime shelter changes are authored in World, Timeline, Cast, Supplies, and Art."),
-                    Property("Not Supported Yet", "Creating, moving, painting, or wiring map nodes from this page."),
-                    Property("Where to fix it", "Open Story for map-facing encounter and route data, or use Map Help for status context.")
+                    ScenarioInspectorItemFactory.Text(
+                        active ? "Real map authoring is active." : "Open the real Sheltered map to select vanilla regions.",
+                        active ? "The editor chrome is hidden while the vanilla map panel owns input. Escape or the map close button returns here." : "This slice supports region selection and capture only; placement, loot editing, icon editing, and visibility application are follow-up slices.",
+                        active ? "Active" : "Ready",
+                        "MAP",
+                        null,
+                        true),
+                    Property("Supported Here", "Open the vanilla map, select towns/regions, and capture the selected region as a draft map location."),
+                    Property("Selection Mode", active ? "MapAuthoringActive" : "Map workshop"),
+                    Property("Deferred", "Dragging, placement, loot editing, icon editing, and runtime visibility application.")
                 }
             };
         }
 
-        private static ScenarioAuthoringInspectorSection BuildSupportedActionsSection()
+        private static ScenarioAuthoringInspectorSection BuildSelectionSection(ScenarioAuthoringState state)
         {
+            ScenarioMapRegionSelection selection = state != null ? state.MapSelection : null;
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (selection == null)
+            {
+                items.Add(Text("No vanilla map region is selected yet."));
+            }
+            else
+            {
+                items.Add(Property("Region", Safe(selection.DisplayName)));
+                items.Add(Property("Grid", selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture)));
+                items.Add(Property("Kind", Safe(selection.Topography) + " / " + Safe(selection.Category)));
+                items.Add(Property("Flags", FormatSelectionFlags(selection)));
+                items.Add(Property("Loot", FormatSelectionLoot(selection)));
+                items.Add(Property("Encounter", "open " + selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / faction " + selection.OpenGroundFactionEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / animal " + selection.AnimalEncounterChance.ToString(CultureInfo.InvariantCulture) + "%"));
+                items.Add(Property("Draft", selection.Captured ? "Captured as " + Safe(selection.CapturedLocationId) : "Not captured"));
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_selection",
+                Title = "Selected Vanilla Region",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildSupportedActionsSection(ScenarioAuthoringState state)
+        {
+            ScenarioMapRegionSelection selection = state != null ? state.MapSelection : null;
+            bool hasSelection = selection != null;
+            bool mapActive = state != null && state.MapAuthoringActive;
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "map_supported_actions",
-                Title = "Where To Author Map-Facing Work",
+                Title = "Map Actions",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = new[]
                 {
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
-                        ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests,
-                        "Open Story",
-                        "Author world-map encounters, stage routing, dialogue, rewards, and outcomes in Story.",
+                        mapActive ? ScenarioAuthoringActionIds.ActionMapAuthoringClose : ScenarioAuthoringActionIds.ActionMapAuthoringOpen,
+                        mapActive ? "Close Map" : "Open Map",
+                        mapActive ? "Close the vanilla map and return to this workshop page." : "Open the real Sheltered map for region selection.",
                         true,
                         true,
-                        "ST")),
+                        mapActive ? "CL" : "MP")),
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
-                        ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicStory,
-                        "Story Help",
-                        "Open help for story and scenario-flow authoring.",
-                        true,
-                        false,
-                        "HP")),
-                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
-                        ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicWorldCamera,
-                        "World Help",
-                        "Open help for the supported world authoring surfaces.",
-                        true,
-                        false,
-                        "WH")),
+                        ScenarioAuthoringActionIds.ActionMapAuthoringCaptureSelection,
+                        hasSelection && selection.Captured ? "Update Draft" : "Capture to Draft",
+                        "Create or update a MapLocationDefinition from the selected vanilla region.",
+                        hasSelection,
+                        hasSelection,
+                        "CP",
+                        null,
+                        hasSelection && selection.Captured ? "Captured" : null,
+                        null,
+                        hasSelection ? null : "Select a vanilla map region first.")),
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicMap,
                         "Map Help",
                         "Open a concrete guide for map-facing data and required source pages.",
                         true,
                         false,
-                        "MP"))
+                        "HP")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests,
+                        "Open Story",
+                        "Author quest and encounter flow connected to map-facing scenario work.",
+                        true,
+                        false,
+                        "ST"))
                 }
             };
         }
@@ -282,6 +326,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(location.EncounterTableId))
                 parts.Add("encounters " + location.EncounterTableId);
             return parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "no tables";
+        }
+
+        private static string FormatSelectionFlags(ScenarioMapRegionSelection selection)
+        {
+            List<string> parts = new List<string>();
+            parts.Add(selection.Searchable ? "searchable" : "not searchable");
+            parts.Add(selection.VisibleOnMap ? "visible" : "hidden marker");
+            parts.Add(selection.Discovered ? "discovered" : "undiscovered");
+            if (selection.HiddenUntilDiscovered)
+                parts.Add("hidden until discovered");
+            return string.Join(", ", parts.ToArray());
+        }
+
+        private static string FormatSelectionLoot(ScenarioMapRegionSelection selection)
+        {
+            List<string> parts = new List<string>();
+            parts.Add(selection.HasItems ? "has items" : "no generated items");
+            if (selection.HasHiddenItems)
+                parts.Add("hidden items");
+            parts.Add(selection.LocationSpecificLootTypeCount.ToString(CultureInfo.InvariantCulture) + " location loot types");
+            parts.Add("max " + selection.MaxItems.ToString(CultureInfo.InvariantCulture));
+            return string.Join(", ", parts.ToArray());
         }
 
         private static string FormatZoneTables(MapBoundaryDefinition boundary)

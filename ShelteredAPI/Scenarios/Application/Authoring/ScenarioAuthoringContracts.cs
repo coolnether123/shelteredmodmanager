@@ -6,6 +6,7 @@ using UnityEngine;
 using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
+using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal interface IScenarioAuthoringBackend
@@ -309,6 +310,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionScenarioModeNext = "scenario.mode.next";
         public const string ActionFocusedEditorSave = "scenario.focused_editor.save";
         public const string ActionFocusedEditorCancel = "scenario.focused_editor.cancel";
+        public const string ActionMapAuthoringOpen = "scenario.map.open_real";
+        public const string ActionMapAuthoringClose = "scenario.map.close_real";
+        public const string ActionMapAuthoringCaptureSelection = "scenario.map.capture_selection";
+        public const string ActionMapAuthoringSelectWorldPrefix = "scenario.map.select_world.";
     }
 
     internal enum ScenarioAuthoringTool
@@ -545,6 +550,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string TimelineSelectedDayId { get; set; }
         public string TimelineSelectedEntryId { get; set; }
         public string AssetBrowserSelectedActionId { get; set; }
+        public bool MapAuthoringActive { get; set; }
+        public bool MapAuthoringPreviousShellVisible { get; set; }
+        public ScenarioMapRegionSelection MapSelection { get; set; }
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
@@ -591,6 +599,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 TimelineSelectedDayId = TimelineSelectedDayId,
                 TimelineSelectedEntryId = TimelineSelectedEntryId,
                 AssetBrowserSelectedActionId = AssetBrowserSelectedActionId,
+                MapAuthoringActive = MapAuthoringActive,
+                MapAuthoringPreviousShellVisible = MapAuthoringPreviousShellVisible,
+                MapSelection = MapSelection != null ? MapSelection.Copy() : null,
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,
