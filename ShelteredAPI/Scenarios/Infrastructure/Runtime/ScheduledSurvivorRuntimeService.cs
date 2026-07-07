@@ -13,6 +13,18 @@ using ShelteredAPI.Scenarios.Domain.Runtime;
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScheduledSurvivorRuntimeService : IScenarioEffectHandler, IScenarioConditionEvaluator
     {
+        private readonly ScenarioActorResolver _actorResolver;
+
+        public ScheduledSurvivorRuntimeService()
+            : this(null)
+        {
+        }
+
+        public ScheduledSurvivorRuntimeService(ScenarioActorResolver actorResolver)
+        {
+            _actorResolver = actorResolver;
+        }
+
         public bool CanHandle(ScenarioEffectKind kind)
         {
             return kind == ScenarioEffectKind.SpawnFutureSurvivor;
@@ -22,7 +34,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         {
             message = null;
             bool askToJoin = ReadBool(effect, "askToJoin", false);
-            FutureSurvivorDefinition survivor = FindFutureSurvivor(definition, effect.SurvivorId ?? effect.TargetId);
+            FutureSurvivorDefinition survivor = FindFutureSurvivor(definition, effect);
             if (survivor == null)
             {
                 message = "Future survivor definition was not found.";
@@ -33,7 +45,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return ScenarioFamilyMemberFactory.ScheduleRecruit(survivor.Survivor, 0f, out message);
 
             FamilyMember spawned;
-            return ScenarioFamilyMemberFactory.Spawn(survivor.Survivor, out spawned, out message);
+            bool spawnedResult = ScenarioFamilyMemberFactory.Spawn(survivor.Survivor, out spawned, out message);
+            if (spawnedResult)
+                BindFutureSurvivor(definition, survivor, spawned);
+            return spawnedResult;
         }
 
         public bool CanEvaluate(ScenarioConditionKind kind)
@@ -59,7 +74,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            FamilyMember target = FindPresentSurvivor(members, condition.TargetId);
+            FamilyMember target = FindPresentSurvivor(definition, condition, members);
             if (target == null)
             {
                 reason = "Survivor not present: " + (condition != null ? condition.TargetId : string.Empty);
@@ -79,7 +94,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return false;
         }
 
-        private static FamilyMember FindPresentSurvivor(List<FamilyMember> members, string targetId)
+        private FamilyMember FindPresentSurvivor(ScenarioDefinition definition, ScenarioConditionRef condition, List<FamilyMember> members)
+        {
+            FamilyMember actorTarget;
+            if (_actorResolver != null
+                && condition != null
+                && condition.ActorRef != null
+                && _actorResolver.TryResolveFamilyMember(definition, condition.ActorRef, out actorTarget))
+            {
+                return actorTarget;
+            }
+
+            return FindPresentSurvivorByName(members, condition != null ? condition.TargetId : null);
+        }
+
+        private static FamilyMember FindPresentSurvivorByName(List<FamilyMember> members, string targetId)
         {
             for (int i = 0; i < members.Count; i++)
             {
@@ -286,7 +315,33 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return trimmed.Length == 0 ? null : trimmed;
         }
 
-        private static FutureSurvivorDefinition FindFutureSurvivor(ScenarioDefinition definition, string id)
+        private FutureSurvivorDefinition FindFutureSurvivor(ScenarioDefinition definition, ScenarioEffectDefinition effect)
+        {
+            if (_actorResolver != null && effect != null && effect.ActorRef != null)
+            {
+                for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+                {
+                    FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
+                    ScenarioActorRef survivorRef = survivor != null ? survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null) : null;
+                    if (_actorResolver.ReferencesSameActor(definition, effect.ActorRef, survivorRef))
+                        return survivor;
+                }
+            }
+
+            return FindFutureSurvivorById(definition, effect != null ? effect.SurvivorId ?? effect.TargetId : null);
+        }
+
+        private void BindFutureSurvivor(ScenarioDefinition definition, FutureSurvivorDefinition survivor, FamilyMember spawned)
+        {
+            if (_actorResolver == null || survivor == null || spawned == null)
+                return;
+
+            ScenarioActorRef actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+            string message;
+            _actorResolver.BindMaterializedFamilyMember(definition, actorRef, spawned, out message);
+        }
+
+        private static FutureSurvivorDefinition FindFutureSurvivorById(ScenarioDefinition definition, string id)
         {
             for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
             {

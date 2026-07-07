@@ -16,10 +16,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private static readonly FieldInfo BaseCharacterMaleField = typeof(BaseCharacter).GetField("m_male", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo FamilyManagerGameOverField = typeof(FamilyManager).GetField("game_over", BindingFlags.NonPublic | BindingFlags.Instance);
         private readonly ScenarioCharacterAppearanceService _characterAppearanceService;
+        private readonly ScenarioActorResolver _actorResolver;
 
-        public FamilyApplyService(ScenarioCharacterAppearanceService characterAppearanceService)
+        public FamilyApplyService(
+            ScenarioCharacterAppearanceService characterAppearanceService,
+            ScenarioActorResolver actorResolver)
         {
             _characterAppearanceService = characterAppearanceService;
+            _actorResolver = actorResolver;
         }
 
         public void Apply(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result)
@@ -53,37 +57,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return;
             }
 
-            int limit = Math.Min(members.Count, definition.FamilySetup.Members.Count);
-            for (int i = 0; i < limit; i++)
+            for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
             {
-                FamilyMember member = members[i];
                 FamilyMemberConfig config = definition.FamilySetup.Members[i];
-                if (member == null || config == null)
+                if (config == null)
                     continue;
 
-                if (!string.IsNullOrEmpty(config.Name) && BaseCharacterFirstNameField != null)
+                FamilyMember member = ResolveAuthoredMember(definition, config, i, members);
+                if (member == null && definition.FamilySetup.OverrideVanillaFamily)
                 {
-                    BaseCharacterFirstNameField.SetValue(member, config.Name);
-                    member.name = config.Name;
-                    result.FamilyChanges++;
+                    SpawnConfiguredMember(definition, scenarioFilePath, result, config);
+                    continue;
                 }
 
-                if (config.Gender != ScenarioGender.Any && BaseCharacterMaleField != null)
-                {
-                    BaseCharacterMaleField.SetValue(member, config.Gender == ScenarioGender.Male);
-                    result.FamilyChanges++;
-                }
-
-                ApplyMeshAlignment(member, config, result);
-
-                ApplyStats(member, config, result);
-                ApplyTraits(member, config, result);
-                ApplySkills(member, config, result);
-                ApplyAppearance(definition, scenarioFilePath, member, config, result);
+                if (member != null)
+                    ApplyConfiguredMember(definition, scenarioFilePath, result, member, config);
             }
-
-            if (definition.FamilySetup.OverrideVanillaFamily && definition.FamilySetup.Members.Count > members.Count)
-                SpawnMissingMembers(definition, scenarioFilePath, result, members.Count);
         }
 
         private int SpawnMissingMembers(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, int startIndex)
@@ -95,21 +84,82 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             for (int i = Math.Max(0, startIndex); i < definition.FamilySetup.Members.Count; i++)
             {
                 FamilyMemberConfig config = definition.FamilySetup.Members[i];
-                FamilyMember spawned;
-                string spawnMessage;
-                if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
-                {
+                if (SpawnConfiguredMember(definition, scenarioFilePath, result, config))
                     spawnedCount++;
-                    result.FamilyChanges++;
-                    ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
-                }
-                else if (!string.IsNullOrEmpty(spawnMessage))
-                {
-                    result.AddMessage(spawnMessage);
-                }
             }
 
             return spawnedCount;
+        }
+
+        private FamilyMember ResolveAuthoredMember(ScenarioDefinition definition, FamilyMemberConfig config, int index, List<FamilyMember> members)
+        {
+            FamilyMember resolved;
+            if (_actorResolver != null
+                && config != null
+                && config.ActorRef != null
+                && _actorResolver.TryResolveFamilyMember(definition, config.ActorRef, out resolved))
+            {
+                return resolved;
+            }
+
+            return members != null && index >= 0 && index < members.Count ? members[index] : null;
+        }
+
+        private bool SpawnConfiguredMember(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, FamilyMemberConfig config)
+        {
+            FamilyMember spawned;
+            string spawnMessage;
+            if (ScenarioFamilyMemberFactory.Spawn(config, out spawned, out spawnMessage))
+            {
+                result.FamilyChanges++;
+                ApplyAppearance(definition, scenarioFilePath, spawned, config, result);
+                BindMaterializedMember(definition, config != null ? config.ActorRef : null, spawned, result);
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(spawnMessage))
+                result.AddMessage(spawnMessage);
+            return false;
+        }
+
+        private void ApplyConfiguredMember(ScenarioDefinition definition, string scenarioFilePath, ScenarioApplyResult result, FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null)
+                return;
+
+            if (!string.IsNullOrEmpty(config.Name) && BaseCharacterFirstNameField != null)
+            {
+                BaseCharacterFirstNameField.SetValue(member, config.Name);
+                member.name = config.Name;
+                result.FamilyChanges++;
+            }
+
+            if (config.Gender != ScenarioGender.Any && BaseCharacterMaleField != null)
+            {
+                BaseCharacterMaleField.SetValue(member, config.Gender == ScenarioGender.Male);
+                result.FamilyChanges++;
+            }
+
+            ApplyMeshAlignment(member, config, result);
+
+            ApplyStats(member, config, result);
+            ApplyTraits(member, config, result);
+            ApplySkills(member, config, result);
+            ApplyAppearance(definition, scenarioFilePath, member, config, result);
+            BindMaterializedMember(definition, config.ActorRef, member, result);
+        }
+
+        private void BindMaterializedMember(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMember member, ScenarioApplyResult result)
+        {
+            if (_actorResolver == null || actorRef == null || member == null)
+                return;
+
+            string bindMessage;
+            if (!_actorResolver.BindMaterializedFamilyMember(definition, actorRef, member, out bindMessage)
+                && !string.IsNullOrEmpty(bindMessage))
+            {
+                result.AddMessage(bindMessage);
+            }
         }
 
         private static void ClearGameOverAfterFamilySpawn()

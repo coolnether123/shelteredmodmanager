@@ -101,7 +101,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioActorResolver>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioActorResolver(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new FamilyApplyService(resolver.Get<ScenarioCharacterAppearanceService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new FamilyApplyService(resolver.Get<ScenarioCharacterAppearanceService>(), resolver.Get<ScenarioActorResolver>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new InventoryApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new BunkerApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournalRepository(); });
@@ -119,7 +119,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton<IScenarioWinLossConditionAdapter>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossConditionAdapter>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledInventoryRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWeatherRuntimeService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledSurvivorRuntimeService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledSurvivorRuntimeService(resolver.Get<ScenarioActorResolver>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledQuestRuntimeService(resolver.Get<IVanillaScenarioRuntime>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledBunkerRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledObjectRuntimeService(); });
