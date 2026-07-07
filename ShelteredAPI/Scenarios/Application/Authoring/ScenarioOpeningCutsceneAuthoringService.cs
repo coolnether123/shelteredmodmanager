@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 {
     internal sealed class ScenarioOpeningCutsceneAuthoringService
     {
+        private const float PreviewStartTimeoutSeconds = 4f;
         private static readonly BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
         private static readonly BindingFlags InstanceAny = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly FieldInfo PanelInputActiveField = typeof(UIPanelManager).GetField("m_bInputActive", InstancePrivate);
@@ -47,13 +48,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             }
 
             Cutscene active = manager.GetActiveCutscene;
-            if (manager.CutSceneActive && active != null && active.IsIntro && !active.IsFinished)
+            if (manager.CutSceneActive && active != null && !active.IsFinished
+                && (active.IsIntro || ReferenceEquals(active, preview.Cutscene)))
+            {
+                preview.MarkStarted();
+                return;
+            }
+
+            if (manager.CutSceneActive && active != null && active.IsFinished)
+                manager.DeactivateCutscene();
+
+            if (!preview.Started && Time.realtimeSinceStartup < preview.StartDeadlineSeconds)
                 return;
 
-            if (manager.CutSceneActive && active != null && ReferenceEquals(active, preview.Cutscene))
-                return;
-
-            RestorePreview(preview, "Opening cutscene preview finished; editor restored.");
+            RestorePreview(preview, preview.Started
+                ? "Opening cutscene preview finished; editor restored."
+                : BuildStartFailureMessage());
         }
 
         internal static void UpdateAuthoringIntroCutsceneFallback()
@@ -115,7 +125,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             {
                 if (active != null && active.IsIntro)
                 {
-                    BeginPreview(state, manager, active);
+                    BeginPreview(state, manager, active).MarkStarted();
                     message = "Playing " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(definition.BaseGameMode) + " opening cutscene.";
                 }
                 else
@@ -135,8 +145,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
             try
             {
-                BeginPreview(state, manager, intro);
+                PreviewContext preview = BeginPreview(state, manager, intro);
                 ResetCutsceneForReplay(intro);
+                preview.OriginalPersonNames = RebindPreviewPeopleToLiveFamily(intro);
                 manager.pauseCutsceneManager = false;
                 bool started = intro.CheckEntryCondition();
                 if (!started)
@@ -147,12 +158,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
                 if (started || manager.CutSceneActive)
                 {
+                    preview.MarkStarted();
                     message = "Playing " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(definition.BaseGameMode) + " opening cutscene.";
                     return true;
                 }
 
-                RestorePreview(_activePreview, null);
-                message = BuildStartFailureMessage();
+                message = "Starting " + ScenarioAuthoringBaseModeReloadService.FormatBaseMode(definition.BaseGameMode) + " opening cutscene.";
                 return true;
             }
             catch (Exception ex)
@@ -178,7 +189,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             return null;
         }
 
-        private static void BeginPreview(ScenarioAuthoringState state, CutsceneManager manager, Cutscene cutscene)
+        private static PreviewContext BeginPreview(ScenarioAuthoringState state, CutsceneManager manager, Cutscene cutscene)
         {
             if (_activePreview != null)
                 RestorePreview(_activePreview, null);
@@ -195,6 +206,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             }
 
             _activePreview = new PreviewContext(state, manager, cutscene, previousShellVisible);
+            RestoreVanillaPanelInputForAuthoring("opening cutscene preview start");
             ScenarioAuthoringPauseService.Instance.ReleasePause("Opening cutscene preview started.");
             if (Time.timeScale == 0f)
                 Time.timeScale = 1f;
@@ -202,6 +214,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             manager.pauseCutsceneManager = false;
             MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview started. scene="
                 + SceneManager.GetActiveScene().name + ", cutscene=" + (cutscene != null ? cutscene.name : "<none>") + ".");
+            return _activePreview;
         }
 
         private static void RestorePreview(PreviewContext preview, string statusMessage)
@@ -220,6 +233,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             }
 
             RestoreVanillaPanelInputForAuthoring("opening cutscene preview");
+            RestorePreviewPeople(preview.Cutscene, preview.OriginalPersonNames);
             ScenarioAuthoringPauseService.Instance.EnsurePaused("Opening cutscene preview finished.");
             MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview restored authoring pause. scene="
                 + SceneManager.GetActiveScene().name + ".");
@@ -280,7 +294,57 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             SetBoolField(cutscene, "finished", false);
             SetBoolField(cutscene, "isActive", false);
             SetIntField(cutscene, "stageNumber", 0);
+            FieldInfo field = typeof(Cutscene).GetField("stagesOfConversation", InstancePrivate);
+            List<Cutscene_Stage> stages = field != null ? field.GetValue(cutscene) as List<Cutscene_Stage> : null;
+            for (int i = 0; stages != null && i < stages.Count; i++)
+            {
+                if (stages[i] != null)
+                    stages[i].started = false;
+            }
+
             cutscene.cutsceneWaiting = true;
+        }
+
+        private static List<string> RebindPreviewPeopleToLiveFamily(Cutscene cutscene)
+        {
+            List<string> originalNames = new List<string>();
+            FieldInfo field = typeof(Cutscene).GetField("peopleInvolved", InstancePrivate);
+            List<Cutscene_Person> people = field != null ? field.GetValue(cutscene) as List<Cutscene_Person> : null;
+            List<FamilyMember> family = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
+            int familyIndex = 0;
+            for (int i = 0; people != null && i < people.Count; i++)
+            {
+                Cutscene_Person person = people[i];
+                originalNames.Add(person != null ? person.name : null);
+                if (person == null || person.isNPC || family == null)
+                    continue;
+
+                while (familyIndex < family.Count && family[familyIndex] == null)
+                    familyIndex++;
+                if (familyIndex >= family.Count)
+                    continue;
+
+                string firstName = family[familyIndex].firstName;
+                if (!string.IsNullOrEmpty(firstName))
+                    person.name = firstName;
+                familyIndex++;
+            }
+
+            return originalNames;
+        }
+
+        private static void RestorePreviewPeople(Cutscene cutscene, List<string> originalNames)
+        {
+            if (cutscene == null || originalNames == null)
+                return;
+
+            FieldInfo field = typeof(Cutscene).GetField("peopleInvolved", InstancePrivate);
+            List<Cutscene_Person> people = field != null ? field.GetValue(cutscene) as List<Cutscene_Person> : null;
+            for (int i = 0; people != null && i < people.Count && i < originalNames.Count; i++)
+            {
+                if (people[i] != null)
+                    people[i].name = originalNames[i];
+            }
         }
 
         private static string BuildNoCutsceneManagerMessage(ScenarioDefinition definition)
@@ -335,6 +399,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             public readonly CutsceneManager Manager;
             public readonly Cutscene Cutscene;
             public readonly bool PreviousShellVisible;
+            public readonly float StartDeadlineSeconds;
+            public List<string> OriginalPersonNames;
+            public bool Started;
 
             public PreviewContext(
                 ScenarioAuthoringState state,
@@ -346,6 +413,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 Manager = manager;
                 Cutscene = cutscene;
                 PreviousShellVisible = previousShellVisible;
+                StartDeadlineSeconds = Time.realtimeSinceStartup + PreviewStartTimeoutSeconds;
+            }
+
+            public void MarkStarted()
+            {
+                Started = true;
             }
         }
     }
