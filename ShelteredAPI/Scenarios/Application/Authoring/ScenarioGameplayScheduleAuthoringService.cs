@@ -10,6 +10,18 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioGameplayScheduleAuthoringService
     {
+        private readonly ScenarioActorResolver _actorResolver;
+
+        public ScenarioGameplayScheduleAuthoringService()
+            : this(null)
+        {
+        }
+
+        public ScenarioGameplayScheduleAuthoringService(ScenarioActorResolver actorResolver)
+        {
+            _actorResolver = actorResolver;
+        }
+
         public bool TryHandleAction(ScenarioEditorSession session, string actionId, out string message)
         {
             message = null;
@@ -50,7 +62,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
-        private static bool AddFutureSurvivor(ScenarioEditorSession session, out string message)
+        private bool AddFutureSurvivor(ScenarioEditorSession session, out string message)
         {
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             FutureSurvivorDefinition survivor = new FutureSurvivorDefinition();
@@ -59,6 +71,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             survivor.Survivor = ScenarioFamilyMemberFactory.CreateDefaultConfig(
                 "New Survivor " + (family.FutureSurvivors.Count + 1).ToString(),
                 ScenarioGender.Any);
+            if (_actorResolver != null)
+                _actorResolver.EnsureFutureSurvivorRef(session.WorkingDefinition, survivor, family.FutureSurvivors.Count);
             family.FutureSurvivors.Add(survivor);
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
             message = "Added future survivor arrival for " + ScenarioAuthoringSchedule.Format(survivor.Arrival) + ".";

@@ -1,4 +1,5 @@
 using ModAPI.Scenarios;
+using ModAPI.Actors;
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -28,6 +29,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return texture != null ? texture.m_avatar : null;
         }
 
+        public static Sprite Resolve(ActorProfileComponent profile)
+        {
+            return Resolve(ToFamilyMemberConfig(profile));
+        }
+
         public static Texture2D ResolveTexture(FamilyMember member)
         {
             if (member == null)
@@ -49,6 +55,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             Color pants;
             ResolveColors(config, out hair, out skin, out shirt, out pants);
             return ResolveTexture(Resolve(config), hair, skin, shirt, pants);
+        }
+
+        public static Texture2D ResolveTexture(ActorProfileComponent profile)
+        {
+            Color hair;
+            Color skin;
+            Color shirt;
+            Color pants;
+            ResolveColors(profile, out hair, out skin, out shirt, out pants);
+            return ResolveTexture(Resolve(profile), hair, skin, shirt, pants);
         }
 
         public static void ResolveColors(
@@ -86,6 +102,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             ApplyColor(appearance.SkinColorHex, ref skin);
             ApplyColor(appearance.ShirtColorHex, ref shirt);
             ApplyColor(appearance.PantsColorHex, ref pants);
+        }
+
+        public static void ResolveColors(
+            ActorProfileComponent profile,
+            out Color hair,
+            out Color skin,
+            out Color shirt,
+            out Color pants)
+        {
+            ResolveDefaultColors(out hair, out skin, out shirt, out pants);
+            if (profile == null)
+                return;
+
+            if (profile.HairColor.a > 0f)
+                hair = profile.HairColor;
+            if (profile.SkinColor.a > 0f)
+                skin = profile.SkinColor;
+        }
+
+        private static FamilyMemberConfig ToFamilyMemberConfig(ActorProfileComponent profile)
+        {
+            if (profile == null)
+                return null;
+
+            FamilyMemberConfig config = new FamilyMemberConfig();
+            config.Name = profile.FirstName;
+            config.Gender = profile.IsMale ? ScenarioGender.Male : ScenarioGender.Female;
+            config.Appearance.MeshId = profile.MeshId;
+            return config;
         }
 
         private static CharacterMeshOptions.CharacterTexture ResolveHeadTexture(FamilyMemberConfig config)

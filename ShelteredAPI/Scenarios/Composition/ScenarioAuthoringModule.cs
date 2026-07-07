@@ -10,6 +10,7 @@ using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
@@ -25,7 +26,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioCharacterEditorAuthoringService(
-                    resolver.Get<ScenarioCharacterAppearanceService>());
+                    resolver.Get<ScenarioCharacterAppearanceService>(),
+                    resolver.Get<ScenarioActorResolver>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -178,7 +180,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioPauseService>(),
                     resolver.Get<IScenarioSpriteSwapEngine>(),
                     resolver.Get<IScenarioSceneSpritePlacementEngine>(),
-                    resolver.Get<ScenarioObjectIdentityAssignmentService>());
+                    resolver.Get<ScenarioObjectIdentityAssignmentService>(),
+                    resolver.Get<ScenarioActorResolver>());
             });
             services.AddSingleton<IScenarioEditorService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioEditorController>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

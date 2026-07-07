@@ -22,10 +22,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         };
 
         private readonly ScenarioCharacterAppearanceService _appearanceService;
+        private readonly ScenarioActorResolver _actorResolver;
 
-        public ScenarioCharacterEditorAuthoringService(ScenarioCharacterAppearanceService appearanceService)
+        public ScenarioCharacterEditorAuthoringService(
+            ScenarioCharacterAppearanceService appearanceService,
+            ScenarioActorResolver actorResolver)
         {
             _appearanceService = appearanceService;
+            _actorResolver = actorResolver;
         }
 
         public bool TryHandleAction(ScenarioEditorSession session, ScenarioAuthoringState state, string actionId, out string message)
@@ -112,22 +116,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
-        private static bool AddStartingSurvivor(ScenarioEditorSession session, ScenarioAuthoringState state, out string message)
+        private bool AddStartingSurvivor(ScenarioEditorSession session, ScenarioAuthoringState state, out string message)
         {
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             family.OverrideVanillaFamily = true;
             int next = family.Members.Count + 1;
-            family.Members.Add(ScenarioFamilyMemberFactory.CreateDefaultConfig("Survivor " + next.ToString(), ScenarioGender.Any));
+            FamilyMemberConfig config = ScenarioFamilyMemberFactory.CreateDefaultConfig("Survivor " + next.ToString(), ScenarioGender.Any);
+            if (_actorResolver != null)
+                _actorResolver.EnsureStartingMemberRef(session.WorkingDefinition, config, family.Members.Count);
+            family.Members.Add(config);
             MarkDirty(session);
             FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, true);
             message = "Added starting survivor slot " + next.ToString() + ".";
             return true;
         }
 
-        private static bool AddLiveSurvivorToStarting(ScenarioEditorSession session, ScenarioAuthoringState state, string token, out string message)
+        private bool AddLiveSurvivorToStarting(ScenarioEditorSession session, ScenarioAuthoringState state, string token, out string message)
         {
-            int liveIndex;
-            if (!int.TryParse(token, out liveIndex) || liveIndex < 0)
+            int actorLocalId;
+            if (!int.TryParse(token, out actorLocalId) || actorLocalId <= 0)
             {
                 message = "Live survivor action was out of range.";
                 return true;
@@ -135,7 +142,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             FamilyManager manager = FamilyManager.Instance;
             List<FamilyMember> liveMembers = manager != null ? manager.GetAllFamilyMembers() : null;
-            if (liveMembers == null || liveIndex >= liveMembers.Count || liveMembers[liveIndex] == null)
+            FamilyMember liveMember = FindLiveMemberByActorId(liveMembers, actorLocalId);
+            if (liveMember == null)
             {
                 message = "That live survivor is no longer available.";
                 return true;
@@ -144,12 +152,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
             family.OverrideVanillaFamily = true;
             FamilyMemberConfig config = new FamilyMemberConfig();
-            CaptureLiveFamilyMember(liveMembers[liveIndex], config);
+            CaptureLiveFamilyMember(liveMember, config);
+            if (_actorResolver != null)
+                config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(liveMember);
             family.Members.Add(config);
             MarkDirty(session);
             FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, false);
             message = "Added " + config.Name + " to the starting cast.";
             return true;
+        }
+
+        private static FamilyMember FindLiveMemberByActorId(List<FamilyMember> liveMembers, int actorLocalId)
+        {
+            for (int i = 0; liveMembers != null && i < liveMembers.Count; i++)
+            {
+                FamilyMember member = liveMembers[i];
+                if (member == null)
+                    continue;
+                try
+                {
+                    if (member.GetId() == actorLocalId)
+                        return member;
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
         }
 
         private static void FocusSurvivorEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
@@ -188,6 +218,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             if (survivor.Survivor == null)
                 survivor.Survivor = ScenarioFamilyMemberFactory.CreateDefaultConfig("Future Survivor " + (index + 1).ToString(), ScenarioGender.Any);
+            if (_actorResolver != null)
+                _actorResolver.EnsureFutureSurvivorRef(session.WorkingDefinition, survivor, index);
 
             return HandleSingleMemberCommand(session, state, survivor.Survivor, memberCommand, "future survivor", out message);
         }
@@ -253,6 +285,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (config == null)
             {
                 config = ScenarioFamilyMemberFactory.CreateDefaultConfig("Survivor " + (index + 1).ToString(), ScenarioGender.Any);
+                if (_actorResolver != null)
+                    _actorResolver.EnsureStartingMemberRef(session.WorkingDefinition, config, index);
                 members[index] = config;
             }
 
@@ -480,6 +514,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
 
             CaptureLiveFamilyMember(target.FamilyMember, config);
+            if (_actorResolver != null)
+                config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(target.FamilyMember);
             MarkDirty(session);
             message = "Copied selected live character identity onto " + label + ".";
             return true;

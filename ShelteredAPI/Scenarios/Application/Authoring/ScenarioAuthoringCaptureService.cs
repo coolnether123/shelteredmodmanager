@@ -9,20 +9,25 @@ using ShelteredAPI.Scenarios.Application.Bunker;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCaptureService
     {
         private readonly IScenarioDraftMutationService _draftMutationService;
+        private readonly ScenarioActorResolver _actorResolver;
 
         public static ScenarioAuthoringCaptureService Instance
         {
             get { return ScenarioCompositionRoot.Resolve<ScenarioAuthoringCaptureService>(); }
         }
 
-        internal ScenarioAuthoringCaptureService(IScenarioDraftMutationService draftMutationService)
+        internal ScenarioAuthoringCaptureService(
+            IScenarioDraftMutationService draftMutationService,
+            ScenarioActorResolver actorResolver)
         {
             _draftMutationService = draftMutationService;
+            _actorResolver = actorResolver;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -62,6 +67,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 FamilyMemberConfig config = new FamilyMemberConfig();
                 CaptureLiveFamilyMember(member, config);
+                if (_actorResolver != null)
+                    config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(member);
 
                 familySetup.Members.Add(config);
                 captured++;
@@ -103,6 +110,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 FamilyMemberConfig config = new FamilyMemberConfig();
                 CaptureLiveFamilyMember(member, config);
+                if (_actorResolver != null)
+                    config.ActorRef = _actorResolver.CreateLiveFamilyMemberRef(member);
                 captured.Add(config);
             }
 
@@ -408,7 +417,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             for (int i = 0; captured != null && i < captured.Count; i++)
             {
                 FamilyMemberConfig next = captured[i];
-                int existing = FindFamilyByName(current, next != null ? next.Name : null, matchedCurrent);
+                int existing = FindFamilyByActorRef(current, next != null ? next.ActorRef : null, matchedCurrent);
+                if (existing < 0)
+                    existing = FindFamilyByName(current, next != null ? next.Name : null, matchedCurrent);
                 if (existing < 0)
                 {
                     preview.AddAdd("Add " + Safe(next != null ? next.Name : null) + " (" + FormatFamilyPreview(next) + ")");
@@ -465,6 +476,39 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return i;
             }
             return -1;
+        }
+
+        private static int FindFamilyByActorRef(List<FamilyMemberConfig> members, ScenarioActorRef actorRef, bool[] excluded)
+        {
+            if (actorRef == null)
+                return -1;
+
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                if (excluded != null && i < excluded.Length && excluded[i])
+                    continue;
+                FamilyMemberConfig member = members[i];
+                if (member != null && SameActorRef(member.ActorRef, actorRef))
+                    return i;
+            }
+            return -1;
+        }
+
+        private static bool SameActorRef(ScenarioActorRef left, ScenarioActorRef right)
+        {
+            if (left == null || right == null)
+                return false;
+            if (!string.IsNullOrEmpty(left.BindingType)
+                && !string.IsNullOrEmpty(left.BindingKey)
+                && string.Equals(left.BindingType, right.BindingType, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.BindingKey, right.BindingKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(left.Kind, right.Kind, StringComparison.OrdinalIgnoreCase)
+                && left.LocalId == right.LocalId
+                && string.Equals(left.Domain ?? string.Empty, right.Domain ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
         private static int FindItem(List<ItemEntry> items, string itemId, bool[] excluded)

@@ -8,6 +8,7 @@ using ShelteredAPI.Scenarios.Application.Objects;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEditorController : IScenarioEditorService
@@ -22,6 +23,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioSpriteSwapEngine _spriteSwapEngine;
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
+        private readonly ScenarioActorResolver _actorResolver;
         private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
 
         public static ScenarioEditorController Instance
@@ -43,7 +45,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             IScenarioPauseService pauseService,
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
-            ScenarioObjectIdentityAssignmentService identityAssignmentService)
+            ScenarioObjectIdentityAssignmentService identityAssignmentService,
+            ScenarioActorResolver actorResolver)
         {
             _sessionStore = sessionStore;
             _serializer = serializer;
@@ -54,6 +57,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _spriteSwapEngine = spriteSwapEngine;
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
             _identityAssignmentService = identityAssignmentService;
+            _actorResolver = actorResolver;
         }
 
         public ScenarioEditorSession EnterEditMode(ScenarioBaseGameMode baseMode)
@@ -108,6 +112,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioObjectIdentityAssignmentSummary identityMigration = _identityAssignmentService.AssignMissingIds(session);
             if (identityMigration.AssignedCount > 0)
                 MMLog.WriteInfo("[ScenarioEditorController] Assigned " + identityMigration.AssignedCount + " missing scenario object id(s) before validation.");
+            int assignedActors = _actorResolver != null ? _actorResolver.AssignMissingCastActorRefs(session.WorkingDefinition) : 0;
+            if (assignedActors > 0)
+                MMLog.WriteInfo("[ScenarioEditorController] Assigned " + assignedActors + " missing scenario actor ref(s) before validation.");
 
             ScenarioValidationResult validation = _validator.Validate(session.WorkingDefinition, path);
             if (validation == null)
@@ -150,6 +157,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ScenarioObjectIdentityAssignmentSummary identityMigration = _identityAssignmentService.AssignMissingIds(session);
                 if (identityMigration.AssignedCount > 0)
                     MMLog.WriteInfo("[ScenarioEditorController] Assigned " + identityMigration.AssignedCount + " missing scenario object id(s) before playtest validation.");
+                int assignedActors = _actorResolver != null ? _actorResolver.AssignMissingCastActorRefs(session.WorkingDefinition) : 0;
+                if (assignedActors > 0)
+                    MMLog.WriteInfo("[ScenarioEditorController] Assigned " + assignedActors + " missing scenario actor ref(s) before playtest validation.");
 
                 validation = _validator.Validate(session.WorkingDefinition, _sessionStore.CurrentFilePath);
             }

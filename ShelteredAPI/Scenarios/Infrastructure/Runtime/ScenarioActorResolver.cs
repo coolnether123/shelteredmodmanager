@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using ModAPI.Actors;
+using ModAPI.Core;
 
 using ShelteredAPI.Actors;
 using ShelteredAPI.Scenarios.Definitions;
@@ -30,6 +31,87 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         public IActorRecord Resolve(ScenarioDefinition definition, ScenarioActorRef actorRef)
         {
             return Resolve(definition, actorRef, null, null, null);
+        }
+
+        public int AssignMissingCastActorRefs(ScenarioDefinition definition)
+        {
+            int assigned = 0;
+            if (definition == null || definition.FamilySetup == null)
+                return assigned;
+
+            for (int i = 0; definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
+            {
+                FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                if (member == null || member.ActorRef != null)
+                    continue;
+
+                member.ActorRef = BuildUnusedStartingMemberRef(definition, member, i);
+                assigned++;
+            }
+
+            for (int i = 0; definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
+                if (survivor == null)
+                    continue;
+
+                ScenarioActorRef actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+                if (actorRef == null)
+                {
+                    actorRef = BuildUnusedFutureSurvivorRef(definition, survivor, i);
+                    assigned++;
+                }
+
+                survivor.ActorRef = actorRef;
+                if (survivor.Survivor != null)
+                    survivor.Survivor.ActorRef = actorRef;
+            }
+
+            return assigned;
+        }
+
+        public ScenarioActorRef EnsureStartingMemberRef(ScenarioDefinition definition, FamilyMemberConfig member, int memberIndex)
+        {
+            if (member == null)
+                return null;
+            if (member.ActorRef == null)
+                member.ActorRef = BuildUnusedStartingMemberRef(definition, member, memberIndex);
+            return member.ActorRef;
+        }
+
+        public ScenarioActorRef EnsureFutureSurvivorRef(ScenarioDefinition definition, FutureSurvivorDefinition survivor, int survivorIndex)
+        {
+            if (survivor == null)
+                return null;
+
+            ScenarioActorRef actorRef = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+            if (actorRef == null)
+                actorRef = BuildUnusedFutureSurvivorRef(definition, survivor, survivorIndex);
+
+            survivor.ActorRef = actorRef;
+            if (survivor.Survivor != null)
+                survivor.Survivor.ActorRef = actorRef;
+            return actorRef;
+        }
+
+        public ScenarioActorRef CreateLiveFamilyMemberRef(FamilyMember member)
+        {
+            if (member == null)
+                return null;
+
+            int id;
+            if (!TryGetFamilyMemberId(member, out id))
+                return null;
+
+            return new ScenarioActorRef
+            {
+                Kind = ActorKind.Player.ToString(),
+                LocalId = id,
+                Domain = string.Empty,
+                BindingType = "core.family",
+                BindingKey = id.ToString(),
+                DisplayNameFallback = member.firstName
+            };
         }
 
         public IActorRecord ResolveStartingMember(ScenarioDefinition definition, FamilyMemberConfig member, int memberIndex)
@@ -70,6 +152,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (definition == null)
                 return;
 
+            AssignMissingCastActorRefs(definition);
+
             if (definition.FamilySetup != null)
             {
                 for (int i = 0; definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
@@ -97,6 +181,153 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             }
 
             return fallback ?? string.Empty;
+        }
+
+        public bool TryResolveFamilyMember(ScenarioDefinition definition, ScenarioActorRef actorRef, out FamilyMember member)
+        {
+            member = null;
+            if (actorRef == null)
+                return false;
+
+            ActorId boundId;
+            if (!string.IsNullOrEmpty(actorRef.BindingType)
+                && !string.IsNullOrEmpty(actorRef.BindingKey)
+                && _actors != null
+                && _actors.TryResolve(actorRef.BindingType, actorRef.BindingKey, out boundId)
+                && TryResolveFamilyMember(boundId, out member))
+            {
+                return true;
+            }
+
+            IActorRecord record = Resolve(definition, actorRef);
+            if (record != null && TryResolveFamilyMember(record.Id, out member))
+                return true;
+
+            IReadOnlyList<ActorBinding> bindings = record != null && _actors != null ? _actors.GetBindings(record.Id) : null;
+            for (int i = 0; bindings != null && i < bindings.Count; i++)
+            {
+                ActorBinding binding = bindings[i];
+                int familyId;
+                if (binding != null
+                    && string.Equals(binding.BindingType, "core.family", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(binding.BindingKey, out familyId)
+                    && TryResolveFamilyMember(new ActorId(ActorKind.Player, familyId, string.Empty), out member))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool BindMaterializedFamilyMember(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMember member, out string message)
+        {
+            message = null;
+            if (_actors == null || actorRef == null || member == null)
+            {
+                message = "Actor binding skipped because the actor reference or spawned survivor was missing.";
+                return false;
+            }
+
+            int familyId;
+            if (!TryGetFamilyMemberId(member, out familyId))
+            {
+                message = "Actor binding skipped because the spawned survivor does not have a stable FamilyMember id yet.";
+                return false;
+            }
+
+            ActorId familyActorId = ShelteredActors.FamilyMemberActorId(familyId);
+            IActorRecord familyActor = _actors.Ensure(new ActorCreateRequest
+            {
+                Id = familyActorId,
+                Kind = ActorKind.Player,
+                Domain = string.Empty,
+                LifecycleState = ActorLifecycleState.Active,
+                PresenceState = ResolvePresence(member),
+                Flags = ActorFlags.Persistent | ActorFlags.Loaded,
+                Origin = ActorOrigin.Core("family")
+            });
+
+            if (familyActor == null)
+            {
+                message = "Actor binding skipped because the live family actor could not be ensured.";
+                return false;
+            }
+
+            _actors.Bind(familyActor.Id, new ActorBinding
+            {
+                BindingType = "core.family",
+                BindingKey = familyId.ToString(),
+                SourceModId = "core",
+                Persistent = true
+            }, true);
+
+            if (!string.IsNullOrEmpty(actorRef.BindingType) && !string.IsNullOrEmpty(actorRef.BindingKey))
+            {
+                _actors.Bind(familyActor.Id, new ActorBinding
+                {
+                    BindingType = actorRef.BindingType,
+                    BindingKey = actorRef.BindingKey,
+                    SourceModId = BuiltInOwner,
+                    Persistent = true
+                }, true);
+            }
+
+            ActorId requestedId;
+            if (TryBuildActorId(actorRef, out requestedId) && IsScenarioOwnedSynthetic(definition, actorRef, requestedId))
+            {
+                IActorRecord synthetic = _actors.Ensure(new ActorCreateRequest
+                {
+                    Id = requestedId,
+                    Kind = requestedId.Kind,
+                    Domain = requestedId.Domain,
+                    LifecycleState = ActorLifecycleState.Active,
+                    PresenceState = ResolvePresence(member),
+                    Flags = ActorFlags.Persistent | ActorFlags.Synthetic | ActorFlags.Loaded,
+                    Origin = new ActorOrigin
+                    {
+                        SourceModId = ResolveScenarioDomain(definition),
+                        SourceKey = !string.IsNullOrEmpty(actorRef.BindingKey) ? actorRef.BindingKey : requestedId.ToString(),
+                        Generator = "scenario-actor-materialization"
+                    }
+                });
+
+                if (synthetic != null)
+                {
+                    _actors.Update(synthetic.Id, new ActorRecordMutation
+                    {
+                        LifecycleState = ActorLifecycleState.Active,
+                        PresenceState = ResolvePresence(member),
+                        Flags = synthetic.Flags | ActorFlags.Persistent | ActorFlags.Synthetic | ActorFlags.Loaded
+                    });
+                }
+            }
+
+            message = "Bound survivor '" + (member.firstName ?? string.Empty) + "' to actor " + familyActor.Id + ".";
+            return true;
+        }
+
+        public bool ReferencesSameActor(ScenarioDefinition definition, ScenarioActorRef left, ScenarioActorRef right)
+        {
+            if (left == null || right == null)
+                return false;
+
+            ActorId leftId;
+            ActorId rightId;
+            if (TryBuildActorId(left, out leftId) && TryBuildActorId(right, out rightId) && leftId.Equals(rightId))
+                return true;
+
+            if (!string.IsNullOrEmpty(left.BindingType)
+                && !string.IsNullOrEmpty(left.BindingKey)
+                && string.Equals(left.BindingType, right.BindingType, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(left.BindingKey, right.BindingKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            IActorRecord leftRecord = Resolve(definition, left);
+            IActorRecord rightRecord = Resolve(definition, right);
+            return leftRecord != null && rightRecord != null && leftRecord.Id != null && leftRecord.Id.Equals(rightRecord.Id);
         }
 
         private IActorRecord Resolve(
@@ -220,6 +451,52 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             }, replaceExisting);
         }
 
+        private bool TryResolveFamilyMember(ActorId actorId, out FamilyMember member)
+        {
+            member = null;
+            if (actorId == null || actorId.Kind != ActorKind.Player)
+                return false;
+
+            List<FamilyMember> members = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
+            for (int i = 0; members != null && i < members.Count; i++)
+            {
+                FamilyMember candidate = members[i];
+                int id;
+                if (candidate != null && TryGetFamilyMemberId(candidate, out id) && id == actorId.LocalId)
+                {
+                    member = candidate;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryGetFamilyMemberId(FamilyMember member, out int id)
+        {
+            id = 0;
+            if (member == null)
+                return false;
+
+            try
+            {
+                id = member.GetId();
+                return id > 0;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioActorResolver] FamilyMember.GetId failed while resolving actor binding: " + ex.Message);
+                return false;
+            }
+        }
+
+        private static ActorPresenceState ResolvePresence(FamilyMember member)
+        {
+            if (member == null)
+                return ActorPresenceState.Offscreen;
+            return member.isAway ? ActorPresenceState.Expedition : ActorPresenceState.InShelter;
+        }
+
         private static ActorProfileComponent BuildProfile(ScenarioActorRef actorRef, FamilyMemberConfig familyMember, ScenarioNpcDefinition npc)
         {
             ActorProfileComponent profile = new ActorProfileComponent();
@@ -255,6 +532,72 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 profile.FirstName = displayName;
 
             return string.IsNullOrEmpty(profile.FirstName) && string.IsNullOrEmpty(profile.MeshId) ? null : profile;
+        }
+
+        private ScenarioActorRef BuildUnusedStartingMemberRef(ScenarioDefinition definition, FamilyMemberConfig member, int preferredIndex)
+        {
+            int candidateIndex = Math.Max(0, preferredIndex);
+            ScenarioActorRef candidate = BuildLegacyStartingMemberRef(definition, member, candidateIndex);
+            while (StartingRefExists(definition, candidate, member))
+            {
+                candidateIndex++;
+                candidate = BuildLegacyStartingMemberRef(definition, member, candidateIndex);
+            }
+            return candidate;
+        }
+
+        private ScenarioActorRef BuildUnusedFutureSurvivorRef(ScenarioDefinition definition, FutureSurvivorDefinition survivor, int preferredIndex)
+        {
+            int candidateIndex = Math.Max(0, preferredIndex);
+            ScenarioActorRef candidate = BuildLegacyFutureSurvivorRef(definition, survivor, candidateIndex);
+            while (FutureRefExists(definition, candidate, survivor))
+            {
+                string originalId = survivor != null ? survivor.Id : null;
+                if (survivor != null)
+                    survivor.Id = (string.IsNullOrEmpty(originalId) ? "future" : originalId) + "_" + (candidateIndex + 1).ToString();
+                candidateIndex++;
+                candidate = BuildLegacyFutureSurvivorRef(definition, survivor, candidateIndex);
+                if (survivor != null)
+                    survivor.Id = originalId;
+            }
+            return candidate;
+        }
+
+        private static bool StartingRefExists(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMemberConfig exceptMember)
+        {
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
+            {
+                FamilyMemberConfig member = definition.FamilySetup.Members[i];
+                if (member == null || ReferenceEquals(member, exceptMember))
+                    continue;
+                if (ActorRefsEqual(member.ActorRef, actorRef))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool FutureRefExists(ScenarioDefinition definition, ScenarioActorRef actorRef, FutureSurvivorDefinition exceptSurvivor)
+        {
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
+                if (survivor == null || ReferenceEquals(survivor, exceptSurvivor))
+                    continue;
+
+                ScenarioActorRef existing = survivor.ActorRef ?? (survivor.Survivor != null ? survivor.Survivor.ActorRef : null);
+                if (ActorRefsEqual(existing, actorRef))
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool ActorRefsEqual(ScenarioActorRef left, ScenarioActorRef right)
+        {
+            if (left == null || right == null)
+                return false;
+            return string.Equals(left.Kind, right.Kind, StringComparison.OrdinalIgnoreCase)
+                && left.LocalId == right.LocalId
+                && string.Equals(left.Domain ?? string.Empty, right.Domain ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
         private static ActorAttributeSetComponent BuildAttributes(FamilyMemberConfig familyMember, ScenarioNpcDefinition npc)

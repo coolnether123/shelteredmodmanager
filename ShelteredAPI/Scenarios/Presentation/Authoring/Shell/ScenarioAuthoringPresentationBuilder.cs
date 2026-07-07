@@ -2,9 +2,11 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using ModAPI.Actors;
 using ModAPI.Scenarios;
 using UnityEngine;
 
+using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
@@ -2267,6 +2269,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     AddFamilyMemberCardItems(
                         startingItems,
                         member,
+                        definition,
                         i,
                         ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix,
                         ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix,
@@ -2289,7 +2292,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (definition != null && definition.FamilySetup != null)
             {
                 for (int i = 0; i < definition.FamilySetup.FutureSurvivors.Count; i++)
-                    AddFutureSurvivorItems(futureItems, definition.FamilySetup.FutureSurvivors[i], i, showAdvancedDetails);
+                    AddFutureSurvivorItems(futureItems, definition, definition.FamilySetup.FutureSurvivors[i], i, showAdvancedDetails);
             }
             if (futureItems.Count == 1)
                 futureItems.Add(Text("No future survivor arrivals have been authored yet."));
@@ -2406,13 +2409,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Color pants;
             ScenarioCastPortraitResolver.ResolveColors(member, out hair, out skin, out shirt, out pants);
 
+            int actorLocalId = TryGetFamilyMemberId(member);
             ScenarioAuthoringInspectorAction addAction = inStartingCast
                 ? null
                 : Action(
-                    ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix + liveIndex.ToString(CultureInfo.InvariantCulture),
+                    ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix + actorLocalId.ToString(CultureInfo.InvariantCulture),
                     "Add to cast",
                     "Copy this live survivor into the authored starting cast without replacing the rest of the draft.",
-                    member != null,
+                    member != null && actorLocalId > 0,
                     true,
                     "A+",
                     "Creates an authored starting survivor from the live world reference.");
@@ -2421,7 +2425,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 Name = Safe(member != null ? member.firstName : null),
                 RoleLine = member != null ? FormatAgeBand(member.isChild ? false : true) + " " + (member.isMale ? "Male" : "Female") : "Live family unavailable",
-                Status = inStartingCast ? "In starting cast" : "World only",
+                Status = BuildLiveActorStatus(member, inStartingCast),
                 CompactReference = true,
                 PortraitSprite = ScenarioCastPortraitResolver.Resolve(member),
                 PortraitTexture = ScenarioCastPortraitResolver.ResolveTexture(member),
@@ -2441,6 +2445,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (member == null || definition == null || definition.FamilySetup == null || definition.FamilySetup.Members == null)
                 return false;
 
+            int actorLocalId = TryGetFamilyMemberId(member);
             string liveName = NormalizeCastName(member.firstName);
             if (string.IsNullOrEmpty(liveName))
                 return false;
@@ -2450,6 +2455,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
             {
                 FamilyMemberConfig authored = definition.FamilySetup.Members[i];
+                if (actorLocalId > 0 && ActorRefMatchesFamilyMember(authored != null ? authored.ActorRef : null, actorLocalId))
+                    return true;
                 if (authored == null || !string.Equals(NormalizeCastName(authored.Name), liveName, StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -2466,6 +2473,112 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static string NormalizeCastName(string name)
         {
             return string.IsNullOrEmpty(name) ? string.Empty : name.Trim();
+        }
+
+        private static string BuildLiveActorStatus(FamilyMember member, bool inStartingCast)
+        {
+            string state = member != null && member.isAway ? "Away" : "Active";
+            return inStartingCast ? state + " / in starting cast" : state;
+        }
+
+        private static string BuildActorStatus(ScenarioDefinition definition, ScenarioActorRef actorRef, string fallback)
+        {
+            IActorRecord record = ResolveActorRecord(actorRef);
+            if (record == null)
+                return fallback;
+
+            if (record.PresenceState == ActorPresenceState.InShelter)
+                return "Active";
+            if (record.PresenceState == ActorPresenceState.Expedition)
+                return "Away";
+            if (record.PresenceState == ActorPresenceState.Offscreen)
+                return string.Equals(fallback, "Future", StringComparison.OrdinalIgnoreCase) ? "Future" : "Offscreen";
+            if (record.LifecycleState == ActorLifecycleState.Active)
+                return "Active";
+            if (record.Id != null && record.Id.Kind == ActorKind.Synthetic)
+                return string.Equals(fallback, "Future", StringComparison.OrdinalIgnoreCase) ? "Future" : "Offscreen";
+            return fallback;
+        }
+
+        private static IActorRecord ResolveActorRecord(ScenarioActorRef actorRef)
+        {
+            if (actorRef == null)
+                return null;
+
+            IActorSystem actors = ShelteredActors.Instance;
+            if (actors == null)
+                return null;
+
+            ActorId boundId;
+            IActorRecord record;
+            if (!string.IsNullOrEmpty(actorRef.BindingType)
+                && !string.IsNullOrEmpty(actorRef.BindingKey)
+                && actors.TryResolve(actorRef.BindingType, actorRef.BindingKey, out boundId)
+                && boundId != null
+                && actors.TryGet(boundId, out record))
+            {
+                return record;
+            }
+
+            ActorId exactId;
+            return TryBuildActorId(actorRef, out exactId) && actors.TryGet(exactId, out record) ? record : null;
+        }
+
+        private static ActorProfileComponent ResolveActorProfile(ScenarioActorRef actorRef)
+        {
+            IActorRecord record = ResolveActorRecord(actorRef);
+            if (record == null || record.Id == null)
+                return null;
+
+            ActorProfileComponent profile;
+            return ShelteredActors.Instance != null && ShelteredActors.Instance.TryGet<ActorProfileComponent>(record.Id, out profile)
+                ? profile
+                : null;
+        }
+
+        private static bool TryBuildActorId(ScenarioActorRef actorRef, out ActorId actorId)
+        {
+            actorId = null;
+            if (actorRef == null || string.IsNullOrEmpty(actorRef.Kind))
+                return false;
+
+            try
+            {
+                ActorKind kind = (ActorKind)Enum.Parse(typeof(ActorKind), actorRef.Kind, true);
+                actorId = new ActorId(kind, actorRef.LocalId, actorRef.Domain ?? string.Empty);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool ActorRefMatchesFamilyMember(ScenarioActorRef actorRef, int actorLocalId)
+        {
+            if (actorRef == null || actorLocalId <= 0)
+                return false;
+            if (string.Equals(actorRef.BindingType, "core.family", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(actorRef.BindingKey, actorLocalId.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))
+                return true;
+            return string.Equals(actorRef.Kind, ActorKind.Player.ToString(), StringComparison.OrdinalIgnoreCase)
+                && actorRef.LocalId == actorLocalId
+                && string.IsNullOrEmpty(actorRef.Domain);
+        }
+
+        private static int TryGetFamilyMemberId(FamilyMember member)
+        {
+            if (member == null)
+                return 0;
+
+            try
+            {
+                return member.GetId();
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveInventorySummaryItems(ScenarioInventorySlotGridViewModel grid)
@@ -2665,7 +2778,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static void AddFutureSurvivorItems(List<ScenarioAuthoringInspectorItem> items, FutureSurvivorDefinition survivor, int index, bool showAdvancedDetails)
+        private static void AddFutureSurvivorItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, FutureSurvivorDefinition survivor, int index, bool showAdvancedDetails)
         {
             if (items == null || survivor == null)
                 return;
@@ -2675,9 +2788,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             FamilyMemberConfig member = survivor.Survivor ?? ScenarioFamilyMemberFactory.CreateDefaultConfig(Safe(survivor.Id), ScenarioGender.Any);
             items.Add(CastCardItem(BuildAuthoredSurvivorCard(
                 member,
+                definition,
                 index,
                 arrival,
                 "Future",
+                survivor.ActorRef ?? (member != null ? member.ActorRef : null),
                 ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix,
                 new[]
                 {
@@ -2690,6 +2805,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static void AddFamilyMemberCardItems(
             List<ScenarioAuthoringInspectorItem> items,
             FamilyMemberConfig member,
+            ScenarioDefinition definition,
             int index,
             string openEditorPrefix,
             string removeOrStartingPrefix,
@@ -2717,18 +2833,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             items.Add(CastCardItem(BuildAuthoredSurvivorCard(
                 member,
+                definition,
                 index,
                 null,
                 "Starting",
+                member.ActorRef,
                 openEditorPrefix,
                 secondary.ToArray())));
         }
 
         private static ScenarioCastCardViewModel BuildAuthoredSurvivorCard(
             FamilyMemberConfig member,
+            ScenarioDefinition definition,
             int index,
             string arrivalSummary,
             string status,
+            ScenarioActorRef actorRef,
             string openEditorPrefix,
             ScenarioAuthoringInspectorAction[] secondaryActions)
         {
@@ -2736,20 +2856,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Color skin;
             Color shirt;
             Color pants;
+            ActorProfileComponent profile = ResolveActorProfile(actorRef);
             ScenarioCastPortraitResolver.ResolveColors(member, out hair, out skin, out shirt, out pants);
+            if (profile != null && (member == null || member.Appearance == null || string.IsNullOrEmpty(member.Appearance.MeshId)))
+                ScenarioCastPortraitResolver.ResolveColors(profile, out hair, out skin, out shirt, out pants);
             string indexText = index.ToString(CultureInfo.InvariantCulture);
             ScenarioAuthoringInspectorAction primary = !string.IsNullOrEmpty(openEditorPrefix)
                 ? Action(openEditorPrefix + indexText, "Edit Person", "Open this survivor in the focused family-style editor.", true, false, "ED", FormatAppearance(member))
                 : null;
+            Sprite portraitSprite = ScenarioCastPortraitResolver.Resolve(member);
+            Texture2D portraitTexture = ScenarioCastPortraitResolver.ResolveTexture(member);
+            if (portraitSprite == null && profile != null)
+                portraitSprite = ScenarioCastPortraitResolver.Resolve(profile);
+            if (portraitTexture == null && profile != null)
+                portraitTexture = ScenarioCastPortraitResolver.ResolveTexture(profile);
 
             return new ScenarioCastCardViewModel
             {
                 Name = Safe(member != null ? member.Name : null),
                 RoleLine = FormatAgeBand(member) + " " + (member != null ? member.Gender.ToString() : ScenarioGender.Any.ToString()),
-                Status = status,
+                Status = BuildActorStatus(definition, actorRef, status),
                 ArrivalSummary = arrivalSummary,
-                PortraitSprite = ScenarioCastPortraitResolver.Resolve(member),
-                PortraitTexture = ScenarioCastPortraitResolver.ResolveTexture(member),
+                PortraitSprite = portraitSprite,
+                PortraitTexture = portraitTexture,
                 HairColor = hair,
                 SkinColor = skin,
                 ShirtColor = shirt,
@@ -2820,7 +2949,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return new ScenarioSurvivorEditorViewModel
             {
-                Portrait = BuildAuthoredSurvivorCard(member, index, arrivalSummary, status, null, new ScenarioAuthoringInspectorAction[0]),
+                Portrait = BuildAuthoredSurvivorCard(member, null, index, arrivalSummary, status, member.ActorRef, null, new ScenarioAuthoringInspectorAction[0]),
                 NameAction = Action(indexedPrefix + "name", Safe(member.Name), "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name)),
                 GenderAction = Action(indexedPrefix + "gender", "Gender: " + member.Gender.ToString(), "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString()),
                 BodyAction = Action(indexedPrefix + "adult", FormatAgeBand(member), "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member, true)),
