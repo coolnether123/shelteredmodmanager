@@ -23,13 +23,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             float gap = compactInspector ? 5f : 6f;
-            float minSlot = compactInspector ? 54f : 62f;
-            float preferredSlot = compactInspector ? 64f : 74f;
+            bool timed = HasInventoryScheduleSlots(slots);
+            float minSlot = timed ? (compactInspector ? 86f : 96f) : (compactInspector ? 54f : 62f);
+            float preferredSlot = timed ? (compactInspector ? 98f : 112f) : (compactInspector ? 64f : 74f);
             int columns = Mathf.Max(1, Mathf.FloorToInt((availableWidth + gap) / (minSlot + gap)));
             float slotSize = Mathf.Min(preferredSlot, (availableWidth - (gap * (columns - 1))) / columns);
             slotSize = Mathf.Clamp(slotSize, minSlot, preferredSlot);
-            bool timed = HasInventoryScheduleSlots(slots);
-            float cellHeight = timed ? slotSize + 96f : slotSize + 35f;
+            float cellHeight = timed ? slotSize + 112f : slotSize + 48f;
 
             int column = 0;
             GUILayout.BeginHorizontal();
@@ -134,8 +134,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawInventoryReadOnlyCorner(slotRect);
             ScenarioUiAtlasSkin.DrawCornerCutBorder(slotRect, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderSubtleTexture);
 
-            Rect labelRect = new Rect(cellRect.x, slotRect.yMax + 3f, cellRect.width, 16f);
-            GUI.Label(labelRect, ShortenToFit(slot != null ? slot.DisplayName : string.Empty, labelRect.width, _mutedTextStyle), _mutedTextStyle);
+            Rect labelRect = new Rect(cellRect.x, slotRect.yMax + 3f, cellRect.width, reserveScheduleSpace ? 32f : 30f);
+            GUIStyle labelStyle = new GUIStyle(_mutedTextStyle);
+            labelStyle.wordWrap = true;
+            labelStyle.clipping = TextClipping.Clip;
+            GUI.Label(labelRect, slot != null ? slot.DisplayName ?? string.Empty : string.Empty, labelStyle);
 
             if (reserveScheduleSpace)
             {
@@ -151,7 +154,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (slot == null || slot.Empty || readOnly)
                 return;
 
-            float y = cellRect.y + cellRect.width + (reserveScheduleSpace ? 35f : 18f);
+            float y = cellRect.y + cellRect.width + (reserveScheduleSpace ? 51f : 32f);
             Rect minusRect = new Rect(cellRect.x, y, 18f, 18f);
             Rect plusRect = new Rect(minusRect.xMax + 2f, y, 18f, 18f);
             Rect removeRect = new Rect(cellRect.xMax - 20f, y, 20f, 18f);
@@ -208,7 +211,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (slot == null || string.IsNullOrEmpty(slot.Badge))
                 return;
 
-            Rect badgeRect = new Rect(slotRect.x + 4f, slotRect.y + 4f, slotRect.width - 8f, 17f);
+            float badgeWidth = Mathf.Min(slotRect.width - 8f, Math.Max(44f, MeasurePillWidth(slot.Badge, 18f)));
+            Rect badgeRect = new Rect(slotRect.x + 4f, slotRect.y + 4f, badgeWidth, 17f);
             ScenarioUiPillEmphasis emphasis = ScenarioUiPillEmphasis.Default;
             if (StringContains(slot.Badge, "+") || StringContains(slot.Badge, "START"))
                 emphasis = ScenarioUiPillEmphasis.Active;
@@ -222,8 +226,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (slot == null || slot.Empty || string.IsNullOrEmpty(slot.QuantityText))
                 return;
 
-            Rect qtyRect = new Rect(slotRect.xMax - 36f, slotRect.yMax - 21f, 32f, 17f);
+            float width = Mathf.Min(slotRect.width - 8f, Math.Max(32f, MeasurePillWidth(slot.QuantityText, 16f)));
+            Rect qtyRect = new Rect(slotRect.xMax - width - 4f, slotRect.yMax - 21f, width, 17f);
             ScenarioUiWidgets.DrawPill(qtyRect, slot.QuantityText, _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+        }
+
+        private float MeasurePillWidth(string label, float padding)
+        {
+            if (string.IsNullOrEmpty(label))
+                return padding;
+
+            GUIStyle style = _uiContext != null && _uiContext.Styles != null && _uiContext.Styles.Pill != null
+                ? _uiContext.Styles.Pill
+                : _mutedTextStyle;
+            return (style != null ? style.CalcSize(new GUIContent(label)).x : 0f) + padding;
         }
 
         private void DrawInventoryEmptyAddGlyph(Rect slotRect)

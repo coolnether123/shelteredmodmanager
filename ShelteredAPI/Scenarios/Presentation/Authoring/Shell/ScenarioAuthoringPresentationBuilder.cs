@@ -2875,7 +2875,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             StartingInventoryDefinition inventory = definition != null ? definition.StartingInventory : null;
             bool overrideRandomStart = inventory != null && inventory.OverrideRandomStart;
-            items.Add(Text("Shelter storage - this is your scenario's starting inventory."));
+            StorageSummary summary = BuildStorageSummary(inventory);
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionInventoryStorageOpen,
+                "Open Shelter Storage",
+                "Open Sheltered's real shelter storage window. Discard and storage edits sync back to the draft automatically.",
+                true,
+                true,
+                "ST",
+                FormatStorageSummary(summary),
+                "VANILLA")));
+            items.Add(Property("Total Items", summary.TotalItems.ToString(CultureInfo.InvariantCulture), "Live InventoryManager total when available; draft total otherwise."));
+            items.Add(Property("Slots Used", summary.SlotsUsed.ToString(CultureInfo.InvariantCulture) + " / " + FormatStorageCapacity(summary), "Uses InventoryManager.GetTotalStackCount while the authoring world is live."));
             items.Add(ActionItem(Action(ScenarioAuthoringLocalActionIds.ActionInventoryStartingAddAndPick, "Add Starting Item", "Add an editable item stack to shelter storage and choose its item.", true, true, "A+")));
             items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionInventoryStartingOverrideToggle,
@@ -2895,11 +2906,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "starting_stockpile",
-                    Title = "Shelter Storage - Scenario Starting Inventory",
+                    Title = "Shelter Storage",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
-                    Items = items.ToArray(),
-                    InventorySlotGrid = BuildStartingInventorySlotGrid(inventory)
+                    Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                    Items = items.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
                 {
@@ -3113,52 +3123,66 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private static ScenarioInventorySlotGridViewModel BuildStartingInventorySlotGrid(StartingInventoryDefinition inventory)
+        private static StorageSummary BuildStorageSummary(StartingInventoryDefinition inventory)
         {
-            List<ScenarioInventorySlotViewModel> slots = new List<ScenarioInventorySlotViewModel>();
+            StorageSummary summary = new StorageSummary();
+            InventoryManager manager = InventoryManager.Instance;
+            if (manager != null)
+            {
+                List<ItemStack> stacks = manager.GetItems();
+                for (int i = 0; stacks != null && i < stacks.Count; i++)
+                {
+                    ItemStack stack = stacks[i];
+                    if (stack == null || stack.m_count <= 0 || stack.m_type == ItemManager.ItemType.Undefined)
+                        continue;
+
+                    summary.TotalItems += stack.m_count;
+                }
+
+                summary.SlotsUsed = Math.Max(0, manager.GetTotalStackCount());
+                summary.StorageCapacity = Math.Max(0, manager.storageCapacity);
+                return summary;
+            }
+
             for (int i = 0; inventory != null && inventory.Items != null && i < inventory.Items.Count; i++)
             {
                 ItemEntry entry = inventory.Items[i];
-                if (entry == null)
+                if (entry == null || entry.Quantity <= 0)
                     continue;
 
-                string index = i.ToString(CultureInfo.InvariantCulture);
-                ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(entry.ItemId);
-                slots.Add(new ScenarioInventorySlotViewModel
-                {
-                    Id = "start." + index,
-                    ItemId = catalogEntry.ItemId,
-                    DisplayName = catalogEntry.DisplayName,
-                    Detail = catalogEntry.Detail,
-                    QuantityText = "x" + Math.Max(1, entry.Quantity).ToString(CultureInfo.InvariantCulture),
-                    Badge = "START",
-                    Emphasized = true,
-                    PreviewSprite = catalogEntry.PreviewSprite,
-                    PrimaryAction = Action(
-                        ScenarioAuthoringLocalActionIds.ActionInventoryStartingPickerOpenPrefix + index,
-                        "Choose " + catalogEntry.DisplayName,
-                        "Open the searchable stockpile item picker for this starting slot.",
-                        true,
-                        true,
-                        "IT",
-                        catalogEntry.ItemId),
-                    QuantityIncreaseAction = Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index + ".1", "+", "Increase this starting stack by one.", true, false, "+"),
-                    QuantityDecreaseAction = Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index + ".-1", "-", "Decrease this starting stack by one.", true, false, "-"),
-                    RemoveAction = Action(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix + index, "Remove", "Remove this stack from shelter storage.", true, false, "RM")
-                });
+                summary.TotalItems += entry.Quantity;
+                summary.SlotsUsed++;
             }
 
-            AddEmptyInventorySlots(
-                slots,
-                Math.Max(3, 8 - (slots.Count % 8)),
-                Action(ScenarioAuthoringLocalActionIds.ActionInventoryStartingAddAndPick, "Add Starting Item", "Add a starting stack, then choose its item.", true, true, "A+"),
-                "START",
-                "Click to add a shelter storage item.");
-            return new ScenarioInventorySlotGridViewModel
-            {
-                EmptyMessage = "Shelter storage has no scenario starting items yet.",
-                Slots = slots.ToArray()
-            };
+            summary.StorageCapacity = -1;
+            return summary;
+        }
+
+        private static string FormatStorageSummary(StorageSummary summary)
+        {
+            if (summary == null)
+                return "Storage summary unavailable";
+
+            return summary.TotalItems.ToString(CultureInfo.InvariantCulture)
+                + " items, "
+                + summary.SlotsUsed.ToString(CultureInfo.InvariantCulture)
+                + " / "
+                + FormatStorageCapacity(summary)
+                + " slots";
+        }
+
+        private static string FormatStorageCapacity(StorageSummary summary)
+        {
+            return summary != null && summary.StorageCapacity >= 0
+                ? summary.StorageCapacity.ToString(CultureInfo.InvariantCulture)
+                : "?";
+        }
+
+        private sealed class StorageSummary
+        {
+            public int TotalItems;
+            public int SlotsUsed;
+            public int StorageCapacity;
         }
 
         private static ScenarioInventorySlotGridViewModel BuildScheduledInventorySlotGrid(StartingInventoryDefinition inventory)
@@ -3877,37 +3901,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-10", "Quantity -10", "Decrease this timed change quantity by ten.", true, false, "-10", change.Quantity.ToString(CultureInfo.InvariantCulture))));
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionInventoryScheduleDayPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleHourPrefix, ScenarioAuthoringActionIds.ActionInventoryScheduleMinutePrefix, index);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryScheduleDeletePrefix + index.ToString(), "Remove Timed Item Change", "Remove this timed stockpile change.", true, false, "RM")));
-        }
-
-        private static void AddStartingInventoryItems(List<ScenarioAuthoringInspectorItem> items, ItemEntry entry, int index)
-        {
-            if (items == null || entry == null)
-                return;
-
-            ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(entry.ItemId);
-            items.Add(Property(
-                "Starting item",
-                catalogEntry.DisplayName,
-                catalogEntry.Detail,
-                "x" + entry.Quantity.ToString(CultureInfo.InvariantCulture),
-                null,
-                catalogEntry.PreviewSprite,
-                true));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Previous Item", "Switch this starting stack to the previous stockpile item.", true, false, "<", catalogEntry.ItemId)));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Next Item", "Switch this starting stack to the next stockpile item.", true, false, ">", catalogEntry.ItemId)));
-            items.Add(ActionItem(Action(
-                ScenarioAuthoringLocalActionIds.ActionInventoryStartingPickerOpenPrefix + index.ToString(CultureInfo.InvariantCulture),
-                "Choose Item",
-                "Open the searchable stockpile item picker for this starting stack.",
-                true,
-                false,
-                "IT",
-                catalogEntry.ItemId)));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".1", "Quantity +", "Increase this starting stack by one.", true, false, "+", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Quantity -", "Decrease this starting stack by one.", true, false, "-", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".10", "Quantity +10", "Increase this starting stack by ten.", true, false, "+10", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix + index.ToString(CultureInfo.InvariantCulture) + ".-10", "Quantity -10", "Decrease this starting stack by ten.", true, false, "-10", entry.Quantity.ToString(CultureInfo.InvariantCulture))));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix + index.ToString(CultureInfo.InvariantCulture), "Remove Starting Item", "Remove this stack from shelter storage.", true, false, "RM")));
         }
 
         private static void AddWeatherEventItems(List<ScenarioAuthoringInspectorItem> items, ScenarioAuthoringState state, WeatherEventDefinition weather, int index)

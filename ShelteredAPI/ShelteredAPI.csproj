@@ -305,6 +305,7 @@
     <Compile Include="Scenarios\Application\Commands\IScenarioCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioAuthoringCommandHandlers.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioMapAuthoringCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioStorageAuthoringCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioHelpCommandHandler.cs" />
@@ -494,6 +495,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeDriver.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringEditorCameraService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioMapAuthoringRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioStorageAuthoringRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringVanillaPanelVisibilityService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeGuards.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioLoadingTransitionGuard.cs" />

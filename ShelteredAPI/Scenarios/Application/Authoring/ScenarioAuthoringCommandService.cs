@@ -35,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringSetupStateService setupStateService,
             ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
             ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
+            ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
             ScenarioMapDraftService mapDraftService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
@@ -55,6 +56,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 setupStateService,
                 weatherEffectSpriteCatalog,
                 mapAuthoringRuntimeService,
+                storageAuthoringRuntimeService,
                 mapDraftService));
         }
 
@@ -106,6 +108,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringSetupStateService setupStateService,
             ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
             ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
+            ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
             ScenarioMapDraftService mapDraftService)
         {
             return new IScenarioCommandHandler[]
@@ -117,6 +120,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new ScenarioHelpCommandHandler(tutorialService, layoutService, setupStateService),
                 new ShellCommandHandler(layoutService, settingsService),
                 new ScenarioMapAuthoringCommandHandler(mapAuthoringRuntimeService, mapDraftService, layoutService),
+                new ScenarioStorageAuthoringCommandHandler(storageAuthoringRuntimeService, layoutService),
                 new TutorialCommandHandler(tutorialService, editorService, layoutService),
                 new TimelineCommandHandler(editorService, timelineBuilder, timelineNavigationService),
                 new StationUpgradeCommandHandler(editorService, selectionScopeService),

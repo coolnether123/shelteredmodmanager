@@ -408,6 +408,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionMapLocationEditPrefix = "scenario.map.location.edit.";
         public const string ActionMapLocationTogglePrefix = "scenario.map.location.toggle.";
         public const string ActionMapLocationCycleIconPrefix = "scenario.map.location.icon_next.";
+        public const string ActionInventoryStorageOpen = "scenario.inventory.storage.open_real";
+        public const string ActionInventoryStorageClose = "scenario.inventory.storage.close_real";
     }
 
     internal enum ScenarioAuthoringTool
@@ -656,6 +658,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string MapAuthoringMode { get; set; }
         public string MapSelectedLocationId { get; set; }
         public ScenarioMapRegionSelection MapSelection { get; set; }
+        public bool StorageAuthoringActive { get; set; }
+        public bool StorageAuthoringPreviousShellVisible { get; set; }
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
@@ -714,6 +718,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MapAuthoringMode = MapAuthoringMode,
                 MapSelectedLocationId = MapSelectedLocationId,
                 MapSelection = MapSelection != null ? MapSelection.Copy() : null,
+                StorageAuthoringActive = StorageAuthoringActive,
+                StorageAuthoringPreviousShellVisible = StorageAuthoringPreviousShellVisible,
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,

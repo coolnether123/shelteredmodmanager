@@ -363,6 +363,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioMapAuthoringRuntimeService mapAuthoring = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
             if (!snapshot.WorldLoading && mapAuthoring != null && mapAuthoring.Synchronize(snapshot, _sessionStore.Current))
                 changed = true;
+            ScenarioStorageAuthoringRuntimeService storageAuthoring = ScenarioCompositionRoot.Resolve<ScenarioStorageAuthoringRuntimeService>();
+            if (!snapshot.WorldLoading && storageAuthoring != null && storageAuthoring.Synchronize(snapshot))
+                changed = true;
 
             _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);

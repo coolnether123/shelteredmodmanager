@@ -69,6 +69,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioMapAuthoringRuntimeService(
                     resolver.Get<ScenarioMapDraftService>());
             });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStorageAuthoringRuntimeService(); });
             services.AddSingleton<IScenarioAuthoringSectionHub>(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringSectionHub(
@@ -168,6 +169,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioAuthoringSetupStateService>(),
                     resolver.Get<ScenarioWeatherEffectSpriteCatalogService>(),
                     resolver.Get<ScenarioMapAuthoringRuntimeService>(),
+                    resolver.Get<ScenarioStorageAuthoringRuntimeService>(),
                     resolver.Get<ScenarioMapDraftService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
