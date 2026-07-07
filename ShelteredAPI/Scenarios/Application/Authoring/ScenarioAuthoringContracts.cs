@@ -1063,7 +1063,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Summary = 6,
         CandidateGrid = 7,
         FactGrid = 8,
-        CastCardGrid = 9
+        CastCardGrid = 9,
+        SurvivorEditor = 10
     }
 
     internal sealed class ScenarioAuthoringInspectorSection
@@ -1073,6 +1074,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool Expanded { get; set; }
         public ScenarioAuthoringInspectorSectionLayout Layout { get; set; }
         public ScenarioAuthoringInspectorItem[] Items { get; set; }
+        public ScenarioSurvivorEditorViewModel SurvivorEditor { get; set; }
     }
 
     internal enum ScenarioAuthoringInspectorItemKind
@@ -1125,6 +1127,57 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Label { get; set; }
         public int Value { get; set; }
         public int Max { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorEditorViewModel
+    {
+        public ScenarioCastCardViewModel Portrait { get; set; }
+        public ScenarioAuthoringInspectorAction NameAction { get; set; }
+        public ScenarioAuthoringInspectorAction GenderAction { get; set; }
+        public ScenarioAuthoringInspectorAction BodyAction { get; set; }
+        public ScenarioSurvivorTextureRowViewModel[] TextureRows { get; set; }
+        public ScenarioSurvivorColorRowViewModel[] ColorRows { get; set; }
+        public ScenarioSurvivorStatRowViewModel[] StatRows { get; set; }
+        public ScenarioSurvivorTraitRowViewModel[] TraitRows { get; set; }
+        public ScenarioAuthoringInspectorAction[] UtilityActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] CloseActions { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorTextureRowViewModel
+    {
+        public string Label { get; set; }
+        public string Detail { get; set; }
+        public ScenarioAuthoringInspectorAction PreviousAction { get; set; }
+        public ScenarioAuthoringInspectorAction NextAction { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorColorRowViewModel
+    {
+        public string Channel { get; set; }
+        public string Label { get; set; }
+        public string Hex { get; set; }
+        public Color Color { get; set; }
+        public ScenarioAuthoringInspectorAction PreviousAction { get; set; }
+        public ScenarioAuthoringInspectorAction NextAction { get; set; }
+        public string OpenColorPickerActionId { get; set; }
+        public string ApplyColorActionPrefix { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorStatRowViewModel
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public int Value { get; set; }
+        public int Max { get; set; }
+        public ScenarioAuthoringInspectorAction DecreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction IncreaseAction { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorTraitRowViewModel
+    {
+        public string Label { get; set; }
+        public string Value { get; set; }
+        public ScenarioAuthoringInspectorAction CycleAction { get; set; }
     }
 
     internal sealed class ScenarioAuthoringTargetContext

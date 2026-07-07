@@ -381,6 +381,25 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
+            if (command.StartsWith(ScenarioAuthoringLocalActionIds.ActionSurvivorApplyColorCommandPrefix, StringComparison.Ordinal))
+            {
+                string[] parts = command.Substring(ScenarioAuthoringLocalActionIds.ActionSurvivorApplyColorCommandPrefix.Length).Split('.');
+                if (parts.Length == 2)
+                {
+                    ScenarioCharacterColorPart part;
+                    Color parsed;
+                    string colorHex = "#" + parts[1];
+                    if (TryParseColorPart(parts[0], out part)
+                        && ScenarioCharacterAppearanceService.TryParseColorHex(colorHex, out parsed))
+                    {
+                        ScenarioCharacterAppearanceService.UpsertColor(config, part, ScenarioCharacterAppearanceService.ToColorHex(parsed));
+                        MarkDirty(session);
+                        message = "Changed " + label + " " + ScenarioCharacterAppearanceService.BuildColorLabel(part).ToLowerInvariant() + " color.";
+                        return true;
+                    }
+                }
+            }
+
             if (string.Equals(command, "copy_look", StringComparison.Ordinal))
                 return CopyLookFromSelected(session, state, config, label, out message);
 

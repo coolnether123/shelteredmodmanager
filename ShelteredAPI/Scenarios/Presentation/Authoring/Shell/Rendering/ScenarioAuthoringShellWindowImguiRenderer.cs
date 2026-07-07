@@ -1428,6 +1428,225 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return null;
         }
 
+        private static Rect Inset(Rect rect, float inset)
+        {
+            float doubleInset = inset * 2f;
+            return new Rect(
+                rect.x + inset,
+                rect.y + inset,
+                Math.Max(0f, rect.width - doubleInset),
+                Math.Max(0f, rect.height - doubleInset));
+        }
+
+        private void DrawSurvivorEditor(Rect rect, ScenarioSurvivorEditorViewModel editor)
+        {
+            if (editor == null)
+            {
+                GUI.Label(rect, "Survivor editor data is unavailable.", _mutedTextStyle);
+                return;
+            }
+
+            RegisterInteractiveRegion(rect);
+            Rect headerRect = new Rect(rect.x, rect.y, rect.width, 42f);
+            Rect footerRect = new Rect(rect.x, rect.yMax - 72f, rect.width, 72f);
+            Rect contentRect = new Rect(rect.x, headerRect.yMax + 10f, rect.width, Math.Max(120f, footerRect.y - headerRect.yMax - 18f));
+            DrawSurvivorEditorHeader(headerRect, editor);
+
+            float gap = 12f;
+            float leftWidth = Mathf.Clamp(contentRect.width * 0.44f, 360f, 458f);
+            leftWidth = Math.Min(leftWidth, Math.Max(260f, contentRect.width - 360f - gap));
+            Rect leftRect = new Rect(contentRect.x, contentRect.y, leftWidth, contentRect.height);
+            Rect rightRect = new Rect(leftRect.xMax + gap, contentRect.y, Math.Max(260f, contentRect.xMax - leftRect.xMax - gap), contentRect.height);
+            DrawSurvivorAppearancePanel(leftRect, editor);
+            DrawSurvivorStatsPanel(rightRect, editor);
+            DrawSurvivorEditorFooter(footerRect, editor);
+        }
+
+        private void DrawSurvivorEditorHeader(Rect rect, ScenarioSurvivorEditorViewModel editor)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
+            float x = rect.x + 10f;
+            float y = rect.y + 7f;
+            float height = 28f;
+            float nameWidth = Mathf.Clamp(rect.width * 0.34f, 180f, 320f);
+            DrawButton(new Rect(x, y, nameWidth, height), editor.NameAction, false);
+            x += nameWidth + 8f;
+
+            float genderWidth = editor.GenderAction != null ? Mathf.Clamp(MeasureButtonWidth(editor.GenderAction, false, 22f), 118f, 190f) : 150f;
+            DrawButton(new Rect(x, y, genderWidth, height), editor.GenderAction, false);
+            x += genderWidth + 8f;
+
+            float bodyWidth = editor.BodyAction != null ? Mathf.Clamp(MeasureButtonWidth(editor.BodyAction, false, 22f), 104f, 170f) : 130f;
+            DrawButton(new Rect(x, y, bodyWidth, height), editor.BodyAction, false);
+        }
+
+        private void DrawSurvivorAppearancePanel(Rect rect, ScenarioSurvivorEditorViewModel editor)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
+            Rect inner = Inset(rect, 10f);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), "Appearance", _sectionTitleStyle);
+
+            float portraitHeight = Mathf.Clamp(inner.height * 0.43f, 154f, 214f);
+            Rect portraitRect = new Rect(inner.x + (inner.width - 176f) * 0.5f, inner.y + 30f, 176f, portraitHeight);
+            DrawCastPortrait(portraitRect, editor.Portrait);
+
+            float y = portraitRect.yMax + 10f;
+            for (int i = 0; editor.TextureRows != null && i < editor.TextureRows.Length; i++)
+            {
+                DrawSurvivorTextureRow(new Rect(inner.x, y, inner.width, 30f), editor.TextureRows[i]);
+                y += 34f;
+            }
+
+            y += 4f;
+            GUI.Label(new Rect(inner.x, y, inner.width, 22f), "Colors", _smallTitleStyle);
+            y += 26f;
+            for (int i = 0; editor.ColorRows != null && i < editor.ColorRows.Length; i++)
+            {
+                DrawSurvivorColorRow(new Rect(inner.x, y, inner.width, 30f), editor.ColorRows[i]);
+                y += 34f;
+            }
+        }
+
+        private void DrawSurvivorTextureRow(Rect rect, ScenarioSurvivorTextureRowViewModel row)
+        {
+            if (row == null)
+                return;
+
+            float stepWidth = 30f;
+            float labelWidth = 82f;
+            DrawButton(new Rect(rect.x, rect.y, stepWidth, 28f), row.PreviousAction, false);
+            GUI.Label(new Rect(rect.x + stepWidth + 8f, rect.y + 3f, labelWidth, 22f), row.Label ?? string.Empty, _textStyle);
+            GUI.Label(new Rect(rect.x + stepWidth + labelWidth + 12f, rect.y + 4f, Math.Max(30f, rect.width - (stepWidth * 2f) - labelWidth - 28f), 20f), ShortenToFit(row.Detail ?? "default", Math.Max(30f, rect.width - (stepWidth * 2f) - labelWidth - 28f), _mutedTextStyle), _mutedTextStyle);
+            DrawButton(new Rect(rect.xMax - stepWidth, rect.y, stepWidth, 28f), row.NextAction, false);
+        }
+
+        private void DrawSurvivorColorRow(Rect rect, ScenarioSurvivorColorRowViewModel row)
+        {
+            if (row == null)
+                return;
+
+            float stepWidth = 30f;
+            float labelWidth = 62f;
+            float swatchWidth = 58f;
+            DrawButton(new Rect(rect.x, rect.y, stepWidth, 28f), row.PreviousAction, false);
+            GUI.Label(new Rect(rect.x + stepWidth + 8f, rect.y + 3f, labelWidth, 22f), row.Label ?? string.Empty, _textStyle);
+
+            Rect swatchRect = new Rect(rect.x + stepWidth + labelWidth + 12f, rect.y + 1f, swatchWidth, 26f);
+            DrawColorPreview(swatchRect, row.Color);
+            RegisterTourTarget("action:" + row.OpenColorPickerActionId, swatchRect);
+            if (DrawPlainButton(swatchRect, GUIContent.none, GUIStyle.none, true))
+                OpenSurvivorColorPicker(row);
+
+            float hexX = swatchRect.xMax + 8f;
+            float hexWidth = Math.Max(42f, rect.xMax - hexX - stepWidth - 8f);
+            GUI.Label(new Rect(hexX, rect.y + 4f, hexWidth, 20f), ShortenToFit(row.Hex ?? string.Empty, hexWidth, _mutedTextStyle), _mutedTextStyle);
+            DrawButton(new Rect(rect.xMax - stepWidth, rect.y, stepWidth, 28f), row.NextAction, false);
+        }
+
+        private void DrawSurvivorStatsPanel(Rect rect, ScenarioSurvivorEditorViewModel editor)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
+            Rect inner = Inset(rect, 10f);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), "Stats", _sectionTitleStyle);
+            float y = inner.y + 30f;
+            for (int i = 0; editor.StatRows != null && i < editor.StatRows.Length; i++)
+            {
+                DrawSurvivorStatRow(new Rect(inner.x, y, inner.width, 34f), editor.StatRows[i]);
+                y += 38f;
+            }
+
+            y += 8f;
+            GUI.Label(new Rect(inner.x, y, inner.width, 24f), "Traits", _sectionTitleStyle);
+            y += 30f;
+            for (int i = 0; editor.TraitRows != null && i < editor.TraitRows.Length; i++)
+            {
+                DrawSurvivorTraitRow(new Rect(inner.x, y, inner.width, 34f), editor.TraitRows[i]);
+                y += 38f;
+            }
+        }
+
+        private void DrawSurvivorStatRow(Rect rect, ScenarioSurvivorStatRowViewModel row)
+        {
+            if (row == null)
+                return;
+
+            float labelWidth = Mathf.Clamp(rect.width * 0.30f, 88f, 146f);
+            float buttonWidth = 30f;
+            float valueWidth = 48f;
+            GUI.Label(new Rect(rect.x, rect.y + 7f, labelWidth, 20f), row.Label ?? string.Empty, _textStyle);
+            DrawButton(new Rect(rect.x + labelWidth + 6f, rect.y + 3f, buttonWidth, 28f), row.DecreaseAction, false);
+
+            Rect barRect = new Rect(rect.x + labelWidth + buttonWidth + 14f, rect.y + 8f, Math.Max(56f, rect.width - labelWidth - (buttonWidth * 2f) - valueWidth - 34f), 16f);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(barRect, _uiContext.Styles.PanelInsetTexture);
+            float fillWidth = Mathf.Clamp01(row.Value / (float)Math.Max(1, row.Max)) * Math.Max(0f, barRect.width - 4f);
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.45f, 0.61f, 0.32f, 1f);
+            GUI.DrawTexture(new Rect(barRect.x + 2f, barRect.y + 2f, fillWidth, barRect.height - 4f), Texture2D.whiteTexture);
+            GUI.color = oldColor;
+
+            string value = row.Value.ToString() + "/" + row.Max.ToString();
+            GUI.Label(new Rect(barRect.xMax + 8f, rect.y + 7f, valueWidth, 20f), value, _mutedTextStyle);
+            DrawButton(new Rect(rect.xMax - buttonWidth, rect.y + 3f, buttonWidth, 28f), row.IncreaseAction, false);
+        }
+
+        private void DrawSurvivorTraitRow(Rect rect, ScenarioSurvivorTraitRowViewModel row)
+        {
+            if (row == null)
+                return;
+
+            float labelWidth = Mathf.Clamp(rect.width * 0.34f, 118f, 170f);
+            GUI.Label(new Rect(rect.x, rect.y + 7f, labelWidth, 20f), row.Label ?? string.Empty, _textStyle);
+            Rect buttonRect = new Rect(rect.x + labelWidth + 8f, rect.y + 3f, Math.Max(120f, rect.width - labelWidth - 8f), 28f);
+            DrawButton(buttonRect, row.CycleAction, false);
+        }
+
+        private void DrawSurvivorEditorFooter(Rect rect, ScenarioSurvivorEditorViewModel editor)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
+            Rect inner = Inset(rect, 8f);
+            float closeWidth = 0f;
+            for (int i = 0; editor.CloseActions != null && i < editor.CloseActions.Length; i++)
+                closeWidth += Math.Max(76f, MeasureButtonWidth(editor.CloseActions[i], false, 20f)) + 6f;
+            closeWidth = Math.Max(0f, closeWidth - 6f);
+
+            Rect utilityRect = new Rect(inner.x, inner.y, Math.Max(120f, inner.width - closeWidth - 18f), inner.height);
+            DrawWrappedActionButtons(utilityRect, editor.UtilityActions, 28f, 6f, false);
+
+            float x = inner.xMax - closeWidth;
+            for (int i = 0; editor.CloseActions != null && i < editor.CloseActions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = editor.CloseActions[i];
+                float width = Math.Max(76f, MeasureButtonWidth(action, false, 20f));
+                DrawButton(new Rect(x, inner.y + inner.height - 30f, width, 28f), action, false);
+                x += width + 6f;
+            }
+        }
+
+        private void DrawWrappedActionButtons(Rect rect, ScenarioAuthoringInspectorAction[] actions, float height, float gap, bool tabs)
+        {
+            float x = rect.x;
+            float y = rect.y;
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
+
+                float width = Math.Max(90f, MeasureButtonWidth(action, tabs, 20f));
+                width = Math.Min(width, rect.width);
+                if (x > rect.x && x + width > rect.xMax)
+                {
+                    x = rect.x;
+                    y += height + gap;
+                }
+                if (y + height > rect.yMax)
+                    break;
+
+                DrawButton(new Rect(x, y, width, height), action, tabs);
+                x += width + gap;
+            }
+        }
+
         private void DrawHomeIdentityHeader(ScenarioAuthoringInspectorSection section)
         {
             GUILayout.BeginVertical(_uiContext.Styles.Card);
@@ -1826,6 +2045,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (section == null)
                 return;
+
+            if (section.Layout == ScenarioAuthoringInspectorSectionLayout.SurvivorEditor)
+            {
+                Rect rect = GUILayoutUtility.GetRect(0f, 520f, GUILayout.ExpandWidth(true), GUILayout.Height(520f));
+                DrawSurvivorEditor(rect, section.SurvivorEditor);
+                return;
+            }
 
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             if (!string.IsNullOrEmpty(section.Title))

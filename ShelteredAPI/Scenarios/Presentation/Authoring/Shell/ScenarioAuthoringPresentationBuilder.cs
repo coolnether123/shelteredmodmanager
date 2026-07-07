@@ -1882,37 +1882,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            string actionPrefix = starting ? ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix : ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix;
             sections.Add(new ScenarioAuthoringInspectorSection
             {
-                Id = "survivor_editor_preview",
-                Title = "Person",
+                Id = "survivor_editor_layout",
+                Title = string.Empty,
                 Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.CastCardGrid,
-                Items = new[]
-                {
-                    CastCardItem(BuildAuthoredSurvivorCard(
-                        member,
-                        index,
-                        futureSurvivor != null ? (futureSurvivor.AskToJoin ? "Ask to join" : "Auto join") + " - " + FormatSchedule(futureSurvivor.Arrival) : null,
-                        starting ? "Starting survivor" : "Future arrival",
-                        null,
-                        new ScenarioAuthoringInspectorAction[0]))
-                }
+                Layout = ScenarioAuthoringInspectorSectionLayout.SurvivorEditor,
+                SurvivorEditor = BuildSurvivorEditorViewModel(
+                    state,
+                    member,
+                    index,
+                    actionPrefix,
+                    futureSurvivor != null ? (futureSurvivor.AskToJoin ? "Ask to join" : "Auto join") + " - " + FormatSchedule(futureSurvivor.Arrival) : null,
+                    starting ? "Starting survivor" : "Future arrival")
             });
-            sections.Add(FactSection("survivor_editor_summary", "Summary", new List<ScenarioAuthoringInspectorItem>
-            {
-                Fact("Name", Safe(member != null ? member.Name : null), "Survivor display name."),
-                Fact("Age Band", FormatAgeBand(member), "Adult or child body choice."),
-                Fact("Gender", member != null ? member.Gender.ToString() : ScenarioGender.Any.ToString(), "Vanilla survivor gender setting."),
-                Fact("Stats", FormatStatLine(member), "Vanilla stats are clamped to 0-20."),
-                Fact("Traits", FindTrait(member, "Strength:") + " / " + FindTrait(member, "Weakness:"), "Strength and weakness pairs block vanilla conflicts."),
-                Fact("Appearance", FormatAppearance(member), "Mesh, textures, and colors currently stored.")
-            }));
-
-            List<ScenarioAuthoringInspectorItem> identity = new List<ScenarioAuthoringInspectorItem>();
-            string actionPrefix = starting ? ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix : ScenarioAuthoringActionIds.ActionFutureSurvivorEditPrefix;
-            AddFamilyMemberEditorItems(identity, state, member, index, actionPrefix, false, true);
-            sections.Add(ActionSection("survivor_editor_fields", "Identity, Stats, Traits, Appearance", identity));
 
             if (future && futureSurvivor != null)
             {
@@ -1922,12 +1906,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 schedule.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + index.ToString(CultureInfo.InvariantCulture), "Toggle Join Mode", "Switch between recruit intercom flow and immediate auto-join.", true, futureSurvivor.AskToJoin, "AJ")));
                 sections.Add(ActionSection("survivor_editor_schedule", "Arrival", schedule));
             }
-
-            sections.Add(ActionSection("survivor_editor_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
-            {
-                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorSave, "Save", "Close this focused survivor editor.", true, true, "SV")),
-                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", state.FocusedEditorIsNew ? "Close this new survivor editor." : "Close this survivor editor.", true, false, "CL"))
-            }));
 
             return new ScenarioAuthoringInspectorDocument
             {
@@ -2662,30 +2640,132 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
-        private static void AddFamilyMemberEditorItems(
-            List<ScenarioAuthoringInspectorItem> items,
+        private static ScenarioSurvivorEditorViewModel BuildSurvivorEditorViewModel(
             ScenarioAuthoringState state,
             FamilyMemberConfig member,
             int index,
             string actionPrefix,
-            bool includeOrdering,
-            bool showAdvancedDetails)
+            string arrivalSummary,
+            string status)
         {
-            if (items == null)
-                return;
-
             if (member == null)
                 member = new FamilyMemberConfig();
 
             string indexedPrefix = actionPrefix + index.ToString(CultureInfo.InvariantCulture) + ".";
-            items.Add(Property(
-                (index + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(member.Name),
-                BuildFamilyMemberSummary(member)));
-            items.Add(ActionItem(Action(indexedPrefix + "name", "Name", "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name))));
-            items.Add(ActionItem(Action(indexedPrefix + "gender", "Gender", "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString())));
-            items.Add(ActionItem(Action(indexedPrefix + "adult", "Adult/Child", "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member, showAdvancedDetails))));
+            string copyReason;
+            bool canCopySelected = CanCopySelectedFamilyMember(state, out copyReason);
+            string strengthTrait = FindTrait(member, "Strength:");
+            string weaknessTrait = FindTrait(member, "Weakness:");
 
+            return new ScenarioSurvivorEditorViewModel
+            {
+                Portrait = BuildAuthoredSurvivorCard(member, index, arrivalSummary, status, null, new ScenarioAuthoringInspectorAction[0]),
+                NameAction = Action(indexedPrefix + "name", Safe(member.Name), "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name)),
+                GenderAction = Action(indexedPrefix + "gender", "Gender: " + member.Gender.ToString(), "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString()),
+                BodyAction = Action(indexedPrefix + "adult", FormatAgeBand(member), "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member, true)),
+                TextureRows = BuildSurvivorTextureRows(member, indexedPrefix),
+                ColorRows = BuildSurvivorColorRows(member, indexedPrefix),
+                StatRows = BuildSurvivorStatRows(member, indexedPrefix),
+                TraitRows = new[]
+                {
+                    new ScenarioSurvivorTraitRowViewModel
+                    {
+                        Label = "Strength Trait",
+                        Value = strengthTrait,
+                        CycleAction = Action(indexedPrefix + "strength_trait", Safe(strengthTrait), "Cycle this survivor's strength characteristic. Vanilla paired trait conflicts are skipped.", true, false, "ST", strengthTrait)
+                    },
+                    new ScenarioSurvivorTraitRowViewModel
+                    {
+                        Label = "Weakness Trait",
+                        Value = weaknessTrait,
+                        CycleAction = Action(indexedPrefix + "weakness_trait", Safe(weaknessTrait), "Cycle this survivor's weakness characteristic. Vanilla paired trait conflicts are skipped.", true, false, "WT", weaknessTrait)
+                    }
+                },
+                UtilityActions = new[]
+                {
+                    Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND"),
+                    Action(indexedPrefix + "randomize_look", "Randomize Look", "Randomize head, top, bottom, and color choices.", true, false, "RLK", FormatAppearance(member)),
+                    Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", canCopySelected, false, "ID", canCopySelected ? "Selected live family member" : null, null, null, copyReason),
+                    Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", canCopySelected, false, "LK", FormatAppearance(member), null, null, copyReason),
+                    Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored mesh, texture, and color overrides.", true, false, "CL", FormatAppearance(member))
+                },
+                CloseActions = new[]
+                {
+                    Action(ScenarioAuthoringActionIds.ActionFocusedEditorSave, "Done", "Close this focused survivor editor.", true, true, "OK"),
+                    Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", state != null && state.FocusedEditorIsNew ? "Close this new survivor editor." : "Close this survivor editor.", true, false, "CL")
+                }
+            };
+        }
+
+        private static ScenarioSurvivorTextureRowViewModel[] BuildSurvivorTextureRows(FamilyMemberConfig member, string indexedPrefix)
+        {
+            FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+            return new[]
+            {
+                SurvivorTextureRow("Head", indexedPrefix, "head", ScenarioCharacterTexturePart.Head, appearance),
+                SurvivorTextureRow("Top", indexedPrefix, "torso", ScenarioCharacterTexturePart.Torso, appearance),
+                SurvivorTextureRow("Bottom", indexedPrefix, "legs", ScenarioCharacterTexturePart.Legs, appearance)
+            };
+        }
+
+        private static ScenarioSurvivorTextureRowViewModel SurvivorTextureRow(
+            string label,
+            string indexedPrefix,
+            string commandPart,
+            ScenarioCharacterTexturePart part,
+            FamilyMemberAppearanceConfig appearance)
+        {
+            return new ScenarioSurvivorTextureRowViewModel
+            {
+                Label = label,
+                Detail = FormatTexture(appearance, part, true),
+                PreviousAction = Action(indexedPrefix + "texture." + commandPart + ".-1", "<", "Switch to the previous vanilla " + label.ToLowerInvariant() + " sprite.", true, false, "<"),
+                NextAction = Action(indexedPrefix + "texture." + commandPart + ".1", ">", "Switch to the next vanilla " + label.ToLowerInvariant() + " sprite.", true, false, ">")
+            };
+        }
+
+        private static ScenarioSurvivorColorRowViewModel[] BuildSurvivorColorRows(FamilyMemberConfig member, string indexedPrefix)
+        {
+            Color hair;
+            Color skin;
+            Color shirt;
+            Color pants;
+            ScenarioCastPortraitResolver.ResolveColors(member, out hair, out skin, out shirt, out pants);
+
+            return new[]
+            {
+                SurvivorColorRow("Hair", "hair", indexedPrefix, ScenarioCharacterColorPart.Hair, hair),
+                SurvivorColorRow("Skin", "skin", indexedPrefix, ScenarioCharacterColorPart.Skin, skin),
+                SurvivorColorRow("Shirt", "shirt", indexedPrefix, ScenarioCharacterColorPart.Shirt, shirt),
+                SurvivorColorRow("Pants", "pants", indexedPrefix, ScenarioCharacterColorPart.Pants, pants)
+            };
+        }
+
+        private static ScenarioSurvivorColorRowViewModel SurvivorColorRow(
+            string label,
+            string commandPart,
+            string indexedPrefix,
+            ScenarioCharacterColorPart part,
+            Color color)
+        {
+            string applyPrefix = indexedPrefix + ScenarioAuthoringLocalActionIds.ActionSurvivorApplyColorCommandPrefix + commandPart + ".";
+            return new ScenarioSurvivorColorRowViewModel
+            {
+                Channel = commandPart,
+                Label = label,
+                Hex = ScenarioCharacterAppearanceService.ToColorHex(color),
+                Color = color,
+                PreviousAction = Action(indexedPrefix + "color." + commandPart + ".-1", "<", "Switch to the previous vanilla " + label.ToLowerInvariant() + " color.", true, false, "<"),
+                NextAction = Action(indexedPrefix + "color." + commandPart + ".1", ">", "Switch to the next vanilla " + label.ToLowerInvariant() + " color.", true, false, ">"),
+                OpenColorPickerActionId = ScenarioAuthoringLocalActionIds.ActionSurvivorOpenColorPickerPrefix + commandPart,
+                ApplyColorActionPrefix = applyPrefix
+            };
+        }
+
+        private static ScenarioSurvivorStatRowViewModel[] BuildSurvivorStatRows(FamilyMemberConfig member, string indexedPrefix)
+        {
             string[] statIds = ScenarioFamilyMemberFactory.StatIds;
+            ScenarioSurvivorStatRowViewModel[] rows = new ScenarioSurvivorStatRowViewModel[statIds.Length];
             for (int i = 0; i < statIds.Length; i++)
             {
                 string statId = statIds[i];
@@ -2694,47 +2774,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 string statDetail = FormatStatDisplayDetail(rawValue, displayValue);
                 bool canIncrease = displayValue < 20;
                 bool canDecrease = displayValue > 0;
-                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".1", statId + " +", "Increase " + statId + ".", canIncrease, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canIncrease ? statDetail : "Stats are limited to 0-20.")));
-                items.Add(ActionItem(Action(indexedPrefix + "stat." + statId + ".-1", statId + " -", "Decrease " + statId + ".", canDecrease, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canDecrease ? statDetail : "Stats are limited to 0-20.")));
+                rows[i] = new ScenarioSurvivorStatRowViewModel
+                {
+                    Id = statId,
+                    Label = statId,
+                    Value = displayValue,
+                    Max = 20,
+                    DecreaseAction = Action(indexedPrefix + "stat." + statId + ".-1", "-", "Decrease " + statId + ".", canDecrease, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canDecrease ? statDetail : "Stats are limited to 0-20."),
+                    IncreaseAction = Action(indexedPrefix + "stat." + statId + ".1", "+", "Increase " + statId + ".", canIncrease, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canIncrease ? statDetail : "Stats are limited to 0-20.")
+                };
             }
 
-            items.Add(ActionItem(Action(indexedPrefix + "strength_trait", "Strength Trait", "Cycle this survivor's strength characteristic. Vanilla paired trait conflicts are skipped.", true, false, "ST", FindTrait(member, "Strength:"))));
-            items.Add(ActionItem(Action(indexedPrefix + "weakness_trait", "Weakness Trait", "Cycle this survivor's weakness characteristic. Vanilla paired trait conflicts are skipped.", true, false, "WT", FindTrait(member, "Weakness:"))));
-            items.Add(ActionItem(Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND")));
-            items.Add(ActionItem(Action(indexedPrefix + "randomize_look", "Randomize Look", "Randomize head, top, bottom, and color choices.", true, false, "RLK", FormatAppearance(member))));
-            AddAppearanceCycleActions(items, indexedPrefix, member, showAdvancedDetails);
-            string copyReason;
-            bool canCopySelected = CanCopySelectedFamilyMember(state, out copyReason);
-            items.Add(ActionItem(Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", canCopySelected, false, "ID", canCopySelected ? "Selected live family member" : null, null, null, copyReason)));
-            items.Add(ActionItem(Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", canCopySelected, false, "LK", FormatAppearance(member), null, null, copyReason)));
-            items.Add(ActionItem(Action(indexedPrefix + "clear_look", "Clear Look", "Clear stored mesh, texture, and color overrides.", true, false, "CL", FormatAppearance(member))));
-
-            if (includeOrdering)
-            {
-                items.Add(ActionItem(Action(actionPrefix + "move." + index.ToString(CultureInfo.InvariantCulture) + ".-1", "Move Up", "Move this starting survivor earlier in the crew order.", true, false, "UP")));
-                items.Add(ActionItem(Action(actionPrefix + "move." + index.ToString(CultureInfo.InvariantCulture) + ".1", "Move Down", "Move this starting survivor later in the crew order.", true, false, "DN")));
-                items.Add(ActionItem(Action(actionPrefix + "remove." + index.ToString(CultureInfo.InvariantCulture), "Remove", "Remove this starting survivor from the start crew.", true, false, "RM")));
-            }
-        }
-
-        private static void AddAppearanceCycleActions(List<ScenarioAuthoringInspectorItem> items, string indexedPrefix, FamilyMemberConfig member, bool showAdvancedDetails)
-        {
-            FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
-            items.Add(ActionItem(Action(indexedPrefix + "texture.head.-1", "Previous Head", "Switch to the previous vanilla head sprite.", true, false, "<H", FormatTexture(appearance, ScenarioCharacterTexturePart.Head, showAdvancedDetails))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.head.1", "Next Head", "Switch to the next vanilla head sprite.", true, false, "H>", FormatTexture(appearance, ScenarioCharacterTexturePart.Head, showAdvancedDetails))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.-1", "Previous Top", "Switch to the previous vanilla torso/top sprite.", true, false, "<T", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso, showAdvancedDetails))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.torso.1", "Next Top", "Switch to the next vanilla torso/top sprite.", true, false, "T>", FormatTexture(appearance, ScenarioCharacterTexturePart.Torso, showAdvancedDetails))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.-1", "Previous Bottom", "Switch to the previous vanilla leg/bottom sprite.", true, false, "<B", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs, showAdvancedDetails))));
-            items.Add(ActionItem(Action(indexedPrefix + "texture.legs.1", "Next Bottom", "Switch to the next vanilla leg/bottom sprite.", true, false, "B>", FormatTexture(appearance, ScenarioCharacterTexturePart.Legs, showAdvancedDetails))));
-
-            items.Add(ActionItem(Action(indexedPrefix + "color.hair.-1", "Previous Hair Color", "Switch to the previous vanilla hair color.", true, false, "<HC", FormatColor(appearance, ScenarioCharacterColorPart.Hair))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.hair.1", "Next Hair Color", "Switch to the next vanilla hair color.", true, false, "HC>", FormatColor(appearance, ScenarioCharacterColorPart.Hair))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.skin.-1", "Previous Skin Color", "Switch to the previous vanilla skin color.", true, false, "<SC", FormatColor(appearance, ScenarioCharacterColorPart.Skin))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.skin.1", "Next Skin Color", "Switch to the next vanilla skin color.", true, false, "SC>", FormatColor(appearance, ScenarioCharacterColorPart.Skin))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.shirt.-1", "Previous Shirt Color", "Switch to the previous vanilla shirt/top color.", true, false, "<TC", FormatColor(appearance, ScenarioCharacterColorPart.Shirt))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.shirt.1", "Next Shirt Color", "Switch to the next vanilla shirt/top color.", true, false, "TC>", FormatColor(appearance, ScenarioCharacterColorPart.Shirt))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.pants.-1", "Previous Pants Color", "Switch to the previous vanilla pants/bottom color.", true, false, "<BC", FormatColor(appearance, ScenarioCharacterColorPart.Pants))));
-            items.Add(ActionItem(Action(indexedPrefix + "color.pants.1", "Next Pants Color", "Switch to the next vanilla pants/bottom color.", true, false, "BC>", FormatColor(appearance, ScenarioCharacterColorPart.Pants))));
+            return rows;
         }
 
         private static bool CanCopySelectedFamilyMember(ScenarioAuthoringState state, out string reason)
@@ -3328,31 +3379,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioCharacterTexturePart.Legs: return "Bottom";
                 default: return "Texture";
             }
-        }
-
-        private static string FormatColor(FamilyMemberAppearanceConfig appearance, ScenarioCharacterColorPart part)
-        {
-            if (appearance == null)
-                return "default";
-
-            string color = null;
-            switch (part)
-            {
-                case ScenarioCharacterColorPart.Hair:
-                    color = appearance.HairColorHex;
-                    break;
-                case ScenarioCharacterColorPart.Skin:
-                    color = appearance.SkinColorHex;
-                    break;
-                case ScenarioCharacterColorPart.Shirt:
-                    color = appearance.ShirtColorHex;
-                    break;
-                case ScenarioCharacterColorPart.Pants:
-                    color = appearance.PantsColorHex;
-                    break;
-            }
-
-            return !string.IsNullOrEmpty(color) ? color : "default";
         }
 
         private static string GetCurrentWeatherSummary()

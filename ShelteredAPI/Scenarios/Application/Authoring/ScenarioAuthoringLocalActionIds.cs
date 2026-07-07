@@ -7,6 +7,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionFutureSurvivorEditorOpenPrefix = "scenario.survivor_editor.future.";
         public const string ActionInventoryStartingPickerOpenPrefix = "scenario.inventory.start.picker.";
         public const string ActionInventorySchedulePickerOpenPrefix = "scenario.inventory.schedule.picker.";
+        public const string ActionSurvivorOpenColorPickerPrefix = "scenario.survivor.color.open.";
+        public const string ActionSurvivorApplyColorCommandPrefix = "color_apply.";
 
         public const string FocusedKindCaptureFamily = "capture_family_preview";
         public const string FocusedKindCaptureInventory = "capture_inventory_preview";

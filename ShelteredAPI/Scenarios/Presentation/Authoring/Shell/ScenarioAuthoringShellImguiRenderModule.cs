@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
+using ModAPI.UI.ColorPicker;
 using UnityEngine;
 
 using ShelteredAPI.Hooks;
@@ -112,6 +113,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect _richHoverCandidateSourceRect = RuntimeCompat.ZeroRect();
         private Rect _activeRichHoverSourceRect = RuntimeCompat.ZeroRect();
         private Rect _activeRichHoverPopupRect = RuntimeCompat.ZeroRect();
+        private Rect _survivorColorPickerRect = RuntimeCompat.ZeroRect();
         private Vector2 _richHoverMouseLastPosition = Vector2.zero;
         private int _richHoverMouseSampleFrame = -1;
         private bool _richHoverMouseHasLastPosition;
@@ -122,6 +124,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _richHoverSourceHoveredThisFrame;
         private string _richHoverSourceKeyThisFrame;
         private readonly List<string> _richHoverTopicBackStack = new List<string>();
+        private SurvivorColorPickerPopup _survivorColorPicker;
 
         public string ModuleId
         {
@@ -182,6 +185,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _visible = false;
             _windowMenuOpen = false;
             _disposeWhenHidden = true;
+            CloseSurvivorColorPicker();
             ClearFloatingDrag();
             if (_runtime != null)
                 _runtime.enabled = true;
@@ -328,7 +332,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (shell.ContextMenu != null && shell.ContextMenu.Visible)
                 RegisterVisualSurface("popup.context-menu", BuildPopupRectCore(shell.ContextMenu, scaledWidth, scaledHeight, hudReserveRect));
             if (shell.FocusedEditorDocument != null || shell.SpritePickerDocument != null)
-                RegisterVisualSurface("modal.document", BuildDocumentModalRect(shell.FocusedEditorDocument != null, scaledWidth, scaledHeight));
+                RegisterVisualSurface("modal.document", BuildDocumentModalRect(shell.FocusedEditorDocument, shell.SpritePickerDocument, scaledWidth, scaledHeight));
+            if (_survivorColorPicker != null)
+                RegisterVisualSurface("popup.survivor-color-picker", BuildSurvivorColorPickerRect(scaledWidth, scaledHeight, hudReserveRect));
             if (shell.Help != null)
                 RegisterVisualSurface("modal.help", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
             if (IsRichHoverHelpActive() && _activeRichHoverPopupRect.width > 0f && _activeRichHoverPopupRect.height > 0f)
@@ -471,9 +477,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     GUI.color = oldColor;
                 }
 
-                float targetWidth = shell.FocusedEditorDocument != null ? 720f : 980f;
-                float targetHeight = shell.FocusedEditorDocument != null ? 520f : 680f;
-                Rect pickerRect = BuildDocumentModalRect(shell.FocusedEditorDocument != null, scaledWidth, scaledHeight);
+                Rect pickerRect = BuildDocumentModalRect(shell.FocusedEditorDocument, shell.SpritePickerDocument, scaledWidth, scaledHeight);
                 float panelProgress = _animations.GetModalPanelProgress(true);
                 float panelScale = Mathf.Lerp(0.975f, 1f, panelProgress);
                 Rect pickerScrollRect;
@@ -489,6 +493,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 _animations.GetModalDimAlpha(false);
                 _animations.GetModalPanelProgress(false);
+                CloseSurvivorColorPicker();
+            }
+
+            if (_survivorColorPicker != null)
+            {
+                _survivorColorPickerRect = BuildSurvivorColorPickerRect(scaledWidth, scaledHeight, hudReserveRect);
+                using (EnterVisualSurface("popup.survivor-color-picker"))
+                    DrawSurvivorColorPickerPopup(_survivorColorPickerRect);
+                inputCapture.RegisterInteractiveRect(_survivorColorPickerRect);
+                inputCapture.SetPopupOpen(true);
             }
 
             Rect overlayRect = new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight);
@@ -507,6 +521,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             inputCapture.SetTextFieldFocused(textFieldFocused);
             inputCapture.SetKeyboardCaptured(
                 modalDocument != null
+                || _survivorColorPicker != null
                 || shell.Help != null
                 || IsRichHoverHelpActive()
                 || textFieldFocused
@@ -760,15 +775,124 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new Rect(rect.x, rect.y + offset, rect.width, rect.height);
         }
 
-        private static Rect BuildDocumentModalRect(bool focusedEditor, float scaledWidth, float scaledHeight)
+        private static Rect BuildDocumentModalRect(
+            ScenarioAuthoringInspectorDocument focusedDocument,
+            ScenarioAuthoringInspectorDocument spritePickerDocument,
+            float scaledWidth,
+            float scaledHeight)
         {
-            float targetWidth = focusedEditor ? 720f : 980f;
-            float targetHeight = focusedEditor ? 520f : 680f;
+            bool spritePicker = focusedDocument == null && spritePickerDocument != null;
+            bool survivorEditor = HasSurvivorEditorLayout(focusedDocument);
+            float targetWidth = spritePicker ? 980f : (survivorEditor ? 1040f : 720f);
+            float targetHeight = spritePicker ? 680f : (survivorEditor ? 620f : 520f);
             return new Rect(
                 Math.Max(Margin, (scaledWidth - targetWidth) * 0.5f),
                 Math.Max(TopBarHeight + Gutter, (scaledHeight - targetHeight) * 0.5f),
                 Math.Min(targetWidth, scaledWidth - (Margin * 2f)),
                 Math.Min(targetHeight, scaledHeight - TopBarHeight - StatusHeight - (Margin * 3f)));
+        }
+
+        private static bool HasSurvivorEditorLayout(ScenarioAuthoringInspectorDocument document)
+        {
+            for (int i = 0; document != null && document.Sections != null && i < document.Sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = document.Sections[i];
+                if (section != null && section.Layout == ScenarioAuthoringInspectorSectionLayout.SurvivorEditor)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private Rect BuildSurvivorColorPickerRect(float scaledWidth, float scaledHeight, Rect hudReserveRect)
+        {
+            Vector2 preferred = _survivorColorPicker != null && _survivorColorPicker.Control != null
+                ? _survivorColorPicker.Control.PreferredSize
+                : new Vector2(430f, 300f);
+            float width = Mathf.Clamp(preferred.x + 28f, 430f, Math.Max(430f, scaledWidth - (Margin * 2f)));
+            float height = Mathf.Clamp(preferred.y + 60f, 330f, Math.Max(330f, scaledHeight - TopBarHeight - StatusHeight - (Margin * 3f)));
+            return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(scaledWidth, scaledHeight, width, height, hudReserveRect);
+        }
+
+        private void DrawSurvivorColorPickerPopup(Rect rect)
+        {
+            if (_survivorColorPicker == null || _survivorColorPicker.Control == null)
+                return;
+
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
+            Rect inner = Inset(rect, 14f);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), _survivorColorPicker.Title ?? "Color", _sectionTitleStyle);
+
+            ColorPickerImguiStyle style = _survivorColorPicker.Control.Style;
+            style.Label = _textStyle;
+            style.Field = GUI.skin.textField;
+            style.Button = _buttonStyle;
+            style.SmallButton = _buttonStyle;
+            style.SwatchLabel = _mutedTextStyle;
+
+            Rect pickerRect = new Rect(inner.x, inner.y + 34f, inner.width, Math.Max(120f, inner.height - 34f));
+            _survivorColorPicker.Control.Draw(pickerRect);
+            if (_survivorColorPicker.Session != null && _survivorColorPicker.Session.WantsClose)
+                CloseSurvivorColorPicker();
+        }
+
+        private void OpenSurvivorColorPicker(ScenarioSurvivorColorRowViewModel row)
+        {
+            if (row == null || string.IsNullOrEmpty(row.ApplyColorActionPrefix))
+                return;
+
+            CloseSurvivorColorPicker();
+            ModColor initial = new ModColor(row.Color.r, row.Color.g, row.Color.b, row.Color.a);
+            string actionPrefix = row.ApplyColorActionPrefix;
+            ColorPickerOptions options = new ColorPickerOptions();
+            options.OnCommit = delegate(ModColor color, ColorPickerCommitKind commitKind)
+            {
+                if (commitKind != ColorPickerCommitKind.Apply && commitKind != ColorPickerCommitKind.Ok)
+                    return;
+
+                string hex = color.ToHexRgba();
+                if (hex.StartsWith("#", StringComparison.Ordinal))
+                    hex = hex.Substring(1);
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(actionPrefix + hex);
+            };
+            options.OnClosed = delegate
+            {
+                GUI.FocusControl(null);
+            };
+
+            ColorPickerSession session = new ColorPickerSession(
+                initial,
+                ColorPickerPaletteStore.LoadDefault(),
+                options,
+                ColorPickerPaletteStore.DefaultPalettePath);
+
+            _survivorColorPicker = new SurvivorColorPickerPopup
+            {
+                Title = (row.Label ?? "Appearance") + " Color",
+                Session = session,
+                Control = new ColorPickerImguiControl(session)
+            };
+
+            if (Event.current != null)
+                Event.current.Use();
+        }
+
+        private void CloseSurvivorColorPicker()
+        {
+            if (_survivorColorPicker == null)
+                return;
+
+            if (_survivorColorPicker.Control != null)
+                _survivorColorPicker.Control.Dispose();
+            _survivorColorPicker = null;
+            _survivorColorPickerRect = RuntimeCompat.ZeroRect();
+        }
+
+        private sealed class SurvivorColorPickerPopup
+        {
+            public string Title;
+            public ColorPickerSession Session;
+            public ColorPickerImguiControl Control;
         }
 
         private static ScenarioAuthoringShellWindowViewModel[] BuildWindowDrawList(
