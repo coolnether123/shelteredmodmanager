@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Bunker;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Objects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -96,6 +97,9 @@ namespace ShelteredAPI.Scenarios.Definitions{
             BackendWorlds = new ScenarioBackendWorldsDefinition();
             Gates = new List<ScenarioGateDefinition>();
             ScheduledActions = new List<ScenarioScheduledActionDefinition>();
+            Journal = new JournalDefinition();
+            Conversations = new ScenarioConversationAuthoringDefinition();
+            VanillaSuppression = new ScenarioVanillaSuppressionDefinition();
         }
 
         public string Id { get; set; }
@@ -124,6 +128,118 @@ namespace ShelteredAPI.Scenarios.Definitions{
         internal ScenarioBackendWorldsDefinition BackendWorlds { get; set; }
         public List<ScenarioGateDefinition> Gates { get; private set; }
         public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
+        public JournalDefinition Journal { get; set; }
+        public ScenarioConversationAuthoringDefinition Conversations { get; set; }
+        public ScenarioVanillaSuppressionDefinition VanillaSuppression { get; set; }
+    }
+
+    public sealed class ScenarioVanillaSuppressionDefinition
+    {
+        public bool RandomVisitors { get; set; }
+        public bool Binman { get; set; }
+        public bool Raids { get; set; }
+        public bool StasisVisitors { get; set; }
+        public bool RadioBroadcastOdds { get; set; }
+    }
+
+    public enum ScenarioConversationTriggerSource
+    {
+        Random = 0,
+        Event = 1,
+        Timeline = 2
+    }
+
+    public enum ScenarioConversationParticipantFallback
+    {
+        None = 0,
+        AnyFamily = 1,
+        NearestIdleFamily = 2,
+        Initiator = 3,
+        Partner = 4
+    }
+
+    public sealed class ScenarioConversationAuthoringDefinition
+    {
+        public ScenarioConversationAuthoringDefinition()
+        {
+            Settings = new ScenarioConversationSuppressionDefinition();
+            Conversations = new List<ScenarioConversationDefinition>();
+        }
+
+        public ScenarioConversationSuppressionDefinition Settings { get; set; }
+        public List<ScenarioConversationDefinition> Conversations { get; private set; }
+    }
+
+    public sealed class ScenarioConversationSuppressionDefinition
+    {
+        public ScenarioConversationSuppressionDefinition()
+        {
+            SuppressedVanillaCategories = new List<string>();
+            SuppressedVanillaTopicKeys = new List<string>();
+        }
+
+        public bool SuppressVanillaRandomChatter { get; set; }
+        public List<string> SuppressedVanillaCategories { get; private set; }
+        public List<string> SuppressedVanillaTopicKeys { get; private set; }
+    }
+
+    public sealed class ScenarioConversationDefinition
+    {
+        public ScenarioConversationDefinition()
+        {
+            Trigger = new ScenarioConversationTriggerDefinition();
+            Participants = new List<ScenarioConversationParticipantDefinition>();
+            Conditions = new List<ScenarioConditionRef>();
+            Lines = new List<ScenarioConversationLineDefinition>();
+            Tags = new List<string>();
+        }
+
+        public string Id { get; set; }
+        public ScenarioConversationTriggerDefinition Trigger { get; set; }
+        public List<ScenarioConversationParticipantDefinition> Participants { get; private set; }
+        public List<ScenarioConditionRef> Conditions { get; private set; }
+        public List<ScenarioConversationLineDefinition> Lines { get; private set; }
+        public List<string> Tags { get; private set; }
+    }
+
+    public sealed class ScenarioConversationTriggerDefinition
+    {
+        public ScenarioConversationTriggerDefinition()
+        {
+            Source = ScenarioConversationTriggerSource.Random;
+            Weight = 1f;
+            Time = new ScenarioScheduleTime();
+        }
+
+        public ScenarioConversationTriggerSource Source { get; set; }
+        public float Weight { get; set; }
+        public string TriggerId { get; set; }
+        public float CooldownDays { get; set; }
+        public bool Once { get; set; }
+        public ScenarioScheduleTime Time { get; set; }
+    }
+
+    public sealed class ScenarioConversationParticipantDefinition
+    {
+        public ScenarioConversationParticipantDefinition()
+        {
+            Required = true;
+            Fallback = ScenarioConversationParticipantFallback.None;
+        }
+
+        public string Slot { get; set; }
+        public string StoryCharacterId { get; set; }
+        public ScenarioActorRef ActorRef { get; set; }
+        public ScenarioConversationParticipantFallback Fallback { get; set; }
+        public bool Required { get; set; }
+    }
+
+    public sealed class ScenarioConversationLineDefinition
+    {
+        public string SpeakerSlot { get; set; }
+        public string TextKey { get; set; }
+        public string RawText { get; set; }
+        public float DelaySeconds { get; set; }
     }
 
     internal sealed class ScenarioBackendWorldsDefinition

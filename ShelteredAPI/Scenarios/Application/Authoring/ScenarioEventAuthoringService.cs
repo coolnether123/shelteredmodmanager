@@ -4,6 +4,7 @@ using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Shared;
@@ -13,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioTriggerAuthoringService _triggers;
         private readonly ScenarioGateAuthoringService _gates;
         private readonly ScenarioScheduledActionAuthoringService _scheduledActions;
+        private readonly ScenarioJournalAuthoringService _journal;
 
         public ScenarioEventAuthoringService()
         {
@@ -20,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _triggers = new ScenarioTriggerAuthoringService();
             _gates = new ScenarioGateAuthoringService(templates);
             _scheduledActions = new ScenarioScheduledActionAuthoringService(templates);
+            _journal = new ScenarioJournalAuthoringService();
         }
 
         public bool CanHandle(string actionId)
@@ -27,7 +30,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return !string.IsNullOrEmpty(actionId)
                 && (actionId.StartsWith("scenario.trigger.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.gate.", StringComparison.Ordinal)
-                    || actionId.StartsWith("scenario.action.", StringComparison.Ordinal));
+                    || actionId.StartsWith("scenario.action.", StringComparison.Ordinal)
+                    || actionId.StartsWith("scenario.journal.", StringComparison.Ordinal));
         }
 
         public bool TryHandleAction(ScenarioEditorSession session, string actionId, out string message)
@@ -44,6 +48,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (_gates.TryHandle(session, actionId, out message))
                 return true;
             if (_scheduledActions.TryHandle(session, actionId, out message))
+                return true;
+            if (_journal.TryHandle(session, actionId, out message))
                 return true;
 
             return false;
@@ -357,6 +363,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action != null && string.Equals(action.GateId, gateId, StringComparison.OrdinalIgnoreCase))
                     action.GateId = null;
+            }
+            for (int i = 0; definition != null && definition.Journal != null && definition.Journal.Entries != null && i < definition.Journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = definition.Journal.Entries[i];
+                if (entry != null && string.Equals(entry.GateId, gateId, StringComparison.OrdinalIgnoreCase))
+                    entry.GateId = null;
             }
         }
 
@@ -703,6 +715,223 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case ScenarioEffectKind.DeactivateObject: return ScenarioEffectKind.UnlockBunkerExpansion;
                 case ScenarioEffectKind.UnlockBunkerExpansion: return ScenarioEffectKind.RestoreWeather;
                 default: return ScenarioEffectKind.SetScenarioFlag;
+            }
+        }
+    }
+
+    internal sealed class ScenarioJournalAuthoringService
+    {
+        public bool TryHandle(ScenarioEditorSession session, string actionId, out string message)
+        {
+            message = null;
+            ScenarioDefinition definition = session.WorkingDefinition;
+            JournalDefinition journal = EnsureJournal(definition);
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal))
+                return AddEntry(session, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionJournalVanillaSuppressFirst, StringComparison.Ordinal))
+            {
+                journal.VanillaPolicy.SuppressFirstEntry = !journal.VanillaPolicy.SuppressFirstEntry;
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = journal.VanillaPolicy.SuppressFirstEntry ? "Vanilla first journal entry suppressed." : "Vanilla first journal entry allowed.";
+                return true;
+            }
+
+            int index;
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryDeletePrefix, journal.Entries.Count, out index))
+            {
+                string id = journal.Entries[index] != null ? journal.Entries[index].Id : null;
+                journal.Entries.RemoveAt(index);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Removed journal entry '" + (id ?? ("#" + index.ToString())) + "'.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryGatePrefix, journal.Entries.Count, out index))
+            {
+                JournalEntryDefinition entry = journal.Entries[index];
+                entry.GateId = NextGateReference(definition, entry != null ? entry.GateId : null);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = string.IsNullOrEmpty(entry.GateId) ? "Journal entry condition gate cleared." : "Journal entry now requires gate '" + entry.GateId + "'.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryRepeatPrefix, journal.Entries.Count, out index))
+            {
+                JournalEntryDefinition entry = journal.Entries[index];
+                entry.Mode = entry.Mode == ScenarioJournalEntryMode.Repeat ? ScenarioJournalEntryMode.Once : ScenarioJournalEntryMode.Repeat;
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = entry.Mode == ScenarioJournalEntryMode.Repeat ? "Journal entry is repeatable." : "Journal entry runs once.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryWriterAnyPrefix, journal.Entries.Count, out index))
+            {
+                journal.Entries[index].Writer = null;
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Journal writer set to any present member.";
+                return true;
+            }
+
+            int delta;
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryDayPrefix, journal.Entries.Count, out index, out delta))
+            {
+                ScenarioScheduleTime time = EnsureDueTime(journal.Entries[index]);
+                time.Day = Math.Max(1, time.Day + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated journal day to " + time.Day + ".";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryHourPrefix, journal.Entries.Count, out index, out delta))
+            {
+                ScenarioScheduleTime time = EnsureDueTime(journal.Entries[index]);
+                time.Hour = ScenarioAuthoringSchedule.Clamp(time.Hour + delta, 0, 23);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated journal hour to " + time.Hour + ".";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionJournalEntryMinutePrefix, journal.Entries.Count, out index, out delta))
+            {
+                ScenarioScheduleTime time = EnsureDueTime(journal.Entries[index]);
+                time.Minute = ScenarioAuthoringSchedule.Clamp(time.Minute + delta, 0, 59);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated journal minute to " + time.Minute + ".";
+                return true;
+            }
+
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionJournalEntryIdPrefix, journal.Entries.Count, out index, out token))
+            {
+                journal.Entries[index].Id = ScenarioAuthoringActionCodec.DecodeToken(token);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated journal entry id.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionJournalEntryTextPrefix, journal.Entries.Count, out index, out token))
+            {
+                journal.Entries[index].Text = ScenarioAuthoringActionCodec.DecodeToken(token);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated journal entry text.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionJournalEntryWriterPrefix, journal.Entries.Count, out index, out token))
+            {
+                ScenarioCastMemberReferenceCandidate candidate;
+                if (!ScenarioCastMemberReferenceCatalog.TryFindByToken(definition, true, true, Uri.UnescapeDataString(token), out candidate))
+                    return false;
+                journal.Entries[index].Writer = ScenarioCastMemberReferenceCatalog.CopyActorRef(candidate.ActorRef);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated journal writer to " + candidate.DisplayName + ".";
+                return true;
+            }
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionJournalVanillaCategoryPrefix, StringComparison.Ordinal))
+            {
+                ScenarioJournalVanillaCategory category;
+                if (!TryParseCategory(actionId.Substring(ScenarioAuthoringActionIds.ActionJournalVanillaCategoryPrefix.Length), out category))
+                    return false;
+                ToggleCategory(journal.VanillaPolicy, category);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated vanilla journal category suppression for " + category + ".";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool AddEntry(ScenarioEditorSession session, out string message)
+        {
+            JournalDefinition journal = EnsureJournal(session.WorkingDefinition);
+            JournalEntryDefinition entry = new JournalEntryDefinition();
+            entry.Id = NextJournalEntryId(journal);
+            entry.Text = "We should write this down. {writer} will remember day {day}.";
+            entry.DueTime = ScenarioAuthoringSchedule.NextTime();
+            entry.Mode = ScenarioJournalEntryMode.Once;
+            journal.Entries.Add(entry);
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Added journal entry '" + entry.Id + "' for " + ScenarioAuthoringSchedule.Format(entry.DueTime) + ".";
+            return true;
+        }
+
+        private static JournalDefinition EnsureJournal(ScenarioDefinition definition)
+        {
+            if (definition.Journal == null)
+                definition.Journal = new JournalDefinition();
+            if (definition.Journal.VanillaPolicy == null)
+                definition.Journal.VanillaPolicy = new JournalVanillaPolicyDefinition();
+            return definition.Journal;
+        }
+
+        private static ScenarioScheduleTime EnsureDueTime(JournalEntryDefinition entry)
+        {
+            if (entry.DueTime == null)
+                entry.DueTime = ScenarioAuthoringSchedule.NextTime();
+            return entry.DueTime;
+        }
+
+        private static string NextJournalEntryId(JournalDefinition journal)
+        {
+            int index = journal != null && journal.Entries != null ? journal.Entries.Count + 1 : 1;
+            string id;
+            do
+            {
+                id = "journal_" + index.ToString();
+                index++;
+            }
+            while (HasJournalEntry(journal, id));
+            return id;
+        }
+
+        private static bool HasJournalEntry(JournalDefinition journal, string id)
+        {
+            for (int i = 0; journal != null && journal.Entries != null && i < journal.Entries.Count; i++)
+                if (journal.Entries[i] != null && string.Equals(journal.Entries[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static string NextGateReference(ScenarioDefinition definition, string current)
+        {
+            if (definition == null || definition.Gates == null || definition.Gates.Count == 0)
+                return null;
+            if (string.IsNullOrEmpty(current))
+                return definition.Gates[0] != null ? definition.Gates[0].Id : null;
+            for (int i = 0; i < definition.Gates.Count; i++)
+            {
+                if (definition.Gates[i] != null && string.Equals(definition.Gates[i].Id, current, StringComparison.OrdinalIgnoreCase))
+                {
+                    int next = i + 1;
+                    return next < definition.Gates.Count && definition.Gates[next] != null ? definition.Gates[next].Id : null;
+                }
+            }
+            return null;
+        }
+
+        private static void ToggleCategory(JournalVanillaPolicyDefinition policy, ScenarioJournalVanillaCategory category)
+        {
+            if (policy == null)
+                return;
+            for (int i = 0; policy.SuppressedCategories != null && i < policy.SuppressedCategories.Count; i++)
+            {
+                if (policy.SuppressedCategories[i] == category)
+                {
+                    policy.SuppressedCategories.RemoveAt(i);
+                    return;
+                }
+            }
+            policy.SuppressedCategories.Add(category);
+        }
+
+        private static bool TryParseCategory(string token, out ScenarioJournalVanillaCategory category)
+        {
+            category = ScenarioJournalVanillaCategory.Death;
+            if (string.IsNullOrEmpty(token))
+                return false;
+            try
+            {
+                category = (ScenarioJournalVanillaCategory)Enum.Parse(typeof(ScenarioJournalVanillaCategory), token, true);
+                return Enum.IsDefined(typeof(ScenarioJournalVanillaCategory), category);
+            }
+            catch
+            {
+                return false;
             }
         }
     }

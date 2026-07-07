@@ -282,6 +282,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return false;
             return string.Equals(action.Id, ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionScheduledActionAdd, StringComparison.Ordinal)
+                || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionTriggerAddScheduled, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, StringComparison.Ordinal)
                 || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionStageSelectPrefix, StringComparison.Ordinal);
@@ -314,6 +315,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return new Color(0.70f, 0.58f, 0.48f, 1f);
             if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
                 return new Color(0.63f, 0.54f, 0.68f, 1f);
+            if (string.Equals(domain, "journal", StringComparison.OrdinalIgnoreCase))
+                return new Color(0.50f, 0.62f, 0.58f, 1f);
             return new Color(0.61f, 0.58f, 0.50f, 1f);
         }
 

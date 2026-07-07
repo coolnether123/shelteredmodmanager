@@ -1,7 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ModAPI.Scenarios;
+using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioStoryAuthoringService
@@ -26,6 +33,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return AddStage(session, flow, out message);
             if (ScenarioStoryAuthoringActions.IsAddCharacter(actionId))
                 return AddCharacter(session, definition, out message);
+            if (TryHandleConversationAction(session, definition, actionId, out message))
+                return true;
 
             int stageIndex;
             int delta;
@@ -633,6 +642,307 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return true;
         }
 
+        private static bool TryHandleConversationAction(ScenarioEditorSession session, ScenarioDefinition definition, string actionId, out string message)
+        {
+            message = null;
+            ScenarioConversationAuthoringDefinition conversations = EnsureConversations(definition);
+            int count = conversations.Conversations.Count;
+            int index;
+            int delta;
+            string token;
+
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryConversationAdd, StringComparison.Ordinal))
+            {
+                conversations.Conversations.Add(CreateConversation(definition));
+                MarkDirty(session);
+                message = "Added NPC conversation.";
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStoryConversationSuppressionToggle, StringComparison.Ordinal))
+            {
+                conversations.Settings.SuppressVanillaRandomChatter = !conversations.Settings.SuppressVanillaRandomChatter;
+                MarkDirty(session);
+                message = conversations.Settings.SuppressVanillaRandomChatter ? "Vanilla random chatter suppressed." : "Vanilla random chatter restored.";
+                return true;
+            }
+            if (TryTokenOnly(actionId, ScenarioAuthoringActionIds.ActionStoryConversationSuppressionCategoryPrefix, out token))
+            {
+                Toggle(conversations.Settings.SuppressedVanillaCategories, Decode(token));
+                MarkDirty(session);
+                message = "Updated vanilla chatter category suppression.";
+                return true;
+            }
+            if (TryTokenOnly(actionId, ScenarioAuthoringActionIds.ActionStoryConversationSuppressionTopicPrefix, out token))
+            {
+                ReplaceCsv(conversations.Settings.SuppressedVanillaTopicKeys, Decode(token));
+                MarkDirty(session);
+                message = "Updated stored vanilla topic-key suppression policy.";
+                return true;
+            }
+
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationPreviewPrefix, count, out index))
+                return PreviewConversation(definition, conversations.Conversations[index], out message);
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationDeletePrefix, count, out index))
+            {
+                string id = conversations.Conversations[index] != null ? conversations.Conversations[index].Id : null;
+                conversations.Conversations.RemoveAt(index);
+                MarkDirty(session);
+                message = "Removed NPC conversation '" + (id ?? ("#" + index.ToString(CultureInfo.InvariantCulture))) + "'.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationDuplicatePrefix, count, out index))
+            {
+                ScenarioConversationDefinition copy = CloneConversation(conversations.Conversations[index], NextConversationId(definition));
+                conversations.Conversations.Insert(index + 1, copy);
+                MarkDirty(session);
+                message = "Duplicated NPC conversation '" + copy.Id + "'.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationMovePrefix, count, out index, out delta))
+                return Move(conversations.Conversations, index, delta, session, "NPC conversation", out message);
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationIdPrefix, count, out index, out token))
+            {
+                conversations.Conversations[index].Id = Decode(token);
+                MarkDirty(session);
+                message = "Renamed NPC conversation.";
+                return true;
+            }
+
+            if (TryHandleConversationTrigger(session, conversations, actionId, out message))
+                return true;
+            if (TryHandleConversationParticipant(session, definition, conversations, actionId, out message))
+                return true;
+            if (TryHandleConversationLine(session, conversations, actionId, out message))
+                return true;
+
+            return false;
+        }
+
+        private static bool TryHandleConversationTrigger(ScenarioEditorSession session, ScenarioConversationAuthoringDefinition conversations, string actionId, out string message)
+        {
+            message = null;
+            int index;
+            int delta;
+            string token;
+            int count = conversations.Conversations.Count;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerSourcePrefix, count, out index, out token))
+            {
+                EnsureTrigger(conversations.Conversations[index]).Source = ParseTriggerSource(Decode(token));
+                MarkDirty(session);
+                message = "Updated conversation trigger source.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerIdPrefix, count, out index, out token))
+            {
+                EnsureTrigger(conversations.Conversations[index]).TriggerId = Decode(token);
+                MarkDirty(session);
+                message = "Updated conversation event trigger id.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerWeightPrefix, count, out index, out token))
+            {
+                float value;
+                if (!float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+                    return false;
+                ScenarioConversationTriggerDefinition trigger = EnsureTrigger(conversations.Conversations[index]);
+                trigger.Weight = Math.Max(0.1f, trigger.Weight + value);
+                MarkDirty(session);
+                message = "Updated random conversation weight.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerCooldownPrefix, count, out index, out delta))
+            {
+                ScenarioConversationTriggerDefinition trigger = EnsureTrigger(conversations.Conversations[index]);
+                trigger.CooldownDays = Math.Max(0, trigger.CooldownDays + delta);
+                MarkDirty(session);
+                message = "Updated conversation cooldown.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerOncePrefix, count, out index))
+            {
+                ScenarioConversationTriggerDefinition trigger = EnsureTrigger(conversations.Conversations[index]);
+                trigger.Once = !trigger.Once;
+                MarkDirty(session);
+                message = "Updated conversation once policy.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerDayPrefix, count, out index, out delta))
+            {
+                EnsureTrigger(conversations.Conversations[index]).Time.Day = Math.Max(1, EnsureTrigger(conversations.Conversations[index]).Time.Day + delta);
+                MarkDirty(session);
+                message = "Updated conversation timeline day.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerHourPrefix, count, out index, out delta))
+            {
+                EnsureTrigger(conversations.Conversations[index]).Time.Hour = ScenarioAuthoringSchedule.Clamp(EnsureTrigger(conversations.Conversations[index]).Time.Hour + delta, 0, 23);
+                MarkDirty(session);
+                message = "Updated conversation timeline hour.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationTriggerMinutePrefix, count, out index, out delta))
+            {
+                EnsureTrigger(conversations.Conversations[index]).Time.Minute = ScenarioAuthoringSchedule.Clamp(EnsureTrigger(conversations.Conversations[index]).Time.Minute + delta, 0, 59);
+                MarkDirty(session);
+                message = "Updated conversation timeline minute.";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryHandleConversationParticipant(ScenarioEditorSession session, ScenarioDefinition definition, ScenarioConversationAuthoringDefinition conversations, string actionId, out string message)
+        {
+            message = null;
+            int conversationIndex;
+            int participantIndex;
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantAddPrefix, conversations.Conversations.Count, out conversationIndex))
+            {
+                ScenarioConversationDefinition conversation = conversations.Conversations[conversationIndex];
+                conversation.Participants.Add(new ScenarioConversationParticipantDefinition
+                {
+                    Slot = NextParticipantSlot(conversation),
+                    Fallback = conversation.Participants.Count == 0 ? ScenarioConversationParticipantFallback.Initiator : ScenarioConversationParticipantFallback.Partner,
+                    Required = true
+                });
+                MarkDirty(session);
+                message = "Added conversation participant.";
+                return true;
+            }
+            if (!TryConversationPair(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantDeletePrefix, conversations, out conversationIndex, out participantIndex))
+            {
+                if (TryConversationPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantSlotPrefix, conversations, out conversationIndex, out participantIndex, out token))
+                {
+                    conversations.Conversations[conversationIndex].Participants[participantIndex].Slot = Decode(token);
+                    MarkDirty(session);
+                    message = "Updated participant slot.";
+                    return true;
+                }
+                if (TryConversationPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantStoryPrefix, conversations, out conversationIndex, out participantIndex, out token))
+                {
+                    conversations.Conversations[conversationIndex].Participants[participantIndex].StoryCharacterId = NullIfNone(Decode(token));
+                    MarkDirty(session);
+                    message = "Updated participant story character.";
+                    return true;
+                }
+                if (TryConversationPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantActorPrefix, conversations, out conversationIndex, out participantIndex, out token))
+                {
+                    ScenarioCastMemberReferenceCandidate candidate;
+                    if (!ScenarioCastMemberReferenceCatalog.TryFindByToken(definition, true, true, Uri.UnescapeDataString(token), out candidate))
+                        return false;
+                    conversations.Conversations[conversationIndex].Participants[participantIndex].ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(candidate.ActorRef);
+                    MarkDirty(session);
+                    message = "Updated participant actor reference.";
+                    return true;
+                }
+                if (TryConversationPairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantFallbackPrefix, conversations, out conversationIndex, out participantIndex, out token))
+                {
+                    conversations.Conversations[conversationIndex].Participants[participantIndex].Fallback = ParseFallback(Decode(token));
+                    MarkDirty(session);
+                    message = "Updated participant fallback.";
+                    return true;
+                }
+                if (TryConversationPair(actionId, ScenarioAuthoringActionIds.ActionStoryConversationParticipantRequiredPrefix, conversations, out conversationIndex, out participantIndex))
+                {
+                    ScenarioConversationParticipantDefinition participant = conversations.Conversations[conversationIndex].Participants[participantIndex];
+                    participant.Required = !participant.Required;
+                    MarkDirty(session);
+                    message = "Updated participant required policy.";
+                    return true;
+                }
+                return false;
+            }
+
+            conversations.Conversations[conversationIndex].Participants.RemoveAt(participantIndex);
+            MarkDirty(session);
+            message = "Removed conversation participant.";
+            return true;
+        }
+
+        private static bool TryHandleConversationLine(ScenarioEditorSession session, ScenarioConversationAuthoringDefinition conversations, string actionId, out string message)
+        {
+            message = null;
+            int conversationIndex;
+            int lineIndex;
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryConversationLineAddPrefix, conversations.Conversations.Count, out conversationIndex))
+            {
+                ScenarioConversationDefinition conversation = conversations.Conversations[conversationIndex];
+                conversation.Lines.Add(new ScenarioConversationLineDefinition
+                {
+                    SpeakerSlot = conversation.Participants.Count > 0 ? conversation.Participants[0].Slot : "A",
+                    RawText = "New line",
+                    DelaySeconds = conversation.Lines.Count == 0 ? 0f : 6f
+                });
+                MarkDirty(session);
+                message = "Added conversation line.";
+                return true;
+            }
+            if (TryConversationLinePair(actionId, ScenarioAuthoringActionIds.ActionStoryConversationLineDeletePrefix, conversations, out conversationIndex, out lineIndex))
+            {
+                conversations.Conversations[conversationIndex].Lines.RemoveAt(lineIndex);
+                MarkDirty(session);
+                message = "Removed conversation line.";
+                return true;
+            }
+            if (TryConversationLinePairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationLineSpeakerPrefix, conversations, out conversationIndex, out lineIndex, out token))
+            {
+                conversations.Conversations[conversationIndex].Lines[lineIndex].SpeakerSlot = Decode(token);
+                MarkDirty(session);
+                message = "Updated line speaker.";
+                return true;
+            }
+            if (TryConversationLinePairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationLineTextPrefix, conversations, out conversationIndex, out lineIndex, out token))
+            {
+                conversations.Conversations[conversationIndex].Lines[lineIndex].RawText = Decode(token);
+                MarkDirty(session);
+                message = "Updated line text.";
+                return true;
+            }
+            if (TryConversationLinePairToken(actionId, ScenarioAuthoringActionIds.ActionStoryConversationLineDelayPrefix, conversations, out conversationIndex, out lineIndex, out token))
+            {
+                float delta;
+                if (!float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out delta))
+                    return false;
+                ScenarioConversationLineDefinition line = conversations.Conversations[conversationIndex].Lines[lineIndex];
+                line.DelaySeconds = Math.Max(0f, line.DelaySeconds + delta);
+                MarkDirty(session);
+                message = "Updated line delay.";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool PreviewConversation(ScenarioDefinition definition, ScenarioConversationDefinition conversation, out string message)
+        {
+            message = null;
+            try
+            {
+                ScenarioConversationRuntimeService service = ScenarioCompositionRoot.ResolveRuntime<ScenarioConversationRuntimeService>();
+                ScenarioRuntimeStateService stateService = ScenarioCompositionRoot.ResolveRuntime<ScenarioRuntimeStateService>();
+                if (service == null || stateService == null)
+                {
+                    message = "Conversation preview is unavailable because the scenario runtime is not initialized.";
+                    return true;
+                }
+
+                service.Activate(definition);
+                return service.Handle(definition, new ScenarioEffectDefinition
+                {
+                    Kind = ScenarioEffectKind.StartConversation,
+                    ConversationId = conversation != null ? conversation.Id : null,
+                    TargetId = conversation != null ? conversation.Id : null
+                }, stateService.State, out message);
+            }
+            catch (Exception ex)
+            {
+                message = "Conversation preview failed: " + ex.Message;
+                return true;
+            }
+        }
+
         private static bool SetItem(ScenarioEditorSession session, ItemEntry item, string itemId, out string message)
         {
             item.ItemId = itemId;
@@ -954,6 +1264,287 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (string.Equals(values[i], value, StringComparison.OrdinalIgnoreCase))
                     return true;
             return false;
+        }
+
+        private static ScenarioConversationAuthoringDefinition EnsureConversations(ScenarioDefinition definition)
+        {
+            if (definition.Conversations == null)
+                definition.Conversations = new ScenarioConversationAuthoringDefinition();
+            if (definition.Conversations.Settings == null)
+                definition.Conversations.Settings = new ScenarioConversationSuppressionDefinition();
+            return definition.Conversations;
+        }
+
+        private static ScenarioConversationDefinition CreateConversation(ScenarioDefinition definition)
+        {
+            ScenarioConversationDefinition conversation = new ScenarioConversationDefinition();
+            conversation.Id = NextConversationId(definition);
+            conversation.Trigger = new ScenarioConversationTriggerDefinition
+            {
+                Source = ScenarioConversationTriggerSource.Random,
+                Weight = 1f,
+                CooldownDays = 1,
+                Once = false,
+                Time = ScenarioAuthoringSchedule.NextTime()
+            };
+            conversation.Participants.Add(new ScenarioConversationParticipantDefinition
+            {
+                Slot = "A",
+                Fallback = ScenarioConversationParticipantFallback.Initiator,
+                Required = true
+            });
+            conversation.Participants.Add(new ScenarioConversationParticipantDefinition
+            {
+                Slot = "B",
+                Fallback = ScenarioConversationParticipantFallback.Partner,
+                Required = true
+            });
+            conversation.Lines.Add(new ScenarioConversationLineDefinition { SpeakerSlot = "A", RawText = "Did you hear that?", DelaySeconds = 0f });
+            conversation.Lines.Add(new ScenarioConversationLineDefinition { SpeakerSlot = "B", RawText = "Keep your voice down.", DelaySeconds = 6f });
+            return conversation;
+        }
+
+        private static ScenarioConversationDefinition CloneConversation(ScenarioConversationDefinition source, string id)
+        {
+            ScenarioConversationDefinition copy = new ScenarioConversationDefinition();
+            copy.Id = id;
+            copy.Trigger = CloneTrigger(source != null ? source.Trigger : null);
+            for (int i = 0; source != null && source.Participants != null && i < source.Participants.Count; i++)
+                copy.Participants.Add(CloneParticipant(source.Participants[i]));
+            for (int i = 0; source != null && source.Conditions != null && i < source.Conditions.Count; i++)
+            {
+                ScenarioConditionRef condition = source.Conditions[i];
+                if (condition != null)
+                    copy.Conditions.Add(new ScenarioConditionRef { Id = condition.Id, Kind = condition.Kind, TargetId = condition.TargetId, Quantity = condition.Quantity, FlagValue = condition.FlagValue });
+            }
+            for (int i = 0; source != null && source.Lines != null && i < source.Lines.Count; i++)
+                copy.Lines.Add(CloneLine(source.Lines[i]));
+            for (int i = 0; source != null && source.Tags != null && i < source.Tags.Count; i++)
+                copy.Tags.Add(source.Tags[i]);
+            return copy;
+        }
+
+        private static ScenarioConversationTriggerDefinition CloneTrigger(ScenarioConversationTriggerDefinition source)
+        {
+            ScenarioConversationTriggerDefinition copy = new ScenarioConversationTriggerDefinition();
+            if (source == null)
+                return copy;
+            copy.Source = source.Source;
+            copy.TriggerId = source.TriggerId;
+            copy.Weight = source.Weight;
+            copy.CooldownDays = source.CooldownDays;
+            copy.Once = source.Once;
+            copy.Time = source.Time != null
+                ? new ScenarioScheduleTime { Day = source.Time.Day, Hour = source.Time.Hour, Minute = source.Time.Minute }
+                : new ScenarioScheduleTime();
+            return copy;
+        }
+
+        private static ScenarioConversationParticipantDefinition CloneParticipant(ScenarioConversationParticipantDefinition source)
+        {
+            ScenarioConversationParticipantDefinition copy = new ScenarioConversationParticipantDefinition();
+            if (source == null)
+                return copy;
+            copy.Slot = source.Slot;
+            copy.StoryCharacterId = source.StoryCharacterId;
+            copy.ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(source.ActorRef);
+            copy.Fallback = source.Fallback;
+            copy.Required = source.Required;
+            return copy;
+        }
+
+        private static ScenarioConversationLineDefinition CloneLine(ScenarioConversationLineDefinition source)
+        {
+            ScenarioConversationLineDefinition copy = new ScenarioConversationLineDefinition();
+            if (source == null)
+                return copy;
+            copy.SpeakerSlot = source.SpeakerSlot;
+            copy.TextKey = source.TextKey;
+            copy.RawText = source.RawText;
+            copy.DelaySeconds = source.DelaySeconds;
+            return copy;
+        }
+
+        private static ScenarioConversationTriggerDefinition EnsureTrigger(ScenarioConversationDefinition conversation)
+        {
+            if (conversation.Trigger == null)
+                conversation.Trigger = new ScenarioConversationTriggerDefinition();
+            if (conversation.Trigger.Time == null)
+                conversation.Trigger.Time = new ScenarioScheduleTime();
+            return conversation.Trigger;
+        }
+
+        private static string NextConversationId(ScenarioDefinition definition)
+        {
+            int index = definition != null && definition.Conversations != null && definition.Conversations.Conversations != null
+                ? definition.Conversations.Conversations.Count + 1
+                : 1;
+            string id;
+            do
+            {
+                id = "conversation_" + index.ToString(CultureInfo.InvariantCulture);
+                index++;
+            }
+            while (HasConversation(definition, id));
+            return id;
+        }
+
+        private static bool HasConversation(ScenarioDefinition definition, string id)
+        {
+            List<ScenarioConversationDefinition> conversations = definition != null && definition.Conversations != null ? definition.Conversations.Conversations : null;
+            for (int i = 0; conversations != null && i < conversations.Count; i++)
+                if (conversations[i] != null && string.Equals(conversations[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static string NextParticipantSlot(ScenarioConversationDefinition conversation)
+        {
+            string alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            for (int i = 0; i < alphabet.Length; i++)
+            {
+                string slot = alphabet.Substring(i, 1);
+                bool used = false;
+                for (int p = 0; conversation != null && conversation.Participants != null && p < conversation.Participants.Count; p++)
+                    if (conversation.Participants[p] != null && string.Equals(conversation.Participants[p].Slot, slot, StringComparison.OrdinalIgnoreCase))
+                        used = true;
+                if (!used)
+                    return slot;
+            }
+            return "P" + (conversation != null && conversation.Participants != null ? (conversation.Participants.Count + 1).ToString(CultureInfo.InvariantCulture) : "1");
+        }
+
+        private static ScenarioConversationTriggerSource ParseTriggerSource(string value)
+        {
+            try
+            {
+                return (ScenarioConversationTriggerSource)Enum.Parse(typeof(ScenarioConversationTriggerSource), value, true);
+            }
+            catch
+            {
+                return ScenarioConversationTriggerSource.Random;
+            }
+        }
+
+        private static ScenarioConversationParticipantFallback ParseFallback(string value)
+        {
+            try
+            {
+                return (ScenarioConversationParticipantFallback)Enum.Parse(typeof(ScenarioConversationParticipantFallback), value, true);
+            }
+            catch
+            {
+                return ScenarioConversationParticipantFallback.None;
+            }
+        }
+
+        private static bool TryTokenOnly(string actionId, string prefix, out string token)
+        {
+            token = null;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+            token = actionId.Substring(prefix.Length);
+            return true;
+        }
+
+        private static void ReplaceCsv(List<string> values, string csv)
+        {
+            if (values == null)
+                return;
+            values.Clear();
+            string[] parts = (csv ?? string.Empty).Split(',');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string value = parts[i] != null ? parts[i].Trim() : null;
+                if (!string.IsNullOrEmpty(value))
+                    values.Add(value);
+            }
+        }
+
+        private static bool TryConversationPair(string actionId, string prefix, ScenarioConversationAuthoringDefinition conversations, out int conversationIndex, out int childIndex)
+        {
+            conversationIndex = -1;
+            childIndex = -1;
+            int first;
+            int second;
+            if (!ScenarioAuthoringActionParser.TryPairIndex(actionId, prefix, conversations.Conversations.Count, out first, out second))
+                return false;
+            if (!HasParticipant(conversations, first, second))
+                return false;
+            conversationIndex = first;
+            childIndex = second;
+            return true;
+        }
+
+        private static bool TryConversationPairToken(string actionId, string prefix, ScenarioConversationAuthoringDefinition conversations, out int conversationIndex, out int childIndex, out string token)
+        {
+            conversationIndex = -1;
+            childIndex = -1;
+            token = null;
+            int first;
+            int second;
+            if (!ScenarioAuthoringActionParser.TryPairToken(actionId, prefix, conversations.Conversations.Count, out first, out second, out token))
+                return false;
+            if (!HasParticipant(conversations, first, second))
+                return false;
+            conversationIndex = first;
+            childIndex = second;
+            return true;
+        }
+
+        private static bool TryConversationLinePair(string actionId, string prefix, ScenarioConversationAuthoringDefinition conversations, out int conversationIndex, out int lineIndex)
+        {
+            conversationIndex = -1;
+            lineIndex = -1;
+            int first;
+            int second;
+            if (!ScenarioAuthoringActionParser.TryPairIndex(actionId, prefix, conversations.Conversations.Count, out first, out second))
+                return false;
+            if (!HasLine(conversations, first, second))
+                return false;
+            conversationIndex = first;
+            lineIndex = second;
+            return true;
+        }
+
+        private static bool TryConversationLinePairToken(string actionId, string prefix, ScenarioConversationAuthoringDefinition conversations, out int conversationIndex, out int lineIndex, out string token)
+        {
+            conversationIndex = -1;
+            lineIndex = -1;
+            token = null;
+            int first;
+            int second;
+            if (!ScenarioAuthoringActionParser.TryPairToken(actionId, prefix, conversations.Conversations.Count, out first, out second, out token))
+                return false;
+            if (!HasLine(conversations, first, second))
+                return false;
+            conversationIndex = first;
+            lineIndex = second;
+            return true;
+        }
+
+        private static bool HasParticipant(ScenarioConversationAuthoringDefinition conversations, int conversationIndex, int participantIndex)
+        {
+            return conversations != null
+                && conversations.Conversations != null
+                && conversationIndex >= 0
+                && conversationIndex < conversations.Conversations.Count
+                && conversations.Conversations[conversationIndex] != null
+                && conversations.Conversations[conversationIndex].Participants != null
+                && participantIndex >= 0
+                && participantIndex < conversations.Conversations[conversationIndex].Participants.Count;
+        }
+
+        private static bool HasLine(ScenarioConversationAuthoringDefinition conversations, int conversationIndex, int lineIndex)
+        {
+            return conversations != null
+                && conversations.Conversations != null
+                && conversationIndex >= 0
+                && conversationIndex < conversations.Conversations.Count
+                && conversations.Conversations[conversationIndex] != null
+                && conversations.Conversations[conversationIndex].Lines != null
+                && lineIndex >= 0
+                && lineIndex < conversations.Conversations[conversationIndex].Lines.Count;
         }
 
         private static bool TryParseCharacterEditAction(string actionId, out string field, out int characterIndex, out string value)

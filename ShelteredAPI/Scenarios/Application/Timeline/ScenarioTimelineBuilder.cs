@@ -9,10 +9,12 @@ using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Bunker;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Shared;
 namespace ShelteredAPI.Scenarios.Application.Timeline{
     internal sealed class ScenarioTimelineBuilder
     {
@@ -52,6 +54,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             AddStoryFlow(definition, runtimeState, entries);
             AddBunker(definition, runtimeState, entries);
             AddObjectActivations(definition, runtimeState, entries);
+            AddJournal(definition, runtimeState, entries);
             AddScheduledActions(definition, runtimeState, entries);
             return entries;
         }
@@ -171,6 +174,34 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             }
         }
 
+        private static void AddJournal(ScenarioDefinition definition, ScenarioRuntimeState runtimeState, List<ScenarioTimelineEntry> entries)
+        {
+            for (int i = 0; definition != null && definition.Journal != null && definition.Journal.Entries != null && i < definition.Journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = definition.Journal.Entries[i];
+                if (entry == null || entry.DueTime == null)
+                    continue;
+
+                string id = "journal." + BuildId(entry.Id, i);
+                entries.Add(NewEntry(
+                    id,
+                    ScenarioTimelineEntryKind.Journal,
+                    entry.DueTime,
+                    "Journal " + Safe(entry.Id),
+                    "JournalEntry",
+                    "Events",
+                    entry.Id,
+                    runtimeState,
+                    "journal",
+                    "journal_entry",
+                    "Journal.Entries",
+                    i,
+                    entry.Id,
+                    ScenarioAuthoringWindowIds.Triggers,
+                    ScenarioAuthoringActionIds.ActionJournalEntryDeletePrefix + i.ToString(CultureInfo.InvariantCulture)));
+            }
+        }
+
         private static ScenarioTimelineEntry NewEntry(string id, ScenarioTimelineEntryKind kind, ScenarioScheduleTime when, string title, string type, string ownerStage, string targetId, ScenarioRuntimeState runtimeState, string source, string sourceKind, string sourceCollection, int sourceIndex, string sourceId, string ownerWindowId, string focusActionId)
         {
             ScenarioTimelineEntry entry = new ScenarioTimelineEntry();
@@ -234,6 +265,10 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                         return ScenarioTimelineEntryKind.Object;
                     case ScenarioEffectKind.UnlockBunkerExpansion:
                         return ScenarioTimelineEntryKind.Bunker;
+                    case ScenarioEffectKind.WorldEvent:
+                        return ScenarioTimelineEntryKind.WorldEvent;
+                    case ScenarioEffectKind.WriteJournalEntry:
+                        return ScenarioTimelineEntryKind.Journal;
                 }
             }
             return ScenarioTimelineEntryKind.CustomModded;
@@ -252,6 +287,8 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 case ScenarioTimelineEntryKind.Bunker:
                 case ScenarioTimelineEntryKind.Object: return "Bunker";
                 case ScenarioTimelineEntryKind.Map: return "Map";
+                case ScenarioTimelineEntryKind.WorldEvent: return "Events";
+                case ScenarioTimelineEntryKind.Journal: return "Events";
                 default: return "Events";
             }
         }
@@ -262,7 +299,13 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             {
                 ScenarioEffectDefinition effect = action.Effects[i];
                 if (effect == null || effect.Kind != ScenarioEffectKind.SpawnFutureSurvivor)
+                {
+                    if (effect != null && effect.Kind == ScenarioEffectKind.WorldEvent)
+                        return "World event " + Safe(ScenarioPropertyBag.GetString(effect.Properties, "eventType", effect.TargetId));
+                    if (effect != null && effect.Kind == ScenarioEffectKind.WriteJournalEntry)
+                        return "Journal " + Safe(ScenarioPropertyBag.GetString(effect.Properties, "entryId", effect.TargetId));
                     continue;
+                }
 
                 string name = effect.ActorRef != null
                     ? ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, effect.ActorRef, false, true, effect.SurvivorId ?? effect.TargetId)

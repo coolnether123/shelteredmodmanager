@@ -101,6 +101,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             SaveLoadFiredTriggers(data, state);
             SaveLoadBunker(data, state);
             SaveLoadObjects(data, state);
+            SaveLoadConversations(data, state);
             data.GroupEnd();
         }
 
@@ -499,6 +500,48 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Persistence{
             record.Active = active;
             record.Locked = locked;
             record.Hidden = hidden;
+        }
+
+        private static void SaveLoadConversations(SaveData data, ScenarioRuntimeState state)
+        {
+            ArrayList loaded = new ArrayList();
+            data.SaveLoadList("Conversations", (IList)state.Conversations,
+                delegate(int i)
+                {
+                    ScenarioConversationRuntimeRecord record = state.Conversations[i];
+                    SaveLoadConversation(data, record);
+                },
+                delegate(int i)
+                {
+                    ScenarioConversationRuntimeRecord record = new ScenarioConversationRuntimeRecord();
+                    SaveLoadConversation(data, record);
+                    loaded.Add(record);
+                });
+            if (data.isLoading)
+            {
+                state.Conversations.Clear();
+                for (int i = 0; i < loaded.Count; i++)
+                    state.Conversations.Add((ScenarioConversationRuntimeRecord)loaded[i]);
+            }
+        }
+
+        private static void SaveLoadConversation(SaveData data, ScenarioConversationRuntimeRecord record)
+        {
+            string id = record.ConversationId ?? string.Empty;
+            int day = record.LastPlayedDay;
+            int hour = record.LastPlayedHour;
+            int minute = record.LastPlayedMinute;
+            int playCount = record.PlayCount;
+            data.SaveLoad("ConversationId", ref id);
+            data.SaveLoad("LastPlayedDay", ref day);
+            data.SaveLoad("LastPlayedHour", ref hour);
+            data.SaveLoad("LastPlayedMinute", ref minute);
+            data.SaveLoad("PlayCount", ref playCount);
+            record.ConversationId = id;
+            record.LastPlayedDay = day;
+            record.LastPlayedHour = hour;
+            record.LastPlayedMinute = minute;
+            record.PlayCount = playCount;
         }
     }
 }

@@ -15,7 +15,9 @@ namespace ShelteredAPI.Scenarios.Domain.Timeline{
         Quest = 5,
         Map = 6,
         CustomModded = 7,
-        Story = 8
+        Story = 8,
+        WorldEvent = 9,
+        Journal = 10
     }
 
     /// <summary>

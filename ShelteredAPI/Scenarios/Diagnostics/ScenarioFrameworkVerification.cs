@@ -7,8 +7,11 @@ using ShelteredAPI.Content;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Diagnostics{
@@ -36,6 +39,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyAtomicScenarioWrites(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyInventoryProjectionReconciliation(result);
+                VerifySchedulePolicyWindows(result);
             }
             catch (Exception ex)
             {
@@ -170,6 +174,41 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             }
 
             return 0;
+        }
+
+        private static void VerifySchedulePolicyWindows(ScenarioValidationResult result)
+        {
+            ScenarioScheduledActionDefinition action = new ScenarioScheduledActionDefinition();
+            action.Id = "window_policy";
+            action.DueTime.Day = 5;
+            action.DueTime.Hour = 8;
+            action.DueTime.Minute = 0;
+            action.Policy.Repeatable = true;
+            action.Policy.CooldownMinutes = 60;
+            action.Policy.WindowEndDay = 5;
+            action.Policy.Chance = 1f;
+            action.Policy.JitterMinutes = 0;
+            action.Policy.MaxRuns = 2;
+            action.Effects.Add(new ScenarioEffectDefinition { Kind = ScenarioEffectKind.WorldEvent });
+
+            string reason;
+            long due = ScenarioSchedulePolicyEvaluator.ToGameMinutes(5, 8, 0);
+            Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, due - 1, 0, 0, null, out reason) == ScenarioSchedulePolicyDecision.NotDue,
+                "Schedule window fired before DueTime.", result);
+            Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, due, 0, 0, null, out reason) == ScenarioSchedulePolicyDecision.Due,
+                "Schedule window did not fire at DueTime.", result);
+            Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, due + 60, 2, 2, due, out reason) == ScenarioSchedulePolicyDecision.NotDue,
+                "Schedule maxRuns did not cap repeatable execution.", result);
+            Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, ScenarioSchedulePolicyEvaluator.ToGameMinutes(6, 0, 0), 0, 0, null, out reason) == ScenarioSchedulePolicyDecision.NotDue,
+                "Schedule windowEndDay did not close the random window.", result);
+
+            action.Policy.Chance = 0f;
+            Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, due, 0, 0, null, out reason) == ScenarioSchedulePolicyDecision.Skipped,
+                "Schedule chance=0 did not produce a skipped decision.", result);
+            action.Policy.Chance = 1f;
+            action.Policy.JitterMinutes = 30;
+            Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, due - 1, 0, 0, null, out reason) == ScenarioSchedulePolicyDecision.NotDue,
+                "Schedule jitter allowed execution before the base due time.", result);
         }
 
         private static void VerifyDependencies(ScenarioValidationResult result)

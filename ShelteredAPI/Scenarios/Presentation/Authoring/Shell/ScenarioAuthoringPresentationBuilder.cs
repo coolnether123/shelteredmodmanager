@@ -22,6 +22,7 @@ using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Bunker;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Objects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -1896,6 +1897,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Sections = sections.ToArray()
             };
         }
+
         private static ScenarioAuthoringInspectorDocument BuildSurvivorFocusedEditorDocument(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             bool starting = string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, StringComparison.OrdinalIgnoreCase);
@@ -2099,6 +2101,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 sections.Add(ActionSection("focused_action_controls", "Fields", controls));
                 AddScheduledActionCastPickerSections(sections, definition, action, state.FocusedEditorIndex);
             }
+            else if (string.Equals(state.FocusedEditorKind, "journal_entry", StringComparison.OrdinalIgnoreCase))
+            {
+                JournalEntryDefinition entry = definition.Journal != null
+                    && definition.Journal.Entries != null
+                    && state.FocusedEditorIndex >= 0
+                    && state.FocusedEditorIndex < definition.Journal.Entries.Count
+                        ? definition.Journal.Entries[state.FocusedEditorIndex]
+                        : null;
+                if (entry == null)
+                    return null;
+
+                title = "Journal Entry";
+                subtitle = "Write authored text into the in-game journal when the schedule and condition pass.";
+                string condition = string.IsNullOrEmpty(entry.GateId) ? "No condition" : entry.GateId;
+                string writer = FormatJournalWriter(definition, entry.Writer);
+                List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+                facts.Add(Fact("Id", Safe(entry.Id), "Stable journal entry id saved in the scenario XML."));
+                facts.Add(Fact("When", FormatJournalSchedule(entry), "Scenario day/time, trigger, or condition-only timing."));
+                facts.Add(Fact("Condition", condition, "The entry only writes while this is true."));
+                facts.Add(Fact("Writer", writer, "Rendered as a journal text prefix because vanilla entries are anonymous."));
+                facts.Add(Fact("Repeat", entry.Mode == ScenarioJournalEntryMode.Repeat ? "Repeat" : "Once", "Whether the entry can write more than once."));
+                facts.Add(Fact("Preview", JournalPreview(entry.Text), "Text supports {writer} and {day}."));
+                sections.Add(FactSection("focused_journal_facts", "Journal Entry", facts));
+
+                string indexText = state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture);
+                List<ScenarioAuthoringInspectorItem> controls = new List<ScenarioAuthoringInspectorItem>();
+                controls.Add(EditableProperty("Id", Safe(entry.Id), ScenarioAuthoringActionIds.ActionJournalEntryIdPrefix + indexText + ".", "Edit the stable journal entry id."));
+                controls.Add(EditableProperty("Text", Safe(entry.Text), ScenarioAuthoringActionIds.ActionJournalEntryTextPrefix + indexText + ".", "Edit journal text. Supports {writer} and {day}."));
+                AddScheduleActions(controls, ScenarioAuthoringActionIds.ActionJournalEntryDayPrefix, ScenarioAuthoringActionIds.ActionJournalEntryHourPrefix, ScenarioAuthoringActionIds.ActionJournalEntryMinutePrefix, state.FocusedEditorIndex);
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryGatePrefix + indexText, "Cycle Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(entry.GateId), "CN", condition)));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryRepeatPrefix + indexText, "Toggle Repeat", "Switch this entry between once-only and repeatable execution.", true, entry.Mode == ScenarioJournalEntryMode.Repeat, "RP")));
+                controls.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryWriterAnyPrefix + indexText, "Any Present Member", "Let runtime choose any shelter member who is present.", true, entry.Writer == null, "ANY")));
+                sections.Add(ActionSection("focused_journal_controls", "Fields", controls));
+                AddJournalCastPickerSection(sections, definition, entry, state.FocusedEditorIndex);
+            }
             else if (string.Equals(state.FocusedEditorKind, "gate", StringComparison.OrdinalIgnoreCase))
             {
                 ScenarioGateDefinition gate = definition.Gates != null
@@ -2179,7 +2216,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> triggerItems = new List<ScenarioAuthoringInspectorItem>();
             triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddManual, "Add Manual Trigger", "Create a trigger that can be fired by code or another scheduled effect.", true, true, "T+")));
-            triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Add Timed Trigger", "Create a trigger that fires on a specific scenario day and hour.", true, true, "TS")));
+            triggerItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Timed Trigger", "Create a trigger that fires on a specific scenario day and hour.", true, true, "TS")));
             if (definition != null && definition.TriggersAndEvents != null)
             {
                 for (int i = 0; i < definition.TriggersAndEvents.Triggers.Count; i++)
@@ -2202,6 +2239,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             List<ScenarioAuthoringInspectorItem> actionItems = BuildScheduledActionItems(state, definition);
+            List<ScenarioAuthoringInspectorItem> journalItems = BuildJournalEntryItems(state, definition);
             List<ScenarioAuthoringInspectorItem> gateItems = BuildGateItems(state, definition);
             List<ScenarioAuthoringInspectorItem> graphItems = BuildEventGraphItems(definition);
 
@@ -2238,6 +2276,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = actionItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "journal_entries",
+                    Title = "Journal Entries",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = journalItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
                 {
@@ -2303,7 +2349,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Last Capture", "Restore the roster from before the last capture or edit snapshot.", true, false, "UN")));
 
             List<ScenarioAuthoringInspectorItem> startingItems = new List<ScenarioAuthoringInspectorItem>();
-            startingItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, "Add Starting Survivor", "Create a new editable starting crew member.", true, true, "S+")));
+            startingItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, "Add Survivor", "Create a new editable starting survivor.", true, true, "S+")));
             if (definition != null && definition.FamilySetup != null)
             {
                 for (int i = 0; i < definition.FamilySetup.Members.Count; i++)
@@ -2331,7 +2377,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     true));
 
             List<ScenarioAuthoringInspectorItem> futureItems = new List<ScenarioAuthoringInspectorItem>();
-            futureItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Add Future Survivor", "Create a survivor who arrives or asks to join at a scheduled day and hour.", true, true, "FS")));
+            futureItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Add Arrival", "Create a future survivor who arrives or asks to join at a scheduled day and hour.", true, true, "FS")));
             if (definition != null && definition.FamilySetup != null)
             {
                 for (int i = 0; i < definition.FamilySetup.FutureSurvivors.Count; i++)
@@ -2411,6 +2457,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
             };
         }
+
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveSurvivorItems(ScenarioDefinition definition)
         {
@@ -3641,6 +3688,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
+        private static void AddJournalCastPickerSection(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition, JournalEntryDefinition entry, int entryIndex)
+        {
+            if (sections == null || entry == null)
+                return;
+
+            sections.Add(ScenarioCastMemberPickerBuilder.BuildSection(
+                "focused_journal_writer",
+                "Journal Writer",
+                definition,
+                true,
+                true,
+                entry.Writer,
+                ScenarioAuthoringActionIds.ActionJournalEntryWriterPrefix,
+                entryIndex.ToString(CultureInfo.InvariantCulture),
+                "Add starting or future survivors before selecting a writer."));
+        }
+
         private static bool IsSurvivorCondition(ScenarioConditionKind kind)
         {
             return kind == ScenarioConditionKind.SurvivorPresent
@@ -4266,6 +4330,88 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
+        private static List<ScenarioAuthoringInspectorItem> BuildJournalEntryItems(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryAdd, "Add Journal Entry", "Create authored text that writes to the in-game journal when its timing and condition pass.", true, true, "J+")));
+            for (int i = 0; definition != null && definition.Journal != null && definition.Journal.Entries != null && i < definition.Journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = definition.Journal.Entries[i];
+                if (entry == null)
+                    continue;
+                string gate = string.IsNullOrEmpty(entry.GateId) ? "no condition" : "condition " + entry.GateId;
+                string mode = entry.Mode == ScenarioJournalEntryMode.Repeat ? "repeat" : "once";
+                string writer = FormatJournalWriter(definition, entry.Writer);
+                items.Add(TimelineFact(state, "journal_entry", i, Safe(entry.Id), FormatJournalSchedule(entry) + " / " + gate + " / " + writer + " / " + mode, JournalPreview(entry.Text)));
+                AddScheduleActions(items, ScenarioAuthoringActionIds.ActionJournalEntryDayPrefix, ScenarioAuthoringActionIds.ActionJournalEntryHourPrefix, ScenarioAuthoringActionIds.ActionJournalEntryMinutePrefix, i);
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryGatePrefix + i.ToString(CultureInfo.InvariantCulture), "Cycle Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(entry.GateId), "CN", gate)));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryRepeatPrefix + i.ToString(CultureInfo.InvariantCulture), "Toggle Repeat", "Switch this journal entry between once-only and repeatable execution.", true, entry.Mode == ScenarioJournalEntryMode.Repeat, "RP")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryWriterAnyPrefix + i.ToString(CultureInfo.InvariantCulture), "Any Present Member", "Let runtime choose any shelter member who is present.", true, entry.Writer == null, "ANY")));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalEntryDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove Journal Entry", "Remove this authored journal entry.", true, false, "RM")));
+            }
+            if (items.Count == 1)
+                items.Add(Text("No authored journal entries have been added yet."));
+            AddJournalPolicyItems(items, definition);
+            return items;
+        }
+
+        private static void AddJournalPolicyItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition)
+        {
+            JournalVanillaPolicyDefinition policy = definition != null && definition.Journal != null ? definition.Journal.VanillaPolicy : null;
+            bool suppressFirst = policy != null && policy.SuppressFirstEntry;
+            items.Add(Property("Vanilla Policy", suppressFirst ? "suppress first entry" : "allow first entry"));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionJournalVanillaSuppressFirst, "Suppress First Entry", "Block the vanilla opening journal entry for this scenario.", true, suppressFirst, "1X")));
+
+            Array categories = Enum.GetValues(typeof(ScenarioJournalVanillaCategory));
+            for (int i = 0; i < categories.Length; i++)
+            {
+                ScenarioJournalVanillaCategory category = (ScenarioJournalVanillaCategory)categories.GetValue(i);
+                bool suppressed = ContainsJournalCategory(policy, category);
+                items.Add(ActionItem(Action(
+                    ScenarioAuthoringActionIds.ActionJournalVanillaCategoryPrefix + category.ToString(),
+                    category.ToString(),
+                    "Toggle vanilla journal suppression for this category.",
+                    true,
+                    suppressed,
+                    "VX",
+                    suppressed ? "Suppressed" : "Allowed")));
+            }
+        }
+
+        private static string FormatJournalSchedule(JournalEntryDefinition entry)
+        {
+            if (entry == null)
+                return "unscheduled";
+            if (entry.DueTime != null)
+                return FormatSchedule(entry.DueTime);
+            if (!string.IsNullOrEmpty(entry.TriggerId))
+                return "trigger " + entry.TriggerId;
+            return "condition only";
+        }
+
+        private static string FormatJournalWriter(ScenarioDefinition definition, ScenarioActorRef actorRef)
+        {
+            if (actorRef == null)
+                return "any present member";
+            return ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, actorRef, true, true, actorRef.DisplayNameFallback);
+        }
+
+        private static string JournalPreview(string text)
+        {
+            string value = Safe(text);
+            if (value.Length <= 72)
+                return value;
+            return value.Substring(0, 69) + "...";
+        }
+
+        private static bool ContainsJournalCategory(JournalVanillaPolicyDefinition policy, ScenarioJournalVanillaCategory category)
+        {
+            for (int i = 0; policy != null && policy.SuppressedCategories != null && i < policy.SuppressedCategories.Count; i++)
+                if (policy.SuppressedCategories[i] == category)
+                    return true;
+            return false;
+        }
+
         private static int CountConditions(ScenarioConditionGroup group)
         {
             int count = 0;
@@ -4662,6 +4808,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 PreviewSprite = previewSprite,
                 Emphasized = emphasized
             };
+        }
+
+        private static ScenarioAuthoringInspectorItem EditableProperty(string label, string value, string actionPrefix, string hoverHint)
+        {
+            ScenarioAuthoringInspectorItem item = Property(label, value);
+            item.Editable = true;
+            item.HoverHint = hoverHint;
+            item.Action = Action(actionPrefix, label, hoverHint, true, false, "ED");
+            return item;
         }
 
         private static ScenarioAuthoringInspectorItem Fact(string label, string value, string hoverHint = null, string pulseKey = null, string pulseSignature = null)

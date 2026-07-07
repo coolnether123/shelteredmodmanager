@@ -36,6 +36,14 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     summary.AddError("events.action.unknown_gate", "[Events] Scheduled action '" + (action.Id ?? ("#" + i)) + "' references unknown gate '" + gateId + "'.");
             }
 
+            for (int i = 0; definition.Journal != null && definition.Journal.Entries != null && i < definition.Journal.Entries.Count; i++)
+            {
+                string entryId = definition.Journal.Entries[i] != null ? definition.Journal.Entries[i].Id : null;
+                string gateId = TrimToNull(definition.Journal.Entries[i] != null ? definition.Journal.Entries[i].GateId : null);
+                if (gateId != null && !index.HasGate(gateId))
+                    summary.AddError("journal.entry.unknown_gate", "[Events] Journal entry '" + (entryId ?? ("#" + i)) + "' references unknown gate '" + gateId + "'.");
+            }
+
             ValidateCircularGateRefs(definition, summary);
         }
 

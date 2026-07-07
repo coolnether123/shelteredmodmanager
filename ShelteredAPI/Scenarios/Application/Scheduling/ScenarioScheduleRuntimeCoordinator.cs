@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 namespace ShelteredAPI.Scenarios.Application.Scheduling{
     internal sealed class ScenarioScheduleRuntimeCoordinator
     {
@@ -42,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             _definition = definition;
             _stateService.EnsureHooked();
             _stateService.Bind(definition, binding);
+            ScenarioWorldEventRuntimeState.Bind(definition);
             if (_winLossOutcomeService != null)
                 _winLossOutcomeService.Initialize(definition, binding);
             _actions = BuildActions(definition);
@@ -57,19 +59,23 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
                 ScenarioScheduledActionDefinition action = _actions[i];
                 if (action == null || string.IsNullOrEmpty(action.Id))
                     continue;
-                if (!IsDue(action.DueTime))
-                    continue;
-                if (IsRepeatable(action))
-                {
-                    if (!CanRunRepeatable(action))
-                        continue;
-                }
-                else if (_journal.HasExecuted(action.Id))
+
+                if (!IsRepeatable(action)
+                    && (_journal.HasExecuted(action.Id) || _journal.HasRecord(action.Id, ScenarioExecutedActionStatus.Skipped)))
                 {
                     continue;
                 }
 
                 string reason;
+                ScenarioSchedulePolicyDecision scheduleDecision = EvaluateSchedule(action, out reason);
+                if (scheduleDecision == ScenarioSchedulePolicyDecision.NotDue)
+                    continue;
+                if (scheduleDecision == ScenarioSchedulePolicyDecision.Skipped)
+                {
+                    _journal.Record(action, ScenarioExecutedActionStatus.Skipped, reason);
+                    continue;
+                }
+
                 if (!_conditions.IsGateSatisfied(_definition, action.GateId, _journal.State, out reason)
                     || !_conditions.AreConditionsSatisfied(_definition, action.ConditionRefs, _journal.State, out reason))
                 {
@@ -131,39 +137,20 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             return action != null && action.Policy != null && action.Policy.Repeatable;
         }
 
-        private bool CanRunRepeatable(ScenarioScheduledActionDefinition action)
+        private ScenarioSchedulePolicyDecision EvaluateSchedule(ScenarioScheduledActionDefinition action, out string reason)
         {
+            long? lastAttemptMinutes = null;
             ScenarioExecutedActionRecord lastRecord;
-            if (!_journal.TryGetLastExecutionAttempt(action.Id, out lastRecord))
-                return true;
+            if (_journal.TryGetLastExecutionAttempt(action.Id, out lastRecord))
+                lastAttemptMinutes = ScenarioSchedulePolicyEvaluator.ToGameMinutes(lastRecord.FiredDay, lastRecord.FiredHour, lastRecord.FiredMinute);
 
-            long elapsedMinutes = ToGameMinutes(GameTime.Day, GameTime.Hour, GameTime.Minute)
-                - ToGameMinutes(lastRecord.FiredDay, lastRecord.FiredHour, lastRecord.FiredMinute);
-            if (elapsedMinutes <= 0)
-                return false;
-
-            int cooldownMinutes = action.Policy != null ? Math.Max(0, action.Policy.CooldownMinutes) : 0;
-            return cooldownMinutes <= 0 || elapsedMinutes >= cooldownMinutes;
-        }
-
-        private static long ToGameMinutes(int day, int hour, int minute)
-        {
-            return ((long)day * 24L * 60L) + ((long)hour * 60L) + minute;
-        }
-
-        private static bool IsDue(ScenarioScheduleTime time)
-        {
-            if (time == null)
-                return false;
-            if (GameTime.Day > time.Day)
-                return true;
-            if (GameTime.Day < time.Day)
-                return false;
-            if (GameTime.Hour > time.Hour)
-                return true;
-            if (GameTime.Hour < time.Hour)
-                return false;
-            return GameTime.Minute >= time.Minute;
+            return ScenarioSchedulePolicyEvaluator.Evaluate(
+                action,
+                ScenarioSchedulePolicyEvaluator.ToGameMinutes(GameTime.Day, GameTime.Hour, GameTime.Minute),
+                _journal.CountRecords(action.Id, ScenarioExecutedActionStatus.Succeeded),
+                _journal.CountAttempts(action.Id),
+                lastAttemptMinutes,
+                out reason);
         }
     }
 }

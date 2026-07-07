@@ -22,6 +22,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
+using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class ScenarioPublishAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
@@ -1029,6 +1030,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         return "Fire " + SafeLabel(effect.TriggerId);
                     case ScenarioEffectKind.SetScenarioFlag:
                         return "Flag " + SafeLabel(effect.FlagId);
+                    case ScenarioEffectKind.WorldEvent:
+                        return BuildWorldEventLabel(effect);
                     case ScenarioEffectKind.UnlockBunkerExpansion:
                         return "Unlock " + SafeLabel(effect.BunkerExpansionId);
                     case ScenarioEffectKind.ActivateObject:
@@ -1056,6 +1059,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioTimelineEntryKind.Story:
                 case ScenarioTimelineEntryKind.Quest:
                     return "story";
+                case ScenarioTimelineEntryKind.WorldEvent:
+                    return "world_event";
+                case ScenarioTimelineEntryKind.Journal:
+                    return "journal";
                 case ScenarioTimelineEntryKind.CustomModded:
                     return string.Equals(entry.Type, "Trigger", StringComparison.OrdinalIgnoreCase) ? "trigger" : "change";
                 default:
@@ -1075,7 +1082,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "TR";
             if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
                 return "ST";
+            if (string.Equals(domain, "world_event", StringComparison.OrdinalIgnoreCase))
+                return "WEV";
+            if (string.Equals(domain, "journal", StringComparison.OrdinalIgnoreCase))
+                return "JR";
             return "EV";
+        }
+
+        private static string BuildWorldEventLabel(ScenarioEffectDefinition effect)
+        {
+            string eventType = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "eventType", "WorldEvent");
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                return SafeLabel(ScenarioPropertyBag.GetString(effect.Properties, "npcType", "Passerby"));
+            if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+                return "Raid";
+            if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                return "Broadcast";
+            return SafeLabel(eventType);
         }
 
         private static string FormatTimelineTime(ScenarioScheduleTime time)

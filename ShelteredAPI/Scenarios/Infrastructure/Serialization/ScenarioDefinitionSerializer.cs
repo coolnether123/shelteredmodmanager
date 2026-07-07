@@ -12,6 +12,7 @@ using ShelteredAPI.Scenarios.Domain.Bunker;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Objects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -385,6 +386,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 : ScenarioSelectionRulesDefinition.ForBaseMode(definition.BaseGameMode);
             ReadScenarioCharacters(Child(root, "ScenarioCharacters"), definition.ScenarioCharacters);
             definition.ScenarioFlow = ReadScenarioFlow(Child(root, "ScenarioFlow"));
+            definition.Conversations = ReadConversations(Child(root, "Conversations"));
+            definition.VanillaSuppression = ReadVanillaSuppression(Child(root, "VanillaSuppression"));
             definition.FamilySetup = familySerializer.Read(Child(root, "FamilySetup"));
             definition.StartingInventory = inventorySerializer.Read(Child(root, "StartingInventory"));
             definition.BunkerEdits = bunkerEditsSerializer.Read(Child(root, "BunkerEdits"));
@@ -403,6 +406,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 ScenarioBackendWorldMaterializer.MaterializeCurrentWorld(definition, definition.BaseGameMode);
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
             scheduledSerializer.Read(Child(root, "ScheduledActions"), definition.ScheduledActions);
+            definition.Journal = ReadJournal(Child(root, "Journal"));
             return definition;
         }
 
@@ -1230,6 +1234,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteSelectionRules(writer, definition.SelectionRules, definition.BaseGameMode);
             WriteScenarioCharacters(writer, definition.ScenarioCharacters);
             WriteScenarioFlow(writer, definition.ScenarioFlow);
+            WriteConversations(writer, definition.Conversations);
+            WriteVanillaSuppression(writer, definition.VanillaSuppression);
 
             familySerializer.Write(writer, definition.FamilySetup);
             inventorySerializer.Write(writer, definition.StartingInventory);
@@ -1244,9 +1250,38 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteBackendWorlds(writer, definition.BackendWorlds);
             gateSerializer.Write(writer, definition.Gates);
             scheduledSerializer.Write(writer, definition.ScheduledActions);
+            WriteJournal(writer, definition.Journal);
 
             writer.WriteEndElement();
             writer.WriteEndDocument();
+        }
+
+        private static ScenarioVanillaSuppressionDefinition ReadVanillaSuppression(XmlElement element)
+        {
+            ScenarioVanillaSuppressionDefinition suppression = new ScenarioVanillaSuppressionDefinition();
+            if (element == null)
+                return suppression;
+
+            suppression.RandomVisitors = ReadBoolAttribute(element, "randomVisitors", false);
+            suppression.Binman = ReadBoolAttribute(element, "binman", false);
+            suppression.Raids = ReadBoolAttribute(element, "raids", false);
+            suppression.StasisVisitors = ReadBoolAttribute(element, "stasisVisitors", false);
+            suppression.RadioBroadcastOdds = ReadBoolAttribute(element, "radioBroadcastOdds", false);
+            return suppression;
+        }
+
+        private static void WriteVanillaSuppression(XmlWriter writer, ScenarioVanillaSuppressionDefinition suppression)
+        {
+            if (suppression == null)
+                suppression = new ScenarioVanillaSuppressionDefinition();
+
+            writer.WriteStartElement("VanillaSuppression");
+            writer.WriteAttributeString("randomVisitors", suppression.RandomVisitors ? "true" : "false");
+            writer.WriteAttributeString("binman", suppression.Binman ? "true" : "false");
+            writer.WriteAttributeString("raids", suppression.Raids ? "true" : "false");
+            writer.WriteAttributeString("stasisVisitors", suppression.StasisVisitors ? "true" : "false");
+            writer.WriteAttributeString("radioBroadcastOdds", suppression.RadioBroadcastOdds ? "true" : "false");
+            writer.WriteEndElement();
         }
 
         private static void WriteSelectionRules(XmlWriter writer, ScenarioSelectionRulesDefinition rules, ScenarioBaseGameMode baseMode)
@@ -2127,6 +2162,146 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteEndElement();
         }
 
+        private static JournalDefinition ReadJournal(XmlElement element)
+        {
+            JournalDefinition journal = new JournalDefinition();
+            if (element == null)
+                return journal;
+
+            XmlElement entries = Child(element, "Entries");
+            XmlNodeList entryNodes = entries != null ? entries.GetElementsByTagName("Entry") : element.GetElementsByTagName("Entry");
+            for (int i = 0; i < entryNodes.Count; i++)
+            {
+                XmlElement node = entryNodes[i] as XmlElement;
+                if (node == null)
+                    continue;
+
+                JournalEntryDefinition entry = new JournalEntryDefinition();
+                entry.Id = AttributeOrChild(node, "id", "Id");
+                entry.Text = AttributeOrChild(node, "text", "Text");
+                entry.TriggerId = AttributeOrChild(node, "triggerId", "TriggerId");
+                entry.GateId = AttributeOrChild(node, "gateId", "GateId");
+                entry.Mode = ReadEnumAttribute(node, "mode", ScenarioJournalEntryMode.Once);
+                entry.CooldownMinutes = ReadIntAttribute(node, "cooldownMinutes", 0);
+                entry.DueTime = ReadOptionalScheduleTime(Child(node, "DueTime"));
+                entry.Writer = ReadJournalWriter(node);
+                ReadConditionRefs(Child(node, "Conditions"), entry.Conditions);
+                journal.Entries.Add(entry);
+            }
+
+            XmlElement policy = Child(element, "VanillaPolicy");
+            if (policy != null)
+            {
+                journal.VanillaPolicy.SuppressFirstEntry = ReadBoolAttribute(policy, "suppressFirstEntry", false);
+                XmlNodeList suppressNodes = policy.GetElementsByTagName("Suppress");
+                for (int i = 0; i < suppressNodes.Count; i++)
+                {
+                    XmlElement suppress = suppressNodes[i] as XmlElement;
+                    if (suppress == null)
+                        continue;
+
+                    ScenarioJournalVanillaCategory category;
+                    if (TryParseJournalCategory(AttributeOrChild(suppress, "category", "Category"), out category)
+                        && !journal.VanillaPolicy.SuppressedCategories.Contains(category))
+                    {
+                        journal.VanillaPolicy.SuppressedCategories.Add(category);
+                    }
+                }
+            }
+
+            return journal;
+        }
+
+        private static void WriteJournal(XmlWriter writer, JournalDefinition journal)
+        {
+            if (journal == null)
+                journal = new JournalDefinition();
+            if (journal.VanillaPolicy == null)
+                journal.VanillaPolicy = new JournalVanillaPolicyDefinition();
+
+            writer.WriteStartElement("Journal");
+            writer.WriteStartElement("Entries");
+            for (int i = 0; journal.Entries != null && i < journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = journal.Entries[i];
+                if (entry == null)
+                    continue;
+
+                writer.WriteStartElement("Entry");
+                WriteAttribute(writer, "id", entry.Id);
+                writer.WriteAttributeString("mode", entry.Mode.ToString());
+                WriteAttribute(writer, "triggerId", entry.TriggerId);
+                WriteAttribute(writer, "gateId", entry.GateId);
+                writer.WriteAttributeString("cooldownMinutes", entry.CooldownMinutes.ToString(CultureInfo.InvariantCulture));
+                WriteJournalWriter(writer, entry.Writer);
+                WriteOptionalScheduleTime(writer, "DueTime", entry.DueTime);
+                WriteElement(writer, "Text", entry.Text);
+                WriteConditionRefs(writer, "Conditions", entry.Conditions);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+
+            writer.WriteStartElement("VanillaPolicy");
+            writer.WriteAttributeString("suppressFirstEntry", journal.VanillaPolicy.SuppressFirstEntry ? "true" : "false");
+            for (int i = 0; journal.VanillaPolicy.SuppressedCategories != null && i < journal.VanillaPolicy.SuppressedCategories.Count; i++)
+            {
+                writer.WriteStartElement("Suppress");
+                writer.WriteAttributeString("category", journal.VanillaPolicy.SuppressedCategories[i].ToString());
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+        }
+
+        private static ScenarioActorRef ReadJournalWriter(XmlElement entry)
+        {
+            XmlElement writer = Child(entry, "Writer");
+            if (writer == null)
+                return null;
+
+            ScenarioActorRef actorRef = new ScenarioActorRef();
+            actorRef.Kind = AttributeOrChild(writer, "kind", "Kind");
+            actorRef.LocalId = ReadIntAttribute(writer, "localId", 0);
+            actorRef.Domain = AttributeOrChild(writer, "domain", "Domain");
+            actorRef.BindingType = AttributeOrChild(writer, "bindingType", "BindingType");
+            actorRef.BindingKey = AttributeOrChild(writer, "bindingKey", "BindingKey");
+            actorRef.DisplayNameFallback = AttributeOrChild(writer, "displayNameFallback", "DisplayNameFallback");
+            actorRef.RequiredModId = AttributeOrChild(writer, "requiredModId", "RequiredModId");
+            return actorRef;
+        }
+
+        private static void WriteJournalWriter(XmlWriter writer, ScenarioActorRef actorRef)
+        {
+            if (actorRef == null)
+                return;
+
+            writer.WriteStartElement("Writer");
+            WriteAttribute(writer, "kind", actorRef.Kind);
+            writer.WriteAttributeString("localId", actorRef.LocalId.ToString(CultureInfo.InvariantCulture));
+            WriteAttribute(writer, "domain", actorRef.Domain);
+            WriteAttribute(writer, "bindingType", actorRef.BindingType);
+            WriteAttribute(writer, "bindingKey", actorRef.BindingKey);
+            WriteAttribute(writer, "displayNameFallback", actorRef.DisplayNameFallback);
+            WriteAttribute(writer, "requiredModId", actorRef.RequiredModId);
+            writer.WriteEndElement();
+        }
+
+        private static bool TryParseJournalCategory(string value, out ScenarioJournalVanillaCategory category)
+        {
+            category = ScenarioJournalVanillaCategory.Death;
+            if (string.IsNullOrEmpty(value))
+                return false;
+            try
+            {
+                category = (ScenarioJournalVanillaCategory)Enum.Parse(typeof(ScenarioJournalVanillaCategory), value, true);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         internal static void ReadScheduledActions(XmlElement element, System.Collections.Generic.List<ScenarioScheduledActionDefinition> target)
         {
             if (element == null || target == null)
@@ -2149,6 +2324,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 {
                     action.Policy.Repeatable = ReadBoolAttribute(policy, "repeatable", false);
                     action.Policy.CooldownMinutes = ReadIntAttribute(policy, "cooldownMinutes", 0);
+                    action.Policy.WindowEndDay = ReadIntAttribute(policy, "windowEndDay", 0);
+                    action.Policy.Chance = ReadFloatAttribute(policy, "chance", 1f);
+                    action.Policy.JitterMinutes = ReadIntAttribute(policy, "jitterMinutes", 0);
+                    action.Policy.MaxRuns = ReadIntAttribute(policy, "maxRuns", 0);
                 }
                 ReadConditionRefs(Child(actionElement, "Conditions"), action.ConditionRefs);
                 ReadEffects(Child(actionElement, "Effects"), action.Effects);
@@ -2174,6 +2353,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     writer.WriteStartElement("Policy");
                     writer.WriteAttributeString("repeatable", action.Policy != null && action.Policy.Repeatable ? "true" : "false");
                     writer.WriteAttributeString("cooldownMinutes", action.Policy != null ? action.Policy.CooldownMinutes.ToString(CultureInfo.InvariantCulture) : "0");
+                    if (action.Policy != null && action.Policy.WindowEndDay > 0)
+                        writer.WriteAttributeString("windowEndDay", action.Policy.WindowEndDay.ToString(CultureInfo.InvariantCulture));
+                    if (action.Policy != null && action.Policy.Chance < 1f)
+                        writer.WriteAttributeString("chance", action.Policy.Chance.ToString(CultureInfo.InvariantCulture));
+                    if (action.Policy != null && action.Policy.JitterMinutes > 0)
+                        writer.WriteAttributeString("jitterMinutes", action.Policy.JitterMinutes.ToString(CultureInfo.InvariantCulture));
+                    if (action.Policy != null && action.Policy.MaxRuns > 0)
+                        writer.WriteAttributeString("maxRuns", action.Policy.MaxRuns.ToString(CultureInfo.InvariantCulture));
                     writer.WriteEndElement();
                     WriteConditionRefs(writer, "Conditions", action.ConditionRefs);
                     WriteEffects(writer, "Effects", action.Effects);
@@ -2299,6 +2486,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 effect.FlagId = AttributeOrChild(node, "flagId", "FlagId");
                 effect.FlagValue = AttributeOrChild(node, "flagValue", "FlagValue");
                 effect.TriggerId = AttributeOrChild(node, "triggerId", "TriggerId");
+                effect.ConversationId = AttributeOrChild(node, "conversationId", "ConversationId");
                 ReadProperties(Child(node, "Properties"), effect.Properties);
                 target.Add(effect);
             }
@@ -2327,6 +2515,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "flagId", effect.FlagId);
                 WriteAttribute(writer, "flagValue", effect.FlagValue);
                 WriteAttribute(writer, "triggerId", effect.TriggerId);
+                WriteAttribute(writer, "conversationId", effect.ConversationId);
                 ScenarioActorXmlSerializer.WriteActorRef(writer, effect.ActorRef);
                 WriteProperties(writer, "Properties", effect.Properties);
                 writer.WriteEndElement();
@@ -2368,6 +2557,184 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                     WriteProperties(writer, "Properties", condition.Properties);
                     writer.WriteEndElement();
                 }
+            }
+            writer.WriteEndElement();
+        }
+
+        private static ScenarioConversationAuthoringDefinition ReadConversations(XmlElement element)
+        {
+            ScenarioConversationAuthoringDefinition authoring = new ScenarioConversationAuthoringDefinition();
+            if (element == null)
+                return authoring;
+
+            XmlElement settings = Child(element, "Settings");
+            if (settings != null)
+            {
+                authoring.Settings.SuppressVanillaRandomChatter = ReadBool(settings, "SuppressVanillaRandomChatter", authoring.Settings.SuppressVanillaRandomChatter);
+                ReadStringList(Child(settings, "SuppressedVanillaCategories"), "string", authoring.Settings.SuppressedVanillaCategories);
+                ReadStringList(Child(settings, "SuppressedVanillaTopicKeys"), "string", authoring.Settings.SuppressedVanillaTopicKeys);
+            }
+
+            XmlNodeList nodes = element.GetElementsByTagName("Conversation");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement conversationElement = nodes[i] as XmlElement;
+                if (conversationElement == null)
+                    continue;
+
+                ScenarioConversationDefinition conversation = new ScenarioConversationDefinition();
+                conversation.Id = AttributeOrChild(conversationElement, "id", "Id");
+                conversation.Trigger = ReadConversationTrigger(Child(conversationElement, "Trigger"));
+                ReadConversationParticipants(Child(conversationElement, "Participants"), conversation.Participants);
+                ReadConditionRefs(Child(conversationElement, "Conditions"), conversation.Conditions);
+                ReadConversationLines(Child(conversationElement, "Lines"), conversation.Lines);
+                ReadStringList(Child(conversationElement, "Tags"), "Tag", conversation.Tags);
+                authoring.Conversations.Add(conversation);
+            }
+
+            return authoring;
+        }
+
+        private static ScenarioConversationTriggerDefinition ReadConversationTrigger(XmlElement element)
+        {
+            ScenarioConversationTriggerDefinition trigger = new ScenarioConversationTriggerDefinition();
+            if (element == null)
+                return trigger;
+
+            trigger.Source = ReadEnumAttribute(element, "source", trigger.Source);
+            trigger.Weight = ReadFloatAttribute(element, "weight", trigger.Weight);
+            trigger.TriggerId = AttributeOrChild(element, "triggerId", "TriggerId");
+            trigger.CooldownDays = ReadFloatAttribute(element, "cooldownDays", trigger.CooldownDays);
+            trigger.Once = ReadBoolAttribute(element, "once", trigger.Once);
+            trigger.Time = ReadScheduleTime(Child(element, "Time"));
+            return trigger;
+        }
+
+        private static void ReadConversationParticipants(XmlElement element, System.Collections.Generic.List<ScenarioConversationParticipantDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Participant");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement participantElement = nodes[i] as XmlElement;
+                if (participantElement == null)
+                    continue;
+
+                ScenarioConversationParticipantDefinition participant = new ScenarioConversationParticipantDefinition();
+                participant.Slot = AttributeOrChild(participantElement, "slot", "Slot");
+                participant.StoryCharacterId = AttributeOrChild(participantElement, "storyCharacterId", "StoryCharacterId");
+                participant.ActorRef = ScenarioActorXmlSerializer.ReadActorRef(participantElement);
+                participant.Fallback = ReadEnumAttribute(participantElement, "fallback", participant.Fallback);
+                participant.Required = ReadBoolAttribute(participantElement, "required", participant.Required);
+                target.Add(participant);
+            }
+        }
+
+        private static void ReadConversationLines(XmlElement element, System.Collections.Generic.List<ScenarioConversationLineDefinition> target)
+        {
+            if (element == null || target == null)
+                return;
+
+            XmlNodeList nodes = element.GetElementsByTagName("Line");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement lineElement = nodes[i] as XmlElement;
+                if (lineElement == null)
+                    continue;
+
+                ScenarioConversationLineDefinition line = new ScenarioConversationLineDefinition();
+                line.SpeakerSlot = AttributeOrChild(lineElement, "speakerSlot", "SpeakerSlot");
+                line.TextKey = AttributeOrChild(lineElement, "textKey", "TextKey");
+                line.RawText = AttributeOrChild(lineElement, "rawText", "RawText");
+                line.DelaySeconds = ReadFloatAttribute(lineElement, "delaySeconds", line.DelaySeconds);
+                target.Add(line);
+            }
+        }
+
+        private static void WriteConversations(XmlWriter writer, ScenarioConversationAuthoringDefinition authoring)
+        {
+            if (authoring == null)
+                authoring = new ScenarioConversationAuthoringDefinition();
+
+            writer.WriteStartElement("Conversations");
+            ScenarioConversationSuppressionDefinition settings = authoring.Settings ?? new ScenarioConversationSuppressionDefinition();
+            writer.WriteStartElement("Settings");
+            WriteElement(writer, "SuppressVanillaRandomChatter", settings.SuppressVanillaRandomChatter ? "true" : "false");
+            WriteStringList(writer, "SuppressedVanillaCategories", "string", settings.SuppressedVanillaCategories);
+            WriteStringList(writer, "SuppressedVanillaTopicKeys", "string", settings.SuppressedVanillaTopicKeys);
+            writer.WriteEndElement();
+
+            for (int i = 0; authoring.Conversations != null && i < authoring.Conversations.Count; i++)
+            {
+                ScenarioConversationDefinition conversation = authoring.Conversations[i];
+                if (conversation == null)
+                    continue;
+
+                writer.WriteStartElement("Conversation");
+                WriteAttribute(writer, "id", conversation.Id);
+                WriteConversationTrigger(writer, conversation.Trigger);
+                WriteConversationParticipants(writer, conversation.Participants);
+                WriteConditionRefs(writer, "Conditions", conversation.Conditions);
+                WriteConversationLines(writer, conversation.Lines);
+                WriteStringList(writer, "Tags", "Tag", conversation.Tags);
+                writer.WriteEndElement();
+            }
+
+            writer.WriteEndElement();
+        }
+
+        private static void WriteConversationTrigger(XmlWriter writer, ScenarioConversationTriggerDefinition trigger)
+        {
+            if (trigger == null)
+                trigger = new ScenarioConversationTriggerDefinition();
+
+            writer.WriteStartElement("Trigger");
+            writer.WriteAttributeString("source", trigger.Source.ToString());
+            writer.WriteAttributeString("weight", trigger.Weight.ToString(CultureInfo.InvariantCulture));
+            WriteAttribute(writer, "triggerId", trigger.TriggerId);
+            writer.WriteAttributeString("cooldownDays", trigger.CooldownDays.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("once", trigger.Once ? "true" : "false");
+            WriteScheduleTime(writer, "Time", trigger.Time);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteConversationParticipants(XmlWriter writer, System.Collections.Generic.List<ScenarioConversationParticipantDefinition> participants)
+        {
+            writer.WriteStartElement("Participants");
+            for (int i = 0; participants != null && i < participants.Count; i++)
+            {
+                ScenarioConversationParticipantDefinition participant = participants[i];
+                if (participant == null)
+                    continue;
+
+                writer.WriteStartElement("Participant");
+                WriteAttribute(writer, "slot", participant.Slot);
+                WriteAttribute(writer, "storyCharacterId", participant.StoryCharacterId);
+                writer.WriteAttributeString("fallback", participant.Fallback.ToString());
+                writer.WriteAttributeString("required", participant.Required ? "true" : "false");
+                ScenarioActorXmlSerializer.WriteActorRef(writer, participant.ActorRef);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+        }
+
+        private static void WriteConversationLines(XmlWriter writer, System.Collections.Generic.List<ScenarioConversationLineDefinition> lines)
+        {
+            writer.WriteStartElement("Lines");
+            for (int i = 0; lines != null && i < lines.Count; i++)
+            {
+                ScenarioConversationLineDefinition line = lines[i];
+                if (line == null)
+                    continue;
+
+                writer.WriteStartElement("Line");
+                WriteAttribute(writer, "speakerSlot", line.SpeakerSlot);
+                WriteAttribute(writer, "textKey", line.TextKey);
+                WriteAttribute(writer, "rawText", line.RawText);
+                writer.WriteAttributeString("delaySeconds", line.DelaySeconds.ToString(CultureInfo.InvariantCulture));
+                writer.WriteEndElement();
             }
             writer.WriteEndElement();
         }

@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Domain.Runtime{
             FiredTriggers = new List<ScenarioFiredTriggerRecord>();
             UnlockedBunker = new List<ScenarioUnlockedBunkerRecord>();
             ObjectStates = new List<ScenarioObjectRuntimeStateRecord>();
+            Conversations = new List<ScenarioConversationRuntimeRecord>();
         }
 
         public string ScenarioId { get; set; }
@@ -30,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Domain.Runtime{
         public List<ScenarioFiredTriggerRecord> FiredTriggers { get; private set; }
         public List<ScenarioUnlockedBunkerRecord> UnlockedBunker { get; private set; }
         public List<ScenarioObjectRuntimeStateRecord> ObjectStates { get; private set; }
+        public List<ScenarioConversationRuntimeRecord> Conversations { get; private set; }
     }
 
     internal class ScenarioRuntimeFlag
@@ -54,5 +56,14 @@ namespace ShelteredAPI.Scenarios.Domain.Runtime{
         public int Day { get; set; }
         public int Hour { get; set; }
         public int Minute { get; set; }
+    }
+
+    internal class ScenarioConversationRuntimeRecord
+    {
+        public string ConversationId { get; set; }
+        public int LastPlayedDay { get; set; }
+        public int LastPlayedHour { get; set; }
+        public int LastPlayedMinute { get; set; }
+        public int PlayCount { get; set; }
     }
 }

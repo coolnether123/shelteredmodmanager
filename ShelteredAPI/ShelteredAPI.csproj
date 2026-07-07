@@ -220,6 +220,7 @@
     <Compile Include="Scenarios\Domain\Conditions\ScenarioWinLossConditionSupport.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectDefinition.cs" />
     <Compile Include="Scenarios\Domain\Effects\ScenarioEffectKind.cs" />
+    <Compile Include="Scenarios\Domain\Journal\JournalDefinition.cs" />
     <Compile Include="Scenarios\Domain\Map\ScenarioMapDefinitions.cs" />
     <Compile Include="Scenarios\Domain\Map\ScenarioMapIconCatalog.cs" />
     <Compile Include="Scenarios\Domain\Objects\ScenarioObjectIdentity.cs" />
@@ -243,6 +244,7 @@
     <Compile Include="Scenarios\Domain\Validation\ObjectStartStateValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationAnalyzer.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioConversationValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioValidationPipeline.cs" />
     <Compile Include="Scenarios\Domain\Validation\SchedulingValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ValidationIssue.cs" />
@@ -317,9 +319,12 @@
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeStateService.cs" />
     <Compile Include="Scenarios\Application\Scheduling\IScenarioScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioDefinitionScheduledActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioConversationScheduledActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioJournalScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerDefinitionCompiler.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioTriggerScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioLegacyScheduleActionProvider.cs" />
+    <Compile Include="Scenarios\Application\Scheduling\ScenarioSchedulePolicyEvaluator.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioScheduleRuntimeCoordinator.cs" />
     <Compile Include="Scenarios\Application\Stages\IScenarioStageModule.cs" />
     <Compile Include="Scenarios\Application\Stages\ScenarioStageContext.cs" />
@@ -379,6 +384,8 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledQuestRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledSurvivorRuntimeService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWeatherRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledWorldEventRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioWorldEventRuntimeState.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\TriggerRuntimeAdapter.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\VanillaScenarioRuntimeGateway.cs" />
     <Compile Include="Scenarios\Application\Selection\ScenarioSelectionScopeService.cs" />
@@ -447,6 +454,9 @@
     <Compile Include="Scenarios\Lifecycle\ScenarioLifecycleService.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioAuthoringBootstrapPatches.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioMapAuthoringPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioWorldEventPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioConversationChatterPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioJournalPatches.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBootstrapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBackendService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutRouter.cs" />
@@ -525,6 +535,8 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFamilyMemberFactory.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFutureSurvivorRecruitBindingService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioActorResolver.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioConversationRuntimeService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScheduledJournalRuntimeService.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioApplyResult.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioPlaytestOrchestrator.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioPlayStartReadiness.cs" />

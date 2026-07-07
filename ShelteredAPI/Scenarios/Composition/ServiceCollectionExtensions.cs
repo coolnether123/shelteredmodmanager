@@ -121,6 +121,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton<IScenarioWinLossConditionAdapter>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossConditionAdapter>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledInventoryRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWeatherRuntimeService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledJournalRuntimeService(resolver.Get<ScenarioActorResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWorldEventRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioFutureSurvivorRecruitBindingService(resolver.Get<ScenarioActorResolver>()); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -145,6 +147,13 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
+                return new ScenarioConversationRuntimeService(
+                    resolver.Get<ScenarioActorResolver>(),
+                    resolver.Get<ScenarioRuntimeStateService>(),
+                    resolver.Get<ScenarioConditionEvaluatorRegistry>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
                 ScenarioEffectDispatcher dispatcher = new ScenarioEffectDispatcher();
                 dispatcher.Register(resolver.Get<ScheduledInventoryRuntimeService>());
                 dispatcher.Register(resolver.Get<ScheduledWeatherRuntimeService>());
@@ -154,6 +163,9 @@ namespace ShelteredAPI.Scenarios.Composition{
                 dispatcher.Register(resolver.Get<ScheduledObjectRuntimeService>());
                 dispatcher.Register(resolver.Get<ScenarioFlagRuntimeService>());
                 dispatcher.Register(resolver.Get<ScenarioTriggerRuntimeService>());
+                dispatcher.Register(resolver.Get<ScheduledJournalRuntimeService>());
+                dispatcher.Register(resolver.Get<ScheduledWorldEventRuntimeService>());
+                dispatcher.Register(resolver.Get<ScenarioConversationRuntimeService>());
                 return dispatcher;
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
@@ -166,7 +178,9 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton<IScenarioWinLossOutcomeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossOutcomeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDefinitionScheduledActionProvider(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioJournalScheduledActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerScheduledActionProvider(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioConversationScheduledActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioLegacyScheduleActionProvider(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -179,7 +193,9 @@ namespace ShelteredAPI.Scenarios.Composition{
                     new IScenarioScheduledActionProvider[]
                     {
                         resolver.Get<ScenarioDefinitionScheduledActionProvider>(),
+                        resolver.Get<ScenarioJournalScheduledActionProvider>(),
                         resolver.Get<ScenarioTriggerScheduledActionProvider>(),
+                        resolver.Get<ScenarioConversationScheduledActionProvider>(),
                         resolver.Get<ScenarioLegacyScheduleActionProvider>()
                     });
             });
@@ -193,7 +209,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             {
                 return new TriggerRuntimeAdapter(
                     resolver.Get<ScenarioScheduleRuntimeCoordinator>(),
-                    resolver.Get<IScenarioRuntimeBindingService>());
+                    resolver.Get<IScenarioRuntimeBindingService>(),
+                    resolver.Get<ScenarioConversationRuntimeService>());
             });
         }
 

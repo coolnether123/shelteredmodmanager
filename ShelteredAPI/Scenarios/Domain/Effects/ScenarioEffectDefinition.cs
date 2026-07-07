@@ -32,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Domain.Effects{
         public string FlagId { get; set; }
         public string FlagValue { get; set; }
         public string TriggerId { get; set; }
+        public string ConversationId { get; set; }
         public List<ScenarioProperty> Properties { get; private set; }
     }
 }

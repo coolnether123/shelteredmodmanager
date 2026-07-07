@@ -17,6 +17,7 @@ using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -1199,6 +1200,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 SetFocusedEditor(state, "gate", definition.Gates != null ? definition.Gates.Count - 1 : -1, true);
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionScheduledActionAdd, StringComparison.Ordinal))
                 SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, "journal_entry", definition.Journal != null && definition.Journal.Entries != null ? definition.Journal.Entries.Count - 1 : -1, true);
         }
 
         private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
@@ -1641,18 +1644,32 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 definition.ScheduledActions.RemoveAt(index);
                 MarkDirty(session, ScenarioDirtySection.Triggers);
             }
+            else if (string.Equals(kind, "journal_entry", StringComparison.OrdinalIgnoreCase)
+                && definition.Journal != null
+                && definition.Journal.Entries != null
+                && index < definition.Journal.Entries.Count)
+            {
+                definition.Journal.Entries.RemoveAt(index);
+                MarkDirty(session, ScenarioDirtySection.Triggers);
+            }
         }
 
         private static void ClearGateReferences(ScenarioDefinition definition, string gateId)
         {
-            if (definition == null || string.IsNullOrEmpty(gateId) || definition.ScheduledActions == null)
+            if (definition == null || string.IsNullOrEmpty(gateId))
                 return;
 
-            for (int i = 0; i < definition.ScheduledActions.Count; i++)
+            for (int i = 0; definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action != null && string.Equals(action.GateId, gateId, StringComparison.OrdinalIgnoreCase))
                     action.GateId = null;
+            }
+            for (int i = 0; definition.Journal != null && definition.Journal.Entries != null && i < definition.Journal.Entries.Count; i++)
+            {
+                JournalEntryDefinition entry = definition.Journal.Entries[i];
+                if (entry != null && string.Equals(entry.GateId, gateId, StringComparison.OrdinalIgnoreCase))
+                    entry.GateId = null;
             }
         }
 

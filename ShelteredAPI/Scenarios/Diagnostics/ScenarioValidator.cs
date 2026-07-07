@@ -62,6 +62,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 new CoreScenarioRule(),
                 new ScenarioCharacterValidationRule(),
                 new ScenarioStoryFlowValidationRule(),
+                new ScenarioConversationValidationRule(),
                 new DependencyValidationRule(this),
                 new AssetValidationRule(),
                 new FamilyValidationRule(),
