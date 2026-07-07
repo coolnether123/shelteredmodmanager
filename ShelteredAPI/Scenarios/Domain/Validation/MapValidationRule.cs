@@ -68,6 +68,8 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     result.AddError("Map location '" + id + "' radius cannot be negative.");
                 if (location.Danger < 0)
                     result.AddError("Map location '" + id + "' danger cannot be negative.");
+                if (location.DiscoveredAtStart && location.HiddenUntilDiscovered)
+                    result.AddError("Map location '" + id + "' cannot be both DiscoveredAtStart and HiddenUntilDiscovered. Fix: either clear Hidden Until Travel Discovery or clear Discovered At Start so vanilla travel discovery can reveal it.");
                 string iconId = TrimToNull(location.IconId);
                 if (iconId != null && !ScenarioMapIconCatalog.IsKnownIconId(iconId))
                     result.AddError("Map location '" + id + "' has invalid iconId '" + iconId + "'. Fix: choose a known map icon id from the Map location editor or clear the icon field.");
