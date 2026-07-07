@@ -381,6 +381,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return;
                 }
 
+                if (pending.ReenterPlaytestAfterBootstrap)
+                {
+                    string cutsceneBlockingReason;
+                    ScenarioPlaytestRestartCutsceneGuard.TryClearBlockingIntroCutscene(pending.DraftId, out cutsceneBlockingReason);
+                }
+
                 if (!ScenarioWorldReady.Evaluate(out blockingReason))
                 {
                     if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
@@ -449,6 +455,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             try
             {
+                string cutsceneBlockingReason;
+                if (!ScenarioPlaytestRestartCutsceneGuard.TryClearBlockingIntroCutscene(
+                        pending != null ? pending.DraftId : null,
+                        out cutsceneBlockingReason))
+                {
+                    FailPlaytestRestartBackToEditor("Playtest restart failed; returned to the editor. " + cutsceneBlockingReason);
+                    return;
+                }
+
                 ScenarioApplyResult result = _editorService.BeginPlaytest();
                 int messages = result != null && result.Messages != null ? result.Messages.Length : 0;
                 ScenarioEditorSession editorSession = _editorService.CurrentSession;

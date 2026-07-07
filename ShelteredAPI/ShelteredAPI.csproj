@@ -462,6 +462,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringVanillaPanelVisibilityService.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioAuthoringRuntimeGuards.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioLoadingTransitionGuard.cs" />
+    <Compile Include="Scenarios\Infrastructure\Unity\ScenarioPlaytestRestartCutsceneGuard.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringScrollFocusService.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringSelectionMenuService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSelectionService.cs" />
