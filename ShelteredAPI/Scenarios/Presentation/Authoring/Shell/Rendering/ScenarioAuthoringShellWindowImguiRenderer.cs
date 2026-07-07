@@ -1892,6 +1892,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawFactGrid(section, compactInspector);
             }
+            else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.CastCardGrid)
+            {
+                DrawCastCardGrid(section, compactInspector);
+            }
             else
             {
                 for (int i = 0; section.Items != null && i < section.Items.Length; i++)
@@ -2444,6 +2448,288 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
             }
             GUILayout.EndHorizontal();
+        }
+
+        private void DrawCastCardGrid(ScenarioAuthoringInspectorSection section, bool compactInspector)
+        {
+            float availableWidth = GetSectionContentWidth();
+            float gap = 8f;
+            DrawCastSectionActions(section, availableWidth, gap);
+
+            int cardCount = CountCastCards(section);
+            if (cardCount == 0)
+            {
+                DrawCastSectionText(section, compactInspector);
+                return;
+            }
+
+            float minCardWidth = compactInspector ? 250f : 286f;
+            int columns = Mathf.Clamp(Mathf.FloorToInt((availableWidth + gap) / (minCardWidth + gap)), 1, compactInspector ? 2 : 4);
+            float cardWidth = (availableWidth - (gap * (columns - 1))) / columns;
+            float cardHeight = compactInspector ? 174f : 198f;
+            int column = 0;
+            GUILayout.BeginHorizontal();
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.CastCard == null)
+                    continue;
+
+                Rect cardRect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
+                DrawCastCard(cardRect, item.CastCard);
+                column++;
+                if (column >= columns && HasMoreCastCards(section, i + 1))
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(gap);
+                    GUILayout.BeginHorizontal();
+                    column = 0;
+                }
+                else if (column < columns)
+                {
+                    GUILayout.Space(gap);
+                }
+            }
+            GUILayout.EndHorizontal();
+        }
+
+        private void DrawCastSectionActions(ScenarioAuthoringInspectorSection section, float availableWidth, float gap)
+        {
+            float rowWidth = 0f;
+            bool hasActions = false;
+            GUILayout.BeginHorizontal();
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.Action == null)
+                    continue;
+
+                float width = Math.Max(94f, MeasureButtonWidth(item.Action, false, 22f));
+                width = Math.Min(width, availableWidth);
+                if (rowWidth > 0f && rowWidth + width > availableWidth)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(4f);
+                    GUILayout.BeginHorizontal();
+                    rowWidth = 0f;
+                }
+
+                Rect rect = GUILayoutUtility.GetRect(width, 28f, GUILayout.Width(width), GUILayout.Height(28f));
+                DrawButton(rect, item.Action, false);
+                GUILayout.Space(gap);
+                rowWidth += width + gap;
+                hasActions = true;
+            }
+            GUILayout.EndHorizontal();
+            if (hasActions)
+                GUILayout.Space(8f);
+        }
+
+        private void DrawCastSectionText(ScenarioAuthoringInspectorSection section, bool compactInspector)
+        {
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.Action != null || item.CastCard != null)
+                    continue;
+
+                DrawItem(item, compactInspector);
+            }
+        }
+
+        private void DrawCastCard(Rect rect, ScenarioCastCardViewModel card)
+        {
+            if (card == null)
+                return;
+
+            ScenarioAuthoringInspectorAction primary = card.PrimaryAction;
+            bool clickable = primary != null && primary.Enabled && !string.IsNullOrEmpty(primary.Id);
+            GUIContent content = new GUIContent(string.Empty, primary != null ? primary.Hint ?? primary.Detail ?? string.Empty : string.Empty);
+            RegisterInteractiveRegion(rect);
+            GUI.Box(rect, content, _uiContext.Styles.Card);
+
+            bool hovered = rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
+            DrawButtonAnimationOverlay(rect, primary != null ? primary.Id : null, clickable, hovered, false);
+
+            Rect portraitRect = new Rect(rect.x + 10f, rect.y + 10f, 82f, 96f);
+            DrawCastPortrait(portraitRect, card);
+
+            Rect statusRect = new Rect(rect.xMax - 92f, rect.y + 10f, 76f, 20f);
+            if (!string.IsNullOrEmpty(card.Status))
+                ScenarioUiWidgets.DrawPill(statusRect, card.Status, _uiContext.Styles, ResolveCastStatusEmphasis(card.Status));
+
+            float textX = portraitRect.xMax + 10f;
+            float textWidth = Math.Max(60f, rect.xMax - textX - 12f);
+            GUI.Label(new Rect(textX, rect.y + 34f, textWidth, 24f), ShortenToFit(card.Name ?? "Survivor", textWidth, _sectionTitleStyle), _sectionTitleStyle);
+            GUI.Label(new Rect(textX, rect.y + 58f, textWidth, 20f), ShortenToFit(card.RoleLine ?? string.Empty, textWidth, _mutedTextStyle), _mutedTextStyle);
+            if (!string.IsNullOrEmpty(card.ArrivalSummary))
+                GUI.Label(new Rect(textX, rect.y + 80f, textWidth, 20f), ShortenToFit(card.ArrivalSummary, textWidth, _mutedTextStyle), _mutedTextStyle);
+
+            DrawCastStats(new Rect(rect.x + 10f, portraitRect.yMax + 8f, rect.width - 20f, 42f), card.Stats);
+            DrawCastTraitChips(new Rect(rect.x + 10f, rect.yMax - 44f, rect.width - 20f, 18f), card.Traits);
+            Rect actionsRect = new Rect(rect.x + 10f, rect.yMax - 24f, rect.width - 20f, 20f);
+            DrawCastCardActions(actionsRect, card);
+
+            Event evt = Event.current;
+            if (clickable
+                && evt != null
+                && evt.type == EventType.MouseDown
+                && evt.button == 0
+                && rect.Contains(evt.mousePosition)
+                && !actionsRect.Contains(evt.mousePosition))
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(primary.Id);
+                evt.Use();
+            }
+        }
+
+        private void DrawCastPortrait(Rect rect, ScenarioCastCardViewModel card)
+        {
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+            if (card == null || card.PortraitSprite == null || card.PortraitSprite.texture == null)
+            {
+                GUI.Label(rect, "No Portrait", _uiContext.Styles.EmptyStateText);
+            }
+            else
+            {
+                DrawSpritePreview(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 20f), card.PortraitSprite, false);
+            }
+
+            float swatch = 9f;
+            float y = rect.yMax - swatch - 5f;
+            float x = rect.x + 8f;
+            DrawColorSwatch(new Rect(x, y, swatch, swatch), card.HairColor);
+            DrawColorSwatch(new Rect(x + 14f, y, swatch, swatch), card.SkinColor);
+            DrawColorSwatch(new Rect(x + 28f, y, swatch, swatch), card.ShirtColor);
+            DrawColorSwatch(new Rect(x + 42f, y, swatch, swatch), card.PantsColor);
+        }
+
+        private void DrawCastStats(Rect rect, ScenarioCastStatViewModel[] stats)
+        {
+            if (stats == null || stats.Length == 0)
+            {
+                GUI.Label(rect, "Stats unavailable", _mutedTextStyle);
+                return;
+            }
+
+            int count = Math.Min(stats.Length, 5);
+            float gap = 5f;
+            float columnWidth = (rect.width - (gap * (count - 1))) / count;
+            for (int i = 0; i < count; i++)
+            {
+                ScenarioCastStatViewModel stat = stats[i];
+                Rect statRect = new Rect(rect.x + (i * (columnWidth + gap)), rect.y, columnWidth, rect.height);
+                DrawCastStat(statRect, stat);
+            }
+        }
+
+        private void DrawCastStat(Rect rect, ScenarioCastStatViewModel stat)
+        {
+            if (stat == null)
+                return;
+
+            GUIStyle labelStyle = new GUIStyle(_mutedTextStyle);
+            labelStyle.alignment = TextAnchor.MiddleCenter;
+            GUI.Label(new Rect(rect.x, rect.y, rect.width, 14f), new GUIContent(stat.Label ?? string.Empty, stat.Id + " " + stat.Value.ToString() + "/" + stat.Max.ToString()), labelStyle);
+
+            Rect bar = new Rect(rect.x + 2f, rect.y + 18f, rect.width - 4f, 8f);
+            GUI.Box(bar, GUIContent.none, _uiContext.Styles.Field);
+            float max = Math.Max(1, stat.Max);
+            float fillWidth = Mathf.Clamp01(stat.Value / max) * Math.Max(0f, bar.width - 4f);
+            Rect fill = new Rect(bar.x + 2f, bar.y + 2f, fillWidth, bar.height - 4f);
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.45f, 0.61f, 0.32f, 1f);
+            GUI.DrawTexture(fill, Texture2D.whiteTexture);
+            GUI.color = oldColor;
+        }
+
+        private void DrawCastTraitChips(Rect rect, string[] traits)
+        {
+            if (traits == null || traits.Length == 0)
+                return;
+
+            float x = rect.x;
+            int max = Math.Min(traits.Length, 3);
+            for (int i = 0; i < max; i++)
+            {
+                string trait = traits[i] ?? string.Empty;
+                float width = Mathf.Clamp(_mutedTextStyle.CalcSize(new GUIContent(trait)).x + 18f, 52f, Math.Max(52f, rect.xMax - x));
+                if (x + width > rect.xMax)
+                    break;
+
+                ScenarioUiWidgets.DrawPill(new Rect(x, rect.y, width, rect.height), ShortenToFit(trait, width - 10f, _mutedTextStyle), _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+                x += width + 5f;
+            }
+        }
+
+        private void DrawCastCardActions(Rect rect, ScenarioCastCardViewModel card)
+        {
+            float x = rect.x;
+            if (card.PrimaryAction != null)
+            {
+                float width = Mathf.Clamp(MeasureButtonWidth(card.PrimaryAction, false, 18f), 58f, 94f);
+                DrawButton(new Rect(x, rect.y, width, rect.height), card.PrimaryAction, false);
+                x += width + 4f;
+            }
+
+            ScenarioAuthoringInspectorAction[] actions = card.SecondaryActions;
+            for (int i = 0; actions != null && i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
+
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 18f), 46f, 86f);
+                if (x + width > rect.xMax)
+                    break;
+
+                DrawButton(new Rect(x, rect.y, width, rect.height), action, false);
+                x += width + 4f;
+            }
+        }
+
+        private static ScenarioUiPillEmphasis ResolveCastStatusEmphasis(string status)
+        {
+            if (StringContains(status, "active") || StringContains(status, "starting"))
+                return ScenarioUiPillEmphasis.Success;
+            if (StringContains(status, "future"))
+                return ScenarioUiPillEmphasis.Active;
+            if (StringContains(status, "dead") || StringContains(status, "unconscious") || StringContains(status, "catatonic"))
+                return ScenarioUiPillEmphasis.Danger;
+            if (StringContains(status, "away"))
+                return ScenarioUiPillEmphasis.Warning;
+            return ScenarioUiPillEmphasis.Default;
+        }
+
+        private static int CountCastCards(ScenarioAuthoringInspectorSection section)
+        {
+            int count = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                if (section.Items[i] != null && section.Items[i].CastCard != null)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static bool HasMoreCastCards(ScenarioAuthoringInspectorSection section, int startIndex)
+        {
+            for (int i = Math.Max(0, startIndex); section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                if (section.Items[i] != null && section.Items[i].CastCard != null)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void DrawColorSwatch(Rect rect, Color color)
+        {
+            Color oldColor = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
         }
 
         private void DrawFactCell(Rect rect, ScenarioAuthoringInspectorItem item)

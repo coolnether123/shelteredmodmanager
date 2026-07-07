@@ -480,6 +480,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorkspaceTabsImguiRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioAuthoringStoragePaths.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringUiDebugService.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioCastPortraitResolver.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs" />

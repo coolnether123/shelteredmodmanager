@@ -1054,7 +1054,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         TabStrip = 5,
         Summary = 6,
         CandidateGrid = 7,
-        FactGrid = 8
+        FactGrid = 8,
+        CastCardGrid = 9
     }
 
     internal sealed class ScenarioAuthoringInspectorSection
@@ -1087,7 +1088,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string HoverHint { get; set; }
         public string PulseKey { get; set; }
         public string PulseSignature { get; set; }
+        public ScenarioCastCardViewModel CastCard { get; set; }
         public ScenarioAuthoringInspectorAction Action { get; set; }
+    }
+
+    internal sealed class ScenarioCastCardViewModel
+    {
+        public string Name { get; set; }
+        public string RoleLine { get; set; }
+        public string Status { get; set; }
+        public string ArrivalSummary { get; set; }
+        public Sprite PortraitSprite { get; set; }
+        public Color HairColor { get; set; }
+        public Color SkinColor { get; set; }
+        public Color ShirtColor { get; set; }
+        public Color PantsColor { get; set; }
+        public ScenarioCastStatViewModel[] Stats { get; set; }
+        public string[] Traits { get; set; }
+        public ScenarioAuthoringInspectorAction PrimaryAction { get; set; }
+        public ScenarioAuthoringInspectorAction[] SecondaryActions { get; set; }
+    }
+
+    internal sealed class ScenarioCastStatViewModel
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public int Value { get; set; }
+        public int Max { get; set; }
     }
 
     internal sealed class ScenarioAuthoringTargetContext

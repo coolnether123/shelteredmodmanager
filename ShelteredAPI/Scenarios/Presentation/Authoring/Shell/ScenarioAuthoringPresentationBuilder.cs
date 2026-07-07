@@ -1880,11 +1880,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "survivor_editor_preview",
+                Title = "Person",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.CastCardGrid,
+                Items = new[]
+                {
+                    CastCardItem(BuildAuthoredSurvivorCard(
+                        member,
+                        index,
+                        futureSurvivor != null ? (futureSurvivor.AskToJoin ? "Ask to join" : "Auto join") + " - " + FormatSchedule(futureSurvivor.Arrival) : null,
+                        starting ? "Starting survivor" : "Future arrival",
+                        null,
+                        new ScenarioAuthoringInspectorAction[0]))
+                }
+            });
             sections.Add(FactSection("survivor_editor_summary", "Summary", new List<ScenarioAuthoringInspectorItem>
             {
                 Fact("Name", Safe(member != null ? member.Name : null), "Survivor display name."),
-                Fact("Body", FormatBody(member, true), "Age, gender, and vanilla mesh alignment."),
-                Fact("Age", FormatAge(member), "Exact age drives adult or child body choice."),
+                Fact("Age Band", FormatAgeBand(member), "Adult or child body choice."),
+                Fact("Gender", member != null ? member.Gender.ToString() : ScenarioGender.Any.ToString(), "Vanilla survivor gender setting."),
                 Fact("Stats", FormatStatLine(member), "Vanilla stats are clamped to 0-20."),
                 Fact("Traits", FindTrait(member, "Strength:") + " / " + FindTrait(member, "Weakness:"), "Strength and weakness pairs block vanilla conflicts."),
                 Fact("Appearance", FormatAppearance(member), "Mesh, textures, and colors currently stored.")
@@ -2288,7 +2305,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "current_survivors",
                     Title = "Current Survivors",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.CastCardGrid,
                     Items = currentItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -2296,7 +2313,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "starting_survivors",
                     Title = "Starting Survivors",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.CastCardGrid,
                     Items = startingItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
@@ -2304,7 +2321,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "future_survivors",
                     Title = "Future Survivors",
                     Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.CastCardGrid,
                     Items = futureItems.ToArray()
                 }
             };
@@ -2389,8 +2406,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (member == null)
                     continue;
 
-                string status = member.isDead ? "Dead" : member.isAway ? "Away" : member.IsUnconscious ? "Unconscious" : member.isCatatonic ? "Catatonic" : "Active";
-                items.Add(Property(Safe(member.firstName), BuildLiveSurvivorSummary(member, status)));
+                items.Add(CastCardItem(BuildLiveSurvivorCard(member)));
             }
 
             if (items.Count == 0)
@@ -2398,26 +2414,37 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        private static string BuildLiveSurvivorSummary(FamilyMember member, string status)
+        private static ScenarioCastCardViewModel BuildLiveSurvivorCard(FamilyMember member)
         {
-            if (member == null)
-                return Safe(status);
+            string status = member != null
+                ? member.isDead ? "Dead" : member.isAway ? "Away" : member.IsUnconscious ? "Unconscious" : member.isCatatonic ? "Catatonic" : "Active"
+                : "Unavailable";
+            Color hair;
+            Color skin;
+            Color shirt;
+            Color pants;
+            ScenarioCastPortraitResolver.ResolveColors(member, out hair, out skin, out shirt, out pants);
 
-            string body = (member.isChild ? "Child " : "Adult ") + (member.isMale ? "Male" : "Female");
-            BaseStats stats = member.BaseStats;
-            string statSummary = stats != null
-                ? "Str " + stats.Strength.Level.ToString(CultureInfo.InvariantCulture)
-                  + ", Dex " + stats.Dexterity.Level.ToString(CultureInfo.InvariantCulture)
-                  + ", Int " + stats.Intelligence.Level.ToString(CultureInfo.InvariantCulture)
-                : "stats unavailable";
-            string traitSummary = BuildLiveTraitSummary(member.traits);
-            return body + " / " + Safe(status) + " / " + statSummary + " / " + traitSummary;
+            return new ScenarioCastCardViewModel
+            {
+                Name = Safe(member != null ? member.firstName : null),
+                RoleLine = member != null ? FormatAgeBand(member.isChild ? false : true) + " " + (member.isMale ? "Male" : "Female") + " / Live family" : "Live family unavailable",
+                Status = status,
+                PortraitSprite = ScenarioCastPortraitResolver.Resolve(member),
+                HairColor = hair,
+                SkinColor = skin,
+                ShirtColor = shirt,
+                PantsColor = pants,
+                Stats = BuildLiveStats(member),
+                Traits = BuildLiveTraits(member != null ? member.traits : null),
+                SecondaryActions = new ScenarioAuthoringInspectorAction[0]
+            };
         }
 
-        private static string BuildLiveTraitSummary(Traits traits)
+        private static string[] BuildLiveTraits(Traits traits)
         {
             if (traits == null)
-                return "traits unavailable";
+                return new[] { "Traits unavailable" };
 
             List<string> names = traits.GetLocalizedStrengthNames(true);
             List<string> weaknesses = traits.GetLocalizedWeaknessNames(true);
@@ -2426,9 +2453,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (weaknesses != null)
                 names.AddRange(weaknesses);
 
-            if (names.Count == 0)
-                return "no visible traits";
-            return string.Join(", ", names.ToArray());
+            return names.Count == 0 ? new[] { "No visible traits" } : names.ToArray();
+        }
+
+        private static ScenarioCastStatViewModel[] BuildLiveStats(FamilyMember member)
+        {
+            if (member == null || member.BaseStats == null)
+                return new ScenarioCastStatViewModel[0];
+
+            return new[]
+            {
+                Stat("Strength", "Str", member.BaseStats.Strength.Level),
+                Stat("Dexterity", "Dex", member.BaseStats.Dexterity.Level),
+                Stat("Intelligence", "Int", member.BaseStats.Intelligence.Level),
+                Stat("Charisma", "Cha", member.BaseStats.Charisma.Level),
+                Stat("Perception", "Per", member.BaseStats.Perception.Level)
+            };
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildLiveInventoryItems()
@@ -2465,22 +2505,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (items == null || survivor == null)
                 return;
 
-            string name = survivor.Survivor != null ? survivor.Survivor.Name : survivor.Id;
-            items.Add(Property(Safe(name), (survivor.AskToJoin ? "Ask to join" : "Auto join") + " - " + FormatSchedule(survivor.Arrival)));
+            string indexText = index.ToString(CultureInfo.InvariantCulture);
+            string arrival = (survivor.AskToJoin ? "Ask to join" : "Auto join") + " - " + FormatSchedule(survivor.Arrival);
+            FamilyMemberConfig member = survivor.Survivor ?? ScenarioFamilyMemberFactory.CreateDefaultConfig(Safe(survivor.Id), ScenarioGender.Any);
+            items.Add(CastCardItem(BuildAuthoredSurvivorCard(
+                member,
+                index,
+                arrival,
+                "Future arrival",
+                ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix,
+                new[]
+                {
+                    Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + indexText, "Join Mode", "Switch between recruit intercom flow and immediate auto-join.", true, survivor.AskToJoin, "AJ", survivor.AskToJoin ? "Ask" : "Auto"),
+                    Action(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + indexText, "Remove", "Remove this future survivor arrival.", true, false, "RM")
+                })));
             AddScheduleActions(items, ScenarioAuthoringActionIds.ActionFutureSurvivorDayPrefix, ScenarioAuthoringActionIds.ActionFutureSurvivorHourPrefix, index);
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorToggleAskPrefix + index.ToString(), "Toggle Join Mode", "Switch between recruit intercom flow and immediate auto-join.", true, survivor.AskToJoin, "AJ")));
-            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + index.ToString(), "Remove Future Survivor", "Remove this future survivor arrival.", true, false, "RM")));
-            if (survivor.Survivor != null)
-            {
-                AddFamilyMemberCardItems(
-                    items,
-                    survivor.Survivor,
-                    index,
-                    ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix,
-                    ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix,
-                    false,
-                    showAdvancedDetails);
-            }
         }
 
         private static void AddFamilyMemberCardItems(
@@ -2499,20 +2538,101 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 member = new FamilyMemberConfig();
 
             string indexText = index.ToString(CultureInfo.InvariantCulture);
-            items.Add(Property(
-                (index + 1).ToString(CultureInfo.InvariantCulture) + ". " + Safe(member.Name),
-                BuildFamilyMemberSummary(member)));
-            items.Add(ActionItem(Action(openEditorPrefix + indexText, "Edit", "Open this survivor in the focused survivor editor.", true, false, "ED", FormatAppearance(member))));
+            List<ScenarioAuthoringInspectorAction> secondary = new List<ScenarioAuthoringInspectorAction>();
             if (includeOrdering)
             {
-                items.Add(ActionItem(Action(removeOrStartingPrefix + "move." + indexText + ".-1", "Move Up", "Move this starting survivor earlier in the crew order.", true, false, "UP")));
-                items.Add(ActionItem(Action(removeOrStartingPrefix + "move." + indexText + ".1", "Move Down", "Move this starting survivor later in the crew order.", true, false, "DN")));
-                items.Add(ActionItem(Action(removeOrStartingPrefix + "remove." + indexText, "Remove", "Remove this starting survivor from the start crew.", true, false, "RM")));
+                secondary.Add(Action(removeOrStartingPrefix + "move." + indexText + ".-1", "Move Up", "Move this starting survivor earlier in the crew order.", true, false, "UP"));
+                secondary.Add(Action(removeOrStartingPrefix + "move." + indexText + ".1", "Move Down", "Move this starting survivor later in the crew order.", true, false, "DN"));
+                secondary.Add(Action(removeOrStartingPrefix + "remove." + indexText, "Remove", "Remove this starting survivor from the start crew.", true, false, "RM"));
             }
             else
             {
-                items.Add(ActionItem(Action(removeOrStartingPrefix + indexText, "Remove", "Remove this future survivor arrival.", true, false, "RM")));
+                secondary.Add(Action(removeOrStartingPrefix + indexText, "Remove", "Remove this future survivor arrival.", true, false, "RM"));
             }
+
+            items.Add(CastCardItem(BuildAuthoredSurvivorCard(
+                member,
+                index,
+                null,
+                "Starting survivor",
+                openEditorPrefix,
+                secondary.ToArray())));
+        }
+
+        private static ScenarioCastCardViewModel BuildAuthoredSurvivorCard(
+            FamilyMemberConfig member,
+            int index,
+            string arrivalSummary,
+            string status,
+            string openEditorPrefix,
+            ScenarioAuthoringInspectorAction[] secondaryActions)
+        {
+            Color hair;
+            Color skin;
+            Color shirt;
+            Color pants;
+            ScenarioCastPortraitResolver.ResolveColors(member, out hair, out skin, out shirt, out pants);
+            string indexText = index.ToString(CultureInfo.InvariantCulture);
+            ScenarioAuthoringInspectorAction primary = !string.IsNullOrEmpty(openEditorPrefix)
+                ? Action(openEditorPrefix + indexText, "Edit Person", "Open this survivor in the focused family-style editor.", true, false, "ED", FormatAppearance(member))
+                : null;
+
+            return new ScenarioCastCardViewModel
+            {
+                Name = Safe(member != null ? member.Name : null),
+                RoleLine = FormatAgeBand(member) + " " + (member != null ? member.Gender.ToString() : ScenarioGender.Any.ToString()),
+                Status = status,
+                ArrivalSummary = arrivalSummary,
+                PortraitSprite = ScenarioCastPortraitResolver.Resolve(member),
+                HairColor = hair,
+                SkinColor = skin,
+                ShirtColor = shirt,
+                PantsColor = pants,
+                Stats = BuildAuthoredStats(member),
+                Traits = BuildAuthoredTraits(member),
+                PrimaryAction = primary,
+                SecondaryActions = secondaryActions ?? new ScenarioAuthoringInspectorAction[0]
+            };
+        }
+
+        private static ScenarioCastStatViewModel[] BuildAuthoredStats(FamilyMemberConfig member)
+        {
+            string[] statIds = ScenarioFamilyMemberFactory.StatIds;
+            ScenarioCastStatViewModel[] stats = new ScenarioCastStatViewModel[statIds.Length];
+            for (int i = 0; i < statIds.Length; i++)
+            {
+                string statId = statIds[i];
+                stats[i] = Stat(statId, statId.Substring(0, 3), ClampStatDisplay(FindStatValue(member, statId, 5)));
+            }
+
+            return stats;
+        }
+
+        private static string[] BuildAuthoredTraits(FamilyMemberConfig member)
+        {
+            List<string> traits = new List<string>();
+            for (int i = 0; member != null && member.Traits != null && i < member.Traits.Count; i++)
+            {
+                string trait = member.Traits[i];
+                if (string.IsNullOrEmpty(trait))
+                    continue;
+
+                int separator = trait.IndexOf(':');
+                traits.Add(separator >= 0 && separator < trait.Length - 1 ? trait.Substring(separator + 1) : trait);
+            }
+
+            return traits.Count == 0 ? new[] { "No traits selected" } : traits.ToArray();
+        }
+
+        private static ScenarioCastStatViewModel Stat(string id, string label, int value)
+        {
+            return new ScenarioCastStatViewModel
+            {
+                Id = id,
+                Label = label,
+                Value = ClampStatDisplay(value),
+                Max = 20
+            };
         }
 
         private static void AddFamilyMemberEditorItems(
@@ -2537,8 +2657,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(indexedPrefix + "name", "Name", "Cycle this survivor's name preset.", true, false, "NM", Safe(member.Name))));
             items.Add(ActionItem(Action(indexedPrefix + "gender", "Gender", "Cycle Any, Female, and Male.", true, false, "GN", member.Gender.ToString())));
             items.Add(ActionItem(Action(indexedPrefix + "adult", "Adult/Child", "Toggle the vanilla adult or child body mesh.", true, false, "BD", FormatBody(member, showAdvancedDetails))));
-            items.Add(ActionItem(Action(indexedPrefix + "age.1", "Age +", "Increase this survivor's exact age.", true, false, "A+", FormatAge(member))));
-            items.Add(ActionItem(Action(indexedPrefix + "age.-1", "Age -", "Decrease this survivor's exact age.", true, false, "A-", FormatAge(member))));
 
             string[] statIds = ScenarioFamilyMemberFactory.StatIds;
             for (int i = 0; i < statIds.Length; i++)
@@ -3019,7 +3137,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return member.Gender
                 + " / " + FormatBody(member, false)
-                + " / age " + FormatAge(member)
                 + " / " + FormatStatLine(member)
                 + " / " + FindTrait(member, "Strength:")
                 + " / " + FindTrait(member, "Weakness:")
@@ -3079,19 +3196,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return "<none>";
         }
 
-        private static string FormatAge(FamilyMemberConfig member)
-        {
-            if (member == null)
-                return "<none>";
-            if (member.ExactAge.HasValue)
-                return member.ExactAge.Value.ToString(CultureInfo.InvariantCulture);
-            if (member.MinAge.HasValue || member.MaxAge.HasValue)
-                return (member.MinAge.HasValue ? member.MinAge.Value.ToString(CultureInfo.InvariantCulture) : "?")
-                    + "-"
-                    + (member.MaxAge.HasValue ? member.MaxAge.Value.ToString(CultureInfo.InvariantCulture) : "?");
-            return "<none>";
-        }
-
         private static string FormatBody(FamilyMemberConfig member, bool showAdvancedDetails)
         {
             FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
@@ -3099,6 +3203,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string mesh = appearance != null && !string.IsNullOrEmpty(appearance.MeshId) ? appearance.MeshId : "<auto>";
             string label = ResolveBodyLabel(member, adult, mesh);
             return showAdvancedDetails ? label + " (" + mesh + ")" : label;
+        }
+
+        private static string FormatAgeBand(FamilyMemberConfig member)
+        {
+            FamilyMemberAppearanceConfig appearance = member != null ? member.Appearance : null;
+            return FormatAgeBand(appearance == null || !appearance.IsAdult.HasValue || appearance.IsAdult.Value);
+        }
+
+        private static string FormatAgeBand(bool adult)
+        {
+            return adult ? "Adult" : "Child";
         }
 
         private static string ResolveBodyLabel(FamilyMemberConfig member, bool adult, string mesh)
@@ -3765,6 +3880,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 IconText = iconText,
                 PreviewSprite = previewSprite,
                 Emphasized = emphasized
+            };
+        }
+
+        private static ScenarioAuthoringInspectorItem CastCardItem(ScenarioCastCardViewModel card)
+        {
+            return new ScenarioAuthoringInspectorItem
+            {
+                Kind = ScenarioAuthoringInspectorItemKind.Property,
+                CastCard = card
             };
         }
 
