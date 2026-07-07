@@ -40,6 +40,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal))
                 return AddStartingSurvivor(session, state, out message);
 
+            if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix, StringComparison.Ordinal))
+                return AddLiveSurvivorToStarting(session, state, actionId.Substring(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix.Length), out message);
+
             if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal))
             {
                 FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
@@ -100,6 +103,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MarkDirty(session);
             FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, true);
             message = "Added starting survivor slot " + next.ToString() + ".";
+            return true;
+        }
+
+        private static bool AddLiveSurvivorToStarting(ScenarioEditorSession session, ScenarioAuthoringState state, string token, out string message)
+        {
+            int liveIndex;
+            if (!int.TryParse(token, out liveIndex) || liveIndex < 0)
+            {
+                message = "Live survivor action was out of range.";
+                return true;
+            }
+
+            FamilyManager manager = FamilyManager.Instance;
+            List<FamilyMember> liveMembers = manager != null ? manager.GetAllFamilyMembers() : null;
+            if (liveMembers == null || liveIndex >= liveMembers.Count || liveMembers[liveIndex] == null)
+            {
+                message = "That live survivor is no longer available.";
+                return true;
+            }
+
+            FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
+            family.OverrideVanillaFamily = true;
+            FamilyMemberConfig config = new FamilyMemberConfig();
+            CaptureLiveFamilyMember(liveMembers[liveIndex], config);
+            family.Members.Add(config);
+            MarkDirty(session);
+            FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, family.Members.Count - 1, false);
+            message = "Added " + config.Name + " to the starting cast.";
             return true;
         }
 

@@ -2560,14 +2560,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float textX = portraitRect.xMax + 10f;
             float textWidth = Math.Max(60f, rect.xMax - textX - 12f);
-            GUI.Label(new Rect(textX, rect.y + 34f, textWidth, 24f), ShortenToFit(card.Name ?? "Survivor", textWidth, _sectionTitleStyle), _sectionTitleStyle);
-            GUI.Label(new Rect(textX, rect.y + 58f, textWidth, 20f), ShortenToFit(card.RoleLine ?? string.Empty, textWidth, _mutedTextStyle), _mutedTextStyle);
+            GUIStyle nameStyle = _uiContext.Styles.PaperTitleText;
+            GUIStyle detailStyle = _uiContext.Styles.PaperMutedText;
+            GUI.Label(new Rect(textX, rect.y + 34f, textWidth, 24f), ShortenToFit(card.Name ?? "Survivor", textWidth, nameStyle), nameStyle);
+            GUI.Label(new Rect(textX, rect.y + 58f, textWidth, 20f), ShortenToFit(card.RoleLine ?? string.Empty, textWidth, detailStyle), detailStyle);
             if (!string.IsNullOrEmpty(card.ArrivalSummary))
-                GUI.Label(new Rect(textX, rect.y + 80f, textWidth, 20f), ShortenToFit(card.ArrivalSummary, textWidth, _mutedTextStyle), _mutedTextStyle);
+                GUI.Label(new Rect(textX, rect.y + 80f, textWidth, 20f), ShortenToFit(card.ArrivalSummary, textWidth, detailStyle), detailStyle);
 
             DrawCastStats(new Rect(rect.x + 10f, portraitRect.yMax + 8f, rect.width - 20f, 42f), card.Stats);
-            DrawCastTraitChips(new Rect(rect.x + 10f, rect.yMax - 44f, rect.width - 20f, 18f), card.Traits);
-            Rect actionsRect = new Rect(rect.x + 10f, rect.yMax - 24f, rect.width - 20f, 20f);
+            DrawCastTraitChips(new Rect(rect.x + 10f, rect.yMax - 52f, rect.width - 20f, 18f), card.Traits);
+            Rect actionsRect = new Rect(rect.x + 10f, rect.yMax - 29f, rect.width - 20f, 24f);
             DrawCastCardActions(actionsRect, card);
 
             Event evt = Event.current;
@@ -2585,14 +2587,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCastPortrait(Rect rect, ScenarioCastCardViewModel card)
         {
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
-            if (card == null || card.PortraitSprite == null || card.PortraitSprite.texture == null)
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, _uiContext.Styles.PanelInsetTexture);
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
+            Rect imageRect = new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, rect.height - 22f);
+            if (card == null || (card.PortraitTexture == null && (card.PortraitSprite == null || card.PortraitSprite.texture == null)))
             {
-                GUI.Label(rect, "No Portrait", _uiContext.Styles.EmptyStateText);
+                GUI.Label(imageRect, "No Portrait", _uiContext.Styles.EmptyStateText);
+            }
+            else if (card.PortraitTexture != null)
+            {
+                DrawTextureFitted(imageRect, card.PortraitTexture, 0f);
             }
             else
             {
-                DrawSpritePreview(new Rect(rect.x + 4f, rect.y + 4f, rect.width - 8f, rect.height - 20f), card.PortraitSprite, false);
+                DrawSpritePreview(imageRect, card.PortraitSprite, false);
             }
 
             float swatch = 9f;
@@ -2629,11 +2637,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             GUIStyle labelStyle = new GUIStyle(_mutedTextStyle);
+            labelStyle.normal.textColor = _uiContext.Styles.PaperMutedText.normal.textColor;
             labelStyle.alignment = TextAnchor.MiddleCenter;
             GUI.Label(new Rect(rect.x, rect.y, rect.width, 14f), new GUIContent(stat.Label ?? string.Empty, stat.Id + " " + stat.Value.ToString() + "/" + stat.Max.ToString()), labelStyle);
 
             Rect bar = new Rect(rect.x + 2f, rect.y + 18f, rect.width - 4f, 8f);
-            GUI.Box(bar, GUIContent.none, _uiContext.Styles.Field);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(bar, _uiContext.Styles.PanelInsetTexture);
             float max = Math.Max(1, stat.Max);
             float fillWidth = Mathf.Clamp01(stat.Value / max) * Math.Max(0f, bar.width - 4f);
             Rect fill = new Rect(bar.x + 2f, bar.y + 2f, fillWidth, bar.height - 4f);
@@ -2653,11 +2662,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < max; i++)
             {
                 string trait = traits[i] ?? string.Empty;
-                float width = Mathf.Clamp(_mutedTextStyle.CalcSize(new GUIContent(trait)).x + 18f, 52f, Math.Max(52f, rect.xMax - x));
+                GUIStyle chipText = _uiContext.Styles.PaperMutedText;
+                float width = Mathf.Clamp(chipText.CalcSize(new GUIContent(trait)).x + 18f, 52f, Math.Max(52f, rect.xMax - x));
                 if (x + width > rect.xMax)
                     break;
 
-                ScenarioUiWidgets.DrawPill(new Rect(x, rect.y, width, rect.height), ShortenToFit(trait, width - 10f, _mutedTextStyle), _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+                ScenarioUiWidgets.DrawPill(new Rect(x, rect.y, width, rect.height), ShortenToFit(trait, width - 10f, chipText), _uiContext.Styles, ScenarioUiPillEmphasis.Default);
                 x += width + 5f;
             }
         }
@@ -2667,7 +2677,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float x = rect.x;
             if (card.PrimaryAction != null)
             {
-                float width = Mathf.Clamp(MeasureButtonWidth(card.PrimaryAction, false, 18f), 58f, 94f);
+                float width = Mathf.Clamp(MeasureButtonWidth(card.PrimaryAction, false, 18f), 58f, 112f);
                 DrawButton(new Rect(x, rect.y, width, rect.height), card.PrimaryAction, false);
                 x += width + 4f;
             }
@@ -2882,6 +2892,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawSpritePreview(Rect rect, Sprite sprite, bool emphasized)
         {
             ScenarioUiWidgets.DrawSpritePreviewFrame(rect, sprite, _uiContext.Styles, emphasized);
+        }
+
+        private static void DrawTextureFitted(Rect rect, Texture texture, float padding)
+        {
+            if (texture == null)
+                return;
+
+            Rect inner = new Rect(rect.x + padding, rect.y + padding, rect.width - (padding * 2f), rect.height - (padding * 2f));
+            if (inner.width <= 0f || inner.height <= 0f || texture.width <= 0 || texture.height <= 0)
+                return;
+
+            float scale = Mathf.Min(inner.width / texture.width, inner.height / texture.height);
+            Rect fitted = new Rect(
+                inner.x + ((inner.width - (texture.width * scale)) * 0.5f),
+                inner.y + ((inner.height - (texture.height * scale)) * 0.5f),
+                texture.width * scale,
+                texture.height * scale);
+            GUI.DrawTexture(fitted, texture, ScaleMode.StretchToFill, true);
         }
 
         private static string CombineDetail(string primary, string secondary)

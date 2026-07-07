@@ -108,6 +108,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionCaptureShelterObjects = "capture.shelter.objects";
         public const string ActionCaptureSelectedObject = "capture.shelter.selected_object";
         public const string ActionRemoveSelectedObjectPlacement = "capture.shelter.remove_selected_object";
+        public const string ActionLiveSurvivorAddToStartingPrefix = "scenario.live_survivor.add_to_start.";
         public const string ActionStartingSurvivorAdd = "scenario.start_survivor.add";
         public const string ActionStartingSurvivorPrefix = "scenario.start_survivor.";
         public const string ActionFutureSurvivorAdd = "scenario.future_survivor.add";
@@ -1099,6 +1100,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Status { get; set; }
         public string ArrivalSummary { get; set; }
         public Sprite PortraitSprite { get; set; }
+        public Texture2D PortraitTexture { get; set; }
         public Color HairColor { get; set; }
         public Color SkinColor { get; set; }
         public Color ShirtColor { get; set; }

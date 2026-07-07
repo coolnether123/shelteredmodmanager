@@ -1031,6 +1031,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         {
             handled = actionId != null
                 && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix, StringComparison.Ordinal)

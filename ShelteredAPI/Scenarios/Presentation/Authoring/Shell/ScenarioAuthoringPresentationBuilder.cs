@@ -2303,7 +2303,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "current_survivors",
-                    Title = "Current Survivors",
+                    Title = "Current Survivors - Live World Reference",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.CastCardGrid,
                     Items = currentItems.ToArray()
@@ -2406,7 +2406,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (member == null)
                     continue;
 
-                items.Add(CastCardItem(BuildLiveSurvivorCard(member)));
+                items.Add(CastCardItem(BuildLiveSurvivorCard(member, i)));
             }
 
             if (items.Count == 0)
@@ -2414,7 +2414,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        private static ScenarioCastCardViewModel BuildLiveSurvivorCard(FamilyMember member)
+        private static ScenarioCastCardViewModel BuildLiveSurvivorCard(FamilyMember member, int liveIndex)
         {
             string status = member != null
                 ? member.isDead ? "Dead" : member.isAway ? "Away" : member.IsUnconscious ? "Unconscious" : member.isCatatonic ? "Catatonic" : "Active"
@@ -2431,12 +2431,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 RoleLine = member != null ? FormatAgeBand(member.isChild ? false : true) + " " + (member.isMale ? "Male" : "Female") + " / Live family" : "Live family unavailable",
                 Status = status,
                 PortraitSprite = ScenarioCastPortraitResolver.Resolve(member),
+                PortraitTexture = ScenarioCastPortraitResolver.ResolveTexture(member),
                 HairColor = hair,
                 SkinColor = skin,
                 ShirtColor = shirt,
                 PantsColor = pants,
                 Stats = BuildLiveStats(member),
                 Traits = BuildLiveTraits(member != null ? member.traits : null),
+                PrimaryAction = Action(
+                    ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix + liveIndex.ToString(CultureInfo.InvariantCulture),
+                    "Add Start",
+                    "Copy this live survivor into the authored starting cast without replacing the rest of the draft.",
+                    member != null,
+                    true,
+                    "A+",
+                    "Creates an authored starting survivor from the live world reference."),
                 SecondaryActions = new ScenarioAuthoringInspectorAction[0]
             };
         }
@@ -2584,6 +2593,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Status = status,
                 ArrivalSummary = arrivalSummary,
                 PortraitSprite = ScenarioCastPortraitResolver.Resolve(member),
+                PortraitTexture = ScenarioCastPortraitResolver.ResolveTexture(member),
                 HairColor = hair,
                 SkinColor = skin,
                 ShirtColor = shirt,
@@ -3539,18 +3549,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioSpriteSwapAuthoringService.CustomEditorModel editor = _sectionHub != null && _sectionHub.SpriteSwap != null
                     ? _sectionHub.SpriteSwap.GetCustomEditorModel(state)
                     : null;
-                bool canClose = editor == null || !editor.Dirty;
                 actions.Add(Action(
                     ScenarioAuthoringActionIds.ActionSpriteSwapPickerCancel,
                     "X",
-                    canClose ? "Close the pixel editor." : "Save or discard pixel edits before closing.",
-                    canClose,
+                    editor != null && editor.Dirty ? "Discard pixel edits and close the pixel editor." : "Close the pixel editor.",
+                    true,
                     false,
                     "HD",
                     null,
                     null,
                     null,
-                    canClose ? null : "Save or discard pixel edits before closing."));
+                    null));
                 return actions.ToArray();
             }
 
