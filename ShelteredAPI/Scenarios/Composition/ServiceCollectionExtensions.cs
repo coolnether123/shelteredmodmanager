@@ -119,7 +119,13 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton<IScenarioWinLossConditionAdapter>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossConditionAdapter>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledInventoryRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledWeatherRuntimeService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledSurvivorRuntimeService(resolver.Get<ScenarioActorResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioFutureSurvivorRecruitBindingService(resolver.Get<ScenarioActorResolver>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScheduledSurvivorRuntimeService(
+                    resolver.Get<ScenarioActorResolver>(),
+                    resolver.Get<ScenarioFutureSurvivorRecruitBindingService>());
+            });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledQuestRuntimeService(resolver.Get<IVanillaScenarioRuntime>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledBunkerRuntimeService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScheduledObjectRuntimeService(); });

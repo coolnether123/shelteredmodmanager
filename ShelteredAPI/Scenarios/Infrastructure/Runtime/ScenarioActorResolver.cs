@@ -222,6 +222,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 
         public bool BindMaterializedFamilyMember(ScenarioDefinition definition, ScenarioActorRef actorRef, FamilyMember member, out string message)
         {
+            return BindMaterializedFamilyMember(definition, actorRef, member, null, null, out message);
+        }
+
+        public bool BindMaterializedFamilyMember(
+            ScenarioDefinition definition,
+            ScenarioActorRef actorRef,
+            FamilyMember member,
+            FamilyMemberConfig authoredConfig,
+            List<ScenarioActorComponentDefinition> components,
+            out string message)
+        {
             message = null;
             if (_actors == null || actorRef == null || member == null)
             {
@@ -273,34 +284,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 }, true);
             }
 
+            HydrateActor(definition, familyActor.Id, actorRef, authoredConfig, components, null);
+
             ActorId requestedId;
             if (TryBuildActorId(actorRef, out requestedId) && IsScenarioOwnedSynthetic(definition, actorRef, requestedId))
             {
-                IActorRecord synthetic = _actors.Ensure(new ActorCreateRequest
-                {
-                    Id = requestedId,
-                    Kind = requestedId.Kind,
-                    Domain = requestedId.Domain,
-                    LifecycleState = ActorLifecycleState.Active,
-                    PresenceState = ResolvePresence(member),
-                    Flags = ActorFlags.Persistent | ActorFlags.Synthetic | ActorFlags.Loaded,
-                    Origin = new ActorOrigin
-                    {
-                        SourceModId = ResolveScenarioDomain(definition),
-                        SourceKey = !string.IsNullOrEmpty(actorRef.BindingKey) ? actorRef.BindingKey : requestedId.ToString(),
-                        Generator = "scenario-actor-materialization"
-                    }
-                });
-
-                if (synthetic != null)
-                {
-                    _actors.Update(synthetic.Id, new ActorRecordMutation
-                    {
-                        LifecycleState = ActorLifecycleState.Active,
-                        PresenceState = ResolvePresence(member),
-                        Flags = synthetic.Flags | ActorFlags.Persistent | ActorFlags.Synthetic | ActorFlags.Loaded
-                    });
-                }
+                _actors.Destroy(requestedId, ActorDestroyReason.Replaced);
             }
 
             message = "Bound survivor '" + (member.firstName ?? string.Empty) + "' to actor " + familyActor.Id + ".";

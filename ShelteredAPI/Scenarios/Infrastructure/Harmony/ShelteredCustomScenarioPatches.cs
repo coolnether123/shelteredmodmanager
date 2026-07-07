@@ -15,6 +15,7 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Registration;
 using ShelteredAPI.Scenarios.Shared;
@@ -427,6 +428,75 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             catch (Exception ex)
             {
                 MMLog.WriteWarning("[ShelteredScenarioDefinitionApply] UpdateManager hook failed: " + ex.Message);
+            }
+        }
+    }
+
+    [PatchPolicy(PatchDomain.Scenarios, "ScenarioFutureSurvivorRecruitBinding",
+        TargetBehavior = "Scenario-scheduled ask-to-join future survivors bind to their authored actor after vanilla recruitment.",
+        FailureMode = "Accepted ask-to-join future survivors join the family without scenario actor identity or conditions resolving.",
+        RollbackStrategy = "Disable the Scenarios patch domain or remove the future-survivor recruit binding patch host.",
+        StartupTiming = PatchStartupTiming.GameplayDeferred)]
+    internal static class ScenarioFutureSurvivorRecruitBindingPatches
+    {
+        private static ScenarioFutureSurvivorRecruitBindingService BindingService
+        {
+            get { return ScenarioCompositionRoot.ResolveRuntime<ScenarioFutureSurvivorRecruitBindingService>(); }
+        }
+
+        [HarmonyPatch(typeof(NpcVisitManager), "CreateNpcVisitor")]
+        [HarmonyPostfix]
+        private static void CreateNpcVisitorPostfix(
+            NpcVisitor.NpcType type,
+            FamilySpawner.CharacterAttributes attribsOverride,
+            NpcVisitor __result)
+        {
+            if (type != NpcVisitor.NpcType.Joiner || __result == null || attribsOverride == null)
+                return;
+
+            try
+            {
+                BindingService.OnVisitorCreated(__result, attribsOverride);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioFutureSurvivorRecruitBinding] Visitor correlation hook failed: " + ex.Message);
+            }
+        }
+
+        [HarmonyPatch(typeof(FamilyManager), "AdoptNpc")]
+        [HarmonyPostfix]
+        private static void AdoptNpcPostfix(NpcVisitor npc, bool __result)
+        {
+            if (!__result || npc == null)
+                return;
+
+            try
+            {
+                FamilyMember member = npc.GetComponent<FamilyMember>();
+                if (member != null)
+                    BindingService.OnNpcAdopted(npc, member);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioFutureSurvivorRecruitBinding] Adoption hook failed: " + ex.Message);
+            }
+        }
+
+        [HarmonyPatch(typeof(NpcVisitManager), "OnNpcFinished")]
+        [HarmonyPostfix]
+        private static void OnNpcFinishedPostfix(NpcVisitor npc)
+        {
+            if (npc == null)
+                return;
+
+            try
+            {
+                BindingService.OnVisitorFinished(npc);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioFutureSurvivorRecruitBinding] Visitor-finished hook failed: " + ex.Message);
             }
         }
     }

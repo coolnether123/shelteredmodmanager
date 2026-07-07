@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScheduledSurvivorRuntimeService : IScenarioEffectHandler, IScenarioConditionEvaluator
     {
         private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioFutureSurvivorRecruitBindingService _recruitBindingService;
 
         public ScheduledSurvivorRuntimeService()
             : this(null)
@@ -21,8 +22,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         }
 
         public ScheduledSurvivorRuntimeService(ScenarioActorResolver actorResolver)
+            : this(actorResolver, null)
+        {
+        }
+
+        public ScheduledSurvivorRuntimeService(
+            ScenarioActorResolver actorResolver,
+            ScenarioFutureSurvivorRecruitBindingService recruitBindingService)
         {
             _actorResolver = actorResolver;
+            _recruitBindingService = recruitBindingService;
         }
 
         public bool CanHandle(ScenarioEffectKind kind)
@@ -42,7 +51,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             if (askToJoin || survivor.AskToJoin)
+            {
+                if (_recruitBindingService != null)
+                    return _recruitBindingService.ScheduleAskToJoin(definition, survivor, 0f, out message);
+
                 return ScenarioFamilyMemberFactory.ScheduleRecruit(survivor.Survivor, 0f, out message);
+            }
 
             FamilyMember spawned;
             bool spawnedResult = ScenarioFamilyMemberFactory.Spawn(survivor.Survivor, out spawned, out message);

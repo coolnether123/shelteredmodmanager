@@ -141,6 +141,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public static bool ScheduleRecruit(FamilyMemberConfig config, float arrivalDelay, out string message)
         {
+            FamilySpawner.CharacterAttributes queuedAttributes;
+            return ScheduleRecruit(config, arrivalDelay, out queuedAttributes, out message);
+        }
+
+        public static bool ScheduleRecruit(
+            FamilyMemberConfig config,
+            float arrivalDelay,
+            out FamilySpawner.CharacterAttributes queuedAttributes,
+            out string message)
+        {
+            queuedAttributes = null;
             message = null;
             if (config == null)
             {
@@ -182,7 +193,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            attributes.Add(CreateAttributes(config));
+            queuedAttributes = CreateAttributes(config);
+            attributes.Add(queuedAttributes);
             pendingSpawns.Add(spawnInfo);
             message = "Scheduled recruit '" + (config.Name ?? "Survivor") + "' to ask to join.";
             return true;

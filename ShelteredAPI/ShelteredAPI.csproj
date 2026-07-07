@@ -515,6 +515,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioEventAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioCharacterEditorAuthoringService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFamilyMemberFactory.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFutureSurvivorRecruitBindingService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioActorResolver.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioApplyResult.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioPlaytestOrchestrator.cs" />
