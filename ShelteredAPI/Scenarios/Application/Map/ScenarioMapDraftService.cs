@@ -111,6 +111,8 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             location.VisibleAtStart = selection.VisibleOnMap;
             location.HiddenUntilDiscovered = selection.HiddenUntilDiscovered;
             location.Danger = Math.Max(0, selection.OpenGroundEncounterChance);
+            if (ScenarioMapIconCatalog.IsKnownIconId(selection.IconId))
+                location.IconId = selection.IconId;
 
             SetProperty(location.Properties, "vanilla.regionName", selection.RegionName);
             SetProperty(location.Properties, "vanilla.townName", selection.TownName);
@@ -122,6 +124,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             SetProperty(location.Properties, "vanilla.discovered", selection.Discovered ? "true" : "false");
             SetProperty(location.Properties, "vanilla.hiddenUntilDiscovered", selection.HiddenUntilDiscovered ? "true" : "false");
             SetProperty(location.Properties, "vanilla.searchable", selection.Searchable ? "true" : "false");
+            SetProperty(location.Properties, "vanilla.iconId", selection.IconId);
             SetProperty(location.Properties, "vanilla.searchTime", FormatFloat(selection.MinSearchTime) + "-" + FormatFloat(selection.MaxSearchTime));
             SetProperty(location.Properties, "vanilla.hasItems", selection.HasItems ? "true" : "false");
             SetProperty(location.Properties, "vanilla.hasHiddenItems", selection.HasHiddenItems ? "true" : "false");

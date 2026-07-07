@@ -63,10 +63,14 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
 
                 AddUnique(locationIds, id, "Duplicate map location id: " + id, result);
                 ValidatePoint("Map location '" + id + "'", location.X, location.Y, map, result);
+                ValidateGrid("Map location '" + id + "'", location.GridX, location.GridY, map, result);
                 if (location.Radius < 0f)
                     result.AddError("Map location '" + id + "' radius cannot be negative.");
                 if (location.Danger < 0)
                     result.AddError("Map location '" + id + "' danger cannot be negative.");
+                string iconId = TrimToNull(location.IconId);
+                if (iconId != null && !ScenarioMapIconCatalog.IsKnownIconId(iconId))
+                    result.AddError("Map location '" + id + "' has invalid iconId '" + iconId + "'. Fix: choose a known map icon id from the Map location editor or clear the icon field.");
             }
         }
 
@@ -84,6 +88,9 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
 
                 AddUnique(markerIds, id, "Duplicate map marker id: " + id, result);
                 ValidatePoint("Map marker '" + id + "'", marker.X, marker.Y, map, result);
+                string iconId = TrimToNull(marker.IconId);
+                if (iconId != null && !ScenarioMapIconCatalog.IsKnownIconId(iconId))
+                    result.AddError("Map marker '" + id + "' has invalid iconId '" + iconId + "'. Fix: choose a known map icon id or clear the marker icon field.");
             }
         }
 
@@ -359,6 +366,16 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 result.AddError(label + " x coordinate is outside map width.");
             if (map != null && map.Height > 0f && y > map.Height)
                 result.AddError(label + " y coordinate is outside map height.");
+        }
+
+        private static void ValidateGrid(string label, int gridX, int gridY, MapAuthoringDefinition map, ScenarioValidationResult result)
+        {
+            if (gridX < 0 || gridY < 0)
+                result.AddError(label + " has negative grid coordinates. Fix: move it onto the visible map grid.");
+            if (map != null && map.Width > 0f && gridX > map.Width)
+                result.AddError(label + " gridX is outside map width. Fix: move it left onto the generated map.");
+            if (map != null && map.Height > 0f && gridY > map.Height)
+                result.AddError(label + " gridY is outside map height. Fix: move it down onto the generated map.");
         }
 
         private static void ValidatePoints(string label, List<MapPointDefinition> points, MapAuthoringDefinition map, ScenarioValidationResult result)

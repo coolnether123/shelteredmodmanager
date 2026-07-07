@@ -58,6 +58,7 @@ namespace ShelteredAPI.Scenarios.Domain.Map{
         public bool DiscoveredAtStart { get; set; }
         public bool VisibleAtStart { get; set; }
         public bool HiddenUntilDiscovered { get; set; }
+        public string IconId { get; set; }
         public string MarkerId { get; set; }
         public string BoundaryId { get; set; }
         public string TerrainId { get; set; }

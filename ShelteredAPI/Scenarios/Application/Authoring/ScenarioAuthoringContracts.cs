@@ -319,6 +319,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionMapAuthoringModePlace = "scenario.map.mode.place";
         public const string ActionMapAuthoringModeMove = "scenario.map.mode.move";
         public const string ActionMapAuthoringSelectLocationPrefix = "scenario.map.select_location.";
+        public const string ActionMapLocationEditPrefix = "scenario.map.location.edit.";
+        public const string ActionMapLocationTogglePrefix = "scenario.map.location.toggle.";
+        public const string ActionMapLocationCycleIconPrefix = "scenario.map.location.icon_next.";
     }
 
     internal enum ScenarioAuthoringTool

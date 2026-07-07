@@ -73,6 +73,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 location.DiscoveredAtStart = ReadBoolAttribute(node, "discoveredAtStart", true);
                 location.VisibleAtStart = ReadBoolAttribute(node, "visibleAtStart", true);
                 location.HiddenUntilDiscovered = ReadBoolAttribute(node, "hiddenUntilDiscovered", false);
+                location.IconId = AttributeOrChild(node, "iconId", "IconId");
                 location.MarkerId = AttributeOrChild(node, "markerId", "MarkerId");
                 location.BoundaryId = AttributeOrChild(node, "boundaryId", "BoundaryId");
                 location.TerrainId = AttributeOrChild(node, "terrainId", "TerrainId");
@@ -107,6 +108,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteAttributeString("discoveredAtStart", location.DiscoveredAtStart ? "true" : "false");
                 writer.WriteAttributeString("visibleAtStart", location.VisibleAtStart ? "true" : "false");
                 writer.WriteAttributeString("hiddenUntilDiscovered", location.HiddenUntilDiscovered ? "true" : "false");
+                WriteAttribute(writer, "iconId", location.IconId);
                 WriteAttribute(writer, "markerId", location.MarkerId);
                 WriteAttribute(writer, "boundaryId", location.BoundaryId);
                 WriteAttribute(writer, "terrainId", location.TerrainId);

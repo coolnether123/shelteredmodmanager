@@ -55,6 +55,12 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return ClickWorldPosition(state, actionId, out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal))
                 return SelectAuthoredLocation(state, actionId, out message);
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationEditPrefix, StringComparison.Ordinal))
+                return EditLocationField(state, actionId, out message);
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix, StringComparison.Ordinal))
+                return ToggleLocationField(state, actionId, out message);
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, StringComparison.Ordinal))
+                return CycleLocationIcon(state, actionId, out message);
 
             handled = false;
             return false;
@@ -317,6 +323,128 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return true;
         }
 
+        private bool EditLocationField(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            string field;
+            string id;
+            string value;
+            if (!TryParseLocationFieldAction(actionId, ScenarioAuthoringActionIds.ActionMapLocationEditPrefix, out field, out id, out value))
+            {
+                message = "Map location edit action is invalid.";
+                return false;
+            }
+
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            MapLocationDefinition location = _draftService != null ? _draftService.GetLocation(session, id) : null;
+            if (location == null)
+            {
+                message = "Authored map location '" + id + "' was not found.";
+                return false;
+            }
+
+            string trimmed = value != null ? value.Trim() : string.Empty;
+            string validationError;
+            if (!ValidateLocationField(field, trimmed, out validationError))
+            {
+                message = validationError;
+                return false;
+            }
+
+            RecordMapUndo(session, "Edit map location " + id + " " + field);
+            ApplyLocationField(location, field, trimmed);
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            SelectAuthoredLocation(state, location, out message);
+            message = "Updated map location " + id + ".";
+            state.StatusMessage = message;
+            if (_runtimeService != null)
+                _runtimeService.RefreshMarkers(state, session);
+            return true;
+        }
+
+        private bool ToggleLocationField(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            string field;
+            string id;
+            if (!TryParseLocationToggleAction(actionId, ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix, out field, out id))
+            {
+                message = "Map location toggle action is invalid.";
+                return false;
+            }
+
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            MapLocationDefinition location = _draftService != null ? _draftService.GetLocation(session, id) : null;
+            if (location == null)
+            {
+                message = "Authored map location '" + id + "' was not found.";
+                return false;
+            }
+
+            if (!string.Equals(field, "searchable", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "visibleAtStart", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "discoveredAtStart", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "hiddenUntilDiscovered", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Unknown map location toggle field '" + field + "'.";
+                return false;
+            }
+
+            RecordMapUndo(session, "Toggle map location " + id + " " + field);
+            if (string.Equals(field, "searchable", StringComparison.OrdinalIgnoreCase))
+                location.Searchable = !location.Searchable;
+            else if (string.Equals(field, "visibleAtStart", StringComparison.OrdinalIgnoreCase))
+                location.VisibleAtStart = !location.VisibleAtStart;
+            else if (string.Equals(field, "discoveredAtStart", StringComparison.OrdinalIgnoreCase))
+                location.DiscoveredAtStart = !location.DiscoveredAtStart;
+            else if (string.Equals(field, "hiddenUntilDiscovered", StringComparison.OrdinalIgnoreCase))
+                location.HiddenUntilDiscovered = !location.HiddenUntilDiscovered;
+
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            SelectAuthoredLocation(state, location, out message);
+            message = "Updated map location " + id + ".";
+            state.StatusMessage = message;
+            return true;
+        }
+
+        private bool CycleLocationIcon(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            string id;
+            if (!ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, out id))
+            {
+                message = "Map location id could not be decoded.";
+                return false;
+            }
+
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            MapLocationDefinition location = _draftService != null ? _draftService.GetLocation(session, id) : null;
+            if (location == null)
+            {
+                message = "Authored map location '" + id + "' was not found.";
+                return false;
+            }
+
+            string[] icons = ScenarioMapIconCatalog.GetKnownIconIds();
+            int nextIndex = 0;
+            for (int i = 0; i < icons.Length; i++)
+            {
+                if (string.Equals(icons[i], location.IconId, StringComparison.OrdinalIgnoreCase))
+                {
+                    nextIndex = (i + 1) % icons.Length;
+                    break;
+                }
+            }
+
+            RecordMapUndo(session, "Change map location icon " + id);
+            location.IconId = icons.Length > 0 ? icons[nextIndex] : null;
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            SelectAuthoredLocation(state, location, out message);
+            message = "Changed map location " + id + " icon to " + location.IconId + ".";
+            state.StatusMessage = message;
+            return true;
+        }
+
         private bool CaptureSelection(ScenarioAuthoringState state, out string message)
         {
             message = null;
@@ -377,7 +505,104 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectWorldPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, StringComparison.Ordinal)
-                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal);
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationEditPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, StringComparison.Ordinal);
+        }
+
+        private static bool ValidateLocationField(string field, string value, out string error)
+        {
+            error = null;
+            if (string.IsNullOrEmpty(field))
+            {
+                error = "Map location field is missing.";
+                return false;
+            }
+
+            if (string.Equals(field, "iconId", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!ScenarioMapIconCatalog.IsKnownIconId(value))
+                {
+                    error = "Icon id '" + value + "' is not known. Choose one of the listed map icon ids or leave it blank.";
+                    return false;
+                }
+            }
+            else if (string.Equals(field, "danger", StringComparison.OrdinalIgnoreCase))
+            {
+                int danger;
+                if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out danger) || danger < 0)
+                {
+                    error = "Danger must be a non-negative whole number.";
+                    return false;
+                }
+            }
+            else if (!string.Equals(field, "displayName", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "kind", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "lootTableId", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(field, "encounterTableId", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "Unknown map location field '" + field + "'.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static void ApplyLocationField(MapLocationDefinition location, string field, string value)
+        {
+            if (string.Equals(field, "displayName", StringComparison.OrdinalIgnoreCase))
+                location.DisplayName = value;
+            else if (string.Equals(field, "kind", StringComparison.OrdinalIgnoreCase))
+                location.Kind = value;
+            else if (string.Equals(field, "iconId", StringComparison.OrdinalIgnoreCase))
+                location.IconId = value;
+            else if (string.Equals(field, "lootTableId", StringComparison.OrdinalIgnoreCase))
+                location.LootTableId = value;
+            else if (string.Equals(field, "encounterTableId", StringComparison.OrdinalIgnoreCase))
+                location.EncounterTableId = value;
+            else if (string.Equals(field, "danger", StringComparison.OrdinalIgnoreCase))
+                location.Danger = int.Parse(value, NumberStyles.Integer, CultureInfo.InvariantCulture);
+        }
+
+        private static bool TryParseLocationFieldAction(string actionId, string prefix, out string field, out string id, out string value)
+        {
+            field = null;
+            id = null;
+            value = null;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            string body = actionId.Substring(prefix.Length);
+            int firstDot = body.IndexOf('.');
+            if (firstDot <= 0)
+                return false;
+
+            int secondDot = body.IndexOf('.', firstDot + 1);
+            if (secondDot <= firstDot)
+                return false;
+
+            field = body.Substring(0, firstDot);
+            id = ScenarioAuthoringActionCodec.DecodeToken(body.Substring(firstDot + 1, secondDot - firstDot - 1));
+            value = ScenarioAuthoringActionCodec.DecodeToken(body.Substring(secondDot + 1));
+            return !string.IsNullOrEmpty(field) && !string.IsNullOrEmpty(id) && value != null;
+        }
+
+        private static bool TryParseLocationToggleAction(string actionId, string prefix, out string field, out string id)
+        {
+            field = null;
+            id = null;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            string body = actionId.Substring(prefix.Length);
+            int dot = body.IndexOf('.');
+            if (dot <= 0)
+                return false;
+
+            field = body.Substring(0, dot);
+            id = ScenarioAuthoringActionCodec.DecodeToken(body.Substring(dot + 1));
+            return !string.IsNullOrEmpty(field) && !string.IsNullOrEmpty(id);
         }
 
         private static bool TryParseWorldAction(string actionId, string prefix, out float worldX, out float worldY)
@@ -406,6 +631,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             selection.VisibleOnMap = location.VisibleAtStart;
             selection.Discovered = location.DiscoveredAtStart;
             selection.HiddenUntilDiscovered = location.HiddenUntilDiscovered;
+            selection.IconId = location.IconId;
             selection.Captured = true;
             selection.CapturedLocationId = location.Id;
             selection.Authored = true;

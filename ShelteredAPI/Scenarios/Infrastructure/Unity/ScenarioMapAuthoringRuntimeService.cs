@@ -268,6 +268,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             selection.VisibleOnMap = region.isVisibleOnMap;
             selection.Discovered = region.discovered;
             selection.HiddenUntilDiscovered = region.isHiddenUntilDiscovered;
+            selection.IconId = ResolveIconId(region);
             selection.HasItems = region.hasItems;
             selection.HasQuest = region.hasQuest;
             selection.HasHiddenItems = SafeHasHiddenItems(region);
@@ -361,6 +362,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         {
             try { return region != null && region.AreThereHiddenItems(); }
             catch { return false; }
+        }
+
+        private static string ResolveIconId(MapRegion region)
+        {
+            UISprite sprite = region != null ? region.GetComponent<UISprite>() : null;
+            return sprite != null ? sprite.spriteName : null;
         }
 
         private static string ResolveDisplayName(MapRegion region, ScenarioMapRegionSelection selection)

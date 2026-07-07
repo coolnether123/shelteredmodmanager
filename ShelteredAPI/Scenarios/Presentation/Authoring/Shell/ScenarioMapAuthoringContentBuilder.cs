@@ -27,12 +27,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 BuildRuntimeNoticeSection(context != null ? context.State : null),
                 BuildSelectionSection(context != null ? context.State : null),
                 BuildSupportedActionsSection(context != null ? context.State : null),
+                BuildLocationEditorSection(context != null ? context.State : null, map),
                 BuildOverviewSection(definition, map),
                 BuildMarkerSection(map),
                 BuildBoundaryTerrainSection(map),
                 BuildLootSection(map),
                 BuildEncounterSection(map),
                 BuildRouteSection(map)
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildLocationEditorSection(ScenarioAuthoringState state, MapAuthoringDefinition map)
+        {
+            MapLocationDefinition location = ResolveSelectedLocation(state, map);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            if (location == null)
+            {
+                items.Add(Text("Select or capture an authored location to edit map stats, loot, icon, and visibility."));
+            }
+            else
+            {
+                items.Add(EditableProperty("Name", location.DisplayName, "displayName", location.Id, "Shown in the scenario map draft and later runtime projection."));
+                items.Add(EditableProperty("Kind / Category", location.Kind, "kind", location.Id, "Semantic category used by E5/E6 projection."));
+                items.Add(EditableProperty("Icon Id", location.IconId, "iconId", location.Id, "Must match a known map icon sprite id."));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                    ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, location.Id),
+                    "Next Icon",
+                    "Cycle through the known map icon sprite ids.",
+                    true,
+                    false,
+                    "IC")));
+                items.Add(Property("Known Icons", FormatKnownIconIds()));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "searchable", "Searchable", location.Searchable, "Whether expeditions can search this location.")));
+                items.Add(EditableProperty("Danger", location.Danger.ToString(CultureInfo.InvariantCulture), "danger", location.Id, "Basic encounter danger/risk value for later projection."));
+                items.Add(EditableProperty("Loot Table", location.LootTableId, "lootTableId", location.Id, "References an existing MapLootTableDefinition id."));
+                items.Add(EditableProperty("Encounter Table", location.EncounterTableId, "encounterTableId", location.Id, "References an existing MapEncounterTableDefinition id."));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "visibleAtStart", "Visible At Start", location.VisibleAtStart, "Marker is visible before player discovery.")));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "discoveredAtStart", "Discovered At Start", location.DiscoveredAtStart, "Location starts as discovered instead of only visible.")));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ToggleAction(location.Id, "hiddenUntilDiscovered", "Hidden Until Travel Discovery", location.HiddenUntilDiscovered, "Maps to MapRegion.isHiddenUntilDiscovered for E5/E6 runtime projection.")));
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "map_location_editor",
+                Title = "Authored Location Editor",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = items.ToArray()
             };
         }
 
@@ -75,6 +116,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(Property(selection.Authored ? "Authored Location" : "Vanilla Region", Safe(selection.DisplayName)));
                 items.Add(Property("Grid", selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture)));
                 items.Add(Property("Kind", Safe(selection.Topography) + " / " + Safe(selection.Category)));
+                items.Add(Property("Icon", Safe(selection.IconId)));
                 items.Add(Property("Flags", FormatSelectionFlags(selection)));
                 items.Add(Property("Loot", FormatSelectionLoot(selection)));
                 items.Add(Property("Encounter", "open " + selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / faction " + selection.OpenGroundFactionEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / animal " + selection.AnimalEncounterChance.ToString(CultureInfo.InvariantCulture) + "%"));
@@ -414,6 +456,66 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorItem Property(string label, string value)
         {
             return ScenarioInspectorItemFactory.Property(label, value);
+        }
+
+        private static ScenarioAuthoringInspectorItem EditableProperty(string label, string value, string field, string locationId, string hint)
+        {
+            ScenarioAuthoringInspectorItem item = ScenarioInspectorItemFactory.Property(label, value ?? string.Empty, hint);
+            item.Editable = true;
+            item.Action = ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionMapLocationEditPrefix + field + "." + ScenarioAuthoringActionCodec.EncodeToken(locationId) + ".",
+                label,
+                hint,
+                true,
+                false,
+                "ED");
+            return item;
+        }
+
+        private static ScenarioAuthoringInspectorAction ToggleAction(string locationId, string field, string label, bool value, string hint)
+        {
+            return ScenarioInspectorItemFactory.Action(
+                ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix + field + "." + ScenarioAuthoringActionCodec.EncodeToken(locationId),
+                label,
+                hint,
+                true,
+                value,
+                value ? "ON" : "OFF",
+                value ? "Enabled" : "Disabled");
+        }
+
+        private static MapLocationDefinition ResolveSelectedLocation(ScenarioAuthoringState state, MapAuthoringDefinition map)
+        {
+            if (map == null)
+                return null;
+
+            string id = state != null ? state.MapSelectedLocationId : null;
+            if (string.IsNullOrEmpty(id) && state != null && state.MapSelection != null && state.MapSelection.Authored)
+                id = state.MapSelection.LocationId;
+            if (string.IsNullOrEmpty(id))
+                return null;
+
+            for (int i = 0; map.Locations != null && i < map.Locations.Count; i++)
+            {
+                MapLocationDefinition location = map.Locations[i];
+                if (location != null && string.Equals(location.Id, id, System.StringComparison.OrdinalIgnoreCase))
+                    return location;
+            }
+
+            return null;
+        }
+
+        private static string FormatKnownIconIds()
+        {
+            string[] icons = ScenarioMapIconCatalog.GetKnownIconIds();
+            int count = icons != null ? icons.Length : 0;
+            int limit = count > 10 ? 10 : count;
+            List<string> parts = new List<string>();
+            for (int i = 0; i < limit; i++)
+                parts.Add(icons[i]);
+            if (count > limit)
+                parts.Add("+" + (count - limit).ToString(CultureInfo.InvariantCulture) + " more");
+            return parts.Count > 0 ? string.Join(", ", parts.ToArray()) : "<none>";
         }
 
         private static string Safe(string value)
