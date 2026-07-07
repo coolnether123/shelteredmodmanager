@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private readonly TriggerRuntimeAdapter _triggerRuntimeAdapter;
         private readonly ScenarioObjectStartStateApplyService _objectStartStateApplyService;
         private readonly ScenarioSceneSpriteStartStateApplyService _sceneSpriteStartStateApplyService;
+        private readonly ScenarioActorResolver _actorResolver;
 
         public ScenarioApplyCoordinator(
             FamilyApplyService familyApplyService,
@@ -22,7 +23,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             AssetApplyService assetApplyService,
             TriggerRuntimeAdapter triggerRuntimeAdapter,
             ScenarioObjectStartStateApplyService objectStartStateApplyService,
-            ScenarioSceneSpriteStartStateApplyService sceneSpriteStartStateApplyService)
+            ScenarioSceneSpriteStartStateApplyService sceneSpriteStartStateApplyService,
+            ScenarioActorResolver actorResolver)
         {
             _familyApplyService = familyApplyService;
             _inventoryApplyService = inventoryApplyService;
@@ -31,6 +33,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             _triggerRuntimeAdapter = triggerRuntimeAdapter;
             _objectStartStateApplyService = objectStartStateApplyService;
             _sceneSpriteStartStateApplyService = sceneSpriteStartStateApplyService;
+            _actorResolver = actorResolver;
         }
 
         public ScenarioApplyResult ApplyAll(ScenarioDefinition definition, string scenarioFilePath)
@@ -42,6 +45,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return result;
             }
 
+            if (_actorResolver != null)
+                ApplyStep("actors", result, delegate { _actorResolver.EnsureScenarioActors(definition); });
             if (_bunkerApplyService != null)
                 ApplyStep("bunker", result, delegate { _bunkerApplyService.Apply(definition, result); });
             if (_objectStartStateApplyService != null)

@@ -97,8 +97,10 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<AssetApplyService>(),
                     resolver.Get<TriggerRuntimeAdapter>(),
                     resolver.Get<ScenarioObjectStartStateApplyService>(),
-                    resolver.Get<ScenarioSceneSpriteStartStateApplyService>());
+                    resolver.Get<ScenarioSceneSpriteStartStateApplyService>(),
+                    resolver.Get<ScenarioActorResolver>());
             });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioActorResolver(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new FamilyApplyService(resolver.Get<ScenarioCharacterAppearanceService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new InventoryApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new BunkerApplyService(); });
