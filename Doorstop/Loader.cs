@@ -124,6 +124,7 @@ public static class UnityInitHook
     private static string _unityVersion;
     private static int _pollAttempts;
     private static bool _firstLogCallbackSeen;
+    private static int _earlyErrorLogCallbacksIgnored;
     private static LogHookMode _logHookMode = LogHookMode.None;
     private static string _lastRegistrationError;
     private static int _sameRegistrationErrorCount;
@@ -258,6 +259,18 @@ public static class UnityInitHook
         }
 
         if (Loader.BootstrapTriggered) return;
+        if (type == LogType.Exception || type == LogType.Error || type == LogType.Assert)
+        {
+            _earlyErrorLogCallbacksIgnored++;
+            if (_earlyErrorLogCallbacksIgnored <= 3)
+            {
+                string snippet = condition ?? string.Empty;
+                if (snippet.Length > 120) snippet = snippet.Substring(0, 120) + "...";
+                LoaderDebugLog.Write(string.Format("[Loader] Ignoring early Unity {0} before bootstrap readiness: '{1}'", type, snippet.Replace('\n', ' ')));
+            }
+            return;
+        }
+
         lock (_lock)
         {
             if (Loader.BootstrapTriggered) return;
@@ -481,7 +494,8 @@ public static class DoorstopBootstrap
         {
             var go = new GameObject("ModLoaderCoroutineRunner");
             UnityEngine.Object.DontDestroyOnLoad(go);
-            go.AddComponent<ModLoaderCoroutineRunner>();
+            var runner = go.AddComponent<ModLoaderCoroutineRunner>();
+            runner.BeginBootstrap();
             LoaderDebugLog.Write("[Bootstrap] ModLoaderCoroutineRunner created successfully.");
         }
         catch (System.Exception ex)
@@ -531,7 +545,7 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
         BeginBootstrap();
     }
 
-    private void BeginBootstrap()
+    public void BeginBootstrap()
     {
         if (_bootstrapStarted) return;
         _bootstrapStarted = true;
@@ -552,22 +566,11 @@ public class ModLoaderCoroutineRunner : MonoBehaviour
     /// </summary>
     private IEnumerator Bootstrap()
     {
-        LoaderDebugLog.Write("[Bootstrap] Coroutine entered. Waiting for Camera.main.");
-        float timeout = 15f;
-        float waited = 0f;
-        while (Camera.main == null)
-        {
-            timeout -= Time.deltaTime;
-            waited += Time.deltaTime;
-            if (timeout <= 0f)
-            {
-                LoaderDebugLog.Write(string.Format("[Bootstrap] WARNING: Camera.main unavailable after {0:0.00}s; continuing bootstrap.", waited));
-                break;
-            }
-            yield return null;
-        }
+        LoaderDebugLog.Write("[Bootstrap] Coroutine entered.");
         if (Camera.main != null)
-            LoaderDebugLog.Write(string.Format("[Bootstrap] Camera.main detected after {0:0.00}s.", waited));
+            LoaderDebugLog.Write("[Bootstrap] Camera.main is available.");
+        else
+            LoaderDebugLog.Write("[Bootstrap] Camera.main unavailable; continuing bootstrap.");
 
         try
         {
