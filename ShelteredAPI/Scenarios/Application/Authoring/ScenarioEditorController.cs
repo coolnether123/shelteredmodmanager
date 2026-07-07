@@ -12,6 +12,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEditorController : IScenarioEditorService
     {
+        private const string RecoveryStatusMessage = "This draft was recovered from a backup after the main file was unreadable; review and save.";
         private readonly IScenarioEditorSessionStore _sessionStore;
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionValidator _validator;
@@ -78,7 +79,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioObjectIdentityAssignmentSummary migration = _identityAssignmentService.AssignMissingIds(session);
             if (recovered)
             {
-                session.LoadWarning = recoveryMessage;
+                session.LoadWarning = RecoveryStatusMessage;
                 session.MarkDraftChanged(ScenarioDirtySection.Meta);
             }
             _sessionStore.Set(session, scenarioFilePath);

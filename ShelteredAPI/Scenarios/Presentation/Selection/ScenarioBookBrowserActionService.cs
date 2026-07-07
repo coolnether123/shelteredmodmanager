@@ -90,9 +90,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 + " virtualSaveType=" + _launchCoordinator.GetVirtualSaveType(entry) + ".");
 
             SaveEntry draftStartupSave;
-            if (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(entry.ScenarioId, out draftStartupSave) || draftStartupSave == null)
+            string draftSaveLookupError;
+            if (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(entry.ScenarioId, out draftStartupSave, out draftSaveLookupError)
+                || draftStartupSave == null)
             {
-                status = "Could not resolve the draft authoring save.";
+                if (!string.IsNullOrEmpty(draftSaveLookupError)
+                    && draftSaveLookupError.IndexOf("recovery copy could not be loaded", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    status = "This draft could not be opened: its scenario file and backup are both unreadable.";
+                }
+                else
+                {
+                    status = "Could not resolve the draft authoring save.";
+                }
                 MMLog.WriteWarning("[ScenarioBookBrowser] Open Draft failed. scenarioId=" + entry.ScenarioId
                     + " reason=" + status);
                 return false;

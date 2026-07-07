@@ -431,9 +431,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 // A corrupt or missing draft file must not bubble up through Update() and crash
                 // the game. Cancel the draft so the player can try again cleanly.
+                string loadFailureMessage = (ex != null
+                    && !string.IsNullOrEmpty(ex.Message)
+                    && ex.Message.IndexOf("recovery copy could not be loaded", StringComparison.OrdinalIgnoreCase) >= 0)
+                    ? "This draft could not be opened: its scenario file and backup are both unreadable."
+                    : "Could not load draft session. " + (ex != null ? ex.Message : "unknown error");
                 MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Editor session load failed for draft '"
                     + pending.DraftId + "': " + ex.Message);
-                CancelPendingDraft("Editor session failed to load: " + ex.Message);
+                _backend.SetStatusMessage(loadFailureMessage);
+                CancelPendingDraft(loadFailureMessage);
                 return;
             }
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Editor session loaded for draft '" + pending.DraftId + "'. DefinitionId="
@@ -451,6 +457,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             _backend.SetActiveSession(pending);
+            if (editorSession != null && !string.IsNullOrEmpty(editorSession.LoadWarning))
+                _backend.SetStatusMessage(editorSession.LoadWarning);
             if (pending.ReenterPlaytestAfterBootstrap)
                 ReenterPlaytest(pending);
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Activated authoring session for draft '" + pending.DraftId

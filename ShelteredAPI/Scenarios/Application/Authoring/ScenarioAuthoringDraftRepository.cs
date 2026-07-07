@@ -175,9 +175,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public bool TryGetDraftSaveEntry(string draftId, out SaveEntry entry)
         {
+            string ignored;
+            return TryGetDraftSaveEntry(draftId, out entry, out ignored);
+        }
+
+        public bool TryGetDraftSaveEntry(string draftId, out SaveEntry entry, out string error)
+        {
+            error = null;
             entry = null;
+            bool hasMatchingDraftFile = false;
             if (string.IsNullOrEmpty(draftId))
+            {
+                error = "Draft id is required.";
                 return false;
+            }
 
             lock (_sync)
             {
@@ -190,14 +201,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                         if (loaded == null || !string.Equals(loaded.Id, draftId, StringComparison.OrdinalIgnoreCase))
                             continue;
 
+                        hasMatchingDraftFile = true;
                         int slot = TryParseSlotNumber(files[i]);
                         if (slot <= 0)
+                        {
+                            error = "Could not resolve the draft save slot for '" + draftId + "'.";
                             return false;
+                        }
 
                         string saveId = DraftStorageScenarioId + "_" + slot;
                         entry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
                         if (entry != null)
+                        {
                             return true;
+                        }
 
                         entry = new SaveEntry
                         {
@@ -215,9 +232,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     }
                     catch (Exception ex)
                     {
+                        error = ex.Message;
                         MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to resolve draft save entry for '" + draftId + "': " + ex.Message);
+                        return false;
                     }
                 }
+            }
+
+            if (string.IsNullOrEmpty(error))
+            {
+                error = hasMatchingDraftFile
+                    ? "Could not resolve the draft save entry for '" + draftId + "'."
+                    : "Could not locate a draft save entry for '" + draftId + "'.";
             }
 
             return false;
