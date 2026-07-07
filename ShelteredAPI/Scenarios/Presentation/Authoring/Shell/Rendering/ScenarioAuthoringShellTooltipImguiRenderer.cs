@@ -58,8 +58,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect BuildContentTooltipRect(Vector2 mouse, float width, float height, float scaledWidth, float scaledHeight, Rect hudReserveRect, Rect contentRect)
         {
             Rect bounds = BuildTooltipBounds(contentRect, scaledWidth, scaledHeight);
-            Rect avoidRect = BuildTooltipAvoidanceRect(mouse, bounds, scaledWidth, false);
-            return PlaceTooltipAroundAvoidance(avoidRect, width, height, bounds, scaledWidth, scaledHeight, hudReserveRect);
+            const float horizontalOffset = 16f;
+            const float verticalOffset = 16f;
+
+            float x = mouse.x + horizontalOffset;
+            float y = mouse.y + verticalOffset;
+
+            if (x + width > bounds.xMax)
+                x = mouse.x - width - horizontalOffset;
+
+            if (y + height > bounds.yMax)
+                y = mouse.y - height - verticalOffset;
+
+            return new Rect(
+                Mathf.Clamp(x, bounds.x, Math.Max(bounds.x, bounds.xMax - width)),
+                Mathf.Clamp(y, bounds.y, Math.Max(bounds.y, bounds.yMax - height)),
+                width,
+                height);
         }
 
         private Rect PlaceTooltipAroundAvoidance(Rect avoidRect, float width, float height, Rect bounds, float scaledWidth, float scaledHeight, Rect hudReserveRect)
