@@ -1100,6 +1100,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string RoleLine { get; set; }
         public string Status { get; set; }
         public string ArrivalSummary { get; set; }
+        public bool CompactReference { get; set; }
         public Sprite PortraitSprite { get; set; }
         public Texture2D PortraitTexture { get; set; }
         public Color HairColor { get; set; }

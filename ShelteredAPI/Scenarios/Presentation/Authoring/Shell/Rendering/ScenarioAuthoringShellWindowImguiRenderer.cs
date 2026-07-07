@@ -2469,10 +2469,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            float minCardWidth = compactInspector ? 250f : 286f;
-            int columns = Mathf.Clamp(Mathf.FloorToInt((availableWidth + gap) / (minCardWidth + gap)), 1, compactInspector ? 2 : 4);
+            bool compactReference = AllCastCardsAreCompactReferences(section);
+            float minCardWidth = compactReference ? 288f : (compactInspector ? 300f : 360f);
+            int maxColumns = compactReference ? 5 : (compactInspector ? 2 : 4);
+            int columns = Mathf.Clamp(Mathf.FloorToInt((availableWidth + gap) / (minCardWidth + gap)), 1, maxColumns);
             float cardWidth = (availableWidth - (gap * (columns - 1))) / columns;
-            float cardHeight = compactInspector ? 174f : 198f;
+            float cardHeight = compactReference ? 72f : (compactInspector ? 174f : 198f);
             int column = 0;
             GUILayout.BeginHorizontal();
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
@@ -2482,7 +2484,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect cardRect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
-                DrawCastCard(cardRect, item.CastCard);
+                if (item.CastCard.CompactReference)
+                    DrawCastReferenceCard(cardRect, item.CastCard);
+                else
+                    DrawCastCard(cardRect, item.CastCard);
                 column++;
                 if (column >= columns && HasMoreCastCards(section, i + 1))
                 {
@@ -2560,9 +2565,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect portraitRect = new Rect(rect.x + 10f, rect.y + 10f, 82f, 96f);
             DrawCastPortrait(portraitRect, card);
 
-            Rect statusRect = new Rect(rect.xMax - 92f, rect.y + 10f, 76f, 20f);
-            if (!string.IsNullOrEmpty(card.Status))
-                ScenarioUiWidgets.DrawPill(statusRect, card.Status, _uiContext.Styles, ResolveCastStatusEmphasis(card.Status));
+            DrawCastStatusPill(new Rect(rect.x + 100f, rect.y + 10f, rect.width - 112f, 20f), card.Status, TextAnchor.UpperRight);
 
             float textX = portraitRect.xMax + 10f;
             float textWidth = Math.Max(60f, rect.xMax - textX - 12f);
@@ -2588,6 +2591,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(primary.Id);
                 evt.Use();
+            }
+        }
+
+        private void DrawCastReferenceCard(Rect rect, ScenarioCastCardViewModel card)
+        {
+            if (card == null)
+                return;
+
+            ScenarioAuthoringInspectorAction action = card.PrimaryAction;
+            GUIContent content = new GUIContent(string.Empty, action != null ? action.Hint ?? action.Detail ?? string.Empty : string.Empty);
+            RegisterInteractiveRegion(rect);
+            GUI.Box(rect, content, _uiContext.Styles.Card);
+
+            Rect portraitRect = new Rect(rect.x + 8f, rect.y + 8f, 46f, 56f);
+            DrawCastPortrait(portraitRect, card);
+
+            float actionWidth = action != null ? Math.Max(94f, MeasureButtonWidth(action, false, 18f)) : 0f;
+            actionWidth = Math.Min(actionWidth, Math.Max(0f, rect.width - 172f));
+            float statusReserve = action != null ? actionWidth + 10f : 136f;
+            float textX = portraitRect.xMax + 9f;
+            float textWidth = Math.Max(48f, rect.width - (textX - rect.x) - statusReserve - 10f);
+            GUIStyle nameStyle = _uiContext.Styles.PaperTitleText;
+            GUIStyle detailStyle = _uiContext.Styles.PaperMutedText;
+            GUI.Label(new Rect(textX, rect.y + 13f, textWidth, 22f), ShortenToFit(card.Name ?? "Survivor", textWidth, nameStyle), nameStyle);
+            GUI.Label(new Rect(textX, rect.y + 37f, textWidth, 18f), ShortenToFit(card.RoleLine ?? string.Empty, textWidth, detailStyle), detailStyle);
+
+            if (action != null)
+            {
+                Rect actionRect = new Rect(rect.xMax - actionWidth - 8f, rect.y + 24f, actionWidth, 24f);
+                DrawButton(actionRect, action, false);
+            }
+            else
+            {
+                DrawCastStatusPill(new Rect(rect.xMax - 146f, rect.y + 24f, 136f, 20f), card.Status, TextAnchor.UpperRight);
             }
         }
 
@@ -2680,34 +2717,114 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCastCardActions(Rect rect, ScenarioCastCardViewModel card)
         {
-            float x = rect.x;
-            if (card.PrimaryAction != null)
+            if (card == null)
+                return;
+
+            ScenarioAuthoringInspectorAction[] secondary = card.SecondaryActions;
+            int secondaryCount = 0;
+            for (int i = 0; secondary != null && i < secondary.Length; i++)
             {
-                float width = Mathf.Clamp(MeasureButtonWidth(card.PrimaryAction, false, 18f), 58f, 112f);
-                DrawButton(new Rect(x, rect.y, width, rect.height), card.PrimaryAction, false);
-                x += width + 4f;
+                if (secondary[i] != null)
+                    secondaryCount++;
             }
 
-            ScenarioAuthoringInspectorAction[] actions = card.SecondaryActions;
-            for (int i = 0; actions != null && i < actions.Length; i++)
+            float gap = 4f;
+            float primaryWidth = card.PrimaryAction != null ? Math.Max(82f, MeasureButtonWidth(card.PrimaryAction, false, 18f)) : 0f;
+            float fullSecondaryWidth = 0f;
+            for (int i = 0; secondary != null && i < secondary.Length; i++)
             {
-                ScenarioAuthoringInspectorAction action = actions[i];
+                ScenarioAuthoringInspectorAction action = secondary[i];
                 if (action == null)
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 18f), 46f, 86f);
+                if (fullSecondaryWidth > 0f)
+                    fullSecondaryWidth += gap;
+                fullSecondaryWidth += Math.Max(60f, MeasureButtonWidth(action, false, 18f));
+            }
+
+            float fullWidth = primaryWidth + (card.PrimaryAction != null && secondaryCount > 0 ? gap : 0f) + fullSecondaryWidth;
+            bool compactSecondary = fullWidth > rect.width;
+            float compactWidth = 30f;
+            float x = rect.x;
+            if (card.PrimaryAction != null)
+            {
+                float width = compactSecondary && secondaryCount > 0
+                    ? Math.Min(primaryWidth, Math.Max(82f, rect.width - ((compactWidth + gap) * secondaryCount)))
+                    : primaryWidth;
+                DrawButton(new Rect(x, rect.y, width, rect.height), card.PrimaryAction, false);
+                x += width + gap;
+            }
+
+            for (int i = 0; secondary != null && i < secondary.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = secondary[i];
+                if (action == null)
+                    continue;
+
+                ScenarioAuthoringInspectorAction renderAction = compactSecondary ? CloneCastCompactAction(action) : action;
+                float width = compactSecondary ? compactWidth : Math.Max(60f, MeasureButtonWidth(action, false, 18f));
                 if (x + width > rect.xMax)
                     break;
 
-                DrawButton(new Rect(x, rect.y, width, rect.height), action, false);
-                x += width + 4f;
+                DrawButton(new Rect(x, rect.y, width, rect.height), renderAction, false);
+                x += width + gap;
             }
+        }
+
+        private ScenarioAuthoringInspectorAction CloneCastCompactAction(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return null;
+
+            return new ScenarioAuthoringInspectorAction
+            {
+                Id = action.Id,
+                Label = CompactCastActionLabel(action),
+                Hint = string.IsNullOrEmpty(action.Hint) ? action.Label : action.Label + " - " + action.Hint,
+                Detail = action.Detail,
+                Badge = action.Badge,
+                IconText = action.IconText,
+                PreviewSprite = action.PreviewSprite,
+                Enabled = action.Enabled,
+                Emphasized = action.Emphasized,
+                DisabledReason = action.DisabledReason
+            };
+        }
+
+        private static string CompactCastActionLabel(ScenarioAuthoringInspectorAction action)
+        {
+            if (action == null)
+                return string.Empty;
+            if (!string.IsNullOrEmpty(action.IconText))
+                return action.IconText;
+            if (StringContains(action.Label, "up"))
+                return "^";
+            if (StringContains(action.Label, "down"))
+                return "v";
+            if (StringContains(action.Label, "remove"))
+                return "X";
+            return Shorten(action.Label, 2);
+        }
+
+        private void DrawCastStatusPill(Rect bounds, string status, TextAnchor anchor)
+        {
+            if (string.IsNullOrEmpty(status))
+                return;
+
+            GUIStyle style = _uiContext.Styles.PaperMutedText;
+            float width = Mathf.Clamp(style.CalcSize(new GUIContent(status)).x + 20f, 58f, Math.Max(58f, bounds.width));
+            float x = anchor == TextAnchor.UpperRight || anchor == TextAnchor.MiddleRight
+                ? bounds.xMax - width
+                : bounds.x;
+            ScenarioUiWidgets.DrawPill(new Rect(x, bounds.y, width, bounds.height), status, _uiContext.Styles, ResolveCastStatusEmphasis(status));
         }
 
         private static ScenarioUiPillEmphasis ResolveCastStatusEmphasis(string status)
         {
             if (StringContains(status, "active") || StringContains(status, "starting"))
                 return ScenarioUiPillEmphasis.Success;
+            if (StringContains(status, "world only"))
+                return ScenarioUiPillEmphasis.Default;
             if (StringContains(status, "future"))
                 return ScenarioUiPillEmphasis.Active;
             if (StringContains(status, "dead") || StringContains(status, "unconscious") || StringContains(status, "catatonic"))
@@ -2738,6 +2855,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return false;
+        }
+
+        private static bool AllCastCardsAreCompactReferences(ScenarioAuthoringInspectorSection section)
+        {
+            int count = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioCastCardViewModel card = section.Items[i] != null ? section.Items[i].CastCard : null;
+                if (card == null)
+                    continue;
+
+                count++;
+                if (!card.CompactReference)
+                    return false;
+            }
+
+            return count > 0;
         }
 
         private static void DrawColorSwatch(Rect rect, Color color)
