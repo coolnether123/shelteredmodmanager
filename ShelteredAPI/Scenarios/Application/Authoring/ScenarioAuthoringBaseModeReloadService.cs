@@ -62,7 +62,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             BaseModeSnapshot snapshot = BaseModeSnapshot.Capture(definition);
+            ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
             ApplyBaseMode(definition, newBaseMode);
+            ScenarioBackendWorldMaterializer.MaterializeCurrentWorld(definition, newBaseMode);
             if (!ApplyFamilyChoice(editorSession, definition, newBaseMode, familyChoice, out message))
             {
                 snapshot.Restore(definition);
@@ -83,9 +85,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 draftStartupSave,
                 ScenarioSelectionIds.GetDefaultSaveType(newBaseMode),
                 newBaseMode,
-                "as " + FormatBaseMode(newBaseMode) + " (" + FormatFamilyChoice(familyChoice) + ")",
+                "as " + FormatBaseMode(newBaseMode) + " backend (" + FormatFamilyChoice(familyChoice) + ")",
                 false,
                 string.Equals(NormalizeFamilyChoice(familyChoice), ScenarioBaseFamilyChoices.UseBaseDefaultFamily, StringComparison.Ordinal),
+                true,
                 out message);
         }
 
@@ -128,7 +131,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
-            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, out message);
+            ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
+            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, out message);
         }
 
         public bool SaveBaseModeOnly(
@@ -146,7 +150,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             ScenarioDefinition definition = editorSession.WorkingDefinition;
             BaseModeSnapshot snapshot = BaseModeSnapshot.Capture(definition);
+            ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
             ApplyBaseMode(definition, newBaseMode);
+            ScenarioBackendWorldMaterializer.MaterializeCurrentWorld(definition, newBaseMode);
             if (!ApplyFamilyChoice(editorSession, definition, newBaseMode, familyChoice, out message))
             {
                 snapshot.Restore(definition);
@@ -164,7 +170,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             message = "Base mode saved as " + FormatBaseMode(newBaseMode)
                 + " with " + FormatFamilyChoice(familyChoice)
-                + ". The current world stays loaded; this draft reopens in that base next time.";
+                + ". The target backend world is saved and will load next time this draft opens.";
             return true;
         }
 
@@ -284,6 +290,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string label,
             bool reenterPlaytest,
             bool captureBaseDefaultFamily,
+            bool suppressIntroCutscene,
             out string message)
         {
             ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
@@ -299,6 +306,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 pending.RequestPlaytestAfterBootstrap();
             if (captureBaseDefaultFamily)
                 pending.RequestBaseDefaultFamilyCaptureAfterBootstrap();
+            if (suppressIntroCutscene)
+                pending.RequestSuppressIntroCutsceneAfterSceneLoad();
 
             string error;
             if (!_launchCoordinator.QueueAuthoringDraftSceneReload(
@@ -347,6 +356,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 definition.BaseFamilyChoice = _definition.BaseFamilyChoice;
                 definition.SelectionRules = _definition.SelectionRules;
                 definition.FamilySetup = _definition.FamilySetup;
+                definition.BunkerEdits = _definition.BunkerEdits;
+                definition.BunkerGrid = _definition.BunkerGrid;
+                definition.AssetReferences = _definition.AssetReferences;
+                definition.BackendWorlds = _definition.BackendWorlds;
             }
         }
     }

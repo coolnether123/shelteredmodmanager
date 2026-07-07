@@ -395,6 +395,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             definition.Scoring = ReadScoring(Child(root, "Scoring"));
             definition.AssetReferences = assetSerializer.Read(Child(root, "AssetReferences"));
             definition.BunkerGrid = bunkerGridSerializer.Read(Child(root, "BunkerGrid"));
+            XmlElement backendWorlds = Child(root, "BackendWorlds");
+            definition.BackendWorlds = ReadBackendWorlds(backendWorlds);
+            if (backendWorlds == null)
+                ScenarioBackendWorldMaterializer.MigrateLegacyCurrentWorld(definition);
+            else
+                ScenarioBackendWorldMaterializer.MaterializeCurrentWorld(definition, definition.BaseGameMode);
             gateSerializer.Read(Child(root, "Gates"), definition.Gates);
             scheduledSerializer.Read(Child(root, "ScheduledActions"), definition.ScheduledActions);
             return definition;
@@ -1086,44 +1092,87 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
 
             XmlElement scenePlacements = Child(element, "SceneSpritePlacements");
-            if (scenePlacements != null)
-            {
-                XmlNodeList placementNodes = scenePlacements.GetElementsByTagName("Placement");
-                for (int i = 0; i < placementNodes.Count; i++)
-                {
-                    XmlElement placementElement = placementNodes[i] as XmlElement;
-                    if (placementElement == null)
-                        continue;
-
-                    SceneSpritePlacement placement = new SceneSpritePlacement();
-                    placement.Id = AttributeOrChild(placementElement, "id", "Id");
-                    placement.ScenarioObjectId = AttributeOrChild(placementElement, "scenarioObjectId", "ScenarioObjectId");
-                    placement.RuntimeBindingKey = AttributeOrChild(placementElement, "runtimeBindingKey", "RuntimeBindingKey");
-                    placement.SpriteId = AttributeOrChild(placementElement, "spriteId", "SpriteId");
-                    placement.RelativePath = AttributeOrChild(placementElement, "path", "Path");
-                    placement.RuntimeSpriteKey = AttributeOrChild(placementElement, "runtimeSpriteKey", "RuntimeSpriteKey");
-                    placement.Position = ReadVector(Child(placementElement, "Position"));
-                    placement.SnapToGrid = ReadBoolAttribute(placementElement, "snapToGrid", false);
-                    placement.GridX = ReadNullableIntAttribute(placementElement, "gridX");
-                    placement.GridY = ReadNullableIntAttribute(placementElement, "gridY");
-                    placement.StartState = ReadEnumAttribute(placementElement, "startState", ScenarioObjectStartState.StartsEnabled);
-                    placement.PlacementPhase = AttributeOrChild(placementElement, "placementPhase", "PlacementPhase");
-                    placement.RequiredFoundationId = AttributeOrChild(placementElement, "requiredFoundationId", "RequiredFoundationId");
-                    placement.RequiredBunkerExpansionId = AttributeOrChild(placementElement, "requiredExpansionId", "RequiredBunkerExpansionId");
-                    placement.UnlockGateId = AttributeOrChild(placementElement, "unlockGateId", "UnlockGateId");
-                    placement.ScheduledActivationId = AttributeOrChild(placementElement, "scheduledActivationId", "ScheduledActivationId");
-                    ReadStringList(Child(placementElement, "Tags"), "Tag", placement.Tags);
-                    placement.SortingLayerName = AttributeOrChild(placementElement, "sortingLayer", "SortingLayer");
-                    placement.SortingOrder = ReadIntAttribute(placementElement, "sortingOrder", 0);
-                    result.SceneSpritePlacements.Add(placement);
-                }
-            }
+            ReadSceneSpritePlacements(scenePlacements, result.SceneSpritePlacements);
 
             return result;
         }
 
+        private static void ReadSceneSpritePlacements(XmlElement scenePlacements, System.Collections.Generic.List<SceneSpritePlacement> target)
+        {
+            if (scenePlacements == null || target == null)
+                return;
+
+            XmlNodeList placementNodes = scenePlacements.GetElementsByTagName("Placement");
+            for (int i = 0; i < placementNodes.Count; i++)
+            {
+                XmlElement placementElement = placementNodes[i] as XmlElement;
+                if (placementElement == null)
+                    continue;
+
+                SceneSpritePlacement placement = new SceneSpritePlacement();
+                placement.Id = AttributeOrChild(placementElement, "id", "Id");
+                placement.ScenarioObjectId = AttributeOrChild(placementElement, "scenarioObjectId", "ScenarioObjectId");
+                placement.RuntimeBindingKey = AttributeOrChild(placementElement, "runtimeBindingKey", "RuntimeBindingKey");
+                placement.SpriteId = AttributeOrChild(placementElement, "spriteId", "SpriteId");
+                placement.RelativePath = AttributeOrChild(placementElement, "path", "Path");
+                placement.RuntimeSpriteKey = AttributeOrChild(placementElement, "runtimeSpriteKey", "RuntimeSpriteKey");
+                placement.Position = ReadVector(Child(placementElement, "Position"));
+                placement.SnapToGrid = ReadBoolAttribute(placementElement, "snapToGrid", false);
+                placement.GridX = ReadNullableIntAttribute(placementElement, "gridX");
+                placement.GridY = ReadNullableIntAttribute(placementElement, "gridY");
+                placement.StartState = ReadEnumAttribute(placementElement, "startState", ScenarioObjectStartState.StartsEnabled);
+                placement.PlacementPhase = AttributeOrChild(placementElement, "placementPhase", "PlacementPhase");
+                placement.RequiredFoundationId = AttributeOrChild(placementElement, "requiredFoundationId", "RequiredFoundationId");
+                placement.RequiredBunkerExpansionId = AttributeOrChild(placementElement, "requiredExpansionId", "RequiredBunkerExpansionId");
+                placement.UnlockGateId = AttributeOrChild(placementElement, "unlockGateId", "UnlockGateId");
+                placement.ScheduledActivationId = AttributeOrChild(placementElement, "scheduledActivationId", "ScheduledActivationId");
+                ReadStringList(Child(placementElement, "Tags"), "Tag", placement.Tags);
+                placement.SortingLayerName = AttributeOrChild(placementElement, "sortingLayer", "SortingLayer");
+                placement.SortingOrder = ReadIntAttribute(placementElement, "sortingOrder", 0);
+                target.Add(placement);
+            }
+        }
+
+        private static ScenarioBackendWorldsDefinition ReadBackendWorlds(XmlElement element)
+        {
+            ScenarioBackendWorldsDefinition backendWorlds = new ScenarioBackendWorldsDefinition();
+            if (element == null)
+                return backendWorlds;
+
+            XmlNodeList nodes = element.GetElementsByTagName("BackendWorld");
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                XmlElement worldElement = nodes[i] as XmlElement;
+                if (worldElement == null)
+                    continue;
+
+                ScenarioBackendWorldDefinition world = new ScenarioBackendWorldDefinition();
+                world.BaseMode = ReadEnumAttribute(worldElement, "baseMode", ScenarioBaseGameMode.Survival);
+                world.BunkerEdits = ReadBunkerEdits(Child(worldElement, "BunkerEdits"));
+                world.BunkerGrid = ReadBunkerGrid(Child(worldElement, "BunkerGrid"));
+                world.SceneSpritePlacements.Clear();
+                ReadSceneSpritePlacements(Child(worldElement, "SceneSpritePlacements"), world.SceneSpritePlacements);
+
+                ScenarioBackendWorldDefinition existing = backendWorlds.Find(world.BaseMode);
+                if (existing == null)
+                    backendWorlds.Worlds.Add(world);
+                else
+                {
+                    existing.BunkerEdits = world.BunkerEdits;
+                    existing.BunkerGrid = world.BunkerGrid;
+                    existing.SceneSpritePlacements.Clear();
+                    for (int placementIndex = 0; placementIndex < world.SceneSpritePlacements.Count; placementIndex++)
+                        existing.SceneSpritePlacements.Add(world.SceneSpritePlacements[placementIndex]);
+                }
+            }
+
+            return backendWorlds;
+        }
+
         private static void WriteDocument(ScenarioDefinition definition, XmlWriter writer)
         {
+            ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
+
             writer.WriteStartDocument();
             writer.WriteStartElement("Scenario");
             IScenarioSectionSerializer<FamilySetupDefinition> familySerializer = new FamilyScenarioSectionSerializer();
@@ -1187,6 +1236,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteScoring(writer, definition.Scoring);
             assetSerializer.Write(writer, definition.AssetReferences);
             bunkerGridSerializer.Write(writer, definition.BunkerGrid);
+            WriteBackendWorlds(writer, definition.BackendWorlds);
             gateSerializer.Write(writer, definition.Gates);
             scheduledSerializer.Write(writer, definition.ScheduledActions);
 
@@ -1765,10 +1815,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             }
             writer.WriteEndElement();
 
+            WriteSceneSpritePlacements(writer, value.SceneSpritePlacements);
+            writer.WriteEndElement();
+        }
+
+        private static void WriteSceneSpritePlacements(XmlWriter writer, System.Collections.Generic.List<SceneSpritePlacement> placements)
+        {
             writer.WriteStartElement("SceneSpritePlacements");
-            for (int i = 0; i < value.SceneSpritePlacements.Count; i++)
+            for (int i = 0; placements != null && i < placements.Count; i++)
             {
-                SceneSpritePlacement placement = value.SceneSpritePlacements[i];
+                SceneSpritePlacement placement = placements[i];
                 if (placement == null)
                     continue;
 
@@ -1797,6 +1853,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
+        }
+
+        private static void WriteBackendWorlds(XmlWriter writer, ScenarioBackendWorldsDefinition backendWorlds)
+        {
+            writer.WriteStartElement("BackendWorlds");
+            for (int i = 0; backendWorlds != null && backendWorlds.Worlds != null && i < backendWorlds.Worlds.Count; i++)
+            {
+                ScenarioBackendWorldDefinition world = backendWorlds.Worlds[i];
+                if (world == null)
+                    continue;
+
+                writer.WriteStartElement("BackendWorld");
+                writer.WriteAttributeString("baseMode", world.BaseMode.ToString());
+                WriteBunkerEdits(writer, world.BunkerEdits);
+                WriteBunkerGrid(writer, world.BunkerGrid);
+                WriteSceneSpritePlacements(writer, world.SceneSpritePlacements);
+                writer.WriteEndElement();
+            }
             writer.WriteEndElement();
         }
 

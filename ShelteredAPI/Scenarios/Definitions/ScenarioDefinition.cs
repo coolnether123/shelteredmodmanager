@@ -66,6 +66,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Scoring = new ScenarioScoringDefinition();
             AssetReferences = new AssetReferencesDefinition();
             BunkerGrid = new ScenarioBunkerGridDefinition();
+            BackendWorlds = new ScenarioBackendWorldsDefinition();
             Gates = new List<ScenarioGateDefinition>();
             ScheduledActions = new List<ScenarioScheduledActionDefinition>();
         }
@@ -93,8 +94,58 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public ScenarioScoringDefinition Scoring { get; set; }
         public AssetReferencesDefinition AssetReferences { get; set; }
         public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
+        internal ScenarioBackendWorldsDefinition BackendWorlds { get; set; }
         public List<ScenarioGateDefinition> Gates { get; private set; }
         public List<ScenarioScheduledActionDefinition> ScheduledActions { get; private set; }
+    }
+
+    internal sealed class ScenarioBackendWorldsDefinition
+    {
+        public ScenarioBackendWorldsDefinition()
+        {
+            Worlds = new List<ScenarioBackendWorldDefinition>();
+        }
+
+        public List<ScenarioBackendWorldDefinition> Worlds { get; private set; }
+
+        public ScenarioBackendWorldDefinition GetOrCreate(ScenarioBaseGameMode baseMode)
+        {
+            ScenarioBackendWorldDefinition world = Find(baseMode);
+            if (world != null)
+                return world;
+
+            world = new ScenarioBackendWorldDefinition();
+            world.BaseMode = baseMode;
+            Worlds.Add(world);
+            return world;
+        }
+
+        public ScenarioBackendWorldDefinition Find(ScenarioBaseGameMode baseMode)
+        {
+            for (int i = 0; Worlds != null && i < Worlds.Count; i++)
+            {
+                ScenarioBackendWorldDefinition world = Worlds[i];
+                if (world != null && world.BaseMode == baseMode)
+                    return world;
+            }
+
+            return null;
+        }
+    }
+
+    internal sealed class ScenarioBackendWorldDefinition
+    {
+        public ScenarioBackendWorldDefinition()
+        {
+            BunkerEdits = new BunkerEditsDefinition();
+            BunkerGrid = new ScenarioBunkerGridDefinition();
+            SceneSpritePlacements = new List<SceneSpritePlacement>();
+        }
+
+        public ScenarioBaseGameMode BaseMode { get; set; }
+        public BunkerEditsDefinition BunkerEdits { get; set; }
+        public ScenarioBunkerGridDefinition BunkerGrid { get; set; }
+        public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
     }
 
     /// <summary>

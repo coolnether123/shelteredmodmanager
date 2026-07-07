@@ -382,10 +382,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return;
                 }
 
-                if (pending.ReenterPlaytestAfterBootstrap)
+                if (pending.ReenterPlaytestAfterBootstrap || pending.SuppressIntroCutsceneAfterSceneLoad)
                 {
                     string cutsceneBlockingReason;
-                    ScenarioPlaytestRestartCutsceneGuard.TryClearBlockingIntroCutscene(pending.DraftId, out cutsceneBlockingReason);
+                    if (!ScenarioPlaytestRestartCutsceneGuard.TryClearBlockingIntroCutscene(pending.DraftId, out cutsceneBlockingReason)
+                        && pending.ReenterPlaytestAfterBootstrap)
+                    {
+                        FailPlaytestRestartBackToEditor("Playtest restart failed; returned to the editor. " + cutsceneBlockingReason);
+                        CancelPendingDraft("Intro cutscene could not be cleared for playtest restart.", false);
+                        return;
+                    }
                 }
 
                 if (!ScenarioWorldReady.Evaluate(out blockingReason))

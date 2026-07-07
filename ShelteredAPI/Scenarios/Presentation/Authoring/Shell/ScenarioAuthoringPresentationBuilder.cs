@@ -1972,22 +1972,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioBaseGameMode targetMode = (ScenarioBaseGameMode)state.FocusedEditorIndex;
                 string targetLabel = FormatBaseMode(targetMode);
                 title = "Switch base to " + targetLabel + "?";
-                subtitle = "Choose the " + targetLabel + " scene theme and what to do with the starting family.";
+                subtitle = "Save this backend's shelter world, then load the " + targetLabel + " backend world.";
                 List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
                 facts.Add(Fact("Current Draft Base", FormatBaseMode(definition.BaseGameMode), "Base saved in the scenario XML."));
-                facts.Add(Fact("Target Theme", targetLabel, "Backdrop and shelter scene used after the world reloads."));
-                facts.Add(Fact("Default Family", targetLabel + " family", "Optional. Keeping your cast is the default."));
-                facts.Add(Text("This changes the backdrop and starting shelter scene theme. Rooms, placed objects, supplies, timeline, story, map, art, and authored cast stay in the draft."));
-                facts.Add(Text("Keep current cast preserves authored starting survivors. If none are authored yet, the live family is captured before switching."));
-                facts.Add(Text("Swap to the default family clears authored starting survivors only; future survivor schedules stay authored."));
-                facts.Add(Text("If a saved placement cannot fit the target scene grid, the reload/playtest apply reports that exact placement instead of deleting it."));
+                facts.Add(Fact("Target Backend", targetLabel, "Loads the saved shelter world for this backend."));
+                facts.Add(Fact("Current World", "Saved", "Returning to this backend restores rooms, objects, walls, wiring, ladders, lights, and scene placements as you left them."));
+                facts.Add(Fact("Shared Settings", "Unchanged", "Supplies, cast, story, map, timeline, art, and victory stay shared across all backends."));
+                facts.Add(Fact("Default Family", targetLabel + " family", "Optional. Cast is shared, so this replaces the shared starting cast."));
+                facts.Add(Text("Switching does not auto-play the opening cutscene. Use Watch opening cutscene from Home when you want to preview it."));
+                facts.Add(Text("Keep current cast is the default. If no starting cast is authored yet, the live family is captured before switching."));
                 sections.Add(FactSection("base_mode_scope", "Scope", facts));
 
                 List<ScenarioAuthoringInspectorItem> actions = new List<ScenarioAuthoringInspectorItem>();
-                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode, ScenarioBaseFamilyChoices.KeepCurrentCast), "Reload, keep current cast", "Save the draft, keep your current cast, and reload into the " + targetLabel + " scene.", true, true, "KEEP")));
-                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily), "Reload, use default family", "Save the draft, replace starting survivors with the " + targetLabel + " default family, and reload.", true, false, "DF")));
-                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchOnly(targetMode, ScenarioBaseFamilyChoices.KeepCurrentCast), "Save base only, keep cast", "Save the base choice and current-cast choice; reload happens next open.", true, false, "SW")));
-                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchOnly(targetMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily), "Save base only, use default family", "Save the base choice and default-family choice; reload happens next open.", true, false, "FAM")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode, ScenarioBaseFamilyChoices.KeepCurrentCast), "Switch, keep shared cast", "Save this backend world, keep the shared cast, and load the " + targetLabel + " backend.", true, true, "KEEP")));
+                actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.SwitchReload(targetMode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily), "Switch, use default family", "Save this backend world, replace the shared starting cast with the " + targetLabel + " default family, and load the backend.", true, false, "DF")));
                 actions.Add(ActionItem(Action(ScenarioBaseModeAuthoringActions.ActionSwitchCancel, "Cancel", "Keep the current base mode.", true, false, "CL")));
                 sections.Add(ActionSection("base_mode_choices", string.Empty, actions));
 

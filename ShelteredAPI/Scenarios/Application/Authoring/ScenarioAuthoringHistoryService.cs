@@ -271,21 +271,44 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             destination.Author = restored.Author;
             destination.Version = restored.Version;
             destination.BaseGameMode = restored.BaseGameMode;
+            destination.BaseFamilyChoice = restored.BaseFamilyChoice;
             destination.SeedOverride = restored.SeedOverride;
+            destination.SelectionRules = restored.SelectionRules;
             destination.Dependencies.Clear();
             if (restored.Dependencies != null)
             {
                 for (int i = 0; i < restored.Dependencies.Count; i++)
                     destination.Dependencies.Add(restored.Dependencies[i]);
             }
+            destination.ModDependencies.Clear();
+            if (restored.ModDependencies != null)
+            {
+                for (int i = 0; i < restored.ModDependencies.Count; i++)
+                    destination.ModDependencies.Add(restored.ModDependencies[i]);
+            }
             destination.FamilySetup = restored.FamilySetup;
             destination.StartingInventory = restored.StartingInventory;
             destination.BunkerEdits = restored.BunkerEdits;
+            destination.BunkerGrid = restored.BunkerGrid;
+            destination.BackendWorlds = restored.BackendWorlds;
             destination.TriggersAndEvents = restored.TriggersAndEvents;
             destination.Quests = restored.Quests;
             destination.Map = restored.Map;
             destination.WinLossConditions = restored.WinLossConditions;
+            destination.Scoring = restored.Scoring;
             destination.AssetReferences = restored.AssetReferences;
+            destination.Gates.Clear();
+            if (restored.Gates != null)
+            {
+                for (int i = 0; i < restored.Gates.Count; i++)
+                    destination.Gates.Add(restored.Gates[i]);
+            }
+            destination.ScheduledActions.Clear();
+            if (restored.ScheduledActions != null)
+            {
+                for (int i = 0; i < restored.ScheduledActions.Count; i++)
+                    destination.ScheduledActions.Add(restored.ScheduledActions[i]);
+            }
         }
 
         private sealed class DefinitionSnapshot

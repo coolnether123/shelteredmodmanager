@@ -212,7 +212,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Survival));
             items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Stasis));
             items.Add(BuildBaseModeOption(mode, ScenarioBaseGameMode.Surrounded));
-            string hint = "Base backdrop and starting shelter scene theme. Switching preserves authored rooms, objects, supplies, timeline, story, map, art, and cast unless you opt into the base default family.";
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioBaseModeAuthoringActions.ActionWatchOpeningCutscene,
+                "Watch opening cutscene",
+                "Play the selected backend's opening cutscene on demand.",
+                true,
+                false,
+                "CUT")));
+            string hint = "Each backend has its own saved shelter world. Switching saves this backend's rooms, objects, walls, wiring, ladders, lights, and scene placements, then restores the target backend as you left it. Supplies, cast, story, map, timeline, art, and victory stay shared.";
             if (worldMode != mode)
                 hint = "World shows " + FormatBaseMode(worldMode) + "; reopens as " + FormatBaseMode(mode) + ". " + hint;
             items.Add(Item.Text(hint));

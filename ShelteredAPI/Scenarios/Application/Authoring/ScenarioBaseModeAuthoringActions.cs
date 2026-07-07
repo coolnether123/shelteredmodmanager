@@ -13,6 +13,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSwitchReloadDefaultFamilyPrefix = "scenario.mode.switch.reload.default_family.";
         public const string ActionSwitchOnlyKeepCastPrefix = "scenario.mode.switch.only.keep_cast.";
         public const string ActionSwitchOnlyDefaultFamilyPrefix = "scenario.mode.switch.only.default_family.";
+        public const string ActionWatchOpeningCutscene = "scenario.mode.watch_opening_cutscene";
         public const string ActionSwitchCancel = "scenario.mode.switch.cancel";
 
         public static string SwitchReload(ScenarioBaseGameMode baseMode, string familyChoice)

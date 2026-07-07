@@ -62,6 +62,10 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(loaded.FamilySetup.Members[0].Traits.Count == 1, "Family trait override was not parsed.", result);
             Assert(loaded.FamilySetup.Members[0].Skills.Count == 1, "Family skill override was not parsed.", result);
             Assert(loaded.BunkerEdits.ObjectPlacements.Count == 1, "Object placement was not parsed.", result);
+            Assert(loaded.BackendWorlds != null
+                && loaded.BackendWorlds.Find(loaded.BaseGameMode) != null
+                && loaded.BackendWorlds.Find(loaded.BaseGameMode).BunkerEdits.ObjectPlacements.Count == 1,
+                "Legacy current world was not migrated into the active backend world.", result);
             Assert(loaded.TriggersAndEvents.Triggers.Count == 1, "Trigger definition was not parsed.", result);
             Assert(loaded.WinLossConditions.WinConditions.Count == 1, "Win condition was not parsed.", result);
             Assert(loaded.Scoring != null, "Scenario scoring definition was not initialized.", result);
@@ -74,6 +78,32 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             ScenarioDefinition familyChoiceRoundTrip = serializer.FromXml(serializer.ToXml(familyChoice));
             Assert(string.Equals(familyChoiceRoundTrip.BaseFamilyChoice, ScenarioBaseFamilyChoices.KeepCurrentCast, StringComparison.Ordinal),
                 "Base family choice did not round-trip through scenario XML.", result);
+
+            ScenarioDefinition backendWorlds = CreateDefinition("Scenario.BackendWorlds");
+            ScenarioBackendWorldDefinition stasisWorld = backendWorlds.BackendWorlds.GetOrCreate(ScenarioBaseGameMode.Stasis);
+            stasisWorld.BunkerEdits.ObjectPlacements.Add(new ObjectPlacement { DefinitionReference = "Bed" });
+            stasisWorld.SceneSpritePlacements.Add(new SceneSpritePlacement { Id = "stasis_sprite", SpriteId = "main" });
+            ScenarioDefinition backendRoundTrip = serializer.FromXml(serializer.ToXml(backendWorlds));
+            Assert(backendRoundTrip.BackendWorlds.Find(ScenarioBaseGameMode.Survival).BunkerEdits.ObjectPlacements.Count == 1,
+                "Active backend world was not stored during XML write.", result);
+            Assert(backendRoundTrip.BackendWorlds.Find(ScenarioBaseGameMode.Stasis).BunkerEdits.ObjectPlacements.Count == 1,
+                "Inactive backend world did not round-trip.", result);
+            backendRoundTrip.BaseGameMode = ScenarioBaseGameMode.Stasis;
+            ScenarioBackendWorldMaterializer.MaterializeCurrentWorld(backendRoundTrip, ScenarioBaseGameMode.Stasis);
+            Assert(backendRoundTrip.BunkerEdits.ObjectPlacements.Count == 1
+                && string.Equals(backendRoundTrip.BunkerEdits.ObjectPlacements[0].DefinitionReference, "Bed", StringComparison.Ordinal),
+                "Inactive backend world did not materialize as the current world.", result);
+            Assert(backendRoundTrip.AssetReferences.SceneSpritePlacements.Count == 1
+                && string.Equals(backendRoundTrip.AssetReferences.SceneSpritePlacements[0].Id, "stasis_sprite", StringComparison.Ordinal),
+                "Backend scene sprite placements did not materialize as the current world.", result);
+
+            ScenarioDefinition legacyBackend = serializer.FromXml(
+                "<Scenario><Meta><Id>Scenario.LegacyBackend</Id><DisplayName>Legacy Backend</DisplayName></Meta><BaseMode>Stasis</BaseMode><BunkerEdits><RoomChanges /><ObjectPlacements><ObjectPlacement definition=\"Generator\"><Position x=\"1\" y=\"2\" z=\"0\" /><Rotation x=\"0\" y=\"0\" z=\"0\" /><Tags /><CustomProperties /></ObjectPlacement></ObjectPlacements></BunkerEdits></Scenario>");
+            Assert(legacyBackend.BackendWorlds.Find(ScenarioBaseGameMode.Stasis) != null
+                && legacyBackend.BackendWorlds.Find(ScenarioBaseGameMode.Stasis).BunkerEdits.ObjectPlacements.Count == 1,
+                "Legacy single-world XML did not migrate into the selected backend.", result);
+            Assert(legacyBackend.BackendWorlds.Find(ScenarioBaseGameMode.Survival) == null,
+                "Legacy single-world XML should leave other backends empty until authored.", result);
 
             ScenarioDefinition missingScoring = serializer.FromXml("<Scenario><Meta><Id>Scenario.NoScoring</Id><DisplayName>No Scoring</DisplayName></Meta></Scenario>");
             Assert(missingScoring.Scoring != null, "Missing <Scoring> did not create a default scoring definition.", result);

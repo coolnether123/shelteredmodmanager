@@ -1051,6 +1051,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private readonly ScenarioBuildPlacementAuthoringService _buildPlacementService;
         private readonly ScenarioSceneSpritePlacementAuthoringService _sceneSpritePlacementService;
         private readonly ScenarioAuthoringBaseModeReloadService _baseModeReloadService;
+        private readonly ScenarioOpeningCutsceneAuthoringService _openingCutsceneService;
 
         public EditorLifecycleCommandHandler(
             IScenarioEditorService editorService,
@@ -1062,6 +1063,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             _buildPlacementService = buildPlacementService;
             _sceneSpritePlacementService = sceneSpritePlacementService;
             _baseModeReloadService = baseModeReloadService;
+            _openingCutsceneService = new ScenarioOpeningCutsceneAuthoringService();
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -1084,6 +1086,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     return TogglePlaytest(state, out message);
                 case ScenarioAuthoringActionIds.ActionPlaytestRestart:
                     return RestartPlaytest(state, out message);
+                case ScenarioBaseModeAuthoringActions.ActionWatchOpeningCutscene:
+                    return _openingCutsceneService.TryWatchOpeningCutscene(_editorService.CurrentSession, out message);
                 case ScenarioAuthoringActionIds.ActionScenarioSeedRandom:
                     return SetScenarioSeedRandom(out message);
                 case ScenarioAuthoringActionIds.ActionScenarioSeedFixed:
