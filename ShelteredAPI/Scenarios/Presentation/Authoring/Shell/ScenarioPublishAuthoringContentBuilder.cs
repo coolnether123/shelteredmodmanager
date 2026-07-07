@@ -961,7 +961,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 FutureSurvivorDefinition survivor = GetFutureSurvivor(definition, entry.SourceIndex);
                 if (survivor != null && survivor.Survivor != null)
-                    return SafeLabel(survivor.Survivor.Name);
+                {
+                    ScenarioActorRef actorRef = survivor.ActorRef != null ? survivor.ActorRef : survivor.Survivor.ActorRef;
+                    return SafeLabel(ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, actorRef, false, true, survivor.Survivor.Name));
+                }
             }
 
             if (string.Equals(entry.SourceKind, "scheduled_action", StringComparison.OrdinalIgnoreCase))
@@ -1017,7 +1020,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     case ScenarioEffectKind.RestoreWeather:
                         return FormatWeatherState(effect.WeatherState);
                     case ScenarioEffectKind.SpawnFutureSurvivor:
-                        return SafeLabel(ResolveFutureSurvivorName(definition, effect.SurvivorId));
+                        return SafeLabel(effect.ActorRef != null
+                            ? ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, effect.ActorRef, false, true, effect.SurvivorId ?? effect.TargetId)
+                            : ResolveFutureSurvivorName(definition, effect.SurvivorId ?? effect.TargetId));
                     case ScenarioEffectKind.StartQuest:
                         return "Start " + SafeLabel(effect.QuestId);
                     case ScenarioEffectKind.FireTrigger:

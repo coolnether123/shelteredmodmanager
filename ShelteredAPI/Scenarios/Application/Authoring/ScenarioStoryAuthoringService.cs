@@ -20,13 +20,38 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            ScenarioFlowDefinition flow = EnsureFlow(session.WorkingDefinition);
+            ScenarioDefinition definition = session.WorkingDefinition;
+            ScenarioFlowDefinition flow = EnsureFlow(definition);
             if (ScenarioStoryAuthoringActions.IsAddStage(actionId))
                 return AddStage(session, flow, out message);
 
             int stageIndex;
             int delta;
             string token;
+            int storyCharacterCount = definition.ScenarioCharacters != null ? definition.ScenarioCharacters.Count : 0;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterActorPrefix, storyCharacterCount, out stageIndex, out token))
+            {
+                ScenarioCastMemberReferenceCandidate candidate;
+                if (!ScenarioCastMemberReferenceCatalog.TryFindByToken(definition, true, true, Uri.UnescapeDataString(token), out candidate))
+                    return false;
+                if (definition.ScenarioCharacters[stageIndex] == null)
+                    return false;
+                definition.ScenarioCharacters[stageIndex].ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(candidate.ActorRef);
+                MarkDirty(session);
+                string characterId = definition.ScenarioCharacters[stageIndex].CharacterId;
+                message = "Linked story character '" + (characterId ?? ("#" + stageIndex.ToString())) + "' to " + candidate.DisplayName + ".";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryCharacterActorClearPrefix, storyCharacterCount, out stageIndex))
+            {
+                if (definition.ScenarioCharacters[stageIndex] == null)
+                    return false;
+                definition.ScenarioCharacters[stageIndex].ActorRef = null;
+                MarkDirty(session);
+                message = "Cleared story character actor link.";
+                return true;
+            }
+
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionStoryStageDeletePrefix, flow.Stages.Count, out stageIndex))
             {
                 string id = flow.Stages[stageIndex] != null ? flow.Stages[stageIndex].Id : null;

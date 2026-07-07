@@ -6,6 +6,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Content.Compatibility;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
@@ -111,7 +112,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     AddActionId(summary, actionIds, "trigger:" + id, "[Events] Duplicate trigger schedule id: " + id);
                     ValidateTime(summary, action.DueTime, "[Events] Trigger '" + id + "'");
                     for (int c = 0; action.ConditionRefs != null && c < action.ConditionRefs.Count; c++)
-                        ValidateTriggerCondition(index, summary, action.ConditionRefs[c], "[Events] Trigger '" + id + "'");
+                        ValidateTriggerCondition(definition, index, summary, action.ConditionRefs[c], "[Events] Trigger '" + id + "'");
                     continue;
                 }
 
@@ -120,7 +121,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
             }
         }
 
-        private static void ValidateTriggerCondition(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionRef condition, string scope)
+        private static void ValidateTriggerCondition(ScenarioDefinition definition, ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionRef condition, string scope)
         {
             if (condition == null)
                 return;
@@ -135,7 +136,12 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                         summary.AddError("events.trigger.unknown_quest", scope + " references unknown quest '" + (target ?? string.Empty) + "'.");
                     break;
                 case ScenarioConditionKind.SurvivorPresent:
-                    if (target == null || (!index.HasFamilySurvivor(target) && !index.HasFutureSurvivor(target)))
+                    if (condition.ActorRef != null)
+                    {
+                        if (!ScenarioCastMemberReferenceCatalog.HasActorRef(definition, condition.ActorRef, true, true))
+                            summary.AddError("events.trigger.deleted_actor", scope + " references deleted cast member actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(condition.ActorRef) + "'. Fix: open Events > Conditions and pick an existing cast member, or clear the actor link.");
+                    }
+                    else if (target == null || (!index.HasFamilySurvivor(target) && !index.HasFutureSurvivor(target)))
                         summary.AddError("events.trigger.unknown_survivor", scope + " references unknown survivor '" + (target ?? string.Empty) + "'.");
                     break;
                 case ScenarioConditionKind.BunkerExpansionUnlocked:
@@ -165,11 +171,11 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     summary.AddError("events.action.effects_required", "[Events] Scheduled action '" + (id ?? ("#" + i)) + "' must contain at least one effect.");
 
                 for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
-                    ValidateEffect(index, summary, action.Effects[e], "[Events] Scheduled action '" + (id ?? ("#" + i)) + "'");
+                    ValidateEffect(definition, index, summary, action.Effects[e], "[Events] Scheduled action '" + (id ?? ("#" + i)) + "'");
             }
         }
 
-        private static void ValidateEffect(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioEffectDefinition effect, string scope)
+        private static void ValidateEffect(ScenarioDefinition definition, ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioEffectDefinition effect, string scope)
         {
             if (effect == null)
             {
@@ -192,7 +198,12 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                     break;
                 case ScenarioEffectKind.SpawnFutureSurvivor:
                     string survivorId = TrimToNull(effect.SurvivorId) ?? TrimToNull(effect.TargetId);
-                    if (survivorId == null)
+                    if (effect.ActorRef != null)
+                    {
+                        if (!ScenarioCastMemberReferenceCatalog.HasActorRef(definition, effect.ActorRef, false, true))
+                            summary.AddError("people.effect.deleted_actor", scope + " references deleted future survivor actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(effect.ActorRef) + "'. Fix: open Events > Scheduled Changes and pick an existing future survivor, or clear the actor link.");
+                    }
+                    else if (survivorId == null)
                         summary.AddError("people.effect.survivor_required", scope + " survivor effect is missing survivorId/targetId.");
                     else if (!index.HasFutureSurvivor(survivorId))
                         summary.AddError("people.effect.unknown_survivor", scope + " references unknown future survivor '" + survivorId + "'.");

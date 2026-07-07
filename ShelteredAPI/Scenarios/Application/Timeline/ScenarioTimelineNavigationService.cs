@@ -33,6 +33,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             }
             state.TimelineSelectionId = entry.Id;
             state.TimelineSelectedEntryId = entry.Id;
+            ApplyFocusedEditorLink(state, entry);
             ScenarioAuthoringTarget target = BuildTimelineTarget(entry, stage);
             if (target != null)
             {
@@ -69,6 +70,24 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 default:
                     return ResolveBunkerStage(entry);
             }
+        }
+
+        private static void ApplyFocusedEditorLink(ScenarioAuthoringState state, ScenarioTimelineEntry entry)
+        {
+            if (state == null || entry == null || string.IsNullOrEmpty(entry.FocusActionId))
+                return;
+
+            string prefix = ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix;
+            if (!entry.FocusActionId.StartsWith(prefix, System.StringComparison.Ordinal))
+                return;
+
+            int index;
+            if (!int.TryParse(entry.FocusActionId.Substring(prefix.Length), out index))
+                return;
+
+            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor;
+            state.FocusedEditorIndex = index;
+            state.FocusedEditorIsNew = false;
         }
 
         private static ScenarioStageKind ResolveBunkerStage(ScenarioTimelineEntry entry)

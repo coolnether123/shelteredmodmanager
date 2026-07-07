@@ -2062,6 +2062,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int e = 0; action.Effects != null && e < action.Effects.Count; e++)
                     AddEffectItems(controls, definition, action.Effects[e], state.FocusedEditorIndex, e);
                 sections.Add(ActionSection("focused_action_controls", "Fields", controls));
+                AddScheduledActionCastPickerSections(sections, definition, action, state.FocusedEditorIndex);
             }
             else if (string.Equals(state.FocusedEditorKind, "gate", StringComparison.OrdinalIgnoreCase))
             {
@@ -2088,6 +2089,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int c = 0; group != null && group.Conditions != null && c < group.Conditions.Count; c++)
                     AddConditionItems(controls, definition, group.Conditions[c], state.FocusedEditorIndex, c);
                 sections.Add(ActionSection("focused_condition_controls", "Fields", controls));
+                AddGateCastPickerSections(sections, definition, group, state.FocusedEditorIndex);
             }
 
             sections.Add(ActionSection("focused_editor_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
@@ -2220,8 +2222,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         internal static string FormatEffectTarget(ScenarioEffectDefinition effect)
         {
+            return FormatEffectTarget(null, effect);
+        }
+
+        internal static string FormatEffectTarget(ScenarioDefinition definition, ScenarioEffectDefinition effect)
+        {
             if (effect == null)
                 return "missing effect";
+            if (effect.ActorRef != null)
+                return "survivor " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, effect.ActorRef, false, true, effect.SurvivorId ?? effect.TargetId);
             if (!string.IsNullOrEmpty(effect.QuestId))
                 return "quest " + effect.QuestId;
             if (!string.IsNullOrEmpty(effect.ObjectId))
@@ -3201,7 +3210,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             string prefix = gateIndex.ToString(CultureInfo.InvariantCulture) + "." + conditionIndex.ToString(CultureInfo.InvariantCulture);
-            items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), condition.Kind + " / " + FormatConditionTarget(condition)));
+            items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), condition.Kind + " / " + FormatConditionTarget(definition, condition)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionKindPrefix + prefix, "Cycle Condition Kind", "Switch this gate condition to the next supported template.", true, false, "CK")));
             AddConditionTargetActions(items, definition, condition, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionDeletePrefix + prefix, "Remove Condition", "Remove this gate condition.", true, false, "RM")));
@@ -3213,7 +3222,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             string prefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + effectIndex.ToString(CultureInfo.InvariantCulture);
-            items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), effect.Kind + " / " + FormatEffectTarget(effect)));
+            items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), effect.Kind + " / " + FormatEffectTarget(definition, effect)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectKindPrefix + prefix, "Cycle Effect Kind", "Switch this effect to the next supported template.", true, false, "EK")));
             AddEffectTargetActions(items, definition, effect, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectDeletePrefix + prefix, "Remove Effect", "Remove this scheduled action effect.", true, false, "RM")));
@@ -3350,6 +3359,63 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, effect.TargetId, "Target", "Use this target id.", "TG", effect.TargetId);
             }
+        }
+
+        private static void AddGateCastPickerSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition, ScenarioConditionGroup group, int gateIndex)
+        {
+            if (sections == null || group == null || group.Conditions == null)
+                return;
+
+            for (int i = 0; i < group.Conditions.Count; i++)
+            {
+                ScenarioConditionRef condition = group.Conditions[i];
+                if (condition == null || !IsSurvivorCondition(condition.Kind))
+                    continue;
+
+                string prefix = gateIndex.ToString(CultureInfo.InvariantCulture) + "." + i.ToString(CultureInfo.InvariantCulture);
+                sections.Add(ScenarioCastMemberPickerBuilder.BuildSection(
+                    "focused_condition_actor_" + prefix.Replace('.', '_'),
+                    "Condition " + (i + 1).ToString(CultureInfo.InvariantCulture) + " Cast Member",
+                    definition,
+                    true,
+                    true,
+                    condition.ActorRef,
+                    ScenarioAuthoringActionIds.ActionGateConditionActorPrefix,
+                    prefix,
+                    "Add starting or future survivors before selecting a cast member."));
+            }
+        }
+
+        private static void AddScheduledActionCastPickerSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition, ScenarioScheduledActionDefinition action, int actionIndex)
+        {
+            if (sections == null || action == null || action.Effects == null)
+                return;
+
+            for (int i = 0; i < action.Effects.Count; i++)
+            {
+                ScenarioEffectDefinition effect = action.Effects[i];
+                if (effect == null || effect.Kind != ScenarioEffectKind.SpawnFutureSurvivor)
+                    continue;
+
+                string prefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + i.ToString(CultureInfo.InvariantCulture);
+                sections.Add(ScenarioCastMemberPickerBuilder.BuildSection(
+                    "focused_effect_actor_" + prefix.Replace('.', '_'),
+                    "Effect " + (i + 1).ToString(CultureInfo.InvariantCulture) + " Future Survivor",
+                    definition,
+                    false,
+                    true,
+                    effect.ActorRef,
+                    ScenarioAuthoringActionIds.ActionScheduledActionEffectActorPrefix,
+                    prefix,
+                    "Add a future survivor before selecting a cast member."));
+            }
+        }
+
+        private static bool IsSurvivorCondition(ScenarioConditionKind kind)
+        {
+            return kind == ScenarioConditionKind.SurvivorPresent
+                || kind == ScenarioConditionKind.SurvivorStatCheck
+                || kind == ScenarioConditionKind.SurvivorTraitCheck;
         }
 
         private static void AddQuestTriggerActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, string indexText, string current)
@@ -3759,10 +3825,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string FormatConditionTarget(ScenarioConditionRef condition)
         {
+            return FormatConditionTarget(null, condition);
+        }
+
+        private static string FormatConditionTarget(ScenarioDefinition definition, ScenarioConditionRef condition)
+        {
             if (condition == null)
                 return "missing condition";
             if (condition.Kind == ScenarioConditionKind.TimeReached)
                 return FormatSchedule(condition.Time);
+            if (condition.ActorRef != null)
+                return "survivor " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, condition.ActorRef, true, true, condition.TargetId);
             if (!string.IsNullOrEmpty(condition.FlagId))
                 return "flag " + condition.FlagId + "=" + condition.FlagValue;
             if (!string.IsNullOrEmpty(condition.TargetId))

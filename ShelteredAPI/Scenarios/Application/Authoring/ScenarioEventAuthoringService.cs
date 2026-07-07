@@ -274,6 +274,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             string token;
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionGateConditionActorPrefix, definition.Gates.Count, out index, out conditionIndex, out token))
+            {
+                ScenarioConditionGroup group = EnsureGroup(definition.Gates[index]);
+                if (conditionIndex >= group.Conditions.Count)
+                    return false;
+                ScenarioCastMemberReferenceCandidate candidate;
+                if (!ScenarioCastMemberReferenceCatalog.TryFindByToken(definition, true, true, Uri.UnescapeDataString(token), out candidate))
+                    return false;
+                ApplyConditionActorTarget(group.Conditions[conditionIndex], candidate);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated gate condition cast member to " + candidate.DisplayName + ".";
+                return true;
+            }
+
             if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionGateConditionTargetPrefix, definition.Gates.Count, out index, out conditionIndex, out token))
             {
                 ScenarioConditionGroup group = EnsureGroup(definition.Gates[index]);
@@ -364,6 +378,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             if (condition == null)
                 return;
+            condition.ActorRef = null;
             condition.TargetId = target;
             if (condition.Kind == ScenarioConditionKind.ScenarioFlagSet)
             {
@@ -371,6 +386,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (string.IsNullOrEmpty(condition.FlagValue))
                     condition.FlagValue = "true";
             }
+        }
+
+        private static void ApplyConditionActorTarget(ScenarioConditionRef condition, ScenarioCastMemberReferenceCandidate candidate)
+        {
+            if (condition == null || candidate == null)
+                return;
+
+            condition.ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(candidate.ActorRef);
+            condition.TargetId = candidate.LegacyTargetId;
         }
     }
 
@@ -519,6 +543,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             string token;
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionScheduledActionEffectActorPrefix, definition.ScheduledActions.Count, out actionIndex, out effectIndex, out token))
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
+                if (effectIndex >= action.Effects.Count)
+                    return false;
+                ScenarioCastMemberReferenceCandidate candidate;
+                if (!ScenarioCastMemberReferenceCatalog.TryFindByToken(definition, false, true, Uri.UnescapeDataString(token), out candidate))
+                    return false;
+                ApplyEffectActorTarget(action.Effects[effectIndex], candidate);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated scheduled effect cast member to " + candidate.DisplayName + ".";
+                return true;
+            }
+
             if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, definition.ScheduledActions.Count, out actionIndex, out effectIndex, out token))
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
@@ -572,6 +610,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             if (effect == null)
                 return;
+            effect.ActorRef = null;
             effect.TargetId = target;
             switch (effect.Kind)
             {
@@ -605,6 +644,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     effect.TriggerId = target;
                     break;
             }
+        }
+
+        private static void ApplyEffectActorTarget(ScenarioEffectDefinition effect, ScenarioCastMemberReferenceCandidate candidate)
+        {
+            if (effect == null || candidate == null)
+                return;
+
+            effect.ActorRef = ScenarioCastMemberReferenceCatalog.CopyActorRef(candidate.ActorRef);
+            effect.TargetId = candidate.LegacyTargetId;
+            if (effect.Kind == ScenarioEffectKind.SpawnFutureSurvivor)
+                effect.SurvivorId = candidate.LegacyTargetId;
         }
 
         private static ScenarioSchedulePolicy EnsurePolicy(ScenarioScheduledActionDefinition action)
@@ -681,7 +731,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case ScenarioConditionKind.SurvivorPresent:
                 case ScenarioConditionKind.SurvivorStatCheck:
                 case ScenarioConditionKind.SurvivorTraitCheck:
-                    condition.TargetId = ScenarioEventReferenceFinder.FirstSurvivorName(definition);
+                    ScenarioCastMemberReferenceCandidate survivor = ScenarioCastMemberReferenceCatalog.FindFirst(definition, true, true);
+                    condition.ActorRef = survivor != null ? ScenarioCastMemberReferenceCatalog.CopyActorRef(survivor.ActorRef) : null;
+                    condition.TargetId = survivor != null ? survivor.LegacyTargetId : ScenarioEventReferenceFinder.FirstSurvivorName(definition);
                     condition.StatId = "Strength";
                     condition.StatValue = 5;
                     condition.TraitId = "Strength:Optimistic";
@@ -727,7 +779,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     effect.ItemId = ScenarioEventReferenceFinder.FirstItemId();
                     break;
                 case ScenarioEffectKind.SpawnFutureSurvivor:
-                    effect.SurvivorId = ScenarioEventReferenceFinder.FirstFutureSurvivorId(definition);
+                    ScenarioCastMemberReferenceCandidate survivor = ScenarioCastMemberReferenceCatalog.FindFirst(definition, false, true);
+                    effect.ActorRef = survivor != null ? ScenarioCastMemberReferenceCatalog.CopyActorRef(survivor.ActorRef) : null;
+                    effect.SurvivorId = survivor != null ? survivor.LegacyTargetId : ScenarioEventReferenceFinder.FirstFutureSurvivorId(definition);
                     effect.TargetId = effect.SurvivorId;
                     break;
                 case ScenarioEffectKind.StartQuest:

@@ -330,6 +330,7 @@
     <Compile Include="Scenarios\Application\Objects\ScenarioObjectIdentityAssignmentService.cs" />
     <Compile Include="Scenarios\Application\Validation\PublishValidationSummaryBuilder.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContext.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioCastMemberReferenceCatalog.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSectionHub.cs" />
     <Compile Include="Scenarios\Composition\ServiceCollectionExtensions.cs" />
     <Compile Include="Scenarios\Composition\ScenarioAuthoringModule.cs" />
@@ -358,6 +359,7 @@
     <Compile Include="Scenarios\Infrastructure\Runtime\BunkerApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\FamilyApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\InventoryApplyService.cs" />
+    <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioMapProjectionApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\RoomVisualRuntimeApplyService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioApplyCoordinator.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFlagRuntimeService.cs" />
@@ -400,6 +402,8 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPlaytestFixActionResolver.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHomeProgressFacts.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />

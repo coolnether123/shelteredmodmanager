@@ -187,6 +187,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionStoryStageChangeDelayPrefix = "scenario.story.stage_change.delay.";
         public const string ActionStoryRecruitTogglePrefix = "scenario.story.recruit.";
         public const string ActionStoryRecruitFamilyPrefix = "scenario.story.recruit_family.";
+        public const string ActionStoryCharacterActorPrefix = "scenario.story.character.actor.";
+        public const string ActionStoryCharacterActorClearPrefix = "scenario.story.character.actor.clear.";
         public const string ActionStoryEndTypePrefix = "scenario.story.end.type.";
         public const string ActionStoryEndCompleteQuestPrefix = "scenario.story.end.complete_quest.";
         public const string ActionStoryEndCompleteScenarioPrefix = "scenario.story.end.complete_scenario.";
@@ -221,6 +223,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionGateConditionDeletePrefix = "scenario.gate.condition.delete.";
         public const string ActionGateConditionKindPrefix = "scenario.gate.condition.kind.";
         public const string ActionGateConditionTargetPrefix = "scenario.gate.condition.target.";
+        public const string ActionGateConditionActorPrefix = "scenario.gate.condition.actor.";
         public const string ActionGateConditionQuantityPrefix = "scenario.gate.condition.quantity.";
         public const string ActionGateConditionFlagValuePrefix = "scenario.gate.condition.flag_value.";
         public const string ActionScheduledActionAdd = "scenario.action.add";
@@ -236,6 +239,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionScheduledActionEffectDeletePrefix = "scenario.action.effect.delete.";
         public const string ActionScheduledActionEffectKindPrefix = "scenario.action.effect.kind.";
         public const string ActionScheduledActionEffectTargetPrefix = "scenario.action.effect.target.";
+        public const string ActionScheduledActionEffectActorPrefix = "scenario.action.effect.actor.";
         public const string ActionScheduledActionEffectQuantityPrefix = "scenario.action.effect.quantity.";
         public const string ActionScheduledActionEffectWeatherDurationPrefix = "scenario.action.effect.weather_duration.";
         public const string ActionScheduledActionEffectFlagValuePrefix = "scenario.action.effect.flag_value.";

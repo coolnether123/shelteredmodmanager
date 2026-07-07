@@ -6,6 +6,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
@@ -24,7 +25,7 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 string id = TrimToNull(gate != null ? gate.Id : null);
                 if (id == null)
                     summary.AddError("events.gate.id_required", "[Events] Gate #" + i + " is missing id.");
-                ValidateGroup(index, summary, gate != null ? gate.Conditions : null, "[Events] Gate '" + (id ?? ("#" + i)) + "'");
+                ValidateGroup(definition, index, summary, gate != null ? gate.Conditions : null, "[Events] Gate '" + (id ?? ("#" + i)) + "'");
             }
 
             for (int i = 0; definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
@@ -38,19 +39,19 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
             ValidateCircularGateRefs(definition, summary);
         }
 
-        private static void ValidateGroup(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionGroup group, string scope)
+        private static void ValidateGroup(ScenarioDefinition definition, ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionGroup group, string scope)
         {
             if (group == null)
                 return;
 
             for (int i = 0; group.Conditions != null && i < group.Conditions.Count; i++)
-                ValidateCondition(index, summary, group.Conditions[i], scope);
+                ValidateCondition(definition, index, summary, group.Conditions[i], scope);
 
             for (int i = 0; group.Groups != null && i < group.Groups.Count; i++)
-                ValidateGroup(index, summary, group.Groups[i], scope);
+                ValidateGroup(definition, index, summary, group.Groups[i], scope);
         }
 
-        private static void ValidateCondition(ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionRef condition, string scope)
+        private static void ValidateCondition(ScenarioDefinition definition, ScenarioDefinitionIndex index, ValidationSummary summary, ScenarioConditionRef condition, string scope)
         {
             if (condition == null)
             {
@@ -82,7 +83,12 @@ namespace ShelteredAPI.Scenarios.Domain.Validation{
                 case ScenarioConditionKind.SurvivorPresent:
                 case ScenarioConditionKind.SurvivorStatCheck:
                 case ScenarioConditionKind.SurvivorTraitCheck:
-                    if (target == null)
+                    if (condition.ActorRef != null)
+                    {
+                        if (!ScenarioCastMemberReferenceCatalog.HasActorRef(definition, condition.ActorRef, true, true))
+                            summary.AddError("people.condition.deleted_actor", scope + " references deleted cast member actor '" + ScenarioCastMemberReferenceCatalog.FormatActorRef(condition.ActorRef) + "'. Fix: open Events > Conditions and pick an existing cast member, or clear the actor link.");
+                    }
+                    else if (target == null)
                         summary.AddError("people.condition.survivor_required", scope + " survivor condition is missing target id.");
                     else if (!index.HasFamilySurvivor(target) && !index.HasFutureSurvivor(target))
                         summary.AddError("people.condition.unknown_survivor", scope + " references unknown survivor '" + target + "'.");

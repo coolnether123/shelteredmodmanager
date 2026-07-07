@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Saves;
@@ -61,7 +62,9 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             {
                 FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
                 string id = "legacy.survivor." + BuildId(survivor != null ? survivor.Id : null, i);
-                entries.Add(NewEntry(id, ScenarioTimelineEntryKind.Survivor, survivor != null ? survivor.Arrival : null, "Future survivor " + Safe(survivor != null && survivor.Survivor != null ? survivor.Survivor.Name : null), "FutureSurvivor", "People", survivor != null ? survivor.Id : null, runtimeState, "legacy", "future_survivor", "FamilySetup.FutureSurvivors", i, survivor != null ? survivor.Id : null, ScenarioAuthoringWindowIds.Survivors, ScenarioAuthoringActionIds.ActionFutureSurvivorRemovePrefix + i.ToString()));
+                ScenarioActorRef actorRef = survivor != null && survivor.ActorRef != null ? survivor.ActorRef : survivor != null && survivor.Survivor != null ? survivor.Survivor.ActorRef : null;
+                string name = ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, actorRef, false, true, survivor != null && survivor.Survivor != null ? survivor.Survivor.Name : null);
+                entries.Add(NewEntry(id, ScenarioTimelineEntryKind.Survivor, survivor != null ? survivor.Arrival : null, "Future survivor " + Safe(name), "FutureSurvivor", "People", survivor != null ? survivor.Id : null, runtimeState, "legacy", "future_survivor", "FamilySetup.FutureSurvivors", i, survivor != null ? survivor.Id : null, ScenarioAuthoringWindowIds.Survivors, ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix + i.ToString()));
             }
         }
 
@@ -164,7 +167,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action == null)
                     continue;
-                entries.Add(NewEntry(action.Id, InferKind(action), action.DueTime, Safe(action.ActionType ?? action.Id), action.ActionType, InferStage(action), ResolveTarget(action), runtimeState, "shared", "scheduled_action", "ScheduledActions", i, action.Id, ScenarioAuthoringWindowIds.Triggers, ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString()));
+                entries.Add(NewEntry(action.Id, InferKind(action), action.DueTime, ResolveTitle(definition, action), action.ActionType, InferStage(action), ResolveTarget(definition, action), runtimeState, "shared", "scheduled_action", "ScheduledActions", i, action.Id, ScenarioAuthoringWindowIds.Triggers, ResolveFocusAction(definition, action, i)));
             }
         }
 
@@ -253,13 +256,32 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             }
         }
 
-        private static string ResolveTarget(ScenarioScheduledActionDefinition action)
+        private static string ResolveTitle(ScenarioDefinition definition, ScenarioScheduledActionDefinition action)
+        {
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+            {
+                ScenarioEffectDefinition effect = action.Effects[i];
+                if (effect == null || effect.Kind != ScenarioEffectKind.SpawnFutureSurvivor)
+                    continue;
+
+                string name = effect.ActorRef != null
+                    ? ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, effect.ActorRef, false, true, effect.SurvivorId ?? effect.TargetId)
+                    : ResolveFutureSurvivorName(definition, effect.SurvivorId ?? effect.TargetId);
+                return "Spawn future survivor " + Safe(name);
+            }
+
+            return Safe(action != null ? action.ActionType ?? action.Id : null);
+        }
+
+        private static string ResolveTarget(ScenarioDefinition definition, ScenarioScheduledActionDefinition action)
         {
             for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
             {
                 ScenarioEffectDefinition effect = action.Effects[i];
                 if (effect == null)
                     continue;
+                if (effect.ActorRef != null)
+                    return ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, effect.ActorRef, false, true, effect.SurvivorId ?? effect.TargetId);
                 if (!string.IsNullOrEmpty(effect.TargetId)) return effect.TargetId;
                 if (!string.IsNullOrEmpty(effect.ObjectId)) return effect.ObjectId;
                 if (!string.IsNullOrEmpty(effect.QuestId)) return effect.QuestId;
@@ -269,6 +291,30 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 if (!string.IsNullOrEmpty(effect.BunkerExpansionId)) return effect.BunkerExpansionId;
             }
             return action != null ? action.Id : null;
+        }
+
+        private static string ResolveFocusAction(ScenarioDefinition definition, ScenarioScheduledActionDefinition action, int actionIndex)
+        {
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+            {
+                ScenarioEffectDefinition effect = action.Effects[i];
+                if (effect == null || effect.Kind != ScenarioEffectKind.SpawnFutureSurvivor)
+                    continue;
+
+                ScenarioCastMemberReferenceCandidate candidate = effect.ActorRef != null
+                    ? ScenarioCastMemberReferenceCatalog.FindByActorRef(definition, effect.ActorRef, false, true)
+                    : ScenarioCastMemberReferenceCatalog.FindByFutureSurvivorId(definition, effect.SurvivorId ?? effect.TargetId);
+                if (candidate != null && candidate.Index >= 0)
+                    return ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix + candidate.Index.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + actionIndex.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string ResolveFutureSurvivorName(ScenarioDefinition definition, string survivorId)
+        {
+            ScenarioCastMemberReferenceCandidate candidate = ScenarioCastMemberReferenceCatalog.FindByFutureSurvivorId(definition, survivorId);
+            return candidate != null ? candidate.DisplayName : survivorId;
         }
 
         private static int CompareEntryTime(ScenarioTimelineEntry left, ScenarioTimelineEntry right)

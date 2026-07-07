@@ -29,6 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             sections.Add(BuildStoryOverviewSection(definition, snapshot, storyIssues));
             sections.Add(BuildStoryToolsSection(definition));
+            ScenarioStoryCharacterActorLinkSectionBuilder.AppendSections(sections, definition);
             sections.Add(BuildStageFlowSection(definition, storyIssues));
             AppendStoryStageSections(sections, definition, storyIssues);
             sections.Add(BuildSideQuestIntroSection(snapshot));
@@ -158,10 +159,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             List<string> characterIds = BuildCharacterIds(definition);
             for (int i = 0; i < flow.Stages.Count; i++)
-                AppendStoryStage(sections, flow, flow.Stages[i], i, characterIds, storyIssues);
+                AppendStoryStage(sections, definition, flow, flow.Stages[i], i, characterIds, storyIssues);
         }
 
-        private static void AppendStoryStage(List<ScenarioAuthoringInspectorSection> sections, ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage, int index, List<string> characterIds, ScenarioStoryFlowIssue[] storyIssues)
+        private static void AppendStoryStage(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition, ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage, int index, List<string> characterIds, ScenarioStoryFlowIssue[] storyIssues)
         {
             if (stage == null)
                 return;
@@ -182,7 +183,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 bool selected = Contains(stage.CharacterIds, id);
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioStoryAuthoringActions.StageCharacterToggle(index, id),
-                    id,
+                    FormatCharacterLabel(definition, id),
                     selected ? "Remove this character from the stage." : "Add this character to the stage.",
                     true,
                     selected,
@@ -207,10 +208,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             });
 
             for (int i = 0; stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
-                sections.Add(BuildIntercomSection(flow, stage, stage.IntercomStages[i], index, i, characterIds));
+                sections.Add(BuildIntercomSection(definition, flow, stage, stage.IntercomStages[i], index, i, characterIds));
         }
 
-        private static ScenarioAuthoringInspectorSection BuildIntercomSection(ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex, List<string> characterIds)
+        private static ScenarioAuthoringInspectorSection BuildIntercomSection(ScenarioDefinition definition, ScenarioFlowDefinition flow, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex, List<string> characterIds)
         {
             string prefix = ScenarioStoryAuthoringActions.IntercomKey(stageIndex, intercomIndex);
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -238,7 +239,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 string id = characterIds[i];
                 bool selected = Contains(intercom.CharacterIdsToRecruit, id);
-                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.RecruitToggle(stageIndex, intercomIndex, id), "Recruit " + id, "Toggle recruitment for this character.", true, selected, "RC")));
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.RecruitToggle(stageIndex, intercomIndex, id), "Recruit " + FormatCharacterLabel(definition, id), "Toggle recruitment for this character.", true, selected, "RC")));
             }
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.RecruitFamily(stageIndex, intercomIndex), "Recruit As Family", "Toggle family recruitment.", true, intercom.RecruitAsFamily, "RF")));
             AddEndTypeActions(items, stageIndex, intercomIndex, intercom.EndOptions != null ? intercom.EndOptions.Type : null);
@@ -744,6 +745,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     routes.Add(source + " --outcome " + (i + 1).ToString(CultureInfo.InvariantCulture) + "--> " + intercom.StageChange.Id);
             }
             return routes.Count > 0 ? string.Join(" | ", routes.ToArray()) : "No outgoing stage arrow - this stage stays active or ends here.";
+        }
+
+        private static string FormatCharacterLabel(ScenarioDefinition definition, string characterId)
+        {
+            if (string.IsNullOrEmpty(characterId))
+                return "<missing>";
+
+            for (int i = 0; definition != null && definition.ScenarioCharacters != null && i < definition.ScenarioCharacters.Count; i++)
+            {
+                ScenarioNpcDefinition character = definition.ScenarioCharacters[i];
+                if (character == null || !string.Equals(character.CharacterId, characterId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (character.ActorRef == null)
+                    return characterId;
+
+                return characterId + " -> " + ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, characterId);
+            }
+
+            return characterId;
         }
 
         // === Per-quest builder ===
