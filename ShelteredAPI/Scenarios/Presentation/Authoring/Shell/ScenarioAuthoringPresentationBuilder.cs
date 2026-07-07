@@ -1791,6 +1791,26 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static void AddInventoryPickerCategorySections(List<ScenarioAuthoringInspectorSection> sections, bool starting, int index, string currentItemId)
         {
+            string actionPrefix = starting
+                ? ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix
+                : ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix;
+            AddItemPickerCategorySections(
+                sections,
+                "inventory_picker_",
+                actionPrefix,
+                index.ToString(CultureInfo.InvariantCulture),
+                currentItemId,
+                "Select this stockpile item.");
+        }
+
+        private static void AddItemPickerCategorySections(
+            List<ScenarioAuthoringInspectorSection> sections,
+            string sectionPrefix,
+            string actionPrefix,
+            string indexPrefix,
+            string currentItemId,
+            string actionHint)
+        {
             List<ScenarioInventoryItemCatalogEntry> catalog = ScenarioInventoryItemCatalog.Build();
             Dictionary<string, List<ScenarioInventoryItemCatalogEntry>> byCategory = new Dictionary<string, List<ScenarioInventoryItemCatalogEntry>>(StringComparer.OrdinalIgnoreCase);
             List<string> categoryOrder = new List<string>();
@@ -1821,13 +1841,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int i = 0; i < entries.Count; i++)
                 {
                     ScenarioInventoryItemCatalogEntry entry = entries[i];
-                    string actionPrefix = starting
-                        ? ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix
-                        : ScenarioAuthoringActionIds.ActionInventoryScheduleItemSelectPrefix;
                     items.Add(ActionItem(Action(
-                        actionPrefix + index.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken(entry.ItemId),
+                        actionPrefix + indexPrefix + "." + EncodeToken(entry.ItemId),
                         entry.DisplayName,
-                        "Select this stockpile item.",
+                        actionHint,
                         true,
                         string.Equals(currentItemId, entry.ItemId, StringComparison.OrdinalIgnoreCase),
                         "IT",
@@ -1838,13 +1855,287 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 sections.Add(new ScenarioAuthoringInspectorSection
                 {
-                    Id = "inventory_picker_" + category.ToLowerInvariant(),
+                    Id = sectionPrefix + category.ToLowerInvariant(),
                     Title = category,
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.CandidateGrid,
                     Items = items.ToArray()
                 });
             }
+        }
+
+        private static ScenarioAuthoringInspectorDocument BuildWorldEventItemPickerDocument(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            if (state == null || definition == null || !state.FocusedEditorKind.StartsWith(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix, StringComparison.Ordinal))
+                return null;
+
+            string payload = state.FocusedEditorKind.Substring(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix.Length);
+            string[] parts = payload.Split(':');
+            int itemIndex;
+            if (parts.Length != 2 || !int.TryParse(parts[1], out itemIndex))
+                return null;
+
+            int actionIndex = state.FocusedEditorIndex;
+            ScenarioScheduledActionDefinition action = GetScheduledAction(definition, actionIndex);
+            ScenarioEffectDefinition effect = FindWorldEventEffect(action);
+            if (effect == null)
+                return null;
+
+            string listKey = parts[0];
+            string propertyKey = ResolveWorldEventItemSpecProperty(listKey);
+            string actionPrefix = ResolveWorldEventItemSpecActionPrefix(listKey);
+            if (string.IsNullOrEmpty(propertyKey) || string.IsNullOrEmpty(actionPrefix))
+                return null;
+
+            List<WorldEventItemSpec> specs = ParseWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, propertyKey, null));
+            if (itemIndex < 0 || itemIndex >= specs.Count)
+                return null;
+
+            WorldEventItemSpec spec = specs[itemIndex];
+            ScenarioInventoryItemCatalogEntry current = ScenarioInventoryItemCatalog.Resolve(spec.ItemId);
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            sections.Add(FactSection("world_event_picker_summary", "Selected Item", new List<ScenarioAuthoringInspectorItem>
+            {
+                Fact("Current", current.DisplayName, current.Detail),
+                Fact("Quantity", Math.Max(1, spec.Quantity).ToString(CultureInfo.InvariantCulture), "The row quantity stays unchanged when you pick a new item.")
+            }));
+
+            string indexPrefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + itemIndex.ToString(CultureInfo.InvariantCulture);
+            AddItemPickerCategorySections(
+                sections,
+                "world_event_picker_",
+                actionPrefix,
+                indexPrefix,
+                spec.ItemId,
+                "Select this valid item id for the world event row.");
+            sections.Add(ActionSection("world_event_picker_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
+            {
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", "Return to the world event editor without changing this row.", true, false, "CL"))
+            }));
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = "Pick World Event Item",
+                Subtitle = FormatWorldEventPickerLabel(listKey) + " uses valid item ids only.",
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Close the world event item picker."),
+                Sections = sections.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorDocument BuildWorldEventFocusedEditorDocument(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            int actionIndex = state != null ? state.FocusedEditorIndex : -1;
+            ScenarioScheduledActionDefinition action = GetScheduledAction(definition, actionIndex);
+            ScenarioEffectDefinition effect = FindWorldEventEffect(action);
+            int effectIndex = FindWorldEventEffectIndex(action);
+            if (action == null || effect == null)
+                return null;
+
+            string eventType = ScenarioPropertyBag.GetString(effect.Properties, "eventType", "NpcVisit");
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            List<ScenarioAuthoringInspectorItem> facts = new List<ScenarioAuthoringInspectorItem>();
+            facts.Add(Fact("Type", FormatWorldEventTypeLabel(eventType), FormatWorldEventEffect(effect)));
+            facts.Add(Fact("When", FormatWorldEventScheduleSummary(action), "Shared schedule policy for this world event."));
+            facts.Add(Fact("Validation", FormatWorldEventValidationState(action, effect), FormatWorldEventValidationFix(effect)));
+            sections.Add(FactSection("focused_world_event_facts", "World Event", facts));
+
+            List<ScenarioAuthoringInspectorItem> controls = new List<ScenarioAuthoringInspectorItem>();
+            AddWorldEventTypeActions(controls, actionIndex, eventType);
+            AddWorldEventScheduleControls(controls, action, actionIndex);
+            sections.Add(ActionSection("focused_world_event_schedule", "Schedule", controls));
+
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                AddNpcVisitFocusedSections(sections, actionIndex, effectIndex, effect);
+            else if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+                AddRaidFocusedSections(sections, actionIndex, effect);
+            else if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                AddBroadcastFocusedSections(sections, actionIndex, effect);
+            else
+                sections.Add(ActionSection("focused_world_event_unknown", "Fix", new List<ScenarioAuthoringInspectorItem>
+                {
+                    Text("Unknown world event type. Pick Visitor, Raid, or Broadcast to repair this row."),
+                    ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventEventTypePrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken("NpcVisit"), "Fix: Visitor", "Set this event to a supported NPC visit.", true, true, "WEV"))
+                }));
+
+            sections.Add(ActionSection("focused_world_event_footer", string.Empty, new List<ScenarioAuthoringInspectorItem>
+            {
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorSave, "Save", "Close this world event editor and keep the entry.", true, true, "SV")),
+                ActionItem(Action(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Cancel", state != null && state.FocusedEditorIsNew ? "Discard this new world event and close the editor." : "Close this world event editor.", true, false, "CL"))
+            }));
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = "World Event - " + FormatWorldEventTypeLabel(eventType),
+                Subtitle = FormatWorldEventScheduleSummary(action),
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionFocusedEditorCancel, "Close this world event editor."),
+                Sections = sections.ToArray()
+            };
+        }
+
+        private static void AddNpcVisitFocusedSections(List<ScenarioAuthoringInspectorSection> sections, int actionIndex, int effectIndex, ScenarioEffectDefinition effect)
+        {
+            string npcType = ScenarioPropertyBag.GetString(effect.Properties, "npcType", "Trader");
+            int count = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "count", effect.Quantity > 0 ? effect.Quantity : 1));
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Visitor Count", count.ToString(CultureInfo.InvariantCulture), "Number of scripted visitor records queued."));
+            AddWorldEventNpcTypeActions(items, actionIndex, npcType);
+            string effectPrefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + Math.Max(0, effectIndex).ToString(CultureInfo.InvariantCulture);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix + effectPrefix + ".1", "Count +", "Increase scripted visitor count.", true, false, "+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix + effectPrefix + ".-1", "Count -", "Decrease scripted visitor count.", true, false, "-")));
+            sections.Add(ActionSection("focused_world_event_npc", "NPC Visit", items));
+
+            if (string.Equals(npcType, "Trader", StringComparison.OrdinalIgnoreCase))
+            {
+                List<ScenarioAuthoringInspectorItem> stockItems = new List<ScenarioAuthoringInspectorItem>();
+                stockItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventTradeAddPrefix + actionIndex.ToString(CultureInfo.InvariantCulture), "Add Stock", "Add a trader stock row using a valid item id.", true, true, "I+")));
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "focused_world_event_trade_stock",
+                    Title = "Trader Stock",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
+                    Items = stockItems.ToArray(),
+                    InventorySlotGrid = BuildWorldEventItemSpecSlotGrid(actionIndex, "trade", "tradeItems", effect, "STOCK", "Trader stock has no authored items yet.")
+                });
+            }
+        }
+
+        private static void AddRaidFocusedSections(List<ScenarioAuthoringInspectorSection> sections, int actionIndex, ScenarioEffectDefinition effect)
+        {
+            int count = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "count", effect.Quantity > 0 ? effect.Quantity : 1));
+            int minNpcs = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "minNpcs", count));
+            int maxNpcs = Math.Max(minNpcs, ScenarioPropertyBag.GetInt(effect.Properties, "maxNpcs", count));
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("NPCs", minNpcs.ToString(CultureInfo.InvariantCulture) + "-" + maxNpcs.ToString(CultureInfo.InvariantCulture), "Runtime applies these to BreachMan difficulty before the raid starts."));
+            items.Add(Property("Difficulty Override", "Breach difficulty fields", "Runtime supports min/max NPCs and loadout overrides; no named difficulty tier is exposed."));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventRaidMinPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".1", "Min +", "Increase minimum raider count.", true, false, "N+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventRaidMinPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-1", "Min -", "Decrease minimum raider count.", true, false, "N-")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventRaidMaxPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".1", "Max +", "Increase maximum raider count.", true, false, "N+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventRaidMaxPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-1", "Max -", "Decrease maximum raider count.", true, false, "N-")));
+            sections.Add(ActionSection("focused_world_event_raid", "Raid", items));
+
+            sections.Add(BuildWorldEventSpecGridSection(actionIndex, "weapon", "weapons", effect, "Raid Weapons", "WEAPON", ScenarioAuthoringActionIds.ActionWorldEventWeaponAddPrefix));
+            sections.Add(BuildWorldEventSpecGridSection(actionIndex, "armor", "armor", effect, "Raid Gear", "GEAR", ScenarioAuthoringActionIds.ActionWorldEventArmorAddPrefix));
+        }
+
+        private static void AddBroadcastFocusedSections(List<ScenarioAuthoringInspectorSection> sections, int actionIndex, ScenarioEffectDefinition effect)
+        {
+            string outcome = ScenarioPropertyBag.GetString(effect.Properties, "outcome", "None");
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Forced Outcome", FormatBroadcastOutcome(outcome), "Runtime forces this radio scan result."));
+            AddWorldEventOutcomeActions(items, actionIndex, outcome);
+            items.Add(ActionItem(Action("scenario.world_event.broadcast.vanilla_weighted", "Vanilla-weighted", "C3 runtime exposes forced radio outcomes only. To use vanilla odds, do not schedule a Broadcast world event.", false, false, "VW", "Runtime unsupported", null, null, "Runtime supports Trader, Recruit, and None forced outcomes.")));
+            sections.Add(ActionSection("focused_world_event_broadcast", "Broadcast / Radio", items));
+        }
+
+        private static void AddWorldEventTypeActions(List<ScenarioAuthoringInspectorItem> items, int actionIndex, string current)
+        {
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventEventTypePrefix, actionIndex, "NPC Visit", "Queue a scripted visitor.", "NpcVisit", "WEV", string.Equals(current, "NpcVisit", StringComparison.OrdinalIgnoreCase));
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventEventTypePrefix, actionIndex, "Raid", "Start a scripted breach.", "Raid", "RD", string.Equals(current, "Raid", StringComparison.OrdinalIgnoreCase));
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventEventTypePrefix, actionIndex, "Broadcast", "Force a radio outcome.", "Broadcast", "BC", string.Equals(current, "Broadcast", StringComparison.OrdinalIgnoreCase) || string.Equals(current, "RadioScan", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void AddWorldEventNpcTypeActions(List<ScenarioAuthoringInspectorItem> items, int actionIndex, string current)
+        {
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventNpcTypePrefix, actionIndex, "Trader", "Use a trader visitor with optional stock.", "Trader", "TR", string.Equals(current, "Trader", StringComparison.OrdinalIgnoreCase));
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventNpcTypePrefix, actionIndex, "Joiner", "Use a recruit visitor.", "Joiner", "JN", string.Equals(current, "Joiner", StringComparison.OrdinalIgnoreCase) || string.Equals(current, "Recruit", StringComparison.OrdinalIgnoreCase));
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventNpcTypePrefix, actionIndex, "Passerby", "Use a passerby visitor.", "Passerby", "PB", string.Equals(current, "Passerby", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void AddWorldEventOutcomeActions(List<ScenarioAuthoringInspectorItem> items, int actionIndex, string current)
+        {
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventOutcomePrefix, actionIndex, "Trader", "Force a trader radio result.", "Trader", "TR", string.Equals(current, "Trader", StringComparison.OrdinalIgnoreCase));
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventOutcomePrefix, actionIndex, "Recruit", "Force a recruit radio result.", "Recruit", "RC", string.Equals(current, "Recruit", StringComparison.OrdinalIgnoreCase) || string.Equals(current, "Joiner", StringComparison.OrdinalIgnoreCase));
+            AddIndexedTokenAction(items, ScenarioAuthoringActionIds.ActionWorldEventOutcomePrefix, actionIndex, "None", "Force no visitor from this radio scan.", "None", "NO", string.Equals(current, "None", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void AddIndexedTokenAction(List<ScenarioAuthoringInspectorItem> items, string prefix, int index, string label, string hint, string token, string icon, bool emphasized)
+        {
+            items.Add(ActionItem(Action(prefix + index.ToString(CultureInfo.InvariantCulture) + "." + EncodeToken(token), label, hint, true, emphasized, icon)));
+        }
+
+        private static void AddWorldEventScheduleControls(List<ScenarioAuthoringInspectorItem> items, ScenarioScheduledActionDefinition action, int actionIndex)
+        {
+            ScenarioSchedulePolicy policy = action != null ? action.Policy : null;
+            if (policy == null)
+                policy = new ScenarioSchedulePolicy();
+            items.Add(Property("Timing", FormatWorldEventScheduleSummary(action), "Honest runtime schedule window."));
+            AddScheduleActions(items, ScenarioAuthoringActionIds.ActionScheduledActionDayPrefix, ScenarioAuthoringActionIds.ActionScheduledActionHourPrefix, ScenarioAuthoringActionIds.ActionScheduledActionMinutePrefix, actionIndex);
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionRepeatPrefix + actionIndex.ToString(CultureInfo.InvariantCulture), "Repeatable", "Switch this event between once-only and repeatable execution.", true, policy.Repeatable, "RP")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".1440", "Cooldown +1d", "Increase repeat cooldown by one day.", true, false, "C+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-1440", "Cooldown -1d", "Decrease repeat cooldown by one day.", true, false, "C-")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionWindowEndDayPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".1", "Window +1d", "Extend the event window by one day.", true, false, "W+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionWindowEndDayPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-1", "Window -1d", "Shorten the event window by one day.", true, false, "W-")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionChancePrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".5", "Chance +5%", "Increase schedule chance by five percent.", true, false, "%+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionChancePrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-5", "Chance -5%", "Decrease schedule chance by five percent.", true, false, "%-")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionJitterPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".30", "Jitter +30m", "Increase random schedule jitter by 30 minutes.", true, false, "J+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionJitterPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-30", "Jitter -30m", "Decrease random schedule jitter by 30 minutes.", true, false, "J-")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionMaxRunsPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".1", "Max +1", "Increase maximum successful runs.", true, false, "M+")));
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionMaxRunsPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + ".-1", "Max -1", "Decrease maximum successful runs.", true, false, "M-")));
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildWorldEventSpecGridSection(int actionIndex, string listKey, string propertyKey, ScenarioEffectDefinition effect, string title, string badge, string addPrefix)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ActionItem(Action(addPrefix + actionIndex.ToString(CultureInfo.InvariantCulture), "Add " + title, "Add a valid item row.", true, true, "I+")));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "focused_world_event_" + listKey,
+                Title = title,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
+                Items = items.ToArray(),
+                InventorySlotGrid = BuildWorldEventItemSpecSlotGrid(actionIndex, listKey, propertyKey, effect, badge, title + " has no authored rows yet.")
+            };
+        }
+
+        private static ScenarioInventorySlotGridViewModel BuildWorldEventItemSpecSlotGrid(int actionIndex, string listKey, string propertyKey, ScenarioEffectDefinition effect, string badge, string emptyMessage)
+        {
+            List<ScenarioInventorySlotViewModel> slots = new List<ScenarioInventorySlotViewModel>();
+            List<WorldEventItemSpec> specs = ParseWorldEventItemSpec(ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, propertyKey, null));
+            string deletePrefix = ResolveWorldEventItemSpecDeletePrefix(listKey);
+            string quantityPrefix = ResolveWorldEventItemSpecQuantityPrefix(listKey);
+            for (int i = 0; i < specs.Count; i++)
+            {
+                WorldEventItemSpec spec = specs[i];
+                ScenarioInventoryItemCatalogEntry catalogEntry = ScenarioInventoryItemCatalog.Resolve(spec.ItemId);
+                string indexText = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + i.ToString(CultureInfo.InvariantCulture);
+                slots.Add(new ScenarioInventorySlotViewModel
+                {
+                    Id = "world_event." + listKey + "." + indexText,
+                    ItemId = catalogEntry.ItemId,
+                    DisplayName = catalogEntry.DisplayName,
+                    Detail = catalogEntry.Detail,
+                    QuantityText = "x" + Math.Max(1, spec.Quantity).ToString(CultureInfo.InvariantCulture),
+                    Badge = badge,
+                    Emphasized = catalogEntry.ItemType != ItemManager.ItemType.Undefined,
+                    PreviewSprite = catalogEntry.PreviewSprite,
+                    PrimaryAction = Action(
+                        ScenarioAuthoringLocalActionIds.ActionWorldEventItemPickerOpenPrefix + actionIndex.ToString(CultureInfo.InvariantCulture) + "." + listKey + "." + i.ToString(CultureInfo.InvariantCulture),
+                        "Choose " + catalogEntry.DisplayName,
+                        "Open the valid item picker for this world event row.",
+                        true,
+                        true,
+                        "IT",
+                        catalogEntry.ItemId),
+                    QuantityIncreaseAction = Action(quantityPrefix + indexText + ".1", "+", "Increase this row quantity.", true, false, "+"),
+                    QuantityDecreaseAction = Action(quantityPrefix + indexText + ".-1", "-", "Decrease this row quantity.", true, false, "-"),
+                    RemoveAction = Action(deletePrefix + indexText, "Remove", "Remove this world event item row.", true, false, "RM")
+                });
+            }
+
+            AddEmptyInventorySlots(
+                slots,
+                slots.Count == 0 ? 1 : Math.Max(0, 4 - (slots.Count % 4)),
+                Action(ResolveWorldEventItemSpecAddPrefix(listKey) + actionIndex.ToString(CultureInfo.InvariantCulture), "Add Row", "Add a valid item row.", true, true, "I+"),
+                "Empty",
+                "No authored item in this slot.");
+            return new ScenarioInventorySlotGridViewModel
+            {
+                EmptyMessage = emptyMessage,
+                Slots = slots.ToArray()
+            };
         }
 
         private static ScenarioAuthoringInspectorDocument BuildCapturePreviewDocument(
@@ -1979,6 +2270,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, StringComparison.OrdinalIgnoreCase))
                 return null;
+            if (state.FocusedEditorKind.StartsWith(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix, StringComparison.Ordinal))
+                return BuildWorldEventItemPickerDocument(state, definition);
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, StringComparison.OrdinalIgnoreCase))
+                return BuildWorldEventFocusedEditorDocument(state, definition);
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             string title = "Edit Timeline Entry";
@@ -2239,6 +2534,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             List<ScenarioAuthoringInspectorItem> actionItems = BuildScheduledActionItems(state, definition);
+            List<ScenarioAuthoringInspectorItem> worldEventItems = BuildWorldEventItems(state, definition);
+            List<ScenarioAuthoringInspectorItem> vanillaSuppressionItems = BuildVanillaSuppressionItems(definition);
             List<ScenarioAuthoringInspectorItem> journalItems = BuildJournalEntryItems(state, definition);
             List<ScenarioAuthoringInspectorItem> gateItems = BuildGateItems(state, definition);
             List<ScenarioAuthoringInspectorItem> graphItems = BuildEventGraphItems(definition);
@@ -2276,6 +2573,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = actionItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "world_events",
+                    Title = "World Events",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = worldEventItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
+                    Id = "vanilla_world_event_suppression",
+                    Title = "Vanilla Suppression",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = vanillaSuppressionItems.ToArray()
                 },
                 new ScenarioAuthoringInspectorSection
                 {
@@ -4313,6 +4626,260 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return Safe(eventType);
         }
 
+        private static ScenarioScheduledActionDefinition GetScheduledAction(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.ScheduledActions != null
+                && index >= 0
+                && index < definition.ScheduledActions.Count
+                    ? definition.ScheduledActions[index]
+                    : null;
+        }
+
+        private static ScenarioEffectDefinition FindWorldEventEffect(ScenarioScheduledActionDefinition action)
+        {
+            int index = FindWorldEventEffectIndex(action);
+            return action != null && action.Effects != null && index >= 0 && index < action.Effects.Count
+                ? action.Effects[index]
+                : null;
+        }
+
+        private static int FindWorldEventEffectIndex(ScenarioScheduledActionDefinition action)
+        {
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+                if (action.Effects[i] != null && action.Effects[i].Kind == ScenarioEffectKind.WorldEvent)
+                    return i;
+            return -1;
+        }
+
+        private static bool HasWorldEventEffect(ScenarioScheduledActionDefinition action)
+        {
+            return FindWorldEventEffect(action) != null;
+        }
+
+        private static List<WorldEventItemSpec> ParseWorldEventItemSpec(string spec)
+        {
+            List<WorldEventItemSpec> entries = new List<WorldEventItemSpec>();
+            if (string.IsNullOrEmpty(spec))
+                return entries;
+
+            string[] parts = spec.Split(',');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string[] pair = parts[i].Split(':');
+                string itemId = pair.Length > 0 ? pair[0].Trim() : string.Empty;
+                int quantity = 1;
+                if (pair.Length > 1)
+                    int.TryParse(pair[1], out quantity);
+                if (!string.IsNullOrEmpty(itemId))
+                    entries.Add(new WorldEventItemSpec { ItemId = itemId, Quantity = Math.Max(1, quantity) });
+            }
+            return entries;
+        }
+
+        private static string ResolveWorldEventItemSpecProperty(string listKey)
+        {
+            if (string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase))
+                return "tradeItems";
+            if (string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase))
+                return "weapons";
+            if (string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+                return "armor";
+            return null;
+        }
+
+        private static string ResolveWorldEventItemSpecActionPrefix(string listKey)
+        {
+            if (string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventTradeItemPrefix;
+            if (string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventWeaponItemPrefix;
+            if (string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventArmorItemPrefix;
+            return null;
+        }
+
+        private static string ResolveWorldEventItemSpecAddPrefix(string listKey)
+        {
+            if (string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventTradeAddPrefix;
+            if (string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventWeaponAddPrefix;
+            if (string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventArmorAddPrefix;
+            return null;
+        }
+
+        private static string ResolveWorldEventItemSpecDeletePrefix(string listKey)
+        {
+            if (string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventTradeDeletePrefix;
+            if (string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventWeaponDeletePrefix;
+            if (string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventArmorDeletePrefix;
+            return null;
+        }
+
+        private static string ResolveWorldEventItemSpecQuantityPrefix(string listKey)
+        {
+            if (string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventTradeQuantityPrefix;
+            if (string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventWeaponQuantityPrefix;
+            if (string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+                return ScenarioAuthoringActionIds.ActionWorldEventArmorQuantityPrefix;
+            return null;
+        }
+
+        private static string FormatWorldEventPickerLabel(string listKey)
+        {
+            if (string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase))
+                return "Trader stock";
+            if (string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase))
+                return "Raid weapons";
+            if (string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+                return "Raid gear";
+            return "World event item";
+        }
+
+        private static string FormatWorldEventTypeLabel(string eventType)
+        {
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                return "NPC Visit";
+            if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+                return "Raid";
+            if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                return "Broadcast / Radio";
+            return Safe(eventType);
+        }
+
+        private static string FormatBroadcastOutcome(string outcome)
+        {
+            if (string.Equals(outcome, "Recruit", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(outcome, "Joiner", StringComparison.OrdinalIgnoreCase))
+                return "Recruit";
+            if (string.Equals(outcome, "Trader", StringComparison.OrdinalIgnoreCase))
+                return "Trader";
+            return "None";
+        }
+
+        private static string FormatWorldEventScheduleSummary(ScenarioScheduledActionDefinition action)
+        {
+            if (action == null)
+                return "unscheduled";
+
+            ScenarioSchedulePolicy policy = action.Policy ?? new ScenarioSchedulePolicy();
+            int dueDay = action.DueTime != null ? Math.Max(1, action.DueTime.Day) : 1;
+            int endDay = policy.WindowEndDay > 0 ? Math.Max(dueDay, policy.WindowEndDay) : dueDay;
+            int chance = ScenarioAuthoringSchedule.Clamp((int)Math.Round(policy.Chance * 100f), 0, 100);
+            string cadence = policy.Repeatable
+                ? "about every " + FormatCooldownDays(policy.CooldownMinutes) + " between day " + dueDay.ToString(CultureInfo.InvariantCulture) + " and " + endDay.ToString(CultureInfo.InvariantCulture)
+                : "once on day " + dueDay.ToString(CultureInfo.InvariantCulture) + (endDay > dueDay ? " through day " + endDay.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            return cadence + " at " + FormatClock(action.DueTime) + ", " + chance.ToString(CultureInfo.InvariantCulture) + "% chance"
+                + (policy.JitterMinutes > 0 ? ", +/-" + policy.JitterMinutes.ToString(CultureInfo.InvariantCulture) + "m jitter" : string.Empty)
+                + (policy.MaxRuns > 0 ? ", max " + policy.MaxRuns.ToString(CultureInfo.InvariantCulture) + " run(s)" : string.Empty);
+        }
+
+        private static string FormatCooldownDays(int cooldownMinutes)
+        {
+            if (cooldownMinutes <= 0)
+                return "eligible check";
+            if (cooldownMinutes % 1440 == 0)
+                return (cooldownMinutes / 1440).ToString(CultureInfo.InvariantCulture) + " day(s)";
+            if (cooldownMinutes % 60 == 0)
+                return (cooldownMinutes / 60).ToString(CultureInfo.InvariantCulture) + " hour(s)";
+            return cooldownMinutes.ToString(CultureInfo.InvariantCulture) + " minute(s)";
+        }
+
+        private static string FormatClock(ScenarioScheduleTime time)
+        {
+            if (time == null)
+                return "--:--";
+            return time.Hour.ToString("D2", CultureInfo.InvariantCulture) + ":" + time.Minute.ToString("D2", CultureInfo.InvariantCulture);
+        }
+
+        private static string FormatWorldEventValidationState(ScenarioScheduledActionDefinition action, ScenarioEffectDefinition effect)
+        {
+            string fix = FormatWorldEventValidationFix(effect);
+            if (!string.IsNullOrEmpty(fix))
+                return "Fix needed";
+            if (action == null || action.DueTime == null || action.DueTime.Day < 1 || action.DueTime.Hour < 0 || action.DueTime.Hour > 23 || action.DueTime.Minute < 0 || action.DueTime.Minute > 59)
+                return "Fix needed";
+            return "OK";
+        }
+
+        private static string FormatWorldEventValidationFix(ScenarioEffectDefinition effect)
+        {
+            if (effect == null)
+                return "Reason: missing WorldEvent effect. Fix: add a world event effect.";
+            string eventType = ScenarioPropertyBag.GetString(effect.Properties, "eventType", null);
+            if (string.IsNullOrEmpty(eventType))
+                return "Reason: missing event type. Fix: choose NPC Visit, Raid, or Broadcast.";
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+            {
+                string npcType = ScenarioPropertyBag.GetString(effect.Properties, "npcType", "Passerby");
+                if (!string.Equals(npcType, "Trader", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(npcType, "Joiner", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(npcType, "Recruit", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(npcType, "Passerby", StringComparison.OrdinalIgnoreCase))
+                    return "Reason: unsupported NPC type. Fix: choose Trader, Joiner, or Passerby.";
+                string tradeIssue = FindInvalidWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, "tradeItems", null));
+                if (!string.IsNullOrEmpty(tradeIssue))
+                    return "Reason: invalid trader stock " + tradeIssue + ". Fix: open the item picker and choose a valid item id.";
+            }
+            else if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+            {
+                int minNpcs = ScenarioPropertyBag.GetInt(effect.Properties, "minNpcs", 1);
+                int maxNpcs = ScenarioPropertyBag.GetInt(effect.Properties, "maxNpcs", minNpcs);
+                if (minNpcs < 1 || maxNpcs < minNpcs)
+                    return "Reason: invalid raid min/max NPCs. Fix: adjust min and max counts.";
+                string weaponIssue = FindInvalidWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, "weapons", null));
+                if (!string.IsNullOrEmpty(weaponIssue))
+                    return "Reason: invalid raid weapon " + weaponIssue + ". Fix: open the item picker and choose a valid item id.";
+                string armorIssue = FindInvalidWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, "armor", null));
+                if (!string.IsNullOrEmpty(armorIssue))
+                    return "Reason: invalid raid gear " + armorIssue + ". Fix: open the item picker and choose a valid item id.";
+            }
+            else if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+            {
+                string outcome = ScenarioPropertyBag.GetString(effect.Properties, "outcome", "None");
+                if (!string.Equals(outcome, "None", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(outcome, "Trader", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(outcome, "Recruit", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(outcome, "Joiner", StringComparison.OrdinalIgnoreCase))
+                    return "Reason: unsupported broadcast outcome. Fix: choose Trader, Recruit, or None.";
+            }
+            else
+            {
+                return "Reason: unsupported world event type. Fix: choose NPC Visit, Raid, or Broadcast.";
+            }
+
+            return null;
+        }
+
+        private static string FindInvalidWorldEventItemSpec(string spec)
+        {
+            List<WorldEventItemSpec> entries = ParseWorldEventItemSpec(spec);
+            for (int i = 0; i < entries.Count; i++)
+            {
+                ScenarioInventoryItemCatalogEntry entry = ScenarioInventoryItemCatalog.Resolve(entries[i].ItemId);
+                if (entry == null || entry.ItemType == ItemManager.ItemType.Undefined)
+                    return "'" + Safe(entries[i].ItemId) + "'";
+                if (entries[i].Quantity < 1)
+                    return "'" + Safe(entries[i].ItemId) + "' quantity";
+            }
+            return null;
+        }
+
+        private sealed class WorldEventItemSpec
+        {
+            public string ItemId;
+            public int Quantity;
+        }
+
         private static ScenarioAuthoringInspectorSection BuildBunkerRuntimeSection(ScenarioDefinition definition, ScenarioAuthoringState state)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -4369,6 +4936,98 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
+        private static List<ScenarioAuthoringInspectorItem> BuildWorldEventItems(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionWorldEventAdd, "Add World Event", "Create a scripted visitor, raid, or radio event with typed fields.", true, true, "WEV")));
+            int count = 0;
+            for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                ScenarioEffectDefinition effect = FindWorldEventEffect(action);
+                if (action == null || effect == null)
+                    continue;
+
+                count++;
+                string eventType = ScenarioPropertyBag.GetString(effect.Properties, "eventType", "WorldEvent");
+                string validation = FormatWorldEventValidationState(action, effect);
+                string fix = FormatWorldEventValidationFix(effect);
+                string detail = FormatWorldEventScheduleSummary(action) + " / " + FormatWorldEventEffect(effect);
+                items.Add(TimelineFact(state, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, i, ResolveWorldEventGlyph(eventType) + " " + Safe(action.Id), detail, string.IsNullOrEmpty(fix) ? "World event is valid." : fix));
+                items.Add(Property("Type", FormatWorldEventTypeLabel(eventType), FormatWorldEventKeyParams(effect), validation, ResolveWorldEventGlyph(eventType), null, !string.IsNullOrEmpty(fix)));
+                items.Add(ActionItem(Action(ScenarioAuthoringLocalActionIds.ActionWorldEventEditorOpenPrefix + i.ToString(CultureInfo.InvariantCulture), "Open Editor", "Edit this world event using typed fields.", true, true, "ED", validation)));
+                items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Remove World Event", "Remove this scheduled world event.", true, false, "RM")));
+            }
+
+            if (count == 0)
+                items.Add(Text("No world events have been authored yet. Add one for scripted visitors, raids, or radio outcomes."));
+            return items;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildVanillaSuppressionItems(ScenarioDefinition definition)
+        {
+            ScenarioVanillaSuppressionDefinition suppression = definition != null ? definition.VanillaSuppression : null;
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Text("Use these only when authored World Events should replace vanilla random systems."));
+            AddVanillaSuppressionAction(items, "randomVisitors", "Random Visitors", suppression != null && suppression.RandomVisitors, "Stops vanilla random visitors so only authored visitor events arrive.");
+            AddVanillaSuppressionAction(items, "binman", "Binman", suppression != null && suppression.Binman, "Stops the vanilla binman visit loop.");
+            AddVanillaSuppressionAction(items, "raids", "Raids", suppression != null && suppression.Raids, "Stops vanilla raid checks so authored Raid events control breaches.");
+            AddVanillaSuppressionAction(items, "stasisVisitors", "Stasis Visitors", suppression != null && suppression.StasisVisitors, "Stops stasis-triggered visitor spawns.");
+            AddVanillaSuppressionAction(items, "radioBroadcastOdds", "Radio Odds", suppression != null && suppression.RadioBroadcastOdds, "Stops vanilla trader/recruit radio odds so authored Broadcast events decide outcomes.");
+            return items;
+        }
+
+        private static void AddVanillaSuppressionAction(List<ScenarioAuthoringInspectorItem> items, string key, string label, bool suppressed, string consequence)
+        {
+            items.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionWorldEventSuppressionPrefix + key,
+                label,
+                consequence,
+                true,
+                suppressed,
+                suppressed ? "OFF" : "ON",
+                consequence,
+                suppressed ? "Suppressed" : "Allowed")));
+        }
+
+        private static string ResolveWorldEventGlyph(string eventType)
+        {
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                return "NPC";
+            if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+                return "RAID";
+            if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                return "RAD";
+            return "WEV";
+        }
+
+        private static string FormatWorldEventKeyParams(ScenarioEffectDefinition effect)
+        {
+            if (effect == null)
+                return "missing effect";
+            string eventType = ScenarioPropertyBag.GetString(effect.Properties, "eventType", null);
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+            {
+                string npcType = ScenarioPropertyBag.GetString(effect.Properties, "npcType", "Passerby");
+                int stock = ParseWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, "tradeItems", null)).Count;
+                int count = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "count", effect.Quantity > 0 ? effect.Quantity : 1));
+                return npcType + " x" + count.ToString(CultureInfo.InvariantCulture) + (string.Equals(npcType, "Trader", StringComparison.OrdinalIgnoreCase) ? " / " + stock.ToString(CultureInfo.InvariantCulture) + " stock row(s)" : string.Empty);
+            }
+            if (string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase))
+            {
+                int min = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "minNpcs", 1));
+                int max = Math.Max(min, ScenarioPropertyBag.GetInt(effect.Properties, "maxNpcs", min));
+                int weapons = ParseWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, "weapons", null)).Count;
+                int armor = ParseWorldEventItemSpec(ScenarioPropertyBag.GetString(effect.Properties, "armor", null)).Count;
+                return min.ToString(CultureInfo.InvariantCulture) + "-" + max.ToString(CultureInfo.InvariantCulture) + " raiders / " + weapons.ToString(CultureInfo.InvariantCulture) + " weapons / " + armor.ToString(CultureInfo.InvariantCulture) + " gear";
+            }
+            if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                return "forced " + FormatBroadcastOutcome(ScenarioPropertyBag.GetString(effect.Properties, "outcome", "None"));
+            return Safe(eventType);
+        }
+
         private static List<ScenarioAuthoringInspectorItem> BuildScheduledActionItems(ScenarioAuthoringState state, ScenarioDefinition definition)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
@@ -4377,6 +5036,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
                 if (action == null)
+                    continue;
+                if (HasWorldEventEffect(action))
                     continue;
                 string gate = string.IsNullOrEmpty(action.GateId) ? "no condition" : "condition " + action.GateId;
                 string repeat = action.Policy != null && action.Policy.Repeatable ? "repeat " + action.Policy.CooldownMinutes.ToString(CultureInfo.InvariantCulture) + "m" : "once";

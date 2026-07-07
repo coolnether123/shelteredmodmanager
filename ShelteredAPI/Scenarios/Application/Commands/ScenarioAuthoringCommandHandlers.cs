@@ -1195,9 +1195,21 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled)
                 return false;
 
+            int focusedIndex;
+            if (TryOpenIndexedFocusedEditor(state, actionId, ScenarioAuthoringLocalActionIds.ActionWorldEventEditorOpenPrefix, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, out focusedIndex))
+            {
+                message = "Opened world event editor.";
+                return true;
+            }
+            if (TryOpenWorldEventItemPicker(state, actionId, out message))
+                return true;
+
             bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
             if (changed)
+            {
+                CloseWorldEventItemPickerAfterSelection(state, actionId);
                 FocusEventEditor(state, _editorService.CurrentSession, actionId);
+            }
             return changed;
         }
 
@@ -1215,8 +1227,70 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 SetFocusedEditor(state, "gate", definition.Gates != null ? definition.Gates.Count - 1 : -1, true);
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionScheduledActionAdd, StringComparison.Ordinal))
                 SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+            else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWorldEventAdd, StringComparison.Ordinal))
+                SetFocusedEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal))
                 SetFocusedEditor(state, "journal_entry", definition.Journal != null && definition.Journal.Entries != null ? definition.Journal.Entries.Count - 1 : -1, true);
+        }
+
+        private static bool TryOpenIndexedFocusedEditor(ScenarioAuthoringState state, string actionId, string prefix, string kind, out int index)
+        {
+            index = -1;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+            if (!int.TryParse(actionId.Substring(prefix.Length), out index) || index < 0)
+                return false;
+            SetFocusedEditor(state, kind, index, false);
+            return true;
+        }
+
+        private static bool TryOpenWorldEventItemPicker(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            if (state == null || string.IsNullOrEmpty(actionId) || !actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionWorldEventItemPickerOpenPrefix, StringComparison.Ordinal))
+                return false;
+
+            string[] parts = actionId.Substring(ScenarioAuthoringLocalActionIds.ActionWorldEventItemPickerOpenPrefix.Length).Split('.');
+            int actionIndex;
+            int itemIndex;
+            if (parts.Length != 3 || !int.TryParse(parts[0], out actionIndex) || !int.TryParse(parts[2], out itemIndex))
+            {
+                message = "World event item picker target is invalid.";
+                return true;
+            }
+
+            string listKey = parts[1];
+            if (!string.Equals(listKey, "trade", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(listKey, "weapon", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(listKey, "armor", StringComparison.OrdinalIgnoreCase))
+            {
+                message = "World event item picker list is invalid.";
+                return true;
+            }
+
+            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix + listKey + ":" + itemIndex.ToString(CultureInfo.InvariantCulture);
+            state.FocusedEditorIndex = actionIndex;
+            state.FocusedEditorIsNew = false;
+            state.TimelineSelectedEntryId = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent + ":" + actionIndex.ToString(CultureInfo.InvariantCulture);
+            message = "Opened world event item picker.";
+            return true;
+        }
+
+        private static void CloseWorldEventItemPickerAfterSelection(ScenarioAuthoringState state, string actionId)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind) || string.IsNullOrEmpty(actionId))
+                return;
+            if (!state.FocusedEditorKind.StartsWith(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix, StringComparison.Ordinal))
+                return;
+            if (!actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventTradeItemPrefix, StringComparison.Ordinal)
+                && !actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventWeaponItemPrefix, StringComparison.Ordinal)
+                && !actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventArmorItemPrefix, StringComparison.Ordinal))
+                return;
+
+            int actionIndex = state.FocusedEditorIndex;
+            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent;
+            state.FocusedEditorIndex = actionIndex;
+            state.FocusedEditorIsNew = false;
         }
 
         private static void SetFocusedEditor(ScenarioAuthoringState state, string kind, int index, bool isNew)
@@ -1428,6 +1502,16 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             string kind = state.FocusedEditorKind;
             int index = state.FocusedEditorIndex;
+            if (kind.StartsWith(ScenarioAuthoringLocalActionIds.FocusedKindWorldEventItemPickerPrefix, StringComparison.Ordinal))
+            {
+                state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent;
+                state.FocusedEditorIndex = index;
+                state.FocusedEditorIsNew = false;
+                state.TimelineSelectedEntryId = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent + ":" + index.ToString(CultureInfo.InvariantCulture);
+                message = "Returned to world event editor.";
+                return true;
+            }
+
             bool discard = cancel && state.FocusedEditorIsNew;
             if (discard)
                 DiscardFocusedEntry(kind, index);
@@ -1652,7 +1736,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 ClearGateReferences(definition, id);
                 MarkDirty(session, ScenarioDirtySection.Triggers);
             }
-            else if (string.Equals(kind, "scheduled_action", StringComparison.OrdinalIgnoreCase)
+            else if ((string.Equals(kind, "scheduled_action", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(kind, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, StringComparison.OrdinalIgnoreCase))
                 && definition.ScheduledActions != null
                 && index < definition.ScheduledActions.Count)
             {

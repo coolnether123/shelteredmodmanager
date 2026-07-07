@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ModAPI.Scenarios;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Definitions;
@@ -31,6 +32,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 && (actionId.StartsWith("scenario.trigger.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.gate.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.action.", StringComparison.Ordinal)
+                    || actionId.StartsWith("scenario.world_event.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.journal.", StringComparison.Ordinal));
         }
 
@@ -43,6 +45,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            if (TryHandleVanillaSuppression(session, actionId, out message))
+                return true;
             if (_triggers.TryHandle(session, actionId, out message))
                 return true;
             if (_gates.TryHandle(session, actionId, out message))
@@ -53,6 +57,39 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
 
             return false;
+        }
+
+        private static bool TryHandleVanillaSuppression(ScenarioEditorSession session, string actionId, out string message)
+        {
+            message = null;
+            if (string.IsNullOrEmpty(actionId) || !actionId.StartsWith(ScenarioAuthoringActionIds.ActionWorldEventSuppressionPrefix, StringComparison.Ordinal))
+                return false;
+
+            ScenarioVanillaSuppressionDefinition suppression = EnsureVanillaSuppression(session.WorkingDefinition);
+            string category = actionId.Substring(ScenarioAuthoringActionIds.ActionWorldEventSuppressionPrefix.Length);
+            if (string.Equals(category, "randomVisitors", StringComparison.OrdinalIgnoreCase))
+                suppression.RandomVisitors = !suppression.RandomVisitors;
+            else if (string.Equals(category, "binman", StringComparison.OrdinalIgnoreCase))
+                suppression.Binman = !suppression.Binman;
+            else if (string.Equals(category, "raids", StringComparison.OrdinalIgnoreCase))
+                suppression.Raids = !suppression.Raids;
+            else if (string.Equals(category, "stasisVisitors", StringComparison.OrdinalIgnoreCase))
+                suppression.StasisVisitors = !suppression.StasisVisitors;
+            else if (string.Equals(category, "radioBroadcastOdds", StringComparison.OrdinalIgnoreCase))
+                suppression.RadioBroadcastOdds = !suppression.RadioBroadcastOdds;
+            else
+                return false;
+
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Updated vanilla world-event suppression.";
+            return true;
+        }
+
+        private static ScenarioVanillaSuppressionDefinition EnsureVanillaSuppression(ScenarioDefinition definition)
+        {
+            if (definition.VanillaSuppression == null)
+                definition.VanillaSuppression = new ScenarioVanillaSuppressionDefinition();
+            return definition.VanillaSuppression;
         }
     }
 
@@ -426,6 +463,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionScheduledActionAdd, StringComparison.Ordinal))
                 return AddScheduledAction(session, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWorldEventAdd, StringComparison.Ordinal))
+                return AddWorldEventAction(session, out message);
 
             int index;
             if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionDeletePrefix, definition.ScheduledActions.Count, out index))
@@ -473,6 +512,46 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 message = "Updated cooldown to " + policy.CooldownMinutes + " minute(s).";
                 return true;
             }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionWindowEndDayPrefix, definition.ScheduledActions.Count, out index, out delta))
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[index];
+                ScenarioSchedulePolicy policy = EnsurePolicy(action);
+                int minDay = action != null && action.DueTime != null ? action.DueTime.Day : 1;
+                policy.WindowEndDay = policy.WindowEndDay <= 0
+                    ? (delta > 0 ? minDay + delta : 0)
+                    : policy.WindowEndDay + delta;
+                if (policy.WindowEndDay > 0)
+                    policy.WindowEndDay = Math.Max(minDay, policy.WindowEndDay);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = policy.WindowEndDay > 0 ? "Updated window end day to " + policy.WindowEndDay + "." : "Cleared schedule window.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionChancePrefix, definition.ScheduledActions.Count, out index, out delta))
+            {
+                ScenarioSchedulePolicy policy = EnsurePolicy(definition.ScheduledActions[index]);
+                int percent = (int)Math.Round(policy.Chance * 100f) + delta;
+                percent = ScenarioAuthoringSchedule.Clamp(percent, 0, 100);
+                policy.Chance = percent / 100f;
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated chance to " + percent + "%.";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionJitterPrefix, definition.ScheduledActions.Count, out index, out delta))
+            {
+                ScenarioSchedulePolicy policy = EnsurePolicy(definition.ScheduledActions[index]);
+                policy.JitterMinutes = Math.Max(0, policy.JitterMinutes + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = "Updated jitter to " + policy.JitterMinutes + " minute(s).";
+                return true;
+            }
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionMaxRunsPrefix, definition.ScheduledActions.Count, out index, out delta))
+            {
+                ScenarioSchedulePolicy policy = EnsurePolicy(definition.ScheduledActions[index]);
+                policy.MaxRuns = Math.Max(0, policy.MaxRuns + delta);
+                ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+                message = policy.MaxRuns > 0 ? "Updated max runs to " + policy.MaxRuns + "." : "Cleared max runs.";
+                return true;
+            }
             if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionScheduledActionDayPrefix, definition.ScheduledActions.Count, out index, out delta))
             {
                 ScenarioScheduleTime time = definition.ScheduledActions[index].DueTime;
@@ -498,6 +577,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            if (TryHandleWorldEventAction(session, actionId, out message))
+                return true;
+
             return TryHandleEffect(session, actionId, out message);
         }
 
@@ -513,6 +595,278 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
             message = "Added scheduled action '" + action.Id + "' for " + ScenarioAuthoringSchedule.Format(action.DueTime) + ".";
             return true;
+        }
+
+        private bool AddWorldEventAction(ScenarioEditorSession session, out string message)
+        {
+            ScenarioDefinition definition = session.WorkingDefinition;
+            ScenarioScheduledActionDefinition action = new ScenarioScheduledActionDefinition();
+            action.Id = ScenarioEventIdFactory.NextScheduledActionId(definition);
+            action.ActionType = ScenarioEffectKind.WorldEvent.ToString();
+            action.DueTime = ScenarioAuthoringSchedule.NextTime();
+            action.Effects.Add(_templates.CreateEffect(definition, ScenarioEffectKind.WorldEvent));
+            definition.ScheduledActions.Add(action);
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Added world event '" + action.Id + "' for " + ScenarioAuthoringSchedule.Format(action.DueTime) + ".";
+            return true;
+        }
+
+        private bool TryHandleWorldEventAction(ScenarioEditorSession session, string actionId, out string message)
+        {
+            message = null;
+            ScenarioDefinition definition = session.WorkingDefinition;
+            int actionIndex;
+            string token;
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventEventTypePrefix, definition.ScheduledActions.Count, out actionIndex, out token))
+                return SetWorldEventProperty(session, actionIndex, "eventType", Uri.UnescapeDataString(token), out message);
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventNpcTypePrefix, definition.ScheduledActions.Count, out actionIndex, out token))
+                return SetWorldEventProperty(session, actionIndex, "npcType", Uri.UnescapeDataString(token), out message);
+            if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventOutcomePrefix, definition.ScheduledActions.Count, out actionIndex, out token))
+                return SetWorldEventProperty(session, actionIndex, "outcome", Uri.UnescapeDataString(token), out message);
+
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventTradeAddPrefix, definition.ScheduledActions.Count, out actionIndex))
+                return AddWorldEventItemSpec(session, actionIndex, "tradeItems", out message);
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventWeaponAddPrefix, definition.ScheduledActions.Count, out actionIndex))
+                return AddWorldEventItemSpec(session, actionIndex, "weapons", out message);
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventArmorAddPrefix, definition.ScheduledActions.Count, out actionIndex))
+                return AddWorldEventItemSpec(session, actionIndex, "armor", out message);
+
+            int itemIndex;
+            if (ScenarioAuthoringActionParser.TryPairIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventTradeDeletePrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex))
+                return DeleteWorldEventItemSpec(session, actionIndex, "tradeItems", itemIndex, out message);
+            if (ScenarioAuthoringActionParser.TryPairIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventWeaponDeletePrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex))
+                return DeleteWorldEventItemSpec(session, actionIndex, "weapons", itemIndex, out message);
+            if (ScenarioAuthoringActionParser.TryPairIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventArmorDeletePrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex))
+                return DeleteWorldEventItemSpec(session, actionIndex, "armor", itemIndex, out message);
+
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventTradeItemPrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex, out token))
+                return SetWorldEventItemSpecItem(session, actionIndex, "tradeItems", itemIndex, Uri.UnescapeDataString(token), out message);
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventWeaponItemPrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex, out token))
+                return SetWorldEventItemSpecItem(session, actionIndex, "weapons", itemIndex, Uri.UnescapeDataString(token), out message);
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventArmorItemPrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex, out token))
+                return SetWorldEventItemSpecItem(session, actionIndex, "armor", itemIndex, Uri.UnescapeDataString(token), out message);
+
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventTradeQuantityPrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex, out token))
+                return StepWorldEventItemSpecQuantity(session, actionIndex, "tradeItems", itemIndex, token, out message);
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventWeaponQuantityPrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex, out token))
+                return StepWorldEventItemSpecQuantity(session, actionIndex, "weapons", itemIndex, token, out message);
+            if (ScenarioAuthoringActionParser.TryPairToken(actionId, ScenarioAuthoringActionIds.ActionWorldEventArmorQuantityPrefix, definition.ScheduledActions.Count, out actionIndex, out itemIndex, out token))
+                return StepWorldEventItemSpecQuantity(session, actionIndex, "armor", itemIndex, token, out message);
+
+            int delta;
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventRaidMinPrefix, definition.ScheduledActions.Count, out actionIndex, out delta))
+                return StepWorldEventIntProperty(session, actionIndex, "minNpcs", delta, 1, out message);
+            if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionWorldEventRaidMaxPrefix, definition.ScheduledActions.Count, out actionIndex, out delta))
+                return StepWorldEventIntProperty(session, actionIndex, "maxNpcs", delta, 1, out message);
+
+            return false;
+        }
+
+        private static bool SetWorldEventProperty(ScenarioEditorSession session, int actionIndex, string key, string value, out string message)
+        {
+            ScenarioEffectDefinition effect;
+            if (!TryGetWorldEventEffect(session.WorkingDefinition, actionIndex, out effect))
+            {
+                message = "World event target is missing.";
+                return false;
+            }
+
+            ScenarioPropertyBag.Set(effect.Properties, key, value);
+            if (string.Equals(key, "eventType", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.Equals(value, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (string.IsNullOrEmpty(ScenarioPropertyBag.GetString(effect.Properties, "npcType", null)))
+                        ScenarioPropertyBag.Set(effect.Properties, "npcType", "Trader");
+                }
+                else if (string.Equals(value, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrEmpty(ScenarioPropertyBag.GetString(effect.Properties, "outcome", null)))
+                {
+                    ScenarioPropertyBag.Set(effect.Properties, "outcome", "None");
+                }
+                else if (string.Equals(value, "Raid", StringComparison.OrdinalIgnoreCase))
+                {
+                    int count = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "count", effect.Quantity > 0 ? effect.Quantity : 1));
+                    ScenarioPropertyBag.Set(effect.Properties, "minNpcs", Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "minNpcs", count)).ToString());
+                    ScenarioPropertyBag.Set(effect.Properties, "maxNpcs", Math.Max(count, ScenarioPropertyBag.GetInt(effect.Properties, "maxNpcs", count)).ToString());
+                }
+            }
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Updated world event " + key + ".";
+            return true;
+        }
+
+        private static bool StepWorldEventIntProperty(ScenarioEditorSession session, int actionIndex, string key, int delta, int minimum, out string message)
+        {
+            ScenarioEffectDefinition effect;
+            if (!TryGetWorldEventEffect(session.WorkingDefinition, actionIndex, out effect))
+            {
+                message = "World event target is missing.";
+                return false;
+            }
+
+            int value = Math.Max(minimum, ScenarioPropertyBag.GetInt(effect.Properties, key, minimum) + delta);
+            if (string.Equals(key, "maxNpcs", StringComparison.OrdinalIgnoreCase))
+                value = Math.Max(value, ScenarioPropertyBag.GetInt(effect.Properties, "minNpcs", minimum));
+            if (string.Equals(key, "minNpcs", StringComparison.OrdinalIgnoreCase))
+            {
+                int max = ScenarioPropertyBag.GetInt(effect.Properties, "maxNpcs", value);
+                if (max < value)
+                    ScenarioPropertyBag.Set(effect.Properties, "maxNpcs", value.ToString());
+            }
+            ScenarioPropertyBag.Set(effect.Properties, key, value.ToString());
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Updated " + key + " to " + value + ".";
+            return true;
+        }
+
+        private static bool AddWorldEventItemSpec(ScenarioEditorSession session, int actionIndex, string key, out string message)
+        {
+            ScenarioEffectDefinition effect;
+            if (!TryGetWorldEventEffect(session.WorkingDefinition, actionIndex, out effect))
+            {
+                message = "World event target is missing.";
+                return false;
+            }
+
+            List<ItemSpecEntry> entries = ParseItemSpec(ScenarioPropertyBag.GetString(effect.Properties, key, null));
+            entries.Add(new ItemSpecEntry { ItemId = ScenarioInventoryItemCatalog.DefaultItemId(), Quantity = 1 });
+            ScenarioPropertyBag.Set(effect.Properties, key, FormatItemSpec(entries));
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Added world event item row.";
+            return true;
+        }
+
+        private static bool DeleteWorldEventItemSpec(ScenarioEditorSession session, int actionIndex, string key, int itemIndex, out string message)
+        {
+            ScenarioEffectDefinition effect;
+            if (!TryGetWorldEventEffect(session.WorkingDefinition, actionIndex, out effect))
+            {
+                message = "World event target is missing.";
+                return false;
+            }
+
+            List<ItemSpecEntry> entries = ParseItemSpec(ScenarioPropertyBag.GetString(effect.Properties, key, null));
+            if (itemIndex < 0 || itemIndex >= entries.Count)
+            {
+                message = "World event item row is missing.";
+                return false;
+            }
+            entries.RemoveAt(itemIndex);
+            ScenarioPropertyBag.Set(effect.Properties, key, FormatItemSpec(entries));
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Removed world event item row.";
+            return true;
+        }
+
+        private static bool SetWorldEventItemSpecItem(ScenarioEditorSession session, int actionIndex, string key, int itemIndex, string itemId, out string message)
+        {
+            ScenarioEffectDefinition effect;
+            if (!TryGetWorldEventEffect(session.WorkingDefinition, actionIndex, out effect))
+            {
+                message = "World event target is missing.";
+                return false;
+            }
+
+            List<ItemSpecEntry> entries = ParseItemSpec(ScenarioPropertyBag.GetString(effect.Properties, key, null));
+            if (itemIndex < 0 || itemIndex >= entries.Count)
+            {
+                message = "World event item row is missing.";
+                return false;
+            }
+            entries[itemIndex].ItemId = string.IsNullOrEmpty(itemId) ? ScenarioInventoryItemCatalog.DefaultItemId() : itemId;
+            entries[itemIndex].Quantity = Math.Max(1, entries[itemIndex].Quantity);
+            ScenarioPropertyBag.Set(effect.Properties, key, FormatItemSpec(entries));
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Updated world event item to '" + entries[itemIndex].ItemId + "'.";
+            return true;
+        }
+
+        private static bool StepWorldEventItemSpecQuantity(ScenarioEditorSession session, int actionIndex, string key, int itemIndex, string token, out string message)
+        {
+            int delta;
+            if (!int.TryParse(token, out delta))
+            {
+                message = "World event quantity change is invalid.";
+                return false;
+            }
+
+            ScenarioEffectDefinition effect;
+            if (!TryGetWorldEventEffect(session.WorkingDefinition, actionIndex, out effect))
+            {
+                message = "World event target is missing.";
+                return false;
+            }
+
+            List<ItemSpecEntry> entries = ParseItemSpec(ScenarioPropertyBag.GetString(effect.Properties, key, null));
+            if (itemIndex < 0 || itemIndex >= entries.Count)
+            {
+                message = "World event item row is missing.";
+                return false;
+            }
+            entries[itemIndex].Quantity = Math.Max(1, entries[itemIndex].Quantity + delta);
+            ScenarioPropertyBag.Set(effect.Properties, key, FormatItemSpec(entries));
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
+            message = "Updated world event item quantity to " + entries[itemIndex].Quantity + ".";
+            return true;
+        }
+
+        private static bool TryGetWorldEventEffect(ScenarioDefinition definition, int actionIndex, out ScenarioEffectDefinition effect)
+        {
+            effect = null;
+            if (definition == null || definition.ScheduledActions == null || actionIndex < 0 || actionIndex >= definition.ScheduledActions.Count)
+                return false;
+            ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+            {
+                if (action.Effects[i] != null && action.Effects[i].Kind == ScenarioEffectKind.WorldEvent)
+                {
+                    effect = action.Effects[i];
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static List<ItemSpecEntry> ParseItemSpec(string spec)
+        {
+            List<ItemSpecEntry> entries = new List<ItemSpecEntry>();
+            if (string.IsNullOrEmpty(spec))
+                return entries;
+
+            string[] parts = spec.Split(',');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string[] pair = parts[i].Split(':');
+                string itemId = pair.Length > 0 ? pair[0].Trim() : string.Empty;
+                int quantity = 1;
+                if (pair.Length > 1)
+                    int.TryParse(pair[1], out quantity);
+                if (!string.IsNullOrEmpty(itemId))
+                    entries.Add(new ItemSpecEntry { ItemId = itemId, Quantity = Math.Max(1, quantity) });
+            }
+            return entries;
+        }
+
+        private static string FormatItemSpec(List<ItemSpecEntry> entries)
+        {
+            if (entries == null || entries.Count == 0)
+                return string.Empty;
+            List<string> parts = new List<string>();
+            for (int i = 0; i < entries.Count; i++)
+            {
+                ItemSpecEntry entry = entries[i];
+                if (entry == null || string.IsNullOrEmpty(entry.ItemId))
+                    continue;
+                parts.Add(entry.ItemId + ":" + Math.Max(1, entry.Quantity).ToString());
+            }
+            return string.Join(",", parts.ToArray());
+        }
+
+        private sealed class ItemSpecEntry
+        {
+            public string ItemId;
+            public int Quantity;
         }
 
         private bool TryHandleEffect(ScenarioEditorSession session, string actionId, out string message)

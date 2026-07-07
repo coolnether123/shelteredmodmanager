@@ -9,6 +9,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionInventoryStartingAddAndPick = "scenario.inventory.start.add_pick";
         public const string ActionInventoryScheduleAddAndPick = "scenario.inventory.schedule.add_pick";
         public const string ActionInventoryScheduleRemoveAndPick = "scenario.inventory.schedule.remove_pick";
+        public const string ActionWorldEventEditorOpenPrefix = "scenario.world_event.editor.";
+        public const string ActionWorldEventItemPickerOpenPrefix = "scenario.world_event.item_picker.";
         public const string ActionSurvivorOpenColorPickerPrefix = "scenario.survivor.color.open.";
         public const string ActionSurvivorApplyColorCommandPrefix = "color_apply.";
 
@@ -17,5 +19,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string FocusedKindFutureSurvivor = "future_survivor";
         public const string FocusedKindInventoryStartingPicker = "inventory_starting_picker";
         public const string FocusedKindInventorySchedulePicker = "inventory_schedule_picker";
+        public const string FocusedKindWorldEvent = "world_event";
+        public const string FocusedKindWorldEventItemPickerPrefix = "world_event_item_picker:";
     }
 }

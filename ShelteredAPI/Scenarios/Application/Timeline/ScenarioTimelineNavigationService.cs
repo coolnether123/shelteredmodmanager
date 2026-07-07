@@ -63,6 +63,8 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 case ScenarioTimelineEntryKind.Map:
                     return ScenarioStageKind.Map;
                 case ScenarioTimelineEntryKind.Weather:
+                case ScenarioTimelineEntryKind.WorldEvent:
+                case ScenarioTimelineEntryKind.Journal:
                 case ScenarioTimelineEntryKind.CustomModded:
                     return ScenarioStageKind.Events;
                 case ScenarioTimelineEntryKind.Bunker:
@@ -78,15 +80,25 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 return;
 
             string prefix = ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix;
-            if (!entry.FocusActionId.StartsWith(prefix, System.StringComparison.Ordinal))
+            if (entry.FocusActionId.StartsWith(prefix, System.StringComparison.Ordinal))
+            {
+                int survivorIndex;
+                if (!int.TryParse(entry.FocusActionId.Substring(prefix.Length), out survivorIndex))
+                    return;
+
+                state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor;
+                state.FocusedEditorIndex = survivorIndex;
+                state.FocusedEditorIsNew = false;
+                return;
+            }
+
+            if (entry.Kind != ScenarioTimelineEntryKind.WorldEvent
+                || !string.Equals(entry.SourceKind, "scheduled_action", System.StringComparison.OrdinalIgnoreCase)
+                || entry.SourceIndex < 0)
                 return;
 
-            int index;
-            if (!int.TryParse(entry.FocusActionId.Substring(prefix.Length), out index))
-                return;
-
-            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor;
-            state.FocusedEditorIndex = index;
+            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent;
+            state.FocusedEditorIndex = entry.SourceIndex;
             state.FocusedEditorIsNew = false;
         }
 
