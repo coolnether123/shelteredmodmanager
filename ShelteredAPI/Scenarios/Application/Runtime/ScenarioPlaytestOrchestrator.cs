@@ -46,12 +46,34 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             string blockingReason;
             if (!ScenarioWorldReady.Evaluate(out blockingReason))
             {
-                ScenarioApplyResult notReady = new ScenarioApplyResult();
-                notReady.AddMessage("World is not ready for scenario apply; playtest did not start. " + blockingReason);
-                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: " + blockingReason);
-                return notReady;
-            }
+                if (string.Equals(blockingReason, "A cutscene is still active.", StringComparison.Ordinal))
+                {
+                    string cutsceneBlockingReason;
+                    if (!ScenarioPlaytestRestartCutsceneGuard.TryClearBlockingIntroCutscene(
+                        session.WorkingDefinition.Id, out cutsceneBlockingReason))
+                    {
+                        MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: " + cutsceneBlockingReason);
+                        ScenarioApplyResult cutsceneBlocked = new ScenarioApplyResult();
+                        cutsceneBlocked.AddMessage("World is not ready for scenario apply; playtest did not start. " + cutsceneBlockingReason);
+                        return cutsceneBlocked;
+                    }
 
+                    if (!ScenarioWorldReady.Evaluate(out blockingReason))
+                    {
+                        ScenarioApplyResult notReadyAfterCutsceneClear = new ScenarioApplyResult();
+                        notReadyAfterCutsceneClear.AddMessage("World is not ready for scenario apply; playtest did not start. " + blockingReason);
+                        MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: " + blockingReason);
+                        return notReadyAfterCutsceneClear;
+                    }
+                }
+                else
+                {
+                    ScenarioApplyResult notReady = new ScenarioApplyResult();
+                    notReady.AddMessage("World is not ready for scenario apply; playtest did not start. " + blockingReason);
+                    MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: " + blockingReason);
+                    return notReady;
+                }
+            }
             bool staleLiveWorld = session.HasUnappliedDraftChanges;
             bool reusedLiveWorld = session.HasAppliedToCurrentWorld;
             ScenarioApplyResult result;
