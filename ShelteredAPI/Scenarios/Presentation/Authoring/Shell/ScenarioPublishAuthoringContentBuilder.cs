@@ -761,7 +761,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static void AddTimelineAddActions(List<ScenarioAuthoringInspectorItem> items)
         {
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, "Weather", "Schedule rain, storms, or a weather restore on a scenario day.", true, true, "WE", "Add event")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Scheduled Change", "Create a timed scenario change with effects, conditions, and repeat rules.", true, true, "A+", "Add event")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Supply Change", "Create a timed supply, survivor, or quest-impacting change with effects, conditions, and repeat rules.", true, true, "A+", "Add event")));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Timed Trigger", "Create a trigger that fires at a specific scenario time.", true, false, "TS", "Add event")));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Arrival", "Create a survivor who arrives or asks to join later.", true, false, "FS", "Add event")));
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests, "Story Beats", "Open Story to author vanilla scenario stages and encounter beats.", true, false, "ST", "Story link")));

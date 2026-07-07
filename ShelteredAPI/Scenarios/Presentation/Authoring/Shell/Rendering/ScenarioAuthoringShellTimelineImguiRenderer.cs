@@ -24,17 +24,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             TimelineDayInfo[] days = BuildTimelineDayInfos(section);
             TimelineChipInfo[] chips = BuildTimelineChipInfos(section);
-            DrawTimelineAddFlow(section, chips.Length == 0);
+            if (chips.Length == 0)
+            {
+                DrawTimelineEmptyState(section);
+                return;
+            }
 
+            DrawTimelineAddFlow(section, false);
             float availableWidth = GetSectionContentWidth();
             float dayWidth = availableWidth >= 720f ? 156f : 132f;
             int maxLanes = Math.Max(1, MaxTimelineChipLaneCount(days, chips));
             float trackHeight = Mathf.Clamp(86f + (maxLanes * 34f), 158f, 242f);
             Rect viewportRect = GUILayoutUtility.GetRect(availableWidth, trackHeight, GUILayout.ExpandWidth(true), GUILayout.Height(trackHeight));
             DrawTimelineTrackViewport(viewportRect, days, chips, dayWidth, trackHeight);
-
-            if (chips.Length == 0)
-                DrawTimelineEmptyState(section);
         }
 
         private void DrawTimelineAddFlow(ScenarioAuthoringInspectorSection section, bool empty)
@@ -53,7 +55,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (!IsTimelineAddAction(action))
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 20f), 82f, 156f);
+                float width = Math.Max(88f, MeasureButtonWidth(action, false, 20f));
                 if (used + width + 4f > limit && used > 90f)
                 {
                     GUILayout.EndHorizontal();
@@ -92,7 +94,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             Rect rulerRect = new Rect(canvasRect.x, canvasRect.y, canvasRect.width, 42f);
             Color oldColor = GUI.color;
-            GUI.color = new Color(0.19f, 0.15f, 0.10f, 0.58f);
+            GUI.color = new Color(0.28f, 0.22f, 0.16f, 0.52f);
             GUI.DrawTexture(new Rect(rulerRect.x, rulerRect.y + rulerRect.height - 5f, rulerRect.width, 2f), Texture2D.whiteTexture);
             GUI.color = oldColor;
 
@@ -108,7 +110,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawTimelineDayColumn(Rect rect, TimelineDayInfo day)
         {
             Color oldColor = GUI.color;
-            GUI.color = day != null && day.Count > 0 ? new Color(0.86f, 0.78f, 0.60f, 0.68f) : new Color(0.72f, 0.66f, 0.52f, 0.38f);
+            GUI.color = day != null && day.Count > 0 ? new Color(0.82f, 0.74f, 0.58f, 0.36f) : new Color(0.64f, 0.58f, 0.48f, 0.22f);
             ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
             GUI.color = oldColor;
             ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderSubtleTexture, _uiContext.Styles.BorderStrongTexture);
@@ -193,23 +195,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawTimelineEmptyState(ScenarioAuthoringInspectorSection section)
         {
-            GUILayout.Space(6f);
-            Rect rect = GUILayoutUtility.GetRect(GetSectionContentWidth(), 96f, GUILayout.ExpandWidth(true), GUILayout.Height(96f));
+            Rect rect = GUILayoutUtility.GetRect(GetSectionContentWidth(), 110f, GUILayout.ExpandWidth(true), GUILayout.Height(110f));
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Card);
             ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
             GUI.Label(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, 24f), "Nothing scheduled yet", _sectionTitleStyle);
-            GUI.Label(new Rect(rect.x + 14f, rect.y + 38f, rect.width - 28f, 20f), "Add your first event, or open Story for stage beats.", _mutedTextStyle);
+            GUI.Label(new Rect(rect.x + 14f, rect.y + 38f, rect.width - 28f, 20f), "Add events to build your day track, or open Story for beats.", _textStyle);
 
             float x = rect.x + 14f;
-            float y = rect.yMax - 34f;
+            float y = rect.y + 66f;
             int drawn = 0;
-            for (int i = 0; section != null && section.Items != null && i < section.Items.Length && drawn < 3; i++)
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = section.Items[i] != null ? section.Items[i].Action : null;
                 if (!IsTimelineAddAction(action))
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 20f), 88f, 146f);
+                float width = Math.Max(90f, MeasureButtonWidth(action, false, 20f));
+                if (x + width > rect.xMax - 14f && drawn > 0)
+                {
+                    x = rect.x + 14f;
+                    y += 30f;
+                }
                 DrawButton(new Rect(x, y, width, 26f), action, false);
                 x += width + 6f;
                 drawn++;
@@ -292,16 +298,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static Color ResolveTimelineChipColor(string domain)
         {
             if (string.Equals(domain, "weather", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.50f, 0.62f, 0.68f, 1f);
+                return new Color(0.55f, 0.65f, 0.75f, 1f);
             if (string.Equals(domain, "inventory", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.63f, 0.53f, 0.36f, 1f);
+                return new Color(0.66f, 0.58f, 0.44f, 1f);
             if (string.Equals(domain, "arrival", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.55f, 0.64f, 0.45f, 1f);
+                return new Color(0.55f, 0.64f, 0.47f, 1f);
             if (string.Equals(domain, "trigger", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.67f, 0.55f, 0.43f, 1f);
+                return new Color(0.70f, 0.58f, 0.48f, 1f);
             if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
-                return new Color(0.58f, 0.50f, 0.66f, 1f);
-            return new Color(0.58f, 0.58f, 0.50f, 1f);
+                return new Color(0.63f, 0.54f, 0.68f, 1f);
+            return new Color(0.61f, 0.58f, 0.50f, 1f);
         }
 
         private static string ResolveTimelineIconRole(string domain)
