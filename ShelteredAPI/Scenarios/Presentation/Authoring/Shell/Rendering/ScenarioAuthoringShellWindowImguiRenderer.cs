@@ -1797,6 +1797,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawTargetStripSection(section, compactInspector);
             }
+            else if (IsTimelineTrackSection(section))
+            {
+                DrawTimelineTrackSection(section);
+            }
             else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.ActionStrip || section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip)
             {
                 bool renderAsTabs = section.Layout == ScenarioAuthoringInspectorSectionLayout.TabStrip;

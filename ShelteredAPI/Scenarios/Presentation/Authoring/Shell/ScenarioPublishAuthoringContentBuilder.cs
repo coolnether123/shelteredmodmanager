@@ -6,12 +6,15 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -613,6 +616,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
     internal sealed class ScenarioTimelineAuthoringContentBuilder : IScenarioAuthoringWindowContentBuilder
     {
+        private const string TimelineDayMetadataPrefix = "timeline-day|";
+        private const string TimelineChipMetadataPrefix = "timeline-chip|";
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private readonly ScenarioTimelineViewModelBuilder _timelineViewModelBuilder;
 
@@ -631,81 +636,466 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state = context != null ? context.State : null;
             ScenarioDefinition definition = context != null ? context.Definition : null;
             ScenarioRuntimeState runtimeState = ScenarioPublishAuthoringContentBuilder.GetRuntimeState();
-            ScenarioTimelineViewModel model = _timelineViewModelBuilder.Build(_timelineBuilder.BuildDays(definition, runtimeState));
+            List<ScenarioTimelineEntry> entries = _timelineBuilder != null
+                ? _timelineBuilder.BuildEntries(definition, runtimeState)
+                : new List<ScenarioTimelineEntry>();
+            entries.Sort(CompareTimelineEntries);
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-
-            List<ScenarioAuthoringInspectorItem> dayItems = new List<ScenarioAuthoringInspectorItem>();
-            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
-            {
-                ScenarioTimelineDayViewModel day = model.Days[i];
-                dayItems.Add(Item.ActionItem(Item.Action(
-                    ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.Day.ToString(CultureInfo.InvariantCulture),
-                    "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
-                    day.Count.ToString(CultureInfo.InvariantCulture) + " scheduled item(s).",
-                    true,
-                    false,
-                    day.Badge,
-                    day.Categories)));
-            }
-            if (dayItems.Count == 0)
-                dayItems.Add(Item.Text("No scheduled scenario events are currently authored."));
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {
-                Id = "timeline_days",
-                Title = "Timeline Days",
+                Id = "timeline_workshop_track",
+                Title = "What happens, and when?",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = dayItems.ToArray()
+                Items = BuildTimelineTrackItems(state, definition, entries).ToArray()
             });
 
-            string selected = state != null ? state.TimelineSelectedDayId : null;
-            for (int i = 0; model != null && model.Days != null && i < model.Days.Length; i++)
+            sections.Add(new ScenarioAuthoringInspectorSection
             {
-                ScenarioTimelineDayViewModel day = model.Days[i];
-                if (selected != null && !string.Equals(selected, day.Day.ToString(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                List<ScenarioAuthoringInspectorItem> entries = new List<ScenarioAuthoringInspectorItem>();
-                for (int e = 0; day.Entries != null && e < day.Entries.Length; e++)
-                {
-                    ScenarioTimelineEntryViewModel entry = day.Entries[e];
-                    ScenarioAuthoringInspectorItem fact = Item.Property(
-                        entry.Time + " " + entry.Title,
-                        entry.Type + " / " + entry.OwnerStage + " / " + entry.Status);
-                    fact.Detail = string.IsNullOrEmpty(entry.Warning) ? entry.OwnerStage : entry.Warning;
-                    fact.Badge = StatusBadge(entry.Status);
-                    if (state != null && string.Equals(state.TimelineSelectedEntryId, entry.Id, StringComparison.OrdinalIgnoreCase))
-                    {
-                        fact.PulseKey = "timeline.entry." + entry.Id;
-                        fact.PulseSignature = entry.Id + ":" + entry.Status;
-                    }
-                    entries.Add(fact);
-                    entries.Add(Item.ActionItem(Item.Action(
-                        entry.ActionId,
-                        "Edit",
-                        "Open this timeline entry.",
-                        true,
-                        entry.Status == "Blocked" || entry.Status == "Failed",
-                        StatusBadge(entry.Status),
-                        string.IsNullOrEmpty(entry.Warning) ? entry.OwnerStage : entry.Warning)));
-                }
-
-                sections.Add(new ScenarioAuthoringInspectorSection
-                {
-                    Id = "timeline_day_" + day.Day.ToString(CultureInfo.InvariantCulture),
-                    Title = "Day " + day.Day.ToString(CultureInfo.InvariantCulture),
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
-                    Items = entries.ToArray()
-                });
-            }
-
-            ScenarioAuthoringInspectorSection[] triggerSections = ScenarioAuthoringPresentationBuilder.BuildTriggerWindowSections(state, definition);
-            for (int i = 0; triggerSections != null && i < triggerSections.Length; i++)
-                sections.Add(triggerSections[i]);
+                Id = "timeline_logic",
+                Title = "Logic",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
+                Items = BuildTimelineLogicItems(definition).ToArray()
+            });
 
             return sections.ToArray();
+        }
+
+        private List<ScenarioAuthoringInspectorItem> BuildTimelineTrackItems(ScenarioAuthoringState state, ScenarioDefinition definition, List<ScenarioTimelineEntry> entries)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            AddTimelineAddActions(items);
+
+            int lastDay = ResolveLastDay(entries);
+            int visibleDayCount = Math.Max(5, lastDay + 2);
+            string currentWeather = GetCurrentWeatherSummary();
+            for (int day = 1; day <= visibleDayCount; day++)
+            {
+                int count = CountEntriesForDay(entries, day);
+                string baseline = day == 1 ? currentWeather : string.Empty;
+                items.Add(Item.ActionItem(TimelineDayAction(day, count, baseline)));
+            }
+
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null)
+                    items.Add(Item.ActionItem(TimelineChipAction(state, definition, entry)));
+            }
+
+            return items;
+        }
+
+        private static void AddTimelineAddActions(List<ScenarioAuthoringInspectorItem> items)
+        {
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, "Weather", "Schedule rain, storms, or a weather restore on a scenario day.", true, true, "WE", "Add event")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Scheduled Change", "Create a timed scenario change with effects, conditions, and repeat rules.", true, true, "A+", "Add event")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Timed Trigger", "Create a trigger that fires at a specific scenario time.", true, false, "TS", "Add event")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Arrival", "Create a survivor who arrives or asks to join later.", true, false, "FS", "Add event")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests, "Story Beats", "Open Story to author vanilla scenario stages and encounter beats.", true, false, "ST", "Story link")));
+        }
+
+        private static ScenarioAuthoringInspectorAction TimelineDayAction(int day, int count, string baseline)
+        {
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ScenarioAuthoringActionIds.ActionTimelineDayPrefix + day.ToString(CultureInfo.InvariantCulture),
+                "Day " + day.ToString(CultureInfo.InvariantCulture),
+                count.ToString(CultureInfo.InvariantCulture) + " scheduled item(s).",
+                true,
+                count > 0,
+                "D" + day.ToString(CultureInfo.InvariantCulture),
+                baseline,
+                count > 0 ? count.ToString(CultureInfo.InvariantCulture) : string.Empty);
+            action.DisabledReason = TimelineDayMetadataPrefix
+                + day.ToString(CultureInfo.InvariantCulture)
+                + "|"
+                + EscapeMetadata(baseline)
+                + "|"
+                + count.ToString(CultureInfo.InvariantCulture);
+            return action;
+        }
+
+        private static ScenarioAuthoringInspectorAction TimelineChipAction(ScenarioAuthoringState state, ScenarioDefinition definition, ScenarioTimelineEntry entry)
+        {
+            int day = entry != null && entry.When != null ? Math.Max(1, entry.When.Day) : 1;
+            string time = FormatTimelineTime(entry != null ? entry.When : null);
+            string domain = ResolveTimelineDomain(entry);
+            string label = BuildTimelineChipLabel(definition, entry);
+            string status = entry != null ? entry.Status.ToString() : "Pending";
+            string hint = "Day " + day.ToString(CultureInfo.InvariantCulture) + " " + time + ": " + label + ". Click to focus this authored entry.";
+            if (entry != null && !string.IsNullOrEmpty(entry.Warning))
+                hint = hint + " " + entry.Warning;
+
+            bool emphasized = state != null
+                && entry != null
+                && string.Equals(state.TimelineSelectedEntryId, entry.Id, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(status, "Blocked", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status, "Failed", StringComparison.OrdinalIgnoreCase))
+                emphasized = true;
+
+            ScenarioAuthoringInspectorAction action = Item.Action(
+                ScenarioAuthoringActionIds.ActionTimelineEntryPrefix + (entry != null ? entry.Id : string.Empty),
+                time + " " + label,
+                hint,
+                true,
+                emphasized,
+                ResolveTimelineIconText(domain),
+                ResolveTimelineChipDetail(definition, entry),
+                StatusBadge(status));
+            action.DisabledReason = TimelineChipMetadataPrefix
+                + day.ToString(CultureInfo.InvariantCulture)
+                + "|"
+                + EscapeMetadata(domain)
+                + "|"
+                + EscapeMetadata(time)
+                + "|"
+                + EscapeMetadata(status);
+            return action;
+        }
+
+        private static List<ScenarioAuthoringInspectorItem> BuildTimelineLogicItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioAuthoringInspectorItem> graphItems = ScenarioEventGraphInspectorBuilder.BuildItems(definition);
+            string nodes = FindPropertyValue(graphItems, "Nodes", "0");
+            string edges = FindPropertyValue(graphItems, "Edges", "0");
+            int manualTriggers = CountManualTriggers(definition);
+            int timedTriggers = CountTimedTriggers(definition);
+            int gates = definition != null && definition.Gates != null ? definition.Gates.Count : 0;
+            int flagEffects = CountFlagEffects(definition);
+
+            items.Add(Item.Property("Event Graph", nodes + " nodes / " + edges + " links", "Dependency status for triggers, gates, scheduled effects, quests, and outcomes."));
+            items.Add(Item.Property("Manual Triggers", manualTriggers.ToString(CultureInfo.InvariantCulture), timedTriggers.ToString(CultureInfo.InvariantCulture) + " timed trigger(s) appear on the day track."));
+            items.Add(Item.Property("Conditions / Flags", gates.ToString(CultureInfo.InvariantCulture) + " conditions / " + flagEffects.ToString(CultureInfo.InvariantCulture) + " flag effect(s)", "Untimed gates stay here instead of cluttering the day ruler."));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTriggerAddManual, "Add Manual Trigger", "Create a trigger fired by code or another scheduled effect.", true, false, "T+")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionGateAdd, "Add Condition", "Create a reusable condition for scheduled changes.", true, false, "C+")));
+            return items;
+        }
+
+        private static string FindPropertyValue(List<ScenarioAuthoringInspectorItem> items, string label, string fallback)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                ScenarioAuthoringInspectorItem item = items[i];
+                if (item != null
+                    && item.Kind == ScenarioAuthoringInspectorItemKind.Property
+                    && string.Equals(item.Label, label, StringComparison.OrdinalIgnoreCase))
+                    return item.Value;
+            }
+
+            return fallback;
+        }
+
+        private static int CountManualTriggers(ScenarioDefinition definition)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+                if (ScenarioTriggerDefinitionCompiler.IsManual(definition.TriggersAndEvents.Triggers[i]))
+                    count++;
+
+            return count;
+        }
+
+        private static int CountTimedTriggers(ScenarioDefinition definition)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.TriggersAndEvents != null && definition.TriggersAndEvents.Triggers != null && i < definition.TriggersAndEvents.Triggers.Count; i++)
+                if (!ScenarioTriggerDefinitionCompiler.IsManual(definition.TriggersAndEvents.Triggers[i]))
+                    count++;
+
+            return count;
+        }
+
+        private static int CountFlagEffects(ScenarioDefinition definition)
+        {
+            int count = 0;
+            for (int i = 0; definition != null && definition.ScheduledActions != null && i < definition.ScheduledActions.Count; i++)
+            {
+                ScenarioScheduledActionDefinition action = definition.ScheduledActions[i];
+                for (int e = 0; action != null && action.Effects != null && e < action.Effects.Count; e++)
+                {
+                    ScenarioEffectDefinition effect = action.Effects[e];
+                    if (effect != null && effect.Kind == ScenarioEffectKind.SetScenarioFlag)
+                        count++;
+                }
+            }
+
+            return count;
+        }
+
+        private static int ResolveLastDay(List<ScenarioTimelineEntry> entries)
+        {
+            int lastDay = 1;
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null && entry.When != null)
+                    lastDay = Math.Max(lastDay, entry.When.Day);
+            }
+
+            return lastDay;
+        }
+
+        private static int CountEntriesForDay(List<ScenarioTimelineEntry> entries, int day)
+        {
+            int count = 0;
+            for (int i = 0; entries != null && i < entries.Count; i++)
+            {
+                ScenarioTimelineEntry entry = entries[i];
+                if (entry != null && entry.When != null && entry.When.Day == day)
+                    count++;
+            }
+
+            return count;
+        }
+
+        private static int CompareTimelineEntries(ScenarioTimelineEntry left, ScenarioTimelineEntry right)
+        {
+            if (left == null && right == null)
+                return 0;
+            if (left == null)
+                return 1;
+            if (right == null)
+                return -1;
+
+            int byDay = (left.When != null ? left.When.Day : 1).CompareTo(right.When != null ? right.When.Day : 1);
+            if (byDay != 0)
+                return byDay;
+            int byHour = (left.When != null ? left.When.Hour : 0).CompareTo(right.When != null ? right.When.Hour : 0);
+            if (byHour != 0)
+                return byHour;
+            return (left.When != null ? left.When.Minute : 0).CompareTo(right.When != null ? right.When.Minute : 0);
+        }
+
+        private static string BuildTimelineChipLabel(ScenarioDefinition definition, ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return "Missing entry";
+
+            if (string.Equals(entry.SourceKind, "weather_event", StringComparison.OrdinalIgnoreCase))
+            {
+                WeatherEventDefinition weather = GetWeather(definition, entry.SourceIndex);
+                return weather != null ? FormatWeatherState(weather.WeatherState) : SafeLabel(entry.Title);
+            }
+
+            if (string.Equals(entry.SourceKind, "inventory_change", StringComparison.OrdinalIgnoreCase))
+            {
+                TimedInventoryChangeDefinition change = GetInventoryChange(definition, entry.SourceIndex);
+                if (change != null)
+                    return change.Kind + " " + SafeLabel(change.ItemId) + " x" + Math.Max(0, change.Quantity).ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (string.Equals(entry.SourceKind, "future_survivor", StringComparison.OrdinalIgnoreCase))
+            {
+                FutureSurvivorDefinition survivor = GetFutureSurvivor(definition, entry.SourceIndex);
+                if (survivor != null && survivor.Survivor != null)
+                    return SafeLabel(survivor.Survivor.Name);
+            }
+
+            if (string.Equals(entry.SourceKind, "scheduled_action", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioScheduledActionDefinition action = GetScheduledAction(definition, entry.SourceIndex);
+                string label = BuildScheduledActionLabel(definition, action);
+                if (!string.IsNullOrEmpty(label))
+                    return label;
+            }
+
+            return SafeLabel(entry.Title);
+        }
+
+        private static string ResolveTimelineChipDetail(ScenarioDefinition definition, ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return null;
+
+            if (string.Equals(entry.SourceKind, "weather_event", StringComparison.OrdinalIgnoreCase))
+            {
+                WeatherEventDefinition weather = GetWeather(definition, entry.SourceIndex);
+                if (weather != null && weather.DurationHours > 0)
+                    return "Restores after " + weather.DurationHours.ToString(CultureInfo.InvariantCulture) + " hour(s)";
+            }
+
+            if (string.Equals(entry.SourceKind, "scheduled_action", StringComparison.OrdinalIgnoreCase))
+            {
+                ScenarioScheduledActionDefinition action = GetScheduledAction(definition, entry.SourceIndex);
+                if (action != null && !string.IsNullOrEmpty(action.GateId))
+                    return "Condition " + action.GateId;
+            }
+
+            return entry.OwnerStage;
+        }
+
+        private static string BuildScheduledActionLabel(ScenarioDefinition definition, ScenarioScheduledActionDefinition action)
+        {
+            for (int i = 0; action != null && action.Effects != null && i < action.Effects.Count; i++)
+            {
+                ScenarioEffectDefinition effect = action.Effects[i];
+                if (effect == null)
+                    continue;
+
+                switch (effect.Kind)
+                {
+                    case ScenarioEffectKind.AddInventory:
+                    case ScenarioEffectKind.RemoveInventory:
+                        return (effect.Kind == ScenarioEffectKind.RemoveInventory ? "Remove " : "Add ")
+                            + SafeLabel(effect.ItemId)
+                            + " x"
+                            + Math.Max(0, effect.Quantity).ToString(CultureInfo.InvariantCulture);
+                    case ScenarioEffectKind.SetWeather:
+                    case ScenarioEffectKind.RestoreWeather:
+                        return FormatWeatherState(effect.WeatherState);
+                    case ScenarioEffectKind.SpawnFutureSurvivor:
+                        return SafeLabel(ResolveFutureSurvivorName(definition, effect.SurvivorId));
+                    case ScenarioEffectKind.StartQuest:
+                        return "Start " + SafeLabel(effect.QuestId);
+                    case ScenarioEffectKind.FireTrigger:
+                        return "Fire " + SafeLabel(effect.TriggerId);
+                    case ScenarioEffectKind.SetScenarioFlag:
+                        return "Flag " + SafeLabel(effect.FlagId);
+                    case ScenarioEffectKind.UnlockBunkerExpansion:
+                        return "Unlock " + SafeLabel(effect.BunkerExpansionId);
+                    case ScenarioEffectKind.ActivateObject:
+                    case ScenarioEffectKind.DeactivateObject:
+                        return effect.Kind + " " + SafeLabel(effect.ObjectId);
+                }
+            }
+
+            return action != null ? SafeLabel(action.ActionType ?? action.Id) : null;
+        }
+
+        private static string ResolveTimelineDomain(ScenarioTimelineEntry entry)
+        {
+            if (entry == null)
+                return "other";
+
+            switch (entry.Kind)
+            {
+                case ScenarioTimelineEntryKind.Weather:
+                    return "weather";
+                case ScenarioTimelineEntryKind.Inventory:
+                    return "inventory";
+                case ScenarioTimelineEntryKind.Survivor:
+                    return "arrival";
+                case ScenarioTimelineEntryKind.Story:
+                case ScenarioTimelineEntryKind.Quest:
+                    return "story";
+                case ScenarioTimelineEntryKind.CustomModded:
+                    return string.Equals(entry.Type, "Trigger", StringComparison.OrdinalIgnoreCase) ? "trigger" : "change";
+                default:
+                    return "change";
+            }
+        }
+
+        private static string ResolveTimelineIconText(string domain)
+        {
+            if (string.Equals(domain, "weather", StringComparison.OrdinalIgnoreCase))
+                return "WE";
+            if (string.Equals(domain, "inventory", StringComparison.OrdinalIgnoreCase))
+                return "IV";
+            if (string.Equals(domain, "arrival", StringComparison.OrdinalIgnoreCase))
+                return "SV";
+            if (string.Equals(domain, "trigger", StringComparison.OrdinalIgnoreCase))
+                return "TR";
+            if (string.Equals(domain, "story", StringComparison.OrdinalIgnoreCase))
+                return "ST";
+            return "EV";
+        }
+
+        private static string FormatTimelineTime(ScenarioScheduleTime time)
+        {
+            if (time == null)
+                return "--:--";
+            return time.Hour.ToString("D2", CultureInfo.InvariantCulture) + ":" + time.Minute.ToString("D2", CultureInfo.InvariantCulture);
+        }
+
+        private static string GetCurrentWeatherSummary()
+        {
+            WeatherManager manager = WeatherManager.Instance;
+            if (manager == null)
+                return "Weather unavailable / day 1";
+            return manager.currentState + " / day " + manager.currentDay.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static WeatherEventDefinition GetWeather(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.TriggersAndEvents != null
+                && definition.TriggersAndEvents.WeatherEvents != null
+                && index >= 0
+                && index < definition.TriggersAndEvents.WeatherEvents.Count
+                    ? definition.TriggersAndEvents.WeatherEvents[index]
+                    : null;
+        }
+
+        private static TimedInventoryChangeDefinition GetInventoryChange(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.StartingInventory != null
+                && definition.StartingInventory.ScheduledChanges != null
+                && index >= 0
+                && index < definition.StartingInventory.ScheduledChanges.Count
+                    ? definition.StartingInventory.ScheduledChanges[index]
+                    : null;
+        }
+
+        private static FutureSurvivorDefinition GetFutureSurvivor(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.FamilySetup != null
+                && definition.FamilySetup.FutureSurvivors != null
+                && index >= 0
+                && index < definition.FamilySetup.FutureSurvivors.Count
+                    ? definition.FamilySetup.FutureSurvivors[index]
+                    : null;
+        }
+
+        private static ScenarioScheduledActionDefinition GetScheduledAction(ScenarioDefinition definition, int index)
+        {
+            return definition != null
+                && definition.ScheduledActions != null
+                && index >= 0
+                && index < definition.ScheduledActions.Count
+                    ? definition.ScheduledActions[index]
+                    : null;
+        }
+
+        private static string ResolveFutureSurvivorName(ScenarioDefinition definition, string id)
+        {
+            for (int i = 0; definition != null && definition.FamilySetup != null && definition.FamilySetup.FutureSurvivors != null && i < definition.FamilySetup.FutureSurvivors.Count; i++)
+            {
+                FutureSurvivorDefinition survivor = definition.FamilySetup.FutureSurvivors[i];
+                if (survivor != null && string.Equals(survivor.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return survivor.Survivor != null ? survivor.Survivor.Name : survivor.Id;
+            }
+
+            return id;
+        }
+
+        private static string FormatWeatherState(string state)
+        {
+            if (string.Equals(state, "None", StringComparison.OrdinalIgnoreCase))
+                return "Clear Weather";
+            if (string.Equals(state, "BlackRain", StringComparison.OrdinalIgnoreCase))
+                return "Black Rain";
+            if (string.Equals(state, "LightSand", StringComparison.OrdinalIgnoreCase))
+                return "Light Sandstorm";
+            if (string.Equals(state, "MediumSand", StringComparison.OrdinalIgnoreCase))
+                return "Sandstorm";
+            if (string.Equals(state, "HeavySand", StringComparison.OrdinalIgnoreCase))
+                return "Heavy Sandstorm";
+            return SafeLabel(state);
+        }
+
+        private static string SafeLabel(string value)
+        {
+            return string.IsNullOrEmpty(value) ? "<missing>" : value;
+        }
+
+        private static string EscapeMetadata(string value)
+        {
+            return (value ?? string.Empty).Replace("|", "/");
         }
 
         private static string StatusBadge(string status)
