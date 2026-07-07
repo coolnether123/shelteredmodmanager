@@ -21,6 +21,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
         private readonly IScenarioScheduledActionProvider[] _providers;
         private ScenarioDefinition _definition;
         private List<ScenarioScheduledActionDefinition> _actions = new List<ScenarioScheduledActionDefinition>();
+        private readonly HashSet<string> _executingActions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         public ScenarioScheduleRuntimeCoordinator(
             ScenarioRuntimeStateService stateService,
@@ -47,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             if (_winLossOutcomeService != null)
                 _winLossOutcomeService.Initialize(definition, binding);
             _actions = BuildActions(definition);
+            _executingActions.Clear();
         }
 
         public void TickOnGameTimeChanged()
@@ -58,6 +60,9 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
             {
                 ScenarioScheduledActionDefinition action = _actions[i];
                 if (action == null || string.IsNullOrEmpty(action.Id))
+                    continue;
+
+                if (_executingActions.Contains(action.Id))
                     continue;
 
                 if (!IsRepeatable(action)
@@ -95,30 +100,41 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling{
 
         private void ExecuteAction(ScenarioScheduledActionDefinition action)
         {
+            if (action == null || string.IsNullOrEmpty(action.Id))
+                return;
+
+            _executingActions.Add(action.Id);
             string message = null;
             bool ok = true;
-            if (action.Effects == null || action.Effects.Count == 0)
+            try
             {
-                _journal.Record(action, ScenarioExecutedActionStatus.Failed, "No effects were defined.");
-                return;
-            }
-
-            for (int i = 0; i < action.Effects.Count; i++)
-            {
-                string effectMessage;
-                if (!_effects.Dispatch(_definition, action.Effects[i], _journal.State, out effectMessage))
+                if (action.Effects == null || action.Effects.Count == 0)
                 {
-                    ok = false;
-                    message = effectMessage;
-                    break;
+                    _journal.Record(action, ScenarioExecutedActionStatus.Failed, "No effects were defined.");
+                    return;
                 }
-                if (!string.IsNullOrEmpty(effectMessage))
-                    message = string.IsNullOrEmpty(message) ? effectMessage : message + " " + effectMessage;
-            }
 
-            _journal.Record(action, ok ? ScenarioExecutedActionStatus.Succeeded : ScenarioExecutedActionStatus.Failed, message);
-            if (!ok)
-                MMLog.WriteWarning("[ScenarioScheduleRuntime] Scheduled action failed: " + action.Id + " " + (message ?? string.Empty));
+                for (int i = 0; i < action.Effects.Count; i++)
+                {
+                    string effectMessage;
+                    if (!_effects.Dispatch(_definition, action.Effects[i], _journal.State, out effectMessage))
+                    {
+                        ok = false;
+                        message = effectMessage;
+                        break;
+                    }
+                    if (!string.IsNullOrEmpty(effectMessage))
+                        message = string.IsNullOrEmpty(message) ? effectMessage : message + " " + effectMessage;
+                }
+
+                _journal.Record(action, ok ? ScenarioExecutedActionStatus.Succeeded : ScenarioExecutedActionStatus.Failed, message);
+                if (!ok)
+                    MMLog.WriteWarning("[ScenarioScheduleRuntime] Scheduled action failed: " + action.Id + " " + (message ?? string.Empty));
+            }
+            finally
+            {
+                _executingActions.Remove(action.Id);
+            }
         }
 
         private List<ScenarioScheduledActionDefinition> BuildActions(ScenarioDefinition definition)

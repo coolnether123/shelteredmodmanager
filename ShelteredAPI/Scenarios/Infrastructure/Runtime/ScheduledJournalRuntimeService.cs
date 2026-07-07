@@ -19,6 +19,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         private static readonly MethodInfo InsertJournalEntryMethod = typeof(JournalManager).GetMethod(
             "InsertJournalEntry",
             BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly HashSet<string> WrittenMinuteKeys = new HashSet<string>(StringComparer.Ordinal);
 
         private readonly ScenarioActorResolver _actorResolver;
 
@@ -60,6 +61,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             string rendered = !string.IsNullOrEmpty(writerName)
                 ? "[b]" + writerName + "[/b]\n" + text
                 : text;
+            string entryId = ScenarioPropertyBag.GetString(effect.Properties, "entryId", effect.TargetId ?? effect.Id ?? string.Empty);
+            string writeKey = (state != null ? state.RuntimeBindingId : string.Empty)
+                + "|"
+                + entryId
+                + "|"
+                + GameTime.Day.ToString()
+                + ":"
+                + GameTime.Hour.ToString()
+                + ":"
+                + GameTime.Minute.ToString()
+                + "|"
+                + rendered;
+            lock (WrittenMinuteKeys)
+            {
+                if (WrittenMinuteKeys.Contains(writeKey))
+                {
+                    message = "Duplicate journal write skipped.";
+                    return true;
+                }
+                WrittenMinuteKeys.Add(writeKey);
+            }
 
             try
             {
@@ -71,6 +93,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 Exception inner = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
                 message = "Journal entry write failed: " + inner.Message;
                 MMLog.WriteWarning("[ScheduledJournalRuntime] " + message);
+                lock (WrittenMinuteKeys)
+                    WrittenMinuteKeys.Remove(writeKey);
                 return false;
             }
         }
