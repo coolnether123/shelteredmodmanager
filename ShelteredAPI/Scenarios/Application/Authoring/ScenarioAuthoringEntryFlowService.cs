@@ -245,7 +245,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             _selectedBaseKey = baseKey;
             _selectionToken++;
-            _worldReady = false;
+            // Do not clear _worldReady here: a no-op pick (Blank, or a base that
+            // is already loaded) triggers no reload, so nothing would restore it.
+            // A real base change clears readiness via BeginReload when the reload
+            // is queued; a no-op pick keeps the world ready and simply re-selects.
 
             ScenarioEditorSession editorSession = _editorService != null ? _editorService.CurrentSession : null;
             if (editorSession != null && editorSession.WorkingDefinition != null)
@@ -358,9 +361,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 || !_baseModeReloadService.SaveAndReload(editorSession, mode, ScenarioBaseFamilyChoices.KeepCurrentCast, true, out message)
                 || !IsReloadQueuedMessage(message))
             {
+                // Mark the selection handled so TickWizard does not re-dispatch a
+                // failing reload every frame; the author can re-click to retry.
+                _dispatchedToken = _selectionToken;
                 SetWizardStatus("Status: base blocked - " + Safe(message, "scenario world could not be loaded."));
-                // Allow a retry: the selection was not realized.
-                _dispatchedToken = _selectionToken - 1;
                 return;
             }
 
@@ -376,16 +380,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 || !_definitionCatalog.TryLoadDefinition(scenarioId, out source, out path, out validation)
                 || source == null)
             {
+                _dispatchedToken = _selectionToken;
                 SetWizardStatus("Status: base blocked - custom scenario could not be loaded.");
-                _dispatchedToken = _selectionToken - 1;
                 return;
             }
 
             ScenarioDefinition copy = ScenarioDefinitionCloner.Clone(source);
             if (copy == null)
             {
+                _dispatchedToken = _selectionToken;
                 SetWizardStatus("Status: base blocked - custom scenario copy failed.");
-                _dispatchedToken = _selectionToken - 1;
                 return;
             }
 
@@ -410,8 +414,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 || !_baseModeReloadService.SaveAndReloadBaseline(editorSession, copy.BaseGameMode, "from a copy of " + Safe(source.DisplayName, scenarioId), out message)
                 || !IsReloadQueuedMessage(message))
             {
+                _dispatchedToken = _selectionToken;
                 SetWizardStatus("Status: base blocked - " + Safe(message, "custom scenario reload failed."));
-                _dispatchedToken = _selectionToken - 1;
                 return;
             }
 
