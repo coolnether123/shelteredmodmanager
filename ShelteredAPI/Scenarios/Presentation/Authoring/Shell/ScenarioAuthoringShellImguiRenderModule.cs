@@ -101,6 +101,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _assetBrowserSearchText = string.Empty;
         private string _assetBrowserCategoryFilter = CandidateFilterAll;
         private bool _assetBrowserSearchFocused;
+        private string _survivorTraitPickerKey;
+        private string _survivorTraitPickerSearchText = string.Empty;
+        private Rect _survivorTraitPickerButtonRect = RuntimeCompat.ZeroRect();
         private float _activeContentWidth;
         private float _activeUiScale = 1f;
         private int _scaledWindowDrawDepth;

@@ -370,17 +370,81 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
-            if (string.Equals(command, "strength_trait", StringComparison.Ordinal))
+            if (command.StartsWith("stat_set.", StringComparison.Ordinal))
             {
-                CycleTrait(config, true);
+                string[] parts = command.Substring("stat_set.".Length).Split(new[] { '.' }, 2);
+                int value;
+                if (parts.Length == 2 && int.TryParse(ScenarioAuthoringActionCodec.DecodeToken(parts[1]), out value))
+                {
+                    StatOverride stat = ScenarioFamilyMemberFactory.EnsureStat(config, parts[0], 5);
+                    if (stat != null)
+                    {
+                        stat.Value = ScenarioFamilyMemberFactory.ClampStat(value);
+                        MarkDirty(session);
+                        message = "Changed " + label + " " + stat.StatId + " to " + stat.Value.ToString() + ".";
+                        return true;
+                    }
+                }
+            }
+
+            if (command.StartsWith("condition.", StringComparison.Ordinal))
+            {
+                string[] parts = command.Substring("condition.".Length).Split('.');
+                int delta;
+                if (parts.Length == 2 && int.TryParse(parts[1], out delta))
+                {
+                    int current;
+                    ScenarioFamilyMemberFactory.TryGetConditionValue(config, parts[0], out current);
+                    ScenarioFamilyMemberFactory.SetConditionValue(config, parts[0], current + delta);
+                    MarkDirty(session);
+                    message = "Changed " + label + " " + parts[0] + " condition.";
+                    return true;
+                }
+            }
+
+            if (command.StartsWith("condition_set.", StringComparison.Ordinal))
+            {
+                string[] parts = command.Substring("condition_set.".Length).Split(new[] { '.' }, 2);
+                int value;
+                if (parts.Length == 2 && int.TryParse(ScenarioAuthoringActionCodec.DecodeToken(parts[1]), out value))
+                {
+                    ScenarioFamilyMemberFactory.SetConditionValue(config, parts[0], value);
+                    MarkDirty(session);
+                    message = "Changed " + label + " " + parts[0] + " condition.";
+                    return true;
+                }
+            }
+
+            if (command.StartsWith("trait.", StringComparison.Ordinal))
+            {
+                string[] parts = command.Substring("trait.".Length).Split('.');
+                if (parts.Length == 2)
+                {
+                    bool strength = string.Equals(parts[0], "strength", StringComparison.OrdinalIgnoreCase);
+                    bool weakness = string.Equals(parts[0], "weakness", StringComparison.OrdinalIgnoreCase);
+                    if ((strength || weakness) && SetTrait(config, strength, parts[1]))
+                    {
+                        MarkDirty(session);
+                        message = "Changed " + label + " " + parts[0] + " trait.";
+                        return true;
+                    }
+
+                    message = "That trait conflicts with the paired " + (strength ? "weakness" : "strength") + " trait.";
+                    return true;
+                }
+            }
+
+            if (command.StartsWith("strength_trait", StringComparison.Ordinal))
+            {
+                CycleTrait(config, true, ParseTraitCycleDelta(command, "strength_trait"));
                 MarkDirty(session);
                 message = "Changed " + label + " strength trait.";
                 return true;
             }
 
-            if (string.Equals(command, "weakness_trait", StringComparison.Ordinal))
+            if (command.StartsWith("weakness_trait", StringComparison.Ordinal))
             {
-                CycleTrait(config, false);
+                CycleTrait(config, false, ParseTraitCycleDelta(command, "weakness_trait"));
                 MarkDirty(session);
                 message = "Changed " + label + " weakness trait.";
                 return true;
@@ -558,6 +622,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
+            CaptureConditions(member, config);
+        }
+
+        private static void CaptureConditions(FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null || member.stats == null)
+                return;
+
+            if (config.Conditions == null)
+                config.Conditions = new FamilyMemberConditionConfig();
+
+            config.Conditions.Hunger = ScenarioFamilyMemberFactory.ClampCondition((int)member.stats.hunger.Value);
+            config.Conditions.Thirst = ScenarioFamilyMemberFactory.ClampCondition((int)member.stats.thirst.Value);
+            config.Conditions.Fatigue = ScenarioFamilyMemberFactory.ClampCondition((int)member.stats.fatigue.Value);
+            config.Conditions.Dirtiness = ScenarioFamilyMemberFactory.ClampCondition((int)member.stats.dirtiness.Value);
+            config.Conditions.Toilet = ScenarioFamilyMemberFactory.ClampCondition((int)member.stats.toilet.Value);
+            config.Conditions.Stress = ScenarioFamilyMemberFactory.ClampCondition((int)member.stats.stress.Value);
         }
 
         private void CycleTexture(FamilyMemberConfig config, ScenarioCharacterTexturePart part, int delta)
@@ -602,7 +683,26 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             config.Traits.Clear();
             AddRandomTrait(config, true);
             AddRandomTrait(config, false);
+            RandomizeConditions(config);
             RandomizeLook(config);
+        }
+
+        private static void RandomizeConditions(FamilyMemberConfig config)
+        {
+            if (config == null)
+                return;
+
+            if (config.Conditions == null)
+                config.Conditions = new FamilyMemberConditionConfig();
+
+            List<int> offsets = new List<int> { -23, -13, 2, 11, 21 };
+            offsets.Shuffle<int>();
+            config.Conditions.Fatigue = ScenarioFamilyMemberFactory.ClampCondition(20 + UnityEngine.Random.Range(0, 11) + offsets[0]);
+            config.Conditions.Toilet = ScenarioFamilyMemberFactory.ClampCondition(25 + UnityEngine.Random.Range(0, 11) + offsets[1]);
+            config.Conditions.Dirtiness = ScenarioFamilyMemberFactory.ClampCondition(30 + UnityEngine.Random.Range(0, 11) + offsets[2]);
+            config.Conditions.Hunger = ScenarioFamilyMemberFactory.ClampCondition(35 + UnityEngine.Random.Range(0, 11) + offsets[3]);
+            config.Conditions.Thirst = ScenarioFamilyMemberFactory.ClampCondition(40 + UnityEngine.Random.Range(0, 11) + offsets[4]);
+            config.Conditions.Stress = 0;
         }
 
         private void RandomizeLook(FamilyMemberConfig config)
@@ -798,7 +898,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return ScenarioGender.Any;
         }
 
-        private static void CycleTrait(FamilyMemberConfig config, bool strength)
+        private static int ParseTraitCycleDelta(string command, string prefix)
+        {
+            if (string.IsNullOrEmpty(command) || string.IsNullOrEmpty(prefix) || command.Length <= prefix.Length + 1)
+                return 1;
+
+            int delta;
+            return int.TryParse(command.Substring(prefix.Length + 1), out delta) && delta < 0 ? -1 : 1;
+        }
+
+        private static void CycleTrait(FamilyMemberConfig config, bool strength, int delta)
         {
             if (config == null)
                 return;
@@ -828,9 +937,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
+            int direction = delta < 0 ? -1 : 1;
             for (int offset = 1; offset <= values.Length; offset++)
             {
-                int nextIndex = (currentIndex + offset) % values.Length;
+                int nextIndex = Mod(currentIndex + (offset * direction), values.Length);
                 object next = values.GetValue(nextIndex);
                 if (next == null || string.Equals(next.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -840,6 +950,47 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 config.Traits.Add(prefix + next.ToString());
                 return;
             }
+        }
+
+        private static bool SetTrait(FamilyMemberConfig config, bool strength, string value)
+        {
+            if (config == null || string.IsNullOrEmpty(value))
+                return false;
+
+            string prefix = strength ? "Strength:" : "Weakness:";
+            Array values = Enum.GetValues(strength ? typeof(Traits.Strength) : typeof(Traits.Weakness));
+            object selected = null;
+            for (int i = 0; values != null && i < values.Length; i++)
+            {
+                object candidate = values.GetValue(i);
+                if (candidate != null && string.Equals(candidate.ToString(), value, StringComparison.OrdinalIgnoreCase))
+                {
+                    selected = candidate;
+                    break;
+                }
+            }
+
+            if (selected == null || string.Equals(selected.ToString(), "Max", StringComparison.OrdinalIgnoreCase) || HasOppositeTrait(config, strength, selected))
+                return false;
+
+            for (int i = config.Traits.Count - 1; i >= 0; i--)
+            {
+                string trait = config.Traits[i];
+                if (trait != null && trait.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    config.Traits.RemoveAt(i);
+            }
+
+            config.Traits.Add(prefix + selected.ToString());
+            return true;
+        }
+
+        private static int Mod(int value, int divisor)
+        {
+            if (divisor <= 0)
+                return 0;
+
+            int result = value % divisor;
+            return result < 0 ? result + divisor : result;
         }
 
         private static bool HasOppositeTrait(FamilyMemberConfig config, bool strength, object value)

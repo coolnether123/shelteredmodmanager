@@ -84,6 +84,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (pending == null)
                 return;
 
+            ScenarioFamilyMemberFactory.ApplyConditions(member, pending.Survivor != null ? pending.Survivor.Survivor : null);
+
             if (_actorResolver == null)
                 return;
 

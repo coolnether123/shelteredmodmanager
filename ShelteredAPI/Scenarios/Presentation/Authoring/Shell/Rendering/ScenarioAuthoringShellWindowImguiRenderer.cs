@@ -1674,8 +1674,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float y = inner.y + 30f;
             for (int i = 0; editor.StatRows != null && i < editor.StatRows.Length; i++)
             {
-                DrawSurvivorStatRow(new Rect(inner.x, y, inner.width, 34f), editor.StatRows[i]);
-                y += 38f;
+                DrawSurvivorStatRow(new Rect(inner.x, y, inner.width, 30f), editor.StatRows[i]);
+                y += 34f;
             }
 
             y += 8f;
@@ -1683,9 +1683,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             y += 30f;
             for (int i = 0; editor.TraitRows != null && i < editor.TraitRows.Length; i++)
             {
-                DrawSurvivorTraitRow(new Rect(inner.x, y, inner.width, 34f), editor.TraitRows[i]);
-                y += 38f;
+                DrawSurvivorTraitRow(new Rect(inner.x, y, inner.width, 30f), editor.TraitRows[i]);
+                y += 34f;
             }
+
+            y += 8f;
+            GUI.Label(new Rect(inner.x, y, inner.width, 24f), "Condition", _sectionTitleStyle);
+            y += 30f;
+            float conditionGap = 8f;
+            float conditionWidth = Math.Max(120f, (inner.width - conditionGap) * 0.5f);
+            for (int i = 0; editor.ConditionRows != null && i < editor.ConditionRows.Length; i++)
+            {
+                int column = i % 2;
+                int rowIndex = i / 2;
+                Rect conditionRect = new Rect(inner.x + column * (conditionWidth + conditionGap), y + rowIndex * 34f, conditionWidth, 30f);
+                DrawSurvivorConditionRow(conditionRect, editor.ConditionRows[i]);
+            }
+
+            DrawSurvivorTraitPickerPopup(editor);
         }
 
         private void DrawSurvivorStatRow(Rect rect, ScenarioSurvivorStatRowViewModel row)
@@ -1693,13 +1708,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (row == null)
                 return;
 
-            float labelWidth = Mathf.Clamp(rect.width * 0.30f, 88f, 146f);
+            float labelWidth = Mathf.Clamp(rect.width * 0.24f, 78f, 126f);
             float buttonWidth = 30f;
             float valueWidth = 48f;
+            float rangeWidth = 44f;
             GUI.Label(new Rect(rect.x, rect.y + 7f, labelWidth, 20f), row.Label ?? string.Empty, _textStyle);
             DrawButton(new Rect(rect.x + labelWidth + 6f, rect.y + 3f, buttonWidth, 28f), row.DecreaseAction, false);
 
-            Rect barRect = new Rect(rect.x + labelWidth + buttonWidth + 14f, rect.y + 8f, Math.Max(56f, rect.width - labelWidth - (buttonWidth * 2f) - valueWidth - 34f), 16f);
+            Rect barRect = new Rect(rect.x + labelWidth + buttonWidth + 14f, rect.y + 8f, Math.Max(48f, rect.width - labelWidth - (buttonWidth * 2f) - valueWidth - rangeWidth - 42f), 16f);
             ScenarioUiAtlasSkin.DrawCornerCutTexture(barRect, _uiContext.Styles.PanelInsetTexture);
             float fillWidth = Mathf.Clamp01(row.Value / (float)Math.Max(1, row.Max)) * Math.Max(0f, barRect.width - 4f);
             Color oldColor = GUI.color;
@@ -1707,8 +1723,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.DrawTexture(new Rect(barRect.x + 2f, barRect.y + 2f, fillWidth, barRect.height - 4f), Texture2D.whiteTexture);
             GUI.color = oldColor;
 
-            string value = row.Value.ToString() + "/" + row.Max.ToString();
-            GUI.Label(new Rect(barRect.xMax + 8f, rect.y + 7f, valueWidth, 20f), value, _mutedTextStyle);
+            Rect valueRect = new Rect(barRect.xMax + 8f, rect.y + 3f, valueWidth, 28f);
+            DrawSurvivorInlineTextField(valueRect, "survivor.stat." + row.Id, row.Value.ToString(), row.TextAction);
+            GUI.Label(new Rect(valueRect.xMax + 4f, rect.y + 7f, rangeWidth, 20f), row.RangeText ?? string.Empty, _mutedTextStyle);
             DrawButton(new Rect(rect.xMax - buttonWidth, rect.y + 3f, buttonWidth, 28f), row.IncreaseAction, false);
         }
 
@@ -1719,8 +1736,139 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float labelWidth = Mathf.Clamp(rect.width * 0.34f, 118f, 170f);
             GUI.Label(new Rect(rect.x, rect.y + 7f, labelWidth, 20f), row.Label ?? string.Empty, _textStyle);
-            Rect buttonRect = new Rect(rect.x + labelWidth + 8f, rect.y + 3f, Math.Max(120f, rect.width - labelWidth - 8f), 28f);
-            DrawButton(buttonRect, row.CycleAction, false);
+            float buttonWidth = 30f;
+            Rect previousRect = new Rect(rect.x + labelWidth + 8f, rect.y + 3f, buttonWidth, 28f);
+            Rect nextRect = new Rect(rect.xMax - buttonWidth, rect.y + 3f, buttonWidth, 28f);
+            Rect pickerRect = new Rect(previousRect.xMax + 6f, rect.y + 3f, Math.Max(80f, nextRect.x - previousRect.xMax - 12f), 28f);
+            DrawButton(previousRect, row.PreviousAction, false);
+            bool pickerEnabled = row.PickerAction != null && row.PickerAction.Enabled;
+            bool pickerPressed = pickerEnabled && IsInteractiveMouseDownAllowed(pickerRect);
+            ScenarioUiAtlasSkin.DrawButton(pickerRect, false, pickerEnabled, pickerPressed, false);
+            GUIContent pickerContent = new GUIContent(ShortenToFit(row.PickerAction != null ? row.PickerAction.Label ?? string.Empty : string.Empty, Math.Max(0f, pickerRect.width - 14f), pickerEnabled ? _buttonContentStyle : _disabledButtonContentStyle), row.PickerAction != null ? row.PickerAction.Hint ?? row.PickerAction.Detail ?? string.Empty : string.Empty);
+            if (DrawPlainButton(pickerRect, pickerContent, pickerEnabled ? _buttonContentStyle : _disabledButtonContentStyle, pickerEnabled))
+            {
+                _survivorTraitPickerKey = string.Equals(_survivorTraitPickerKey, row.PickerKey, StringComparison.OrdinalIgnoreCase) ? null : row.PickerKey;
+                _survivorTraitPickerSearchText = string.Empty;
+                _survivorTraitPickerButtonRect = pickerRect;
+                Event.current.Use();
+            }
+            else if (string.Equals(_survivorTraitPickerKey, row.PickerKey, StringComparison.OrdinalIgnoreCase))
+            {
+                _survivorTraitPickerButtonRect = pickerRect;
+            }
+            DrawButton(nextRect, row.NextAction, false);
+        }
+
+        private void DrawSurvivorConditionRow(Rect rect, ScenarioSurvivorConditionRowViewModel row)
+        {
+            if (row == null)
+                return;
+
+            float labelWidth = Mathf.Clamp(rect.width * 0.34f, 58f, 84f);
+            float buttonWidth = 24f;
+            float valueWidth = 38f;
+            float rangeWidth = rect.width >= 230f ? 38f : 0f;
+            GUI.Label(new Rect(rect.x, rect.y + 6f, labelWidth, 20f), row.Label ?? string.Empty, _textStyle);
+            DrawButton(new Rect(rect.x + labelWidth + 6f, rect.y + 2f, buttonWidth, 28f), row.DecreaseAction, false);
+            Rect valueRect = new Rect(rect.x + labelWidth + buttonWidth + 8f, rect.y + 2f, valueWidth, 28f);
+            DrawSurvivorInlineTextField(valueRect, "survivor.condition." + row.Id, row.Value.ToString(), row.TextAction);
+            if (rangeWidth > 0f)
+                GUI.Label(new Rect(valueRect.xMax + 4f, rect.y + 6f, rangeWidth, 20f), row.RangeText ?? string.Empty, _mutedTextStyle);
+            float helpX = valueRect.xMax + rangeWidth + 12f;
+            float helpWidth = Math.Max(50f, rect.xMax - helpX - buttonWidth - 8f);
+            if (helpWidth >= 90f)
+                GUI.Label(new Rect(helpX, rect.y + 6f, helpWidth, 20f), ShortenToFit(row.HelpText ?? string.Empty, helpWidth, _mutedTextStyle), _mutedTextStyle);
+            DrawButton(new Rect(rect.xMax - buttonWidth, rect.y + 2f, buttonWidth, 28f), row.IncreaseAction, false);
+        }
+
+        private void DrawSurvivorInlineTextField(Rect rect, string controlName, string value, ScenarioAuthoringInspectorAction action)
+        {
+            ScenarioAuthoringInspectorItem item = new ScenarioAuthoringInspectorItem
+            {
+                Action = action
+            };
+            DrawInlineEditableField(rect, item, controlName, value ?? string.Empty, _uiContext.Styles.Field);
+        }
+
+        private void DrawSurvivorTraitPickerPopup(ScenarioSurvivorEditorViewModel editor)
+        {
+            if (string.IsNullOrEmpty(_survivorTraitPickerKey) || editor == null)
+                return;
+
+            ScenarioSurvivorTraitRowViewModel row = FindSurvivorTraitRow(editor, _survivorTraitPickerKey);
+            if (row == null || row.Options == null)
+            {
+                _survivorTraitPickerKey = null;
+                return;
+            }
+
+            Rect popupRect = new Rect(_survivorTraitPickerButtonRect.x, _survivorTraitPickerButtonRect.yMax + 4f, Math.Max(300f, _survivorTraitPickerButtonRect.width + 120f), 246f);
+            popupRect.x = Mathf.Min(popupRect.x, Screen.width - popupRect.width - 12f);
+            popupRect.y = Mathf.Min(popupRect.y, Screen.height - popupRect.height - 12f);
+            RegisterInteractiveRegion(popupRect);
+            GUI.Box(popupRect, GUIContent.none, _uiContext.Styles.Section);
+
+            Rect inner = Inset(popupRect, 8f);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width, 20f), row.Label ?? "Trait", _smallTitleStyle);
+            Rect searchRect = new Rect(inner.x, inner.y + 24f, inner.width, 26f);
+            bool searchTopmost = IsInteractiveVisualTopmost(searchRect);
+            if (searchTopmost)
+            {
+                GUI.SetNextControlName("survivor_trait_picker_search");
+                _survivorTraitPickerSearchText = GUI.TextField(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.Field);
+            }
+            else
+            {
+                GUI.Box(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.Field);
+            }
+
+            float y = searchRect.yMax + 8f;
+            int drawn = 0;
+            for (int i = 0; i < row.Options.Length && drawn < 6; i++)
+            {
+                ScenarioSurvivorTraitOptionViewModel option = row.Options[i];
+                if (!TraitOptionMatchesSearch(option, _survivorTraitPickerSearchText))
+                    continue;
+
+                Rect optionRect = new Rect(inner.x, y, inner.width, 26f);
+                DrawButton(optionRect, option.SelectAction, false);
+                Rect descriptionRect = new Rect(inner.x + 8f, optionRect.yMax - 2f, inner.width - 16f, 18f);
+                GUI.Label(descriptionRect, ShortenToFit(option.Description ?? string.Empty, descriptionRect.width, _mutedTextStyle), _mutedTextStyle);
+                y += 46f;
+                drawn++;
+            }
+
+            if (drawn == 0)
+                GUI.Label(new Rect(inner.x, y, inner.width, 22f), "No matching traits.", _mutedTextStyle);
+
+            Event evt = Event.current;
+            if (evt != null && evt.type == EventType.MouseDown && evt.button == 0 && !popupRect.Contains(evt.mousePosition) && !_survivorTraitPickerButtonRect.Contains(evt.mousePosition))
+                _survivorTraitPickerKey = null;
+        }
+
+        private static ScenarioSurvivorTraitRowViewModel FindSurvivorTraitRow(ScenarioSurvivorEditorViewModel editor, string key)
+        {
+            for (int i = 0; editor != null && editor.TraitRows != null && i < editor.TraitRows.Length; i++)
+            {
+                ScenarioSurvivorTraitRowViewModel row = editor.TraitRows[i];
+                if (row != null && string.Equals(row.PickerKey, key, StringComparison.OrdinalIgnoreCase))
+                    return row;
+            }
+
+            return null;
+        }
+
+        private static bool TraitOptionMatchesSearch(ScenarioSurvivorTraitOptionViewModel option, string search)
+        {
+            if (option == null)
+                return false;
+
+            string trimmed = (search ?? string.Empty).Trim();
+            if (trimmed.Length == 0)
+                return true;
+
+            string haystack = (option.Label ?? string.Empty) + " " + (option.Description ?? string.Empty) + " " + (option.Id ?? string.Empty);
+            return haystack.IndexOf(trimmed, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void DrawModFieldSection(ScenarioAuthoringInspectorSection section)
@@ -1921,6 +2069,45 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (focused || (fieldTopmost && Event.current != null && rect.Contains(Event.current.mousePosition)))
                 DrawFieldFocusBorder(rect);
             TryCommitEditableField(item, controlName, value, next, previouslyFocused, focused);
+            TrackEditableFieldFocus(controlName, focused);
+        }
+
+        private void DrawInlineEditableField(Rect rect, ScenarioAuthoringInspectorItem item, string controlName, string value, GUIStyle style)
+        {
+            if (string.IsNullOrEmpty(controlName))
+                controlName = "editable.inline";
+
+            string focusedName = GUI.GetNameOfFocusedControl();
+            bool wasFocused = string.Equals(focusedName, controlName, StringComparison.Ordinal);
+            bool previouslyFocused = _editableFieldsFocusedLastFrame.Contains(controlName);
+            string draft;
+            if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || (!wasFocused && !previouslyFocused))
+                draft = value ?? string.Empty;
+
+            Event evt = Event.current;
+            bool fieldTopmost = IsInteractiveVisualTopmost(rect);
+            bool hovered = evt != null && rect.Contains(evt.mousePosition) && fieldTopmost;
+            if (hovered && evt.type == EventType.MouseDown && evt.button == 0)
+                GUI.FocusControl(controlName);
+
+            string next;
+            if (fieldTopmost)
+            {
+                GUI.SetNextControlName(controlName);
+                next = GUI.TextField(rect, draft, style);
+            }
+            else
+            {
+                GUI.Box(rect, draft, style);
+                next = draft;
+            }
+
+            _editableFieldDrafts[controlName] = next;
+            bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+            _editableFieldFocused = _editableFieldFocused || focused;
+            if (focused || hovered)
+                DrawFieldFocusBorder(rect);
+            TryCommitEditableField(item, controlName, value ?? string.Empty, next, previouslyFocused, focused);
             TrackEditableFieldFocus(controlName, focused);
         }
 

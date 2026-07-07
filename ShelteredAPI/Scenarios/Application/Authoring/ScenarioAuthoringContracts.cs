@@ -1222,6 +1222,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioSurvivorColorRowViewModel[] ColorRows { get; set; }
         public ScenarioSurvivorStatRowViewModel[] StatRows { get; set; }
         public ScenarioSurvivorTraitRowViewModel[] TraitRows { get; set; }
+        public ScenarioSurvivorConditionRowViewModel[] ConditionRows { get; set; }
         public ScenarioAuthoringInspectorAction[] UtilityActions { get; set; }
         public ScenarioAuthoringInspectorAction[] CloseActions { get; set; }
     }
@@ -1251,16 +1252,46 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Id { get; set; }
         public string Label { get; set; }
         public int Value { get; set; }
+        public int Min { get; set; }
         public int Max { get; set; }
+        public string RangeText { get; set; }
         public ScenarioAuthoringInspectorAction DecreaseAction { get; set; }
         public ScenarioAuthoringInspectorAction IncreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction TextAction { get; set; }
     }
 
     internal sealed class ScenarioSurvivorTraitRowViewModel
     {
+        public string Kind { get; set; }
         public string Label { get; set; }
         public string Value { get; set; }
-        public ScenarioAuthoringInspectorAction CycleAction { get; set; }
+        public string PickerKey { get; set; }
+        public ScenarioAuthoringInspectorAction PreviousAction { get; set; }
+        public ScenarioAuthoringInspectorAction NextAction { get; set; }
+        public ScenarioAuthoringInspectorAction PickerAction { get; set; }
+        public ScenarioSurvivorTraitOptionViewModel[] Options { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorTraitOptionViewModel
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public string Description { get; set; }
+        public ScenarioAuthoringInspectorAction SelectAction { get; set; }
+    }
+
+    internal sealed class ScenarioSurvivorConditionRowViewModel
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public int Value { get; set; }
+        public int Min { get; set; }
+        public int Max { get; set; }
+        public string RangeText { get; set; }
+        public string HelpText { get; set; }
+        public ScenarioAuthoringInspectorAction DecreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction IncreaseAction { get; set; }
+        public ScenarioAuthoringInspectorAction TextAction { get; set; }
     }
 
     internal enum ScenarioSurvivorModFieldControlKind

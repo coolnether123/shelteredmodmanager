@@ -2969,21 +2969,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 TextureRows = BuildSurvivorTextureRows(member, indexedPrefix),
                 ColorRows = BuildSurvivorColorRows(member, indexedPrefix),
                 StatRows = BuildSurvivorStatRows(member, indexedPrefix),
-                TraitRows = new[]
-                {
-                    new ScenarioSurvivorTraitRowViewModel
-                    {
-                        Label = "Strength Trait",
-                        Value = strengthTrait,
-                        CycleAction = Action(indexedPrefix + "strength_trait", Safe(strengthTrait), "Cycle this survivor's strength characteristic. Vanilla paired trait conflicts are skipped.", true, false, "ST", strengthTrait)
-                    },
-                    new ScenarioSurvivorTraitRowViewModel
-                    {
-                        Label = "Weakness Trait",
-                        Value = weaknessTrait,
-                        CycleAction = Action(indexedPrefix + "weakness_trait", Safe(weaknessTrait), "Cycle this survivor's weakness characteristic. Vanilla paired trait conflicts are skipped.", true, false, "WT", weaknessTrait)
-                    }
-                },
+                TraitRows = BuildSurvivorTraitRows(member, indexedPrefix, strengthTrait, weaknessTrait),
+                ConditionRows = BuildSurvivorConditionRows(member, indexedPrefix),
                 UtilityActions = new[]
                 {
                     Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND"),
@@ -3075,16 +3062,114 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 int rawValue = FindStatValue(member, statId, 5);
                 int displayValue = ClampStatDisplay(rawValue);
                 string statDetail = FormatStatDisplayDetail(rawValue, displayValue);
-                bool canIncrease = displayValue < 20;
-                bool canDecrease = displayValue > 0;
+                bool canIncrease = displayValue < ScenarioFamilyMemberFactory.StatMax;
+                bool canDecrease = displayValue > ScenarioFamilyMemberFactory.StatMin;
                 rows[i] = new ScenarioSurvivorStatRowViewModel
                 {
                     Id = statId,
                     Label = statId,
                     Value = displayValue,
-                    Max = 20,
-                    DecreaseAction = Action(indexedPrefix + "stat." + statId + ".-1", "-", "Decrease " + statId + ".", canDecrease, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canDecrease ? statDetail : "Stats are limited to 0-20."),
-                    IncreaseAction = Action(indexedPrefix + "stat." + statId + ".1", "+", "Increase " + statId + ".", canIncrease, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canIncrease ? statDetail : "Stats are limited to 0-20.")
+                    Min = ScenarioFamilyMemberFactory.StatMin,
+                    Max = ScenarioFamilyMemberFactory.StatMax,
+                    RangeText = ScenarioFamilyMemberFactory.StatMin.ToString(CultureInfo.InvariantCulture) + "-" + ScenarioFamilyMemberFactory.StatMax.ToString(CultureInfo.InvariantCulture),
+                    DecreaseAction = Action(indexedPrefix + "stat." + statId + ".-1", "-", "Decrease " + statId + ".", canDecrease, false, "-", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canDecrease ? statDetail : "Stats are limited to 1-20."),
+                    IncreaseAction = Action(indexedPrefix + "stat." + statId + ".1", "+", "Increase " + statId + ".", canIncrease, false, "+", displayValue.ToString(CultureInfo.InvariantCulture), null, null, canIncrease ? statDetail : "Stats are limited to 1-20."),
+                    TextAction = Action(indexedPrefix + "stat_set." + statId + ".", displayValue.ToString(CultureInfo.InvariantCulture), "Enter a " + statId + " value from 1 to 20.", true, false, "TX", displayValue.ToString(CultureInfo.InvariantCulture))
+                };
+            }
+
+            return rows;
+        }
+
+        private static ScenarioSurvivorTraitRowViewModel[] BuildSurvivorTraitRows(FamilyMemberConfig member, string indexedPrefix, string strengthTrait, string weaknessTrait)
+        {
+            return new[]
+            {
+                new ScenarioSurvivorTraitRowViewModel
+                {
+                    Kind = "strength",
+                    Label = "Strength Trait",
+                    Value = strengthTrait,
+                    PickerKey = indexedPrefix + "trait.strength",
+                    PreviousAction = Action(indexedPrefix + "strength_trait.-1", "<", "Switch to the previous valid strength trait.", true, false, "<"),
+                    NextAction = Action(indexedPrefix + "strength_trait.1", ">", "Switch to the next valid strength trait.", true, false, ">"),
+                    PickerAction = Action(indexedPrefix + "trait_picker.strength", Safe(strengthTrait), "Pick a strength trait with its vanilla effect.", true, false, "ST", strengthTrait),
+                    Options = BuildTraitOptions(member, indexedPrefix, true)
+                },
+                new ScenarioSurvivorTraitRowViewModel
+                {
+                    Kind = "weakness",
+                    Label = "Weakness Trait",
+                    Value = weaknessTrait,
+                    PickerKey = indexedPrefix + "trait.weakness",
+                    PreviousAction = Action(indexedPrefix + "weakness_trait.-1", "<", "Switch to the previous valid weakness trait.", true, false, "<"),
+                    NextAction = Action(indexedPrefix + "weakness_trait.1", ">", "Switch to the next valid weakness trait.", true, false, ">"),
+                    PickerAction = Action(indexedPrefix + "trait_picker.weakness", Safe(weaknessTrait), "Pick a weakness trait with its vanilla effect.", true, false, "WT", weaknessTrait),
+                    Options = BuildTraitOptions(member, indexedPrefix, false)
+                }
+            };
+        }
+
+        private static ScenarioSurvivorTraitOptionViewModel[] BuildTraitOptions(FamilyMemberConfig member, string indexedPrefix, bool strength)
+        {
+            Array values = Enum.GetValues(strength ? typeof(Traits.Strength) : typeof(Traits.Weakness));
+            List<ScenarioSurvivorTraitOptionViewModel> options = new List<ScenarioSurvivorTraitOptionViewModel>();
+            for (int i = 0; values != null && i < values.Length; i++)
+            {
+                object value = values.GetValue(i);
+                if (value == null || string.Equals(value.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                bool conflicts = HasOppositeTrait(member, strength, value);
+                string id = value.ToString();
+                string label = FormatTraitName(id);
+                string description = GetTraitDescription(strength, id);
+                options.Add(new ScenarioSurvivorTraitOptionViewModel
+                {
+                    Id = id,
+                    Label = label,
+                    Description = description,
+                    SelectAction = Action(
+                        indexedPrefix + "trait." + (strength ? "strength" : "weakness") + "." + id,
+                        label,
+                        description,
+                        !conflicts,
+                        false,
+                        strength ? "ST" : "WT",
+                        id,
+                        null,
+                        null,
+                        conflicts ? "Blocked by the paired " + (strength ? "weakness" : "strength") + " trait." : null)
+                });
+            }
+
+            return options.ToArray();
+        }
+
+        private static ScenarioSurvivorConditionRowViewModel[] BuildSurvivorConditionRows(FamilyMemberConfig member, string indexedPrefix)
+        {
+            string[] conditionIds = ScenarioFamilyMemberFactory.ConditionIds;
+            ScenarioSurvivorConditionRowViewModel[] rows = new ScenarioSurvivorConditionRowViewModel[conditionIds.Length];
+            for (int i = 0; i < conditionIds.Length; i++)
+            {
+                string id = conditionIds[i];
+                int rawValue;
+                bool hasValue = ScenarioFamilyMemberFactory.TryGetConditionValue(member, id, out rawValue);
+                int value = hasValue ? rawValue : 0;
+                bool canDecrease = value > ScenarioFamilyMemberFactory.ConditionMin;
+                bool canIncrease = value < ScenarioFamilyMemberFactory.ConditionMax;
+                rows[i] = new ScenarioSurvivorConditionRowViewModel
+                {
+                    Id = id,
+                    Label = FormatConditionLabel(id),
+                    Value = value,
+                    Min = ScenarioFamilyMemberFactory.ConditionMin,
+                    Max = ScenarioFamilyMemberFactory.ConditionMax,
+                    RangeText = ScenarioFamilyMemberFactory.ConditionMin.ToString(CultureInfo.InvariantCulture) + "-" + ScenarioFamilyMemberFactory.ConditionMax.ToString(CultureInfo.InvariantCulture),
+                    HelpText = GetConditionHelp(id),
+                    DecreaseAction = Action(indexedPrefix + "condition." + id + ".-5", "-", "Decrease starting " + id.ToLowerInvariant() + ".", canDecrease, false, "-", value.ToString(CultureInfo.InvariantCulture), null, null, canDecrease ? null : "Conditions are limited to 0-100."),
+                    IncreaseAction = Action(indexedPrefix + "condition." + id + ".5", "+", "Increase starting " + id.ToLowerInvariant() + ".", canIncrease, false, "+", value.ToString(CultureInfo.InvariantCulture), null, null, canIncrease ? null : "Conditions are limited to 0-100."),
+                    TextAction = Action(indexedPrefix + "condition_set." + id + ".", value.ToString(CultureInfo.InvariantCulture), "Enter a starting " + id.ToLowerInvariant() + " value from 0 to 100.", true, false, "TX", value.ToString(CultureInfo.InvariantCulture))
                 };
             }
 
@@ -3790,7 +3875,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static int ClampStatDisplay(int value)
         {
-            return Mathf.Clamp(value, 0, 20);
+            return Mathf.Clamp(value, ScenarioFamilyMemberFactory.StatMin, ScenarioFamilyMemberFactory.StatMax);
         }
 
         private static string FormatStatDisplayDetail(int rawValue, int displayValue)
@@ -3799,9 +3884,114 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return null;
 
             return "Warning: XML value " + rawValue.ToString(CultureInfo.InvariantCulture)
-                + " is outside 0-20; showing "
+                + " is outside 1-20; showing "
                 + displayValue.ToString(CultureInfo.InvariantCulture)
                 + ".";
+        }
+
+        private static bool HasOppositeTrait(FamilyMemberConfig member, bool strength, object value)
+        {
+            if (member == null || member.Traits == null || value == null)
+                return false;
+
+            if (strength)
+            {
+                Traits.Weakness pairedWeakness;
+                if (!ScenarioFamilyMemberFactory.TryGetPairedWeakness((Traits.Strength)value, out pairedWeakness))
+                    return false;
+
+                for (int i = 0; i < member.Traits.Count; i++)
+                {
+                    Traits.Weakness weakness;
+                    if (ScenarioFamilyMemberFactory.TryParseWeaknessTrait(member.Traits[i], out weakness) && weakness == pairedWeakness)
+                        return true;
+                }
+
+                return false;
+            }
+
+            Traits.Strength pairedStrength;
+            if (!ScenarioFamilyMemberFactory.TryGetPairedStrength((Traits.Weakness)value, out pairedStrength))
+                return false;
+
+            for (int i = 0; i < member.Traits.Count; i++)
+            {
+                Traits.Strength existingStrength;
+                if (ScenarioFamilyMemberFactory.TryParseStrengthTrait(member.Traits[i], out existingStrength) && existingStrength == pairedStrength)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static string FormatTraitName(string id)
+        {
+            return SplitPascalCase(id);
+        }
+
+        private static string SplitPascalCase(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return string.Empty;
+
+            System.Text.StringBuilder builder = new System.Text.StringBuilder(value.Length + 4);
+            for (int i = 0; i < value.Length; i++)
+            {
+                char current = value[i];
+                if (i > 0 && char.IsUpper(current) && !char.IsUpper(value[i - 1]))
+                    builder.Append(' ');
+                builder.Append(current);
+            }
+
+            return builder.ToString();
+        }
+
+        private static string GetTraitDescription(bool strength, string id)
+        {
+            if (strength)
+            {
+                if (string.Equals(id, "SmallEater", StringComparison.OrdinalIgnoreCase)) return "Food restores more hunger.";
+                if (string.Equals(id, "Courageous", StringComparison.OrdinalIgnoreCase)) return "Improves combat reliability and subdue chance.";
+                if (string.Equals(id, "DeepSleeper", StringComparison.OrdinalIgnoreCase)) return "Recovers fatigue faster while sleeping.";
+                if (string.Equals(id, "Proactive", StringComparison.OrdinalIgnoreCase)) return "Moves faster in shelter and on expeditions.";
+                if (string.Equals(id, "HandsOn", StringComparison.OrdinalIgnoreCase)) return "Crafts and repairs faster.";
+                if (string.Equals(id, "Optimistic", StringComparison.OrdinalIgnoreCase)) return "Good need changes reduce stress more strongly.";
+                if (string.Equals(id, "Resourceful", StringComparison.OrdinalIgnoreCase)) return "Improves item return chance when deconstructing.";
+                if (string.Equals(id, "Hygienic", StringComparison.OrdinalIgnoreCase)) return "Gets dirty more slowly.";
+            }
+            else
+            {
+                if (string.Equals(id, "BigEater", StringComparison.OrdinalIgnoreCase)) return "Food restores less hunger.";
+                if (string.Equals(id, "Cowardice", StringComparison.OrdinalIgnoreCase)) return "Can cower or skip turns under combat pressure.";
+                if (string.Equals(id, "LightSleeper", StringComparison.OrdinalIgnoreCase)) return "Recovers fatigue more slowly while sleeping.";
+                if (string.Equals(id, "Lazy", StringComparison.OrdinalIgnoreCase)) return "Moves slower in shelter and on expeditions.";
+                if (string.Equals(id, "HandsOff", StringComparison.OrdinalIgnoreCase)) return "Crafts and repairs more slowly.";
+                if (string.Equals(id, "Pessimistic", StringComparison.OrdinalIgnoreCase)) return "Bad need changes increase stress more strongly.";
+                if (string.Equals(id, "Wasteful", StringComparison.OrdinalIgnoreCase)) return "Reduces item return chance when deconstructing.";
+                if (string.Equals(id, "Unhygienic", StringComparison.OrdinalIgnoreCase)) return "Gets dirty faster and is tied to food poisoning.";
+            }
+
+            return "Vanilla trait effect.";
+        }
+
+        private static string FormatConditionLabel(string id)
+        {
+            if (string.Equals(id, "Fatigue", StringComparison.OrdinalIgnoreCase))
+                return "Tiredness";
+            if (string.Equals(id, "Dirtiness", StringComparison.OrdinalIgnoreCase))
+                return "Hygiene";
+            return SplitPascalCase(id);
+        }
+
+        private static string GetConditionHelp(string id)
+        {
+            if (string.Equals(id, "Hunger", StringComparison.OrdinalIgnoreCase)) return "0 is fed; 100 is starving.";
+            if (string.Equals(id, "Thirst", StringComparison.OrdinalIgnoreCase)) return "0 is hydrated; 100 is dehydrated.";
+            if (string.Equals(id, "Fatigue", StringComparison.OrdinalIgnoreCase)) return "0 is rested; 100 is exhausted.";
+            if (string.Equals(id, "Dirtiness", StringComparison.OrdinalIgnoreCase)) return "0 is clean; 100 is filthy.";
+            if (string.Equals(id, "Toilet", StringComparison.OrdinalIgnoreCase)) return "0 is relieved; 100 urgently needs the toilet.";
+            if (string.Equals(id, "Stress", StringComparison.OrdinalIgnoreCase)) return "0 is calm; 100 is maximum stress.";
+            return "Vanilla BehaviourStat value.";
         }
 
         private static string FindTrait(FamilyMemberConfig member, string prefix)

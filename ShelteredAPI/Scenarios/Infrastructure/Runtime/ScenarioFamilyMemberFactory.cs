@@ -26,9 +26,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             "Perception"
         };
 
+        private static readonly string[] CoreConditions = new[]
+        {
+            "Hunger",
+            "Thirst",
+            "Fatigue",
+            "Dirtiness",
+            "Toilet",
+            "Stress"
+        };
+
+        public const int StatMin = 1;
+        public const int StatMax = 20;
+        public const int ConditionMin = 0;
+        public const int ConditionMax = 100;
+
         public static string[] StatIds
         {
             get { return CoreStats; }
+        }
+
+        public static string[] ConditionIds
+        {
+            get { return CoreConditions; }
         }
 
         public static FamilyMemberConfig CreateDefaultConfig(string name, ScenarioGender gender)
@@ -69,6 +89,43 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             };
             config.Stats.Add(created);
             return created;
+        }
+
+        public static bool TryGetConditionValue(FamilyMemberConfig config, string conditionId, out int value)
+        {
+            value = 0;
+            if (config == null || config.Conditions == null || string.IsNullOrEmpty(conditionId))
+                return false;
+
+            int? stored = GetConditionValue(config.Conditions, conditionId);
+            if (!stored.HasValue)
+                return false;
+
+            value = ClampCondition(stored.Value);
+            return true;
+        }
+
+        public static void SetConditionValue(FamilyMemberConfig config, string conditionId, int value)
+        {
+            if (config == null || string.IsNullOrEmpty(conditionId))
+                return;
+
+            if (config.Conditions == null)
+                config.Conditions = new FamilyMemberConditionConfig();
+
+            int clamped = ClampCondition(value);
+            if (string.Equals(conditionId, "Hunger", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Hunger = clamped;
+            else if (string.Equals(conditionId, "Thirst", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Thirst = clamped;
+            else if (string.Equals(conditionId, "Fatigue", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Fatigue = clamped;
+            else if (string.Equals(conditionId, "Dirtiness", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Dirtiness = clamped;
+            else if (string.Equals(conditionId, "Toilet", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Toilet = clamped;
+            else if (string.Equals(conditionId, "Stress", StringComparison.OrdinalIgnoreCase))
+                config.Conditions.Stress = clamped;
         }
 
         public static FamilySpawner.CharacterAttributes CreateAttributes(FamilyMemberConfig config)
@@ -131,6 +188,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (after != null && after.Count > previousCount)
             {
                 spawned = after[after.Count - 1];
+                ApplyConditions(spawned, config);
                 message = "Spawned survivor '" + (config.Name ?? "Survivor") + "'.";
                 return true;
             }
@@ -202,9 +260,61 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public static int ClampStat(int value)
         {
-            if (value < 0)
-                return 0;
-            return value > 20 ? 20 : value;
+            if (value < StatMin)
+                return StatMin;
+            return value > StatMax ? StatMax : value;
+        }
+
+        public static int ClampCondition(int value)
+        {
+            if (value < ConditionMin)
+                return ConditionMin;
+            return value > ConditionMax ? ConditionMax : value;
+        }
+
+        public static bool ApplyConditions(FamilyMember member, FamilyMemberConfig config)
+        {
+            if (member == null || config == null || config.Conditions == null || member.stats == null)
+                return false;
+
+            bool changed = false;
+            changed |= ApplyCondition(member.stats.hunger, config.Conditions.Hunger);
+            changed |= ApplyCondition(member.stats.thirst, config.Conditions.Thirst);
+            changed |= ApplyCondition(member.stats.fatigue, config.Conditions.Fatigue);
+            changed |= ApplyCondition(member.stats.dirtiness, config.Conditions.Dirtiness);
+            changed |= ApplyCondition(member.stats.toilet, config.Conditions.Toilet);
+            changed |= ApplyCondition(member.stats.stress, config.Conditions.Stress);
+            return changed;
+        }
+
+        private static bool ApplyCondition(BehaviourStat target, int? value)
+        {
+            if (target == null || !value.HasValue)
+                return false;
+
+            target.Set(ClampCondition(value.Value));
+            return true;
+        }
+
+        private static int? GetConditionValue(FamilyMemberConditionConfig conditions, string conditionId)
+        {
+            if (conditions == null || string.IsNullOrEmpty(conditionId))
+                return null;
+
+            if (string.Equals(conditionId, "Hunger", StringComparison.OrdinalIgnoreCase))
+                return conditions.Hunger;
+            if (string.Equals(conditionId, "Thirst", StringComparison.OrdinalIgnoreCase))
+                return conditions.Thirst;
+            if (string.Equals(conditionId, "Fatigue", StringComparison.OrdinalIgnoreCase))
+                return conditions.Fatigue;
+            if (string.Equals(conditionId, "Dirtiness", StringComparison.OrdinalIgnoreCase))
+                return conditions.Dirtiness;
+            if (string.Equals(conditionId, "Toilet", StringComparison.OrdinalIgnoreCase))
+                return conditions.Toilet;
+            if (string.Equals(conditionId, "Stress", StringComparison.OrdinalIgnoreCase))
+                return conditions.Stress;
+
+            return null;
         }
 
         private static string ResolveMeshId(FamilyMemberConfig config)

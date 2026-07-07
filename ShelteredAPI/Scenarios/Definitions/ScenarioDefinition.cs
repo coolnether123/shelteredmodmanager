@@ -511,6 +511,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Traits = new List<string>();
             Skills = new List<SkillOverride>();
             Appearance = new FamilyMemberAppearanceConfig();
+            Conditions = new FamilyMemberConditionConfig();
             ActorComponents = new List<ScenarioActorComponentDefinition>();
         }
 
@@ -525,6 +526,21 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<string> Traits { get; private set; }
         public List<SkillOverride> Skills { get; private set; }
         public FamilyMemberAppearanceConfig Appearance { get; set; }
+        public FamilyMemberConditionConfig Conditions { get; set; }
+    }
+
+    /// <summary>
+    /// Optional runtime-applied starting condition overrides for an authored survivor.
+    /// Values match vanilla BehaviourStat values, where higher values mean a stronger need or problem.
+    /// </summary>
+    public class FamilyMemberConditionConfig
+    {
+        public int? Hunger { get; set; }
+        public int? Thirst { get; set; }
+        public int? Fatigue { get; set; }
+        public int? Dirtiness { get; set; }
+        public int? Toilet { get; set; }
+        public int? Stress { get; set; }
     }
 
     /// <summary>

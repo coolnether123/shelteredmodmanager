@@ -144,6 +144,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
             ApplyStats(member, config, result);
             ApplyTraits(member, config, result);
+            ApplyConditions(member, config, result);
             ApplySkills(member, config, result);
             ApplyAppearance(definition, scenarioFilePath, member, config, result);
             BindMaterializedMember(definition, config.ActorRef, member, result);
@@ -230,10 +231,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                     continue;
                 }
 
-                int level = Mathf.Clamp(stat.Value, 0, 20);
-                target.SetInitialLevel(level, 20);
+                int level = ScenarioFamilyMemberFactory.ClampStat(stat.Value);
+                target.SetInitialLevel(level, ScenarioFamilyMemberFactory.StatMax);
                 result.FamilyChanges++;
             }
+        }
+
+        private static void ApplyConditions(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)
+        {
+            if (member == null || config == null)
+                return;
+
+            if (ScenarioFamilyMemberFactory.ApplyConditions(member, config) && result != null)
+                result.FamilyChanges++;
         }
 
         private static void ApplyTraits(FamilyMember member, FamilyMemberConfig config, ScenarioApplyResult result)

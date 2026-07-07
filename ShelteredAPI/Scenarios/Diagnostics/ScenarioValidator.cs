@@ -304,13 +304,15 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 if (stat == null)
                     continue;
 
-                if (stat.Value < 0 || stat.Value > 20)
+                if (stat.Value < ScenarioFamilyMemberFactory.StatMin || stat.Value > ScenarioFamilyMemberFactory.StatMax)
                 {
                     result.AddWarning("Family survivor '" + survivorName + "' has stat '" + (stat.StatId ?? string.Empty)
-                        + "' outside the supported 0-20 range: " + stat.Value.ToString(CultureInfo.InvariantCulture)
-                        + ". It will be clamped to 0-20 at runtime.");
+                        + "' outside the supported 1-20 range: " + stat.Value.ToString(CultureInfo.InvariantCulture)
+                        + ". It will be clamped to 1-20 at runtime.");
                 }
             }
+
+            ValidateFamilyMemberConditions(member, survivorName, result);
 
             Traits.Strength strength;
             Traits.Weakness weakness;
@@ -320,6 +322,29 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                     + strength + " and Weakness:" + weakness
                     + ". The conflicting weakness will be removed at runtime.");
             }
+        }
+
+        private static void ValidateFamilyMemberConditions(FamilyMemberConfig member, string survivorName, ScenarioValidationResult result)
+        {
+            if (member == null || member.Conditions == null || result == null)
+                return;
+
+            ValidateConditionValue(survivorName, "Hunger", member.Conditions.Hunger, result);
+            ValidateConditionValue(survivorName, "Thirst", member.Conditions.Thirst, result);
+            ValidateConditionValue(survivorName, "Fatigue", member.Conditions.Fatigue, result);
+            ValidateConditionValue(survivorName, "Dirtiness", member.Conditions.Dirtiness, result);
+            ValidateConditionValue(survivorName, "Toilet", member.Conditions.Toilet, result);
+            ValidateConditionValue(survivorName, "Stress", member.Conditions.Stress, result);
+        }
+
+        private static void ValidateConditionValue(string survivorName, string conditionId, int? value, ScenarioValidationResult result)
+        {
+            if (!value.HasValue || value.Value >= ScenarioFamilyMemberFactory.ConditionMin && value.Value <= ScenarioFamilyMemberFactory.ConditionMax)
+                return;
+
+            result.AddWarning("Family survivor '" + survivorName + "' has condition '" + conditionId
+                + "' outside the supported 0-100 range: " + value.Value.ToString(CultureInfo.InvariantCulture)
+                + ". It will be clamped to 0-100 at runtime.");
         }
 
         private static void ValidateScenarioCharacters(ScenarioDefinition definition, ScenarioValidationResult result)
