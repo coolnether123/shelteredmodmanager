@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Core;
@@ -484,10 +484,12 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
                 ScenarioStageKind previousStage = state.ActiveStage;
                 ScenarioAuthoringTool previousTool = state.ActiveTool;
+                bool closedFocusedEditor = CloseFocusedEditorForPageSwitch(state, stageKind);
                 bool changed = _layoutService.SelectStage(state, stageKind);
-                if (changed)
-                    state.StatusMessage = BuildStageStatus(state, previousStage, previousTool);
-                return changed;
+                if (changed || closedFocusedEditor)
+                    state.StatusMessage = BuildStageStatus(state, previousStage, previousTool)
+                        + (closedFocusedEditor ? " Focused editor closed." : string.Empty);
+                return changed || closedFocusedEditor;
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionWindowCollapsePrefix, StringComparison.Ordinal))
@@ -545,10 +547,31 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private bool SetStage(ScenarioAuthoringState state, ScenarioStageKind stageKind, out string message, string statusMessage)
         {
             message = null;
+            bool closedFocusedEditor = CloseFocusedEditorForPageSwitch(state, stageKind);
             bool changed = _layoutService.SelectStage(state, stageKind);
-            if (changed)
-                message = statusMessage;
-            return changed;
+            if (changed || closedFocusedEditor)
+                message = statusMessage + (closedFocusedEditor ? " Focused editor closed." : string.Empty);
+            return changed || closedFocusedEditor;
+        }
+
+        private static bool CloseFocusedEditorForPageSwitch(ScenarioAuthoringState state, ScenarioStageKind requestedStage)
+        {
+            if (state == null || string.IsNullOrEmpty(state.FocusedEditorKind))
+                return false;
+            if (ScenarioAuthoringWorkflowRules.ResolveStageKind(state) == requestedStage)
+                return false;
+
+            if (string.Equals(state.FocusedEditorKind, ScenarioStoryFocusedEditorActions.FocusedEditorKind, StringComparison.OrdinalIgnoreCase))
+                state.TimelineSelectedEntryId = ScenarioStoryFocusedEditorActions.FocusedEntryId(state.FocusedEditorIndex);
+            else
+                state.TimelineSelectedEntryId = state.FocusedEditorKind + ":" + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture);
+
+            state.FocusedEditorKind = null;
+            state.FocusedEditorIndex = -1;
+            state.FocusedEditorIsNew = false;
+            state.SurvivorColorPickerChannel = null;
+            state.SurvivorColorPickerRequestId = 0;
+            return true;
         }
 
         private static string BuildStageStatus(
