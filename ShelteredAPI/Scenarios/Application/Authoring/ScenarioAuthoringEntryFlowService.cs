@@ -11,6 +11,8 @@ using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
@@ -188,14 +190,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 Title = "Blank shelter",
                 Badge = "BLANK",
-                Detail = "Current default authoring start: empty scenario definition on the standard shelter.",
-                Meta = "Fastest path for building everything yourself.",
+                Detail = "Start with an empty shelter and build everything yourself.",
+                Meta = string.Empty,
                 ActionId = ActionBlank,
                 Enabled = true
             });
-            AddBaseModeCard(cards, ScenarioBaseGameMode.Survival, "Standard", "Vanilla survival shelter world.");
-            AddBaseModeCard(cards, ScenarioBaseGameMode.Stasis, "Stasis", "Stasis backend and saved shelter world.");
-            AddBaseModeCard(cards, ScenarioBaseGameMode.Surrounded, "Surrounded", "Surrounded backend and saved shelter world.");
+            AddBaseModeCard(cards, ScenarioBaseGameMode.Survival, "Standard", "The classic survival start.");
+            AddBaseModeCard(cards, ScenarioBaseGameMode.Stasis, "Stasis", "The Stasis scenario world.");
+            AddBaseModeCard(cards, ScenarioBaseGameMode.Surrounded, "Surrounded", "The Surrounded scenario world.");
             AddCustomScenarioCards(cards);
             return cards.ToArray();
         }
@@ -207,7 +209,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Title = title,
                 Badge = "BASE",
                 Detail = detail,
-                Meta = "Uses the existing base-mode reload machinery.",
+                Meta = string.Empty,
                 ActionId = ActionModePrefix + ((int)mode).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 Enabled = true
             });
@@ -252,7 +254,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     Title = Safe(entry.DisplayName, entry.ScenarioId),
                     Badge = "COPY",
-                    Detail = Safe(summary, "Start from a copy of this installed custom scenario."),
+                    Detail = Safe(summary, "No scenario summary provided."),
                     Meta = "Author: " + Safe(author, "unknown"),
                     ActionId = ActionScenarioPrefix + entry.ScenarioId,
                     Enabled = enabled,
@@ -312,13 +314,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (_baseModeReloadService == null
                 || !_baseModeReloadService.SaveAndReload(session, mode, ScenarioBaseFamilyChoices.UseBaseDefaultFamily, out message))
             {
-                SetPickerStatus("Status: baseline blocked - " + Safe(message, "base-mode reload failed."));
+                SetPickerStatus("Status: baseline blocked - " + Safe(message, "scenario world could not be loaded."));
                 return;
             }
 
             if (!IsReloadQueuedMessage(message))
             {
-                SetPickerStatus("Status: baseline blocked - " + Safe(message, "base-mode reload failed."));
+                SetPickerStatus("Status: baseline blocked - " + Safe(message, "scenario world could not be loaded."));
                 return;
             }
 
@@ -460,8 +462,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private GUIStyle _titleStyle;
             private GUIStyle _flavorStyle;
             private GUIStyle _statusStyle;
+            private GUIStyle _cardButtonStyle;
             private GUIStyle _cardTitleStyle;
             private GUIStyle _cardTextStyle;
+            private GUIStyle _cardMetaStyle;
             private GUIStyle _disabledTextStyle;
             private float _styleOpacity = -1f;
             private Canvas _loadingCanvas;
@@ -612,13 +616,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 GUI.color = new Color(0.10f, 0.08f, 0.06f, 1f);
                 GUI.DrawTexture(full, Texture2D.whiteTexture);
                 GUI.color = oldColor;
-                GUI.Box(full, GUIContent.none, _uiContext.Styles.PanelBase);
 
                 float width = Mathf.Clamp(Screen.width - 180f, 720f, 1120f);
                 Rect panel = new Rect((Screen.width - width) * 0.5f, 64f, width, Screen.height - 128f);
-                GUI.Box(panel, GUIContent.none, _uiContext.Styles.PanelRaised);
+                ScenarioUiWindowRegions regions = _uiContext.Frame.Build(panel, string.Empty, string.Empty, false, 0f, 0f);
 
-                Rect inner = new Rect(panel.x + 28f, panel.y + 24f, panel.width - 56f, panel.height - 48f);
+                Rect inner = new Rect(regions.Body.x + 12f, regions.Body.y + 12f, regions.Body.width - 24f, regions.Body.height - 24f);
                 GUI.Label(new Rect(inner.x, inner.y, inner.width, 48f), snapshot.Title ?? string.Empty, _titleStyle);
                 GUI.Label(new Rect(inner.x, inner.y + 52f, inner.width, 42f), snapshot.Flavor ?? string.Empty, _flavorStyle);
                 GUI.Box(new Rect(inner.x, inner.y + 100f, inner.width, 36f), snapshot.Status ?? string.Empty, _statusStyle);
@@ -655,16 +658,55 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private void DrawCard(Rect rect, ScenarioAuthoringEntryBaselineCard card)
             {
                 bool enabled = card != null && card.Enabled;
-                GUI.Box(rect, GUIContent.none, enabled ? _uiContext.Styles.Card : _uiContext.Styles.PanelInset);
-                Rect badgeRect = new Rect(rect.x + 10f, rect.y + 10f, 54f, 22f);
-                GUI.Box(badgeRect, card != null ? card.Badge ?? string.Empty : string.Empty, enabled ? _uiContext.Styles.PillEmphasized : _uiContext.Styles.Pill);
-                GUI.Label(new Rect(rect.x + 72f, rect.y + 8f, rect.width - 84f, 26f), card != null ? card.Title ?? string.Empty : string.Empty, enabled ? _cardTitleStyle : _disabledTextStyle);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 40f, rect.width - 24f, 38f), card != null ? card.Detail ?? string.Empty : string.Empty, enabled ? _cardTextStyle : _disabledTextStyle);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 80f, rect.width - 24f, 20f), card != null && !enabled ? card.DisabledReason ?? string.Empty : (card != null ? card.Meta ?? string.Empty : string.Empty), enabled ? _uiContext.Styles.MutedText : _disabledTextStyle);
-                GUI.enabled = enabled;
-                if (GUI.Button(new Rect(rect.x + rect.width - 96f, rect.y + rect.height - 32f, 84f, 24f), "Start", enabled ? _uiContext.Styles.ButtonActive : _uiContext.Styles.ButtonDisabled))
+                GUIContent content = new GUIContent(string.Empty, card != null ? card.Detail ?? string.Empty : string.Empty);
+                if (enabled && GUI.Button(rect, content, _cardButtonStyle))
                     _owner.ExecuteEntryAction(card.ActionId);
-                GUI.enabled = true;
+                else if (!enabled)
+                    GUI.Box(rect, content, _uiContext.Styles.PanelInset);
+
+                DrawCardSelectionOverlay(rect, enabled);
+
+                Rect badgeRect = new Rect(rect.x + 10f, rect.y + 10f, 64f, 22f);
+                GUI.Box(badgeRect, card != null ? card.Badge ?? string.Empty : string.Empty, enabled ? _uiContext.Styles.PillEmphasized : _uiContext.Styles.Pill);
+                GUI.Label(new Rect(rect.x + 84f, rect.y + 8f, rect.width - 96f, 26f), card != null ? card.Title ?? string.Empty : string.Empty, enabled ? _cardTitleStyle : _disabledTextStyle);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 42f, rect.width - 24f, 50f), card != null ? card.Detail ?? string.Empty : string.Empty, enabled ? _cardTextStyle : _disabledTextStyle);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 96f, rect.width - 24f, 22f), card != null && !enabled ? card.DisabledReason ?? string.Empty : (card != null ? card.Meta ?? string.Empty : string.Empty), enabled ? _cardMetaStyle : _disabledTextStyle);
+            }
+
+            private void DrawCardSelectionOverlay(Rect rect, bool enabled)
+            {
+                if (!enabled || Event.current == null)
+                    return;
+
+                bool hovered = rect.Contains(Event.current.mousePosition);
+                bool pressed = hovered && Event.current.type == EventType.MouseDown && Event.current.button == 0;
+                if (!hovered && !pressed)
+                    return;
+
+                Color oldColor = GUI.color;
+                Rect overlayRect = InsetCardOverlayRect(rect);
+                if (hovered)
+                {
+                    GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.24f);
+                    ScenarioUiAtlasSkin.DrawCornerCutTexture(overlayRect, _uiContext.Styles.AccentHoverTexture != null ? _uiContext.Styles.AccentHoverTexture : Texture2D.whiteTexture);
+                }
+
+                if (pressed)
+                {
+                    GUI.color = new Color(0.718f, 0.639f, 0.482f, 0.34f);
+                    ScenarioUiAtlasSkin.DrawCornerCutTexture(overlayRect, Texture2D.whiteTexture);
+                }
+
+                GUI.color = oldColor;
+            }
+
+            private static Rect InsetCardOverlayRect(Rect rect)
+            {
+                const float inset = 3f;
+                if (rect.width <= inset * 2f || rect.height <= inset * 2f)
+                    return rect;
+
+                return new Rect(rect.x + inset, rect.y + inset, rect.width - (inset * 2f), rect.height - (inset * 2f));
             }
 
             private void BlockInput(ScenarioAuthoringEntryFlowSnapshot snapshot)
@@ -714,12 +756,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _flavorStyle.fontSize = 14;
                 _statusStyle = new GUIStyle(_uiContext.Styles.Status);
                 _statusStyle.alignment = TextAnchor.MiddleLeft;
-                _cardTitleStyle = new GUIStyle(_uiContext.Styles.SectionTitleText);
+                _cardButtonStyle = new GUIStyle(_uiContext.Styles.Card);
+                _cardButtonStyle.hover.background = _uiContext.Styles.Card.normal.background;
+                _cardButtonStyle.active.background = _uiContext.Styles.Card.normal.background;
+                _cardButtonStyle.focused.background = _uiContext.Styles.Card.normal.background;
+                _cardTitleStyle = new GUIStyle(_uiContext.Styles.PaperTitleText);
                 _cardTitleStyle.fontSize = 15;
-                _cardTextStyle = new GUIStyle(_uiContext.Styles.BodyText);
+                _cardTextStyle = new GUIStyle(_uiContext.Styles.PaperBodyText);
                 _cardTextStyle.fontSize = 12;
-                _disabledTextStyle = new GUIStyle(_uiContext.Styles.MutedText);
-                _disabledTextStyle.normal.textColor = new Color(0.45f, 0.40f, 0.34f, 1f);
+                _cardMetaStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
+                _cardMetaStyle.fontSize = 11;
+                _disabledTextStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
+                _disabledTextStyle.normal.textColor = new Color(0.28f, 0.23f, 0.18f, 1f);
             }
 
             private void OnDestroy()
