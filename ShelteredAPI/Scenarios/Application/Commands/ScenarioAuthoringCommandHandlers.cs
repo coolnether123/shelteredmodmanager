@@ -1024,6 +1024,15 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (!handled || _service == null)
                 return false;
 
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionInventoryStartingAddAndPick, StringComparison.Ordinal))
+                return AddInventoryEntryAndOpenPicker(state, ScenarioAuthoringActionIds.ActionInventoryStartingAdd, ScenarioAuthoringLocalActionIds.FocusedKindInventoryStartingPicker, true, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionInventoryScheduleAddAndPick, StringComparison.Ordinal))
+                return AddInventoryEntryAndOpenPicker(state, ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, false, out message);
+
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionInventoryScheduleRemoveAndPick, StringComparison.Ordinal))
+                return AddInventoryEntryAndOpenPicker(state, ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, ScenarioAuthoringLocalActionIds.FocusedKindInventorySchedulePicker, false, out message);
+
             int pickerIndex;
             if (TryOpenIndexedFocusedEditor(
                 state,
@@ -1054,6 +1063,22 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 CloseInventoryPickerAfterSelection(state, actionId);
             }
             return changed;
+        }
+
+        private bool AddInventoryEntryAndOpenPicker(ScenarioAuthoringState state, string addActionId, string pickerKind, bool starting, out string message)
+        {
+            bool changed = _service.TryHandleAction(_editorService.CurrentSession, addActionId, out message);
+            if (!changed)
+                return false;
+
+            ScenarioEditorSession session = _editorService.CurrentSession;
+            StartingInventoryDefinition inventory = session != null && session.WorkingDefinition != null ? session.WorkingDefinition.StartingInventory : null;
+            int index = -1;
+            if (inventory != null)
+                index = starting ? inventory.Items.Count - 1 : inventory.ScheduledChanges.Count - 1;
+            if (state != null)
+                SetFocusedEditor(state, pickerKind, index, true);
+            return true;
         }
 
         private static bool TryOpenIndexedFocusedEditor(ScenarioAuthoringState state, string actionId, string prefix, string kind, out int index)

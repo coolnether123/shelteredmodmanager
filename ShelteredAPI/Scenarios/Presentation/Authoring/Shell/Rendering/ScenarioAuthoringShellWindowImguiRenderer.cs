@@ -2172,6 +2172,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawFactGrid(section, compactInspector);
             }
+            else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid)
+            {
+                DrawInventorySlotGridSection(section, compactInspector);
+            }
             else if (section.Layout == ScenarioAuthoringInspectorSectionLayout.CastCardGrid)
             {
                 DrawCastCardGrid(section, compactInspector);
