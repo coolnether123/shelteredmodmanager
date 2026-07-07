@@ -101,7 +101,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     Item.Text("Domains filter palettes and click priority while selection stays available."),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolFamily, "Family", "Capture the current live family roster, stats, and traits.", true, activeTool == ScenarioAuthoringTool.Family, "FM", "Family roster and stats.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolInventory, "Inventory", "Capture the current live shelter inventory.", true, activeTool == ScenarioAuthoringTool.Inventory, "IV", "Shelter inventory snapshot.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolInventory, "Inventory", "Edit native shelter storage as the scenario starting inventory.", true, activeTool == ScenarioAuthoringTool.Inventory, "IV", "Shelter storage.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolShelter, "Structure", "Place new shelter rooms, ladders, and lights with vanilla build ghosts.", true, activeTool == ScenarioAuthoringTool.Shelter, "ST", "Shelter layout editing.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "Place workbenches, shelter systems, and furniture or capture live spawned objects.", true, activeTool == ScenarioAuthoringTool.Objects, "OB", "Interactive shelter objects.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolWiring, "Walls & Wiring", "Apply room wall and wiring sprites to the selected shelter tile.", true, activeTool == ScenarioAuthoringTool.Wiring, "WW", "Room finish editing.")),
@@ -165,10 +165,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 case ScenarioAuthoringTool.Inventory:
                     title = "Inventory";
-                    items.Add(Item.Property("Captured Stacks", Item.CountInventoryStacks(definition).ToString()));
+                    items.Add(Item.Property("Storage Stacks", Item.CountInventoryStacks(definition).ToString()));
                     items.Add(Item.Property("Total Items", Item.CountInventoryTotal(definition).ToString()));
                     items.Add(Item.Text(Item.SummarizeInventory(definition)));
-                    items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCaptureInventory, "Capture Current Inventory", "Snapshot the live shelter inventory into the scenario.", true, true, "IV", "Capture live inventory.")));
+                    items.Add(Item.Text("Native shelter storage is the scenario starting inventory."));
                     break;
 
                 case ScenarioAuthoringTool.Assets:

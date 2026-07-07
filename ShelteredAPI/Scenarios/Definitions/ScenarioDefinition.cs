@@ -583,7 +583,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
 
     /// <summary>
     /// Starting and scheduled inventory changes for a scenario.
-    /// Use <see cref="OverrideRandomStart"/> to replace vanilla random starting supplies.
+    /// In authoring, <see cref="Items"/> mirrors native shelter storage and is the scenario's starting inventory.
+    /// Use <see cref="OverrideRandomStart"/> only to suppress vanilla random-start item pools when the scenario is applied.
     /// </summary>
     public class StartingInventoryDefinition
     {

@@ -918,10 +918,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     return OpenCapturePreview(state, ScenarioAuthoringLocalActionIds.FocusedKindCaptureFamily, out message);
                 case ScenarioAuthoringLocalActionIds.ActionCaptureFamilyConfirm:
                     return ConfirmCapture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentFamily(session, out text); }, out message);
-                case ScenarioAuthoringActionIds.ActionCaptureInventory:
-                    return OpenCapturePreview(state, ScenarioAuthoringLocalActionIds.FocusedKindCaptureInventory, out message);
-                case ScenarioAuthoringLocalActionIds.ActionCaptureInventoryConfirm:
-                    return ConfirmCapture(state, delegate(ScenarioEditorSession session, out string text) { return _captureService.CaptureCurrentInventory(session, out text); }, out message);
                 case ScenarioAuthoringActionIds.ActionCaptureShelterObjects:
                     if (_scopeService.ResolveActiveScope(state) != ScenarioTargetScope.BunkerInside)
                     {

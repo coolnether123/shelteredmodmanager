@@ -96,7 +96,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             inventory.OverrideRandomStart = true;
             inventory.Items.Add(entry);
             MarkInventoryDirty(session);
-            message = "Added starting stockpile item '" + entry.ItemId + "'.";
+            message = "Added shelter storage item '" + entry.ItemId + "'.";
             return true;
         }
 
@@ -234,8 +234,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 inventory.OverrideRandomStart = !inventory.OverrideRandomStart;
                 MarkInventoryDirty(session);
                 message = inventory.OverrideRandomStart
-                    ? "Starting stockpile now overrides random starting items."
-                    : "Random starting items are allowed alongside authored stockpile items.";
+                    ? "Vanilla random-start item pools will be suppressed when this scenario applies."
+                    : "Vanilla random-start item pools are allowed when this scenario applies.";
                 return true;
             }
 
@@ -245,7 +245,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 inventory.Items.RemoveAt(index);
                 MarkInventoryDirty(session);
-                message = "Removed starting stockpile item.";
+                message = "Removed shelter storage item.";
                 return true;
             }
 
@@ -254,7 +254,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ItemEntry entry = inventory.Items[index];
                 entry.Quantity = Math.Max(1, entry.Quantity + delta);
                 MarkInventoryDirty(session);
-                message = "Updated starting stockpile quantity to " + entry.Quantity + ".";
+                message = "Updated shelter storage quantity to " + entry.Quantity + ".";
                 return true;
             }
 
@@ -263,7 +263,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ItemEntry entry = inventory.Items[index];
                 entry.ItemId = ScenarioInventoryItemCatalog.CycleItemId(entry.ItemId, delta);
                 MarkInventoryDirty(session);
-                message = "Changed starting stockpile item to '" + entry.ItemId + "'.";
+                message = "Changed shelter storage item to '" + entry.ItemId + "'.";
                 return true;
             }
 
@@ -273,7 +273,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ItemEntry entry = inventory.Items[index];
                 entry.ItemId = DecodeToken(itemToken);
                 MarkInventoryDirty(session);
-                message = "Changed starting stockpile item to '" + entry.ItemId + "'.";
+                message = "Changed shelter storage item to '" + entry.ItemId + "'.";
                 return true;
             }
 

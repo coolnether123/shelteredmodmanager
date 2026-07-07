@@ -143,9 +143,21 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(seed.ContainsKey("Water") && seed["Water"] == 5, "Inventory projection seed should cap live authored items at the authored quantity.", result);
             Assert(!seed.ContainsKey("Food"), "Inventory projection seed should not claim extra live-only items as projected draft items.", result);
 
+            Dictionary<string, int> liveAdd = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            liveAdd["Water"] = 5;
+            liveAdd["Food"] = 2;
+            List<InventoryProjectionDelta> liveAddDeltas = InventoryApplyService.PlanProjectionDeltas(authored, liveAdd);
+            Assert(FindDelta(liveAddDeltas, "Food") == 2, "Live-truth reverse reconciliation did not detect a live add into the draft.", result);
+
+            Dictionary<string, int> liveRemove = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            liveRemove["Water"] = 3;
+            List<InventoryProjectionDelta> liveRemoveDeltas = InventoryApplyService.PlanProjectionDeltas(authored, liveRemove);
+            Assert(FindDelta(liveRemoveDeltas, "Water") == -2, "Live-truth reverse reconciliation did not detect a live removal into the draft.", result);
+            Assert(InventoryApplyService.SnapshotsEqual(authored, authored), "Live-truth reconciliation should treat matching draft/live snapshots as no-op to avoid feedback loops.", result);
+
             StartingInventoryDefinition inventory = new StartingInventoryDefinition();
             inventory.OverrideRandomStart = true;
-            Assert(InventoryApplyService.ShouldApplyRandomStartOverride(inventory), "OverrideRandomStart should still disable vanilla random-start pools during projection/apply.", result);
+            Assert(InventoryApplyService.ShouldApplyRandomStartOverride(inventory), "OverrideRandomStart should only suppress vanilla random-start pools during projection/apply.", result);
         }
 
         private static int FindDelta(List<InventoryProjectionDelta> deltas, string itemId)

@@ -53,15 +53,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
         }
 
-        public void AdoptAuthoringProjection(ScenarioDefinition definition)
-        {
-            lock (_authoringProjectionSync)
-            {
-                _authoringProjectionKey = ProjectionKey(definition);
-                _authoringLastProjected = BuildStartingInventorySnapshot(definition != null ? definition.StartingInventory : null);
-            }
-        }
-
         public void ClearAuthoringProjection()
         {
             lock (_authoringProjectionSync)
@@ -155,6 +146,71 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             projection.Stacks = authored.Count;
+            return projection;
+        }
+
+        public InventoryProjectionResult ReconcileAuthoringLiveTruth(ScenarioDefinition definition, ScenarioApplyResult result)
+        {
+            InventoryProjectionResult projection = new InventoryProjectionResult();
+            if (definition == null)
+                return projection;
+
+            if (definition.StartingInventory == null)
+                definition.StartingInventory = new StartingInventoryDefinition();
+
+            InventoryManager manager = InventoryManager.Instance;
+            if (manager == null)
+            {
+                if (result != null)
+                    result.AddMessage("InventoryManager is not ready; authoring live-truth inventory sync skipped.");
+                return projection;
+            }
+
+            Dictionary<string, int> previous;
+            string key = ProjectionKey(definition);
+            lock (_authoringProjectionSync)
+            {
+                if (!string.Equals(_authoringProjectionKey, key, System.StringComparison.Ordinal))
+                {
+                    _authoringProjectionKey = key;
+                    _authoringLastProjected = SeedProjectedSnapshotFromLive(definition);
+                }
+                previous = CopySnapshot(_authoringLastProjected);
+            }
+
+            Dictionary<string, int> authored = BuildStartingInventorySnapshot(definition.StartingInventory);
+            if (!SnapshotsEqual(previous, authored))
+                return ProjectAuthoringStartingInventory(definition, result);
+
+            Dictionary<string, int> live = BuildLiveInventorySnapshot();
+            if (SnapshotsEqual(previous, live))
+            {
+                projection.Stacks = authored.Count;
+                return projection;
+            }
+
+            ReplaceStartingInventory(definition.StartingInventory, live);
+            List<InventoryProjectionDelta> deltas = PlanProjectionDeltas(previous, live);
+            for (int i = 0; i < deltas.Count; i++)
+            {
+                InventoryProjectionDelta delta = deltas[i];
+                if (delta == null || delta.QuantityDelta == 0)
+                    continue;
+
+                if (delta.QuantityDelta > 0)
+                    projection.Added += delta.QuantityDelta;
+                else
+                    projection.Removed += -delta.QuantityDelta;
+            }
+
+            lock (_authoringProjectionSync)
+            {
+                _authoringProjectionKey = key;
+                _authoringLastProjected = live;
+            }
+
+            projection.DraftUpdated = true;
+            projection.Stacks = live.Count;
             return projection;
         }
 
@@ -254,7 +310,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 BuildLiveInventorySnapshot());
         }
 
-        private static Dictionary<string, int> BuildStartingInventorySnapshot(StartingInventoryDefinition inventory)
+        internal static Dictionary<string, int> BuildStartingInventorySnapshot(StartingInventoryDefinition inventory)
         {
             Dictionary<string, int> snapshot = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
             for (int i = 0; inventory != null && inventory.Items != null && i < inventory.Items.Count; i++)
@@ -271,7 +327,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return snapshot;
         }
 
-        private static Dictionary<string, int> BuildLiveInventorySnapshot()
+        internal static Dictionary<string, int> BuildLiveInventorySnapshot()
         {
             Dictionary<string, int> snapshot = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
             InventoryManager manager = InventoryManager.Instance;
@@ -316,6 +372,45 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             foreach (KeyValuePair<string, int> pair in source)
                 copy[pair.Key] = pair.Value;
             return copy;
+        }
+
+        internal static bool SnapshotsEqual(IDictionary<string, int> left, IDictionary<string, int> right)
+        {
+            Dictionary<string, int> normalizedLeft = NormalizeSnapshot(left);
+            Dictionary<string, int> normalizedRight = NormalizeSnapshot(right);
+            if (normalizedLeft.Count != normalizedRight.Count)
+                return false;
+
+            foreach (KeyValuePair<string, int> pair in normalizedLeft)
+            {
+                int rightQuantity;
+                if (!normalizedRight.TryGetValue(pair.Key, out rightQuantity) || rightQuantity != pair.Value)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static void ReplaceStartingInventory(StartingInventoryDefinition inventory, IDictionary<string, int> live)
+        {
+            if (inventory == null)
+                return;
+
+            Dictionary<string, int> snapshot = NormalizeSnapshot(live);
+            List<string> ids = new List<string>();
+            AddKeys(ids, snapshot);
+            ids.Sort(System.StringComparer.OrdinalIgnoreCase);
+
+            inventory.Items.Clear();
+            for (int i = 0; i < ids.Count; i++)
+            {
+                string itemId = ids[i];
+                inventory.Items.Add(new ItemEntry
+                {
+                    ItemId = itemId,
+                    Quantity = snapshot[itemId]
+                });
+            }
         }
 
         private static void AddKeys(List<string> ids, Dictionary<string, int> snapshot)
@@ -387,6 +482,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         public int Added { get; set; }
         public int Removed { get; set; }
         public int Stacks { get; set; }
-        public bool Changed { get { return Added > 0 || Removed > 0; } }
+        public bool DraftUpdated { get; set; }
+        public bool Changed { get { return Added > 0 || Removed > 0 || DraftUpdated; } }
     }
 }

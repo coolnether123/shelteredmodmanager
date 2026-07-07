@@ -383,6 +383,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _backend.Update();
             _presentation.Update();
             _menuService.Update(active);
+            if (_inventoryProjectionService != null)
+                _inventoryProjectionService.UpdateLiveTruth(_editorService.CurrentSession);
         }
 
         private void TryBootstrapPendingDraft()

@@ -108,7 +108,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSelectionStackSelectPrefix = "selection.stack.select.";
         public const string ActionHierarchySelectPrefix = "hierarchy.select.";
         public const string ActionCaptureFamily = "capture.family.current";
-        public const string ActionCaptureInventory = "capture.inventory.current";
         public const string ActionCaptureShelterObjects = "capture.shelter.objects";
         public const string ActionCaptureSelectedObject = "capture.shelter.selected_object";
         public const string ActionRemoveSelectedObjectPlacement = "capture.shelter.remove_selected_object";

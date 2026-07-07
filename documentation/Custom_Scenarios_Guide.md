@@ -157,6 +157,8 @@ Minimal XML:
 </Scenario>
 ```
 
+In the scenario editor, shelter storage is live truth: the native `InventoryManager` contents are the scenario's starting inventory. Editing the Supplies grid writes through to storage, and changes made through vanilla storage flows are adopted back into `StartingInventory.Items` automatically. `OverrideRandomStart` only controls whether scenario apply suppresses Sheltered's vanilla random-start item pool; it does not make the authored item list optional.
+
 XML packs are refreshed when the custom scenario UI opens. If a code registration and an XML pack share the same scenario id, the code registration wins. If an active save binding references an XML scenario that is missing at load time, the runtime keeps that binding in a blocked pending state and retries after the catalog refreshes in the same session.
 
 ### Triggers

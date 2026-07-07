@@ -16,7 +16,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         private readonly IScenarioDraftMutationService _draftMutationService;
         private readonly ScenarioActorResolver _actorResolver;
-        private readonly ScenarioAuthoringInventoryProjectionService _inventoryProjectionService;
 
         public static ScenarioAuthoringCaptureService Instance
         {
@@ -25,12 +24,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         internal ScenarioAuthoringCaptureService(
             IScenarioDraftMutationService draftMutationService,
-            ScenarioActorResolver actorResolver,
-            ScenarioAuthoringInventoryProjectionService inventoryProjectionService)
+            ScenarioActorResolver actorResolver)
         {
             _draftMutationService = draftMutationService;
             _actorResolver = actorResolver;
-            _inventoryProjectionService = inventoryProjectionService;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -141,68 +138,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             List<FamilyMemberConfig> current = family != null ? family.Members : null;
             preview = ScenarioCapturePreview.Create("family", "Starting Survivors", captured.Count, 0);
             AddFamilyDiffLines(preview, current, captured);
-            return true;
-        }
-
-        public bool CaptureCurrentInventory(ScenarioEditorSession session, out string message)
-        {
-            message = null;
-            if (session == null || session.WorkingDefinition == null)
-            {
-                message = "No active authoring session is available.";
-                return false;
-            }
-
-            InventoryManager inventoryManager = InventoryManager.Instance;
-            if (inventoryManager == null)
-            {
-                message = "InventoryManager is not ready; inventory capture skipped.";
-                return false;
-            }
-
-            List<ItemStack> liveStacks = inventoryManager.GetItems();
-            RecordUndo(session, "Capture stockpile from world");
-            StartingInventoryDefinition inventory = session.WorkingDefinition.StartingInventory ?? new StartingInventoryDefinition();
-            inventory.OverrideRandomStart = true;
-            inventory.Items.Clear();
-
-            int totalItems = 0;
-            List<ItemEntry> capturedItems = BuildLiveInventoryEntries(liveStacks, out totalItems);
-            for (int i = 0; i < capturedItems.Count; i++)
-                inventory.Items.Add(capturedItems[i]);
-
-            session.WorkingDefinition.StartingInventory = inventory;
-            MarkCaptured(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
-            if (_inventoryProjectionService != null)
-                _inventoryProjectionService.AdoptCurrentDraftAsProjected(session, "capture live inventory");
-            message = "Captured " + capturedItems.Count + " stockpile stack(s) from the world (" + totalItems + " total item(s)).";
-            MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
-            return true;
-        }
-
-        public bool BuildInventoryCapturePreview(ScenarioEditorSession session, out ScenarioCapturePreview preview, out string message)
-        {
-            preview = null;
-            message = null;
-            if (session == null || session.WorkingDefinition == null)
-            {
-                message = "No active authoring session is available.";
-                return false;
-            }
-
-            InventoryManager inventoryManager = InventoryManager.Instance;
-            if (inventoryManager == null)
-            {
-                message = "InventoryManager is not ready; inventory capture preview is unavailable.";
-                return false;
-            }
-
-            int totalItems = 0;
-            List<ItemEntry> captured = BuildLiveInventoryEntries(inventoryManager.GetItems(), out totalItems);
-            StartingInventoryDefinition inventory = session.WorkingDefinition.StartingInventory;
-            List<ItemEntry> current = inventory != null ? inventory.Items : null;
-            preview = ScenarioCapturePreview.Create("inventory", "Starting Stockpile", captured.Count, totalItems);
-            AddInventoryDiffLines(preview, current, captured);
             return true;
         }
 
@@ -413,28 +348,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioCharacterAppearanceService.CaptureAppearance(member, config);
         }
 
-        private static List<ItemEntry> BuildLiveInventoryEntries(List<ItemStack> liveStacks, out int totalItems)
-        {
-            totalItems = 0;
-            List<ItemEntry> capturedItems = new List<ItemEntry>();
-            for (int i = 0; liveStacks != null && i < liveStacks.Count; i++)
-            {
-                ItemStack stack = liveStacks[i];
-                if (stack == null || stack.m_type == ItemManager.ItemType.Undefined || stack.m_count <= 0)
-                    continue;
-
-                capturedItems.Add(new ItemEntry
-                {
-                    ItemId = stack.m_type.ToString(),
-                    Quantity = stack.m_count
-                });
-                totalItems += stack.m_count;
-            }
-
-            capturedItems.Sort(CompareItemEntries);
-            return capturedItems;
-        }
-
         private static void AddFamilyDiffLines(ScenarioCapturePreview preview, List<FamilyMemberConfig> current, List<FamilyMemberConfig> captured)
         {
             bool[] matchedCurrent = new bool[current != null ? current.Count : 0];
@@ -460,32 +373,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 if (!matchedCurrent[i])
                     preview.AddRemoval("Remove authored survivor " + Safe(current[i] != null ? current[i].Name : null));
-            }
-        }
-
-        private static void AddInventoryDiffLines(ScenarioCapturePreview preview, List<ItemEntry> current, List<ItemEntry> captured)
-        {
-            bool[] matchedCurrent = new bool[current != null ? current.Count : 0];
-            for (int i = 0; captured != null && i < captured.Count; i++)
-            {
-                ItemEntry next = captured[i];
-                int existing = FindItem(current, next != null ? next.ItemId : null, matchedCurrent);
-                if (existing < 0)
-                {
-                    preview.AddAdd("Add " + Safe(next != null ? next.ItemId : null) + " x" + (next != null ? next.Quantity.ToString() : "0"));
-                    continue;
-                }
-
-                matchedCurrent[existing] = true;
-                ItemEntry previous = current[existing];
-                if (previous != null && next != null && previous.Quantity != next.Quantity)
-                    preview.AddChange("Change " + Safe(next.ItemId) + " from x" + previous.Quantity.ToString() + " to x" + next.Quantity.ToString());
-            }
-
-            for (int i = 0; current != null && i < current.Count; i++)
-            {
-                if (!matchedCurrent[i])
-                    preview.AddRemoval("Remove authored stockpile item " + Safe(current[i] != null ? current[i].ItemId : null));
             }
         }
 
@@ -533,19 +420,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return string.Equals(left.Kind, right.Kind, StringComparison.OrdinalIgnoreCase)
                 && left.LocalId == right.LocalId
                 && string.Equals(left.Domain ?? string.Empty, right.Domain ?? string.Empty, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int FindItem(List<ItemEntry> items, string itemId, bool[] excluded)
-        {
-            for (int i = 0; items != null && i < items.Count; i++)
-            {
-                if (excluded != null && i < excluded.Length && excluded[i])
-                    continue;
-                ItemEntry item = items[i];
-                if (item != null && string.Equals(item.ItemId ?? string.Empty, itemId ?? string.Empty, StringComparison.OrdinalIgnoreCase))
-                    return i;
-            }
-            return -1;
         }
 
         private static string FormatFamilyPreview(FamilyMemberConfig member)
@@ -854,17 +728,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             float leftX = left.Position != null ? left.Position.X : 0f;
             float rightX = right.Position != null ? right.Position.X : 0f;
             return leftX.CompareTo(rightX);
-        }
-
-        private static int CompareItemEntries(ItemEntry left, ItemEntry right)
-        {
-            if (ReferenceEquals(left, right))
-                return 0;
-            if (left == null)
-                return 1;
-            if (right == null)
-                return -1;
-            return string.Compare(left.ItemId ?? string.Empty, right.ItemId ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string SafeObjectName(Obj_Base obj)

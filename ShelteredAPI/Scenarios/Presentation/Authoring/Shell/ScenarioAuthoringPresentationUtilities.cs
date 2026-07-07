@@ -134,7 +134,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int stacks = CountInventoryStacks(definition);
             int total = CountInventoryTotal(definition);
             return stacks == 0
-                ? "No starting stockpile has been captured or authored yet."
+                ? "Shelter storage has no authored starting items yet."
                 : stacks + " item stack(s), " + total + " total item(s).";
         }
 
