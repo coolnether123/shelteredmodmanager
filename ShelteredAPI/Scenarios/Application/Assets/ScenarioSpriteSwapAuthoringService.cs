@@ -323,7 +323,17 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (!IsPickerOpen(state))
                 return false;
 
-            if (state.SelectedTarget == null || !AreSameTarget(state.SelectedTarget, state.SpriteSwapPicker.Target))
+            if (state.SelectedTarget == null)
+            {
+                if (IsCustomEditorBoundToPickerTarget(state))
+                    return false;
+
+                ClosePickerState(state, true);
+                message = "Asset editor closed because the selected target changed.";
+                return true;
+            }
+
+            if (!AreSameTarget(state.SelectedTarget, state.SpriteSwapPicker.Target))
             {
                 ClosePickerState(state, true);
                 message = "Asset editor closed because the selected target changed.";
@@ -2598,6 +2608,16 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 return string.Equals(left.TransformPath, right.TransformPath, StringComparison.OrdinalIgnoreCase);
 
             return string.Equals(left.DisplayName, right.DisplayName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsCustomEditorBoundToPickerTarget(ScenarioAuthoringState state)
+        {
+            if (_customEditorSession == null || state == null || state.SpriteSwapPicker == null)
+                return false;
+
+            return !string.IsNullOrEmpty(_customEditorSession.TargetPath)
+                && !string.IsNullOrEmpty(state.SpriteSwapPicker.TargetPath)
+                && string.Equals(_customEditorSession.TargetPath, state.SpriteSwapPicker.TargetPath, StringComparison.OrdinalIgnoreCase);
         }
 
         private static Color[] CloneBrushPalette()
