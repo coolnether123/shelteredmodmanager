@@ -8,7 +8,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly List<Rect> _interactiveRects = new List<Rect>();
         private readonly ScenarioAuthoringScrollFocusService _scrollFocusService;
         private float _coordinateScale = 1f;
-        private bool _explicitTextFieldFocused;
+        private bool _textFieldFocusedThisGuiFrame;
+        private bool _textFieldFocusedLastGuiFrame;
+        private int _textFieldFocusGuiFrame = -1;
         private const float RectPadding = 6f;
 
         public ScenarioAuthoringInputCaptureService(ScenarioAuthoringScrollFocusService scrollFocusService)
@@ -24,8 +26,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public bool KeyboardCaptured { get; private set; }
         public bool TextFieldFocused
         {
-            get { return _explicitTextFieldFocused || IsGuiTextFieldFocused(); }
-            private set { _explicitTextFieldFocused = value; }
+            get { return _textFieldFocusedLastGuiFrame; }
         }
         public bool TransitionActive { get; private set; }
         public bool KeyboardShortcutHandled { get; private set; }
@@ -39,7 +40,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             PopupOpen = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
-            TextFieldFocused = false;
+            BeginTextFieldFocusFrame();
             TransitionActive = false;
             KeyboardShortcutHandled = false;
             _coordinateScale = coordinateScale > 0.001f ? coordinateScale : 1f;
@@ -83,7 +84,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public void SetTextFieldFocused(bool focused)
         {
-            TextFieldFocused = focused;
+            BeginTextFieldFocusFrame();
+            _textFieldFocusedThisGuiFrame = _textFieldFocusedThisGuiFrame || focused;
         }
 
         public void MarkKeyboardShortcutHandled()
@@ -100,21 +102,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public void SuppressWorldInputForAction()
         {
             PointerOverAuthoringUi = true;
-        }
-
-        public void CompleteFrame()
-        {
-            Vector2 pointer = GetPointerPosition(_coordinateScale);
-            PointerOverAuthoringUi = IsPointerOverRegisteredUi(pointer);
-
-            _scrollFocusService.CompleteFrame(pointer);
-            if (_scrollFocusService.PointerOverScrollableRegion)
-            {
-                PointerOverAuthoringUi = true;
-                _scrollFocusService.ConsumeScrollWheelIfFocused(Event.current);
-            }
-            if (PopupOpen)
-                PointerOverAuthoringUi = true;
         }
 
         public bool ShouldSuppressWorldInput()
@@ -150,7 +137,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             PopupOpenLastFrame = false;
             DraggingShellChrome = false;
             KeyboardCaptured = false;
-            TextFieldFocused = false;
+            _textFieldFocusedThisGuiFrame = false;
+            _textFieldFocusedLastGuiFrame = false;
+            _textFieldFocusGuiFrame = -1;
             TransitionActive = false;
             KeyboardShortcutHandled = false;
             _scrollFocusService.BeginFrame();
@@ -188,14 +177,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new Vector2(mouse.x / scale, (Screen.height - mouse.y) / scale);
         }
 
-        private static bool IsGuiTextFieldFocused()
+        private void BeginTextFieldFocusFrame()
         {
-            int controlId = GUIUtility.keyboardControl;
-            if (controlId <= 0)
-                return false;
+            int frame = Time.frameCount;
+            if (_textFieldFocusGuiFrame == frame)
+                return;
 
-            TextEditor textEditor = GUIUtility.GetStateObject(typeof(TextEditor), controlId) as TextEditor;
-            return textEditor != null;
+            _textFieldFocusGuiFrame = frame;
+            _textFieldFocusedThisGuiFrame = false;
+        }
+
+        public void CompleteFrame()
+        {
+            Vector2 pointer = GetPointerPosition(_coordinateScale);
+            PointerOverAuthoringUi = IsPointerOverRegisteredUi(pointer);
+
+            _scrollFocusService.CompleteFrame(pointer);
+            if (_scrollFocusService.PointerOverScrollableRegion)
+            {
+                PointerOverAuthoringUi = true;
+                _scrollFocusService.ConsumeScrollWheelIfFocused(Event.current);
+            }
+            if (PopupOpen)
+                PointerOverAuthoringUi = true;
+
+            _textFieldFocusedLastGuiFrame = _textFieldFocusedThisGuiFrame;
         }
     }
 }
