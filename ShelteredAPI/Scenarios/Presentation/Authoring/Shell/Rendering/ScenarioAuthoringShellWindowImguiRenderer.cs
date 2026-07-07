@@ -1699,32 +1699,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = Inset(rect, 10f);
             GUI.Label(new Rect(inner.x, inner.y, inner.width, 24f), "Stats", _sectionTitleStyle);
-            float y = inner.y + 30f;
+            float rowStep = 28f;
+            float rowHeight = 28f;
+            float y = inner.y + 28f;
             for (int i = 0; editor.StatRows != null && i < editor.StatRows.Length; i++)
             {
-                DrawSurvivorStatRow(new Rect(inner.x, y, inner.width, 30f), editor.StatRows[i]);
-                y += 34f;
+                DrawSurvivorStatRow(new Rect(inner.x, y, inner.width, rowHeight), editor.StatRows[i]);
+                y += rowStep;
             }
 
-            y += 8f;
-            GUI.Label(new Rect(inner.x, y, inner.width, 24f), "Traits", _sectionTitleStyle);
-            y += 30f;
+            y += 6f;
+            GUI.Label(new Rect(inner.x, y, inner.width, 22f), "Traits", _sectionTitleStyle);
+            y += 26f;
             for (int i = 0; editor.TraitRows != null && i < editor.TraitRows.Length; i++)
             {
-                DrawSurvivorTraitRow(new Rect(inner.x, y, inner.width, 30f), editor.TraitRows[i]);
-                y += 34f;
+                DrawSurvivorTraitRow(new Rect(inner.x, y, inner.width, rowHeight), editor.TraitRows[i]);
+                y += rowStep;
             }
 
-            y += 8f;
-            GUI.Label(new Rect(inner.x, y, inner.width, 24f), "Condition", _sectionTitleStyle);
-            y += 30f;
+            y += 6f;
+            GUI.Label(new Rect(inner.x, y, inner.width, 22f), "Condition", _sectionTitleStyle);
+            y += 26f;
             float conditionGap = 8f;
-            float conditionWidth = Math.Max(120f, (inner.width - conditionGap) * 0.5f);
+            float conditionWidth = Math.Max(170f, (inner.width - conditionGap) * 0.5f);
             for (int i = 0; editor.ConditionRows != null && i < editor.ConditionRows.Length; i++)
             {
                 int column = i % 2;
                 int rowIndex = i / 2;
-                Rect conditionRect = new Rect(inner.x + column * (conditionWidth + conditionGap), y + rowIndex * 34f, conditionWidth, 30f);
+                Rect conditionRect = new Rect(inner.x + column * (conditionWidth + conditionGap), y + rowIndex * rowStep, conditionWidth, rowHeight);
                 DrawSurvivorConditionRow(conditionRect, editor.ConditionRows[i]);
             }
 
@@ -1795,18 +1797,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float labelWidth = Mathf.Clamp(rect.width * 0.34f, 58f, 84f);
             float buttonWidth = 24f;
             float valueWidth = 38f;
-            float rangeWidth = rect.width >= 230f ? 38f : 0f;
+            string rangeText = row.RangeText ?? string.Empty;
+            GUIStyle rangeStyle = new GUIStyle(_mutedTextStyle);
+            rangeStyle.wordWrap = false;
+            rangeStyle.clipping = TextClipping.Clip;
+            float rangeWidth = Math.Max(46f, rangeStyle.CalcSize(new GUIContent(rangeText)).x + 2f);
+            bool showRange = rect.width >= 48f + 6f + buttonWidth + 6f + valueWidth + 4f + rangeWidth + 8f + buttonWidth;
+            if (!showRange)
+                rangeWidth = 0f;
+            float fixedWidthAfterLabel = showRange
+                ? 6f + buttonWidth + 6f + valueWidth + 4f + rangeWidth + 8f + buttonWidth
+                : 6f + buttonWidth + 6f + valueWidth + 8f + buttonWidth;
+            labelWidth = Math.Min(labelWidth, Math.Max(48f, rect.width - fixedWidthAfterLabel));
             GUI.Label(new Rect(rect.x, rect.y + 6f, labelWidth, 20f), row.Label ?? string.Empty, _textStyle);
-            DrawButton(new Rect(rect.x + labelWidth + 6f, rect.y + 2f, buttonWidth, 28f), row.DecreaseAction, false);
-            Rect valueRect = new Rect(rect.x + labelWidth + buttonWidth + 8f, rect.y + 2f, valueWidth, 28f);
+            Rect decreaseRect = new Rect(rect.x + labelWidth + 6f, rect.y + 2f, buttonWidth, 24f);
+            DrawButton(decreaseRect, row.DecreaseAction, false);
+            Rect valueRect = new Rect(decreaseRect.xMax + 6f, rect.y + 2f, valueWidth, 24f);
             DrawSurvivorInlineTextField(valueRect, "survivor.condition." + row.Id, row.Value.ToString(), row.TextAction);
-            if (rangeWidth > 0f)
-                GUI.Label(new Rect(valueRect.xMax + 4f, rect.y + 6f, rangeWidth, 20f), row.RangeText ?? string.Empty, _mutedTextStyle);
-            float helpX = valueRect.xMax + rangeWidth + 12f;
-            float helpWidth = Math.Max(50f, rect.xMax - helpX - buttonWidth - 8f);
+            Rect rangeRect = showRange
+                ? new Rect(valueRect.xMax + 4f, rect.y + 6f, rangeWidth, 20f)
+                : new Rect(valueRect.xMax, rect.y + 6f, 0f, 20f);
+            if (showRange)
+                GUI.Label(rangeRect, rangeText, rangeStyle);
+            Rect increaseRect = new Rect(rect.xMax - buttonWidth, rect.y + 2f, buttonWidth, 24f);
+            float helpX = showRange ? rangeRect.xMax + 8f : valueRect.xMax + 8f;
+            float helpWidth = Math.Max(0f, increaseRect.x - helpX - 8f);
             if (helpWidth >= 90f)
                 GUI.Label(new Rect(helpX, rect.y + 6f, helpWidth, 20f), ShortenToFit(row.HelpText ?? string.Empty, helpWidth, _mutedTextStyle), _mutedTextStyle);
-            DrawButton(new Rect(rect.xMax - buttonWidth, rect.y + 2f, buttonWidth, 28f), row.IncreaseAction, false);
+            DrawButton(increaseRect, row.IncreaseAction, false);
         }
 
         private void DrawSurvivorInlineTextField(Rect rect, string controlName, string value, ScenarioAuthoringInspectorAction action)

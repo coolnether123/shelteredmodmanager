@@ -879,8 +879,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Vector2 preferred = _survivorColorPicker != null && _survivorColorPicker.Control != null
                 ? _survivorColorPicker.Control.PreferredSize
                 : new Vector2(430f, 300f);
-            float width = Mathf.Clamp(preferred.x + 28f, 430f, Math.Max(430f, scaledWidth - (Margin * 2f)));
-            float height = Mathf.Clamp(preferred.y + 60f, 330f, Math.Max(330f, scaledHeight - TopBarHeight - StatusHeight - (Margin * 3f)));
+            Vector2 minimum = _survivorColorPicker != null && _survivorColorPicker.Control != null
+                ? _survivorColorPicker.Control.MinimumSize
+                : new Vector2(430f, 300f);
+            float minWidth = Math.Max(430f, minimum.x + 28f);
+            float minHeight = Math.Max(330f, minimum.y + 62f);
+            float maxWidth = Math.Max(minWidth, scaledWidth - (Margin * 2f));
+            float maxHeight = Math.Max(minHeight, scaledHeight - TopBarHeight - StatusHeight - (Margin * 3f));
+            float width = Mathf.Clamp(preferred.x + 28f, minWidth, maxWidth);
+            float height = Mathf.Clamp(preferred.y + 62f, minHeight, maxHeight);
             return ScenarioAuthoringShellLayout.BuildCenteredPopupRect(scaledWidth, scaledHeight, width, height, hudReserveRect);
         }
 

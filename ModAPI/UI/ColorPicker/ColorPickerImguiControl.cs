@@ -1,4 +1,5 @@
 using System;
+using ModAPI.Core;
 using UnityEngine;
 using ModAPI.UI;
 
@@ -34,8 +35,38 @@ namespace ModAPI.UI.ColorPicker
         private float _cachedHue = -1f;
         private float _cachedSvAlpha = -1f;
         private float _cachedSaturation = -1f;
+        private int _cachedSvTextureSize = -1;
+        private int _cachedHueTextureWidth = -1;
+        private int _cachedHueTextureHeight = -1;
+        private int _cachedAlphaTextureWidth = -1;
+        private int _cachedAlphaTextureHeight = -1;
         private ModColor _cachedAlphaColor;
         private string _focusedTextFieldId;
+
+        private const float FixedGap = 8f;
+        private const float HueBarHeight = 18f;
+        private const float AlphaBarHeight = 18f;
+        private const float MinimumSaturationValueSize = 120f;
+        private const float MinimumDrawableSaturationValueSize = 40f;
+        private const float MinimumContentWidth = 496f;
+        private const float FieldLabelWidth = 36f;
+        private const float FieldGap = 4f;
+        private const float UnitFieldWidth = 42f;
+        private const float HexFieldWidth = 116f;
+        private const float SwatchLabelWidth = 54f;
+
+        private static readonly ModColor[] BasicSwatches = new[]
+        {
+            new ModColor(0f, 0f, 0f, 1f),
+            new ModColor(1f, 1f, 1f, 1f),
+            new ModColor(0.5f, 0.5f, 0.5f, 1f),
+            new ModColor(1f, 0f, 0f, 1f),
+            new ModColor(0f, 1f, 0f, 1f),
+            new ModColor(0f, 0f, 1f, 1f),
+            new ModColor(1f, 1f, 0f, 1f),
+            new ModColor(0f, 1f, 1f, 1f),
+            new ModColor(1f, 0f, 1f, 1f)
+        };
 
         public ColorPickerImguiControl(ColorPickerSession session)
         {
@@ -46,10 +77,10 @@ namespace ModAPI.UI.ColorPicker
             Style = new ColorPickerImguiStyle();
             PickerSize = 220f;
             SliderWidth = 16f;
-            Margin = 6f;
-            FieldHeight = 22f;
+            Margin = 8f;
+            FieldHeight = 26f;
             ButtonHeight = 28f;
-            PreviewSize = 56f;
+            PreviewSize = 42f;
             SwatchSize = 18f;
         }
 
@@ -63,23 +94,16 @@ namespace ModAPI.UI.ColorPicker
         public float SwatchSize { get; set; }
         public bool ConsumedInputThisFrame { get; private set; }
 
+        public Vector2 MinimumSize
+        {
+            get { return new Vector2(MinimumContentWidth + (Margin * 2f), CalculateRequiredHeight(MinimumSaturationValueSize)); }
+        }
+
         public Vector2 PreferredSize
         {
             get
             {
-                float rightWidth = PreviewSize * 2f + Margin;
-                rightWidth = Math.Max(rightWidth, 188f);
-                float width = PickerSize + Margin + SliderWidth + Margin + SliderWidth + Margin + rightWidth;
-                float rightHeight = PreviewSize
-                    + Margin
-                    + (SwatchSize * 3f)
-                    + Margin
-                    + (FieldHeight * 3f)
-                    + (Margin * 2f)
-                    + ButtonHeight
-                    + Margin
-                    + ButtonHeight;
-                return new Vector2(width, Math.Max(PickerSize, rightHeight));
+                return new Vector2(MinimumSize.x, CalculateRequiredHeight(Math.Max(MinimumSaturationValueSize, PickerSize)));
             }
         }
 
@@ -96,14 +120,17 @@ namespace ModAPI.UI.ColorPicker
             string focused = GUI.GetNameOfFocusedControl();
             _session.SyncTextFields(IsColorPickerTextField(focused) ? focused : null, false);
 
-            Rect pickerRect = new Rect(rect.x, rect.y, PickerSize, PickerSize);
-            Rect hueRect = new Rect(pickerRect.xMax + Margin, rect.y, SliderWidth, PickerSize);
-            Rect alphaRect = new Rect(hueRect.xMax + Margin, rect.y, SliderWidth, PickerSize);
-            Rect rightRect = new Rect(alphaRect.xMax + Margin, rect.y, rect.xMax - alphaRect.xMax - Margin, rect.height);
+            ColorPickerLayout layout = BuildLayout(rect);
 
-            EnsureTextures();
-            DrawPickerArea(pickerRect, hueRect, alphaRect);
-            DrawRightColumn(rightRect);
+            EnsureTextures(layout);
+            DrawPickerArea(layout.SaturationValueRect, layout.HueRect, layout.AlphaRect);
+            DrawPreviewRow(layout.PreviewRect);
+            DrawNumericFieldGrid(layout);
+            DrawSwatches(layout.BasicsSwatchRect, layout.PinnedSwatchRect, layout.RecentSwatchRect);
+            DrawButtons(layout.ButtonRect);
+#if DEBUG
+            GuardNoLayoutIntersections(layout);
+#endif
             HandleKeyboard();
             CommitTextFieldFocusChange(GUI.GetNameOfFocusedControl());
 
@@ -132,67 +159,67 @@ namespace ModAPI.UI.ColorPicker
                 pickerRect.y + ((1f - _session.Hsv.V) * pickerRect.height) - 4f,
                 8f,
                 8f));
-            DrawHandle(new Rect(hueRect.x - 2f, hueRect.y + ((1f - _session.Hsv.H) * hueRect.height) - 3f, hueRect.width + 4f, 6f));
-            DrawHandle(new Rect(alphaRect.x - 2f, alphaRect.y + ((1f - _session.CurrentColor.A) * alphaRect.height) - 3f, alphaRect.width + 4f, 6f));
+            DrawHandle(new Rect(hueRect.x + (_session.Hsv.H * hueRect.width) - 3f, hueRect.y - 2f, 6f, hueRect.height + 4f));
+            DrawHandle(new Rect(alphaRect.x + (_session.CurrentColor.A * alphaRect.width) - 3f, alphaRect.y - 2f, 6f, alphaRect.height + 4f));
 
             HandlePickerDrag(pickerRect, hueRect, alphaRect);
         }
 
-        private void DrawRightColumn(Rect rect)
+        private void DrawPreviewRow(Rect rect)
         {
             Rect newPreview = new Rect(rect.x, rect.y, PreviewSize, PreviewSize);
-            Rect oldPreview = new Rect(newPreview.xMax + Margin, rect.y, PreviewSize, PreviewSize);
+            Rect oldPreview = new Rect(newPreview.xMax + FixedGap, rect.y, PreviewSize, PreviewSize);
             DrawColorPreview(newPreview, _session.CurrentColor);
             DrawColorPreview(oldPreview, _session.OldColor);
             if (GUI.Button(oldPreview, GUIContent.none, GUIStyle.none))
                 _session.RestoreOldColor();
+            GUI.Label(new Rect(oldPreview.xMax + FixedGap, rect.y + 1f, Math.Max(1f, rect.xMax - oldPreview.xMax - FixedGap), 18f), "New / Old", LabelStyle);
+        }
 
-            Rect swatches = new Rect(rect.x, newPreview.yMax + Margin, rect.width, SwatchSize * 3f);
-            DrawSwatches(swatches);
-
-            Rect hsv = new Rect(rect.x, swatches.yMax + Margin, rect.width, FieldHeight);
-            Rect rgb = new Rect(rect.x, hsv.yMax + Margin, rect.width, FieldHeight);
-            Rect hex = new Rect(rect.x, rgb.yMax + Margin, rect.width, FieldHeight);
-            DrawFieldRow(hsv, "HSV", _session.HueField, _session.SaturationField, _session.ValueField, _session.AlphaHsvField);
-            DrawFieldRow(rgb, "RGB", _session.RedField, _session.GreenField, _session.BlueField, _session.AlphaRgbField);
-            DrawHexRow(hex);
+        private void DrawNumericFieldGrid(ColorPickerLayout layout)
+        {
+            DrawHexRow(layout.HexFieldRect);
+            DrawFieldRow(layout.RgbFieldRect, "RGB", _session.RedField, _session.GreenField, _session.BlueField, _session.AlphaRgbField);
+            DrawFieldRow(layout.HsvFieldRect, "HSV", _session.HueField, _session.SaturationField, _session.ValueField, _session.AlphaHsvField);
             CommitTextFieldFocusChange(GUI.GetNameOfFocusedControl());
+        }
 
-            Rect applyRect = new Rect(rect.x, hex.yMax + Margin, (rect.width - Margin) * 0.5f, ButtonHeight);
-            Rect cancelRect = new Rect(applyRect.xMax + Margin, applyRect.y, applyRect.width, ButtonHeight);
-            Rect okRect = new Rect(rect.x, applyRect.yMax + Margin, rect.width, ButtonHeight);
+        private void DrawButtons(Rect rect)
+        {
+            float buttonWidth = Math.Max(1f, (rect.width - (FixedGap * 2f)) / 3f);
+            Rect applyRect = new Rect(rect.x, rect.y, buttonWidth, rect.height);
+            Rect okRect = new Rect(applyRect.xMax + FixedGap, rect.y, buttonWidth, rect.height);
+            Rect cancelRect = new Rect(okRect.xMax + FixedGap, rect.y, Math.Max(1f, rect.xMax - okRect.xMax - FixedGap), rect.height);
 
             if (GUI.Button(applyRect, "Apply", ButtonStyle))
                 _session.Apply();
-            if (GUI.Button(cancelRect, "Cancel", ButtonStyle))
-                _session.Cancel();
             if (GUI.Button(okRect, "OK", ButtonStyle))
                 _session.Ok();
+            if (GUI.Button(cancelRect, "Cancel", ButtonStyle))
+                _session.Cancel();
         }
 
-        private void DrawSwatches(Rect rect)
+        private void DrawSwatches(Rect basicsRect, Rect pinnedRect, Rect recentRect)
         {
-            float x = rect.x;
-            float y = rect.y;
-            ModColor[] pinned = _session.Palette.PinnedColors;
-            ModColor[] recent = _session.Palette.RecentColors;
-
-            for (int i = 0; i < pinned.Length; i++)
-                DrawSwatch(ref x, ref y, rect, pinned[i], true);
-
-            if (pinned.Length > 0 && recent.Length > 0)
-            {
-                x = rect.x;
-                y += SwatchSize + 2f;
-            }
-
-            for (int i = 0; i < recent.Length; i++)
-                DrawSwatch(ref x, ref y, rect, recent[i], false);
+            DrawSwatchRow(basicsRect, "Basics", BasicSwatches, true);
+            DrawSwatchRow(pinnedRect, "Pinned", _session.Palette.PinnedColors, true);
+            DrawSwatchRow(recentRect, "Recent", _session.Palette.RecentColors, true);
         }
 
-        private void DrawSwatch(ref float x, ref float y, Rect bounds, ModColor color, bool pinned)
+        private void DrawSwatchRow(Rect rect, string label, ModColor[] colors, bool allowPinToggle)
         {
-            if (y + SwatchSize > bounds.yMax)
+            GUI.Label(new Rect(rect.x, rect.y + 1f, SwatchLabelWidth, rect.height), label, LabelStyle);
+            Rect bounds = new Rect(rect.x + SwatchLabelWidth, rect.y, Math.Max(0f, rect.width - SwatchLabelWidth), rect.height);
+            float x = bounds.x;
+            float y = bounds.y;
+
+            for (int i = 0; colors != null && i < colors.Length; i++)
+                DrawSwatch(ref x, ref y, bounds, colors[i], _session.Palette.IsPinned(colors[i]), allowPinToggle);
+        }
+
+        private void DrawSwatch(ref float x, ref float y, Rect bounds, ModColor color, bool pinned, bool allowPinToggle)
+        {
+            if (y + SwatchSize > bounds.yMax || x + SwatchSize > bounds.xMax)
                 return;
 
             Rect swatch = new Rect(x, y, SwatchSize, SwatchSize);
@@ -203,38 +230,37 @@ namespace ModAPI.UI.ColorPicker
             Event evt = Event.current;
             if (evt != null && swatch.Contains(evt.mousePosition) && evt.type == EventType.MouseDown)
             {
-                if (evt.button == 1)
+                if (evt.button == 1 && allowPinToggle)
                     _session.TogglePinned(color);
                 else
                     _session.SelectSwatch(color);
                 evt.Use();
             }
 
-            x += SwatchSize + 2f;
-            if (x + SwatchSize > bounds.xMax)
-            {
-                x = bounds.x;
-                y += SwatchSize + 2f;
-            }
+            x += SwatchSize + 3f;
         }
 
         private void DrawFieldRow(Rect rect, string label, ColorPickerTextField a, ColorPickerTextField b, ColorPickerTextField c, ColorPickerTextField d)
         {
-            float labelWidth = 32f;
-            GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), label, LabelStyle);
+            GUI.Label(new Rect(rect.x, rect.y + 3f, FieldLabelWidth, rect.height - 3f), label, LabelStyle);
 
-            float fieldWidth = Math.Max(36f, (rect.width - labelWidth) / 4f);
-            DrawTextField(new Rect(rect.x + labelWidth, rect.y, fieldWidth, rect.height), a);
-            DrawTextField(new Rect(rect.x + labelWidth + fieldWidth, rect.y, fieldWidth, rect.height), b);
-            DrawTextField(new Rect(rect.x + labelWidth + (fieldWidth * 2f), rect.y, fieldWidth, rect.height), c);
-            DrawTextField(new Rect(rect.x + labelWidth + (fieldWidth * 3f), rect.y, fieldWidth, rect.height), d);
+            float availableWidth = Math.Max(4f, rect.width - FieldLabelWidth - (FieldGap * 3f));
+            float fieldWidth = Math.Min(UnitFieldWidth, availableWidth / 4f);
+            float x = rect.x + FieldLabelWidth;
+            DrawTextField(new Rect(x, rect.y, fieldWidth, rect.height), a);
+            x += fieldWidth + FieldGap;
+            DrawTextField(new Rect(x, rect.y, fieldWidth, rect.height), b);
+            x += fieldWidth + FieldGap;
+            DrawTextField(new Rect(x, rect.y, fieldWidth, rect.height), c);
+            x += fieldWidth + FieldGap;
+            DrawTextField(new Rect(x, rect.y, fieldWidth, rect.height), d);
         }
 
         private void DrawHexRow(Rect rect)
         {
-            float labelWidth = 32f;
-            GUI.Label(new Rect(rect.x, rect.y, labelWidth, rect.height), "HEX", LabelStyle);
-            DrawTextField(new Rect(rect.x + labelWidth, rect.y, rect.width - labelWidth, rect.height), _session.HexField);
+            GUI.Label(new Rect(rect.x, rect.y + 3f, FieldLabelWidth, rect.height - 3f), "HEX", LabelStyle);
+            float width = Math.Min(HexFieldWidth, Math.Max(1f, rect.width - FieldLabelWidth));
+            DrawTextField(new Rect(rect.x + FieldLabelWidth, rect.y, width, rect.height), _session.HexField);
         }
 
         private void DrawTextField(Rect rect, ColorPickerTextField field)
@@ -280,12 +306,12 @@ namespace ModAPI.UI.ColorPicker
             {
                 if (hueRect.Contains(evt.mousePosition))
                 {
-                    _session.SetHue(_session.Hsv.H - (evt.delta.y / PickerSize));
+                    _session.SetHue(_session.Hsv.H - (evt.delta.y / Math.Max(1f, hueRect.width)));
                     evt.Use();
                 }
                 else if (alphaRect.Contains(evt.mousePosition))
                 {
-                    _session.SetAlpha(_session.CurrentColor.A - (evt.delta.y / PickerSize));
+                    _session.SetAlpha(_session.CurrentColor.A - (evt.delta.y / Math.Max(1f, alphaRect.width)));
                     evt.Use();
                 }
             }
@@ -309,13 +335,13 @@ namespace ModAPI.UI.ColorPicker
             }
             else if (_session.ActiveControl == ColorPickerActiveControl.Hue)
             {
-                float h = 1f - ColorPickerMath.Clamp01((evt.mousePosition.y - hueRect.y) / hueRect.height);
+                float h = ColorPickerMath.Clamp01((evt.mousePosition.x - hueRect.x) / hueRect.width);
                 _session.SetHue(h);
                 evt.Use();
             }
             else if (_session.ActiveControl == ColorPickerActiveControl.Alpha)
             {
-                float a = 1f - ColorPickerMath.Clamp01((evt.mousePosition.y - alphaRect.y) / alphaRect.height);
+                float a = ColorPickerMath.Clamp01((evt.mousePosition.x - alphaRect.x) / alphaRect.width);
                 _session.SetAlpha(a);
                 evt.Use();
             }
@@ -401,27 +427,44 @@ namespace ModAPI.UI.ColorPicker
             GUI.color = old;
         }
 
-        private void EnsureTextures()
+        private void EnsureTextures(ColorPickerLayout layout)
         {
-            if (_hueTexture == null)
-                _hueTexture = CreateHueTexture(1, (int)PickerSize);
+            int svSize = Math.Max(1, (int)Math.Round(layout.SaturationValueRect.width));
+            int hueWidth = Math.Max(1, (int)Math.Round(layout.HueRect.width));
+            int hueHeight = Math.Max(1, (int)Math.Round(layout.HueRect.height));
+            int alphaWidth = Math.Max(1, (int)Math.Round(layout.AlphaRect.width));
+            int alphaHeight = Math.Max(1, (int)Math.Round(layout.AlphaRect.height));
+
+            if (_hueTexture == null || _cachedHueTextureWidth != hueWidth || _cachedHueTextureHeight != hueHeight)
+            {
+                DestroyTexture(ref _hueTexture);
+                _hueTexture = CreateHueTexture(hueWidth, hueHeight);
+                _cachedHueTextureWidth = hueWidth;
+                _cachedHueTextureHeight = hueHeight;
+            }
 
             if (_svTexture == null
+                || _cachedSvTextureSize != svSize
                 || Math.Abs(_cachedHue - _session.Hsv.H) > 0.0001f
                 || Math.Abs(_cachedSvAlpha - _session.CurrentColor.A) > 0.0001f)
             {
                 DestroyTexture(ref _svTexture);
-                _svTexture = CreateSaturationValueTexture((int)PickerSize, (int)PickerSize, _session.Hsv.H, _session.CurrentColor.A);
+                _svTexture = CreateSaturationValueTexture(svSize, svSize, _session.Hsv.H, _session.CurrentColor.A);
+                _cachedSvTextureSize = svSize;
                 _cachedHue = _session.Hsv.H;
                 _cachedSvAlpha = _session.CurrentColor.A;
             }
 
             if (_alphaTexture == null
+                || _cachedAlphaTextureWidth != alphaWidth
+                || _cachedAlphaTextureHeight != alphaHeight
                 || Math.Abs(_cachedSaturation - _session.Hsv.S) > 0.0001f
                 || !_cachedAlphaColor.NearlyEquals(_session.CurrentColor))
             {
                 DestroyTexture(ref _alphaTexture);
-                _alphaTexture = CreateAlphaTexture(1, (int)PickerSize, _session.CurrentColor);
+                _alphaTexture = CreateAlphaTexture(alphaWidth, alphaHeight, _session.CurrentColor);
+                _cachedAlphaTextureWidth = alphaWidth;
+                _cachedAlphaTextureHeight = alphaHeight;
                 _cachedSaturation = _session.Hsv.S;
                 _cachedAlphaColor = _session.CurrentColor;
             }
@@ -459,10 +502,12 @@ namespace ModAPI.UI.ColorPicker
             Texture2D texture = new Texture2D(width, height);
             for (int y = 0; y < height; y++)
             {
-                float h = height <= 1 ? 0f : y / (float)(height - 1);
-                Color color = ToUnityColor(ColorPickerMath.HsvToRgb(h, 1f, 1f, 1f));
                 for (int x = 0; x < width; x++)
+                {
+                    float h = width <= 1 ? 0f : x / (float)(width - 1);
+                    Color color = ToUnityColor(ColorPickerMath.HsvToRgb(h, 1f, 1f, 1f));
                     texture.SetPixel(x, y, color);
+                }
             }
 
             texture.Apply();
@@ -474,10 +519,12 @@ namespace ModAPI.UI.ColorPicker
             Texture2D texture = new Texture2D(width, height);
             for (int y = 0; y < height; y++)
             {
-                float alpha = height <= 1 ? 0f : y / (float)(height - 1);
-                Color unity = new Color(color.R, color.G, color.B, alpha);
                 for (int x = 0; x < width; x++)
+                {
+                    float alpha = width <= 1 ? 0f : x / (float)(width - 1);
+                    Color unity = new Color(color.R, color.G, color.B, alpha);
                     texture.SetPixel(x, y, unity);
+                }
             }
 
             texture.Apply();
@@ -528,6 +575,153 @@ namespace ModAPI.UI.ColorPicker
             return evt.type == EventType.MouseDown
                 || evt.type == EventType.MouseDrag
                 || evt.type == EventType.ScrollWheel;
+        }
+
+        private ColorPickerLayout BuildLayout(Rect rect)
+        {
+            Rect content = new Rect(
+                rect.x + Margin,
+                rect.y + Margin,
+                Math.Max(1f, rect.width - (Margin * 2f)),
+                Math.Max(1f, rect.height - (Margin * 2f)));
+
+            float fixedHeight = HueBarHeight
+                + AlphaBarHeight
+                + PreviewSize
+                + NumericGridHeight
+                + SwatchRowsHeight
+                + ButtonHeight
+                + (FixedGap * 6f);
+            float availableSvSize = content.height - fixedHeight;
+            float svSize = Math.Min(Math.Max(MinimumDrawableSaturationValueSize, availableSvSize), Math.Min(PickerSize, content.width));
+            if (availableSvSize >= MinimumSaturationValueSize)
+                svSize = Math.Min(Math.Min(PickerSize, availableSvSize), content.width);
+
+            float y = content.y;
+            ColorPickerLayout layout = new ColorPickerLayout();
+            layout.HueRect = new Rect(content.x, y, content.width, HueBarHeight);
+            y += HueBarHeight + FixedGap;
+
+            layout.SaturationValueRect = new Rect(content.x + Math.Max(0f, (content.width - svSize) * 0.5f), y, svSize, svSize);
+            y += svSize + FixedGap;
+
+            layout.AlphaRect = new Rect(content.x, y, content.width, AlphaBarHeight);
+            y += AlphaBarHeight + FixedGap;
+
+            layout.PreviewRect = new Rect(content.x, y, content.width, PreviewSize);
+            y += PreviewSize + FixedGap;
+
+            float columnWidth = Math.Max(1f, (content.width - FixedGap) * 0.5f);
+            layout.HexFieldRect = new Rect(content.x, y, columnWidth, FieldHeight);
+            layout.RgbFieldRect = new Rect(content.x + columnWidth + FixedGap, y, columnWidth, FieldHeight);
+            y += FieldHeight + FixedGap;
+            layout.HsvFieldRect = new Rect(content.x, y, columnWidth, FieldHeight);
+            y += FieldHeight + FixedGap;
+
+            layout.BasicsSwatchRect = new Rect(content.x, y, content.width, SwatchSize);
+            y += SwatchSize + FixedGap;
+            layout.PinnedSwatchRect = new Rect(content.x, y, content.width, SwatchSize);
+            y += SwatchSize + FixedGap;
+            layout.RecentSwatchRect = new Rect(content.x, y, content.width, SwatchSize);
+            y += SwatchSize + FixedGap;
+
+            layout.ButtonRect = new Rect(content.x, y, content.width, ButtonHeight);
+            return layout;
+        }
+
+        private float NumericGridHeight
+        {
+            get { return (FieldHeight * 2f) + FixedGap; }
+        }
+
+        private float SwatchRowsHeight
+        {
+            get { return (SwatchSize * 3f) + (FixedGap * 2f); }
+        }
+
+        private float CalculateRequiredHeight(float saturationValueSize)
+        {
+            return (Margin * 2f)
+                + HueBarHeight
+                + saturationValueSize
+                + AlphaBarHeight
+                + PreviewSize
+                + NumericGridHeight
+                + SwatchRowsHeight
+                + ButtonHeight
+                + (FixedGap * 6f);
+        }
+
+#if DEBUG
+        private static void GuardNoLayoutIntersections(ColorPickerLayout layout)
+        {
+            string[] names = new[]
+            {
+                "hue",
+                "sv",
+                "alpha",
+                "preview",
+                "hex",
+                "rgb",
+                "hsv",
+                "basics",
+                "pinned",
+                "recent",
+                "buttons"
+            };
+            Rect[] rects = new[]
+            {
+                layout.HueRect,
+                layout.SaturationValueRect,
+                layout.AlphaRect,
+                layout.PreviewRect,
+                layout.HexFieldRect,
+                layout.RgbFieldRect,
+                layout.HsvFieldRect,
+                layout.BasicsSwatchRect,
+                layout.PinnedSwatchRect,
+                layout.RecentSwatchRect,
+                layout.ButtonRect
+            };
+
+            for (int i = 0; i < rects.Length; i++)
+            {
+                for (int j = i + 1; j < rects.Length; j++)
+                {
+                    if (Intersects(rects[i], rects[j]))
+                    {
+                        MMLog.WarnOnce(
+                            "ColorPicker.LayoutIntersection." + names[i] + "." + names[j],
+                            "[ColorPicker] Layout rects intersect: " + names[i] + "=" + FormatRect(rects[i]) + " " + names[j] + "=" + FormatRect(rects[j]));
+                    }
+                }
+            }
+        }
+
+        private static bool Intersects(Rect a, Rect b)
+        {
+            return a.xMin < b.xMax && a.xMax > b.xMin && a.yMin < b.yMax && a.yMax > b.yMin;
+        }
+
+        private static string FormatRect(Rect rect)
+        {
+            return "(" + rect.x.ToString("0.##") + "," + rect.y.ToString("0.##") + "," + rect.width.ToString("0.##") + "," + rect.height.ToString("0.##") + ")";
+        }
+#endif
+
+        private struct ColorPickerLayout
+        {
+            public Rect HueRect;
+            public Rect SaturationValueRect;
+            public Rect AlphaRect;
+            public Rect PreviewRect;
+            public Rect HexFieldRect;
+            public Rect RgbFieldRect;
+            public Rect HsvFieldRect;
+            public Rect BasicsSwatchRect;
+            public Rect PinnedSwatchRect;
+            public Rect RecentSwatchRect;
+            public Rect ButtonRect;
         }
 
         private static void DestroyTexture(ref Texture2D texture)
