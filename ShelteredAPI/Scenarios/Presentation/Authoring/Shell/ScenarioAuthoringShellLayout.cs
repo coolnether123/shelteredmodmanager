@@ -19,7 +19,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public const float InspectorWidth = 300f;
         public const float InspectorMinWidth = 240f;
         public const float InspectorMaxWidth = 480f;
-        public const float BottomTrayHeight = 246f;
+        public const float BottomTrayHeight = 286f;
         public const float BottomTrayCollapsedHeight = 44f;
         public const float CommandDockHeight = 48f;
 
@@ -111,7 +111,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float trayBottom = Math.Max(contentRect.y + 180f, commandDockTop - Gutter);
             float upperClearanceY = contentRect.y + 216f;
             float availableHeight = Math.Max(150f, trayBottom - upperClearanceY);
-            float trayHeight = Mathf.Clamp(BottomTrayHeight, 206f, Math.Min(246f, availableHeight));
+            float trayHeight = Mathf.Clamp(BottomTrayHeight, 246f, Math.Min(320f, availableHeight));
             float trayY = trayBottom - trayHeight;
             return new Rect(viewportLeft, trayY, trayWidth, trayHeight);
         }
@@ -205,11 +205,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : contentRect;
             float dockWidth = Mathf.Clamp(inspectorWidth > 0f ? inspectorWidth : InspectorWidth, InspectorMinWidth, InspectorMaxWidth);
             float maxWidth = Math.Max(320f, workspaceBounds.width - ((ToolRailWidth + Gutter + dockWidth + Gutter) * 0.5f));
-            float maxHeight = Math.Max(220f, workspaceBounds.height - WorkspaceTabReserveHeight - Gutter);
-            float width = Mathf.Clamp(workspaceBounds.width * 0.58f, Math.Min(640f, maxWidth), Math.Min(980f, maxWidth));
-            float height = Mathf.Clamp(workspaceBounds.height * 0.72f, Math.Min(400f, maxHeight), Math.Min(620f, maxHeight));
+            float maxHeight = Math.Max(260f, workspaceBounds.height - WorkspaceTabReserveHeight - Gutter);
+            float width = Mathf.Clamp(workspaceBounds.width * 0.64f, Math.Min(680f, maxWidth), Math.Min(1040f, maxWidth));
+            float height = Mathf.Clamp(workspaceBounds.height * 0.8f, Math.Min(460f, maxHeight), Math.Min(680f, maxHeight));
             float x = workspaceBounds.x + ((workspaceBounds.width - width) * 0.5f);
-            float y = workspaceBounds.y + ((workspaceBounds.height - height) * 0.5f) + (WorkspaceTabReserveHeight * 0.5f);
+            float y = workspaceBounds.y + WorkspaceTabReserveHeight + 2f;
+            float maxY = workspaceBounds.yMax - WorkspaceTabReserveHeight;
+            if (y + height > maxY)
+                y = Math.Max(workspaceBounds.y + WorkspaceTabReserveHeight, maxY - height);
             y = Math.Max(workspaceBounds.y + WorkspaceTabReserveHeight, y);
             return new Rect(x, y, width, height);
         }

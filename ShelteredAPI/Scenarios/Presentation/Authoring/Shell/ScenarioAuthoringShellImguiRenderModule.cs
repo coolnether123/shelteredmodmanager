@@ -27,6 +27,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const string CandidateFilterVanilla = "vanilla";
         private const string CandidateFilterScenario = "scenario";
         private const string ShellRootAnimationKey = "shell.root";
+        private const string ShellChromeAnimationKey = "shell.chrome";
 
         // Layout constants live in ScenarioAuthoringShellLayout. These aliases keep
         // the render code readable without re-declaring the values.
@@ -37,7 +38,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const float ToolRailWidth = ScenarioAuthoringShellLayout.ToolRailWidth;
         private const float InspectorWidth = ScenarioAuthoringShellLayout.InspectorWidth;
         private const float BottomTrayHeight = ScenarioAuthoringShellLayout.BottomTrayHeight;
+        private const float ChromeInteractionThreshold = 0.06f;
+        private const float WindowInteractionAlphaThreshold = 0.03f;
         private const float CommandDockHeight = ScenarioAuthoringShellLayout.CommandDockHeight;
+
+        private Rect _chromeViewportRect;
 
         private readonly ScenarioAuthoringShellAnimationService _animations;
         private readonly List<ScenarioAuthoringShellAnimationService.WindowVisualState> _closingWindowBuffer =
@@ -252,13 +257,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                 float scaledWidth = Screen.width / uiScale;
                 float scaledHeight = Screen.height / uiScale;
+                _chromeViewportRect = new Rect(0f, 0f, scaledWidth, scaledHeight);
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
                 Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
+                float chromeProgress = _animations.GetChromeProgress(ShellChromeAnimationKey, !HasMajorWindowOpen(shell.Windows));
                 if (_snapshot.State != null && _snapshot.State.ReloadPending)
                 {
-                    DrawPlaytestControlStripCore(statusRect, shell);
-                    inputCapture.RegisterInteractiveRect(statusRect);
+                    Rect playtestStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
+                    if (chromeProgress > ChromeInteractionThreshold && playtestStatusRect.width > 0f && playtestStatusRect.height > 0f)
+                    {
+                        inputCapture.RegisterInteractiveRect(playtestStatusRect);
+                    }
+
                     inputCapture.SetTextFieldFocused(false);
                     inputCapture.SetKeyboardCaptured(false);
                     inputCapture.SetPopupOpen(false);
@@ -270,8 +281,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
                 {
-                    DrawPlaytestControlStripCore(statusRect, shell);
-                    inputCapture.RegisterInteractiveRect(statusRect);
+                    Rect playtestStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
+                    if (chromeProgress > ChromeInteractionThreshold && playtestStatusRect.width > 0f && playtestStatusRect.height > 0f)
+                    {
+                        inputCapture.RegisterInteractiveRect(playtestStatusRect);
+                    }
+
                     inputCapture.SetTextFieldFocused(false);
                     inputCapture.SetKeyboardCaptured(false);
                     inputCapture.SetPopupOpen(false);
@@ -281,12 +296,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return;
                 }
 
-                Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell);
-                RegisterTopBarMoreMenu(inputCapture);
+                Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell, chromeProgress);
+                RegisterTopBarMoreMenu(inputCapture, chromeProgress > ChromeInteractionThreshold);
                 Rect collapsedStripRect = RuntimeCompat.ZeroRect();
-                DrawStatusBarCore(statusRect, shell);
-                inputCapture.RegisterInteractiveRect(topRect);
-                inputCapture.RegisterInteractiveRect(statusRect);
+                Rect animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
+                if (chromeProgress > ChromeInteractionThreshold && windowMenuButtonRect.width > 0f && windowMenuButtonRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(windowMenuButtonRect);
+                if (chromeProgress > ChromeInteractionThreshold && animatedStatusRect.width > 0f && animatedStatusRect.height > 0f)
+                    inputCapture.RegisterInteractiveRect(animatedStatusRect);
 
             Rect contentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
 
@@ -295,32 +312,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
             bool workshopSurface = IsWorkshopSurface(_snapshot.State, activeWorkspaceId);
 
-            if (workshopSurface)
-            {
-                Rect pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
-                windowMenuButtonRect = DrawTopBarCore(topRect, shell);
-                RegisterTopBarMoreMenu(inputCapture);
-                DrawStatusBarCore(statusRect, shell);
-                if (pageRect.width > 0f && pageRect.height > 0f)
-                    inputCapture.RegisterInteractiveRect(pageRect);
-            }
-            else
-            {
+                if (workshopSurface)
+                {
+                    Rect pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
+                    windowMenuButtonRect = DrawTopBarCore(topRect, shell, chromeProgress);
+                    RegisterTopBarMoreMenu(inputCapture, chromeProgress > ChromeInteractionThreshold);
+                    animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
+                    if (pageRect.width > 0f && pageRect.height > 0f)
+                        inputCapture.RegisterInteractiveRect(pageRect);
+                    if (chromeProgress > ChromeInteractionThreshold && windowMenuButtonRect.width > 0f && windowMenuButtonRect.height > 0f)
+                        inputCapture.RegisterInteractiveRect(windowMenuButtonRect);
+                    if (chromeProgress > ChromeInteractionThreshold && animatedStatusRect.width > 0f && animatedStatusRect.height > 0f)
+                        inputCapture.RegisterInteractiveRect(animatedStatusRect);
+                }
+                else
+                {
                 // TODO(centralize): This is the legacy multi-surface path. Merge the tool rail,
                 // command dock, docked windows, and floating overlays into the central workspace
                 // once the remaining scenario editor migration plan is defined.
                 int restoreChipCount = CountCollapsedWorldToolWindows(shell.Windows);
-                Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State, restoreChipCount);
-                if (toolRailRect.width > 0f && toolRailRect.height > 0f)
+                Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State, restoreChipCount, chromeProgress);
+                if (chromeProgress > ChromeInteractionThreshold && toolRailRect.width > 0f && toolRailRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(toolRailRect);
-                Rect restoreChipsRect = DrawWorldToolRestoreChips(contentRect, toolRailRect, shell.Windows);
+                Rect restoreChipsRect = toolRailRect.width > 0f && toolRailRect.height > 0f
+                    ? DrawWorldToolRestoreChips(contentRect, toolRailRect, shell.Windows)
+                    : RuntimeCompat.ZeroRect();
                 if (restoreChipsRect.width > 0f && restoreChipsRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(restoreChipsRect);
 
                 if (activeWorkspaceId == null)
                 {
-                    Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State);
-                    if (commandDockRect.width > 0f && commandDockRect.height > 0f)
+                    Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State, chromeProgress);
+                    if (chromeProgress > ChromeInteractionThreshold && commandDockRect.width > 0f && commandDockRect.height > 0f)
                         inputCapture.RegisterInteractiveRect(commandDockRect);
                 }
 
@@ -481,14 +504,86 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private void RegisterTopBarMoreMenu(ScenarioAuthoringInputCaptureService inputCapture)
+        private void RegisterTopBarMoreMenu(ScenarioAuthoringInputCaptureService inputCapture, bool registerRect)
         {
-            if (!_topBarMoreMenuOpen || inputCapture == null)
+            if (!_topBarMoreMenuOpen || inputCapture == null || !registerRect)
                 return;
 
             inputCapture.RegisterInteractiveRect(_topBarMoreButtonRect);
             inputCapture.RegisterInteractiveRect(_topBarMoreMenuRect);
             inputCapture.SetPopupOpen(true);
+        }
+
+        private static bool HasMajorWindowOpen(ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            for (int i = 0; windows != null && i < windows.Length; i++)
+            {
+                if (IsMajorWindowOpen(windows[i]))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsMajorWindowOpen(ScenarioAuthoringShellWindowViewModel window)
+        {
+            if (window == null || !window.Visible || window.Collapsed)
+                return false;
+
+            if (window.Dock == ScenarioAuthoringShellDock.Overlay)
+                return true;
+
+            return string.Equals(window.Id, ScenarioAuthoringWindowIds.PixelEditor, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(window.Id, ScenarioAuthoringWindowIds.Settings, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(window.Id, ScenarioAuthoringWindowIds.AssetBrowser, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private Rect ResolveSlidingChromeRect(Rect rect, float openProgress, ScenarioUiSlideDirection direction)
+        {
+            if (rect.width <= 0f || rect.height <= 0f)
+                return rect;
+
+            return ScenarioUiAnimator.ResolveSlidingRect(
+                rect,
+                Mathf.Clamp01(openProgress),
+                direction,
+                ScenarioUiAnimator.ResolveSlideDistance(rect, direction));
+        }
+
+        private Rect ResolveWindowSlidingRect(Rect rect, float openProgress)
+        {
+            ScenarioUiSlideDirection direction = ResolveWindowSlideDirection(rect, _chromeViewportRect);
+            return ResolveSlidingChromeRect(rect, openProgress, direction);
+        }
+
+        private static ScenarioUiSlideDirection ResolveWindowSlideDirection(Rect rect, Rect viewport)
+        {
+            if (viewport.width <= 0f || viewport.height <= 0f)
+                return ScenarioUiSlideDirection.Up;
+
+            float left = Mathf.Max(0f, rect.x - viewport.x);
+            float right = Mathf.Max(0f, (viewport.x + viewport.width) - rect.xMax);
+            float top = Mathf.Max(0f, rect.y - viewport.y);
+            float bottom = Mathf.Max(0f, (viewport.y + viewport.height) - rect.yMax);
+            float nearest = left;
+            ScenarioUiSlideDirection direction = ScenarioUiSlideDirection.Left;
+            if (right < nearest)
+            {
+                nearest = right;
+                direction = ScenarioUiSlideDirection.Right;
+            }
+
+            if (top < nearest)
+            {
+                nearest = top;
+                direction = ScenarioUiSlideDirection.Up;
+            }
+
+            if (bottom < nearest)
+                direction = ScenarioUiSlideDirection.Down;
+
+            return direction;
         }
 
         private void RegisterWindowAnimationStates(
@@ -563,6 +658,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             for (int i = 0; i < drawList.Length; i++)
             {
                 ScenarioAuthoringShellWindowViewModel window = drawList[i];
+                ScenarioAuthoringShellAnimationService.WindowVisualState visual = _animations.GetWindowVisual(window != null ? window.Id : null);
                 Rect rect;
                 if (window == null
                     || !window.Visible
@@ -576,11 +672,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     // TODO(centralize): Floating windows remain movable/resizable overlays.
                     // Replace with central workspace panels once each tool has a target region.
-                    rect = HandleFloatingWindowInput(
-                        window,
-                        rect,
-                        contentRect,
-                        IsTopmostFloatingWindowForInput(drawList, windowRects, i));
+                    bool canInteract = visual == null || visual.Alpha > WindowInteractionAlphaThreshold;
+                    if (canInteract)
+                    {
+                        rect = HandleFloatingWindowInput(
+                            window,
+                            rect,
+                            contentRect,
+                            IsTopmostFloatingWindowForInput(drawList, windowRects, i));
+                    }
                 }
                 else if (window.Dock == ScenarioAuthoringShellDock.Right
                     && string.Equals(window.Id, ScenarioAuthoringWindowIds.Inspector, StringComparison.OrdinalIgnoreCase))
@@ -589,8 +689,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 _animations.UpdateWindowRect(window.Id, rect);
-                DrawWindowCore(rect, window);
-                inputCapture.RegisterInteractiveRect(rect);
+                Rect interactiveRect = DrawWindowCore(rect, window);
+                if (interactiveRect.width > 0f && interactiveRect.height > 0f && (visual == null || visual.Alpha > WindowInteractionAlphaThreshold))
+                {
+                    inputCapture.RegisterInteractiveRect(interactiveRect);
+                }
             }
 
             _animations.CollectClosingWindows(floating, _closingWindowBuffer);
@@ -601,8 +704,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect rect = state.LastRect;
-                DrawWindowCore(rect, state.Window);
-                inputCapture.RegisterInteractiveRect(rect);
+                Rect interactiveRect = DrawWindowCore(rect, state.Window);
+                if (interactiveRect.width > 0f && interactiveRect.height > 0f && state.Alpha > WindowInteractionAlphaThreshold)
+                {
+                    inputCapture.RegisterInteractiveRect(interactiveRect);
+                }
             }
         }
 

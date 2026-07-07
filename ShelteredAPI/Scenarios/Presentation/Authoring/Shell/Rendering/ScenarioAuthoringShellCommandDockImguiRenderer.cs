@@ -21,7 +21,7 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private Rect DrawCommandDockCore(Rect contentRect, ScenarioAuthoringState state)
+        private Rect DrawCommandDockCore(Rect contentRect, ScenarioAuthoringState state, float openProgress)
         {
             // TODO(centralize): Command dock is still a separate bottom-center action strip.
             // Merge these selection/build commands into the central workspace command area.
@@ -47,13 +47,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string signature = state != null
                 ? state.ActiveTool.ToString() + ":" + (state.SelectedTarget != null ? state.SelectedTarget.Id : "none")
                 : "none";
-            float appear = _animations.GetBinaryProgress("command.dock.visible", true, 0.14f, ScenarioUiEasing.EaseOut, false);
+            float appear = openProgress * _animations.GetBinaryProgress("command.dock.visible", true, 0.14f, ScenarioUiEasing.EaseOut, false);
             float swap = 1f - _animations.GetPulseProgress("command.dock.content", signature, 0.16f, ScenarioUiEasing.EaseOut);
-            using (ScenarioUiGuiScope.Apply(appear * Mathf.Clamp01(swap), rect, 1f))
+            Rect animatedRect = ResolveSlidingChromeRect(rect, openProgress, ScenarioUiSlideDirection.Down);
+            using (ScenarioUiGuiScope.Apply(appear * Mathf.Clamp01(swap), animatedRect, 1f))
             {
-            DrawChromePanel(rect, _rootPanelStyle);
-            float x = rect.x + 10f;
-            float availableButtonWidth = rect.width - 20f - (gap * (actions.Length - 1));
+            DrawChromePanel(animatedRect, _rootPanelStyle);
+            float x = animatedRect.x + 10f;
+            float availableButtonWidth = animatedRect.width - 20f - (gap * (actions.Length - 1));
             float overflow = Math.Max(0f, buttonsWidth - availableButtonWidth);
             for (int i = 0; i < actions.Length; i++)
             {
@@ -64,11 +65,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     buttonWidth -= shrink;
                     overflow -= shrink;
                 }
-                DrawButton(new Rect(x, rect.y + 8f, buttonWidth, 32f), actions[i], false);
+                DrawButton(new Rect(x, animatedRect.y + 8f, buttonWidth, 32f), actions[i], false);
                 x += buttonWidth + gap;
             }
             }
-            return rect;
+            return animatedRect;
         }
 
         private float ResolveCommandDockButtonWidth(ScenarioAuthoringInspectorAction action)

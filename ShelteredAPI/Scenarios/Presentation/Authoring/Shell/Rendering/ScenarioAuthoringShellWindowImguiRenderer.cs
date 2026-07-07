@@ -28,7 +28,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 window != null ? _animations.GetWindowVisual(window.Id) : null;
             float alpha = visual != null ? visual.Alpha : 1f;
             float scale = visual != null ? visual.Scale : 1f;
-            using (ScenarioUiGuiScope.Apply(alpha, rect, scale))
+            float slideProgress = visual != null ? (1f - visual.Slide) : 1f;
+            Rect slidingRect = ResolveWindowSlidingRect(rect, slideProgress);
+            using (ScenarioUiGuiScope.Apply(alpha, slidingRect, scale))
             {
                 bool scaled = Mathf.Abs(scale - 1f) > 0.0001f;
                 if (scaled)
@@ -36,7 +38,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 try
                 {
-                    return DrawWindowCoreUnscoped(rect, window);
+                    return DrawWindowCoreUnscoped(slidingRect, window);
                 }
                 finally
                 {

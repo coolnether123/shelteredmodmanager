@@ -12,6 +12,10 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
     {
         private const float WindowOpenDuration = 0.18f;
         private const float WindowCloseDuration = 0.12f;
+        private const float WindowSlideOpenDuration = 0.18f;
+        private const float WindowSlideCloseDuration = 0.12f;
+        private const float ChromeOpenDuration = 0.18f;
+        private const float ChromeCloseDuration = 0.14f;
         private const float ButtonHoverDuration = 0.16f;
         private const float ButtonPressDuration = 0.08f;
         private const float ButtonRecoverDuration = 0.12f;
@@ -40,6 +44,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
         private readonly Dictionary<string, string> _pulseSignatures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _windowRemovalBuffer = new List<string>();
         private bool _enabled = true;
+        private float _lastRealtime = -1f;
         private int _lastFrame = -1;
         private string _lastTooltip;
         private string _lastStatus;
@@ -63,8 +68,19 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                 return;
 
             _lastFrame = frame;
-            float deltaTime = _enabled ? Time.unscaledDeltaTime : 1f;
-            _tweens.Advance(deltaTime);
+            if (!_enabled)
+            {
+                _tweens.Advance(1f);
+            }
+            else
+            {
+                float now = Time.realtimeSinceStartup;
+                float delta = 1f;
+                if (_lastRealtime > 0f)
+                    delta = Mathf.Max(0f, now - _lastRealtime);
+                _lastRealtime = now;
+                _tweens.Advance(delta);
+            }
             TransitionActive = false;
         }
 
@@ -98,8 +114,9 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             if (state.VisibleThisFrame)
             {
                 state.Alpha = _tweens.GetValue(state.AlphaKey, 1f);
+                state.Slide = _tweens.GetValue(state.SlideKey, 0f);
                 state.Scale = _tweens.GetValue(state.ScaleKey, 1f);
-                if (_tweens.IsRunning(state.AlphaKey) || _tweens.IsRunning(state.ScaleKey))
+                if (_tweens.IsRunning(state.AlphaKey) || _tweens.IsRunning(state.ScaleKey) || _tweens.IsRunning(state.SlideKey))
                     TransitionActive = true;
             }
 
@@ -122,7 +139,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                 {
                     state.Alpha = _tweens.GetValue(state.AlphaKey, 0f);
                     state.Scale = _tweens.GetValue(state.ScaleKey, 0.985f);
-                    if (_tweens.IsRunning(state.AlphaKey) || _tweens.IsRunning(state.ScaleKey))
+                    state.Slide = _tweens.GetValue(state.SlideKey, 1f);
+                    if (_tweens.IsRunning(state.AlphaKey) || _tweens.IsRunning(state.ScaleKey) || _tweens.IsRunning(state.SlideKey))
                         TransitionActive = true;
                     else if (state.Alpha <= 0.001f)
                     {
@@ -143,6 +161,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
                 {
                     _tweens.Remove(removed.AlphaKey);
                     _tweens.Remove(removed.ScaleKey);
+                    _tweens.Remove(removed.SlideKey);
                     _windows.Remove(_windowRemovalBuffer[i]);
                 }
             }
@@ -298,16 +317,28 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
 
         public float GetBinaryProgress(string key, bool visible, float duration, ScenarioUiEasing easing, bool blocksWorldInput)
         {
+            return GetBinaryProgress(key, visible, duration, duration, easing, blocksWorldInput);
+        }
+
+        public float GetBinaryProgress(string key, bool visible, float openDuration, float closeDuration, ScenarioUiEasing easing, bool blocksWorldInput)
+        {
             if (string.IsNullOrEmpty(key))
                 return visible ? 1f : 0f;
 
             if (!_enabled)
                 return visible ? 1f : 0f;
 
-            _tweens.PlayFromCurrent(key, visible ? 1f : 0f, duration, easing, visible ? 1f : 0f);
+            float target = visible ? 1f : 0f;
+            float transition = visible ? openDuration : closeDuration;
+            _tweens.PlayFromCurrent(key, target, transition, easing, target);
             if (blocksWorldInput && _tweens.IsRunning(key))
                 TransitionActive = true;
-            return _tweens.GetValue(key, visible ? 1f : 0f);
+            return _tweens.GetValue(key, target);
+        }
+
+        public float GetChromeProgress(string key, bool visible)
+        {
+            return GetBinaryProgress(key, visible, ChromeOpenDuration, ChromeCloseDuration, ScenarioUiEasing.EaseOut, false);
         }
 
         public float GetPulseProgress(string key, string triggerSignature, float duration, ScenarioUiEasing easing)
@@ -335,13 +366,16 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             {
                 _tweens.Set(state.AlphaKey, 1f);
                 _tweens.Set(state.ScaleKey, 1f);
+                _tweens.Set(state.SlideKey, 0f);
                 state.Alpha = 1f;
                 state.Scale = 1f;
+                state.Slide = 0f;
                 return;
             }
 
             _tweens.Play(state.AlphaKey, 0f, 1f, WindowOpenDuration, ScenarioUiEasing.EaseOut);
             _tweens.Play(state.ScaleKey, 0.975f, 1f, WindowOpenDuration, ScenarioUiEasing.EaseOut);
+            _tweens.Play(state.SlideKey, 1f, 0f, WindowSlideOpenDuration, ScenarioUiEasing.EaseOut);
             TransitionActive = true;
         }
 
@@ -355,14 +389,17 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             {
                 state.Alpha = 0f;
                 state.Scale = 0.985f;
+                state.Slide = 1f;
                 state.Closing = false;
                 _tweens.Set(state.AlphaKey, 0f);
                 _tweens.Set(state.ScaleKey, 0.985f);
+                _tweens.Set(state.SlideKey, 1f);
                 return;
             }
 
             _tweens.Play(state.AlphaKey, _tweens.GetValue(state.AlphaKey, 1f), 0f, WindowCloseDuration, ScenarioUiEasing.EaseInOut);
             _tweens.Play(state.ScaleKey, _tweens.GetValue(state.ScaleKey, 1f), 0.985f, WindowCloseDuration, ScenarioUiEasing.EaseInOut);
+            _tweens.Play(state.SlideKey, _tweens.GetValue(state.SlideKey, 0f), 1f, WindowSlideCloseDuration, ScenarioUiEasing.EaseOut);
             TransitionActive = true;
         }
 
@@ -391,6 +428,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             public readonly string Id;
             public readonly string AlphaKey;
             public readonly string ScaleKey;
+            public readonly string SlideKey;
             public ScenarioAuthoringShellWindowViewModel Window;
             public Rect LastRect;
             public bool Floating;
@@ -400,15 +438,18 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Animation
             public bool Closing;
             public float Alpha;
             public float Scale;
+            public float Slide;
 
             public WindowVisualState(string id)
             {
                 Id = id;
                 AlphaKey = string.Concat("window:", id, ":alpha");
                 ScaleKey = string.Concat("window:", id, ":scale");
+                SlideKey = string.Concat("window:", id, ":slide");
                 LastRect = RuntimeCompat.ZeroRect();
                 Alpha = 1f;
                 Scale = 1f;
+                Slide = 0f;
             }
         }
     }

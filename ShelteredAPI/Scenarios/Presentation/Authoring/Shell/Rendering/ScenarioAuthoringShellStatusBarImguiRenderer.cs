@@ -22,9 +22,12 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private void DrawStatusBarCore(Rect rect, ScenarioAuthoringShellViewModel shell)
+        private Rect DrawStatusBarCore(Rect rect, ScenarioAuthoringShellViewModel shell, float openProgress)
         {
-            DrawChromePanel(rect, _statusStyle);
+            Rect animatedRect = ResolveSlidingChromeRect(rect, openProgress, ScenarioUiSlideDirection.Down);
+            using (ScenarioUiGuiScope.Apply(openProgress, animatedRect, 1f))
+            {
+            DrawChromePanel(animatedRect, _statusStyle);
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
             string playStartReason = null;
             bool canStartPlay = isPlaytesting || CanStartPlay(out playStartReason);
@@ -49,10 +52,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float pauseMenuWidth = Math.Max(128f, MeasureButtonWidth(pauseMenuAction, false, 34f));
             float rightPadding = 16f;
             float buttonGap = 104f;
-            Rect pauseMenuRect = new Rect(rect.xMax - pauseMenuWidth - rightPadding, rect.y + 8f, pauseMenuWidth, 30f);
-            Rect playtestRect = new Rect(pauseMenuRect.x - buttonGap - playtestWidth, rect.y + 8f, playtestWidth, 30f);
+            Rect pauseMenuRect = new Rect(animatedRect.xMax - pauseMenuWidth - rightPadding, animatedRect.y + 8f, pauseMenuWidth, 30f);
+            Rect playtestRect = new Rect(pauseMenuRect.x - buttonGap - playtestWidth, animatedRect.y + 8f, playtestWidth, 30f);
             float statusRight = playtestRect.x - 14f;
-            float x = rect.x + 26f;
+            float x = animatedRect.x + 26f;
             string message = null;
             for (int i = 0; shell != null && shell.StatusEntries != null && i < shell.StatusEntries.Length; i++)
             {
@@ -70,13 +73,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 float measuredWidth = ScenarioUiMeasuredLabel.Width(value, _mutedTextStyle, 16f);
                 float width = Math.Min(measuredWidth, available);
-                DrawStatusLabel(new Rect(x, rect.y + 14f, width, 20f), value, false);
+                DrawStatusLabel(new Rect(x, animatedRect.y + 14f, width, 20f), value, false);
                 x += width + 18f;
             }
 
             if (!string.IsNullOrEmpty(message))
             {
-                Rect messageRect = new Rect(x, rect.y + 13f, Math.Max(0f, statusRight - x), 22f);
+                Rect messageRect = new Rect(x, animatedRect.y + 13f, Math.Max(0f, statusRight - x), 22f);
                 if (messageRect.width > 8f)
                     DrawStatusLabel(messageRect, message, true);
             }
@@ -84,7 +87,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawButton(playtestRect, playtestAction, false);
             DrawButton(pauseMenuRect, pauseMenuAction, false);
 
-            DrawStatusToastCore(rect, message);
+            DrawStatusToastCore(animatedRect, message);
+            }
+            return animatedRect;
         }
 
         private void DrawPlaytestControlStripCore(Rect rect, ScenarioAuthoringShellViewModel shell)

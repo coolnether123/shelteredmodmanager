@@ -24,12 +24,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const float RailRestoreChipHeight = 30f;
         private const float RailRestoreChipGap = 6f;
 
-        private Rect DrawToolRailCore(Rect contentRect, ScenarioAuthoringShellViewModel shell, ScenarioAuthoringState state)
+        private Rect DrawToolRailCore(Rect contentRect, ScenarioAuthoringShellViewModel shell, ScenarioAuthoringState state, float openProgress)
         {
-            return DrawToolRailCore(contentRect, shell, state, 0);
+            return DrawToolRailCore(contentRect, shell, state, 0, openProgress);
         }
 
-        private Rect DrawToolRailCore(Rect contentRect, ScenarioAuthoringShellViewModel shell, ScenarioAuthoringState state, int restoreChipCount)
+        private Rect DrawToolRailCore(
+            Rect contentRect,
+            ScenarioAuthoringShellViewModel shell,
+            ScenarioAuthoringState state,
+            int restoreChipCount,
+            float openProgress)
         {
             ScenarioAuthoringToolButtonViewModel[] buttons = shell != null ? shell.ToolButtons : null;
             int count = buttons != null ? buttons.Length : 0;
@@ -37,23 +42,27 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ? (restoreChipCount * RailRestoreChipHeight) + (restoreChipCount * RailRestoreChipGap)
                 : 0f;
             Rect rect = ScenarioAuthoringShellLayout.BuildToolRailRect(contentRect, count, restoreReserve);
-            DrawChromePanel(rect, _rootPanelStyle);
+            Rect animatedRect = ResolveSlidingChromeRect(rect, openProgress, ScenarioUiSlideDirection.Left);
+            using (ScenarioUiGuiScope.Apply(openProgress, animatedRect, 1f))
+            {
+            DrawChromePanel(animatedRect, _rootPanelStyle);
 
             float buttonHeight;
             float buttonStep;
-            ResolveToolRailButtonMetrics(rect, count, out buttonHeight, out buttonStep);
-            DrawToolRailActiveIndicator(rect, state, buttons, buttonStep, buttonHeight);
+            ResolveToolRailButtonMetrics(animatedRect, count, out buttonHeight, out buttonStep);
+            DrawToolRailActiveIndicator(animatedRect, state, buttons, buttonStep, buttonHeight);
 
-            float y = rect.y + 12f;
+            float y = animatedRect.y + 12f;
             for (int i = 0; buttons != null && i < buttons.Length; i++)
             {
-                if (y + buttonHeight > rect.yMax - 6f)
+                if (y + buttonHeight > animatedRect.yMax - 6f)
                     break;
 
-                DrawToolRailButton(new Rect(rect.x + 10f, y, rect.width - 20f, buttonHeight), state, buttons[i]);
+                DrawToolRailButton(new Rect(animatedRect.x + 10f, y, animatedRect.width - 20f, buttonHeight), state, buttons[i]);
                 y += buttonStep;
             }
-            return rect;
+            }
+            return animatedRect;
         }
 
         private Rect DrawWorldToolRestoreChips(Rect contentRect, Rect railRect, ScenarioAuthoringShellWindowViewModel[] windows)

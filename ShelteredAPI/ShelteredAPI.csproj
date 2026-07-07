@@ -52,6 +52,10 @@
       <HintPath>$(ShelteredManagedDir)UnityEngine.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ShelteredManagedDir)UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Adapters\GameHelperExtensions.cs" />
@@ -413,6 +417,7 @@
     <Compile Include="Scenarios\Presentation\UiKit\Theme\ScenarioUiMetrics.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Theme\ScenarioUiTheme.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioAuthoringShellAnimationService.cs" />
+    <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiAnimator.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiEasing.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiGuiScope.cs" />
     <Compile Include="Scenarios\Presentation\UiKit\Animation\ScenarioUiTween.cs" />

@@ -21,49 +21,53 @@ using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private Rect DrawTopBarCore(Rect rect, ScenarioAuthoringShellViewModel shell)
+        private Rect DrawTopBarCore(Rect rect, ScenarioAuthoringShellViewModel shell, float openProgress)
         {
-            DrawChromePanel(rect, _rootPanelStyle);
-            bool compact = IsCompactTopBar(rect, shell);
+            Rect animatedRect = ResolveSlidingChromeRect(rect, openProgress, ScenarioUiSlideDirection.Up);
+            using (ScenarioUiGuiScope.Apply(openProgress, animatedRect, 1f))
+            {
+            bool compact = IsCompactTopBar(animatedRect, shell);
             float primaryRowY = compact ? 34f : 8f;
             float primaryRowHeight = compact ? 28f : 32f;
             float utilityRowY = compact ? 6f : 46f;
             float utilityRowHeight = compact ? 26f : 28f;
+            DrawChromePanel(animatedRect, _rootPanelStyle);
 
             Rect brandRect = compact
-                ? new Rect(rect.x + 14f, rect.y + 5f, 206f, 30f)
-                : new Rect(rect.x + 18f, rect.y + 7f, 220f, 70f);
+                ? new Rect(animatedRect.x + 14f, animatedRect.y + 5f, 206f, 30f)
+                : new Rect(animatedRect.x + 18f, animatedRect.y + 7f, 220f, 70f);
             GUI.Label(new Rect(brandRect.x, brandRect.y, brandRect.width, 30f), "SHELTERED", _titleStyle);
             if (!compact)
                 GUI.Label(new Rect(brandRect.x, brandRect.y + 31f, brandRect.width, 20f), "Scenario Workshop", _smallTitleStyle);
             if (!compact && shell != null && !string.IsNullOrEmpty(shell.Subtitle))
                 GUI.Label(new Rect(brandRect.x, brandRect.y + 52f, brandRect.width, 18f), ShortenToFit(shell.Subtitle, brandRect.width, _mutedTextStyle), _mutedTextStyle);
 
-            float primaryRowLeft = compact ? rect.x + 12f : brandRect.xMax + 20f;
-            float actionRight = rect.xMax - 10f;
+            float primaryRowLeft = compact ? animatedRect.x + 12f : brandRect.xMax + 20f;
+            float actionRight = animatedRect.xMax - 10f;
             Rect windowMenuButtonRect = DrawTopBarWindowAction(
                 compact
-                    ? new Rect(rect.xMax - 122f, rect.y + 6f, 112f, 26f)
-                    : new Rect(primaryRowLeft, rect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),
+                    ? new Rect(animatedRect.xMax - 122f, animatedRect.y + 6f, 112f, 26f)
+                    : new Rect(primaryRowLeft, animatedRect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),
                 shell);
 
             float saveWidth = MeasureTopBarActionsWidth(shell.ToolbarActions, compact);
             float saveRight = windowMenuButtonRect.width > 0f ? windowMenuButtonRect.x - (compact ? 4f : 8f) : actionRight;
             float saveX = Math.Max(primaryRowLeft, saveRight - saveWidth);
-            Rect saveRect = new Rect(saveX, rect.y + utilityRowY, Math.Max(0f, saveRight - saveX), utilityRowHeight);
+            Rect saveRect = new Rect(saveX, animatedRect.y + utilityRowY, Math.Max(0f, saveRight - saveX), utilityRowHeight);
             DrawTopBarToolbarActions(saveRect, shell, compact);
 
-            float primaryTabsRight = compact ? rect.xMax - 12f : Math.Max(primaryRowLeft, saveX - 12f);
-            DrawMeasuredStageTabs(new Rect(primaryRowLeft, rect.y + primaryRowY, Math.Max(0f, primaryTabsRight - primaryRowLeft), primaryRowHeight), shell, compact);
+            float primaryTabsRight = compact ? animatedRect.xMax - 12f : Math.Max(primaryRowLeft, saveX - 12f);
+            DrawMeasuredStageTabs(new Rect(primaryRowLeft, animatedRect.y + primaryRowY, Math.Max(0f, primaryTabsRight - primaryRowLeft), primaryRowHeight), shell, compact);
 
             if (_snapshot != null && IsWorldStage(_snapshot.State))
             {
                 Rect worldControlsRect = compact
-                    ? new Rect(primaryRowLeft, rect.y + 60f, primaryTabsRight - primaryRowLeft, 24f)
-                    : new Rect(primaryRowLeft, rect.y + 50f, Math.Max(0f, saveX - primaryRowLeft - 12f), 26f);
+                    ? new Rect(primaryRowLeft, animatedRect.y + 60f, primaryTabsRight - primaryRowLeft, 24f)
+                    : new Rect(primaryRowLeft, animatedRect.y + 50f, Math.Max(0f, saveX - primaryRowLeft - 12f), 26f);
                 DrawWorldSurfaceControls(worldControlsRect, shell, compact);
             }
 
+            }
             return windowMenuButtonRect;
         }
 
