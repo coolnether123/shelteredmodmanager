@@ -576,6 +576,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (_entryFlowService != null)
                 _entryFlowService.MarkEditorReady(pending);
             _menuService.Open(pending, true);
+            ScenarioAuthoringPauseService.Instance.ReleasePause("World-loading shell opened before draft warmup completed.");
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Opened navigable draft shell while world loads. draftId="
                 + pending.DraftId + " definitionLoaded=" + (editorSession != null && editorSession.WorkingDefinition != null) + ".");
             return true;
@@ -800,8 +801,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     + " seconds before authoring pause.");
             }
 
-            if (!PauseManager.isPaused && Time.timeScale > 0f)
-                _warmupElapsedSeconds += Time.deltaTime;
+            float warmupDelta = Time.deltaTime;
+            if (warmupDelta <= 0f)
+                warmupDelta = Time.unscaledDeltaTime;
+            if (warmupDelta > 0f)
+                _warmupElapsedSeconds += warmupDelta;
 
             if (_warmupElapsedSeconds < DraftWarmupSeconds)
                 return false;
