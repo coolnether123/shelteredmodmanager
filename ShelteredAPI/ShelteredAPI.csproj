@@ -462,6 +462,7 @@
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioObjectPlacementRuntimeBinding.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioObjectStatePropertyService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCaptureService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringInventoryProjectionService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringCommandService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringContracts.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringLocalActionIds.cs" />

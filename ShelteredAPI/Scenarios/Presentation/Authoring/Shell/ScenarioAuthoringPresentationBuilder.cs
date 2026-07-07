@@ -2367,7 +2367,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "current_stockpile",
-                    Title = "Live Shelter Inventory - Reference Only",
+                    Title = "Live Shelter Inventory - Native Storage",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
                     Items = liveItems.ToArray(),
@@ -2376,7 +2376,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "starting_stockpile",
-                    Title = "Starting Items",
+                    Title = "Starting Items - Written to Storage",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
                     Items = items.ToArray(),
@@ -2635,7 +2635,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Id = "live." + i.ToString(CultureInfo.InvariantCulture),
                     ItemId = catalogEntry.ItemId,
                     DisplayName = catalogEntry.DisplayName,
-                    Detail = catalogEntry.Detail + " | Reference only",
+                    Detail = catalogEntry.Detail + " | Native shelter storage",
                     QuantityText = "x" + stack.m_count.ToString(CultureInfo.InvariantCulture),
                     Badge = "LIVE",
                     ReadOnly = true,

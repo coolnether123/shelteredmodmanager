@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Runtime;
+using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 namespace ShelteredAPI.Scenarios.Diagnostics{
     /// <summary>
@@ -34,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyScenarioSaveIdGuards(result);
                 VerifyAtomicScenarioWrites(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
+                VerifyInventoryProjectionReconciliation(result);
             }
             catch (Exception ex)
             {
@@ -116,6 +118,46 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             Assert(scenarios.Length == 1, "Scenario catalog did not discover exactly one scenario.xml pack.", result);
             Assert(scenarios.Length == 0 || string.Equals(scenarios[0].Id, "Scenario.PackOne", StringComparison.OrdinalIgnoreCase),
                 "Scenario catalog discovered the wrong scenario id.", result);
+        }
+
+        private static void VerifyInventoryProjectionReconciliation(ScenarioValidationResult result)
+        {
+            Dictionary<string, int> previous = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            previous["Water"] = 2;
+            previous["Food"] = 1;
+
+            Dictionary<string, int> authored = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            authored["Water"] = 5;
+
+            List<InventoryProjectionDelta> deltas = InventoryApplyService.PlanProjectionDeltas(previous, authored);
+            Assert(FindDelta(deltas, "Water") == 3, "Inventory projection did not compute the authored add delta.", result);
+            Assert(FindDelta(deltas, "Food") == -1, "Inventory projection did not compute the authored removal delta.", result);
+
+            List<InventoryProjectionDelta> idempotent = InventoryApplyService.PlanProjectionDeltas(authored, authored);
+            Assert(idempotent.Count == 0, "Inventory projection is not idempotent for an unchanged authored stockpile.", result);
+
+            Dictionary<string, int> live = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            live["Water"] = 7;
+            live["Food"] = 4;
+            Dictionary<string, int> seed = InventoryApplyService.BuildProjectionSeed(authored, live);
+            Assert(seed.ContainsKey("Water") && seed["Water"] == 5, "Inventory projection seed should cap live authored items at the authored quantity.", result);
+            Assert(!seed.ContainsKey("Food"), "Inventory projection seed should not claim extra live-only items as projected draft items.", result);
+
+            StartingInventoryDefinition inventory = new StartingInventoryDefinition();
+            inventory.OverrideRandomStart = true;
+            Assert(InventoryApplyService.ShouldApplyRandomStartOverride(inventory), "OverrideRandomStart should still disable vanilla random-start pools during projection/apply.", result);
+        }
+
+        private static int FindDelta(List<InventoryProjectionDelta> deltas, string itemId)
+        {
+            for (int i = 0; deltas != null && i < deltas.Count; i++)
+            {
+                InventoryProjectionDelta delta = deltas[i];
+                if (delta != null && string.Equals(delta.ItemId, itemId, StringComparison.OrdinalIgnoreCase))
+                    return delta.QuantityDelta;
+            }
+
+            return 0;
         }
 
         private static void VerifyDependencies(ScenarioValidationResult result)

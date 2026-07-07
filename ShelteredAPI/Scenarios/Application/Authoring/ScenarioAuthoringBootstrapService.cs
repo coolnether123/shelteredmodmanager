@@ -30,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
         private readonly ScenarioAuthoringCaptureService _captureService;
+        private readonly ScenarioAuthoringInventoryProjectionService _inventoryProjectionService;
         private readonly ScenarioAuthoringEntryFlowService _entryFlowService;
         private ScenarioAuthoringSession _pendingSession;
         private ScenarioAuthoringSession _activeSession;
@@ -52,6 +53,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             IScenarioSaveLibrary saveLibrary,
             IScenarioRuntimeBindingService runtimeBindingService,
             ScenarioAuthoringCaptureService captureService,
+            ScenarioAuthoringInventoryProjectionService inventoryProjectionService,
             ScenarioAuthoringEntryFlowService entryFlowService)
         {
             _backend = backend;
@@ -62,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _saveLibrary = saveLibrary;
             _runtimeBindingService = runtimeBindingService;
             _captureService = captureService;
+            _inventoryProjectionService = inventoryProjectionService;
             _entryFlowService = entryFlowService;
             try { GameEvents.OnAfterLoad += HandleAfterLoad; }
             catch { }
@@ -491,6 +494,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _backend.SetActiveSession(pending);
             if (_entryFlowService != null)
                 _entryFlowService.MarkEditorReady(pending);
+            ProjectStartingInventoryAfterBootstrap(pending, editorSession);
             if (editorSession != null && !string.IsNullOrEmpty(editorSession.LoadWarning))
                 _backend.SetStatusMessage(editorSession.LoadWarning);
             if (pending.ReenterPlaytestAfterBootstrap)
@@ -574,6 +578,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Captured base default family but failed to save draft '"
                     + pending.DraftId + "': " + ex.Message);
+            }
+        }
+
+        private void ProjectStartingInventoryAfterBootstrap(ScenarioAuthoringSession pending, ScenarioEditorSession editorSession)
+        {
+            if (_inventoryProjectionService == null || pending == null || pending.ReenterPlaytestAfterBootstrap)
+                return;
+
+            _inventoryProjectionService.ResetForCurrentWorld(editorSession);
+            string projectionMessage;
+            if (!_inventoryProjectionService.TryProject(editorSession, "authoring bootstrap", out projectionMessage)
+                && !string.IsNullOrEmpty(projectionMessage))
+            {
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] " + projectionMessage);
             }
         }
 
@@ -810,6 +828,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
             finally
             {
+                if (_inventoryProjectionService != null)
+                    _inventoryProjectionService.Clear();
                 _backend.ClearActiveSession(reason);
                 if (_entryFlowService != null)
                     _entryFlowService.Hide("Authoring session closed.");

@@ -11,15 +11,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioGameplayScheduleAuthoringService
     {
         private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioAuthoringInventoryProjectionService _inventoryProjectionService;
 
         public ScenarioGameplayScheduleAuthoringService()
-            : this(null)
+            : this(null, null)
         {
         }
 
-        public ScenarioGameplayScheduleAuthoringService(ScenarioActorResolver actorResolver)
+        public ScenarioGameplayScheduleAuthoringService(
+            ScenarioActorResolver actorResolver,
+            ScenarioAuthoringInventoryProjectionService inventoryProjectionService)
         {
             _actorResolver = actorResolver;
+            _inventoryProjectionService = inventoryProjectionService;
         }
 
         public bool TryHandleAction(ScenarioEditorSession session, string actionId, out string message)
@@ -37,13 +41,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingAdd, StringComparison.Ordinal))
-                return AddStartingInventoryItem(session, out message);
+                return FinishStartingInventoryMutation(session, AddStartingInventoryItem(session, out message), "add starting item", ref message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, StringComparison.Ordinal))
                 return AddInventoryChange(session, ScenarioInventoryChangeKind.Add, out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, StringComparison.Ordinal))
                 return AddInventoryChange(session, ScenarioInventoryChangeKind.Remove, out message);
             if (TryHandleInventoryChange(session, actionId, out message))
+            {
+                if (IsStartingInventoryAction(actionId))
+                    FinishStartingInventoryMutation(session, true, "edit starting item", ref message);
                 return true;
+            }
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, StringComparison.Ordinal))
                 return AddWeatherEvent(session, out message);
@@ -808,6 +816,29 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private static void MarkInventoryDirty(ScenarioEditorSession session)
         {
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+        }
+
+        private bool FinishStartingInventoryMutation(ScenarioEditorSession session, bool changed, string reason, ref string message)
+        {
+            if (!changed || _inventoryProjectionService == null)
+                return changed;
+
+            string projectionMessage;
+            if (_inventoryProjectionService.TryProject(session, reason, out projectionMessage) && !string.IsNullOrEmpty(projectionMessage))
+                message = string.IsNullOrEmpty(message) ? projectionMessage : message + " " + projectionMessage;
+            return changed;
+        }
+
+        private static bool IsStartingInventoryAction(string actionId)
+        {
+            if (string.IsNullOrEmpty(actionId))
+                return false;
+
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingOverrideToggle, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingRemovePrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingQuantityPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingItemPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionInventoryStartingItemSelectPrefix, StringComparison.Ordinal);
         }
 
         private static FamilySetupDefinition EnsureFamily(ScenarioDefinition definition)

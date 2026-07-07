@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
     {
         private readonly IScenarioDraftMutationService _draftMutationService;
         private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioAuthoringInventoryProjectionService _inventoryProjectionService;
 
         public static ScenarioAuthoringCaptureService Instance
         {
@@ -24,10 +25,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         internal ScenarioAuthoringCaptureService(
             IScenarioDraftMutationService draftMutationService,
-            ScenarioActorResolver actorResolver)
+            ScenarioActorResolver actorResolver,
+            ScenarioAuthoringInventoryProjectionService inventoryProjectionService)
         {
             _draftMutationService = draftMutationService;
             _actorResolver = actorResolver;
+            _inventoryProjectionService = inventoryProjectionService;
         }
 
         public bool CaptureCurrentFamily(ScenarioEditorSession session, out string message)
@@ -151,6 +154,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             session.WorkingDefinition.StartingInventory = inventory;
             MarkCaptured(session, ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+            if (_inventoryProjectionService != null)
+                _inventoryProjectionService.AdoptCurrentDraftAsProjected(session, "capture live inventory");
             message = "Captured " + capturedItems.Count + " stockpile stack(s) from the world (" + totalItems + " total item(s)).";
             MMLog.WriteInfo("[ScenarioAuthoringCapture] " + message);
             return true;
