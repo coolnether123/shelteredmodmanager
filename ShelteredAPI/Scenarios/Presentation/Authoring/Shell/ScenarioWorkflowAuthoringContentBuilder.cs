@@ -31,6 +31,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string playStartReason = null;
             bool isPlaytesting = editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting;
             bool canStartPlay = isPlaytesting || new ScenarioPlayStartReadiness().CanStartPlay(editorSession != null ? editorSession.WorkingDefinition : null, out playStartReason);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             ScenarioAuthoringInspectorAction playtestAction = Item.Action(
                 ScenarioAuthoringActionIds.ActionPlaytest,
                 isPlaytesting ? "Stop Playtest" : "Start Playtest",
@@ -42,19 +43,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ? "Return to frozen authoring mode."
                     : canStartPlay ? "Run the live shelter with the current draft." : playStartReason);
             if (!canStartPlay)
+            {
                 playtestAction.DisabledReason = playStartReason;
+                ScenarioAuthoringInspectorAction fixAction = ScenarioPlaytestFixActionResolver.BuildFixAction(playStartReason);
+                if (fixAction != null)
+                    items.Add(Item.ActionItem(fixAction));
+            }
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft (Ctrl+S)", "Persist the current scenario XML.", true, false, "SV", "Ctrl+S writes scenario.xml to the active draft.")));
+            items.Add(Item.ActionItem(playtestAction));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCloseEditor, "Exit Editor", "Close the authoring shell and return the save to normal live play.", true, false, "EX", "Release the current authoring session.")));
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "workflow",
                 Title = "Workflow",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                Items = new[]
-                {
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save Draft (Ctrl+S)", "Persist the current scenario XML.", true, false, "SV", "Ctrl+S writes scenario.xml to the active draft.")),
-                    Item.ActionItem(playtestAction),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionCloseEditor, "Exit Editor", "Close the authoring shell and return the save to normal live play.", true, false, "EX", "Release the current authoring session."))
-                }
+                Items = items.ToArray()
             };
         }
 

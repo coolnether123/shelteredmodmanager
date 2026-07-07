@@ -47,7 +47,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ScenarioInspectorItemFactory.Text("Map authoring is not yet supported.", "This page is a read-only review of map-facing scenario data already present in the draft.", "Read-only", "MAP", null, true),
                     Property("Supported Here", "Review authored map locations, markers, boundaries, terrain, loot tables, encounters, and routes when those records exist."),
                     Property("Authoring Today", "World-map story events are authored in Story. Runtime shelter changes are authored in World, Timeline, Cast, Supplies, and Art."),
-                    Property("Not Supported Yet", "Creating, moving, painting, or wiring map nodes from this page.")
+                    Property("Not Supported Yet", "Creating, moving, painting, or wiring map nodes from this page."),
+                    Property("Where to fix it", "Open Story for map-facing encounter and route data, or use Map Help for status context.")
                 }
             };
         }
@@ -82,7 +83,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         "Open help for the supported world authoring surfaces.",
                         true,
                         false,
-                        "WH"))
+                        "WH")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicMap,
+                        "Map Help",
+                        "Open a concrete guide for map-facing data and required source pages.",
+                        true,
+                        false,
+                        "MP"))
                 }
             };
         }

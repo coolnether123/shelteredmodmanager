@@ -3,8 +3,10 @@ using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal sealed class ScenarioPlayStartReadiness
     {
-        public const string EmptyCastWarning = "This scenario starts with no survivors; playtest and live start are disabled until at least one survivor is present at the start.";
-        public const string EmptyCastDisabledReason = EmptyCastWarning + " Add a starting survivor in Cast. Future arrivals are scheduled after play begins and cannot safely prevent Sheltered's initial empty-family game over.";
+        public const string EmptyCastWarning = "No starting survivors.";
+        public const string EmptyCastDisabledReason = "No starting survivors. Add a starting survivor in Cast before playtest can begin.";
+        public const string UnsavedDraftDisabledReason = "Save draft before testing.";
+        public const string ValidationUnavailableDisabledReason = "Validation is unavailable. Open Publish and refresh checks before playtest.";
 
         public bool CanStartPlay(ScenarioDefinition definition, out string reason)
         {

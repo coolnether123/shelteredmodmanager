@@ -92,7 +92,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Item.ActionItem(Item.Action(
                 "stage.select." + ScenarioStageKind.Publish,
                 validationLabel,
-                validation != null && validation.WarningCount > 0 ? "Open Publish to review warnings." : "Open Publish to validate and export.",
+                BuildHomeValidationHint(validation),
                 true,
                 false,
                 validation != null && validation.ErrorCount > 0 ? "!" : "OK")));
@@ -105,8 +105,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "TS",
                 canOpenTest ? null : playtestDisabledReason);
             if (!canOpenTest)
+            {
                 testAction.DisabledReason = playtestDisabledReason;
+                ScenarioAuthoringInspectorAction fixAction = ScenarioPlaytestFixActionResolver.BuildFixAction(playtestDisabledReason);
+                if (fixAction != null)
+                    items.Add(Item.ActionItem(fixAction));
+            }
             items.Add(Item.ActionItem(testAction));
+            items.Add(Item.ActionItem(Item.Action(
+                ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicPublish,
+                "What Draft Health Means",
+                "Open publish, validation, and export guidance for this card.",
+                true,
+                false,
+                "HP")));
             ScenarioAuthoringInspectorItem pathItem = Item.Property("Draft Path", !string.IsNullOrEmpty(draftPath) ? draftPath : "No draft file is active.");
             pathItem.HoverHint = draftPath;
             items.Add(pathItem);
@@ -194,9 +206,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "No starting survivors";
             }
             if (Item.CountDirtyFlags(editorSession) > 0)
+            {
+                disabledReason = ScenarioPlayStartReadiness.UnsavedDraftDisabledReason;
                 return "Save draft before testing";
+            }
             if (validation == null || !validation.ValidationAvailable)
+            {
+                disabledReason = ScenarioPlayStartReadiness.ValidationUnavailableDisabledReason;
                 return "Validation unavailable";
+            }
             if (validation.ErrorCount > 0)
                 return "Fix validation errors first";
             return "Ready to test";
@@ -300,6 +318,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!enabled)
                 primaryAction.DisabledReason = disabledReason;
             items.Add(Item.ActionItem(primaryAction));
+            if (!enabled)
+            {
+                ScenarioAuthoringInspectorAction fixAction = ScenarioPlaytestFixActionResolver.BuildFixAction(disabledReason);
+                if (fixAction != null)
+                    items.Add(Item.ActionItem(fixAction));
+            }
             items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + topicId, "Learn More", "Open help for this setup area.", true, false, "HELP")));
             if (!string.IsNullOrEmpty(tourId))
                 items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTourStartPrefix + tourId, "Walk Me Through It", "Start the related spotlight tour.", true, true, "TO")));
@@ -396,6 +420,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int count = Enum.GetValues(typeof(ScenarioBaseGameMode)).Length;
             int next = ((int)mode + direction + count) % count;
             return FormatBaseMode((ScenarioBaseGameMode)next);
+        }
+
+        private static string BuildHomeValidationHint(ScenarioAuthoringValidationSnapshot validation)
+        {
+            if (validation == null)
+                return "Validation did not run. Open Publish to initialize checks.";
+            if (!validation.ValidationAvailable)
+                return "Validation is unavailable. Open Publish to refresh checks.";
+            if (validation.ErrorCount > 0)
+                return "Blocking errors must be fixed before playtest or export. Open Publish for fixes.";
+            if (validation.WarningCount > 0)
+                return "Warnings are advisory. Open Publish to review impact before shipping.";
+            return "Validation is clean. Open Publish to validate and export.";
         }
 
         private static string FormatBaseMode(ScenarioBaseGameMode mode)

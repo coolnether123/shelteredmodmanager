@@ -65,6 +65,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (statusMessage == "Scenario authoring shell is active. Use playtest to make live shelter changes, then capture them back into the draft.")
                 return "Workshop ready. Playtest live changes, then capture updates into the draft.";
+            if (statusMessage == "Close blocked: the draft could not be saved. Fix validation errors, then try Exit Editor again.")
+                return "Exit is blocked. Fix validation errors, then close the editor.";
+            if (statusMessage.IndexOf("Close blocked", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return "An action is blocked. Check the reason and apply the fix.";
             if (!string.IsNullOrEmpty(statusMessage)
                 && statusMessage.IndexOf("Unknown", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 return statusMessage.Replace("Unknown", "current workspace");

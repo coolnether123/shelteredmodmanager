@@ -389,6 +389,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringInspectorItemFacade.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHierarchyAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHelpAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPlaytestFixActionResolver.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHomeProgressFacts.cs" />
@@ -434,6 +435,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringShortcutRouter.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSurfaceResolver.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringEntryFlowService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioOpeningCutsceneAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringValidationSnapshot.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />

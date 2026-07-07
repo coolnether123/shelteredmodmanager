@@ -19,9 +19,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
         public const string TopicSupplies = "supplies";
         public const string TopicTimelineConditions = "timeline-conditions";
         public const string TopicStory = "story";
+        public const string TopicMap = "map";
         public const string TopicArtPixelEditor = "art-pixel-editor";
         public const string TopicTest = "test";
         public const string TopicPublish = "publish";
+        public const string TopicModGating = "mod-gating";
         public const string TopicBaseModes = "base-modes";
 
         public const string TourEditorBasics = "editor-basics";
@@ -47,13 +49,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring.Tutorial{
             new ScenarioAuthoringHelpPage(TopicWorldCamera, "World & Camera", "The editor shell keeps the shelter visible while authoring. Camera input is guarded while the shell owns pointer focus, and the World tabs open the bunker, surface, backdrop, and map workspaces.", ScenarioStageKind.Bunker, ScenarioAuthoringWindowIds.Scenario, TourEditorBasics),
             new ScenarioAuthoringHelpPage(TopicPlacementSnap, "Placement & Snap", "Object placement and scene-sprite placement are separate authoring tools. Snap-to-grid is a persistent editor setting, and placement tools cancel when switching tools or starting playtest.", ScenarioStageKind.BunkerInside, ScenarioAuthoringWindowIds.TilesPalette, TourPlaceFirstObject),
             new ScenarioAuthoringHelpPage(TopicSelectionCycling, "Selection & Cycling", "Selection uses live scene targets. When multiple targets are available, the selection stack can cycle or select a specific row; clearing selection drops selected and multi-selected targets.", ScenarioStageKind.BunkerInside, ScenarioAuthoringWindowIds.Hierarchy, TourEditorBasics),
-            new ScenarioAuthoringHelpPage(TopicCast, "Cast", "The Cast workspace edits starting family members and future survivors. Starting survivors live in FamilySetup.Members; future arrivals live in FamilySetup.FutureSurvivors.", ScenarioStageKind.People, ScenarioAuthoringWindowIds.Survivors, null),
-            new ScenarioAuthoringHelpPage(TopicSupplies, "Supplies", "Supplies are authored as starting inventory entries, an override-random-start flag, and scheduled inventory changes. The editor can also capture the current live inventory into the draft.", ScenarioStageKind.InventoryStorage, ScenarioAuthoringWindowIds.Stockpile, null),
+            new ScenarioAuthoringHelpPage(TopicCast, "Cast", "Every scenario starts with at least one named survivor in Cast. Add the first named FamilySetup member to unlock playtest and to prevent immediate game-over on spawn.", ScenarioStageKind.People, ScenarioAuthoringWindowIds.Survivors, null),
+            new ScenarioAuthoringHelpPage(TopicSupplies, "Supplies", "Start supplies decide the first-day pressure: food, water, fuel, and medicine. If an issue blocks testing, add missing required categories in Supplies or check scheduled starts/flows in Scheduled Stock.", ScenarioStageKind.InventoryStorage, ScenarioAuthoringWindowIds.Stockpile, null),
+            new ScenarioAuthoringHelpPage(TopicMap, "Map", "Map data in the draft is read-only in this editor panel. Define encounter tables, routes, and markers through Story and timeline flows, then verify them here before export.", ScenarioStageKind.Map, ScenarioAuthoringWindowIds.Map, null),
             new ScenarioAuthoringHelpPage(TopicTimelineConditions, "Timeline & Conditions", "Timeline authoring combines triggers, weather events, gates, and scheduled actions. Gates group condition references; scheduled actions can apply effects at scenario time.", ScenarioStageKind.Events, ScenarioAuthoringWindowIds.Triggers, TourTimelineEvent),
             new ScenarioAuthoringHelpPage(TopicStory, "Story", "Story authoring stores quest definitions and scenario flow stages. Dialogue, options, rewards, removals, milestones, recruitment, and end outcomes are explicit draft data.", ScenarioStageKind.Quests, ScenarioAuthoringWindowIds.Quests, null),
             new ScenarioAuthoringHelpPage(TopicArtPixelEditor, "Art & Pixel Editor", "Art tools can replace existing target sprites, place scene sprites, import PNG assets, and edit custom sprite drafts before applying them to the scenario.", ScenarioStageKind.BunkerInside, ScenarioAuthoringWindowIds.PixelEditor, TourEditSprite),
-            new ScenarioAuthoringHelpPage(TopicTest, "Test", "Playtest applies the current draft to the live world. If the draft changes after a playtest starts, saving reports that the running playtest predates recent edits.", ScenarioStageKind.Test, ScenarioAuthoringWindowIds.Scenario, null),
-            new ScenarioAuthoringHelpPage(TopicPublish, "Publish", "Publish validates and exports the active draft. The export path uses the active scenario definition serializer and validator before writing a package.", ScenarioStageKind.Publish, ScenarioAuthoringWindowIds.Publish, null),
+            new ScenarioAuthoringHelpPage(TopicTest, "Test", "Playtest snapshots the open draft into live shelter and starts a guarded simulation window. If blocked, fix the listed blocker then retry from Playtest or the Workflow panel.", ScenarioStageKind.Test, ScenarioAuthoringWindowIds.Scenario, null),
+            new ScenarioAuthoringHelpPage(TopicPublish, "Publish", "Publish is your health checkpoint. It collects blocking errors, warnings, unsupported-feature checks, and package state. Resolve blockers by opening the linked source pages shown on each issue.", ScenarioStageKind.Publish, ScenarioAuthoringWindowIds.Publish, null),
+            new ScenarioAuthoringHelpPage(TopicModGating, "Mod Gating", "Some issues are blocked by missing required mods, version mismatches, or unknown references. Install the required dependencies, sync mod versions, then re-open the draft and run save/revalidate.", ScenarioStageKind.Publish, ScenarioAuthoringWindowIds.Publish, null),
             new ScenarioAuthoringHelpPage(TopicBaseModes, "Base Modes", "Base mode changes update scenario metadata and selection availability. The current world is not transformed in place; reopen the draft to load the matching base scene.", ScenarioStageKind.Bunker, ScenarioAuthoringWindowIds.Scenario, null)
         };
 

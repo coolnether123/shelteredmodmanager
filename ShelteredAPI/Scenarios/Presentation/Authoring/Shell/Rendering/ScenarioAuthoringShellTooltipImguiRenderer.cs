@@ -883,6 +883,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Bunker, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.BunkerInside, StringComparison.Ordinal))
                 return TutorialContent.TopicWorldCamera;
+            if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Map, StringComparison.Ordinal))
+                return TutorialContent.TopicMap;
             if (string.Equals(action.Id, ScenarioAuthoringActionIds.ActionToolAssets, StringComparison.Ordinal)
                 || string.Equals(action.Id, ScenarioAuthoringActionIds.ActionWindowTogglePrefix + ScenarioAuthoringWindowIds.PixelEditor, StringComparison.Ordinal))
                 return TutorialContent.TopicArtPixelEditor;

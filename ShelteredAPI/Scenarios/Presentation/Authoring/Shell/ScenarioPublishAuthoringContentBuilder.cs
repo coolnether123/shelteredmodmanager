@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Commands;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -152,7 +153,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Item.Property("Status", validation.Result != null && validation.Result.IsValid ? "Ready to export" : "Blocked"));
             items.Add(Item.Property("Errors", validation.ErrorCount.ToString(CultureInfo.InvariantCulture)));
             items.Add(Item.Property("Warnings", validation.WarningCount.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if the draft has no blocking errors.", true, validation.ErrorCount == 0, "SV")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save the current draft.", true, true, "SV")));
 
             if (issues.Length == 0)
             {
@@ -167,6 +168,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     items.Add(Item.Property(issue.Severity.ToString(), issue.Message));
                     items.Add(Item.ActionItem(BuildIssueNavigationAction(issue)));
+                    string issueTopic = ResolveIssueTopic(issue.Message);
+                    if (!string.IsNullOrEmpty(issueTopic))
+                        items.Add(Item.ActionItem(BuildIssueTopicAction(issueTopic)));
                 }
             }
 
@@ -188,6 +192,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 canExport,
                 "EX",
                 canExport ? "Creates ScenarioAuthoringExports/<scenario-id>/scenario.xml. Copy the exported folder into any mod's Scenarios directory to install or share it." : errors.ToString(CultureInfo.InvariantCulture) + " validation error(s) block export.")));
+            if (!canExport)
+            {
+                items.Add(Item.ActionItem(Item.Action(
+                    ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicPublish,
+                    "How to Fix Export Blockers",
+                    "Open publish validation guidance and follow each issue link.",
+                    true,
+                    false,
+                    "HP")));
+            }
 
             ScenarioPublishExportResult last = GetLastExportResult();
             if (last == null)
@@ -226,6 +240,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 issue != null ? issue.Severity.ToString() : "Issue");
         }
 
+        private static ScenarioAuthoringInspectorAction BuildIssueTopicAction(string issueTopic)
+        {
+            if (string.IsNullOrEmpty(issueTopic))
+                return null;
+
+            return Item.Action(
+                ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + issueTopic,
+                "How to Fix This",
+                "Open the relevant help topic and apply the concrete fix.",
+                true,
+                false,
+                "HP");
+        }
+
         private static ScenarioStageKind ResolveIssueStage(string message)
         {
             string text = message != null ? message.ToLowerInvariant() : string.Empty;
@@ -248,6 +276,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ScenarioStageKind.Publish;
         }
 
+        private static string ResolveIssueTopic(string issueMessage)
+        {
+            string text = issueMessage != null ? issueMessage.ToLowerInvariant() : string.Empty;
+            if (text.IndexOf("survivor") >= 0 || text.IndexOf("starting") >= 0 || text.IndexOf("family") >= 0 || text.IndexOf("cast") >= 0)
+                return TutorialContent.TopicCast;
+            if (text.IndexOf("supply") >= 0 || text.IndexOf("inventory") >= 0 || text.IndexOf("item") >= 0 || text.IndexOf("water") >= 0 || text.IndexOf("food") >= 0 || text.IndexOf("medicine") >= 0)
+                return TutorialContent.TopicSupplies;
+            if (text.IndexOf("map") >= 0 || text.IndexOf("location") >= 0 || text.IndexOf("route") >= 0 || text.IndexOf("encounter") >= 0 || text.IndexOf("terrain") >= 0)
+                return TutorialContent.TopicMap;
+            if (text.IndexOf("quest") >= 0 || text.IndexOf("story") >= 0 || text.IndexOf("dialogue") >= 0)
+                return TutorialContent.TopicStory;
+            if (text.IndexOf("mod") >= 0 || text.IndexOf("dependency") >= 0 || text.IndexOf("required mod") >= 0 || text.IndexOf("missing") >= 0 || text.IndexOf("unsupported") >= 0)
+                return TutorialContent.TopicModGating;
+            if (text.IndexOf("win") >= 0 || text.IndexOf("loss") >= 0 || text.IndexOf("end state") >= 0)
+                return TutorialContent.TopicPublish;
+            if (text.IndexOf("trigger") >= 0 || text.IndexOf("schedule") >= 0 || text.IndexOf("condition") >= 0 || text.IndexOf("action") >= 0 || text.IndexOf("weather") >= 0 || text.IndexOf("gate") >= 0)
+                return TutorialContent.TopicTimelineConditions;
+            if (text.IndexOf("sprite") >= 0 || text.IndexOf("asset") >= 0 || text.IndexOf("png") >= 0)
+                return TutorialContent.TopicArtPixelEditor;
+
+            return null;
+        }
+
         private static List<ScenarioAuthoringInspectorItem> BuildReadinessSummary(
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition,
@@ -268,6 +319,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(Item.Property("End State", definition.WinLossConditions.WinConditions.Count.ToString(CultureInfo.InvariantCulture) + " win / " + definition.WinLossConditions.LossConditions.Count.ToString(CultureInfo.InvariantCulture) + " loss"));
             else
                 items.Add(Item.Property("End State", "No victory condition - scenario runs forever"));
+            if (compatibilityReport != null
+                && (
+                    (compatibilityReport.MissingRequiredMods != null && compatibilityReport.MissingRequiredMods.Count > 0)
+                    || (compatibilityReport.VersionMismatches != null && compatibilityReport.VersionMismatches.Count > 0)
+                    || (compatibilityReport.UnknownReferences != null && compatibilityReport.UnknownReferences.Count > 0)))
+            {
+                items.Add(Item.ActionItem(Item.Action(
+                    ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicModGating,
+                    "Mod Gating Guidance",
+                    "Open why these dependencies are blocked and what to install or update.",
+                    true,
+                    false,
+                    "MOD")));
+            }
             return items;
         }
 
@@ -465,7 +530,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 isPlaytesting ? "ST" : "GO",
                 isPlaytesting ? "Authoring pause is restored immediately." : canStart ? "Pre-flight validation has no blocking errors." : canStartFromCast ? "Fix blocking validation errors first." : playStartReason);
             if (!action.Enabled)
+            {
                 action.DisabledReason = canStartFromCast ? "Blocking validation errors must be fixed before playtest." : playStartReason;
+                ScenarioAuthoringInspectorAction fixAction = ScenarioPlaytestFixActionResolver.BuildFixAction(playStartReason);
+                if (fixAction != null)
+                    items.Add(Item.ActionItem(fixAction));
+            }
             items.Add(Item.ActionItem(action));
             if (isPlaytesting)
             {
@@ -478,7 +548,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     "RS",
                     "Reloads through the safe authoring launch path.")));
             }
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save if there are no blocking errors.", true, false, "SV")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSave, "Save / Revalidate", "Run validation and save the current draft.", true, true, "SV")));
             return items;
         }
 
