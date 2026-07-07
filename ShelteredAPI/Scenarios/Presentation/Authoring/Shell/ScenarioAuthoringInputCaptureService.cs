@@ -8,6 +8,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly List<Rect> _interactiveRects = new List<Rect>();
         private readonly ScenarioAuthoringScrollFocusService _scrollFocusService;
         private float _coordinateScale = 1f;
+        private bool _explicitTextFieldFocused;
         private const float RectPadding = 6f;
 
         public ScenarioAuthoringInputCaptureService(ScenarioAuthoringScrollFocusService scrollFocusService)
@@ -21,7 +22,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public bool PopupOpenLastFrame { get; private set; }
         public bool DraggingShellChrome { get; private set; }
         public bool KeyboardCaptured { get; private set; }
-        public bool TextFieldFocused { get; private set; }
+        public bool TextFieldFocused
+        {
+            get { return _explicitTextFieldFocused || IsGuiTextFieldFocused(); }
+            private set { _explicitTextFieldFocused = value; }
+        }
         public bool TransitionActive { get; private set; }
         public bool KeyboardShortcutHandled { get; private set; }
 
@@ -181,6 +186,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Vector3 mouse = UnityEngine.Input.mousePosition;
             float scale = coordinateScale > 0.001f ? coordinateScale : 1f;
             return new Vector2(mouse.x / scale, (Screen.height - mouse.y) / scale);
+        }
+
+        private static bool IsGuiTextFieldFocused()
+        {
+            int controlId = GUIUtility.keyboardControl;
+            if (controlId <= 0)
+                return false;
+
+            TextEditor textEditor = GUIUtility.GetStateObject(typeof(TextEditor), controlId) as TextEditor;
+            return textEditor != null;
         }
     }
 }
