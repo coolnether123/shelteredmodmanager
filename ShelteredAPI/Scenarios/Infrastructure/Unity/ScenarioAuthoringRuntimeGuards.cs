@@ -37,9 +37,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return session != null && session.PlaytestState == ScenarioPlaytestState.Playtesting;
         }
 
+        public static bool IsOpeningCutscenePreviewActive()
+        {
+            return IsAuthoringActive() && ScenarioOpeningCutsceneAuthoringService.IsPreviewActive;
+        }
+
         public static bool ShouldCaptureGameplayInput()
         {
             if (!IsAuthoringActive())
+                return false;
+
+            if (IsOpeningCutscenePreviewActive())
                 return false;
 
             ScenarioAuthoringState state = GetState();
@@ -54,6 +62,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public static bool ShouldMaintainPausedSimulation()
         {
+            if (IsOpeningCutscenePreviewActive())
+                return false;
+
             return IsAuthoringActive() && !IsPlaytesting();
         }
 

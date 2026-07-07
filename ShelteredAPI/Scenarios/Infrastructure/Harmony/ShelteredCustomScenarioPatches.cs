@@ -404,7 +404,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
         [HarmonyPrefix]
         private static bool GameTimeUpdatePrefix()
         {
-            return !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation();
+            return !ScenarioAuthoringRuntimeGuards.ShouldMaintainPausedSimulation()
+                && !ScenarioAuthoringRuntimeGuards.IsOpeningCutscenePreviewActive();
         }
     }
 

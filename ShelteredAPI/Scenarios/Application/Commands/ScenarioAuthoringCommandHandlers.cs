@@ -1087,7 +1087,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionPlaytestRestart:
                     return RestartPlaytest(state, out message);
                 case ScenarioBaseModeAuthoringActions.ActionWatchOpeningCutscene:
-                    return _openingCutsceneService.TryWatchOpeningCutscene(_editorService.CurrentSession, out message);
+                    return _openingCutsceneService.TryWatchOpeningCutscene(_editorService.CurrentSession, state, out message);
                 case ScenarioAuthoringActionIds.ActionScenarioSeedRandom:
                     return SetScenarioSeedRandom(out message);
                 case ScenarioAuthoringActionIds.ActionScenarioSeedFixed:
