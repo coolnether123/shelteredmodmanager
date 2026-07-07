@@ -336,7 +336,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
-            MapLocationDefinition location = _draftService != null ? _draftService.GetLocation(session, id) : null;
+            MapLocationDefinition location;
+            if (!TryResolveEditableLocation(state, session, id, "Edit map location " + id + " " + field, out location, out message))
+                return false;
+
             if (location == null)
             {
                 message = "Authored map location '" + id + "' was not found.";
@@ -351,7 +354,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
             }
 
-            RecordMapUndo(session, "Edit map location " + id + " " + field);
             ApplyLocationField(location, field, trimmed);
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
             SelectAuthoredLocation(state, location, out message);
@@ -374,12 +376,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
-            MapLocationDefinition location = _draftService != null ? _draftService.GetLocation(session, id) : null;
-            if (location == null)
-            {
-                message = "Authored map location '" + id + "' was not found.";
+            MapLocationDefinition location;
+            if (!TryResolveEditableLocation(state, session, id, "Toggle map location " + id + " " + field, out location, out message))
                 return false;
-            }
 
             if (!string.Equals(field, "searchable", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(field, "visibleAtStart", StringComparison.OrdinalIgnoreCase)
@@ -390,7 +389,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
             }
 
-            RecordMapUndo(session, "Toggle map location " + id + " " + field);
             if (string.Equals(field, "searchable", StringComparison.OrdinalIgnoreCase))
                 location.Searchable = !location.Searchable;
             else if (string.Equals(field, "visibleAtStart", StringComparison.OrdinalIgnoreCase))
@@ -418,12 +416,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
-            MapLocationDefinition location = _draftService != null ? _draftService.GetLocation(session, id) : null;
-            if (location == null)
-            {
-                message = "Authored map location '" + id + "' was not found.";
+            MapLocationDefinition location;
+            if (!TryResolveEditableLocation(state, session, id, "Change map location icon " + id, out location, out message))
                 return false;
-            }
 
             string[] icons = ScenarioMapIconCatalog.GetKnownIconIds();
             int nextIndex = 0;
@@ -436,13 +431,75 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 }
             }
 
-            RecordMapUndo(session, "Change map location icon " + id);
             location.IconId = icons.Length > 0 ? icons[nextIndex] : null;
             ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
             SelectAuthoredLocation(state, location, out message);
             message = "Changed map location " + id + " icon to " + location.IconId + ".";
             state.StatusMessage = message;
             return true;
+        }
+
+        private bool TryResolveEditableLocation(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession session,
+            string id,
+            string undoDescription,
+            out MapLocationDefinition location,
+            out string message)
+        {
+            location = null;
+            message = null;
+            if (_draftService == null || session == null)
+            {
+                message = "The map draft is not available.";
+                return false;
+            }
+
+            location = _draftService.GetLocation(session, id);
+            if (location != null)
+            {
+                RecordMapUndo(session, undoDescription);
+                return true;
+            }
+
+            ScenarioMapRegionSelection selection = state != null ? state.MapSelection : null;
+            if (selection == null || selection.Authored || !IsSelectionLocationId(selection, id))
+            {
+                message = "Authored map location '" + id + "' was not found.";
+                return false;
+            }
+
+            RecordMapUndo(session, undoDescription);
+            bool wasExisting;
+            if (!_draftService.UpsertLocationFromSelection(session, selection, out location, out wasExisting) || location == null)
+            {
+                message = "The selected map region could not be saved into the draft.";
+                return false;
+            }
+
+            selection = selection.Copy();
+            selection.Captured = true;
+            selection.CapturedLocationId = location.Id;
+            selection.LocationId = location.Id;
+            selection.Authored = true;
+            selection.SelectionKind = "Authored";
+            state.MapSelection = selection;
+            state.MapSelectedLocationId = location.Id;
+            return true;
+        }
+
+        private bool IsSelectionLocationId(ScenarioMapRegionSelection selection, string id)
+        {
+            if (selection == null || string.IsNullOrEmpty(id) || _draftService == null)
+                return false;
+
+            if (!string.IsNullOrEmpty(selection.LocationId) && string.Equals(selection.LocationId, id, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (!string.IsNullOrEmpty(selection.CapturedLocationId) && string.Equals(selection.CapturedLocationId, id, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            string selectionId = _draftService.BuildLocationId(selection);
+            return string.Equals(selectionId, id, StringComparison.OrdinalIgnoreCase);
         }
 
         private bool CaptureSelection(ScenarioAuthoringState state, out string message)
@@ -632,6 +689,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             selection.Discovered = location.DiscoveredAtStart;
             selection.HiddenUntilDiscovered = location.HiddenUntilDiscovered;
             selection.IconId = location.IconId;
+            selection.LootTableId = location.LootTableId;
+            selection.EncounterTableId = location.EncounterTableId;
             selection.Captured = true;
             selection.CapturedLocationId = location.Id;
             selection.Authored = true;

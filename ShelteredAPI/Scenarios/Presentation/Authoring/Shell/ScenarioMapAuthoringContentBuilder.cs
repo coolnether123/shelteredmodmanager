@@ -43,10 +43,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             if (location == null)
             {
-                items.Add(Text("Select or capture an authored location to edit map stats, loot, icon, and visibility."));
+                items.Add(Text("Select a map region or authored location to edit map stats, loot, icon, and visibility."));
             }
             else
             {
+                items.Add(Property("State", IsSelectedVanillaRegion(state) ? "Vanilla - edits will be saved to your scenario" : "Authored"));
                 items.Add(EditableProperty("Name", location.DisplayName, "displayName", location.Id, "Shown in the scenario map draft and later runtime projection."));
                 items.Add(EditableProperty("Kind / Category", location.Kind, "kind", location.Id, "Semantic category used by E5/E6 projection."));
                 items.Add(EditableProperty("Icon Id", location.IconId, "iconId", location.Id, "Must match a known map icon sprite id."));
@@ -95,7 +96,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         "MAP",
                         null,
                         true),
-                    Property("Supported Here", "Open the vanilla map, select towns/regions, capture vanilla regions, place authored locations, and click-move selected authored locations."),
+                    Property("Supported Here", "Open the vanilla map, select towns/regions, edit selected regions directly, place authored locations, and click-move selected authored locations."),
                     Property("Selection Mode", active ? "MapAuthoringActive" : "Map workshop"),
                     Property("Map Click Mode", state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select"),
                     Property("Movement", "Click-to-move is used because vanilla mouse drag already pans the map and drags waypoints.")
@@ -121,7 +122,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(Property("Loot", FormatSelectionLoot(selection)));
                 items.Add(Property("Encounter", "open " + selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / faction " + selection.OpenGroundFactionEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / animal " + selection.AnimalEncounterChance.ToString(CultureInfo.InvariantCulture) + "%"));
                 items.Add(Property("Selection Kind", selection.Authored ? "Authored draft location" : "Vanilla map region"));
-                items.Add(Property("Draft", selection.Captured ? "Captured as " + Safe(selection.CapturedLocationId) : "Not captured"));
+                items.Add(Property("State", selection.Authored ? "Authored" : "Vanilla - edits will be saved to your scenario"));
             }
 
             return new ScenarioAuthoringInspectorSection
@@ -155,17 +156,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         true,
                         true,
                         mapActive ? "CL" : "MP")),
-                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
-                        ScenarioAuthoringActionIds.ActionMapAuthoringCaptureSelection,
-                        hasSelection && selection.Captured ? "Update Draft" : "Capture to Draft",
-                        "Create or update a MapLocationDefinition from the selected vanilla region.",
-                        hasSelection && !authoredSelected,
-                        hasSelection && !authoredSelected,
-                        "CP",
-                        null,
-                        hasSelection && selection.Captured ? "Captured" : null,
-                        null,
-                        !hasSelection ? "Select a vanilla map region first." : (authoredSelected ? "Authored locations are already in the draft." : null))),
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect,
                         "Select",
@@ -492,8 +482,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string id = state != null ? state.MapSelectedLocationId : null;
             if (string.IsNullOrEmpty(id) && state != null && state.MapSelection != null && state.MapSelection.Authored)
                 id = state.MapSelection.LocationId;
-            if (string.IsNullOrEmpty(id))
-                return null;
+            if (string.IsNullOrEmpty(id) && state != null && state.MapSelection != null)
+                id = BuildSelectionLocationId(state.MapSelection);
 
             for (int i = 0; map.Locations != null && i < map.Locations.Count; i++)
             {
@@ -502,7 +492,47 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return location;
             }
 
-            return null;
+            return state != null && state.MapSelection != null && !state.MapSelection.Authored
+                ? BuildEditableLocationPreview(state.MapSelection, id)
+                : null;
+        }
+
+        private static bool IsSelectedVanillaRegion(ScenarioAuthoringState state)
+        {
+            return state != null && state.MapSelection != null && !state.MapSelection.Authored;
+        }
+
+        private static MapLocationDefinition BuildEditableLocationPreview(ScenarioMapRegionSelection selection, string id)
+        {
+            if (selection == null || string.IsNullOrEmpty(id))
+                return null;
+
+            MapLocationDefinition location = new MapLocationDefinition();
+            location.Id = id;
+            location.DisplayName = selection.DisplayName;
+            location.Kind = !string.IsNullOrEmpty(selection.Topography) ? selection.Topography : selection.Category;
+            location.IconId = selection.IconId;
+            location.X = selection.GridX;
+            location.Y = selection.GridY;
+            location.GridX = selection.GridX;
+            location.GridY = selection.GridY;
+            location.Searchable = selection.Searchable;
+            location.VisibleAtStart = selection.VisibleOnMap;
+            location.DiscoveredAtStart = selection.Discovered;
+            location.HiddenUntilDiscovered = selection.HiddenUntilDiscovered;
+            location.Danger = selection.OpenGroundEncounterChance;
+            return location;
+        }
+
+        private static string BuildSelectionLocationId(ScenarioMapRegionSelection selection)
+        {
+            if (selection == null)
+                return null;
+            if (!string.IsNullOrEmpty(selection.LocationId))
+                return selection.LocationId;
+            if (!string.IsNullOrEmpty(selection.CapturedLocationId))
+                return selection.CapturedLocationId;
+            return "vanilla-" + selection.GridX.ToString(CultureInfo.InvariantCulture) + "-" + selection.GridY.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string FormatKnownIconIds()

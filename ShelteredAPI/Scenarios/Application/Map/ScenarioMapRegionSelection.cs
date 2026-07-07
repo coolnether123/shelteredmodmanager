@@ -18,6 +18,8 @@ namespace ShelteredAPI.Scenarios.Application.Map{
         public bool Discovered { get; set; }
         public bool HiddenUntilDiscovered { get; set; }
         public string IconId { get; set; }
+        public string LootTableId { get; set; }
+        public string EncounterTableId { get; set; }
         public bool HasItems { get; set; }
         public bool HasQuest { get; set; }
         public bool HasHiddenItems { get; set; }
@@ -55,6 +57,8 @@ namespace ShelteredAPI.Scenarios.Application.Map{
                 Discovered = Discovered,
                 HiddenUntilDiscovered = HiddenUntilDiscovered,
                 IconId = IconId,
+                LootTableId = LootTableId,
+                EncounterTableId = EncounterTableId,
                 HasItems = HasItems,
                 HasQuest = HasQuest,
                 HasHiddenItems = HasHiddenItems,
