@@ -62,9 +62,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 ? "[b]" + writerName + "[/b]\n" + text
                 : text;
             string entryId = ScenarioPropertyBag.GetString(effect.Properties, "entryId", effect.TargetId ?? effect.Id ?? string.Empty);
-            string writeKey = (state != null ? state.RuntimeBindingId : string.Empty)
-                + "|"
-                + entryId
+            if (!ScenarioPropertyBag.GetBool(effect.Properties, "repeatable", false)
+                && HasJournalEntry(manager, rendered))
+            {
+                message = "Duplicate journal write skipped.";
+                return true;
+            }
+
+            string writeKey = entryId
                 + "|"
                 + GameTime.Day.ToString()
                 + ":"
@@ -97,6 +102,20 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                     WrittenMinuteKeys.Remove(writeKey);
                 return false;
             }
+        }
+
+        private static bool HasJournalEntry(JournalManager manager, string rendered)
+        {
+            if (manager == null || string.IsNullOrEmpty(rendered))
+                return false;
+
+            for (int i = 0; i < manager.NumEntries; i++)
+            {
+                if (string.Equals(manager.GetEntryText(i), rendered, StringComparison.Ordinal))
+                    return true;
+            }
+
+            return false;
         }
 
         private string ResolveWriterName(ScenarioDefinition definition, ScenarioEffectDefinition effect)

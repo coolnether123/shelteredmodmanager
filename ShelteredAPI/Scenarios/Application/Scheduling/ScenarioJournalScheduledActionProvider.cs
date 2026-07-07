@@ -66,6 +66,7 @@ namespace ShelteredAPI.Scenarios.Application.Scheduling
             effect.ActorRef = CopyActorRef(entry.Writer);
             ScenarioPropertyBag.Set(effect.Properties, "entryId", entryId);
             ScenarioPropertyBag.Set(effect.Properties, "text", entry.Text ?? string.Empty);
+            ScenarioPropertyBag.Set(effect.Properties, "repeatable", action.Policy.Repeatable ? "true" : "false");
             ScenarioPropertyBag.Set(effect.Properties, "format", "WriterPrefix");
             ScenarioPropertyBag.Set(effect.Properties, "writerMode", entry.Writer != null ? "Specific" : "AnyPresent");
             action.Effects.Add(effect);
