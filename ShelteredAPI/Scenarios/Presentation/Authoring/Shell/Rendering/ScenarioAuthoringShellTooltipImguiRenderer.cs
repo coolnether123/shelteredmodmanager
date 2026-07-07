@@ -411,7 +411,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     break;
 
                 Rect buttonRect = new Rect(x, y, width, RichHoverPopupActionHeight);
-                if (GUI.Button(buttonRect, new GUIContent(action.Label ?? string.Empty), action.Emphasized ? _activeButtonStyle : _buttonStyle))
+                if (DrawPlainButton(buttonRect, new GUIContent(action.Label ?? string.Empty), action.Emphasized ? _activeButtonStyle : _buttonStyle, action.Enabled))
                     ExecuteRichHoverHelpAction(action);
                 x += width + RichHoverPopupActionGap;
             }

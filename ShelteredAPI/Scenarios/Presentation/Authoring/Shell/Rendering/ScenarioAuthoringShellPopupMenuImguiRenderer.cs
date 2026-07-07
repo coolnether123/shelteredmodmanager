@@ -140,10 +140,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return;
 
-            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
-            bool manualHighlightEnabled = _scaledWindowDrawDepth == 0;
-            bool hovered = manualHighlightEnabled && rect.Contains(mouse);
-            bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
+            bool hovered = action.Enabled && IsInteractiveHoverAllowed(rect);
+            bool pressed = action.Enabled && IsInteractiveMouseDownAllowed(rect);
             float press = action.Enabled ? _animations.GetButtonPressForAction(action.Id, pressed) : 0f;
             Rect visualRect = press > 0.001f
                 ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
@@ -168,7 +166,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (IsWindowMenuAction(action))
             {
-                if (GUI.Button(visualRect, content, drawStyle) && action.Enabled)
+                if (DrawPlainButton(visualRect, content, drawStyle, action.Enabled))
                 {
                     _windowMenuOpen = !_windowMenuOpen;
                     if (_snapshot != null && _snapshot.State != null)
@@ -182,7 +180,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            if (GUI.Button(visualRect, content, drawStyle) && action.Enabled)
+            if (DrawPlainButton(visualRect, content, drawStyle, action.Enabled))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)

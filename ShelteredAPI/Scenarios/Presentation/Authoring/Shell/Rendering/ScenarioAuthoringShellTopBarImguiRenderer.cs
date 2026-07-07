@@ -262,7 +262,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawTopBarMoreButton(Rect rect, ScenarioAuthoringInspectorAction action)
         {
-            if (GUI.Button(rect, new GUIContent(action.Label, action.Hint), _topBarMoreMenuOpen ? _activeButtonStyle : _buttonStyle))
+            if (DrawPlainButton(rect, new GUIContent(action.Label, action.Hint), _topBarMoreMenuOpen ? _activeButtonStyle : _buttonStyle, true))
             {
                 _topBarMoreMenuOpen = !_topBarMoreMenuOpen;
                 if (Event.current != null)

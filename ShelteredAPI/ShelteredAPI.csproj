@@ -488,6 +488,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTooltipImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTopBarImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTutorialImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellVisualSurfaceGate.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorkspaceTabsImguiRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Persistence\ScenarioAuthoringStoragePaths.cs" />

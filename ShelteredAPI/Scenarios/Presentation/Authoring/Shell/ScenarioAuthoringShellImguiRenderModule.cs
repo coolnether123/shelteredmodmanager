@@ -239,6 +239,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             EnsureStyles(_snapshot.State != null ? _snapshot.State.Settings : null);
             _editableFieldFocused = false;
             BeginRichHoverFrame();
+            BeginVisualSurfaceFrame();
             _animations.BeginFrame(_snapshot.State != null ? _snapshot.State.Settings : null);
             if (_snapshot.State != null)
                 _windowMenuOpen = _snapshot.State.WindowMenuOpen;
@@ -296,10 +297,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return;
                 }
 
-                Rect windowMenuButtonRect = DrawTopBarCore(topRect, shell, chromeProgress);
+                RegisterVisualSurface("chrome.top", topRect);
+                RegisterVisualSurface("chrome.status", statusRect);
+                Rect windowMenuButtonRect;
+                using (EnterVisualSurface("chrome.top", chromeProgress > ChromeInteractionThreshold))
+                    windowMenuButtonRect = DrawTopBarCore(topRect, shell, chromeProgress);
                 RegisterTopBarMoreMenu(inputCapture, chromeProgress > ChromeInteractionThreshold);
+                if (_topBarMoreMenuOpen && _topBarMoreMenuRect.width > 0f && _topBarMoreMenuRect.height > 0f)
+                    RegisterVisualSurface("popup.topbar.more", _topBarMoreMenuRect);
                 Rect collapsedStripRect = RuntimeCompat.ZeroRect();
-                Rect animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
+                Rect animatedStatusRect;
+                using (EnterVisualSurface("chrome.status", chromeProgress > ChromeInteractionThreshold))
+                    animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
                 if (chromeProgress > ChromeInteractionThreshold && windowMenuButtonRect.width > 0f && windowMenuButtonRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(windowMenuButtonRect);
                 if (chromeProgress > ChromeInteractionThreshold && animatedStatusRect.width > 0f && animatedStatusRect.height > 0f)
@@ -311,13 +320,31 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterWindowAnimationStates(shell.Windows, windowRects);
             string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
             bool workshopSurface = IsWorkshopSurface(_snapshot.State, activeWorkspaceId);
+            RegisterWindowVisualSurfaces(shell.Windows, windowRects, false);
+            RegisterWindowVisualSurfaces(shell.Windows, windowRects, true);
+
+            if (_windowMenuOpen && shell.WindowMenuActions != null && shell.WindowMenuActions.Length > 0)
+                RegisterVisualSurface("popup.window-menu", BuildWindowMenuRectCore(windowMenuButtonRect, shell.WindowMenuActions, scaledWidth, scaledHeight, hudReserveRect));
+            if (shell.ContextMenu != null && shell.ContextMenu.Visible)
+                RegisterVisualSurface("popup.context-menu", BuildPopupRectCore(shell.ContextMenu, scaledWidth, scaledHeight, hudReserveRect));
+            if (shell.FocusedEditorDocument != null || shell.SpritePickerDocument != null)
+                RegisterVisualSurface("modal.document", BuildDocumentModalRect(shell.FocusedEditorDocument != null, scaledWidth, scaledHeight));
+            if (shell.Help != null)
+                RegisterVisualSurface("modal.help", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
+            if (IsRichHoverHelpActive() && _activeRichHoverPopupRect.width > 0f && _activeRichHoverPopupRect.height > 0f)
+                RegisterVisualSurface("popup.rich-help", _activeRichHoverPopupRect);
 
                 if (workshopSurface)
                 {
-                    Rect pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
-                    windowMenuButtonRect = DrawTopBarCore(topRect, shell, chromeProgress);
+                    RegisterVisualSurface("workspace:" + activeWorkspaceId, ScenarioAuthoringShellLayout.BuildWorkshopPageRect(contentRect));
+                    Rect pageRect;
+                    using (EnterVisualSurface("workspace:" + activeWorkspaceId))
+                        pageRect = DrawWorkshopSurfaceCore(contentRect, shell.Windows, activeWorkspaceId);
+                    using (EnterVisualSurface("chrome.top", chromeProgress > ChromeInteractionThreshold))
+                        windowMenuButtonRect = DrawTopBarCore(topRect, shell, chromeProgress);
                     RegisterTopBarMoreMenu(inputCapture, chromeProgress > ChromeInteractionThreshold);
-                    animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
+                    using (EnterVisualSurface("chrome.status", chromeProgress > ChromeInteractionThreshold))
+                        animatedStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
                     if (pageRect.width > 0f && pageRect.height > 0f)
                         inputCapture.RegisterInteractiveRect(pageRect);
                     if (chromeProgress > ChromeInteractionThreshold && windowMenuButtonRect.width > 0f && windowMenuButtonRect.height > 0f)
@@ -331,7 +358,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 // command dock, docked windows, and floating overlays into the central workspace
                 // once the remaining scenario editor migration plan is defined.
                 int restoreChipCount = CountCollapsedWorldToolWindows(shell.Windows);
-                Rect toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State, restoreChipCount, chromeProgress);
+                Rect toolRailRect;
+                using (EnterVisualSurface("chrome.toolrail", chromeProgress > ChromeInteractionThreshold))
+                    toolRailRect = DrawToolRailCore(contentRect, shell, _snapshot.State, restoreChipCount, chromeProgress);
                 if (chromeProgress > ChromeInteractionThreshold && toolRailRect.width > 0f && toolRailRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(toolRailRect);
                 Rect restoreChipsRect = toolRailRect.width > 0f && toolRailRect.height > 0f
@@ -342,7 +371,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 if (activeWorkspaceId == null)
                 {
-                    Rect commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State, chromeProgress);
+                    Rect commandDockRect;
+                    using (EnterVisualSurface("chrome.command-dock", chromeProgress > ChromeInteractionThreshold))
+                        commandDockRect = DrawCommandDockCore(contentRect, _snapshot.State, chromeProgress);
                     if (chromeProgress > ChromeInteractionThreshold && commandDockRect.width > 0f && commandDockRect.height > 0f)
                         inputCapture.RegisterInteractiveRect(commandDockRect);
                 }
@@ -354,7 +385,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawWindowSet(shell.Windows, windowRects, true, contentRect, inputCapture);
             if (!workshopSurface)
             {
-                collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
+                using (EnterVisualSurface("chrome.collapsed-strip"))
+                    collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
                 if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(collapsedStripRect);
             }
@@ -368,6 +400,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 float menuProgress = _animations.GetPopupProgress(true, true);
                 Rect animatedMenuRect = SlidePopupRect(windowMenuRect, menuProgress);
                 using (ScenarioUiGuiScope.Apply(menuProgress, animatedMenuRect, 1f))
+                using (EnterVisualSurface("popup.window-menu"))
                     DrawWindowMenuCore(animatedMenuRect, shell.WindowMenuActions);
                 inputCapture.RegisterInteractiveRect(windowMenuRect);
                 inputCapture.SetPopupOpen(true);
@@ -384,6 +417,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 float popupProgress = _animations.GetPopupProgress(true, false);
                 Rect animatedPopupRect = SlidePopupRect(popupRect, popupProgress);
                 using (ScenarioUiGuiScope.Apply(popupProgress, animatedPopupRect, 1f))
+                using (EnterVisualSurface("popup.context-menu"))
                     DrawContextMenuCore(animatedPopupRect, shell.ContextMenu);
                 inputCapture.RegisterInteractiveRect(popupRect);
                 inputCapture.SetPopupOpen(true);
@@ -439,15 +473,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
                 float targetWidth = shell.FocusedEditorDocument != null ? 720f : 980f;
                 float targetHeight = shell.FocusedEditorDocument != null ? 520f : 680f;
-                Rect pickerRect = new Rect(
-                    Math.Max(Margin, (scaledWidth - targetWidth) * 0.5f),
-                    Math.Max(topRect.yMax + Gutter, (scaledHeight - targetHeight) * 0.5f),
-                    Math.Min(targetWidth, scaledWidth - (Margin * 2f)),
-                    Math.Min(targetHeight, scaledHeight - topRect.height - StatusHeight - (Margin * 3f)));
+                Rect pickerRect = BuildDocumentModalRect(shell.FocusedEditorDocument != null, scaledWidth, scaledHeight);
                 float panelProgress = _animations.GetModalPanelProgress(true);
                 float panelScale = Mathf.Lerp(0.975f, 1f, panelProgress);
                 Rect pickerScrollRect;
                 using (ScenarioUiGuiScope.Apply(panelProgress, pickerRect, panelScale))
+                using (EnterVisualSurface("modal.document"))
                     pickerScrollRect = DrawDocumentModalCore(pickerRect, modalDocument, modalScrollId);
                 inputCapture.RegisterInteractiveRect(pickerRect);
                 if (pickerScrollRect.width > 0f && pickerScrollRect.height > 0f)
@@ -461,9 +492,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             Rect overlayRect = new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight);
-            DrawHelpModalCore(overlayRect, shell.Help, inputCapture);
+            using (EnterVisualSurface("modal.help"))
+                DrawHelpModalCore(overlayRect, shell.Help, inputCapture);
             if (shell.Help == null)
-                DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
+            {
+                using (EnterVisualSurface("modal.tutorial"))
+                    DrawTutorialOverlayCore(overlayRect, topRect, statusRect, windowRects, shell, inputCapture);
+            }
 
             bool textFieldFocused = _buildPaletteSearchFocused
                 || _spritePickerSearchFocused
@@ -478,7 +513,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || (shell.ContextMenu != null && shell.ContextMenu.Visible));
             inputCapture.SetTransitionActive(_animations.TransitionActive);
 
-            bool richHelpOpen = DrawRichHoverHelpOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect, inputCapture);
+            bool richHelpOpen;
+            using (EnterVisualSurface("popup.rich-help"))
+                richHelpOpen = DrawRichHoverHelpOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect, inputCapture);
             if (!richHelpOpen)
                 DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, contentRect);
                 }
@@ -689,7 +726,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
 
                 _animations.UpdateWindowRect(window.Id, rect);
-                Rect interactiveRect = DrawWindowCore(rect, window);
+                bool visualInteractive = visual == null || visual.Alpha > WindowInteractionAlphaThreshold;
+                Rect interactiveRect;
+                using (EnterVisualSurface(VisualSurfaceIdForWindow(window.Id), visualInteractive))
+                    interactiveRect = DrawWindowCore(rect, window);
                 if (interactiveRect.width > 0f && interactiveRect.height > 0f && (visual == null || visual.Alpha > WindowInteractionAlphaThreshold))
                 {
                     inputCapture.RegisterInteractiveRect(interactiveRect);
@@ -704,7 +744,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect rect = state.LastRect;
-                Rect interactiveRect = DrawWindowCore(rect, state.Window);
+                Rect interactiveRect;
+                using (EnterVisualSurface(VisualSurfaceIdForWindow(state.Window.Id), state.Alpha > WindowInteractionAlphaThreshold))
+                    interactiveRect = DrawWindowCore(rect, state.Window);
                 if (interactiveRect.width > 0f && interactiveRect.height > 0f && state.Alpha > WindowInteractionAlphaThreshold)
                 {
                     inputCapture.RegisterInteractiveRect(interactiveRect);
@@ -716,6 +758,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             float offset = (1f - Mathf.Clamp01(progress)) * -8f;
             return new Rect(rect.x, rect.y + offset, rect.width, rect.height);
+        }
+
+        private static Rect BuildDocumentModalRect(bool focusedEditor, float scaledWidth, float scaledHeight)
+        {
+            float targetWidth = focusedEditor ? 720f : 980f;
+            float targetHeight = focusedEditor ? 520f : 680f;
+            return new Rect(
+                Math.Max(Margin, (scaledWidth - targetWidth) * 0.5f),
+                Math.Max(TopBarHeight + Gutter, (scaledHeight - targetHeight) * 0.5f),
+                Math.Min(targetWidth, scaledWidth - (Margin * 2f)),
+                Math.Min(targetHeight, scaledHeight - TopBarHeight - StatusHeight - (Margin * 3f)));
         }
 
         private static ScenarioAuthoringShellWindowViewModel[] BuildWindowDrawList(

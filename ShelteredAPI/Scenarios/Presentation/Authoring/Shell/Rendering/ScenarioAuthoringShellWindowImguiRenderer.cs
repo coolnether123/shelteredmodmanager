@@ -853,7 +853,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (color.a <= 0.001f)
                 GUI.Label(rect, "X", _mutedTextStyle);
 
-            if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+            if (DrawPlainButton(rect, GUIContent.none, GUIStyle.none, true))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(
                     ScenarioSpriteSwapAuthoringService.BuildCustomPresetActionId(brushIndex));
@@ -946,7 +946,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 canvasHeight);
 
             Event current = Event.current;
-            if (current != null && IsPointerInsideGuiRect(inner, current))
+            if (current != null && IsPointerInsideGuiRect(inner, current) && IsInteractiveVisualTopmost(inner))
             {
                 if (TryHandlePixelCanvasWheel(inner, current))
                     return;
@@ -998,7 +998,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawSelectionOverlay(rect, editor, displayZoom);
 
             Event current = Event.current;
-            if (current != null && rect.Contains(current.mousePosition))
+            if (current != null && rect.Contains(current.mousePosition) && IsInteractiveVisualTopmost(rect))
             {
                 if (TryHandlePixelCanvasWheel(rect, current))
                     return;
@@ -1259,12 +1259,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
-            GUI.SetNextControlName(controlName);
-            string nextSearchText = GUILayout.TextField(searchText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Height(26f));
+            Rect searchRect = GUILayoutUtility.GetRect(0f, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
+            bool searchTopmost = IsInteractiveVisualTopmost(searchRect);
+            string nextSearchText;
+            if (searchTopmost)
+            {
+                GUI.SetNextControlName(controlName);
+                nextSearchText = GUI.TextField(searchRect, searchText ?? string.Empty, _uiContext.Styles.Field);
+            }
+            else
+            {
+                nextSearchText = searchText ?? string.Empty;
+                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.Field);
+            }
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
                 searchText = nextSearchText;
 
-            if (GUILayout.Button("Clear", _buttonStyle, GUILayout.Width(64f), GUILayout.Height(26f)))
+            Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
+            if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
                 searchText = string.Empty;
             GUILayout.EndHorizontal();
 
@@ -1278,7 +1290,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUILayout.EndVertical();
             GUILayout.EndArea();
-            searchFocused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+            searchFocused = searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
         }
 
         private void DrawCandidateSearchControl(
@@ -1290,22 +1302,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(26f));
-            GUI.SetNextControlName(controlName);
-            string nextSearchText = GUILayout.TextField(searchText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Height(26f));
+            Rect searchRect = GUILayoutUtility.GetRect(0f, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
+            bool searchTopmost = IsInteractiveVisualTopmost(searchRect);
+            string nextSearchText;
+            if (searchTopmost)
+            {
+                GUI.SetNextControlName(controlName);
+                nextSearchText = GUI.TextField(searchRect, searchText ?? string.Empty, _uiContext.Styles.Field);
+            }
+            else
+            {
+                nextSearchText = searchText ?? string.Empty;
+                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.Field);
+            }
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
                 searchText = nextSearchText;
 
-            if (GUILayout.Button("Clear", _buttonStyle, GUILayout.Width(64f), GUILayout.Height(26f)))
+            Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
+            if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
                 searchText = string.Empty;
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
-            searchFocused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
+            searchFocused = searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
         }
 
         private void DrawCandidateFilterButton(string label, string value, ref string candidateFilter)
         {
             bool active = string.Equals(candidateFilter, value, StringComparison.OrdinalIgnoreCase);
-            if (GUILayout.Button(label, active ? _activeButtonStyle : _buttonStyle, GUILayout.Width(78f), GUILayout.Height(26f)))
+            Rect rect = GUILayoutUtility.GetRect(78f, 26f, GUILayout.Width(78f), GUILayout.Height(26f));
+            if (DrawPlainButton(rect, new GUIContent(label), active ? _activeButtonStyle : _buttonStyle, true))
                 candidateFilter = value;
         }
 
@@ -1451,12 +1476,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string draft;
             if (!_editableFieldDrafts.TryGetValue(controlName, out draft) || (!wasFocused && !previouslyFocused))
                 draft = value;
-            GUI.SetNextControlName(controlName);
-            string next = GUI.TextField(rect, draft, style);
+            bool fieldTopmost = IsInteractiveVisualTopmost(rect);
+            string next;
+            if (fieldTopmost)
+            {
+                GUI.SetNextControlName(controlName);
+                next = GUI.TextField(rect, draft, style);
+            }
+            else
+            {
+                GUI.Box(rect, draft, style);
+                next = draft;
+            }
             _editableFieldDrafts[controlName] = next;
             bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
             _editableFieldFocused = _editableFieldFocused || focused;
-            if (focused || (Event.current != null && rect.Contains(Event.current.mousePosition)))
+            if (focused || (fieldTopmost && Event.current != null && rect.Contains(Event.current.mousePosition)))
                 DrawFieldFocusBorder(rect);
             TryCommitEditableField(item, controlName, value, next, previouslyFocused, focused);
             TrackEditableFieldFocus(controlName, focused);
@@ -1507,7 +1542,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 RegisterTourTarget("action:" + action.Id, rect);
             if (action.Enabled)
             {
-                if (GUI.Button(rect, content, style))
+                if (DrawPlainButton(rect, content, style, true))
                 {
                     ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                     if (Event.current != null)
@@ -1972,6 +2007,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawHomeQuestionCard(Rect rect, ScenarioAuthoringInspectorSection section)
         {
             ScenarioAuthoringInspectorAction action = null;
+            ScenarioAuthoringInspectorAction fixAction = null;
             string detail = string.Empty;
             string badge = string.Empty;
             for (int i = 0; section.Items != null && i < section.Items.Length; i++)
@@ -1981,6 +2017,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
                 if (item.Action != null && action == null)
                     action = item.Action;
+                else if (item.Action != null && fixAction == null && !IsHomeQuestionUtilityAction(item.Action))
+                    fixAction = item.Action;
                 else if (string.IsNullOrEmpty(detail))
                     detail = item.Value ?? item.Label ?? string.Empty;
                 else if (string.IsNullOrEmpty(badge))
@@ -1998,17 +2036,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterInteractiveRegion(rect);
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
-            GUI.Box(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card);
-            bool hovered = rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
-            DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, false);
+            bool clicked = DrawPlainButton(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card, action.Enabled);
+            bool hovered = action.Enabled && IsInteractiveHoverAllowed(rect);
+            bool pressed = action.Enabled && IsInteractiveMouseDownAllowed(rect);
+            DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, pressed);
+            if (clicked)
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                if (Event.current != null)
+                    Event.current.Use();
+            }
             if (action.Emphasized && _uiContext != null && _uiContext.Styles != null)
                 ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderStrongTexture);
 
             GUIStyle detailStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
             detailStyle.wordWrap = true;
             detailStyle.clipping = TextClipping.Clip;
-            float buttonWidth = Mathf.Clamp(MeasureButtonWidth(action, false, 20f), 116f, Math.Min(168f, rect.width * 0.34f));
-            float sideWidth = buttonWidth;
+            float fixWidth = fixAction != null ? Mathf.Clamp(MeasureButtonWidth(fixAction, false, 20f), 104f, Math.Min(168f, rect.width * 0.34f)) : 0f;
+            float sideWidth = fixWidth > 0f ? fixWidth : 116f;
             if (!string.IsNullOrEmpty(badge))
             {
                 Vector2 measuredBadge = _mutedTextStyle.CalcSize(new GUIContent(badge));
@@ -2028,8 +2073,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 14f, sideWidth, 22f);
                 ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ResolveHomeBadgeEmphasis(badge));
             }
-            Rect actionRect = new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 38f, sideWidth, 28f);
-            DrawButton(actionRect, action.Enabled ? CloneEmphasized(action) : action, false);
+            if (fixAction != null)
+            {
+                Rect actionRect = new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 38f, sideWidth, 28f);
+                DrawButton(actionRect, fixAction, false);
+            }
+        }
+
+        private static bool IsHomeQuestionUtilityAction(ScenarioAuthoringInspectorAction action)
+        {
+            return action != null
+                && !string.IsNullOrEmpty(action.Id)
+                && (action.Id.StartsWith(ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix, StringComparison.Ordinal)
+                    || action.Id.StartsWith(ScenarioAuthoringActionIds.ActionTourStartPrefix, StringComparison.Ordinal));
         }
 
         private bool DrawHomeQuestionGlyph(Rect rect, ScenarioAuthoringInspectorSection section, ScenarioAuthoringInspectorAction action)
@@ -2146,7 +2202,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && evt != null
                 && evt.type == EventType.MouseDown
                 && evt.button == 0
-                && rowRect.Contains(evt.mousePosition))
+                && rowRect.Contains(evt.mousePosition)
+                && IsInteractiveVisualTopmost(rowRect))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 evt.Use();
@@ -2177,12 +2234,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 draft = value ?? string.Empty;
 
             Event evt = Event.current;
-            bool hovered = evt != null && fieldRect.Contains(evt.mousePosition);
+            bool fieldTopmost = IsInteractiveVisualTopmost(fieldRect);
+            bool hovered = evt != null && fieldRect.Contains(evt.mousePosition) && fieldTopmost;
             if (hovered && evt.type == EventType.MouseDown && evt.button == 0)
                 GUI.FocusControl(controlName);
 
-            GUI.SetNextControlName(controlName);
-            string next = GUI.TextField(fieldRect, draft, _uiContext.Styles.Field);
+            string next;
+            if (fieldTopmost)
+            {
+                GUI.SetNextControlName(controlName);
+                next = GUI.TextField(fieldRect, draft, _uiContext.Styles.Field);
+            }
+            else
+            {
+                GUI.Box(fieldRect, draft, _uiContext.Styles.Field);
+                next = draft;
+            }
             _editableFieldDrafts[controlName] = next;
 
             bool focused = string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal);
@@ -2309,10 +2376,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             GUIStyle style = !action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
-            bool manualHighlightEnabled = _scaledWindowDrawDepth == 0;
-            bool hovered = manualHighlightEnabled && rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
-            bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
-            if (GUI.Button(rect, GUIContent.none, style) && action.Enabled)
+            bool hovered = action.Enabled && IsInteractiveHoverAllowed(rect);
+            bool pressed = action.Enabled && IsInteractiveMouseDownAllowed(rect);
+            if (DrawPlainButton(rect, GUIContent.none, style, action.Enabled))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
                 if (Event.current != null)
@@ -2569,12 +2635,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             ScenarioAuthoringInspectorAction primary = card.PrimaryAction;
-            bool clickable = primary != null && primary.Enabled && !string.IsNullOrEmpty(primary.Id);
+            bool multiAction = HasSecondaryCastActions(card);
+            bool clickable = !multiAction && primary != null && primary.Enabled && !string.IsNullOrEmpty(primary.Id);
             GUIContent content = new GUIContent(string.Empty, primary != null ? primary.Hint ?? primary.Detail ?? string.Empty : string.Empty);
             RegisterInteractiveRegion(rect);
             GUI.Box(rect, content, _uiContext.Styles.Card);
 
-            bool hovered = rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
+            bool hovered = clickable && IsInteractiveHoverAllowed(rect);
             DrawButtonAnimationOverlay(rect, primary != null ? primary.Id : null, clickable, hovered, false);
 
             Rect portraitRect = new Rect(rect.x + 10f, rect.y + 10f, 82f, 96f);
@@ -2602,7 +2669,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && evt.type == EventType.MouseDown
                 && evt.button == 0
                 && rect.Contains(evt.mousePosition)
-                && !actionsRect.Contains(evt.mousePosition))
+                && !actionsRect.Contains(evt.mousePosition)
+                && IsInteractiveVisualTopmost(rect))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(primary.Id);
                 evt.Use();
@@ -2617,7 +2685,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringInspectorAction action = card.PrimaryAction;
             GUIContent content = new GUIContent(string.Empty, action != null ? action.Hint ?? action.Detail ?? string.Empty : string.Empty);
             RegisterInteractiveRegion(rect);
-            GUI.Box(rect, content, _uiContext.Styles.Card);
+            bool clickable = action != null && action.Enabled && !string.IsNullOrEmpty(action.Id);
+            bool clicked = DrawPlainButton(rect, content, _uiContext.Styles.Card, clickable);
+            bool hovered = clickable && IsInteractiveHoverAllowed(rect);
+            bool pressed = clickable && IsInteractiveMouseDownAllowed(rect);
+            DrawButtonAnimationOverlay(rect, action != null ? action.Id : null, clickable, hovered, pressed);
+            if (clicked)
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                if (Event.current != null)
+                    Event.current.Use();
+            }
 
             Rect portraitRect = new Rect(rect.x + 8f, rect.y + 8f, 46f, 56f);
             DrawCastPortrait(portraitRect, card);
@@ -2634,8 +2712,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (action != null)
             {
-                Rect actionRect = new Rect(rect.xMax - actionWidth - 8f, rect.y + 24f, actionWidth, 24f);
-                DrawButton(actionRect, action, false);
+                Rect actionPillRect = new Rect(rect.xMax - actionWidth - 8f, rect.y + 24f, actionWidth, 20f);
+                ScenarioUiWidgets.DrawPill(actionPillRect, ShortenToFit(action.Label ?? string.Empty, actionPillRect.width - 12f, _uiContext.Styles.PaperMutedText), _uiContext.Styles, action.Enabled ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
             }
             else
             {
@@ -2784,6 +2862,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 DrawButton(new Rect(x, rect.y, width, rect.height), renderAction, false);
                 x += width + gap;
             }
+        }
+
+        private static bool HasSecondaryCastActions(ScenarioCastCardViewModel card)
+        {
+            for (int i = 0; card != null && card.SecondaryActions != null && i < card.SecondaryActions.Length; i++)
+            {
+                if (card.SecondaryActions[i] != null)
+                    return true;
+            }
+
+            return false;
         }
 
         private ScenarioAuthoringInspectorAction CloneCastCompactAction(ScenarioAuthoringInspectorAction action)

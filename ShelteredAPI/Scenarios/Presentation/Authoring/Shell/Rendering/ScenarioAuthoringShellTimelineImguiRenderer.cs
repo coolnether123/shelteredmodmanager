@@ -142,17 +142,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (chip == null || chip.Action == null)
                 return;
 
-            Event evt = Event.current;
-            Vector2 mouse = evt != null ? evt.mousePosition : Vector2.zero;
-            bool hovered = _scaledWindowDrawDepth == 0 && rect.Contains(mouse);
-            bool pressed = hovered && evt != null && evt.type == EventType.MouseDown && evt.button == 0;
+            bool hovered = chip.Action.Enabled && IsInteractiveHoverAllowed(rect);
+            bool pressed = chip.Action.Enabled && IsInteractiveMouseDownAllowed(rect);
             RegisterInteractiveRegion(rect);
             if (!string.IsNullOrEmpty(chip.Action.Id))
                 RegisterTourTarget("action:" + chip.Action.Id, rect);
             RegisterRichHoverHelpSource(rect, chip.Action);
 
             DrawTimelineChipSurface(rect, chip, hovered, pressed);
-            if (GUI.Button(rect, GUIContent.none, GUIStyle.none) && chip.Action.Enabled)
+            if (DrawPlainButton(rect, GUIContent.none, GUIStyle.none, chip.Action.Enabled))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(chip.Action.Id);
                 if (Event.current != null)

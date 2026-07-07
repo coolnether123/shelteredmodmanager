@@ -195,15 +195,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             bool active = state != null && state.ActiveTool == button.Tool;
             GUIStyle style = active ? _activeButtonStyle : _buttonStyle;
-            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
-            bool hovered = rect.Contains(mouse);
-            bool pressed = hovered && Event.current != null && Event.current.type == EventType.MouseDown && Event.current.button == 0;
+            bool hovered = button.Action.Enabled && IsInteractiveHoverAllowed(rect);
+            bool pressed = button.Action.Enabled && IsInteractiveMouseDownAllowed(rect);
             float press = button.Action.Enabled ? _animations.GetButtonPressForAction(button.Action.Id, pressed) : 0f;
             Rect visualRect = press > 0.001f
                 ? new Rect(rect.x + press, rect.y - press, rect.width, rect.height)
                 : rect;
             RegisterTourTarget("tool:" + button.Tool, visualRect);
-            if (GUI.Button(visualRect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style) && button.Action.Enabled)
+            if (DrawPlainButton(visualRect, new GUIContent(string.Empty, button.Action.Hint ?? string.Empty), style, button.Action.Enabled))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(button.Action.Id);
                 if (Event.current != null)

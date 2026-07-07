@@ -41,16 +41,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(28f));
-            GUI.SetNextControlName("asset_browser_search");
-            string nextSearchText = GUILayout.TextField(_assetBrowserSearchText ?? string.Empty, _uiContext.Styles.Field, GUILayout.Height(28f));
+            Rect searchRect = GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+            bool searchTopmost = IsInteractiveVisualTopmost(searchRect);
+            string nextSearchText;
+            if (searchTopmost)
+            {
+                GUI.SetNextControlName("asset_browser_search");
+                nextSearchText = GUI.TextField(searchRect, _assetBrowserSearchText ?? string.Empty, _uiContext.Styles.Field);
+            }
+            else
+            {
+                nextSearchText = _assetBrowserSearchText ?? string.Empty;
+                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.Field);
+            }
             if (!string.Equals(nextSearchText, _assetBrowserSearchText ?? string.Empty, StringComparison.Ordinal))
                 _assetBrowserSearchText = nextSearchText;
 
-            if (GUILayout.Button("Clear", _buttonStyle, GUILayout.Width(68f), GUILayout.Height(28f)))
+            Rect clearRect = GUILayoutUtility.GetRect(68f, 28f, GUILayout.Width(68f), GUILayout.Height(28f));
+            if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
                 _assetBrowserSearchText = string.Empty;
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
-            _assetBrowserSearchFocused = string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal);
+            _assetBrowserSearchFocused = searchTopmost && string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal);
         }
 
         private void DrawAssetBrowserCategoryRail(Rect rect, ScenarioAuthoringShellWindowViewModel window)
@@ -77,7 +89,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || (string.IsNullOrEmpty(_assetBrowserCategoryFilter) && string.Equals(filter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase));
             string safeLabel = string.IsNullOrEmpty(label) ? "Assets" : label;
             string display = safeLabel + "  " + count;
-            if (GUILayout.Button(new GUIContent(ShortenToFit(display, 140f, _buttonStyle), safeLabel), active ? _activeButtonStyle : _buttonStyle, GUILayout.Height(30f)))
+            Rect rect = GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
+            if (DrawPlainButton(rect, new GUIContent(ShortenToFit(display, 140f, _buttonStyle), safeLabel), active ? _activeButtonStyle : _buttonStyle, true))
                 _assetBrowserCategoryFilter = filter;
             GUILayout.Space(4f);
         }
