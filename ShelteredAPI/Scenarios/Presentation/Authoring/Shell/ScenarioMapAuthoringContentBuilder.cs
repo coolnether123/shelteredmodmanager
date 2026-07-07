@@ -49,14 +49,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     ScenarioInspectorItemFactory.Text(
                         active ? "Real map authoring is active." : "Open the real Sheltered map to select vanilla regions.",
-                        active ? "The editor chrome is hidden while the vanilla map panel owns input. Escape or the map close button returns here." : "This slice supports region selection and capture only; placement, loot editing, icon editing, and visibility application are follow-up slices.",
+                        active ? "The editor chrome is hidden while the vanilla map panel owns input. Escape or the map close button returns here." : "Open the map to select vanilla regions, place authored locations, or move selected authored locations.",
                         active ? "Active" : "Ready",
                         "MAP",
                         null,
                         true),
-                    Property("Supported Here", "Open the vanilla map, select towns/regions, and capture the selected region as a draft map location."),
+                    Property("Supported Here", "Open the vanilla map, select towns/regions, capture vanilla regions, place authored locations, and click-move selected authored locations."),
                     Property("Selection Mode", active ? "MapAuthoringActive" : "Map workshop"),
-                    Property("Deferred", "Dragging, placement, loot editing, icon editing, and runtime visibility application.")
+                    Property("Map Click Mode", state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select"),
+                    Property("Movement", "Click-to-move is used because vanilla mouse drag already pans the map and drags waypoints.")
                 }
             };
         }
@@ -71,12 +72,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             else
             {
-                items.Add(Property("Region", Safe(selection.DisplayName)));
+                items.Add(Property(selection.Authored ? "Authored Location" : "Vanilla Region", Safe(selection.DisplayName)));
                 items.Add(Property("Grid", selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture)));
                 items.Add(Property("Kind", Safe(selection.Topography) + " / " + Safe(selection.Category)));
                 items.Add(Property("Flags", FormatSelectionFlags(selection)));
                 items.Add(Property("Loot", FormatSelectionLoot(selection)));
                 items.Add(Property("Encounter", "open " + selection.OpenGroundEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / faction " + selection.OpenGroundFactionEncounterChance.ToString(CultureInfo.InvariantCulture) + "% / animal " + selection.AnimalEncounterChance.ToString(CultureInfo.InvariantCulture) + "%"));
+                items.Add(Property("Selection Kind", selection.Authored ? "Authored draft location" : "Vanilla map region"));
                 items.Add(Property("Draft", selection.Captured ? "Captured as " + Safe(selection.CapturedLocationId) : "Not captured"));
             }
 
@@ -95,6 +97,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioMapRegionSelection selection = state != null ? state.MapSelection : null;
             bool hasSelection = selection != null;
             bool mapActive = state != null && state.MapAuthoringActive;
+            bool authoredSelected = hasSelection && selection.Authored;
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "map_supported_actions",
@@ -114,13 +117,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         ScenarioAuthoringActionIds.ActionMapAuthoringCaptureSelection,
                         hasSelection && selection.Captured ? "Update Draft" : "Capture to Draft",
                         "Create or update a MapLocationDefinition from the selected vanilla region.",
-                        hasSelection,
-                        hasSelection,
+                        hasSelection && !authoredSelected,
+                        hasSelection && !authoredSelected,
                         "CP",
                         null,
                         hasSelection && selection.Captured ? "Captured" : null,
                         null,
-                        hasSelection ? null : "Select a vanilla map region first.")),
+                        !hasSelection ? "Select a vanilla map region first." : (authoredSelected ? "Authored locations are already in the draft." : null))),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect,
+                        "Select",
+                        "Map clicks select authored locations first, then vanilla regions.",
+                        true,
+                        state == null || string.IsNullOrEmpty(state.MapAuthoringMode) || state.MapAuthoringMode == "select",
+                        "SL")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModePlace,
+                        "Place",
+                        "The next map click creates an authored location on an empty authored grid cell.",
+                        true,
+                        state != null && state.MapAuthoringMode == "place",
+                        "PL")),
+                    ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionMapAuthoringModeMove,
+                        "Move",
+                        "The next map click relocates the selected authored location.",
+                        authoredSelected,
+                        state != null && state.MapAuthoringMode == "move",
+                        "MV",
+                        null,
+                        null,
+                        null,
+                        authoredSelected ? null : "Select an authored location first.")),
                     ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                         ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicMap,
                         "Map Help",

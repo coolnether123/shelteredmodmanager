@@ -2,6 +2,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
     internal sealed class ScenarioMapRegionSelection
     {
         public string SelectionId { get; set; }
+        public string SelectionKind { get; set; }
         public string LocationId { get; set; }
         public string DisplayName { get; set; }
         public string RegionName { get; set; }
@@ -29,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
         public int AnimalEncounterChance { get; set; }
         public bool Captured { get; set; }
         public string CapturedLocationId { get; set; }
+        public bool Authored { get; set; }
         public string Source { get; set; }
 
         public ScenarioMapRegionSelection Copy()
@@ -36,6 +38,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             return new ScenarioMapRegionSelection
             {
                 SelectionId = SelectionId,
+                SelectionKind = SelectionKind,
                 LocationId = LocationId,
                 DisplayName = DisplayName,
                 RegionName = RegionName,
@@ -63,6 +66,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
                 AnimalEncounterChance = AnimalEncounterChance,
                 Captured = Captured,
                 CapturedLocationId = CapturedLocationId,
+                Authored = Authored,
                 Source = Source
             };
         }

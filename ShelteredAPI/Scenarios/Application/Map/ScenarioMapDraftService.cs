@@ -26,6 +26,57 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             return map != null && Upsert(map.Locations, location, GetId, location != null ? location.Id : null);
         }
 
+        public MapLocationDefinition CreateLocationAtGrid(
+            ScenarioEditorSession session,
+            int gridX,
+            int gridY,
+            float worldX,
+            float worldY)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null)
+                return null;
+
+            EnsureMapSize(map);
+            string id = BuildAuthoredLocationId(map, gridX, gridY);
+            MapLocationDefinition location = new MapLocationDefinition();
+            location.Id = id;
+            location.DisplayName = "Authored Location " + (map.Locations.Count + 1).ToString(CultureInfo.InvariantCulture);
+            location.Kind = "PointOfInterest";
+            location.X = gridX;
+            location.Y = gridY;
+            location.GridX = gridX;
+            location.GridY = gridY;
+            location.Searchable = true;
+            location.VisibleAtStart = true;
+            location.DiscoveredAtStart = false;
+            location.HiddenUntilDiscovered = false;
+            SetProperty(location.Properties, "authoring.createdFrom", "map-click");
+            SetProperty(location.Properties, "authoring.world", FormatFloat(worldX) + "," + FormatFloat(worldY));
+            map.Locations.Add(location);
+            return location;
+        }
+
+        public bool MoveLocation(ScenarioEditorSession session, string id, int gridX, int gridY, float worldX, float worldY, out MapLocationDefinition location)
+        {
+            location = null;
+            MapAuthoringDefinition map = EnsureMap(session);
+            if (map == null || string.IsNullOrEmpty(id))
+                return false;
+
+            location = FindLocation(map, id);
+            if (location == null)
+                return false;
+
+            EnsureMapSize(map);
+            location.X = gridX;
+            location.Y = gridY;
+            location.GridX = gridX;
+            location.GridY = gridY;
+            SetProperty(location.Properties, "authoring.world", FormatFloat(worldX) + "," + FormatFloat(worldY));
+            return true;
+        }
+
         public bool UpsertLocationFromSelection(
             ScenarioEditorSession session,
             ScenarioMapRegionSelection selection,
@@ -38,10 +89,7 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             if (map == null || selection == null)
                 return false;
 
-            if (map.Width <= 0f && ExpeditionMap.Instance != null)
-                map.Width = ExpeditionMap.Instance.width;
-            if (map.Height <= 0f && ExpeditionMap.Instance != null)
-                map.Height = ExpeditionMap.Instance.height;
+            EnsureMapSize(map);
 
             string id = BuildLocationId(selection);
             location = FindLocation(map, id);
@@ -250,6 +298,25 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             return map != null && FindLocation(map, id) != null;
         }
 
+        public MapLocationDefinition GetLocation(ScenarioEditorSession session, string id)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            return FindLocation(map, id);
+        }
+
+        public MapLocationDefinition FindLocationAtGrid(ScenarioEditorSession session, int gridX, int gridY)
+        {
+            MapAuthoringDefinition map = EnsureMap(session);
+            for (int i = 0; map != null && map.Locations != null && i < map.Locations.Count; i++)
+            {
+                MapLocationDefinition location = map.Locations[i];
+                if (location != null && location.GridX == gridX && location.GridY == gridY)
+                    return location;
+            }
+
+            return null;
+        }
+
         public string BuildLocationId(ScenarioMapRegionSelection selection)
         {
             if (selection == null)
@@ -269,6 +336,32 @@ namespace ShelteredAPI.Scenarios.Application.Map{
             }
 
             return null;
+        }
+
+        private static void EnsureMapSize(MapAuthoringDefinition map)
+        {
+            if (map == null || ExpeditionMap.Instance == null)
+                return;
+
+            if (map.Width <= 0f)
+                map.Width = ExpeditionMap.Instance.width;
+            if (map.Height <= 0f)
+                map.Height = ExpeditionMap.Instance.height;
+        }
+
+        private static string BuildAuthoredLocationId(MapAuthoringDefinition map, int gridX, int gridY)
+        {
+            string root = "authored-" + gridX.ToString(CultureInfo.InvariantCulture)
+                + "-" + gridY.ToString(CultureInfo.InvariantCulture);
+            string candidate = root;
+            int suffix = 2;
+            while (FindLocation(map, candidate) != null)
+            {
+                candidate = root + "-" + suffix.ToString(CultureInfo.InvariantCulture);
+                suffix++;
+            }
+
+            return candidate;
         }
 
         private static void SetProperty(List<ScenarioProperty> properties, string key, string value)

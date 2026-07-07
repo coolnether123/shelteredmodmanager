@@ -314,6 +314,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionMapAuthoringClose = "scenario.map.close_real";
         public const string ActionMapAuthoringCaptureSelection = "scenario.map.capture_selection";
         public const string ActionMapAuthoringSelectWorldPrefix = "scenario.map.select_world.";
+        public const string ActionMapAuthoringClickWorldPrefix = "scenario.map.click_world.";
+        public const string ActionMapAuthoringModeSelect = "scenario.map.mode.select";
+        public const string ActionMapAuthoringModePlace = "scenario.map.mode.place";
+        public const string ActionMapAuthoringModeMove = "scenario.map.mode.move";
+        public const string ActionMapAuthoringSelectLocationPrefix = "scenario.map.select_location.";
     }
 
     internal enum ScenarioAuthoringTool
@@ -552,6 +557,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string AssetBrowserSelectedActionId { get; set; }
         public bool MapAuthoringActive { get; set; }
         public bool MapAuthoringPreviousShellVisible { get; set; }
+        public string MapAuthoringMode { get; set; }
+        public string MapSelectedLocationId { get; set; }
         public ScenarioMapRegionSelection MapSelection { get; set; }
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
@@ -601,6 +608,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 AssetBrowserSelectedActionId = AssetBrowserSelectedActionId,
                 MapAuthoringActive = MapAuthoringActive,
                 MapAuthoringPreviousShellVisible = MapAuthoringPreviousShellVisible,
+                MapAuthoringMode = MapAuthoringMode,
+                MapSelectedLocationId = MapSelectedLocationId,
                 MapSelection = MapSelection != null ? MapSelection.Copy() : null,
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,

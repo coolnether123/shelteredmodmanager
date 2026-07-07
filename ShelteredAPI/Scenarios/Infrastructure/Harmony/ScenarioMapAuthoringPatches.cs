@@ -1,7 +1,9 @@
 using System;
+using System.Reflection;
 using HarmonyLib;
 using ModAPI.Core;
 using ModAPI.Harmony;
+using UnityEngine;
 
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -47,13 +49,48 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             try
             {
                 ScenarioMapAuthoringRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
-                if (service != null)
-                    service.SelectHoveredRegion(__instance, "click");
+                Vector2 worldPosition;
+                if (service != null && TryGetWorldPositionUnderCursor(__instance, out worldPosition))
+                    service.ClickMap(__instance, worldPosition, "click");
             }
             catch (Exception ex)
             {
                 MMLog.WarnOnce("ScenarioMapAuthoring.SelectHover", ex.Message);
             }
+        }
+
+        [HarmonyPatch(typeof(UI_ExpeditionMap), "OnDisable")]
+        [HarmonyPostfix]
+        private static void OnDisablePostfix()
+        {
+            try
+            {
+                ScenarioMapAuthoringRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioMapAuthoringRuntimeService>();
+                if (service != null)
+                    service.CleanupMarkers();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ScenarioMapAuthoring.CleanupMarkers", ex.Message);
+            }
+        }
+
+        private static bool TryGetWorldPositionUnderCursor(UI_ExpeditionMap map, out Vector2 position)
+        {
+            position = Vector2.zero;
+            if (map == null)
+                return false;
+
+            MethodInfo method = AccessTools.Method(typeof(UI_ExpeditionMap), "WorldPositionUnderCursor");
+            if (method == null)
+                return false;
+
+            object value = method.Invoke(map, null);
+            if (!(value is Vector2))
+                return false;
+
+            position = (Vector2)value;
+            return true;
         }
     }
 }

@@ -18,7 +18,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect rect = BuildMapAuthoringOverlayRect(scaledWidth, scaledHeight);
             RegisterVisualSurface("map.authoring.card", rect);
             using (EnterVisualSurface("map.authoring.card"))
-                DrawMapAuthoringCard(rect, selection);
+                DrawMapAuthoringCard(rect, state, selection);
             if (inputCapture != null)
                 inputCapture.RegisterInteractiveRect(rect);
         }
@@ -30,7 +30,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new Rect(Margin, Mathf.Max(Margin, scaledHeight - height - Margin), width, height);
         }
 
-        private void DrawMapAuthoringCard(Rect rect, ScenarioMapRegionSelection selection)
+        private void DrawMapAuthoringCard(Rect rect, ScenarioAuthoringState state, ScenarioMapRegionSelection selection)
         {
             GUI.Box(rect, GUIContent.none, _rootPanelStyle);
             Rect inner = new Rect(rect.x + 12f, rect.y + 10f, rect.width - 24f, rect.height - 20f);
@@ -39,19 +39,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float y = inner.y + 28f;
             if (selection == null)
             {
-                GUI.Label(new Rect(inner.x, y, inner.width, 44f), "Select a vanilla region on the map.", _textStyle);
+                GUI.Label(new Rect(inner.x, y, inner.width, 44f), "Click the map to select or place locations.", _textStyle);
                 y += 52f;
-                GUI.Label(new Rect(inner.x, y, inner.width, 36f), "Escape or Close returns to the Map workshop page.", _mutedTextStyle);
+                GUI.Label(new Rect(inner.x, y, inner.width, 36f), "Mode: " + FormatOverlayMode(state) + ". Escape or Close returns to the Map workshop page.", _mutedTextStyle);
             }
             else
             {
                 GUI.Label(new Rect(inner.x, y, inner.width, 22f), selection.DisplayName ?? "<unnamed>", _textStyle);
                 y += 23f;
-                GUI.Label(new Rect(inner.x, y, inner.width, 20f), "Grid " + selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture) + "  " + SafeOverlay(selection.Topography), _mutedTextStyle);
+                GUI.Label(new Rect(inner.x, y, inner.width, 20f), (selection.Authored ? "Authored" : "Vanilla") + "  Grid " + selection.GridX.ToString(CultureInfo.InvariantCulture) + "," + selection.GridY.ToString(CultureInfo.InvariantCulture) + "  " + SafeOverlay(selection.Topography), _mutedTextStyle);
                 y += 21f;
                 GUI.Label(new Rect(inner.x, y, inner.width, 20f), FormatOverlayFlags(selection), _mutedTextStyle);
                 y += 21f;
                 GUI.Label(new Rect(inner.x, y, inner.width, 20f), selection.Captured ? "Captured as " + SafeOverlay(selection.CapturedLocationId) : "Not captured", _mutedTextStyle);
+                y += 21f;
+                GUI.Label(new Rect(inner.x, y, inner.width, 20f), "Mode: " + FormatOverlayMode(state), _mutedTextStyle);
             }
 
             Rect closeRect = new Rect(inner.x, inner.yMax - 32f, 94f, 28f);
@@ -59,13 +61,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionMapAuthoringClose);
 
             Rect captureRect = new Rect(closeRect.xMax + 8f, closeRect.y, 138f, 28f);
-            bool canCapture = selection != null;
+            bool canCapture = selection != null && !selection.Authored;
             GUIStyle captureStyle = canCapture ? _activeButtonStyle : _buttonStyle;
             if (GUI.Button(captureRect, selection != null && selection.Captured ? "Update Draft" : "Capture", captureStyle) && canCapture)
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionMapAuthoringCaptureSelection);
 
             if (!canCapture)
-                ScenarioUiWidgets.DrawPill(new Rect(captureRect.xMax + 8f, captureRect.y + 5f, 74f, 18f), "Select", _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+                ScenarioUiWidgets.DrawPill(new Rect(captureRect.xMax + 8f, captureRect.y + 5f, 74f, 18f), selection != null && selection.Authored ? "Draft" : "Select", _uiContext.Styles, ScenarioUiPillEmphasis.Default);
+        }
+
+        private static string FormatOverlayMode(ScenarioAuthoringState state)
+        {
+            return state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select";
         }
 
         private static string FormatOverlayFlags(ScenarioMapRegionSelection selection)

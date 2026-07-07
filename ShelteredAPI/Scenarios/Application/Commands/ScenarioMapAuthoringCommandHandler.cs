@@ -43,8 +43,18 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return CloseMapAuthoring(state, out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringCaptureSelection, StringComparison.Ordinal))
                 return CaptureSelection(state, out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect, StringComparison.Ordinal))
+                return SetMode(state, "select", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, StringComparison.Ordinal))
+                return SetMode(state, "place", out message);
+            if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, StringComparison.Ordinal))
+                return SetMode(state, "move", out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectWorldPrefix, StringComparison.Ordinal))
                 return SelectWorldPosition(state, actionId, out message);
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, StringComparison.Ordinal))
+                return ClickWorldPosition(state, actionId, out message);
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal))
+                return SelectAuthoredLocation(state, actionId, out message);
 
             handled = false;
             return false;
@@ -81,8 +91,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.ActiveShellTab = ScenarioAuthoringShellTab.Map;
             state.MapAuthoringPreviousShellVisible = state.ShellVisible;
             state.MapAuthoringActive = true;
+            if (string.IsNullOrEmpty(state.MapAuthoringMode))
+                state.MapAuthoringMode = "select";
             state.ShellVisible = false;
-            state.StatusMessage = "Map authoring active. Select a region on the real map.";
+            state.StatusMessage = "Map authoring active. Select or place authored locations on the real map.";
             message = state.StatusMessage;
             return true;
         }
@@ -90,10 +102,21 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private bool CloseMapAuthoring(ScenarioAuthoringState state, out string message)
         {
             if (_runtimeService != null)
+            {
+                _runtimeService.CleanupMarkers();
                 _runtimeService.CloseVanillaMap();
+            }
 
             RestoreMapWorkspace(state);
             message = "Map authoring closed. Map workspace active.";
+            state.StatusMessage = message;
+            return true;
+        }
+
+        private bool SetMode(ScenarioAuthoringState state, string mode, out string message)
+        {
+            state.MapAuthoringMode = string.IsNullOrEmpty(mode) ? "select" : mode;
+            message = "Map authoring mode: " + state.MapAuthoringMode + ".";
             state.StatusMessage = message;
             return true;
         }
@@ -130,7 +153,166 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             state.MapSelection = selection;
+            state.MapSelectedLocationId = null;
             message = "Selected map region " + selection.DisplayName + ".";
+            state.StatusMessage = message;
+            return true;
+        }
+
+        private bool ClickWorldPosition(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            if (!state.MapAuthoringActive)
+            {
+                message = "Open the real map before authoring map locations.";
+                return false;
+            }
+
+            float worldX;
+            float worldY;
+            if (!TryParseWorldAction(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, out worldX, out worldY))
+            {
+                message = "Map click coordinates are invalid.";
+                return false;
+            }
+
+            int gridX;
+            int gridY;
+            float centreX;
+            float centreY;
+            if (_runtimeService == null || !_runtimeService.TryResolveGrid(worldX, worldY, out gridX, out gridY, out centreX, out centreY))
+            {
+                message = "Map click is outside the authored map grid.";
+                return false;
+            }
+
+            string mode = string.IsNullOrEmpty(state.MapAuthoringMode) ? "select" : state.MapAuthoringMode;
+            if (string.Equals(mode, "place", StringComparison.OrdinalIgnoreCase))
+                return PlaceAtGrid(state, gridX, gridY, centreX, centreY, out message);
+            if (string.Equals(mode, "move", StringComparison.OrdinalIgnoreCase))
+                return MoveSelectedToGrid(state, gridX, gridY, centreX, centreY, out message);
+
+            MapLocationDefinition authored = _draftService != null
+                ? _draftService.FindLocationAtGrid(ScenarioEditorController.Instance.CurrentSession, gridX, gridY)
+                : null;
+            if (authored != null)
+                return SelectAuthoredLocation(state, authored, out message);
+
+            ScenarioMapRegionSelection selection;
+            if (_runtimeService != null && _runtimeService.TryCreateSelectionFromWorldPosition(worldX, worldY, ScenarioEditorController.Instance.CurrentSession, "click", out selection))
+            {
+                state.MapSelection = selection;
+                state.MapSelectedLocationId = null;
+                message = "Selected vanilla map region " + selection.DisplayName + ".";
+                state.StatusMessage = message;
+                return true;
+            }
+
+            message = "No authored location or vanilla region exists at grid " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture) + ".";
+            return false;
+        }
+
+        private bool PlaceAtGrid(ScenarioAuthoringState state, int gridX, int gridY, float worldX, float worldY, out string message)
+        {
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            if (_draftService == null || session == null)
+            {
+                message = "The map draft is not available.";
+                return false;
+            }
+
+            MapLocationDefinition existing = _draftService.FindLocationAtGrid(session, gridX, gridY);
+            if (existing != null)
+                return SelectAuthoredLocation(state, existing, out message);
+
+            RecordMapUndo(session, "Place map location at " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture));
+            MapLocationDefinition location = _draftService.CreateLocationAtGrid(session, gridX, gridY, worldX, worldY);
+            if (location == null)
+            {
+                message = "Could not create map location at the selected grid cell.";
+                return false;
+            }
+
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            SelectAuthoredLocation(state, location, out message);
+            state.MapAuthoringMode = "select";
+            message = "Placed authored map location " + location.Id + ".";
+            state.StatusMessage = message;
+            if (_runtimeService != null)
+                _runtimeService.RefreshMarkers(state, session);
+            return true;
+        }
+
+        private bool MoveSelectedToGrid(ScenarioAuthoringState state, int gridX, int gridY, float worldX, float worldY, out string message)
+        {
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            if (_draftService == null || session == null)
+            {
+                message = "The map draft is not available.";
+                return false;
+            }
+
+            string id = state.MapSelectedLocationId;
+            if (string.IsNullOrEmpty(id) && state.MapSelection != null && state.MapSelection.Authored)
+                id = state.MapSelection.LocationId;
+            if (string.IsNullOrEmpty(id))
+            {
+                message = "Select an authored location before using Move mode.";
+                return false;
+            }
+
+            MapLocationDefinition occupying = _draftService.FindLocationAtGrid(session, gridX, gridY);
+            if (occupying != null && !string.Equals(occupying.Id, id, StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Grid " + gridX.ToString(CultureInfo.InvariantCulture) + "," + gridY.ToString(CultureInfo.InvariantCulture) + " already has authored location " + occupying.Id + ".";
+                return false;
+            }
+
+            RecordMapUndo(session, "Move map location " + id);
+            MapLocationDefinition moved;
+            if (!_draftService.MoveLocation(session, id, gridX, gridY, worldX, worldY, out moved))
+            {
+                message = "Could not move authored location " + id + ".";
+                return false;
+            }
+
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            SelectAuthoredLocation(state, moved, out message);
+            state.MapAuthoringMode = "select";
+            message = "Moved authored map location " + moved.Id + ".";
+            state.StatusMessage = message;
+            if (_runtimeService != null)
+                _runtimeService.RefreshMarkers(state, session);
+            return true;
+        }
+
+        private bool SelectAuthoredLocation(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            string id;
+            if (!ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, out id))
+            {
+                message = "Map location id could not be decoded.";
+                return false;
+            }
+
+            MapLocationDefinition location = _draftService != null
+                ? _draftService.GetLocation(ScenarioEditorController.Instance.CurrentSession, id)
+                : null;
+            if (location == null)
+            {
+                message = "Authored map location '" + id + "' was not found.";
+                return false;
+            }
+
+            return SelectAuthoredLocation(state, location, out message);
+        }
+
+        private bool SelectAuthoredLocation(ScenarioAuthoringState state, MapLocationDefinition location, out string message)
+        {
+            ScenarioMapRegionSelection selection = BuildAuthoredSelection(location);
+            state.MapSelection = selection;
+            state.MapSelectedLocationId = location.Id;
+            message = "Selected authored map location " + location.Id + ".";
             state.StatusMessage = message;
             return true;
         }
@@ -146,6 +328,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            RecordMapUndo(session, "Capture map region " + selection.DisplayName);
             MapLocationDefinition location;
             bool wasExisting;
             if (_draftService == null || !_draftService.UpsertLocationFromSelection(session, selection, out location, out wasExisting))
@@ -159,7 +342,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             selection.Captured = true;
             selection.CapturedLocationId = location.Id;
             selection.LocationId = location.Id;
+            selection.Authored = true;
+            selection.SelectionKind = "Authored";
             state.MapSelection = selection;
+            state.MapSelectedLocationId = location.Id;
             message = wasExisting
                 ? "Updated captured map location " + location.Id + "."
                 : "Captured map location " + location.Id + ".";
@@ -186,7 +372,53 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             return string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringOpen, StringComparison.Ordinal)
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringClose, StringComparison.Ordinal)
                 || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringCaptureSelection, StringComparison.Ordinal)
-                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectWorldPrefix, StringComparison.Ordinal);
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeSelect, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, StringComparison.Ordinal)
+                || string.Equals(actionId, ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectWorldPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal);
+        }
+
+        private static bool TryParseWorldAction(string actionId, string prefix, out float worldX, out float worldY)
+        {
+            worldX = 0f;
+            worldY = 0f;
+            string token;
+            return ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, prefix, out token)
+                && TryParseWorldPosition(token, out worldX, out worldY);
+        }
+
+        private static ScenarioMapRegionSelection BuildAuthoredSelection(MapLocationDefinition location)
+        {
+            ScenarioMapRegionSelection selection = new ScenarioMapRegionSelection();
+            selection.SelectionId = "authored:" + location.Id;
+            selection.SelectionKind = "Authored";
+            selection.LocationId = location.Id;
+            selection.DisplayName = !string.IsNullOrEmpty(location.DisplayName) ? location.DisplayName : location.Id;
+            selection.Topography = location.Kind;
+            selection.Category = location.Kind;
+            selection.GridX = location.GridX;
+            selection.GridY = location.GridY;
+            selection.WorldX = location.X;
+            selection.WorldY = location.Y;
+            selection.Searchable = location.Searchable;
+            selection.VisibleOnMap = location.VisibleAtStart;
+            selection.Discovered = location.DiscoveredAtStart;
+            selection.HiddenUntilDiscovered = location.HiddenUntilDiscovered;
+            selection.Captured = true;
+            selection.CapturedLocationId = location.Id;
+            selection.Authored = true;
+            selection.Source = "draft";
+            selection.OpenGroundEncounterChance = location.Danger;
+            return selection;
+        }
+
+        private static void RecordMapUndo(ScenarioEditorSession session, string description)
+        {
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null && session != null)
+                history.RecordAuthoringChange(session.WorkingDefinition, description, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
         }
 
         private static bool TryParseWorldPosition(string token, out float worldX, out float worldY)
