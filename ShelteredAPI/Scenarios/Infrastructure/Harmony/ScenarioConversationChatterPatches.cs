@@ -62,7 +62,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                 if (!service.TryHandleRandomComment(__instance, out authoredSpeech))
                     return true;
 
-                __result = authoredSpeech ?? string.Empty;
+                __result = string.Empty;
                 return false;
             }
             catch (Exception ex)

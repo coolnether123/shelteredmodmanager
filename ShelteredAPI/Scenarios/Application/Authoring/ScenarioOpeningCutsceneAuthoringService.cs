@@ -20,11 +20,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         private static readonly FieldInfo PanelNextFrameInputActiveField = typeof(UIPanelManager).GetField("m_bNextFrameInputActive", InstancePrivate);
         private static readonly FieldInfo PanelIgnoreInputField = typeof(UIPanelManager).GetField("m_bIgnoreInput", InstancePrivate);
         private static readonly FieldInfo PanelTimePausedField = typeof(UIPanelManager).GetField("m_bTimePaused", InstancePrivate);
+        private static readonly FieldInfo InteractionSelectedMemberField = typeof(InteractionManager).GetField("selectedMember", InstancePrivate);
+        private static readonly FieldInfo InteractionSelectedMemberIndexField = typeof(InteractionManager).GetField("selectedMemberIndex", InstancePrivate);
         private static PreviewContext _activePreview;
 
         public static bool IsPreviewActive
         {
             get { return _activePreview != null; }
+        }
+
+        internal static bool HasVanillaOpeningCutscene(ScenarioBaseGameMode mode)
+        {
+            return mode == ScenarioBaseGameMode.Stasis || mode == ScenarioBaseGameMode.Surrounded;
+        }
+
+        internal static string BuildNoOpeningCutsceneMessage(ScenarioBaseGameMode mode)
+        {
+            if (mode == ScenarioBaseGameMode.Survival)
+                return "Standard mode starts directly after family setup, so there is no vanilla opening cutscene to preview.";
+
+            return ScenarioAuthoringBaseModeReloadService.FormatBaseMode(mode)
+                + " does not expose a vanilla opening cutscene in the current shelter scene.";
         }
 
         public static void UpdateActivePreview()
@@ -112,6 +128,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 message = "No active scenario draft is available.";
                 return true;
             }
+            if (!HasVanillaOpeningCutscene(definition.BaseGameMode))
+            {
+                message = BuildNoOpeningCutsceneMessage(definition.BaseGameMode);
+                return true;
+            }
 
             CutsceneManager manager = CutsceneManager.Instance;
             if (manager == null)
@@ -139,7 +160,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             Cutscene intro = FindIntroCutscene(manager);
             if (intro == null)
             {
-                message = "Opening cutscene is unavailable because this backend scene does not expose an intro cutscene.";
+                message = "Opening cutscene is unavailable because this shelter scene does not expose an intro cutscene.";
                 return true;
             }
 
@@ -148,11 +169,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 PreviewContext preview = BeginPreview(state, manager, intro);
                 ResetCutsceneForReplay(intro);
                 preview.OriginalPersonNames = RebindPreviewPeopleToLiveFamily(intro);
+                if (!TryPreparePreviewPrerequisites(preview, out message))
+                {
+                    RestorePreview(preview, null);
+                    return true;
+                }
+
                 manager.pauseCutsceneManager = false;
                 bool started = intro.CheckEntryCondition();
                 if (!started)
                 {
                     manager.PlayCutscene(intro);
+                    intro.cutsceneWaiting = true;
                     started = intro.CheckEntryCondition();
                 }
 
@@ -169,10 +197,84 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             catch (Exception ex)
             {
                 RestorePreview(_activePreview, null);
-                message = "Opening cutscene could not start: " + ex.Message;
+                message = "Opening cutscene could not start. Make sure the shelter has an active survivor, then try again.";
                 MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Failed to play opening cutscene: " + ex + ".");
                 return true;
             }
+        }
+
+        private static bool TryPreparePreviewPrerequisites(PreviewContext preview, out string message)
+        {
+            message = null;
+            if (preview == null || preview.Cutscene == null)
+            {
+                message = "Opening cutscene is unavailable right now.";
+                return false;
+            }
+
+            preview.CaptureCutsceneWaiting();
+
+            if (FamilySpawner.instance == null)
+            {
+                message = "Opening cutscene needs the shelter family spawner to be ready. Try again after the scene finishes loading.";
+                return false;
+            }
+
+            List<FamilyMember> family = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
+            if (family == null || family.Count == 0)
+            {
+                message = "Opening cutscene needs at least one active survivor in the shelter.";
+                return false;
+            }
+
+            InteractionManager interaction = InteractionManager.Instance;
+            if (interaction == null)
+            {
+                message = "Opening cutscene needs shelter controls to be ready. Try again after the scene finishes loading.";
+                return false;
+            }
+
+            preview.CaptureInteractionSelection(interaction);
+            if (interaction.GetSelectedFamilyMember() == null && !TrySelectFirstFamilyMember(interaction))
+            {
+                message = "Opening cutscene needs at least one selectable survivor in the shelter.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TrySelectFirstFamilyMember(InteractionManager interaction)
+        {
+            if (interaction == null)
+                return false;
+
+            for (int i = 0; i < interaction.GetNumFamilyMembers(); i++)
+            {
+                FamilyMember member = interaction.GetFamilyMemberByIndex(i);
+                if (member == null)
+                    continue;
+
+                interaction.SelectFamilyMemberByIndex(i);
+                if (interaction.GetSelectedFamilyMember() != null)
+                    return true;
+
+                SetInteractionSelection(interaction, member, i);
+                return interaction.GetSelectedFamilyMember() != null;
+            }
+
+            List<FamilyMember> family = FamilyManager.Instance != null ? FamilyManager.Instance.GetAllFamilyMembers() : null;
+            for (int i = 0; family != null && i < family.Count; i++)
+            {
+                FamilyMember member = family[i];
+                if (member == null)
+                    continue;
+
+                SetInteractionSelection(interaction, member, i);
+                return interaction.GetSelectedFamilyMember() != null;
+            }
+
+            return false;
         }
 
         private static Cutscene FindIntroCutscene(CutsceneManager manager)
@@ -234,9 +336,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
             RestoreVanillaPanelInputForAuthoring("opening cutscene preview");
             RestorePreviewPeople(preview.Cutscene, preview.OriginalPersonNames);
+            RestorePreviewPrerequisites(preview);
             ScenarioAuthoringPauseService.Instance.EnsurePaused("Opening cutscene preview finished.");
             MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview restored authoring pause. scene="
                 + SceneManager.GetActiveScene().name + ".");
+        }
+
+        private static void RestorePreviewPrerequisites(PreviewContext preview)
+        {
+            if (preview == null)
+                return;
+
+            preview.RestoreCutsceneWaiting();
+            preview.RestoreInteractionSelection();
         }
 
         internal static void RestoreStaleCutscenePanelIfAuthoringVisible()
@@ -350,21 +462,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         private static string BuildNoCutsceneManagerMessage(ScenarioDefinition definition)
         {
             if (definition != null && definition.BaseGameMode == ScenarioBaseGameMode.Survival)
-                return "Standard mode has no vanilla opening cutscene asset to replay; Sheltered starts Standard games directly after family setup.";
+                return BuildNoOpeningCutsceneMessage(definition.BaseGameMode);
 
-            return "Opening cutscene is unavailable because this backend scene has not created CutsceneManager yet.";
+            return "Opening cutscene is unavailable because this shelter scene has not finished preparing cutscenes yet.";
         }
 
         private static string BuildStartFailureMessage()
         {
-            string inputState = UIPanelManager.instance != null && UIPanelManager.instance.IsGameInputActive()
-                ? "game input is active"
-                : "game input is blocked";
-            string saveState = SaveManager.instance != null && (SaveManager.instance.isSaving || SaveManager.instance.isLoading)
-                ? "save/load is busy"
-                : "save/load is idle";
-            return "Opening cutscene could not start from the editor context (" + inputState + ", "
-                + saveState + ", timeScale=" + Time.timeScale + ").";
+            bool inputActive = UIPanelManager.instance != null && UIPanelManager.instance.IsGameInputActive();
+            bool saveBusy = SaveManager.instance != null && (SaveManager.instance.isSaving || SaveManager.instance.isLoading);
+            bool hasSelectedMember = InteractionManager.Instance != null && InteractionManager.Instance.GetSelectedFamilyMember() != null;
+            int familyCount = FamilyManager.Instance != null && FamilyManager.Instance.GetAllFamilyMembers() != null
+                ? FamilyManager.Instance.GetAllFamilyMembers().Count
+                : 0;
+            MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview timed out. inputActive="
+                + inputActive + ", saveBusy=" + saveBusy + ", selectedMember=" + hasSelectedMember
+                + ", familyCount=" + familyCount + ", familySpawner=" + (FamilySpawner.instance != null)
+                + ", timeScale=" + Time.timeScale + ".");
+            return "Opening cutscene could not start. Make sure the shelter has an active survivor, then try again.";
         }
 
         private static void SetBoolField(object target, string fieldName, bool value)
@@ -393,6 +508,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 field.SetValue(panelManager, value);
         }
 
+        private static void SetInteractionSelection(InteractionManager interaction, FamilyMember member, int index)
+        {
+            if (interaction == null)
+                return;
+
+            if (InteractionSelectedMemberField != null && InteractionSelectedMemberField.FieldType == typeof(FamilyMember))
+                InteractionSelectedMemberField.SetValue(interaction, member);
+            if (InteractionSelectedMemberIndexField != null && InteractionSelectedMemberIndexField.FieldType == typeof(int))
+                InteractionSelectedMemberIndexField.SetValue(interaction, index);
+        }
+
         private sealed class PreviewContext
         {
             public readonly ScenarioAuthoringState State;
@@ -402,6 +528,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             public readonly float StartDeadlineSeconds;
             public List<string> OriginalPersonNames;
             public bool Started;
+            private bool _cutsceneWaitingCaptured;
+            private bool _originalCutsceneWaiting;
+            private bool _interactionSelectionCaptured;
+            private InteractionManager _interaction;
+            private FamilyMember _originalSelectedMember;
+            private int _originalSelectedMemberIndex;
 
             public PreviewContext(
                 ScenarioAuthoringState state,
@@ -419,6 +551,45 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             public void MarkStarted()
             {
                 Started = true;
+            }
+
+            public void CaptureCutsceneWaiting()
+            {
+                if (Cutscene == null || _cutsceneWaitingCaptured)
+                    return;
+
+                _originalCutsceneWaiting = Cutscene.cutsceneWaiting;
+                _cutsceneWaitingCaptured = true;
+                Cutscene.cutsceneWaiting = true;
+            }
+
+            public void RestoreCutsceneWaiting()
+            {
+                if (Cutscene == null || !_cutsceneWaitingCaptured)
+                    return;
+
+                Cutscene.cutsceneWaiting = _originalCutsceneWaiting;
+            }
+
+            public void CaptureInteractionSelection(InteractionManager interaction)
+            {
+                if (interaction == null || _interactionSelectionCaptured)
+                    return;
+
+                _interaction = interaction;
+                _originalSelectedMember = interaction.GetSelectedFamilyMember();
+                _originalSelectedMemberIndex = InteractionSelectedMemberIndexField != null && InteractionSelectedMemberIndexField.FieldType == typeof(int)
+                    ? (int)InteractionSelectedMemberIndexField.GetValue(interaction)
+                    : interaction.GetSelectedFamilyMemberIndex();
+                _interactionSelectionCaptured = true;
+            }
+
+            public void RestoreInteractionSelection()
+            {
+                if (!_interactionSelectionCaptured)
+                    return;
+
+                SetInteractionSelection(_interaction, _originalSelectedMember, _originalSelectedMemberIndex);
             }
         }
     }
