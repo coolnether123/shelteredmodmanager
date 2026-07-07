@@ -545,6 +545,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
+        public string SurvivorColorPickerChannel { get; set; }
+        public int SurvivorColorPickerRequestId { get; set; }
         public ScenarioAuthoringInspectorTab InspectorTab { get; set; }
         public string FilterText { get; set; }
         public string SearchText { get; set; }
@@ -589,6 +591,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,
+                SurvivorColorPickerChannel = SurvivorColorPickerChannel,
+                SurvivorColorPickerRequestId = SurvivorColorPickerRequestId,
                 InspectorTab = InspectorTab,
                 FilterText = FilterText,
                 SearchText = SearchText,

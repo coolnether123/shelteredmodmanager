@@ -43,6 +43,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix, StringComparison.Ordinal))
                 return AddLiveSurvivorToStarting(session, state, actionId.Substring(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix.Length), out message);
 
+            if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSurvivorOpenColorPickerPrefix, StringComparison.Ordinal))
+            {
+                string channel = actionId.Substring(ScenarioAuthoringLocalActionIds.ActionSurvivorOpenColorPickerPrefix.Length);
+                if (!string.Equals(channel, "hair", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(channel, "skin", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(channel, "shirt", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(channel, "pants", StringComparison.OrdinalIgnoreCase))
+                {
+                    message = "Survivor color picker channel was not recognized.";
+                    return true;
+                }
+
+                state.SurvivorColorPickerChannel = channel.ToLowerInvariant();
+                state.SurvivorColorPickerRequestId++;
+                message = "Opened survivor color picker.";
+                return true;
+            }
+
             if (!string.IsNullOrEmpty(actionId) && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal))
             {
                 FamilySetupDefinition family = EnsureFamily(session.WorkingDefinition);
@@ -142,6 +160,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             state.FocusedEditorKind = kind;
             state.FocusedEditorIndex = index;
             state.FocusedEditorIsNew = isNew;
+            state.SurvivorColorPickerChannel = null;
+            state.SurvivorColorPickerRequestId = 0;
         }
 
         private bool HandleFutureMemberCommand(

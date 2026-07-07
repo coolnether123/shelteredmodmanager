@@ -125,6 +125,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _richHoverSourceKeyThisFrame;
         private readonly List<string> _richHoverTopicBackStack = new List<string>();
         private SurvivorColorPickerPopup _survivorColorPicker;
+        private string _lastSurvivorColorPickerRequestKey;
 
         public string ModuleId
         {
@@ -494,6 +495,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 _animations.GetModalDimAlpha(false);
                 _animations.GetModalPanelProgress(false);
                 CloseSurvivorColorPicker();
+                _lastSurvivorColorPickerRequestKey = null;
+            }
+
+            if (modalDocument != null
+                && shell.FocusedEditorDocument != null
+                && _snapshot != null
+                && _snapshot.State != null
+                && !string.IsNullOrEmpty(_snapshot.State.SurvivorColorPickerChannel))
+            {
+                string requestedChannel = _snapshot.State.SurvivorColorPickerChannel;
+                string requestKey = (_snapshot.State.FocusedEditorKind ?? string.Empty)
+                    + ":"
+                    + _snapshot.State.FocusedEditorIndex.ToString()
+                    + ":"
+                    + requestedChannel
+                    + ":"
+                    + _snapshot.State.SurvivorColorPickerRequestId.ToString();
+                if (!string.Equals(requestKey, _lastSurvivorColorPickerRequestKey, StringComparison.Ordinal))
+                {
+                    ScenarioSurvivorColorRowViewModel requestedRow = null;
+                    for (int sectionIndex = 0;
+                        shell.FocusedEditorDocument.Sections != null
+                        && requestedRow == null
+                        && sectionIndex < shell.FocusedEditorDocument.Sections.Length;
+                        sectionIndex++)
+                    {
+                        ScenarioAuthoringInspectorSection section = shell.FocusedEditorDocument.Sections[sectionIndex];
+                        ScenarioSurvivorEditorViewModel editor = section != null ? section.SurvivorEditor : null;
+                        for (int rowIndex = 0; editor != null && editor.ColorRows != null && rowIndex < editor.ColorRows.Length; rowIndex++)
+                        {
+                            ScenarioSurvivorColorRowViewModel row = editor.ColorRows[rowIndex];
+                            if (row != null && string.Equals(row.Channel, requestedChannel, StringComparison.OrdinalIgnoreCase))
+                            {
+                                requestedRow = row;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (requestedRow != null)
+                    {
+                        OpenSurvivorColorPicker(requestedRow);
+                        _lastSurvivorColorPickerRequestKey = requestKey;
+                    }
+                }
             }
 
             if (_survivorColorPicker != null)

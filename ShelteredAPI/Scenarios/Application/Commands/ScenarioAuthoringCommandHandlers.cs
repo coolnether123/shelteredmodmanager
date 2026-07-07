@@ -1183,6 +1183,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             handled = actionId != null
                 && (string.Equals(actionId, ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionLiveSurvivorAddToStartingPrefix, StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSurvivorOpenColorPickerPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionStartingSurvivorEditorOpenPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionFutureSurvivorEditorOpenPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith(ScenarioAuthoringActionIds.ActionStartingSurvivorPrefix, StringComparison.Ordinal)
@@ -1370,6 +1371,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.FocusedEditorKind = null;
             state.FocusedEditorIndex = -1;
             state.FocusedEditorIsNew = false;
+            state.SurvivorColorPickerChannel = null;
+            state.SurvivorColorPickerRequestId = 0;
             message = discard ? "New timeline entry discarded." : "Timeline entry saved.";
             return true;
         }
