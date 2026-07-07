@@ -110,7 +110,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     InspectorTab = ScenarioAuthoringInspectorTab.Properties,
                     ActiveDraftId = session.DraftId,
                     ActiveScenarioFilePath = session.ScenarioFilePath,
-                    StatusMessage = "Scenario authoring shell is active. Use playtest to make live shelter changes, then capture them back into the draft.",
+                    StatusMessage = ResolveInitialStatusMessage(_sessionStore.Current),
                     Settings = _settingsService.Load(),
                     SetupState = _setupStateService != null ? _setupStateService.LoadForScenarioFile(session.ScenarioFilePath) : new ScenarioAuthoringSetupState()
                 };
@@ -127,6 +127,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             MMLog.WriteInfo("[ScenarioAuthoringBackend] Active session set. DraftId=" + session.DraftId
                 + ", ScenarioFile=" + session.ScenarioFilePath + ".");
             RaiseStateChanged();
+        }
+
+        private static string ResolveInitialStatusMessage(ScenarioEditorSession editorSession)
+        {
+            if (editorSession != null && !string.IsNullOrEmpty(editorSession.LoadWarning))
+                return editorSession.LoadWarning;
+
+            return "Scenario authoring shell is active. Use playtest to make live shelter changes, then capture them back into the draft.";
         }
 
         internal void ClearActiveSession(string reason)

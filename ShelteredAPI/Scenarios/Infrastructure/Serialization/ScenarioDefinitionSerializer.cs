@@ -29,6 +29,51 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             return LoadUncached(filePath);
         }
 
+        public bool TryLoadWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered)
+        {
+            definition = null;
+            recoveryMessage = null;
+            recovered = false;
+
+            if (string.IsNullOrEmpty(filePath))
+            {
+                recoveryMessage = "Scenario file path is required.";
+                return false;
+            }
+
+            try
+            {
+                definition = LoadUncached(filePath);
+                return true;
+            }
+            catch (Exception primaryError)
+            {
+                string backupPath = filePath + ".bak";
+                if (!File.Exists(backupPath))
+                {
+                    recoveryMessage = "Scenario XML could not be loaded and no recovery copy exists: " + primaryError.Message;
+                    return false;
+                }
+
+                try
+                {
+                    ScenarioDefinition backupDefinition = LoadUncached(backupPath);
+                    string corruptPath;
+                    RestoreBackupOverUnreadablePrimary(filePath, backupPath, out corruptPath);
+                    definition = backupDefinition;
+                    recovered = true;
+                    recoveryMessage = "Recovered the scenario draft from the last good backup. The unreadable XML was kept at " + corruptPath + ".";
+                    return true;
+                }
+                catch (Exception recoveryError)
+                {
+                    recoveryMessage = "Scenario XML and its recovery copy could not be loaded. Primary error: "
+                        + primaryError.Message + " Recovery error: " + recoveryError.Message;
+                    return false;
+                }
+            }
+        }
+
         internal ScenarioDefinition LoadUncached(string filePath)
         {
             if (string.IsNullOrEmpty(filePath))
@@ -163,6 +208,73 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
             string name = Path.GetFileName(filePath);
             return Path.Combine(directory, name + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        }
+
+        private void RestoreBackupOverUnreadablePrimary(string filePath, string backupPath, out string corruptPath)
+        {
+            corruptPath = BuildCorruptPath(filePath);
+            string tempPath = BuildTempPath(filePath);
+            try
+            {
+                File.Copy(backupPath, tempPath, true);
+                LoadUncached(tempPath);
+                if (File.Exists(filePath))
+                {
+                    try
+                    {
+                        File.Replace(tempPath, filePath, corruptPath, false);
+                        tempPath = null;
+                        return;
+                    }
+                    catch (PlatformNotSupportedException)
+                    {
+                    }
+                    catch (NotSupportedException)
+                    {
+                    }
+                }
+
+                RestoreBackupWithCopyFallback(tempPath, filePath, backupPath, corruptPath);
+                tempPath = null;
+            }
+            finally
+            {
+                if (!string.IsNullOrEmpty(tempPath))
+                    TryDeleteFile(tempPath);
+            }
+        }
+
+        private static void RestoreBackupWithCopyFallback(string tempPath, string filePath, string backupPath, string corruptPath)
+        {
+            if (File.Exists(filePath))
+                File.Copy(filePath, corruptPath, true);
+
+            try
+            {
+                if (File.Exists(filePath))
+                    File.Delete(filePath);
+                File.Move(tempPath, filePath);
+            }
+            catch
+            {
+                if (File.Exists(backupPath))
+                    File.Copy(backupPath, filePath, true);
+                throw;
+            }
+        }
+
+        private static string BuildCorruptPath(string filePath)
+        {
+            string directory = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrEmpty(directory))
+                directory = Directory.GetCurrentDirectory();
+
+            string name = Path.GetFileName(filePath);
+            string stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+            string path = Path.Combine(directory, name + ".corrupt_" + stamp);
+            while (File.Exists(path))
+                path = Path.Combine(directory, name + ".corrupt_" + stamp + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
+            return path;
         }
 
         private static void ReplaceValidatedTempFile(string tempPath, string filePath)

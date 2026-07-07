@@ -68,12 +68,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public ScenarioEditorSession LoadEditMode(string scenarioFilePath)
         {
-            ScenarioDefinition definition = _serializer.Load(scenarioFilePath);
+            ScenarioDefinition definition;
+            string recoveryMessage;
+            bool recovered;
+            if (!_serializer.TryLoadWithRecovery(scenarioFilePath, out definition, out recoveryMessage, out recovered))
+                throw new InvalidOperationException(string.IsNullOrEmpty(recoveryMessage) ? "Scenario XML could not be loaded." : recoveryMessage);
+
             ScenarioEditorSession session = CreateSession(definition);
             ScenarioObjectIdentityAssignmentSummary migration = _identityAssignmentService.AssignMissingIds(session);
+            if (recovered)
+            {
+                session.LoadWarning = recoveryMessage;
+                session.MarkDraftChanged(ScenarioDirtySection.Meta);
+            }
             _sessionStore.Set(session, scenarioFilePath);
 
             PauseForEditor();
+            if (!string.IsNullOrEmpty(recoveryMessage))
+                MMLog.WriteWarning("[ScenarioEditorController] " + recoveryMessage);
             if (migration.AssignedCount > 0)
                 MMLog.WriteInfo("[ScenarioEditorController] Assigned " + migration.AssignedCount + " missing scenario object id(s) while loading old scenario XML.");
             MMLog.WriteInfo("[ScenarioEditorController] Loaded scenario edit session from " + scenarioFilePath + ".");

@@ -22,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
     internal interface IScenarioDefinitionSerializer
     {
         ScenarioDefinition Load(string filePath);
+        bool TryLoadWithRecovery(string filePath, out ScenarioDefinition definition, out string recoveryMessage, out bool recovered);
         ScenarioDefinition FromXml(string xml);
         void Save(ScenarioDefinition definition, string filePath);
         string ToXml(ScenarioDefinition definition);

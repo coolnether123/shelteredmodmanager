@@ -122,7 +122,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     try
                     {
-                        ScenarioInfo info = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioInfo info = LoadInfoWithRecovery(files[i]);
                         if (info == null || string.IsNullOrEmpty(info.Id) || byId.ContainsKey(info.Id))
                             continue;
 
@@ -156,7 +156,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     try
                     {
-                        ScenarioInfo loaded = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioInfo loaded = LoadInfoWithRecovery(files[i]);
                         if (loaded != null && string.Equals(loaded.Id, scenarioId, StringComparison.OrdinalIgnoreCase))
                         {
                             info = loaded;
@@ -186,7 +186,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     try
                     {
-                        ScenarioInfo loaded = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioInfo loaded = LoadInfoWithRecovery(files[i]);
                         if (loaded == null || !string.Equals(loaded.Id, draftId, StringComparison.OrdinalIgnoreCase))
                             continue;
 
@@ -405,7 +405,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     try
                     {
-                        ScenarioInfo loaded = _serializer.LoadInfo(files[i], DraftOwnerId);
+                        ScenarioInfo loaded = LoadInfoWithRecovery(files[i]);
                         if (loaded == null || !string.Equals(loaded.Id, draftId, StringComparison.OrdinalIgnoreCase))
                             continue;
 
@@ -449,8 +449,39 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private ScenarioDefinition SafeLoadDefinition(string filePath)
         {
-            try { return _serializer.Load(filePath); }
+            try
+            {
+                ScenarioDefinition definition;
+                string recoveryMessage;
+                bool recovered;
+                if (!_serializer.TryLoadWithRecovery(filePath, out definition, out recoveryMessage, out recovered))
+                    return null;
+
+                if (recovered)
+                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] " + recoveryMessage);
+                return definition;
+            }
             catch { return null; }
+        }
+
+        private ScenarioInfo LoadInfoWithRecovery(string filePath)
+        {
+            ScenarioDefinition definition;
+            string recoveryMessage;
+            bool recovered;
+            if (!_serializer.TryLoadWithRecovery(filePath, out definition, out recoveryMessage, out recovered))
+                throw new IOException(string.IsNullOrEmpty(recoveryMessage) ? "Scenario XML could not be loaded." : recoveryMessage);
+
+            if (recovered)
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] " + recoveryMessage);
+
+            return new ScenarioInfo(
+                definition.Id,
+                definition.DisplayName,
+                definition.Author,
+                definition.Version,
+                filePath,
+                DraftOwnerId);
         }
 
         private static bool ScenarioIdExistsOutsideDrafts(string scenarioId)

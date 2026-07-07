@@ -60,6 +60,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             _pipeline = new ScenarioValidationPipeline(new IScenarioValidationRule[]
             {
                 new CoreScenarioRule(),
+                new ScenarioCharacterValidationRule(),
                 new ScenarioStoryFlowValidationRule(),
                 new DependencyValidationRule(this),
                 new AssetValidationRule(),
@@ -318,6 +319,117 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 result.AddWarning("Family survivor '" + survivorName + "' has conflicting trait pair: Strength:"
                     + strength + " and Weakness:" + weakness
                     + ". The conflicting weakness will be removed at runtime.");
+            }
+        }
+
+        private static void ValidateScenarioCharacters(ScenarioDefinition definition, ScenarioValidationResult result)
+        {
+            if (definition == null || definition.ScenarioCharacters == null || result == null)
+                return;
+
+            HashSet<string> characterIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < definition.ScenarioCharacters.Count; i++)
+            {
+                ScenarioNpcDefinition character = definition.ScenarioCharacters[i];
+                string label = "Scenario character #" + i.ToString(CultureInfo.InvariantCulture);
+                if (character == null)
+                {
+                    result.AddError(label + " is null.");
+                    continue;
+                }
+
+                string id = TrimToNull(character.CharacterId);
+                if (id == null)
+                {
+                    result.AddError(label + " is missing characterId.");
+                }
+                else if (characterIds.Contains(id))
+                {
+                    result.AddError("Duplicate scenario character id: " + id);
+                }
+                else
+                {
+                    characterIds.Add(id);
+                    label = "Scenario character '" + id + "'";
+                }
+
+                ValidateNpcItem(character.WeaponItemId, label, "weapon", result, false);
+                ValidateNpcItem(character.EquippedItem1Id, label, "equipped item 1", result, true);
+                ValidateNpcItem(character.EquippedItem2Id, label, "equipped item 2", result, true);
+                ValidateItemEntries(character.CarriedItems, label + " carried item", result);
+                ValidateNpcStats(character.Stats, label, result);
+                ValidateNpcEnums(character, label, result);
+
+                if (character.NumRandomItems < 0)
+                    result.AddError(label + " numRandomItems cannot be negative.");
+            }
+        }
+
+        private static void ValidateNpcItem(string itemId, string label, string field, ScenarioValidationResult result, bool allowUndefined)
+        {
+            string id = TrimToNull(itemId);
+            if (id == null || (allowUndefined && string.Equals(id, "Undefined", StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            ItemManager.ItemType itemType;
+            if (!ContentInjector.ResolveItemType(id, out itemType))
+                result.AddError(label + " references unknown " + field + " item id '" + id + "'.");
+        }
+
+        private static void ValidateItemEntries(List<ItemEntry> items, string label, ScenarioValidationResult result)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                ItemEntry item = items[i];
+                string itemId = TrimToNull(item != null ? item.ItemId : null);
+                if (itemId == null)
+                {
+                    result.AddError(label + " #" + i.ToString(CultureInfo.InvariantCulture) + " is missing itemId.");
+                    continue;
+                }
+
+                if (item.Quantity <= 0)
+                    result.AddError(label + " '" + itemId + "' must have quantity greater than zero.");
+                ValidateNpcItem(itemId, label, "carried", result, false);
+            }
+        }
+
+        private static void ValidateNpcStats(ScenarioNpcStatsDefinition stats, string label, ScenarioValidationResult result)
+        {
+            if (stats == null)
+                return;
+
+            ValidateNpcStat(stats.Strength, label, "Strength", result);
+            ValidateNpcStat(stats.Dexterity, label, "Dexterity", result);
+            ValidateNpcStat(stats.Charisma, label, "Charisma", result);
+            ValidateNpcStat(stats.Perception, label, "Perception", result);
+            ValidateNpcStat(stats.Intelligence, label, "Intelligence", result);
+        }
+
+        private static void ValidateNpcStat(int value, string label, string statName, ScenarioValidationResult result)
+        {
+            if (value < 0 || value > 20)
+            {
+                result.AddWarning(label + " has " + statName + " outside the supported 0-20 range: "
+                    + value.ToString(CultureInfo.InvariantCulture) + ". It will be clamped or ignored by runtime stat setup.");
+            }
+        }
+
+        private static void ValidateNpcEnums(ScenarioNpcDefinition character, string label, ScenarioValidationResult result)
+        {
+            string statSetting = TrimToNull(character.StatSetting);
+            if (statSetting == null)
+                return;
+
+            try
+            {
+                object parsed = Enum.Parse(typeof(QuestDefBase.QuestCharacter.StatSetting), statSetting, true);
+                if (parsed == null || !Enum.IsDefined(typeof(QuestDefBase.QuestCharacter.StatSetting), parsed))
+                    result.AddError(label + " has invalid statSetting '" + statSetting + "'.");
+            }
+            catch
+            {
+                result.AddError(label + " has invalid statSetting '" + statSetting + "'.");
             }
         }
 
@@ -1120,6 +1232,16 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             {
                 ScenarioValidationResult legacy = new ScenarioValidationResult();
                 ValidateAssets(definition, scenarioFilePath, legacy);
+                CopyIssues(legacy, summary);
+            }
+        }
+
+        private sealed class ScenarioCharacterValidationRule : IScenarioValidationRule
+        {
+            public void Validate(ScenarioDefinition definition, string scenarioFilePath, ValidationSummary summary)
+            {
+                ScenarioValidationResult legacy = new ScenarioValidationResult();
+                ValidateScenarioCharacters(definition, legacy);
                 CopyIssues(legacy, summary);
             }
         }

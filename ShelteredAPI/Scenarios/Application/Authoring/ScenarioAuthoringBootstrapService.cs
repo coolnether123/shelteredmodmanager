@@ -269,11 +269,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            if (closeableRuntimeState)
-                CloseRuntimeStateToMainMenu(reason ?? "Closed from authoring shell.", backendState);
-            else
-                CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
-            message = "Closed from authoring shell and returning to the main menu.";
+            bool closed = closeableRuntimeState
+                ? CloseRuntimeStateToMainMenu(reason ?? "Closed from authoring shell.", backendState)
+                : CloseActiveSessionToMainMenu(reason ?? "Closed from authoring shell.");
+            message = closed
+                ? "Closed from authoring shell and returning to the main menu."
+                : "Close blocked: fix the draft validation/save issue, then try Exit Editor again.";
             return true;
         }
 
@@ -775,27 +776,35 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 + ", scene=" + SceneManager.GetActiveScene().name + ".");
         }
 
-        private void CloseActiveSessionToMainMenu(string reason)
+        private bool CloseActiveSessionToMainMenu(string reason)
         {
             ScenarioAuthoringSession active = GetActiveSession();
             if (!IsEditingDraftSession(active))
-                return;
+                return false;
 
             if (!CommitActiveDraftForClose(active))
-                return;
+            {
+                _backend.SetStatusMessage("Close blocked: the draft could not be saved. Fix validation errors, then try Exit Editor again.");
+                return false;
+            }
 
             CloseActiveSession(reason, false);
             ReturnToMainMenu();
+            return true;
         }
 
-        private void CloseRuntimeStateToMainMenu(string reason, ScenarioAuthoringState state)
+        private bool CloseRuntimeStateToMainMenu(string reason, ScenarioAuthoringState state)
         {
             string scenarioFilePath = state != null ? state.ActiveScenarioFilePath : null;
             if (!CommitActiveDraftForClose(scenarioFilePath))
-                return;
+            {
+                _backend.SetStatusMessage("Close blocked: the draft could not be saved. Fix validation errors, then try Exit Editor again.");
+                return false;
+            }
 
             CloseRuntimeState(reason);
             ReturnToMainMenu();
+            return true;
         }
 
         private void CloseRuntimeState(string reason)

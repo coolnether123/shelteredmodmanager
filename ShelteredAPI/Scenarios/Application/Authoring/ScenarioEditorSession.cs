@@ -53,6 +53,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool RequestedRestart { get; set; }
         public ScenarioEditCategory CurrentEditCategory { get; set; }
         public bool HasAppliedToCurrentWorld { get; set; }
+        public string LoadWarning { get; set; }
         public int DraftRevision { get; private set; }
         public int AppliedDraftRevision { get; private set; }
 
