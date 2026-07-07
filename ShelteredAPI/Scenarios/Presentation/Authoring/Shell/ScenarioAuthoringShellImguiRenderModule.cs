@@ -107,6 +107,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect _richHoverCandidateSourceRect = RuntimeCompat.ZeroRect();
         private Rect _activeRichHoverSourceRect = RuntimeCompat.ZeroRect();
         private Rect _activeRichHoverPopupRect = RuntimeCompat.ZeroRect();
+        private Vector2 _richHoverMouseLastPosition = Vector2.zero;
+        private int _richHoverMouseSampleFrame = -1;
+        private bool _richHoverMouseHasLastPosition;
+        private bool _richHoverMouseMovingFastThisFrame;
         private string _richHoverCandidateKey;
         private float _richHoverCandidateSince;
         private float _richHoverLastHoveredAt;

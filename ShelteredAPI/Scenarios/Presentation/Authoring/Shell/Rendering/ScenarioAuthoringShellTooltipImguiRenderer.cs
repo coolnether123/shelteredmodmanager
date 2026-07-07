@@ -17,15 +17,26 @@ using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 using ShelteredAPI.UI.FieldManual.Tooltips;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed partial class ScenarioAuthoringShellImguiRenderModule
     {
-        private const float RichHoverDwellSeconds = 0.40f;
+        private const float RichHoverDwellSeconds = 0.60f;
         private const float RichHoverGraceSeconds = 0.30f;
+        private const float RichHoverMouseMovePx = 5f;
+        private const float RichHoverPopupMaxWidth = 380f;
+        private const float RichHoverPopupMinWidth = 150f;
+        private const float RichHoverPopupPaddingX = 14f;
+        private const float RichHoverPopupPaddingY = 10f;
+        private const float RichHoverPopupGapY = 6f;
+        private const float RichHoverPopupActionHeight = 24f;
+        private const float RichHoverPopupActionGap = 4f;
+        private const float RichHoverPopupVerticalGap = 8f;
         private const string RichHoverActionBack = "rich.help.back";
         private const string RichHoverActionTopicPrefix = "rich.help.topic.";
+        private const int RichHoverAutoPopupInlineCharacters = 96;
 
         private void DrawTooltipOverlayCore(float scaledWidth, float scaledHeight, Rect hudReserveRect, Rect contentRect)
         {
@@ -168,6 +179,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void BeginRichHoverFrame()
         {
+            Event evt = Event.current;
+            if (evt != null)
+                UpdateRichHoverMouseMotion(evt.mousePosition);
             _richHoverSourceHoveredThisFrame = false;
             _richHoverSourceKeyThisFrame = null;
             _richHoverCandidate = null;
@@ -188,7 +202,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return true;
 
             float now = Time.realtimeSinceStartup;
-            if (!string.Equals(_richHoverCandidateKey, model.Key, StringComparison.Ordinal))
+            if (!string.Equals(_richHoverCandidateKey, model.Key, StringComparison.Ordinal)
+                || IsRichHoverMouseMovingFast())
             {
                 _richHoverCandidateKey = model.Key;
                 _richHoverCandidateSince = now;
@@ -226,8 +241,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             Rect popupRect = _activeRichHoverPopupRect;
-            bool popupHovered = Event.current != null && popupRect.Contains(Event.current.mousePosition);
+            Vector2 mouse = Event.current != null ? Event.current.mousePosition : Vector2.zero;
+            bool popupHovered = Event.current != null && popupRect.Contains(mouse);
             if (popupHovered)
+                _richHoverLastHoveredAt = Time.realtimeSinceStartup;
+            bool sourceBridgeHovered = Event.current != null
+                && IsRichHoverSourcePopupBridgeHovered(mouse, _activeRichHoverSourceRect, popupRect);
+            if (sourceBridgeHovered)
                 _richHoverLastHoveredAt = Time.realtimeSinceStartup;
 
             DrawRichHoverHelpPopup(popupRect, _activeRichHoverHelp);
@@ -248,14 +268,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool activeSourceHovered = _activeRichHoverHelp != null
                 && _richHoverSourceHoveredThisFrame
                 && string.Equals(_richHoverSourceKeyThisFrame, _activeRichHoverHelp.Key, StringComparison.Ordinal);
+            bool sourceBridgeHovered = Event.current != null
+                && IsRichHoverSourcePopupBridgeHovered(Event.current.mousePosition, _activeRichHoverSourceRect, _activeRichHoverPopupRect);
             bool popupHovered = _activeRichHoverHelp != null
                 && Event.current != null
                 && _activeRichHoverPopupRect.Contains(Event.current.mousePosition);
 
-            if (_activeRichHoverHelp != null && (activeSourceHovered || popupHovered))
+            if (_activeRichHoverHelp != null && (activeSourceHovered || popupHovered || sourceBridgeHovered))
                 _richHoverLastHoveredAt = now;
 
             if (_richHoverCandidate != null
+                && IsRichHoverPopupAnchorStable()
                 && now - _richHoverCandidateSince >= RichHoverDwellSeconds
                 && (_activeRichHoverHelp == null || !string.Equals(_activeRichHoverHelp.Key, _richHoverCandidate.Key, StringComparison.Ordinal)))
             {
@@ -266,6 +289,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_activeRichHoverHelp != null
                 && !activeSourceHovered
                 && !popupHovered
+                && !sourceBridgeHovered
                 && now - _richHoverLastHoveredAt > RichHoverGraceSeconds)
             {
                 CloseRichHoverHelp();
@@ -303,48 +327,366 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect contentRect)
         {
             Rect bounds = BuildTooltipBounds(contentRect, scaledWidth, scaledHeight);
-            float width = Mathf.Clamp(bounds.width * 0.34f, 340f, 460f);
-            float bodyHeight = _textStyle != null
-                ? _textStyle.CalcHeight(new GUIContent(model.Body ?? string.Empty), width - 28f)
-                : 96f;
-            float actionRows = model.Actions != null && model.Actions.Length > 0 ? 42f : 8f;
-            float height = Mathf.Clamp(80f + bodyHeight + actionRows, 164f, Math.Min(360f, bounds.height));
+            float width = CalculateRichHoverPopupWidth(model, bounds);
+            float height = Mathf.Clamp(
+                CalculateRichHoverPopupHeight(model, width),
+                72f,
+                Math.Min(280f, bounds.height));
             Rect avoidRect = sourceRect.width > 0f && sourceRect.height > 0f
                 ? sourceRect
                 : BuildTooltipAvoidanceRect(Event.current != null ? Event.current.mousePosition : Vector2.zero, bounds, scaledWidth, false);
-            return PlaceTooltipAroundAvoidance(avoidRect, width, height, bounds, scaledWidth, scaledHeight, hudReserveRect);
+            return PlaceRichHoverPopupRect(avoidRect, width, height, bounds, hudReserveRect);
         }
 
         private void DrawRichHoverHelpPopup(Rect rect, RichHoverHelpModel help)
         {
-            DrawChromePanel(rect, _uiContext.Styles.Menu);
-            Rect titleRect = new Rect(rect.x + 14f, rect.y + 10f, rect.width - 28f, 24f);
-            GUI.Label(titleRect, (help.Title ?? "Help").ToUpperInvariant(), _sectionTitleStyle);
-            Rect bodyRect = new Rect(rect.x + 14f, titleRect.yMax + 8f, rect.width - 28f, rect.height - 88f);
-            GUI.Label(bodyRect, help.Body ?? string.Empty, _textStyle);
+            DrawRichHoverChromePanel(rect);
+            Rect contentRect = new Rect(
+                rect.x + RichHoverPopupPaddingX,
+                rect.y + RichHoverPopupPaddingY,
+                Math.Max(0f, rect.width - (RichHoverPopupPaddingX * 2f)),
+                Math.Max(0f, rect.height - (RichHoverPopupPaddingY * 2f)));
+            float titleHeight = ResolveRichHoverTitleHeight(help != null ? help.Title : null, contentRect.width);
+            float bodyHeight = ResolveRichHoverBodyHeight(help != null ? help.Body : null, contentRect.width);
+            float actionHeight = MeasureRichHoverActionAreaHeight(help != null ? help.Actions : null, contentRect.width);
 
-            Rect actionRect = new Rect(rect.x + 12f, rect.yMax - 42f, rect.width - 24f, 30f);
-            DrawRichHoverHelpActions(actionRect, help.Actions);
+            GUIStyle titleStyle = new GUIStyle(_sectionTitleStyle)
+            {
+                normal =
+                {
+                    textColor = new Color(0.74f, 0.61f, 0.21f, 1f)
+                }
+            };
+            titleStyle.wordWrap = true;
+            Rect titleRect = new Rect(contentRect.x, contentRect.y, contentRect.width, Math.Max(16f, titleHeight));
+            GUI.Label(titleRect, (help != null ? (help.Title ?? "Help") : "Help").ToUpperInvariant(), titleStyle);
+
+            if (bodyHeight > 0f)
+            {
+                GUIStyle bodyStyle = new GUIStyle(_uiContext.Styles.PaperBodyText)
+                {
+                    wordWrap = true
+                };
+                float bodyBottom = rect.yMax - RichHoverPopupPaddingY - actionHeight;
+                Rect bodyRect = new Rect(
+                    contentRect.x,
+                    titleRect.yMax + RichHoverPopupGapY,
+                    contentRect.width,
+                    Math.Max(0f, bodyBottom - (titleRect.yMax + RichHoverPopupGapY)));
+                GUI.Label(bodyRect, help != null ? help.Body : string.Empty, bodyStyle);
+            }
+
+            if (actionHeight > 0f)
+            {
+                Rect actionRect = new Rect(
+                    contentRect.x,
+                    rect.yMax - RichHoverPopupPaddingY - actionHeight,
+                    contentRect.width,
+                    actionHeight);
+                DrawRichHoverHelpActions(actionRect, help.Actions);
+            }
         }
 
         private void DrawRichHoverHelpActions(Rect rect, ScenarioAuthoringInspectorAction[] actions)
         {
+            if (rect.height <= 0f || rect.width <= 0f || actions == null || actions.Length == 0)
+                return;
+
             float x = rect.x;
+            float y = rect.y;
             for (int i = 0; actions != null && i < actions.Length; i++)
             {
                 ScenarioAuthoringInspectorAction action = actions[i];
                 if (action == null)
                     continue;
 
-                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 74f, 156f);
-                if (x + width > rect.xMax)
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 74f, 160f);
+                if (x > rect.x && x + width > rect.xMax)
+                {
+                    x = rect.x;
+                    y += RichHoverPopupActionHeight + RichHoverPopupActionGap;
+                }
+
+                if (y + RichHoverPopupActionHeight > rect.yMax)
                     break;
 
-                Rect buttonRect = new Rect(x, rect.y, width, rect.height);
+                Rect buttonRect = new Rect(x, y, width, RichHoverPopupActionHeight);
                 if (GUI.Button(buttonRect, new GUIContent(action.Label ?? string.Empty), action.Emphasized ? _activeButtonStyle : _buttonStyle))
                     ExecuteRichHoverHelpAction(action);
-                x += width + 6f;
+                x += width + RichHoverPopupActionGap;
             }
+        }
+
+        private void DrawRichHoverChromePanel(Rect rect)
+        {
+            if (_uiContext == null || _uiContext.Styles == null)
+            {
+                DrawChromePanel(rect, _rootPanelStyle);
+                return;
+            }
+
+            ScenarioUiAtlasSkin.DrawCornerCutShadow(rect);
+            Color old = GUI.color;
+            GUI.color = new Color(0.95f, 0.90f, 0.79f, 1f);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
+            GUI.color = old;
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
+        }
+
+        private void UpdateRichHoverMouseMotion(Vector2 mousePosition)
+        {
+            int frame = Time.frameCount;
+            if (_richHoverMouseSampleFrame == frame)
+                return;
+
+            _richHoverMouseSampleFrame = frame;
+            if (!_richHoverMouseHasLastPosition)
+            {
+                _richHoverMouseHasLastPosition = true;
+                _richHoverMouseLastPosition = mousePosition;
+                _richHoverMouseMovingFastThisFrame = false;
+                return;
+            }
+
+            float distance = Vector2.Distance(mousePosition, _richHoverMouseLastPosition);
+            _richHoverMouseMovingFastThisFrame = distance > RichHoverMouseMovePx;
+            _richHoverMouseLastPosition = mousePosition;
+        }
+
+        private bool IsRichHoverMouseMovingFast()
+        {
+            return _richHoverMouseMovingFastThisFrame;
+        }
+
+        private bool IsRichHoverPopupAnchorStable()
+        {
+            return !_richHoverMouseMovingFastThisFrame;
+        }
+
+        private bool IsRichHoverSourcePopupBridgeHovered(Vector2 mouse, Rect sourceRect, Rect popupRect)
+        {
+            if (sourceRect.Contains(mouse) || popupRect.Contains(mouse))
+                return true;
+
+            return IsMouseBetweenSourceAndPopup(mouse, sourceRect, popupRect);
+        }
+
+        private bool IsMouseBetweenSourceAndPopup(Vector2 mouse, Rect sourceRect, Rect popupRect)
+        {
+            if (sourceRect.width <= 0f || sourceRect.height <= 0f || popupRect.width <= 0f || popupRect.height <= 0f)
+                return false;
+
+            if (sourceRect.Overlaps(popupRect))
+                return true;
+
+            float left = Math.Min(sourceRect.x, popupRect.x);
+            float right = Math.Max(sourceRect.xMax, popupRect.xMax);
+            float top = Math.Min(sourceRect.y, popupRect.y);
+            float bottom = Math.Max(sourceRect.yMax, popupRect.yMax);
+
+            if (popupRect.y > sourceRect.yMax)
+                return mouse.x >= left - RichHoverPopupVerticalGap
+                    && mouse.x <= right + RichHoverPopupVerticalGap
+                    && mouse.y >= sourceRect.yMax - RichHoverPopupVerticalGap
+                    && mouse.y <= popupRect.y;
+
+            if (sourceRect.y > popupRect.yMax)
+                return mouse.x >= left - RichHoverPopupVerticalGap
+                    && mouse.x <= right + RichHoverPopupVerticalGap
+                    && mouse.y >= popupRect.yMax - RichHoverPopupVerticalGap
+                    && mouse.y <= sourceRect.y;
+
+            if (popupRect.x > sourceRect.xMax)
+                return mouse.y >= top - RichHoverPopupVerticalGap
+                    && mouse.y <= bottom + RichHoverPopupVerticalGap
+                    && mouse.x >= sourceRect.xMax - RichHoverPopupVerticalGap
+                    && mouse.x <= popupRect.x;
+
+            return mouse.y >= top - RichHoverPopupVerticalGap
+                && mouse.y <= bottom + RichHoverPopupVerticalGap
+                && mouse.x >= popupRect.xMax - RichHoverPopupVerticalGap
+                && mouse.x <= sourceRect.x;
+        }
+
+        private float ResolveRichHoverTitleHeight(string title, float width)
+        {
+            GUIStyle titleStyle = new GUIStyle(_sectionTitleStyle)
+            {
+                normal =
+                {
+                    textColor = new Color(0.74f, 0.61f, 0.21f, 1f)
+                },
+                wordWrap = true
+            };
+            return titleStyle.CalcHeight(new GUIContent(title ?? "Help"), width);
+        }
+
+        private float ResolveRichHoverBodyHeight(string body, float width)
+        {
+            if (string.IsNullOrEmpty(body))
+                return 0f;
+
+            GUIStyle bodyStyle = new GUIStyle(_uiContext.Styles.PaperBodyText)
+            {
+                wordWrap = true
+            };
+            return bodyStyle.CalcHeight(new GUIContent(body), width);
+        }
+
+        private float CalculateRichHoverPopupWidth(RichHoverHelpModel model, Rect bounds)
+        {
+            string title = model != null ? model.Title : null;
+            float titleWidth = !string.IsNullOrEmpty(title)
+                ? new GUIStyle(_sectionTitleStyle).CalcSize(new GUIContent(title)).x
+                : 0f;
+            float bodyWidth = MeasureRichHoverTextMaxLineWidth(_uiContext.Styles.PaperBodyText, model != null ? model.Body : null);
+            float actionWidth = MeasureRichHoverActionRowWidth(model != null ? model.Actions : null);
+
+            float width = Math.Max(RichHoverPopupMinWidth, Math.Max(titleWidth, Math.Max(bodyWidth, actionWidth)) + (RichHoverPopupPaddingX * 2f));
+            return Mathf.Clamp(width, RichHoverPopupMinWidth, Math.Min(RichHoverPopupMaxWidth, bounds.width));
+        }
+
+        private float CalculateRichHoverPopupHeight(RichHoverHelpModel model, float width)
+        {
+            float innerWidth = Math.Max(1f, width - (RichHoverPopupPaddingX * 2f));
+            float titleHeight = ResolveRichHoverTitleHeight(model != null ? (model.Title ?? string.Empty) : string.Empty, innerWidth);
+            float bodyHeight = ResolveRichHoverBodyHeight(model != null ? model.Body : null, innerWidth);
+            float actionHeight = MeasureRichHoverActionAreaHeight(model != null ? model.Actions : null, innerWidth);
+            return (RichHoverPopupPaddingY * 2f)
+                + Math.Max(16f, titleHeight)
+                + (titleHeight > 0f && bodyHeight > 0f ? RichHoverPopupGapY : 0f)
+                + bodyHeight
+                + (bodyHeight > 0f && actionHeight > 0f ? RichHoverPopupGapY : 0f)
+                + actionHeight
+                + (actionHeight > 0f ? RichHoverPopupGapY : 0f);
+        }
+
+        private float MeasureRichHoverActionAreaHeight(ScenarioAuthoringInspectorAction[] actions, float availableWidth)
+        {
+            if (actions == null || actions.Length == 0 || availableWidth <= 0f)
+                return 0f;
+
+            float rowWidth = 0f;
+            float totalHeight = 0f;
+            for (int i = 0; i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
+
+                float width = Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 74f, 160f);
+                if (rowWidth > 0f && rowWidth + RichHoverPopupActionGap + width > availableWidth)
+                {
+                    if (totalHeight == 0f)
+                        totalHeight = RichHoverPopupActionHeight;
+                    else
+                        totalHeight += RichHoverPopupActionHeight + RichHoverPopupActionGap;
+                    rowWidth = width;
+                }
+                else
+                {
+                    rowWidth += (rowWidth > 0f ? RichHoverPopupActionGap : 0f) + width;
+                    if (totalHeight == 0f)
+                        totalHeight = RichHoverPopupActionHeight;
+                }
+            }
+
+            return totalHeight;
+        }
+
+        private float MeasureRichHoverActionRowWidth(ScenarioAuthoringInspectorAction[] actions)
+        {
+            if (actions == null || actions.Length == 0)
+                return 0f;
+
+            float width = 0f;
+            for (int i = 0; i < actions.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = actions[i];
+                if (action == null)
+                    continue;
+
+                if (width > 0f)
+                    width += RichHoverPopupActionGap;
+                width += Mathf.Clamp(MeasureButtonWidth(action, false, 24f), 74f, 160f);
+            }
+
+            return width;
+        }
+
+        private float MeasureRichHoverTextMaxLineWidth(GUIStyle style, string text)
+        {
+            if (string.IsNullOrEmpty(text) || style == null)
+                return 0f;
+
+            float maxWidth = 0f;
+            string[] lines = text.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                float width = style.CalcSize(new GUIContent(lines[i])).x;
+                if (width > maxWidth)
+                    maxWidth = width;
+            }
+
+            return maxWidth;
+        }
+
+        private Rect PlaceRichHoverPopupRect(
+            Rect sourceRect,
+            float width,
+            float height,
+            Rect bounds,
+            Rect hudReserveRect)
+        {
+            float gap = 8f;
+            float centerX = sourceRect.x + (sourceRect.width * 0.5f);
+            float centerY = sourceRect.y + (sourceRect.height * 0.5f);
+            Rect[] candidates = new[]
+            {
+                new Rect(centerX - (width * 0.5f), sourceRect.yMax + gap, width, height),
+                new Rect(centerX - (width * 0.5f), sourceRect.y - height - gap, width, height),
+                new Rect(sourceRect.xMax + gap, centerY - (height * 0.5f), width, height),
+                new Rect(sourceRect.x - width - gap, centerY - (height * 0.5f), width, height)
+            };
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                Rect candidate = ConstrainRichHoverPopupRect(candidates[i], bounds, hudReserveRect);
+                if (!candidate.Overlaps(sourceRect))
+                    return candidate;
+            }
+
+            Rect fallback = ConstrainRichHoverPopupRect(candidates[0], bounds, hudReserveRect);
+            if (fallback.Overlaps(sourceRect))
+                fallback = ConstrainRichHoverPopupRect(candidates[1], bounds, hudReserveRect);
+            return fallback;
+        }
+
+        private Rect ConstrainRichHoverPopupRect(Rect rect, Rect bounds, Rect hudReserveRect)
+        {
+            rect.x = Mathf.Clamp(rect.x, bounds.x, Math.Max(bounds.x, bounds.xMax - rect.width));
+            rect.y = Mathf.Clamp(rect.y, bounds.y, Math.Max(bounds.y, bounds.yMax - rect.height));
+
+            if (!rect.Overlaps(hudReserveRect))
+                return rect;
+
+            float shiftedLeft = hudReserveRect.x - rect.width - Gutter;
+            if (shiftedLeft >= bounds.x)
+            {
+                rect.x = shiftedLeft;
+            }
+            else
+            {
+                float shiftedRight = hudReserveRect.xMax + Gutter;
+                if (shiftedRight + rect.width <= bounds.xMax)
+                    rect.x = shiftedRight;
+                else
+                    rect.y = Math.Min(bounds.yMax - rect.height, hudReserveRect.yMax + Gutter);
+            }
+
+            rect.x = Mathf.Clamp(rect.x, bounds.x, Math.Max(bounds.x, bounds.xMax - rect.width));
+            rect.y = Mathf.Clamp(rect.y, bounds.y, Math.Max(bounds.y, bounds.yMax - rect.height));
+            return rect;
         }
 
         private void ExecuteRichHoverHelpAction(ScenarioAuthoringInspectorAction action)
@@ -481,13 +823,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (action == null)
                 return false;
 
-            if (!string.IsNullOrEmpty(ResolveActionTopicId(action)))
+            string topicId = ResolveActionTopicId(action);
+            if (!string.IsNullOrEmpty(topicId))
                 return true;
 
             string text = !string.IsNullOrEmpty(action.DisabledReason)
                 ? action.DisabledReason
                 : (!string.IsNullOrEmpty(action.Detail) ? action.Detail : action.Hint);
-            return !string.IsNullOrEmpty(text) && text.Length > 90;
+            if (string.IsNullOrEmpty(text))
+                return false;
+
+            if (text.IndexOf('\n') >= 0 || text.IndexOf('\r') >= 0)
+                return true;
+
+            if (text.Length > RichHoverAutoPopupInlineCharacters)
+                return true;
+
+            return false;
         }
 
         private static string BuildRichHoverKey(ScenarioAuthoringInspectorAction action)
