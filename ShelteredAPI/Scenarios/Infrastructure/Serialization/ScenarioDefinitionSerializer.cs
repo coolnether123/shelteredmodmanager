@@ -1280,8 +1280,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
                 writer.WriteStartElement("Character");
                 WriteAttribute(writer, "id", character.CharacterId);
-                ScenarioActorXmlSerializer.WriteActorRef(writer, character.ActorRef);
-                ScenarioActorXmlSerializer.WriteActorComponents(writer, character.ActorComponents);
                 WriteAttribute(writer, "presetId", character.PresetId);
                 WriteAttribute(writer, "weapon", character.WeaponItemId);
                 WriteAttribute(writer, "equippedItem1", character.EquippedItem1Id);
@@ -1293,6 +1291,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 writer.WriteAttributeString("flipMesh", character.FlipMesh.ToString());
                 WriteAttribute(writer, "species", character.Species);
                 WriteAttribute(writer, "avatarOverrideSpriteId", character.AvatarOverrideSpriteId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, character.ActorRef);
+                ScenarioActorXmlSerializer.WriteActorComponents(writer, character.ActorComponents);
                 WriteScenarioNpcStats(writer, character.Stats);
                 WriteItemEntries(writer, "CarriedItems", "Item", character.CarriedItems);
                 writer.WriteEndElement();
@@ -2249,7 +2249,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "id", condition.Id);
                 writer.WriteAttributeString("kind", condition.Kind.ToString());
                 WriteAttribute(writer, "targetId", condition.TargetId);
-                ScenarioActorXmlSerializer.WriteActorRef(writer, condition.ActorRef);
                 WriteAttribute(writer, "comparison", condition.Comparison);
                 writer.WriteAttributeString("quantity", condition.Quantity.ToString(CultureInfo.InvariantCulture));
                 WriteAttribute(writer, "statId", condition.StatId);
@@ -2257,6 +2256,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "traitId", condition.TraitId);
                 WriteAttribute(writer, "flagId", condition.FlagId);
                 WriteAttribute(writer, "flagValue", condition.FlagValue);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, condition.ActorRef);
                 WriteOptionalScheduleTime(writer, "Time", condition.Time);
                 WriteProperties(writer, "Properties", condition.Properties);
                 writer.WriteEndElement();
@@ -2309,7 +2309,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "id", effect.Id);
                 writer.WriteAttributeString("kind", effect.Kind.ToString());
                 WriteAttribute(writer, "targetId", effect.TargetId);
-                ScenarioActorXmlSerializer.WriteActorRef(writer, effect.ActorRef);
                 WriteAttribute(writer, "itemId", effect.ItemId);
                 writer.WriteAttributeString("quantity", effect.Quantity.ToString(CultureInfo.InvariantCulture));
                 WriteAttribute(writer, "weatherState", effect.WeatherState);
@@ -2321,6 +2320,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
                 WriteAttribute(writer, "flagId", effect.FlagId);
                 WriteAttribute(writer, "flagValue", effect.FlagValue);
                 WriteAttribute(writer, "triggerId", effect.TriggerId);
+                ScenarioActorXmlSerializer.WriteActorRef(writer, effect.ActorRef);
                 WriteProperties(writer, "Properties", effect.Properties);
                 writer.WriteEndElement();
             }
