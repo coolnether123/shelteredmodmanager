@@ -2322,6 +2322,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "weather " + effect.WeatherState;
             if (!string.IsNullOrEmpty(effect.FlagId))
                 return "flag " + effect.FlagId + "=" + effect.FlagValue;
+            if (effect.Kind == ScenarioEffectKind.WriteJournalEntry)
+                return "journal " + ScenarioPropertyBag.GetString(effect.Properties, "text", "<empty>");
+            if (!string.IsNullOrEmpty(effect.ConversationId))
+                return "conversation " + effect.ConversationId;
+            if (effect.Kind == ScenarioEffectKind.WorldEvent)
+                return FormatWorldEventEffect(effect);
             if (!string.IsNullOrEmpty(effect.SurvivorId))
                 return "survivor " + effect.SurvivorId;
             if (!string.IsNullOrEmpty(effect.BunkerExpansionId))
@@ -3632,10 +3638,57 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstExpansionId(definition), "Expansion", "Use an existing bunker expansion target.", "EX", effect.BunkerExpansionId ?? effect.TargetId);
             else if (effect.Kind == ScenarioEffectKind.FireTrigger)
                 AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, ScenarioEventReferenceFinder.FirstTriggerId(definition), "Trigger", "Use an existing trigger target.", "TR", effect.TriggerId ?? effect.TargetId);
+            else if (effect.Kind == ScenarioEffectKind.StartConversation)
+                AddConversationEffectTargetActions(items, definition, effect, prefix);
+            else if (effect.Kind == ScenarioEffectKind.WriteJournalEntry)
+                AddJournalEffectTargetActions(items, prefix, effect);
+            else if (effect.Kind == ScenarioEffectKind.WorldEvent)
+                AddWorldEventEffectTargetActions(items, prefix, effect);
             else
             {
                 AddPairTokenActionOrChoose(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, effect.TargetId, "Target", "Use this target id.", "TG", effect.TargetId);
             }
+        }
+
+        private static void AddConversationEffectTargetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, ScenarioEffectDefinition effect, string prefix)
+        {
+            bool added = false;
+            for (int i = 0; definition != null && definition.Conversations != null && definition.Conversations.Conversations != null && i < definition.Conversations.Conversations.Count; i++)
+            {
+                ScenarioConversationDefinition conversation = definition.Conversations.Conversations[i];
+                if (conversation == null || string.IsNullOrEmpty(conversation.Id))
+                    continue;
+                added = true;
+                AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Conversation " + conversation.Id, "Start this authored conversation.", conversation.Id, "CV", string.Equals(effect.ConversationId ?? effect.TargetId, conversation.Id, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!added)
+                items.Add(Text("No authored conversations exist yet. Add one in Story before this effect can resolve."));
+        }
+
+        private static void AddJournalEffectTargetActions(List<ScenarioAuthoringInspectorItem> items, string prefix, ScenarioEffectDefinition effect)
+        {
+            string text = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "text", null);
+            items.Add(Property("Journal Text", string.IsNullOrEmpty(text) ? "<empty>" : text));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Default Text", "Seed this journal effect with editable XML-safe placeholder text.", "Authored journal entry for day {day}.", "J");
+        }
+
+        private static void AddWorldEventEffectTargetActions(List<ScenarioAuthoringInspectorItem> items, string prefix, ScenarioEffectDefinition effect)
+        {
+            string eventType = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "eventType", "NpcVisit");
+            string npcType = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "npcType", "Trader");
+            string outcome = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "outcome", "None");
+            items.Add(Property("World Event", FormatWorldEventEffect(effect)));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Visitor", "Queue a scripted visitor through NpcVisitManager.", "eventType:NpcVisit", "WE", string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Raid", "Start a scripted breach through BreachMan.", "eventType:Raid", "WE", string.Equals(eventType, "Raid", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Broadcast", "Force a radio broadcast outcome.", "eventType:Broadcast", "WE", string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Trader", "Use a trader visitor.", "npcType:Trader", "NP", string.Equals(npcType, "Trader", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Joiner", "Use a recruit visitor.", "npcType:Joiner", "NP", string.Equals(npcType, "Joiner", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Passerby", "Use a passerby visitor.", "npcType:Passerby", "NP", string.Equals(npcType, "Passerby", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Broadcast None", "Force no radio visitor.", "outcome:None", "BC", string.Equals(outcome, "None", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Broadcast Trader", "Force a trader radio outcome.", "outcome:Trader", "BC", string.Equals(outcome, "Trader", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectTargetPrefix, prefix, "Broadcast Recruit", "Force a recruit radio outcome.", "outcome:Recruit", "BC", string.Equals(outcome, "Recruit", StringComparison.OrdinalIgnoreCase));
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix, prefix, "Count +", "Increase scripted visitor count.", "1", "+");
+            AddPairTokenAction(items, ScenarioAuthoringActionIds.ActionScheduledActionEffectQuantityPrefix, prefix, "Count -", "Decrease scripted visitor count.", "-1", "-");
         }
 
         private static void AddGateCastPickerSections(List<ScenarioAuthoringInspectorSection> sections, ScenarioDefinition definition, ScenarioConditionGroup group, int gateIndex)
@@ -4244,6 +4297,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(condition.TraitId))
                 return "trait " + condition.TraitId;
             return condition.Kind.ToString();
+        }
+
+        private static string FormatWorldEventEffect(ScenarioEffectDefinition effect)
+        {
+            string eventType = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "eventType", "WorldEvent");
+            string npcType = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "npcType", null);
+            string outcome = ScenarioPropertyBag.GetString(effect != null ? effect.Properties : null, "outcome", null);
+            int count = ScenarioPropertyBag.GetInt(effect != null ? effect.Properties : null, "count", effect != null ? Math.Max(1, effect.Quantity) : 1);
+            if (string.Equals(eventType, "NpcVisit", StringComparison.OrdinalIgnoreCase))
+                return "visitor " + Safe(npcType) + " x" + count.ToString(CultureInfo.InvariantCulture);
+            if (string.Equals(eventType, "Broadcast", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(eventType, "RadioScan", StringComparison.OrdinalIgnoreCase))
+                return "broadcast " + Safe(outcome);
+            return Safe(eventType);
         }
 
         private static ScenarioAuthoringInspectorSection BuildBunkerRuntimeSection(ScenarioDefinition definition, ScenarioAuthoringState state)

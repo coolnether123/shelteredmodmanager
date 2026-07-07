@@ -586,9 +586,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ScenarioScheduledActionDefinition action = definition.ScheduledActions[actionIndex];
                 if (effectIndex >= action.Effects.Count || !int.TryParse(token, out delta))
                     return false;
-                action.Effects[effectIndex].Quantity = Math.Max(1, action.Effects[effectIndex].Quantity + delta);
+                ScenarioEffectDefinition effect = action.Effects[effectIndex];
+                effect.Quantity = Math.Max(1, effect.Quantity + delta);
+                if (effect.Kind == ScenarioEffectKind.WorldEvent)
+                    ScenarioPropertyBag.Set(effect.Properties, "count", effect.Quantity.ToString());
                 ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
-                message = "Updated scheduled effect quantity to " + action.Effects[effectIndex].Quantity + ".";
+                message = "Updated scheduled effect quantity to " + effect.Quantity + ".";
                 return true;
             }
 
@@ -655,6 +658,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case ScenarioEffectKind.FireTrigger:
                     effect.TriggerId = target;
                     break;
+                case ScenarioEffectKind.StartConversation:
+                    effect.ConversationId = target;
+                    break;
+                case ScenarioEffectKind.WriteJournalEntry:
+                    ScenarioPropertyBag.Set(effect.Properties, "text", target);
+                    break;
+                case ScenarioEffectKind.WorldEvent:
+                    ApplyWorldEventTarget(effect, target);
+                    break;
+            }
+        }
+
+        private static void ApplyWorldEventTarget(ScenarioEffectDefinition effect, string target)
+        {
+            if (effect == null || string.IsNullOrEmpty(target))
+                return;
+            int separator = target.IndexOf(':');
+            if (separator <= 0)
+                return;
+            string key = target.Substring(0, separator);
+            string value = target.Substring(separator + 1);
+            ScenarioPropertyBag.Set(effect.Properties, key, value);
+            if (string.Equals(key, "eventType", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(value, "NpcVisit", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrEmpty(ScenarioPropertyBag.GetString(effect.Properties, "npcType", null)))
+            {
+                ScenarioPropertyBag.Set(effect.Properties, "npcType", "Trader");
             }
         }
 
@@ -714,6 +744,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case ScenarioEffectKind.ActivateObject: return ScenarioEffectKind.DeactivateObject;
                 case ScenarioEffectKind.DeactivateObject: return ScenarioEffectKind.UnlockBunkerExpansion;
                 case ScenarioEffectKind.UnlockBunkerExpansion: return ScenarioEffectKind.RestoreWeather;
+                case ScenarioEffectKind.RestoreWeather: return ScenarioEffectKind.WriteJournalEntry;
+                case ScenarioEffectKind.WriteJournalEntry: return ScenarioEffectKind.StartConversation;
+                case ScenarioEffectKind.StartConversation: return ScenarioEffectKind.WorldEvent;
                 default: return ScenarioEffectKind.SetScenarioFlag;
             }
         }
@@ -1032,8 +1065,36 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     effect.TriggerId = ScenarioEventReferenceFinder.FirstTriggerId(definition);
                     effect.TargetId = effect.TriggerId;
                     break;
+                case ScenarioEffectKind.WriteJournalEntry:
+                    ScenarioPropertyBag.Set(effect.Properties, "text", "Authored journal entry for day {day}.");
+                    ScenarioPropertyBag.Set(effect.Properties, "format", "WriterPrefix");
+                    ScenarioPropertyBag.Set(effect.Properties, "writerMode", "AnyPresent");
+                    break;
+                case ScenarioEffectKind.StartConversation:
+                    effect.ConversationId = FirstConversationId(definition);
+                    effect.TargetId = effect.ConversationId;
+                    break;
+                case ScenarioEffectKind.WorldEvent:
+                    ScenarioPropertyBag.Set(effect.Properties, "eventType", "NpcVisit");
+                    ScenarioPropertyBag.Set(effect.Properties, "npcType", "Trader");
+                    ScenarioPropertyBag.Set(effect.Properties, "count", "1");
+                    effect.Quantity = 1;
+                    break;
             }
             return effect;
+        }
+
+        private static string FirstConversationId(ScenarioDefinition definition)
+        {
+            if (definition != null
+                && definition.Conversations != null
+                && definition.Conversations.Conversations != null
+                && definition.Conversations.Conversations.Count > 0
+                && definition.Conversations.Conversations[0] != null)
+            {
+                return definition.Conversations.Conversations[0].Id;
+            }
+            return "conversation_1";
         }
     }
 
