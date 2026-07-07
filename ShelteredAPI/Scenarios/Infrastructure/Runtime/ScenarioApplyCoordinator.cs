@@ -14,6 +14,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private readonly TriggerRuntimeAdapter _triggerRuntimeAdapter;
         private readonly ScenarioObjectStartStateApplyService _objectStartStateApplyService;
         private readonly ScenarioSceneSpriteStartStateApplyService _sceneSpriteStartStateApplyService;
+        private readonly ScenarioMapProjectionApplyService _mapProjectionApplyService;
         private readonly ScenarioActorResolver _actorResolver;
 
         public ScenarioApplyCoordinator(
@@ -24,6 +25,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             TriggerRuntimeAdapter triggerRuntimeAdapter,
             ScenarioObjectStartStateApplyService objectStartStateApplyService,
             ScenarioSceneSpriteStartStateApplyService sceneSpriteStartStateApplyService,
+            ScenarioMapProjectionApplyService mapProjectionApplyService,
             ScenarioActorResolver actorResolver)
         {
             _familyApplyService = familyApplyService;
@@ -33,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             _triggerRuntimeAdapter = triggerRuntimeAdapter;
             _objectStartStateApplyService = objectStartStateApplyService;
             _sceneSpriteStartStateApplyService = sceneSpriteStartStateApplyService;
+            _mapProjectionApplyService = mapProjectionApplyService;
             _actorResolver = actorResolver;
         }
 
@@ -59,6 +62,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 ApplyStep("assets", result, delegate { _assetApplyService.Apply(definition, scenarioFilePath, result); });
             if (_sceneSpriteStartStateApplyService != null)
                 ApplyStep("scene sprite start state", result, delegate { _sceneSpriteStartStateApplyService.Apply(definition, result); });
+            if (_mapProjectionApplyService != null)
+                ApplyStep("map projection", result, delegate { _mapProjectionApplyService.Apply(definition, result); });
             if (_triggerRuntimeAdapter != null)
                 ApplyStep("scheduled runtime", result, delegate { _triggerRuntimeAdapter.Apply(definition, result); });
             return result;

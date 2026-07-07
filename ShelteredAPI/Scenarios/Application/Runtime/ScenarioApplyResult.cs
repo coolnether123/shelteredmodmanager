@@ -12,6 +12,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         public int TriggerChanges { get; set; }
         public int ConditionChanges { get; set; }
         public int SpriteSwapChanges { get; set; }
+        public int MapChanges { get; set; }
 
         public string[] Messages
         {

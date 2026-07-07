@@ -98,6 +98,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<TriggerRuntimeAdapter>(),
                     resolver.Get<ScenarioObjectStartStateApplyService>(),
                     resolver.Get<ScenarioSceneSpriteStartStateApplyService>(),
+                    resolver.Get<ScenarioMapProjectionApplyService>(),
                     resolver.Get<ScenarioActorResolver>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioActorResolver(); });
@@ -111,6 +112,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournal(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpriteStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapProjectionApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerRuntimeService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton<IScenarioTriggerRuntimeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioTriggerRuntimeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestInstanceResolver(resolver.Get<IVanillaScenarioRuntime>()); });
