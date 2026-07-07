@@ -14,6 +14,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Widgets;
 using ShelteredAPI.UI.FieldManual.Tooltips;
@@ -24,25 +25,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             DrawChromePanel(rect, _rootPanelStyle);
             bool compact = IsCompactTopBar(rect, shell);
-            float primaryRowY = compact ? 38f : 10f;
-            float primaryRowHeight = compact ? 30f : 36f;
-            float utilityRowY = compact ? 10f : 54f;
-            float utilityRowHeight = compact ? 28f : 30f;
+            float primaryRowY = compact ? 34f : 8f;
+            float primaryRowHeight = compact ? 28f : 32f;
+            float utilityRowY = compact ? 6f : 46f;
+            float utilityRowHeight = compact ? 26f : 28f;
 
             Rect brandRect = compact
-                ? new Rect(rect.x + 14f, rect.y + 8f, 206f, 30f)
-                : new Rect(rect.x + 18f, rect.y + 9f, 220f, 78f);
+                ? new Rect(rect.x + 14f, rect.y + 5f, 206f, 30f)
+                : new Rect(rect.x + 18f, rect.y + 7f, 220f, 70f);
             GUI.Label(new Rect(brandRect.x, brandRect.y, brandRect.width, 30f), "SHELTERED", _titleStyle);
             if (!compact)
                 GUI.Label(new Rect(brandRect.x, brandRect.y + 31f, brandRect.width, 20f), "Scenario Workshop", _smallTitleStyle);
             if (!compact && shell != null && !string.IsNullOrEmpty(shell.Subtitle))
-                GUI.Label(new Rect(brandRect.x, brandRect.y + 56f, brandRect.width, 18f), ShortenToFit(shell.Subtitle, brandRect.width, _mutedTextStyle), _mutedTextStyle);
+                GUI.Label(new Rect(brandRect.x, brandRect.y + 52f, brandRect.width, 18f), ShortenToFit(shell.Subtitle, brandRect.width, _mutedTextStyle), _mutedTextStyle);
 
             float primaryRowLeft = compact ? rect.x + 12f : brandRect.xMax + 20f;
             float actionRight = rect.xMax - 10f;
             Rect windowMenuButtonRect = DrawTopBarWindowAction(
                 compact
-                    ? new Rect(rect.xMax - 122f, rect.y + 10f, 112f, 28f)
+                    ? new Rect(rect.xMax - 122f, rect.y + 6f, 112f, 26f)
                     : new Rect(primaryRowLeft, rect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),
                 shell);
 
@@ -58,8 +59,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_snapshot != null && IsWorldStage(_snapshot.State))
             {
                 Rect worldControlsRect = compact
-                    ? new Rect(primaryRowLeft, rect.y + 68f, primaryTabsRight - primaryRowLeft, 26f)
-                    : new Rect(primaryRowLeft, rect.y + 56f, Math.Max(0f, saveX - primaryRowLeft - 12f), 28f);
+                    ? new Rect(primaryRowLeft, rect.y + 60f, primaryTabsRight - primaryRowLeft, 24f)
+                    : new Rect(primaryRowLeft, rect.y + 50f, Math.Max(0f, saveX - primaryRowLeft - 12f), 26f);
                 DrawWorldSurfaceControls(worldControlsRect, shell, compact);
             }
 
@@ -149,6 +150,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (tabRect.xMax > availableRight)
                     break;
                 DrawButton(tabRect, tab.Action, true);
+                if (tab.Action != null && tab.Action.Emphasized && _uiContext != null && _uiContext.Styles != null)
+                    ScenarioUiAtlasSkin.DrawCornerCutBorder(tabRect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
                 RegisterTopBarActionAliases(tab.Action, tabRect);
                 x = tabRect.xMax + 2f;
                 if (!tab.Finish)

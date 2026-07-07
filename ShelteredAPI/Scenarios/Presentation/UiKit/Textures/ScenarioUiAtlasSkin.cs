@@ -204,13 +204,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Textures
             RegisterRole(atlases, "close", "Close", "close", "x", "cross");
             RegisterRole(atlases, "check", "Check", "check", "tick", "ok");
             RegisterRole(atlases, "pin", "Pin", "pin", "clip", "paperclip");
-            RegisterExactRole(atlases, "home_world", "WorldMap", "ExpeditionMap", "MapIcon", "LocationIcon", "TownIcon", "LocationMarker");
-            RegisterExactRole(atlases, "home_people", "Portrait", "SurvivorPortrait", "CharacterPortrait", "PeopleIcon", "PersonIcon", "FamilyIcon");
-            RegisterExactRole(atlases, "home_inventory", "CrateIcon", "BoxIcon", "InventoryIcon", "BackpackIcon", "SupplyCrate");
-            RegisterExactRole(atlases, "home_events", "ClockIcon", "CalendarIcon", "TimelineIcon", "EventIcon");
-            RegisterExactRole(atlases, "home_art", "BrushIcon", "PaintBrush", "PaletteIcon", "SpriteIcon");
-            RegisterExactRole(atlases, "home_test", "Check", "Checkmark", "Tick", "FlagIcon", "PlayIcon");
-            RegisterExactRole(atlases, "home_publish", "RadioIcon", "FlagIcon", "UploadIcon", "PublishIcon");
+            RegisterRole(atlases, "home_world", "WorldMap", "ExpeditionMap", "MapIcon", "LocationIcon", "TownIcon", "LocationMarker");
+            RegisterRole(atlases, "home_people", "Portrait", "SurvivorPortrait", "CharacterPortrait", "PeopleIcon", "PersonIcon", "FamilyIcon");
+            RegisterRole(atlases, "home_inventory", "CrateIcon", "BoxIcon", "InventoryIcon", "BackpackIcon", "SupplyCrate");
+            RegisterRole(atlases, "home_events", "ClockIcon", "CalendarIcon", "TimelineIcon", "EventIcon");
+            RegisterRole(atlases, "home_art", "BrushIcon", "PaintBrush", "PaletteIcon", "SpriteIcon");
+            RegisterRole(atlases, "home_test", "Check", "Checkmark", "Tick", "FlagIcon", "PlayIcon");
+            RegisterRole(atlases, "home_publish", "RadioIcon", "FlagIcon", "UploadIcon", "PublishIcon");
         }
 
         private static void RegisterRole(UIAtlas[] atlases, string role, params string[] candidates)

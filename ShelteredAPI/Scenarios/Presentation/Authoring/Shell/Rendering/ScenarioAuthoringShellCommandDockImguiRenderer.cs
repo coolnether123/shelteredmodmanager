@@ -158,6 +158,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 IconText = action.IconText,
                 PreviewSprite = action.PreviewSprite,
                 Enabled = action.Enabled,
+                DisabledReason = action.DisabledReason,
                 Emphasized = true
             };
         }

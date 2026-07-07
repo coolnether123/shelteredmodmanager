@@ -156,11 +156,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUI.color = oldColor;
 
             Rect pageRect = ScenarioAuthoringShellLayout.BuildWorkshopPageRect(contentRect);
-            GUI.Label(new Rect(pageRect.x, pageRect.y, pageRect.width, 34f), window.Title ?? string.Empty, _smallTitleStyle);
-            if (!string.IsNullOrEmpty(window.Subtitle))
-                GUI.Label(new Rect(pageRect.x, pageRect.y + 30f, pageRect.width, 20f), window.Subtitle, _mutedTextStyle);
-
-            Rect bodyRect = new Rect(pageRect.x, pageRect.y + 58f, pageRect.width, Math.Max(120f, pageRect.height - 58f));
+            bool homeWorkshopPage = IsHomeWorkshopPage(window);
+            Rect bodyRect;
+            if (homeWorkshopPage)
+            {
+                bodyRect = new Rect(pageRect.x, pageRect.y, pageRect.width, pageRect.height);
+            }
+            else
+            {
+                GUI.Label(new Rect(pageRect.x, pageRect.y, pageRect.width, 34f), window.Title ?? string.Empty, _smallTitleStyle);
+                if (!string.IsNullOrEmpty(window.Subtitle))
+                    GUI.Label(new Rect(pageRect.x, pageRect.y + 30f, pageRect.width, 20f), window.Subtitle, _mutedTextStyle);
+                bodyRect = new Rect(pageRect.x, pageRect.y + 58f, pageRect.width, Math.Max(120f, pageRect.height - 58f));
+            }
             GUILayout.BeginArea(bodyRect);
             float previousContentWidth = _activeContentWidth;
             _activeContentWidth = Math.Max(120f, bodyRect.width - 18f);
@@ -173,7 +181,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             RegisterScrollRegion(window.Id, bodyRect);
             scrollPosition = GUILayout.BeginScrollView(scrollPosition, false, false, GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true));
-            if (IsHomeWorkshopPage(window))
+            if (homeWorkshopPage)
             {
                 DrawHomeWorkshopPage(window);
             }
@@ -1746,7 +1754,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 for (int column = 0; column < rowCount; column++)
                 {
                     int index = i + column;
-                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, 78f, GUILayout.Width(rowCardWidth), GUILayout.Height(78f));
+                    Rect rect = GUILayoutUtility.GetRect(rowCardWidth, 108f, GUILayout.Width(rowCardWidth), GUILayout.Height(108f));
                     DrawHomeQuestionCard(rect, questions[index]);
 
                     if (column < rowCount - 1)
@@ -1946,7 +1954,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawHomeQuestionCard(ScenarioAuthoringInspectorSection section)
         {
-            Rect rect = GUILayoutUtility.GetRect(120f, 78f, GUILayout.ExpandWidth(true), GUILayout.Height(78f));
+            Rect rect = GUILayoutUtility.GetRect(120f, 108f, GUILayout.ExpandWidth(true), GUILayout.Height(108f));
             DrawHomeQuestionCard(rect, section);
         }
 
@@ -1977,50 +1985,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             RegisterInteractiveRegion(rect);
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
-            if (action.Enabled)
-            {
-                if (GUI.Button(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card))
-                {
-                    ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
-                    if (Event.current != null)
-                        Event.current.Use();
-                }
-            }
-            else
-            {
-                GUI.Box(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card);
-            }
-            DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero), false);
+            GUI.Box(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card);
+            bool hovered = rect.Contains(Event.current != null ? Event.current.mousePosition : Vector2.zero);
+            DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, false);
             if (action.Emphasized && _uiContext != null && _uiContext.Styles != null)
                 ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderStrongTexture);
 
-            GUIStyle actionStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
-            actionStyle.alignment = TextAnchor.MiddleRight;
-            actionStyle.wordWrap = false;
-            actionStyle.clipping = TextClipping.Clip;
-            float actionLabelWidth = actionStyle.CalcSize(new GUIContent(action.Label ?? string.Empty)).x + 12f;
-            float sideWidth = Mathf.Max(108f, actionLabelWidth);
+            GUIStyle detailStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
+            detailStyle.wordWrap = true;
+            detailStyle.clipping = TextClipping.Clip;
+            float buttonWidth = Mathf.Clamp(MeasureButtonWidth(action, false, 20f), 116f, Math.Min(168f, rect.width * 0.34f));
+            float sideWidth = buttonWidth;
             if (!string.IsNullOrEmpty(badge))
             {
                 Vector2 measuredBadge = _mutedTextStyle.CalcSize(new GUIContent(badge));
                 sideWidth = Mathf.Max(sideWidth, measuredBadge.x + 24f);
             }
 
-            sideWidth = Mathf.Clamp(sideWidth, 108f, Math.Min(240f, rect.width * 0.46f));
-            Rect glyphRect = new Rect(rect.x + 12f, rect.y + 16f, 38f, 38f);
+            sideWidth = Mathf.Clamp(sideWidth, 116f, Math.Min(190f, rect.width * 0.38f));
+            Rect glyphRect = new Rect(rect.x + 12f, rect.y + 14f, 42f, 42f);
             bool drewGlyph = DrawHomeQuestionGlyph(glyphRect, section, action);
             float textX = drewGlyph ? glyphRect.xMax + 10f : rect.x + 14f;
-            float textReservedWidth = drewGlyph ? glyphRect.width + 42f : 32f;
-            Rect textRect = new Rect(textX, rect.y + 8f, Math.Max(24f, rect.width - sideWidth - textReservedWidth), rect.height - 16f);
+            float textReservedWidth = drewGlyph ? glyphRect.width + 44f : 32f;
+            Rect textRect = new Rect(textX, rect.y + 9f, Math.Max(24f, rect.width - sideWidth - textReservedWidth), rect.height - 18f);
             GUI.Label(new Rect(textRect.x, textRect.y, textRect.width, 24f), ShortenToFit(section.Title ?? string.Empty, textRect.width, _uiContext.Styles.PaperTitleText), _uiContext.Styles.PaperTitleText);
-            GUI.Label(new Rect(textRect.x, textRect.y + 26f, textRect.width, 32f), detail ?? string.Empty, _uiContext.Styles.PaperMutedText);
+            GUI.Label(new Rect(textRect.x, textRect.y + 28f, textRect.width, rect.height - 44f), detail ?? string.Empty, detailStyle);
             if (!string.IsNullOrEmpty(badge))
             {
                 Rect badgeRect = new Rect(rect.xMax - sideWidth - 14f, rect.y + 14f, sideWidth, 22f);
                 ScenarioUiWidgets.DrawPill(badgeRect, badge, _uiContext.Styles, ResolveHomeBadgeEmphasis(badge));
             }
-            Rect actionRect = new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 32f, sideWidth, 20f);
-            GUI.Label(actionRect, ShortenToFit(action.Label ?? string.Empty, actionRect.width, actionStyle), actionStyle);
+            Rect actionRect = new Rect(rect.xMax - sideWidth - 14f, rect.yMax - 38f, sideWidth, 28f);
+            DrawButton(actionRect, action.Enabled ? CloneEmphasized(action) : action, false);
         }
 
         private bool DrawHomeQuestionGlyph(Rect rect, ScenarioAuthoringInspectorSection section, ScenarioAuthoringInspectorAction action)
@@ -2028,13 +2024,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (_uiContext == null || _uiContext.Styles == null)
                 return false;
 
-            Rect iconRect = new Rect(rect.x + 6f, rect.y + 5f, rect.width - 12f, rect.height - 10f);
+            Rect iconRect = new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f);
             string role = ResolveHomeIconRole(section);
-            if (string.IsNullOrEmpty(role) || !ScenarioUiAtlasSkin.HasIcon(role))
+            GUI.Box(rect, GUIContent.none, action != null && action.Emphasized ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Field);
+            if (!string.IsNullOrEmpty(role) && ScenarioUiAtlasSkin.HasIcon(role) && ScenarioUiAtlasSkin.DrawIcon(iconRect, role))
+                return true;
+
+            string iconText = action != null ? action.IconText ?? string.Empty : string.Empty;
+            if (string.IsNullOrEmpty(iconText))
                 return false;
 
-            GUI.Box(rect, GUIContent.none, action != null && action.Emphasized ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Field);
-            return ScenarioUiAtlasSkin.DrawIcon(iconRect, role);
+            GUIStyle iconStyle = new GUIStyle(_uiContext.Styles.PaperMutedText);
+            iconStyle.alignment = TextAnchor.MiddleCenter;
+            iconStyle.fontStyle = FontStyle.Bold;
+            iconStyle.wordWrap = false;
+            iconStyle.clipping = TextClipping.Clip;
+            GUI.Label(iconRect, ShortenToFit(iconText, iconRect.width, iconStyle), iconStyle);
+            return true;
         }
 
         private static string ResolveHomeIconRole(ScenarioAuthoringInspectorSection section)
