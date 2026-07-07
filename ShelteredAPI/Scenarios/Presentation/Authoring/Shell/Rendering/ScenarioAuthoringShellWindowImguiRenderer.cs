@@ -2883,6 +2883,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(action.Id))
                 RegisterTourTarget("action:" + action.Id, rect);
             bool clicked = DrawPlainButton(rect, new GUIContent(string.Empty, tooltip), _uiContext.Styles.Card, action.Enabled);
+            if (_uiContext != null && _uiContext.Styles != null)
+            {
+                Color domainTint;
+                int domainSeed;
+                ResolveHomeDomainFace(section != null ? section.Id : null, out domainTint, out domainSeed);
+                ScenarioUiParchment.PaintFace(
+                    rect,
+                    _uiContext.Styles.Textures,
+                    domainTint,
+                    domainSeed,
+                    0.05f,
+                    1f,
+                    _uiContext.Styles.BevelLightTexture,
+                    _uiContext.Styles.BevelDarkTexture);
+            }
             bool hovered = action.Enabled && IsInteractiveHoverAllowed(rect);
             bool pressed = action.Enabled && IsInteractiveMouseDownAllowed(rect);
             DrawButtonAnimationOverlay(rect, action.Id, action.Enabled, hovered, pressed);
@@ -2946,6 +2961,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect iconRect = new Rect(rect.x + 6f, rect.y + 6f, rect.width - 12f, rect.height - 12f);
             string role = ResolveHomeIconRole(section);
             GUI.Box(rect, GUIContent.none, action != null && action.Emphasized ? _uiContext.Styles.ButtonActive : _uiContext.Styles.Field);
+            // Give each domain's glyph plate its own grain instance and faint
+            // tint so the tiles read as distinct stamped frames, not clones.
+            Color glyphTint;
+            int glyphSeed;
+            ResolveHomeDomainFace(section != null ? section.Id : null, out glyphTint, out glyphSeed);
+            ScenarioUiParchment.PaintFace(
+                rect,
+                _uiContext.Styles.Textures,
+                new Color(glyphTint.r, glyphTint.g, glyphTint.b, glyphTint.a * 0.6f),
+                glyphSeed + 101,
+                0.05f,
+                0.5f,
+                null,
+                null);
             if (!string.IsNullOrEmpty(role) && ScenarioUiAtlasSkin.HasIcon(role) && ScenarioUiAtlasSkin.DrawIcon(iconRect, role))
                 return true;
 
@@ -2967,6 +2996,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (section == null || string.IsNullOrEmpty(section.Id))
                 return null;
             return section.Id;
+        }
+
+        /// <summary>
+        /// Maps a home question section to a subtle domain identity: a faint
+        /// colour wash and a distinct grain seed. Variations stay quiet (wash
+        /// alpha ~0.05) so the parchment set reads as one cohesive book, with
+        /// each page family only softly tinted (Cast warm, Supplies olive,
+        /// Timeline amber, Story burgundy, World sepia, Home/Ready neutral).
+        /// </summary>
+        private static void ResolveHomeDomainFace(string sectionId, out Color tint, out int grainSeed)
+        {
+            string id = sectionId ?? string.Empty;
+            if (string.Equals(id, "home_people", StringComparison.OrdinalIgnoreCase))
+            {
+                tint = new Color(0.60f, 0.32f, 0.20f, 0.055f); // Cast: warm terracotta
+                grainSeed = 34;
+                return;
+            }
+            if (string.Equals(id, "home_inventory", StringComparison.OrdinalIgnoreCase))
+            {
+                tint = new Color(0.42f, 0.44f, 0.22f, 0.055f); // Supplies: olive
+                grainSeed = 47;
+                return;
+            }
+            if (string.Equals(id, "home_events", StringComparison.OrdinalIgnoreCase))
+            {
+                tint = new Color(0.72f, 0.50f, 0.14f, 0.055f); // Timeline: amber
+                grainSeed = 58;
+                return;
+            }
+            if (string.Equals(id, "home_art", StringComparison.OrdinalIgnoreCase))
+            {
+                tint = new Color(0.52f, 0.18f, 0.22f, 0.05f); // Story/Art: burgundy
+                grainSeed = 63;
+                return;
+            }
+            if (string.Equals(id, "home_world", StringComparison.OrdinalIgnoreCase))
+            {
+                tint = new Color(0.46f, 0.34f, 0.20f, 0.055f); // World/Map: sepia
+                grainSeed = 21;
+                return;
+            }
+
+            // Home, Ready-to-test, Publish and anything else stay neutral.
+            tint = new Color(0f, 0f, 0f, 0f);
+            grainSeed = 12;
         }
 
         private static ScenarioUiPillEmphasis ResolveHomeBadgeEmphasis(string badge)

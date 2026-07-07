@@ -95,6 +95,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         public Texture2D DisabledTexture { get; private set; }
         public Texture2D ViewportTexture { get; private set; }
 
+        // Parchment bevel: a warm highlight for the top/left edges and a soft
+        // shadow for the bottom/right edges, giving surfaces a lit, raised feel.
+        public Texture2D BevelLightTexture { get; private set; }
+        public Texture2D BevelDarkTexture { get; private set; }
+
         private void Rebuild()
         {
             IScenarioUiPalette palette = _theme.Palette;
@@ -113,6 +118,8 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             DangerTexture       = _textures.Get(palette.AccentDanger);
             DisabledTexture     = _textures.Get(_theme.WithPanelOpacity(palette.DisabledSurface));
             ViewportTexture     = _textures.Get(palette.Viewport);
+            BevelLightTexture   = _textures.Get(new Color(0.98f, 0.93f, 0.80f, 0.30f));
+            BevelDarkTexture    = _textures.Get(new Color(0.10f, 0.06f, 0.03f, 0.38f));
 
             Texture2D panelCorner       = _textures.GetCornerCut(_theme.WithPanelOpacity(palette.PanelBase));
             Texture2D panelRaisedCorner = _textures.GetCornerCut(_theme.WithRaisedOpacity(palette.PanelRaised));

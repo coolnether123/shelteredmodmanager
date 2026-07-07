@@ -34,6 +34,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float utilityRowY = compact ? 6f : 46f;
             float utilityRowHeight = compact ? 26f : 28f;
             DrawChromePanel(animatedRect, _rootPanelStyle);
+            DrawTopBarGoldRule(animatedRect);
 
             Rect brandRect = compact
                 ? new Rect(animatedRect.x + 14f, animatedRect.y + 5f, 206f, 30f)
@@ -74,6 +75,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             }
             return windowMenuButtonRect;
+        }
+
+        // Lays twin rule lines along the bottom of the leather chrome band so it
+        // reads like a book-cover strip sitting above the parchment pages: a
+        // gold hairline over a darker shadow line.
+        private void DrawTopBarGoldRule(Rect animatedRect)
+        {
+            if (_uiContext == null || _uiContext.Styles == null || animatedRect.width <= 24f)
+                return;
+
+            float x = animatedRect.x + 6f;
+            float width = animatedRect.width - 12f;
+            Color previous = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(new Rect(x, animatedRect.yMax - 3f, width, 1f), _uiContext.Styles.BorderStrongTexture);
+            GUI.color = new Color(0f, 0f, 0f, 0.35f);
+            GUI.DrawTexture(new Rect(x, animatedRect.yMax - 2f, width, 1f), Texture2D.whiteTexture);
+            GUI.color = previous;
         }
 
         private Rect DrawWorldLoadingChip(Rect animatedRect, bool compact)

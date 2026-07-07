@@ -23,6 +23,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     {
         private const float WindowChromeGlyphMaxExtent = 34f;
 
+        // Fixed grain seed for chrome bands (top bar, docks, menus) so the
+        // leather tooth stays stable frame to frame.
+        private const int ChromeGrainSeed = 5;
+
         private static bool IsWindowMenuAction(ScenarioAuthoringInspectorAction action)
         {
             return action != null
@@ -159,6 +163,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 ScenarioUiAtlasSkin.DrawCornerCutShadow(rect);
                 GUI.Box(rect, GUIContent.none, style ?? _rootPanelStyle);
+                ScenarioUiParchment.PaintFace(
+                    rect,
+                    _uiContext.Styles.Textures,
+                    new Color(0f, 0f, 0f, 0f),
+                    ChromeGrainSeed,
+                    0.045f,
+                    0.7f,
+                    null,
+                    null);
                 ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
             }
         }
