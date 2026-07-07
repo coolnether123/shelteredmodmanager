@@ -279,7 +279,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(row.Scenario, out status); });
                         break;
                     case ScenarioBookRowKind.CreateDraft:
-                        RunLaunchAction(delegate(out string status) { return _actions.CreateDraft(out status); });
+                        RunLaunchAction(delegate(out string status) { return _actions.CreateDraftInteractive(out status); });
                         break;
                     case ScenarioBookRowKind.DuplicateDraft:
                         RunBrowserAction(delegate(out string status) { ModAPI.Scenarios.ScenarioInfo duplicate; return _actions.DuplicateDraft(row.Scenario, out duplicate, out status); });

@@ -13,6 +13,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
 using ShelteredAPI.Scenarios.Presentation.UiKit;
+using ShelteredAPI.Scenarios.Presentation.UiKit.Animation;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Frame;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Textures;
 using ShelteredAPI.Scenarios.Presentation.UiKit.Theme;
@@ -24,6 +25,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect DrawTopBarCore(Rect rect, ScenarioAuthoringShellViewModel shell, float openProgress)
         {
             Rect animatedRect = ResolveSlidingChromeRect(rect, openProgress, ScenarioUiSlideDirection.Up);
+            Rect windowMenuButtonRect = default(Rect);
             using (ScenarioUiGuiScope.Apply(openProgress, animatedRect, 1f))
             {
             bool compact = IsCompactTopBar(animatedRect, shell);
@@ -44,7 +46,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float primaryRowLeft = compact ? animatedRect.x + 12f : brandRect.xMax + 20f;
             float actionRight = animatedRect.xMax - 10f;
-            Rect windowMenuButtonRect = DrawTopBarWindowAction(
+            windowMenuButtonRect = DrawTopBarWindowAction(
                 compact
                     ? new Rect(animatedRect.xMax - 122f, animatedRect.y + 6f, 112f, 26f)
                     : new Rect(primaryRowLeft, animatedRect.y + utilityRowY, actionRight - primaryRowLeft, utilityRowHeight),

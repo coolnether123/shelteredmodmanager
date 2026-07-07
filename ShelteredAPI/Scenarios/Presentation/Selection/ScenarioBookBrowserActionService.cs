@@ -32,6 +32,43 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _draftMetadataEditService = draftMetadataEditService;
         }
 
+        internal static string CreateInteractiveDraftForLiveVerification()
+        {
+            SaveManager.SaveType launchSaveType = SaveManager.SaveType.Slot1;
+            EnsureEditorRuntime("ScenarioBookBrowser live verification CreateDraftInteractive");
+            ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(
+                ScenarioBaseGameMode.Survival,
+                launchSaveType,
+                true);
+            if (draft == null || string.IsNullOrEmpty(draft.StartupSaveId))
+                return "failed: draft session did not provide a startup save";
+
+            SaveEntry startupSave = draft.StartupSave;
+            if (startupSave == null
+                && (!ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(draft.DraftId, out startupSave) || startupSave == null))
+            {
+                ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Live verification launch failed.");
+                return "failed: could not resolve draft startup save";
+            }
+
+            string error;
+            bool queued = ScenarioCompositionRoot.Resolve<ScenarioLaunchCoordinator>().QueueAuthoringDraftSceneReload(
+                ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                startupSave,
+                launchSaveType,
+                "authoring draft '" + draft.DraftId + "'",
+                draft.BaseMode,
+                out error);
+            if (!queued)
+            {
+                ScenarioCompositionRoot.Resolve<IScenarioSaveLibrary>().ClearQueuedNewGameSave(launchSaveType);
+                ScenarioAuthoringBootstrapService.Instance.CancelPendingDraft("Live verification launch failed.");
+                return "failed: " + (error ?? "could not launch draft scene");
+            }
+
+            return "queued:" + draft.DraftId;
+        }
+
         public bool StartScenario(ScenarioCatalogEntry entry, out string status)
         {
             status = null;
@@ -142,12 +179,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         public bool CreateDraft(out string status)
         {
+            return CreateDraft(false, out status);
+        }
+
+        public bool CreateDraftInteractive(out string status)
+        {
+            return CreateDraft(true, out status);
+        }
+
+        private bool CreateDraft(bool showBaselinePicker, out string status)
+        {
             status = null;
             try
             {
                 SaveManager.SaveType launchSaveType = SaveManager.SaveType.Slot1;
                 EnsureEditorRuntime("ScenarioBookBrowser CreateDraft");
-                ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType);
+                ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType, showBaselinePicker);
                 if (draft == null || string.IsNullOrEmpty(draft.StartupSaveId))
                     throw new InvalidOperationException("The draft session did not provide a startup save.");
 

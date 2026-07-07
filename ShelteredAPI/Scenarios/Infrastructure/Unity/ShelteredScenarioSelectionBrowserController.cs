@@ -793,7 +793,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 highScoreLabel = Traverse.Create(panel).Field("m_scenarioHighScore").GetValue<UILabel>();
                 stasisScoreLabelsRoot = Traverse.Create(panel).Field("m_stasis_scoreLabelsRoot").GetValue<GameObject>();
                 SaveManager.SaveType launchSaveType = GetLaunchVirtualSaveType();
-                ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType);
+                ScenarioAuthoringSession draft = ScenarioAuthoringBootstrapService.Instance.QueueNewDraft(ScenarioBaseGameMode.Survival, launchSaveType, true);
                 string id = draft != null && !string.IsNullOrEmpty(draft.DraftId) ? draft.DraftId : "new scenario";
                 MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Add New clicked. panel=" + panel.GetInstanceID()
                     + " draftId=" + id + ".");

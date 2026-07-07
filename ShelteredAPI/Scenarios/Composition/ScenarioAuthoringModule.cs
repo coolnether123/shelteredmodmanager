@@ -132,6 +132,15 @@ namespace ShelteredAPI.Scenarios.Composition{
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
+                return new ScenarioAuthoringEntryFlowService(
+                    resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<IScenarioSelectionCatalogService>(),
+                    resolver.Get<IScenarioDefinitionCatalogService>(),
+                    resolver.Get<ScenarioAuthoringBaseModeReloadService>(),
+                    resolver.Get<ScenarioAuthoringSettingsService>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
                 return new ScenarioAuthoringCommandService(
                     resolver.Get<ScenarioAuthoringCaptureService>(),
                     resolver.Get<IScenarioAuthoringSectionHub>(),
@@ -194,7 +203,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<IScenarioSaveLibrary>(),
                     resolver.Get<IScenarioRuntimeBindingService>(),
-                    resolver.Get<ScenarioAuthoringCaptureService>());
+                    resolver.Get<ScenarioAuthoringCaptureService>(),
+                    resolver.Get<ScenarioAuthoringEntryFlowService>());
             });
         }
     }

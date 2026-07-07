@@ -135,6 +135,58 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, out message);
         }
 
+        public bool SaveAndReloadBaseline(
+            ScenarioEditorSession editorSession,
+            ScenarioBaseGameMode baseMode,
+            string label,
+            out string message)
+        {
+            message = null;
+            if (editorSession == null || editorSession.WorkingDefinition == null)
+            {
+                message = "No active scenario definition is available.";
+                return true;
+            }
+
+            ScenarioDefinition definition = editorSession.WorkingDefinition;
+            string draftId = definition.Id;
+            if (string.IsNullOrEmpty(draftId))
+            {
+                message = "The active draft does not have an id.";
+                return true;
+            }
+
+            SaveEntry draftStartupSave;
+            if (!_draftRepository.TryGetDraftSaveEntry(draftId, out draftStartupSave) || draftStartupSave == null)
+            {
+                message = "Could not resolve the draft authoring save.";
+                return true;
+            }
+
+            ScenarioValidationResult validation = _editorService.CommitChanges(null);
+            if (validation == null || !validation.IsValid)
+            {
+                message = "Baseline save failed validation: " + FormatValidationSummary(validation);
+                return true;
+            }
+
+            ScenarioBaseGameMode reloadMode = Enum.IsDefined(typeof(ScenarioBaseGameMode), baseMode)
+                ? baseMode
+                : definition.BaseGameMode;
+            SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(reloadMode);
+            string reloadLabel = string.IsNullOrEmpty(label) ? "from the selected baseline" : label;
+            return QueueSavedDraftReload(
+                draftId,
+                draftStartupSave,
+                launchSaveType,
+                reloadMode,
+                reloadLabel,
+                false,
+                false,
+                true,
+                out message);
+        }
+
         public bool SaveBaseModeOnly(
             ScenarioEditorSession editorSession,
             ScenarioBaseGameMode newBaseMode,
