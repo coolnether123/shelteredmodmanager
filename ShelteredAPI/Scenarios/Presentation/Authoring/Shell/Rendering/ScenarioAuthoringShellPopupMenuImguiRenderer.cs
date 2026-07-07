@@ -279,16 +279,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float thickness = Mathf.Max(1f, Mathf.Round(Mathf.Min(rect.width, rect.height) * 0.10f));
             if (IsWindowHeaderCloseAction(action))
             {
-                DrawVectorLine(new Vector2(glyphRect.x, glyphRect.y), new Vector2(glyphRect.xMax, glyphRect.yMax), color, thickness);
-                DrawVectorLine(new Vector2(glyphRect.xMax, glyphRect.y), new Vector2(glyphRect.x, glyphRect.yMax), color, thickness);
+                Color oldColor = GUI.color;
+                GUI.color = color;
+                bool drewAtlasGlyph = ScenarioUiAtlasSkin.DrawIcon(glyphRect, "close");
+                GUI.color = oldColor;
+                if (!drewAtlasGlyph)
+                {
+                    DrawTextureStampedLine(new Vector2(glyphRect.x, glyphRect.y), new Vector2(glyphRect.xMax, glyphRect.yMax), color, thickness);
+                    DrawTextureStampedLine(new Vector2(glyphRect.xMax, glyphRect.y), new Vector2(glyphRect.x, glyphRect.yMax), color, thickness);
+                }
                 return;
             }
 
             float y = rect.y + (rect.height * 0.52f);
-            DrawVectorLine(new Vector2(glyphRect.x, y), new Vector2(glyphRect.xMax, y), color, thickness);
+            DrawTextureStampedLine(new Vector2(glyphRect.x, y), new Vector2(glyphRect.xMax, y), color, thickness);
         }
 
-        private static void DrawVectorLine(Vector2 start, Vector2 end, Color color, float thickness)
+        private static void DrawTextureStampedLine(Vector2 start, Vector2 end, Color color, float thickness)
         {
             Vector2 delta = end - start;
             float length = delta.magnitude;
@@ -296,12 +303,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Color oldColor = GUI.color;
-            Matrix4x4 oldMatrix = GUI.matrix;
             GUI.color = color;
-            float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
-            GUIUtility.RotateAroundPivot(angle, start);
-            GUI.DrawTexture(new Rect(start.x, start.y - (thickness * 0.5f), length, thickness), Texture2D.whiteTexture);
-            GUI.matrix = oldMatrix;
+            int steps = Mathf.Max(1, Mathf.CeilToInt(length / Mathf.Max(1f, thickness * 0.85f)));
+            float size = Mathf.Max(1f, thickness);
+            for (int i = 0; i <= steps; i++)
+            {
+                float t = steps > 0 ? (float)i / (float)steps : 0f;
+                Vector2 point = Vector2.Lerp(start, end, t);
+                GUI.DrawTexture(new Rect(point.x - (size * 0.5f), point.y - (size * 0.5f), size, size), Texture2D.whiteTexture);
+            }
             GUI.color = oldColor;
         }
     }

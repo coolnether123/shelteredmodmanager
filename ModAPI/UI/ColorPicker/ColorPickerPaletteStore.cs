@@ -29,7 +29,7 @@ namespace ModAPI.UI.ColorPicker
         {
             ColorPickerPalette palette = new ColorPickerPalette();
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
-                return palette;
+                return CreateStarterPalette();
 
             try
             {
@@ -48,6 +48,26 @@ namespace ModAPI.UI.ColorPicker
                 MMLog.WriteWarning("[ColorPicker] Failed to load palette: " + ex.Message);
             }
 
+            return palette;
+        }
+
+        private static ColorPickerPalette CreateStarterPalette()
+        {
+            ColorPickerPalette palette = new ColorPickerPalette();
+            palette.Load(
+                new ModColor[0],
+                new[]
+                {
+                    new ModColor(0f, 0f, 0f, 1f),
+                    new ModColor(1f, 1f, 1f, 1f),
+                    new ModColor(0.5f, 0.5f, 0.5f, 1f),
+                    new ModColor(1f, 0f, 0f, 1f),
+                    new ModColor(0f, 1f, 0f, 1f),
+                    new ModColor(0f, 0f, 1f, 1f),
+                    new ModColor(1f, 1f, 0f, 1f),
+                    new ModColor(0f, 1f, 1f, 1f),
+                    new ModColor(1f, 0f, 1f, 1f)
+                });
             return palette;
         }
 
