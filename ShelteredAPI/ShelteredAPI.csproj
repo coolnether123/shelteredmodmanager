@@ -522,6 +522,7 @@
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteReferenceLibrary.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeMutationService.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteRuntimeResolver.cs" />
+    <Compile Include="Scenarios\Infrastructure\Assets\ScenarioWeatherEffectSpriteCatalogService.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioSpriteSwapAuthoringService.Actions.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioSpriteSwapAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Assets\ScenarioSpriteSwapRuleEditor.cs" />

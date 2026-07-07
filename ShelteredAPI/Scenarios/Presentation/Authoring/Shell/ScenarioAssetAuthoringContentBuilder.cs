@@ -19,12 +19,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         public ScenarioAssetAuthoringContentBuilder(
             IScenarioAuthoringSectionHub sectionHub,
             ScenarioSelectionScopeService selectionScopeService,
-            ScenarioSpriteRuntimeResolver runtimeResolver)
+            ScenarioSpriteRuntimeResolver runtimeResolver,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
         {
             _placementContentBuilder = new ScenarioAssetPlacementContentBuilder(
                 sectionHub,
                 selectionScopeService,
-                runtimeResolver);
+                runtimeResolver,
+                weatherEffectSpriteCatalog);
             _editorContentBuilder = new ScenarioSelectedAssetEditorContentBuilder(sectionHub);
         }
 
@@ -33,7 +35,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioEditorSession editorSession,
             ScenarioAuthoringTarget target)
         {
-            return _placementContentBuilder.Build(state, editorSession, target);
+            List<ScenarioAuthoringInspectorSection> sections = _placementContentBuilder.Build(state, editorSession, target);
+            if (ScenarioWeatherEffectSpriteCatalogService.IsWeatherEffectTarget(target))
+            {
+                List<ScenarioAuthoringInspectorSection> editorSections = _editorContentBuilder.Build(state, editorSession, target);
+                for (int i = 0; i < editorSections.Count; i++)
+                    sections.Add(editorSections[i]);
+            }
+
+            return sections;
         }
 
         public List<ScenarioAuthoringInspectorSection> BuildSelectedAssetEditorSections(
@@ -175,6 +185,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 case ScenarioSpriteTargetComponentKind.SpriteRenderer: return "Sprite Renderer";
                 case ScenarioSpriteTargetComponentKind.UI2DSprite: return "UI Sprite";
+                case ScenarioSpriteTargetComponentKind.ParticleSystemRenderer: return "Particle Renderer";
                 case ScenarioSpriteTargetComponentKind.Auto: return "Auto";
                 default: return kind.ToString();
             }
@@ -186,15 +197,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly IScenarioAuthoringSectionHub _sectionHub;
         private readonly ScenarioSelectionScopeService _selectionScopeService;
         private readonly ScenarioSpriteRuntimeResolver _runtimeResolver;
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
 
         public ScenarioAssetPlacementContentBuilder(
             IScenarioAuthoringSectionHub sectionHub,
             ScenarioSelectionScopeService selectionScopeService,
-            ScenarioSpriteRuntimeResolver runtimeResolver)
+            ScenarioSpriteRuntimeResolver runtimeResolver,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
         {
             _sectionHub = sectionHub;
             _selectionScopeService = selectionScopeService;
             _runtimeResolver = runtimeResolver;
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
         }
 
         public List<ScenarioAuthoringInspectorSection> Build(
@@ -219,6 +233,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             sections.Add(BuildPlacementBrowserGuidanceSection());
+            sections.Add(BuildWeatherEffectSection(state));
             List<ScenarioAuthoringInspectorSection> placementSections = BuildSceneSpritePlacementSections(state, editorSession, target);
             for (int i = 0; i < placementSections.Count; i++)
                 sections.Add(placementSections[i]);
@@ -238,6 +253,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 {
                     ScenarioInspectorItemFactory.Text("This browser is only for placing snapped scene sprites. Select an existing asset and use the Inspector's Edit Asset action to change that asset.")
                 }
+            };
+        }
+
+        private ScenarioAuthoringInspectorSection BuildWeatherEffectSection(ScenarioAuthoringState state)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            List<ScenarioWeatherEffectSpriteCatalogService.WeatherEffectSpriteTarget> targets =
+                _weatherEffectSpriteCatalog != null
+                    ? _weatherEffectSpriteCatalog.GetTargets()
+                    : new List<ScenarioWeatherEffectSpriteCatalogService.WeatherEffectSpriteTarget>();
+            items.Add(ScenarioInspectorItemFactory.Property("Editable Effects", targets.Count.ToString()));
+            if (targets.Count == 0)
+            {
+                items.Add(ScenarioInspectorItemFactory.Text("No loaded weather or particle effects currently expose a sprite-editable material texture."));
+            }
+            else
+            {
+                for (int i = 0; i < targets.Count; i++)
+                {
+                    ScenarioWeatherEffectSpriteCatalogService.WeatherEffectSpriteTarget target = targets[i];
+                    if (target == null || target.Target == null)
+                        continue;
+
+                    bool active = state != null
+                        && state.SelectedTarget != null
+                        && string.Equals(state.SelectedTarget.Id, target.Target.Id, StringComparison.OrdinalIgnoreCase);
+                    items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                        ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix + target.Target.Id,
+                        ScenarioAuthoringPresentationBuilder.CleanCandidateLabel(target.Target.DisplayName),
+                        target.Source + " | Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
+                        true,
+                        active,
+                        "FX",
+                        target.Group,
+                        active ? "SELECTED" : "EDIT",
+                        target.PreviewSprite)));
+                }
+            }
+
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "weather_effect_sprites",
+                Title = "Weather & Effects",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.CandidateGrid,
+                Items = items.ToArray()
             };
         }
 

@@ -21,6 +21,7 @@ using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Domain.Timeline;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
@@ -1570,6 +1571,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
     internal sealed class SelectionCommandHandler : IScenarioCommandHandler
     {
+        private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
+
+        public SelectionCommandHandler(ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+        {
+            _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
+        }
+
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
         {
             message = null;
@@ -1623,6 +1631,13 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 }
 
                 return SelectStackIndex(state, index, out message);
+            }
+
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix, StringComparison.Ordinal))
+            {
+                handled = true;
+                string targetId = actionId.Substring(ScenarioAuthoringActionIds.ActionWeatherEffectSpriteSelectPrefix.Length);
+                return SelectWeatherEffectTarget(state, targetId, out message);
             }
 
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionHierarchySelectPrefix, StringComparison.Ordinal))
@@ -1714,6 +1729,30 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             }
 
             return null;
+        }
+
+        private bool SelectWeatherEffectTarget(ScenarioAuthoringState state, string targetId, out string message)
+        {
+            message = null;
+            if (_weatherEffectSpriteCatalog == null || string.IsNullOrEmpty(targetId))
+            {
+                message = "Weather/effect sprite target is unavailable.";
+                return true;
+            }
+
+            ScenarioAuthoringTarget target;
+            if (!_weatherEffectSpriteCatalog.TryFindTarget(targetId, out target) || target == null)
+            {
+                message = "Weather/effect sprite target is not loaded: " + targetId + ".";
+                return true;
+            }
+
+            state.SelectedTarget = target.Copy();
+            state.HoveredTarget = target.Copy();
+            state.MultiSelection.Clear();
+            state.MultiSelection.Add(target.Copy());
+            message = "Selected " + target.DisplayName + " from Weather & Effects.";
+            return true;
         }
 
         private static ScenarioAuthoringTarget BuildTargetFromScene(string targetId)

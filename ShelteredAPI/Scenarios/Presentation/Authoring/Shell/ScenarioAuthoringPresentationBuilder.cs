@@ -1144,6 +1144,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 case ScenarioSpriteTargetComponentKind.SpriteRenderer: return "Sprite Renderer";
                 case ScenarioSpriteTargetComponentKind.UI2DSprite: return "UI Sprite";
+                case ScenarioSpriteTargetComponentKind.ParticleSystemRenderer: return "Particle Renderer";
                 case ScenarioSpriteTargetComponentKind.Auto: return "Auto";
                 default: return kind.ToString();
             }

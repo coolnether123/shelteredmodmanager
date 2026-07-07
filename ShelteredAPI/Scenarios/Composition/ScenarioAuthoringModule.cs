@@ -148,7 +148,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioPublishExportService>(),
                     resolver.Get<ScenarioAuthoringBaseModeReloadService>(),
                     resolver.Get<ScenarioAuthoringTutorialService>(),
-                    resolver.Get<ScenarioAuthoringSetupStateService>());
+                    resolver.Get<ScenarioAuthoringSetupStateService>(),
+                    resolver.Get<ScenarioWeatherEffectSpriteCatalogService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

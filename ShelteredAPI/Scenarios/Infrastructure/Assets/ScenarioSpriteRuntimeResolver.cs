@@ -16,6 +16,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             public ScenarioSpriteTargetComponentKind Kind;
             public SpriteRenderer SpriteRenderer;
             public UI2DSprite Ui2DSprite;
+            public ParticleSystemRenderer ParticleRenderer;
 
             public Sprite CurrentSprite
             {
@@ -25,6 +26,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                         return SpriteRenderer.sprite;
                     if (Kind == ScenarioSpriteTargetComponentKind.UI2DSprite && Ui2DSprite != null)
                         return Ui2DSprite.sprite2D;
+                    if (Kind == ScenarioSpriteTargetComponentKind.ParticleSystemRenderer && ParticleRenderer != null)
+                    {
+                        Material material = ParticleRenderer.material != null ? ParticleRenderer.material : ParticleRenderer.sharedMaterial;
+                        Texture2D texture = material != null ? material.mainTexture as Texture2D : null;
+                        return ScenarioSpriteReferenceLibrary.CreateFullTextureSprite(texture, texture != null ? texture.name : null);
+                    }
                     return null;
                 }
             }
@@ -93,6 +100,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 return target.SpriteRenderer != null;
             if (target.Kind == ScenarioSpriteTargetComponentKind.UI2DSprite)
                 return target.Ui2DSprite != null;
+            if (target.Kind == ScenarioSpriteTargetComponentKind.ParticleSystemRenderer)
+                return target.ParticleRenderer != null;
             return false;
         }
 
@@ -103,11 +112,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
 
             SpriteRenderer spriteRenderer = null;
             UI2DSprite ui2DSprite = null;
+            ParticleSystemRenderer particleRenderer = null;
 
             if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.SpriteRenderer)
                 spriteRenderer = transform.GetComponent<SpriteRenderer>() ?? transform.GetComponentInChildren<SpriteRenderer>(true);
             if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.UI2DSprite)
                 ui2DSprite = transform.GetComponent<UI2DSprite>() ?? transform.GetComponentInChildren<UI2DSprite>(true);
+            if (preferredKind == ScenarioSpriteTargetComponentKind.Auto || preferredKind == ScenarioSpriteTargetComponentKind.ParticleSystemRenderer)
+                particleRenderer = transform.GetComponent<ParticleSystemRenderer>() ?? transform.GetComponentInChildren<ParticleSystemRenderer>(true);
 
             if (spriteRenderer != null)
             {
@@ -128,6 +140,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     Transform = transform,
                     Kind = ScenarioSpriteTargetComponentKind.UI2DSprite,
                     Ui2DSprite = ui2DSprite
+                };
+            }
+
+            if (particleRenderer != null)
+            {
+                return new ResolvedTarget
+                {
+                    TargetPath = targetPath,
+                    Transform = transform,
+                    Kind = ScenarioSpriteTargetComponentKind.ParticleSystemRenderer,
+                    ParticleRenderer = particleRenderer
                 };
             }
 

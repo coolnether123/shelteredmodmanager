@@ -913,7 +913,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
     {
         Auto = 0,
         SpriteRenderer = 1,
-        UI2DSprite = 2
+        UI2DSprite = 2,
+        ParticleSystemRenderer = 3
     }
 
     /// <summary>

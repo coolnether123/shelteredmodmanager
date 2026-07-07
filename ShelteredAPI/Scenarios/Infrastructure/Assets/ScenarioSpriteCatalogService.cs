@@ -179,9 +179,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 ? familyMatcher.DescribeTarget(authoringTarget, target)
                 : null;
             bool allowEnvironmentPalette = IsEnvironmentArtTarget(authoringTarget);
+            bool allowWeatherEffectPalette = IsWeatherEffectArtTarget(authoringTarget);
             if (familyMatcher == null || !familyMatcher.HasVerifiedFamily(targetFamily))
             {
-                if (!allowEnvironmentPalette)
+                if (!allowEnvironmentPalette && !allowWeatherEffectPalette)
                 {
                     AddCustomSpriteCandidates(
                         definition,
@@ -197,8 +198,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 }
 
                 catalog.FamilyFiltered = false;
-                catalog.FilterSummary = "Scenario environment art";
-                catalog.GuidanceMessage = "Showing same-size loaded environment sprites so scenario wall and background art can be reused across built-in scenarios.";
+                catalog.FilterSummary = allowWeatherEffectPalette ? "Weather & effects art" : "Scenario environment art";
+                catalog.GuidanceMessage = allowWeatherEffectPalette
+                    ? "Showing same-size loaded weather and particle textures. Overrides save as sprite swaps and apply to the particle renderer material."
+                    : "Showing same-size loaded environment sprites so scenario wall and background art can be reused across built-in scenarios.";
             }
 
             List<ScenarioSpriteReferenceLibrary.LoadedSpriteReference> loadedSprites = ScenarioSpriteReferenceLibrary.GetLoadedSprites();
@@ -220,8 +223,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     && familyMatcher != null
                     && familyMatcher.IsExactVerifiedMatch(targetFamily, candidateFamily);
                 if (!exactMatch && !allowEnvironmentPalette)
-                    continue;
+                {
+                    if (!allowWeatherEffectPalette)
+                        continue;
+                }
                 if (!exactMatch && allowEnvironmentPalette && !IsEnvironmentCandidate(loaded, candidateFamily))
+                    continue;
+                if (!exactMatch && allowWeatherEffectPalette && !IsWeatherEffectCandidate(loaded, candidateFamily))
                     continue;
 
                 catalog.VanillaCandidates.Add(new SpriteCandidate
@@ -250,17 +258,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             {
                 catalog.GuidanceMessage = allowEnvironmentPalette && !catalog.FamilyFiltered
                     ? "No same-size loaded environment sprites were found for this scenario art target."
-                    : "No verified runtime replacements were found for the selected family '"
+                    : (allowWeatherEffectPalette && !catalog.FamilyFiltered
+                        ? "No same-size loaded weather/effect textures were found for this particle target."
+                        : "No verified runtime replacements were found for the selected family '"
                         + (familyMatcher != null ? familyMatcher.DescribeVerifiedFamily(targetFamily) : "<unknown>")
-                        + "'. The editor will not widen the list to same-size sprites.";
+                        + "'. The editor will not widen the list to same-size sprites.");
             }
             else
             {
                 catalog.GuidanceMessage = allowEnvironmentPalette && !catalog.FamilyFiltered
                     ? "Showing same-size loaded environment sprites, including built-in scenario room/background sheets when Unity has them loaded."
-                    : "Showing verified runtime replacements for the in-game family '"
+                    : (allowWeatherEffectPalette && !catalog.FamilyFiltered
+                        ? "Showing same-size loaded weather/effect textures. Scenario custom sprite patches are listed separately."
+                        : "Showing verified runtime replacements for the in-game family '"
                         + familyMatcher.DescribeVerifiedFamily(targetFamily)
-                        + "'. Scenario custom sprite patches are listed separately.";
+                        + "'. Scenario custom sprite patches are listed separately.");
             }
             return catalog;
         }
@@ -462,6 +474,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             }
         }
 
+        private static bool IsWeatherEffectArtTarget(ScenarioAuthoringTarget target)
+        {
+            return ScenarioWeatherEffectSpriteCatalogService.IsWeatherEffectTarget(target);
+        }
+
         internal static bool IsGeneratedPatchRuntimeKey(string runtimeSpriteKey)
         {
             return !string.IsNullOrEmpty(runtimeSpriteKey)
@@ -487,6 +504,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 + " "
                 + ((loaded != null ? loaded.TextureName : null) ?? string.Empty);
             return ContainsAny(combined, "wall", "background", "backdrop", "room", "bunker", "shelter", "surrounded", "stasis", "scenario");
+        }
+
+        private static bool IsWeatherEffectCandidate(
+            ScenarioSpriteReferenceLibrary.LoadedSpriteReference loaded,
+            ScenarioSpriteFamilyMatcher.FamilyProfile candidateFamily)
+        {
+            if (candidateFamily != null && !string.IsNullOrEmpty(candidateFamily.KindKey))
+            {
+                if (ContainsAny(candidateFamily.KindKey, "weather", "rain", "sand", "storm", "dust", "snow", "fog", "cloud", "particle", "effect"))
+                    return true;
+            }
+
+            string combined = ((loaded != null ? loaded.SpriteName : null) ?? string.Empty)
+                + " "
+                + ((loaded != null ? loaded.TextureName : null) ?? string.Empty);
+            return ContainsAny(combined, "weather", "rain", "sand", "storm", "dust", "snow", "fog", "cloud", "particle", "effect");
         }
 
         private static bool ContainsAny(string value, params string[] parts)

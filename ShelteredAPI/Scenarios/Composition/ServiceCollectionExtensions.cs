@@ -206,7 +206,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioAssetAuthoringContentBuilder(
                     resolver.Get<IScenarioAuthoringSectionHub>(),
                     resolver.Get<ScenarioSelectionScopeService>(),
-                    resolver.Get<ScenarioSpriteRuntimeResolver>());
+                    resolver.Get<ScenarioSpriteRuntimeResolver>(),
+                    resolver.Get<ScenarioWeatherEffectSpriteCatalogService>());
             });
         }
 
@@ -215,6 +216,7 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new SpritePatchValidator(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new SpritePatchBuilder(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new SpritePatchRuntimeRenderer(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioWeatherEffectSpriteCatalogService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new SpritePatchApplyService(

@@ -7,6 +7,7 @@ using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Application.Stages;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringCommandService
@@ -29,7 +30,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioPublishExportService publishExportService,
             ScenarioAuthoringBaseModeReloadService baseModeReloadService,
             ScenarioAuthoringTutorialService tutorialService,
-            ScenarioAuthoringSetupStateService setupStateService)
+            ScenarioAuthoringSetupStateService setupStateService,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -46,7 +48,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 publishExportService,
                 baseModeReloadService,
                 tutorialService,
-                setupStateService));
+                setupStateService,
+                weatherEffectSpriteCatalog));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -94,7 +97,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioPublishExportService publishExportService,
             ScenarioAuthoringBaseModeReloadService baseModeReloadService,
             ScenarioAuthoringTutorialService tutorialService,
-            ScenarioAuthoringSetupStateService setupStateService)
+            ScenarioAuthoringSetupStateService setupStateService,
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
         {
             return new IScenarioCommandHandler[]
             {
@@ -114,7 +118,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioWinLossCommandHandler(editorService),
                 new ScenarioPublishCommandHandler(publishExportService),
-                new SelectionCommandHandler(),
+                new SelectionCommandHandler(weatherEffectSpriteCatalog),
                 new ToolCommandHandler(layoutService)
             };
         }
