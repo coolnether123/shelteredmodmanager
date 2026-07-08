@@ -410,6 +410,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionMapLocationCycleIconPrefix = "scenario.map.location.icon_next.";
         public const string ActionInventoryStorageOpen = "scenario.inventory.storage.open_real";
         public const string ActionInventoryStorageClose = "scenario.inventory.storage.close_real";
+        public const string ActionVanillaInteractionReturnEditor = "shell.vanilla_interaction.return_editor";
     }
 
     internal enum ScenarioAuthoringTool
@@ -660,6 +661,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioMapRegionSelection MapSelection { get; set; }
         public bool StorageAuthoringActive { get; set; }
         public bool StorageAuthoringPreviousShellVisible { get; set; }
+        public bool VanillaInteractionActive { get; set; }
+        public bool VanillaInteractionPreviousShellVisible { get; set; }
+        public string VanillaInteractionKind { get; set; }
+        public string VanillaInteractionAssistNote { get; set; }
         public string FocusedEditorKind { get; set; }
         public int FocusedEditorIndex { get; set; }
         public bool FocusedEditorIsNew { get; set; }
@@ -720,6 +725,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 MapSelection = MapSelection != null ? MapSelection.Copy() : null,
                 StorageAuthoringActive = StorageAuthoringActive,
                 StorageAuthoringPreviousShellVisible = StorageAuthoringPreviousShellVisible,
+                VanillaInteractionActive = VanillaInteractionActive,
+                VanillaInteractionPreviousShellVisible = VanillaInteractionPreviousShellVisible,
+                VanillaInteractionKind = VanillaInteractionKind,
+                VanillaInteractionAssistNote = VanillaInteractionAssistNote,
                 FocusedEditorKind = FocusedEditorKind,
                 FocusedEditorIndex = FocusedEditorIndex,
                 FocusedEditorIsNew = FocusedEditorIsNew,

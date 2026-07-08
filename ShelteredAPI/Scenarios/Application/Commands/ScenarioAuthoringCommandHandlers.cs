@@ -411,6 +411,14 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                         message = "Authoring inspector already open.";
                     }
                     return true;
+                case ScenarioAuthoringActionIds.ActionVanillaInteractionReturnEditor:
+                    ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+                    if (vanillaInteraction != null)
+                        vanillaInteraction.CloseVanillaAndReturnToEditor(state);
+                    else
+                        state.ShellVisible = true;
+                    message = state.StatusMessage;
+                    return true;
                 case ScenarioAuthoringActionIds.ActionShellHideAll:
                 case ScenarioAuthoringActionIds.ActionShellMinimalMode:
                     _layoutService.HideAll(state);

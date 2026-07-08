@@ -1,6 +1,7 @@
 using System;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
@@ -73,6 +74,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             state.StorageAuthoringActive = true;
             state.ShellVisible = false;
             state.StatusMessage = "Shelter storage authoring active. Use the real storage window; changes sync into the draft.";
+            ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+            if (vanillaInteraction != null)
+                vanillaInteraction.BeginPanelSession(state, ScenarioVanillaInteractionRuntimeService.KindStorage, "Changes sync to your scenario. Storage live-truth is captured into the stockpile draft.");
             message = state.StatusMessage;
             return true;
         }
@@ -82,7 +86,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             if (_runtimeService != null)
                 _runtimeService.CloseVanillaStorage();
 
-            ScenarioStorageAuthoringRuntimeService.RestoreSuppliesWorkspace(state);
+            ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+            if (vanillaInteraction != null && state.VanillaInteractionActive)
+                vanillaInteraction.ReturnToEditor(state);
+            else
+                ScenarioStorageAuthoringRuntimeService.RestoreSuppliesWorkspace(state);
             if (_layoutService != null)
                 _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.Stockpile, true);
 

@@ -3,6 +3,7 @@ using System.Globalization;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Map;
+using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -101,6 +102,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 state.MapAuthoringMode = "select";
             state.ShellVisible = false;
             state.StatusMessage = "Map authoring active. Select or place authored locations on the real map.";
+            ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+            if (vanillaInteraction != null)
+                vanillaInteraction.BeginPanelSession(state, ScenarioVanillaInteractionRuntimeService.KindMap, "Changes sync to your scenario. Map picks update authored location data.");
             message = state.StatusMessage;
             return true;
         }
@@ -113,7 +117,11 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 _runtimeService.CloseVanillaMap();
             }
 
-            RestoreMapWorkspace(state);
+            ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+            if (vanillaInteraction != null && state.VanillaInteractionActive)
+                vanillaInteraction.ReturnToEditor(state);
+            else
+                RestoreMapWorkspace(state);
             message = "Map authoring closed. Map workspace active.";
             state.StatusMessage = message;
             return true;

@@ -185,13 +185,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
             bool reloadPending = snapshot != null && snapshot.State != null && snapshot.State.ReloadPending;
             bool worldLoading = snapshot != null && snapshot.State != null && snapshot.State.WorldLoading;
+            bool vanillaInteractionActive = snapshot != null && snapshot.State != null && snapshot.State.VanillaInteractionActive;
             bool mapAuthoringActive = snapshot != null && snapshot.State != null && snapshot.State.MapAuthoringActive;
             _visible = snapshot != null
                 && snapshot.State != null
                 && snapshot.State.IsActive
-                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending || worldLoading || mapAuthoringActive)
+                && (snapshot.State.ShellVisible || isPlaytesting || reloadPending || worldLoading || vanillaInteractionActive || mapAuthoringActive)
                 && snapshot.ShellViewModel != null
-                && (!vanillaBlockingPanelOpen || worldLoading || mapAuthoringActive);
+                && (!vanillaBlockingPanelOpen || worldLoading || vanillaInteractionActive || mapAuthoringActive);
 
             if (_runtime != null)
                 _runtime.enabled = _visible || wasVisible || _rootAlpha > 0.001f;
@@ -331,6 +332,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     inputCapture.SetTransitionActive(_animations.TransitionActive);
                     Rect playtestContentRect = ScenarioAuthoringShellLayout.BuildContentRect(scaledWidth, topRect, statusRect);
                     DrawTooltipOverlayCore(scaledWidth, scaledHeight, hudReserveRect, playtestContentRect);
+                    return;
+                }
+
+                if (_snapshot.State != null && _snapshot.State.VanillaInteractionActive)
+                {
+                    DrawVanillaInteractionAssistStripCore(scaledWidth, scaledHeight, inputCapture);
+                    if (_snapshot.State.MapAuthoringActive)
+                        DrawMapAuthoringOverlayCore(scaledWidth, scaledHeight, inputCapture);
+                    inputCapture.SetTextFieldFocused(false);
+                    inputCapture.SetKeyboardCaptured(false);
+                    inputCapture.SetPopupOpen(false);
+                    inputCapture.SetTransitionActive(false);
                     return;
                 }
 

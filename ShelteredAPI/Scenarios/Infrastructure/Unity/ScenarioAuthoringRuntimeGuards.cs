@@ -60,14 +60,26 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             return state != null && state.StorageAuthoringActive;
         }
 
+        public static bool IsVanillaInteractionActive()
+        {
+            if (!IsAuthoringActive())
+                return false;
+
+            ScenarioAuthoringState state = GetState();
+            return state != null && state.VanillaInteractionActive;
+        }
+
         public static bool IsVanillaAuthoringPanelActive()
         {
-            return IsMapAuthoringActive() || IsStorageAuthoringActive();
+            return IsVanillaInteractionActive();
         }
 
         public static bool ShouldCaptureGameplayInput()
         {
             if (!IsAuthoringActive())
+                return false;
+
+            if (IsVanillaInteractionActive())
                 return false;
 
             if (IsOpeningCutscenePreviewActive())
@@ -86,6 +98,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         public static bool ShouldMaintainPausedSimulation()
         {
             if (IsOpeningCutscenePreviewActive())
+                return false;
+
+            if (IsVanillaInteractionActive())
                 return false;
 
             return IsAuthoringActive() && !IsPlaytesting();
@@ -133,7 +148,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         {
             if (!ShouldCaptureGameplayInput())
                 return false;
-            if (IsStorageAuthoringActive())
+
+            if (IsVanillaInteractionActive())
                 return false;
 
             switch (button)

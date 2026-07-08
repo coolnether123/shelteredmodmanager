@@ -90,8 +90,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 bool placementActive = ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
                 bool dragPanConsumedClick = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().ShouldSuppressSelectionClickThisFrame();
+                bool vanillaInteractionClick = IsVanillaInteractionClickCandidate();
                 if (!placementActive
                     && !dragPanConsumedClick
+                    && !vanillaInteractionClick
                     && !worldSelectionSuppressedByUi
                     && ScenarioAuthoringInputActions.IsConfirmSelectionDown()
                     && hovered != null
@@ -104,6 +106,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (ScenarioAuthoringInputActions.IsClearSelectionDown())
             {
+                if (IsVanillaInteractionClickCandidate())
+                {
+                    ScenarioHoverVisualService.Instance.UpdateFromState(state);
+                    ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
+                    return changed;
+                }
+
                 ScenarioAuthoringTarget menuTarget = state.SelectedTarget ?? hovered;
                 if (selectionMode && menuTarget != null)
                 {
@@ -125,6 +134,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioHoverVisualService.Instance.UpdateFromState(state);
             ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
             return changed;
+        }
+
+        private static bool IsVanillaInteractionClickCandidate()
+        {
+            try
+            {
+                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+                return service != null && service.CanStartWorldInteraction();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private bool TryResolveCandidateStack(ScenarioAuthoringState state, out List<ScenarioAuthoringTarget> targets)

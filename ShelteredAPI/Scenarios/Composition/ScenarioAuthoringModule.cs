@@ -70,6 +70,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioMapDraftService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioStorageAuthoringRuntimeService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioVanillaInteractionRuntimeService(); });
             services.AddSingleton<IScenarioAuthoringSectionHub>(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringSectionHub(

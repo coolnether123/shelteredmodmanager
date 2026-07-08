@@ -366,6 +366,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioStorageAuthoringRuntimeService storageAuthoring = ScenarioCompositionRoot.Resolve<ScenarioStorageAuthoringRuntimeService>();
             if (!snapshot.WorldLoading && storageAuthoring != null && storageAuthoring.Synchronize(snapshot))
                 changed = true;
+            ScenarioVanillaInteractionRuntimeService vanillaInteraction = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+            if (!snapshot.WorldLoading && vanillaInteraction != null && vanillaInteraction.Synchronize(snapshot))
+                changed = true;
 
             _stageCoordinator.Synchronize(context);
             changed |= _selectionScopeService.ClearSelectionIfOutOfScope(snapshot);
@@ -399,6 +402,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (_state == null)
                     _state = new ScenarioAuthoringState();
                 _state.StatusMessage = message ?? string.Empty;
+            }
+
+            RaiseStateChanged();
+        }
+
+        internal void BeginVanillaInteractionSession(string kind, string assistNote)
+        {
+            lock (_sync)
+            {
+                if (_state == null)
+                    _state = new ScenarioAuthoringState();
+
+                if (!_state.VanillaInteractionActive)
+                    _state.VanillaInteractionPreviousShellVisible = _state.ShellVisible;
+
+                _state.VanillaInteractionActive = true;
+                _state.VanillaInteractionKind = kind;
+                _state.VanillaInteractionAssistNote = assistNote ?? string.Empty;
+                _state.ShellVisible = false;
+                if (!string.IsNullOrEmpty(assistNote))
+                    _state.StatusMessage = assistNote;
             }
 
             RaiseStateChanged();
