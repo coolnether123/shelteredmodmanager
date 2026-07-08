@@ -257,20 +257,45 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 Traits.Strength strength;
                 if (TryParseStrengthTrait(traitId, out strength))
                 {
+                    if (member.traits.HasStrength(strength))
+                        continue;
+
+                    Traits.Weakness pairedWeakness;
+                    if (ScenarioFamilyMemberFactory.TryGetPairedWeakness(strength, out pairedWeakness)
+                        && member.traits.HasWeakness(pairedWeakness))
+                    {
+                        result.AddMessage("Strength trait conflicts with active paired weakness: " + traitId);
+                        continue;
+                    }
+
                     if (member.traits.AddStrength(strength))
                         result.FamilyChanges++;
                     else
-                        result.AddMessage("Strength trait was already active or blocked by its paired weakness: " + traitId);
+                        result.AddMessage("Strength trait could not be applied: " + traitId);
                     continue;
                 }
 
                 Traits.Weakness weakness;
                 if (TryParseWeaknessTrait(traitId, out weakness))
                 {
+                    if (member.traits.HasWeakness(weakness))
+                    {
+                        member.traits.SetWeaknessVisible(weakness, true);
+                        continue;
+                    }
+
+                    Traits.Strength pairedStrength;
+                    if (ScenarioFamilyMemberFactory.TryGetPairedStrength(weakness, out pairedStrength)
+                        && member.traits.HasStrength(pairedStrength))
+                    {
+                        result.AddMessage("Weakness trait conflicts with active paired strength: " + traitId);
+                        continue;
+                    }
+
                     if (member.traits.AddWeakness(weakness, true))
                         result.FamilyChanges++;
                     else
-                        result.AddMessage("Weakness trait was already active or blocked by its paired strength: " + traitId);
+                        result.AddMessage("Weakness trait could not be applied: " + traitId);
                     continue;
                 }
 

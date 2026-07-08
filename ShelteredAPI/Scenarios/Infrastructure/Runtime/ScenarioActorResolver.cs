@@ -245,7 +245,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             int familyId;
             if (!TryGetFamilyMemberId(member, out familyId))
             {
-                message = "Actor binding skipped because the spawned survivor does not have a stable FamilyMember id yet.";
+                Resolve(definition, actorRef, authoredConfig, components, null);
                 return false;
             }
 
