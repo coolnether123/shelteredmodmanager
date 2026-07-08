@@ -17,6 +17,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         private static readonly Dictionary<string, CachedPortrait> ColorizedPortraitCache = new Dictionary<string, CachedPortrait>();
         private static Material AvatarMaterialTemplate;
         private static int LastAvatarMaterialLookupFrame = -120;
+        private const float PortraitAlphaThreshold = 0.02f;
+        private const int MinimumCropPadding = 1;
 
         public static Sprite Resolve(FamilyMember member)
         {
@@ -220,12 +222,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             if (source == null)
                 return cached != null ? cached.Texture : null;
 
+            Texture2D portraitSource = CropToDominantPortraitRegion(source);
             bool usedAvatarMaterial = false;
-            Texture2D rendered = RenderWithAvatarMaterial(source, hair, skin, shirt, pants, out usedAvatarMaterial);
+            Texture2D rendered = RenderWithAvatarMaterial(portraitSource, hair, skin, shirt, pants, out usedAvatarMaterial);
             if (rendered == null && cached != null && cached.Texture != null)
                 rendered = cached.Texture;
             else if (rendered == null)
-                rendered = RenderFallbackTint(source, hair, skin, shirt, pants);
+                rendered = RenderFallbackTint(portraitSource, hair, skin, shirt, pants);
 
             if (rendered != null)
             {
@@ -242,6 +245,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             if (source != sprite.texture)
                 UnityEngine.Object.Destroy(source);
+            if (portraitSource != null && portraitSource != source)
+                UnityEngine.Object.Destroy(portraitSource);
 
             return rendered;
         }
@@ -313,6 +318,157 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                     RenderTexture.ReleaseTemporary(renderTexture);
                 }
             }
+        }
+
+        private static Texture2D CropToDominantPortraitRegion(Texture2D source)
+        {
+            if (source == null || source.width <= 1 || source.height <= 1)
+                return source;
+
+            Color[] pixels;
+            try
+            {
+                pixels = source.GetPixels();
+            }
+            catch
+            {
+                return source;
+            }
+
+            RectInt crop;
+            if (!TryFindDominantAlphaCrop(pixels, source.width, source.height, out crop))
+                return source;
+
+            if (crop.X <= 0
+                && crop.Y <= 0
+                && crop.Width >= source.width
+                && crop.Height >= source.height)
+            {
+                return source;
+            }
+
+            Texture2D copy = new Texture2D(crop.Width, crop.Height, TextureFormat.ARGB32, false);
+            copy.filterMode = FilterMode.Point;
+            copy.wrapMode = TextureWrapMode.Clamp;
+            Color[] cropped = new Color[crop.Width * crop.Height];
+            for (int y = 0; y < crop.Height; y++)
+            {
+                for (int x = 0; x < crop.Width; x++)
+                {
+                    cropped[x + (y * crop.Width)] = pixels[(crop.X + x) + ((crop.Y + y) * source.width)];
+                }
+            }
+
+            copy.SetPixels(cropped);
+            copy.Apply();
+            return copy;
+        }
+
+        private static bool TryFindDominantAlphaCrop(Color[] pixels, int width, int height, out RectInt crop)
+        {
+            crop = new RectInt(0, 0, width, height);
+            if (pixels == null || pixels.Length != width * height)
+                return false;
+
+            bool[] visited = new bool[pixels.Length];
+            int[] queue = new int[pixels.Length];
+            AlphaComponent largest = new AlphaComponent();
+            AlphaComponent retained = new AlphaComponent();
+            for (int index = 0; index < pixels.Length; index++)
+            {
+                if (visited[index] || pixels[index].a <= PortraitAlphaThreshold)
+                    continue;
+
+                AlphaComponent component = FloodAlphaComponent(pixels, visited, queue, width, height, index);
+                if (component.Count > largest.Count)
+                    largest = component;
+            }
+
+            if (largest.Count <= 0)
+                return false;
+
+            int minimumArea = Mathf.Max(4, largest.Count / 5);
+            for (int index = 0; index < pixels.Length; index++)
+                visited[index] = false;
+
+            for (int index = 0; index < pixels.Length; index++)
+            {
+                if (visited[index] || pixels[index].a <= PortraitAlphaThreshold)
+                    continue;
+
+                AlphaComponent component = FloodAlphaComponent(pixels, visited, queue, width, height, index);
+                if (component.Count >= minimumArea || Overlaps(component, largest))
+                    retained.Include(component);
+            }
+
+            if (retained.Count <= 0)
+                retained = largest;
+
+            int minX = Mathf.Max(0, retained.MinX - MinimumCropPadding);
+            int minY = Mathf.Max(0, retained.MinY - MinimumCropPadding);
+            int maxX = Mathf.Min(width - 1, retained.MaxX + MinimumCropPadding);
+            int maxY = Mathf.Min(height - 1, retained.MaxY + MinimumCropPadding);
+            crop = new RectInt(minX, minY, Mathf.Max(1, maxX - minX + 1), Mathf.Max(1, maxY - minY + 1));
+            return true;
+        }
+
+        private static AlphaComponent FloodAlphaComponent(
+            Color[] pixels,
+            bool[] visited,
+            int[] queue,
+            int width,
+            int height,
+            int startIndex)
+        {
+            AlphaComponent component = new AlphaComponent();
+            int head = 0;
+            int tail = 0;
+            queue[tail++] = startIndex;
+            visited[startIndex] = true;
+
+            while (head < tail)
+            {
+                int index = queue[head++];
+                int x = index % width;
+                int y = index / width;
+                component.Include(x, y);
+
+                EnqueueAlphaNeighbor(pixels, visited, queue, width, height, x - 1, y, ref tail);
+                EnqueueAlphaNeighbor(pixels, visited, queue, width, height, x + 1, y, ref tail);
+                EnqueueAlphaNeighbor(pixels, visited, queue, width, height, x, y - 1, ref tail);
+                EnqueueAlphaNeighbor(pixels, visited, queue, width, height, x, y + 1, ref tail);
+            }
+
+            return component;
+        }
+
+        private static void EnqueueAlphaNeighbor(
+            Color[] pixels,
+            bool[] visited,
+            int[] queue,
+            int width,
+            int height,
+            int x,
+            int y,
+            ref int tail)
+        {
+            if (x < 0 || y < 0 || x >= width || y >= height)
+                return;
+
+            int index = x + (y * width);
+            if (visited[index] || pixels[index].a <= PortraitAlphaThreshold)
+                return;
+
+            visited[index] = true;
+            queue[tail++] = index;
+        }
+
+        private static bool Overlaps(AlphaComponent left, AlphaComponent right)
+        {
+            return left.MinX <= right.MaxX
+                && left.MaxX >= right.MinX
+                && left.MinY <= right.MaxY
+                && left.MaxY >= right.MinY;
         }
 
         private static Texture2D RenderWithAvatarMaterial(Texture2D source, Color hair, Color skin, Color shirt, Color pants, out bool usedAvatarMaterial)
@@ -450,6 +606,73 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             public Texture2D Texture;
             public bool Exact;
+        }
+
+        private struct RectInt
+        {
+            public RectInt(int x, int y, int width, int height)
+            {
+                X = x;
+                Y = y;
+                Width = width;
+                Height = height;
+            }
+
+            public int X;
+            public int Y;
+            public int Width;
+            public int Height;
+        }
+
+        private struct AlphaComponent
+        {
+            public int Count;
+            public int MinX;
+            public int MinY;
+            public int MaxX;
+            public int MaxY;
+
+            public void Include(int x, int y)
+            {
+                if (Count == 0)
+                {
+                    MinX = x;
+                    MaxX = x;
+                    MinY = y;
+                    MaxY = y;
+                }
+                else
+                {
+                    if (x < MinX) MinX = x;
+                    if (x > MaxX) MaxX = x;
+                    if (y < MinY) MinY = y;
+                    if (y > MaxY) MaxY = y;
+                }
+
+                Count++;
+            }
+
+            public void Include(AlphaComponent component)
+            {
+                if (component.Count <= 0)
+                    return;
+
+                if (Count == 0)
+                {
+                    MinX = component.MinX;
+                    MaxX = component.MaxX;
+                    MinY = component.MinY;
+                    MaxY = component.MaxY;
+                    Count = component.Count;
+                    return;
+                }
+
+                if (component.MinX < MinX) MinX = component.MinX;
+                if (component.MaxX > MaxX) MaxX = component.MaxX;
+                if (component.MinY < MinY) MinY = component.MinY;
+                if (component.MaxY > MaxY) MaxY = component.MaxY;
+                Count += component.Count;
+            }
         }
     }
 }
