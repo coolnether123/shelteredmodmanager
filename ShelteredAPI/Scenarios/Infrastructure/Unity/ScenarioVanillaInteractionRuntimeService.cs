@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using ModAPI.Core;
 using UnityEngine;
 
@@ -14,6 +15,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         public const string KindWorld = "World";
         public const string KindMap = "Map";
         public const string KindStorage = "Storage";
+
+        private static readonly MethodInfo InteractionManagerShowInteractionMenu =
+            typeof(InteractionManager).GetMethod("ShowInteractionMenu", BindingFlags.NonPublic | BindingFlags.Instance);
 
         // Authoring allows live world/inventory mutations and blocks only flows that leave
         // or replace the editable scenario world.
@@ -30,6 +34,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private string _trackedInteractionType;
         private float _jobWatchUntil;
         private bool _pauseReleasedForInteraction;
+        private Obj_Base _pendingMenuObject;
+        private float _pendingMenuOpenUntil;
 
         public bool IsActive()
         {
@@ -58,8 +64,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (UICamera.hoveredObject != null)
                 return false;
 
-            Obj_Base selected = InteractionManager.Instance != null ? InteractionManager.Instance.SelectedObject : null;
-            return selected != null && selected.GetPlayerInteractions().Count > 0;
+            Obj_Base selected = ResolveInteractableUnderPointer();
+            return HasPlayerInteractions(selected);
         }
 
         public bool TryResolveSyntheticLeftInteract(PlatformInput.InputButton button, bool isDown, bool isUp, bool isHeld, out bool result)
@@ -75,13 +81,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return true;
             }
 
-            if (button == PlatformInput.InputButton.Interact && isUp && UnityEngine.Input.GetMouseButtonUp(0))
-            {
-                BeginWorldObjectSession("Left-click object interaction.");
-                result = true;
-                return true;
-            }
-
             return false;
         }
 
@@ -93,6 +92,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return;
 
             BeginWorldObjectSession("Right-click object interaction.");
+        }
+
+        public bool TryOpenWorldInteractionUnderPointer()
+        {
+            if (!CanStartWorldInteraction())
+                return false;
+
+            Obj_Base selected = ResolveInteractableUnderPointer();
+            if (!HasPlayerInteractions(selected))
+                return false;
+
+            BeginWorldObjectSession("Right-click object interaction.");
+            _pendingMenuObject = selected;
+            _pendingMenuOpenUntil = RealTime.time + 0.75f;
+            _jobWatchUntil = RealTime.time + 2f;
+            return true;
         }
 
         public void BeginPanelSession(ScenarioAuthoringState state, string kind, string assistNote)
@@ -142,6 +157,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 return false;
 
             state.VanillaInteractionAssistNote = BuildAssistNote(state.VanillaInteractionKind);
+
+            if (_pendingMenuObject != null)
+            {
+                if (TryOpenPendingWorldMenu())
+                    return false;
+
+                if (RealTime.time < _pendingMenuOpenUntil)
+                    return false;
+
+                _pendingMenuObject = null;
+                _pendingMenuOpenUntil = 0f;
+            }
 
             if (HasActiveVanillaPanelOrMenu() || HasTrackedJob())
                 return false;
@@ -198,6 +225,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             _trackedMemberId = -1;
             _trackedObjectId = -1;
             _trackedInteractionType = null;
+            _pendingMenuObject = null;
+            _pendingMenuOpenUntil = 0f;
             _jobWatchUntil = 0f;
 
             if (wasStorage)
@@ -229,6 +258,39 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         {
             ScenarioAuthoringVanillaPanelVisibilityService visibility = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>();
             return visibility != null && visibility.HasBlockingPanelOpen();
+        }
+
+        private bool TryOpenPendingWorldMenu()
+        {
+            if (_pendingMenuObject == null)
+                return false;
+
+            if (UnityEngine.Input.GetMouseButton(1)
+                || UnityEngine.Input.GetMouseButtonDown(1)
+                || UnityEngine.Input.GetMouseButtonUp(1))
+                return false;
+
+            try
+            {
+                if (InteractionManager.Instance == null || InteractionManagerShowInteractionMenu == null)
+                    return false;
+
+                if (InteractionManager.Instance.SelectedObject != _pendingMenuObject)
+                    InteractionManager.Instance.SelectObject(_pendingMenuObject);
+
+                InteractionManagerShowInteractionMenu.Invoke(InteractionManager.Instance, null);
+                _pendingMenuObject = null;
+                _pendingMenuOpenUntil = 0f;
+                _jobWatchUntil = RealTime.time + 2f;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _pendingMenuObject = null;
+                _pendingMenuOpenUntil = 0f;
+                MMLog.WarnOnce("ScenarioVanillaInteraction.OpenMenu", ex.Message);
+                return false;
+            }
         }
 
         private bool HasTrackedJob()
@@ -311,6 +373,115 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             if (string.Equals(interactionType, "evacuate", StringComparison.OrdinalIgnoreCase))
                 return "Evacuation is blocked while authoring because it exits the authored shelter flow.";
             return "That vanilla action is blocked while authoring because it would leave the editable scenario world.";
+        }
+
+        private static Obj_Base ResolveInteractableUnderPointer()
+        {
+            Obj_Base selected = InteractionManager.Instance != null ? InteractionManager.Instance.SelectedObject : null;
+            if (HasPlayerInteractions(selected))
+                return selected;
+
+            Obj_Base hovered = FindInteractableUnderPointer();
+            if (hovered == null)
+                return selected;
+
+            try
+            {
+                if (InteractionManager.Instance != null && InteractionManager.Instance.SelectedObject != hovered)
+                    InteractionManager.Instance.SelectObject(hovered);
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ScenarioVanillaInteraction.SelectHovered", ex.Message);
+            }
+
+            return hovered;
+        }
+
+        private static Obj_Base FindInteractableUnderPointer()
+        {
+            Camera camera = Camera.main;
+            if (camera == null)
+            {
+                Camera[] cameras = Camera.allCameras;
+                if (cameras == null || cameras.Length == 0)
+                    return null;
+
+                camera = cameras[0];
+            }
+
+            Vector3 mouse = UnityEngine.Input.mousePosition;
+            mouse.z = Mathf.Abs(camera.transform.position.z);
+            Vector3 worldPoint = camera.ScreenToWorldPoint(mouse);
+
+            try
+            {
+                Collider2D[] hits2D = Physics2D.OverlapPointAll(new Vector2(worldPoint.x, worldPoint.y));
+                for (int i = 0; hits2D != null && i < hits2D.Length; i++)
+                {
+                    Obj_Base candidate = ResolveObjBase(hits2D[i] != null ? hits2D[i].gameObject : null);
+                    if (HasPlayerInteractions(candidate))
+                        return candidate;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ScenarioVanillaInteraction.HitTest2D", ex.Message);
+            }
+
+            try
+            {
+                Ray ray = camera.ScreenPointToRay(UnityEngine.Input.mousePosition);
+                RaycastHit[] hits = Physics.RaycastAll(ray, 1000f);
+                Array.Sort(hits, CompareRaycastHit);
+                for (int i = 0; hits != null && i < hits.Length; i++)
+                {
+                    Collider collider = hits[i].collider;
+                    Obj_Base candidate = ResolveObjBase(collider != null ? collider.gameObject : null);
+                    if (HasPlayerInteractions(candidate))
+                        return candidate;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ScenarioVanillaInteraction.HitTest3D", ex.Message);
+            }
+
+            return null;
+        }
+
+        private static Obj_Base ResolveObjBase(GameObject gameObject)
+        {
+            if (gameObject == null)
+                return null;
+
+            Obj_Base direct = gameObject.GetComponent<Obj_Base>();
+            if (direct != null)
+                return direct;
+
+            return gameObject.GetComponentInParent<Obj_Base>();
+        }
+
+        private static bool HasPlayerInteractions(Obj_Base obj)
+        {
+            if (obj == null)
+                return false;
+
+            try
+            {
+                List<string> interactions = obj.GetPlayerInteractions();
+                return interactions != null && interactions.Count > 0;
+            }
+            catch (Exception ex)
+            {
+                MMLog.WarnOnce("ScenarioVanillaInteraction.PlayerInteractions", ex.Message);
+                return false;
+            }
+        }
+
+        private static int CompareRaycastHit(RaycastHit left, RaycastHit right)
+        {
+            return left.distance.CompareTo(right.distance);
         }
     }
 }

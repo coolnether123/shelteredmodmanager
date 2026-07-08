@@ -90,7 +90,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 bool placementActive = ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
                 bool dragPanConsumedClick = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>().ShouldSuppressSelectionClickThisFrame();
-                bool vanillaInteractionClick = IsVanillaInteractionClickCandidate();
+                bool vanillaInteractionClick = IsVanillaInteractionRightClickCandidate();
                 if (!placementActive
                     && !dragPanConsumedClick
                     && !vanillaInteractionClick
@@ -104,15 +104,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
-            if (ScenarioAuthoringInputActions.IsClearSelectionDown())
+            if (IsVanillaInteractionRightClickCandidate())
             {
-                if (IsVanillaInteractionClickCandidate())
+                if (TryOpenVanillaInteractionFromRightClick())
                 {
                     ScenarioHoverVisualService.Instance.UpdateFromState(state);
                     ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
-                    return changed;
+                    return true;
                 }
 
+                ScenarioHoverVisualService.Instance.UpdateFromState(state);
+                ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
+                return changed;
+            }
+
+            if (ScenarioAuthoringInputActions.IsClearSelectionDown())
+            {
                 ScenarioAuthoringTarget menuTarget = state.SelectedTarget ?? hovered;
                 if (selectionMode && menuTarget != null)
                 {
@@ -136,12 +143,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return changed;
         }
 
-        private static bool IsVanillaInteractionClickCandidate()
+        private static bool IsVanillaInteractionRightClickCandidate()
         {
+            if (!UnityEngine.Input.GetMouseButtonDown(1)
+                && !UnityEngine.Input.GetMouseButtonUp(1)
+                && !UnityEngine.Input.GetMouseButton(1))
+                return false;
+
             try
             {
                 ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
                 return service != null && service.CanStartWorldInteraction();
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryOpenVanillaInteractionFromRightClick()
+        {
+            if (!UnityEngine.Input.GetMouseButtonUp(1))
+                return false;
+
+            try
+            {
+                ScenarioVanillaInteractionRuntimeService service = ScenarioCompositionRoot.Resolve<ScenarioVanillaInteractionRuntimeService>();
+                return service != null && service.TryOpenWorldInteractionUnderPointer();
             }
             catch
             {

@@ -20,7 +20,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                     return false;
 
                 BasePanel topPanel = manager.GetTopPanel();
-                return topPanel != null && topPanel.gameObject != null && topPanel.gameObject.activeInHierarchy;
+                return IsPanelBlocking(topPanel);
             }
             catch
             {
@@ -42,7 +42,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 for (int i = stack.Count - 1; i >= 0; i--)
                 {
                     BasePanel panel = stack[i];
-                    if (panel != null && panel.gameObject != null && panel.gameObject.activeInHierarchy)
+                    if (IsPanelBlocking(panel))
                         return true;
                 }
             }
@@ -52,6 +52,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             }
 
             return false;
+        }
+
+        private static bool IsPanelBlocking(BasePanel panel)
+        {
+            if (panel == null)
+                return false;
+
+            if (panel.IsShowing())
+                return true;
+
+            return panel.gameObject != null && panel.gameObject.activeInHierarchy;
         }
     }
 }
