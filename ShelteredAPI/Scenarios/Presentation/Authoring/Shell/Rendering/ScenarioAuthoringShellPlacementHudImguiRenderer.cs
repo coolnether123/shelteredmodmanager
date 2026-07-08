@@ -45,15 +45,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || _snapshot.State.Settings == null
                 || _snapshot.State.Settings.GetBool("visuals.snap_to_grid", true);
             float x = rect.xMax - rightWidth - 12f;
-            DrawButton(new Rect(x, rect.y + 18f, actionWidth, 28f), new ScenarioAuthoringInspectorAction
+            string snapActionId = ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid";
+            Rect snapRect = new Rect(x, rect.y + 18f, actionWidth, 28f);
+            RegisterTourTarget("action:" + snapActionId, snapRect);
+            if (DrawPlainButton(
+                snapRect,
+                new GUIContent(snapOn ? "Snap On" : "Snap Off", "Toggle default scene-sprite snapping. Hold Shift for the temporary opposite."),
+                snapOn ? _activeButtonStyle : _buttonStyle,
+                true))
             {
-                Id = ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid",
-                Label = snapOn ? "Snap On" : "Snap Off",
-                Hint = "Toggle default scene-sprite snapping. Hold Shift for the temporary opposite.",
-                Enabled = true,
-                Emphasized = snapOn,
-                IconText = "SN"
-            }, false);
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(snapActionId);
+                if (Event.current != null)
+                    Event.current.Use();
+            }
             x += actionWidth + actionGap;
 
             DrawDisabledPlacementHudButton(new Rect(x, rect.y + 18f, actionWidth, 28f), "Rotate/Flip", "No orientation action is exposed for this asset.");

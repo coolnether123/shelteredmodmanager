@@ -1793,7 +1793,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float portraitHeight = 176f;
             Rect portraitRect = new Rect((viewRect.width - 176f) * 0.5f, 30f, 176f, portraitHeight);
-            DrawCastPortrait(portraitRect, editor.Portrait);
+            DrawCastPortrait(portraitRect, editor.Portrait, false);
 
             float y = portraitRect.yMax + 10f;
             for (int i = 0; editor.TextureRows != null && i < editor.TextureRows.Length; i++)
@@ -3669,6 +3669,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCastPortrait(Rect rect, ScenarioCastCardViewModel card)
         {
+            DrawCastPortrait(rect, card, true);
+        }
+
+        private void DrawCastPortrait(Rect rect, ScenarioCastCardViewModel card, bool showColorSwatches)
+        {
             ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, _uiContext.Styles.PanelInsetTexture);
             ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
             Rect imageRect = new Rect(rect.x + 5f, rect.y + 5f, rect.width - 10f, rect.height - 22f);
@@ -3684,6 +3689,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawSpritePreview(imageRect, card.PortraitSprite, false);
             }
+
+            if (!showColorSwatches || card == null)
+                return;
 
             float swatch = 9f;
             float y = rect.yMax - swatch - 5f;
