@@ -78,6 +78,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
         public void Render(ScenarioAuthoringPresentationSnapshot snapshot)
         {
+            if (ScenarioOpeningCutsceneAuthoringService.IsPreviewActive)
+            {
+                Hide();
+                return;
+            }
+
             if (snapshot == null || snapshot.State == null || !snapshot.State.IsActive)
             {
                 Hide();

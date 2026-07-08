@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 
 using ModAPI.Core;
@@ -16,12 +17,15 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         private const float PreviewStartTimeoutSeconds = 4f;
         private static readonly BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
         private static readonly BindingFlags InstanceAny = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        private static readonly BindingFlags StaticAny = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
         private static readonly FieldInfo PanelInputActiveField = typeof(UIPanelManager).GetField("m_bInputActive", InstancePrivate);
         private static readonly FieldInfo PanelNextFrameInputActiveField = typeof(UIPanelManager).GetField("m_bNextFrameInputActive", InstancePrivate);
         private static readonly FieldInfo PanelIgnoreInputField = typeof(UIPanelManager).GetField("m_bIgnoreInput", InstancePrivate);
         private static readonly FieldInfo PanelTimePausedField = typeof(UIPanelManager).GetField("m_bTimePaused", InstancePrivate);
         private static readonly FieldInfo InteractionSelectedMemberField = typeof(InteractionManager).GetField("selectedMember", InstancePrivate);
         private static readonly FieldInfo InteractionSelectedMemberIndexField = typeof(InteractionManager).GetField("selectedMemberIndex", InstancePrivate);
+        private static readonly FieldInfo GameTimeCurrentDayField = typeof(GameTime).GetField("current_day", StaticAny);
+        private static readonly FieldInfo GameTimeCurrentHourField = typeof(GameTime).GetField("current_hour", StaticAny);
         private static PreviewContext _activePreview;
 
         public static bool IsPreviewActive
@@ -169,6 +173,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 PreviewContext preview = BeginPreview(state, manager, intro);
                 ResetCutsceneForReplay(intro);
                 preview.OriginalPersonNames = RebindPreviewPeopleToLiveFamily(intro);
+                preview.OriginalStagePersonNames = RebindPreviewStagesToLiveFamily(intro, preview.OriginalPersonNames);
                 if (!TryPreparePreviewPrerequisites(preview, out message))
                 {
                     RestorePreview(preview, null);
@@ -241,6 +246,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 return false;
             }
 
+            preview.CaptureAndSatisfyGameTimeGate();
             return true;
         }
 
@@ -336,6 +342,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
             RestoreVanillaPanelInputForAuthoring("opening cutscene preview");
             RestorePreviewPeople(preview.Cutscene, preview.OriginalPersonNames);
+            RestorePreviewStages(preview.Cutscene, preview.OriginalStagePersonNames);
             RestorePreviewPrerequisites(preview);
             ScenarioAuthoringPauseService.Instance.EnsurePaused("Opening cutscene preview finished.");
             MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview restored authoring pause. scene="
@@ -349,6 +356,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
 
             preview.RestoreCutsceneWaiting();
             preview.RestoreInteractionSelection();
+            preview.RestoreGameTimeGate();
         }
 
         internal static void RestoreStaleCutscenePanelIfAuthoringVisible()
@@ -445,6 +453,48 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             return originalNames;
         }
 
+        private static List<string> RebindPreviewStagesToLiveFamily(Cutscene cutscene, List<string> originalPersonNames)
+        {
+            List<string> originalStageNames = new List<string>();
+            if (cutscene == null)
+                return originalStageNames;
+
+            FieldInfo peopleField = typeof(Cutscene).GetField("peopleInvolved", InstancePrivate);
+            List<Cutscene_Person> people = peopleField != null ? peopleField.GetValue(cutscene) as List<Cutscene_Person> : null;
+            FieldInfo stagesField = typeof(Cutscene).GetField("stagesOfConversation", InstancePrivate);
+            List<Cutscene_Stage> stages = stagesField != null ? stagesField.GetValue(cutscene) as List<Cutscene_Stage> : null;
+            if (people == null || stages == null || originalPersonNames == null)
+                return originalStageNames;
+
+            Dictionary<string, string> rebinding = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (int i = 0; i < people.Count && i < originalPersonNames.Count; i++)
+            {
+                Cutscene_Person person = people[i];
+                string originalName = originalPersonNames[i];
+                string previewName = person != null ? person.name : null;
+                if (string.IsNullOrEmpty(originalName) || string.IsNullOrEmpty(previewName) || string.Equals(originalName, previewName, StringComparison.Ordinal))
+                    continue;
+
+                if (!rebinding.ContainsKey(originalName))
+                    rebinding.Add(originalName, previewName);
+            }
+
+            for (int i = 0; i < stages.Count; i++)
+            {
+                Cutscene_Stage stage = stages[i];
+                string originalName = stage != null ? stage.nameOfPerson : null;
+                originalStageNames.Add(originalName);
+                if (stage == null || string.IsNullOrEmpty(originalName))
+                    continue;
+
+                string previewName;
+                if (rebinding.TryGetValue(originalName, out previewName))
+                    stage.nameOfPerson = previewName;
+            }
+
+            return originalStageNames;
+        }
+
         private static void RestorePreviewPeople(Cutscene cutscene, List<string> originalNames)
         {
             if (cutscene == null || originalNames == null)
@@ -456,6 +506,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             {
                 if (people[i] != null)
                     people[i].name = originalNames[i];
+            }
+        }
+
+        private static void RestorePreviewStages(Cutscene cutscene, List<string> originalNames)
+        {
+            if (cutscene == null || originalNames == null)
+                return;
+
+            FieldInfo field = typeof(Cutscene).GetField("stagesOfConversation", InstancePrivate);
+            List<Cutscene_Stage> stages = field != null ? field.GetValue(cutscene) as List<Cutscene_Stage> : null;
+            for (int i = 0; stages != null && i < stages.Count && i < originalNames.Count; i++)
+            {
+                if (stages[i] != null)
+                    stages[i].nameOfPerson = originalNames[i];
             }
         }
 
@@ -475,10 +539,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             int familyCount = FamilyManager.Instance != null && FamilyManager.Instance.GetAllFamilyMembers() != null
                 ? FamilyManager.Instance.GetAllFamilyMembers().Count
                 : 0;
+            Cutscene intro = CutsceneManager.Instance != null ? FindIntroCutscene(CutsceneManager.Instance) : null;
             MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Opening cutscene preview timed out. inputActive="
                 + inputActive + ", saveBusy=" + saveBusy + ", selectedMember=" + hasSelectedMember
                 + ", familyCount=" + familyCount + ", familySpawner=" + (FamilySpawner.instance != null)
-                + ", timeScale=" + Time.timeScale + ".");
+                + ", timeScale=" + Time.timeScale + ", gameDay=" + GameTime.Day + ", gameHour=" + GameTime.Hour
+                + ", introDay=" + (intro != null ? intro.dayToActivate.ToString(CultureInfo.InvariantCulture) : "<none>")
+                + ", introHour=" + (intro != null ? intro.hourToActivate.ToString(CultureInfo.InvariantCulture) : "<none>") + ".");
             return "Opening cutscene could not start. Make sure the shelter has an active survivor, then try again.";
         }
 
@@ -527,6 +594,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             public readonly bool PreviousShellVisible;
             public readonly float StartDeadlineSeconds;
             public List<string> OriginalPersonNames;
+            public List<string> OriginalStagePersonNames;
             public bool Started;
             private bool _cutsceneWaitingCaptured;
             private bool _originalCutsceneWaiting;
@@ -534,6 +602,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             private InteractionManager _interaction;
             private FamilyMember _originalSelectedMember;
             private int _originalSelectedMemberIndex;
+            private bool _gameTimeGateCaptured;
+            private int _originalGameDay;
+            private int _originalGameHour;
 
             public PreviewContext(
                 ScenarioAuthoringState state,
@@ -584,12 +655,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 _interactionSelectionCaptured = true;
             }
 
+            public void CaptureAndSatisfyGameTimeGate()
+            {
+                if (Cutscene == null || _gameTimeGateCaptured)
+                    return;
+
+                if (Cutscene.dayToActivate <= 0)
+                    return;
+
+                if (GameTimeCurrentDayField == null || GameTimeCurrentHourField == null)
+                    return;
+
+                _originalGameDay = GameTime.Day;
+                _originalGameHour = GameTime.Hour;
+                _gameTimeGateCaptured = true;
+
+                int targetDay = Cutscene.dayToActivate;
+                int targetHour = Cutscene.hourToActivate > 0 ? Cutscene.hourToActivate : _originalGameHour;
+                bool dayBlocked = _originalGameDay < targetDay;
+                bool hourBlocked = _originalGameDay == targetDay && Cutscene.hourToActivate > 0 && _originalGameHour < Cutscene.hourToActivate;
+                if (!dayBlocked && !hourBlocked)
+                    return;
+
+                if (dayBlocked)
+                    GameTimeCurrentDayField.SetValue(null, targetDay);
+                if (dayBlocked || hourBlocked)
+                    GameTimeCurrentHourField.SetValue(null, targetHour);
+
+                MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Satisfied opening cutscene GameTime gate for preview. day "
+                    + _originalGameDay + "->" + GameTime.Day + ", hour " + _originalGameHour + "->" + GameTime.Hour + ".");
+            }
+
             public void RestoreInteractionSelection()
             {
                 if (!_interactionSelectionCaptured)
                     return;
 
                 SetInteractionSelection(_interaction, _originalSelectedMember, _originalSelectedMemberIndex);
+            }
+
+            public void RestoreGameTimeGate()
+            {
+                if (!_gameTimeGateCaptured)
+                    return;
+
+                if (GameTimeCurrentDayField != null)
+                    GameTimeCurrentDayField.SetValue(null, _originalGameDay);
+                if (GameTimeCurrentHourField != null)
+                    GameTimeCurrentHourField.SetValue(null, _originalGameHour);
             }
         }
     }

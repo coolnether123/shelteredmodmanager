@@ -162,6 +162,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             EnsureRuntime();
             bool wasVisible = _visible;
             _snapshot = snapshot ?? _snapshot;
+            if (ScenarioOpeningCutsceneAuthoringService.IsPreviewActive)
+            {
+                _visible = false;
+                _rootAlpha = 0f;
+                _disposeWhenHidden = true;
+                if (_runtime != null)
+                    _runtime.enabled = false;
+                DisposeUiContext();
+                ClearInputCapture();
+                return;
+            }
+
             bool vanillaBlockingPanelOpen = ScenarioCompositionRoot.Resolve<ScenarioAuthoringVanillaPanelVisibilityService>().HasBlockingPanelOpen();
             bool isPlaytesting = ScenarioAuthoringRuntimeGuards.IsPlaytesting();
             bool reloadPending = snapshot != null && snapshot.State != null && snapshot.State.ReloadPending;
