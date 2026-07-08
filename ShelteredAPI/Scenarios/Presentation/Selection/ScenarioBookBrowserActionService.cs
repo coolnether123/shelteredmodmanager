@@ -209,13 +209,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 }
 
                 string error;
-                if (!_launchCoordinator.QueueAuthoringDraftLaunch(
+                bool queued = showBaselinePicker
+                    ? _launchCoordinator.QueueAuthoringDraftSceneReload(
+                        ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
+                        draftStartupSave,
+                        launchSaveType,
+                        "authoring draft '" + draft.DraftId + "'",
+                        draft.BaseMode,
+                        out error)
+                    : _launchCoordinator.QueueAuthoringDraftLaunch(
                         _adapter,
                         ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                         draftStartupSave,
                         launchSaveType,
                         "authoring draft '" + draft.DraftId + "'",
-                        out error))
+                        out error);
+                if (!queued)
                 {
                     throw new InvalidOperationException(error ?? "Could not open the customisation panel for the draft.");
                 }
