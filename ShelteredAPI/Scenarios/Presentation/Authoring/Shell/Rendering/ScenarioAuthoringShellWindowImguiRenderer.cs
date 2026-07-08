@@ -285,10 +285,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawBottomTrayWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            // TODO(centralize): Asset placement still uses a standalone bottom tray.
-            // Merge palette/details content into the central workspace when the tool layout lands.
-            if (IsPlacementActive())
-                return DrawCollapsedPlacementTray(rect, window);
+            if (string.Equals(window.Id, ScenarioAuthoringWindowIds.BuildTools, StringComparison.OrdinalIgnoreCase))
+                return DrawPlaceflowBrowserWindow(rect, window);
 
             ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
             ScenarioUiWindowRegions regions = _uiContext.Frame.Build(
@@ -423,17 +421,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return bodyRect;
         }
 
-        private Rect DrawCollapsedPlacementTray(Rect rect, ScenarioAuthoringShellWindowViewModel window)
+        private Rect DrawPlaceflowBrowserWindow(Rect rect, ScenarioAuthoringShellWindowViewModel window)
         {
-            // TODO(centralize): Active placement feedback is still a collapsed tray strip.
-            // Move this state into the central placement workspace/status area.
             DrawChromePanel(rect, _rootPanelStyle);
-            string label = ResolveActivePlacementLabel(window);
-            string validity = ResolvePlacementValidityLabel(window);
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 10f, Math.Max(80f, rect.width * 0.45f), 22f), label, _textStyle);
-            GUI.Label(new Rect(rect.x + (rect.width * 0.48f), rect.y + 10f, 120f, 22f), validity, _mutedTextStyle);
-            GUI.Label(new Rect(rect.xMax - 190f, rect.y + 10f, 178f, 22f), "Esc or right click cancels", _mutedTextStyle);
-            return RuntimeCompat.ZeroRect();
+            Rect headerRect = new Rect(rect.x + 12f, rect.y + 8f, rect.width - 24f, 34f);
+            GUI.Label(new Rect(headerRect.x, headerRect.y + 3f, Math.Max(120f, headerRect.width - 80f), 26f), window.Title ?? "Tool Workspace", _smallTitleStyle);
+
+            ScenarioAuthoringInspectorAction[] chromeActions = GetHeaderActions(window.HeaderActions, true);
+            float actionX = headerRect.xMax - 24f;
+            for (int i = chromeActions.Length - 1; i >= 0; i--)
+            {
+                DrawButton(new Rect(actionX, headerRect.y + 5f, 22f, 22f), chromeActions[i], false);
+                actionX -= 24f;
+            }
+
+            Rect bodyRect = new Rect(rect.x + 12f, headerRect.yMax + 6f, rect.width - 24f, Math.Max(120f, rect.yMax - headerRect.yMax - 18f));
+            return DrawAssetBrowserWorkshopPage(bodyRect, window, true);
         }
 
         private static string ResolveActivePlacementLabel(ScenarioAuthoringShellWindowViewModel window)
@@ -3297,6 +3300,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCandidateCard(Rect rect, ScenarioAuthoringInspectorAction action)
         {
+            DrawCandidateCard(rect, action, false);
+        }
+
+        private void DrawCandidateCard(Rect rect, ScenarioAuthoringInspectorAction action, bool armPlacementOnAssetBrowserClick)
+        {
             if (action == null)
                 return;
 
@@ -3305,7 +3313,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool pressed = action.Enabled && IsInteractiveMouseDownAllowed(rect);
             if (DrawPlainButton(rect, GUIContent.none, style, action.Enabled))
             {
-                ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                ExecuteCandidateCardAction(action, armPlacementOnAssetBrowserClick);
                 if (Event.current != null)
                     Event.current.Use();
             }
@@ -3342,6 +3350,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Vector2 badgeSize = _mutedTextStyle.CalcSize(new GUIContent(action.Badge));
                 Rect badgeRect = new Rect(textRect.x, rect.yMax - 22f, Mathf.Max(52f, badgeSize.x + 16f), 18f);
                 ScenarioUiWidgets.DrawPill(badgeRect, action.Badge, _uiContext.Styles, action.Emphasized ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
+            }
+        }
+
+        private static void ExecuteCandidateCardAction(ScenarioAuthoringInspectorAction action, bool armPlacementOnAssetBrowserClick)
+        {
+            if (action == null || string.IsNullOrEmpty(action.Id))
+                return;
+
+            ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+            if (armPlacementOnAssetBrowserClick
+                && action.Id.StartsWith(ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, StringComparison.Ordinal))
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionAssetBrowserPlaceSelected);
             }
         }
 

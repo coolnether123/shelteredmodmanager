@@ -227,8 +227,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             {
                 ScenarioAuthoringState state = ScenarioAuthoringBackendService.Instance.CurrentState;
                 _leftDragCandidate = !ShouldSuppressWorldCameraInput()
-                    && !ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement
-                    && (state == null || state.HoveredTarget == null);
+                    && (IsPlacementModeActive() || state == null || state.HoveredTarget == null);
                 _leftDragging = false;
                 _leftDragStartMousePosition = UnityEngine.Input.mousePosition;
                 _lastLeftMousePosition = _leftDragStartMousePosition;
@@ -342,6 +341,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
         private bool ShouldSuppressWorldCameraInput()
         {
             return _inputCapture != null && _inputCapture.ShouldSuppressWorldInputNow();
+        }
+
+        private static bool IsPlacementModeActive()
+        {
+            try
+            {
+                if (ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement)
+                    return true;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                return ShelteredAPI.Scenarios.Application.Assets.ScenarioSceneSpritePlacementAuthoringService.Instance.HasActivePlacement;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void ResetDragState()

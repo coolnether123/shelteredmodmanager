@@ -1734,77 +1734,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioEditorSession editorSession,
             ScenarioDefinition definition)
         {
-            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
-            AddWorldSubstageSection(sections, state);
-            if (state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)
-            {
-                sections.Add(_workflowAuthoringContentBuilder.BuildToolSection(
-                    state,
-                    editorSession,
-                    state.ActiveTool,
-                    definition,
-                    state.SelectedTarget,
-                    false,
-                    false,
-                    null));
-
-                ScenarioAuthoringTarget target = state.SelectedTarget;
-                List<ScenarioAuthoringInspectorSection> assetSections = _assetAuthoringContentBuilder.BuildAssetPlacementSections(state, editorSession, target);
-                for (int i = 0; i < assetSections.Count; i++)
-                    sections.Add(assetSections[i]);
-
-                return sections.ToArray();
-            }
-
-            List<ScenarioBuildPlacementAuthoringService.PaletteSectionModel> paletteSections = _sectionHub.BuildPlacement.GetPaletteSections(
-                state,
-                editorSession);
-            for (int i = 0; paletteSections != null && i < paletteSections.Count; i++)
-                sections.Add(BuildPlacementPaletteSection(paletteSections[i]));
-
-            ScenarioBuildPlacementAuthoringService.StatusModel buildStatus = _sectionHub.BuildPlacement.GetStatusModel(state, editorSession);
-            if (buildStatus != null && buildStatus.PlacementActive)
-                sections.Add(BuildPlacementStatusSection(buildStatus));
-
-            sections.Add(new ScenarioAuthoringInspectorSection
-            {
-                Id = "snap",
-                Title = "Snap",
-                Expanded = true,
-                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = new[]
-                {
-                    ActionItem(Action(
-                        ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.snap_to_grid",
-                        state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "Snap To Grid: On" : "Snap To Grid: Off",
-                        "Scene sprites use this by default. Rooms and room lights stay grid-locked; ladders keep hybrid placement; objects already place freely.",
-                        true,
-                        state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true),
-                        "SN")),
-                    Property("Scene Sprites", state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "Snapped by default; Shift places freely" : "Free by default; Shift snaps"),
-                    Property("Rooms / Lights", "Always grid-locked"),
-                    Property("Ladders / Objects", "Hybrid ladders; objects free")
-                }
-            });
-
-            if (ShowAdvancedDetails(state))
-            {
-                sections.Add(new ScenarioAuthoringInspectorSection
-                {
-                    Id = "snap_diagnostics",
-                    Title = "Snap Diagnostics",
-                    Expanded = false,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                    Items = new[]
-                    {
-                        Property("Grid", state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On" : "Off"),
-                        Property("Snap", state.Settings != null && state.Settings.GetBool("visuals.snap_to_grid", true) ? "On" : "Off"),
-                        Property("Scroll", state.Settings != null ? state.Settings.GetFloat("input.scroll_speed", 1f).ToString("0.00", CultureInfo.InvariantCulture) + "x" : "1.00x")
-                    }
-                });
-                sections.Add(BuildBunkerRuntimeSection(definition, state));
-            }
-            return sections.ToArray();
+            return _assetAuthoringContentBuilder.BuildAssetBrowserSections(state, editorSession);
         }
 
         private ScenarioAuthoringInspectorSection[] BuildTimelineWindowSections(

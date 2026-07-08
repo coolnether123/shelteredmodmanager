@@ -162,17 +162,17 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 && UnityEngine.Input.GetKeyDown(KeyCode.Escape))
                 return CancelActivePlacement("Scene sprite placement cancelled.", out message);
 
-            if (inputCapture != null && inputCapture.PointerOverAuthoringUi)
-                return false;
-
             Vector3 worldPoint;
             if (TryGetMouseWorldPoint(out worldPoint))
                 UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
 
+            if (inputCapture != null && inputCapture.ShouldSuppressWorldInputNow())
+                return false;
+
             if (UnityEngine.Input.GetMouseButtonUp(1))
                 return CancelActivePlacement("Scene sprite placement cancelled.", out message);
 
-            if (UnityEngine.Input.GetMouseButtonUp(0))
+            if (UnityEngine.Input.GetMouseButtonUp(0) && !IsEditorCameraDragPanning())
                 return CompleteActivePlacement(state, session, out message);
 
             return false;
@@ -325,6 +325,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             placement.SortingOrder = _activePlacement.SortingOrder;
             AssignMissingIdentity(session);
 
+            ScenarioSpriteCatalogService.SpriteCandidate repeatCandidate = _activePlacement.Candidate;
             string label = SafeLabel(_activePlacement.Candidate.Label);
             string placementId = SafeLabel(placement.Id);
             CancelActivePlacement(null);
@@ -336,6 +337,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             message = isNew
                 ? "Placed scene sprite '" + label + "' as '" + placementId + "'."
                 : "Updated placed scene sprite '" + placementId + "'.";
+            RestartPlacementForRepeat(state, session, repeatCandidate, ref message);
             MMLog.WriteInfo("[ScenarioSceneSpritePlacementAuthoring] " + message);
             return true;
         }
@@ -804,6 +806,42 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             if (preview != null)
                 UnityEngine.Object.Destroy(preview);
             return true;
+        }
+
+        private void RestartPlacementForRepeat(
+            ScenarioAuthoringState state,
+            ScenarioEditorSession session,
+            ScenarioSpriteCatalogService.SpriteCandidate candidate,
+            ref string message)
+        {
+            if (candidate == null || candidate.Sprite == null || session == null || session.WorkingDefinition == null)
+                return;
+
+            _activePlacement = CreatePlacementSession(candidate, null, state != null ? state.SelectedTarget : null);
+            if (_activePlacement == null)
+            {
+                message = (message ?? string.Empty) + " Repeat placement stopped because the preview could not be recreated.";
+                return;
+            }
+
+            Vector3 worldPoint;
+            if (TryGetMouseWorldPoint(out worldPoint))
+                UpdatePreview(session.WorkingDefinition, worldPoint, ResolveSnapToGrid(state));
+
+            _activePlacement.SnapToGridDefault = ResolveSnapToGrid(state);
+        }
+
+        private static bool IsEditorCameraDragPanning()
+        {
+            try
+            {
+                ScenarioAuthoringEditorCameraService camera = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>();
+                return camera != null && camera.ShouldSuppressSelectionClickThisFrame();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string DecodeActionToken(string encoded)

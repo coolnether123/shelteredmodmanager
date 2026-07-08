@@ -346,16 +346,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             bool suppressWorldInput = inputCapture != null && inputCapture.ShouldSuppressWorldInputNow();
             bool primaryClickConsumed = ConsumePlacementStartPrimaryClick();
+            Vector3 worldPoint;
+            if (TryGetMouseWorldPoint(out worldPoint))
+                UpdateGhostPosition(worldPoint);
+
             if (!suppressWorldInput)
             {
-                Vector3 worldPoint;
-                if (TryGetMouseWorldPoint(out worldPoint))
-                    UpdateGhostPosition(worldPoint);
-
                 if (UnityEngine.Input.GetMouseButtonUp(1))
                     return CancelActivePlacement("Placement cancelled.", out message);
 
-                if (UnityEngine.Input.GetMouseButtonUp(0) && !primaryClickConsumed)
+                if (UnityEngine.Input.GetMouseButtonUp(0) && !primaryClickConsumed && !IsEditorCameraDragPanning())
                     return TryCompletePlacement(session, out message);
             }
 
@@ -783,6 +783,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ObjectManager.ObjectType objectType = _activePlacement.ObjectType;
             int level = _activePlacement.Level;
             string label = _activePlacement.Label;
+            Obj_Base cloneSource = _activePlacement.CloneSourceObject;
             Obj_Base spawned;
             try
             {
@@ -824,6 +825,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             message = "Placed " + ScenarioBunkerDraftService.SafeObjectName(spawned) + " and recorded it in the scenario draft.";
             LogPlacementInfo("Placement recorded to draft: " + ScenarioBunkerDraftService.SafeObjectName(spawned) + ".");
+            RestartPlacementForRepeat(PlacementSessionKind.Object, objectType, level, cloneSource, ref message);
             return true;
         }
 
@@ -897,6 +899,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             message = "Placed a room tile at " + gridX + "," + gridY + " and stored it in the draft.";
             LogPlacementInfo("Placement recorded to draft: " + definitionReference + " at " + gridX + "," + gridY + ".");
+            RestartPlacementForRepeat(PlacementSessionKind.Room, ObjectManager.ObjectType.RoomGhost, 1, null, ref message);
             return true;
         }
 
@@ -969,6 +972,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             message = "Placed a ladder for room " + gridX + "," + gridY + " and stored it in the draft.";
             LogPlacementInfo("Placement recorded to draft: Ladder at " + gridX + "," + gridY + ".");
+            RestartPlacementForRepeat(PlacementSessionKind.Ladder, ObjectManager.ObjectType.LadderGhost, 1, null, ref message);
             return true;
         }
 
@@ -1038,6 +1042,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             message = "Placed a room light at " + gridX + "," + gridY + " and stored it in the draft.";
             LogPlacementInfo("Placement recorded to draft: Room Light at " + gridX + "," + gridY + ".");
+            RestartPlacementForRepeat(PlacementSessionKind.RoomLight, ObjectManager.ObjectType.RoomLightGhost, 1, null, ref message);
             return true;
         }
 
@@ -1176,6 +1181,57 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
 
             _activePlacement.GhostVisual.Apply();
+        }
+
+        private void RestartPlacementForRepeat(
+            PlacementSessionKind kind,
+            ObjectManager.ObjectType objectType,
+            int level,
+            Obj_Base cloneSource,
+            ref string message)
+        {
+            string restartMessage;
+            switch (kind)
+            {
+                case PlacementSessionKind.Object:
+                    if (cloneSource != null)
+                        StartObjectClonePlacement(cloneSource, out restartMessage);
+                    else
+                        StartObjectPlacement(objectType, level, out restartMessage);
+                    break;
+
+                case PlacementSessionKind.Room:
+                    StartRoomPlacement(out restartMessage);
+                    break;
+
+                case PlacementSessionKind.Ladder:
+                    StartLadderPlacement(out restartMessage);
+                    break;
+
+                case PlacementSessionKind.RoomLight:
+                    StartRoomLightPlacement(out restartMessage);
+                    break;
+
+                default:
+                    restartMessage = "Unsupported repeat placement kind.";
+                    break;
+            }
+
+            if (!HasActivePlacement && !string.IsNullOrEmpty(restartMessage))
+                message = (message ?? string.Empty) + " Repeat placement stopped: " + restartMessage;
+        }
+
+        private static bool IsEditorCameraDragPanning()
+        {
+            try
+            {
+                ScenarioAuthoringEditorCameraService camera = ScenarioCompositionRoot.Resolve<ScenarioAuthoringEditorCameraService>();
+                return camera != null && camera.ShouldSuppressSelectionClickThisFrame();
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void RestoreActiveGhostVisual()

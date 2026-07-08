@@ -18,6 +18,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawAssetBrowserWorkshopPage(Rect bodyRect, ScenarioAuthoringShellWindowViewModel window)
         {
+            return DrawAssetBrowserWorkshopPage(bodyRect, window, false);
+        }
+
+        private Rect DrawAssetBrowserWorkshopPage(Rect bodyRect, ScenarioAuthoringShellWindowViewModel window, bool armPlacementOnCardClick)
+        {
             Rect searchRect = new Rect(bodyRect.x, bodyRect.y, bodyRect.width, 32f);
             DrawAssetBrowserSearch(searchRect);
 
@@ -32,7 +37,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect gridRect = new Rect(railRect.xMax + 10f, contentY, Math.Max(220f, detailRect.x - railRect.xMax - 20f), contentHeight);
 
             DrawAssetBrowserCategoryRail(railRect, window);
-            DrawAssetBrowserGrid(gridRect, window);
+            DrawAssetBrowserGrid(gridRect, window, armPlacementOnCardClick);
             DrawAssetBrowserDetailPane(detailRect, window);
             return bodyRect;
         }
@@ -99,7 +104,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Space(4f);
         }
 
-        private void DrawAssetBrowserGrid(Rect rect, ScenarioAuthoringShellWindowViewModel window)
+        private void DrawAssetBrowserGrid(Rect rect, ScenarioAuthoringShellWindowViewModel window, bool armPlacementOnCardClick)
         {
             DrawChromePanel(rect, _rootPanelStyle);
             Rect inner = new Rect(rect.x + 10f, rect.y + 10f, rect.width - 20f, rect.height - 20f);
@@ -122,7 +127,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 GUILayout.Label(section.Title ?? "Assets", _sectionTitleStyle);
-                DrawAssetBrowserGridSection(section);
+                DrawAssetBrowserGridSection(section, armPlacementOnCardClick);
                 GUILayout.Space(10f);
                 visibleCount += sectionVisibleCount;
             }
@@ -137,7 +142,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             SetWindowScrollPosition("asset_browser.grid", scroll);
         }
 
-        private void DrawAssetBrowserGridSection(ScenarioAuthoringInspectorSection section)
+        private void DrawAssetBrowserGridSection(ScenarioAuthoringInspectorSection section, bool armPlacementOnCardClick)
         {
             float availableWidth = GetSectionContentWidth();
             float gap = 8f;
@@ -162,7 +167,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect cardRect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
-                DrawCandidateCard(cardRect, item.Action);
+                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick);
                 count++;
                 if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, _assetBrowserSearchText, CandidateFilterAll))
                 {

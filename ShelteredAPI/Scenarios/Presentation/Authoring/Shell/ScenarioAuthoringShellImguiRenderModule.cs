@@ -43,6 +43,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const float WindowInteractionAlphaThreshold = 0.03f;
         private const float CommandDockHeight = ScenarioAuthoringShellLayout.CommandDockHeight;
 
+        private enum ScenarioAssetPlaceflowPhase
+        {
+            Hidden = 0,
+            Browse = 1,
+            Placement = 2
+        }
+
         private Rect _chromeViewportRect;
 
         private readonly ScenarioAuthoringShellAnimationService _animations;
@@ -377,6 +384,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 RegisterVisualSurface("modal.tutorial", new Rect(0f, topRect.yMax, scaledWidth, scaledHeight - topRect.yMax - StatusHeight));
             if (IsRichHoverHelpActive() && _activeRichHoverPopupRect.width > 0f && _activeRichHoverPopupRect.height > 0f)
                 RegisterVisualSurface("popup.rich-help", _activeRichHoverPopupRect);
+            Rect placementHudRect = RuntimeCompat.ZeroRect();
+            if (IsAnyPlacementActive())
+            {
+                placementHudRect = BuildPlacementHudRect(scaledWidth, scaledHeight);
+                RegisterVisualSurface("placement.hud", placementHudRect);
+            }
 
                 if (workshopSurface)
                 {
@@ -433,6 +446,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     collapsedStripRect = DrawCollapsedWindowStripCore(statusRect, shell.Windows);
                 if (collapsedStripRect.width > 0f && collapsedStripRect.height > 0f)
                     inputCapture.RegisterInteractiveRect(collapsedStripRect);
+            }
+
+            if (placementHudRect.width > 0f && placementHudRect.height > 0f)
+            {
+                using (EnterVisualSurface("placement.hud"))
+                    DrawPlacementHudCore(placementHudRect, shell.Windows);
+                inputCapture.RegisterInteractiveRect(placementHudRect);
             }
 
             Rect windowMenuRect = RuntimeCompat.ZeroRect();
@@ -747,12 +767,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool workspaceStageActive = activeWorkspaceId != null;
 
             bool showBottomTray = !workspaceStageActive && HasVisibleDockedRenderer(windows, ScenarioAuthoringShellRendererKind.BottomTray);
+            ScenarioAssetPlaceflowPhase placeflowPhase = ResolvePlaceflowPhase(showBottomTray);
+            bool placeflowBrowseMode = placeflowPhase == ScenarioAssetPlaceflowPhase.Browse;
 
             if (!workspaceStageActive)
             {
                 // TODO(centralize): Right-side inspector remains outside the central workspace.
                 // Marked for merge once selection details have a central panel destination.
-                if (!IsEmptyInspector(inspectorWindow))
+                if (!showBottomTray && !IsEmptyInspector(inspectorWindow))
                 {
                     AppendStackRect(
                         rects,
@@ -762,17 +784,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 }
             }
 
-            if (showBottomTray)
+            if (placeflowBrowseMode)
             {
-                // TODO(centralize): Build tools still use a separate bottom tray/collapsed tray.
-                // Merge placement tools into the central workspace when that flow is specified.
-                Rect buildToolsRect = IsPlacementActive()
-                    ? ScenarioAuthoringShellLayout.BuildCollapsedBottomTrayRect(contentRect, viewportLeft, viewportRight)
-                    : ScenarioAuthoringShellLayout.BuildBottomTrayRect(contentRect, viewportLeft, viewportRight);
+                Rect buildToolsRect = ScenarioAuthoringShellLayout.BuildPlaceflowBrowserRect(_chromeViewportRect);
                 AppendRendererRects(rects, windows, ScenarioAuthoringShellRendererKind.BottomTray, buildToolsRect);
             }
 
-            Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, showBottomTray, inspectorWidth);
+            Rect workspaceRect = ScenarioAuthoringShellLayout.BuildWorkspaceRect(contentRect, placeflowBrowseMode, inspectorWidth);
             AppendWorkspaceRects(rects, windows, workspaceRect);
             // TODO(centralize): Floating windows are still resolved independently from the
             // workspace page. Fold remaining floating tools into central workspace regions.
@@ -1424,11 +1442,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return false;
         }
 
-        private static bool IsPlacementActive()
+        private static bool IsAnyPlacementActive()
+        {
+            return IsBuildPlacementActive() || IsSceneSpritePlacementActive();
+        }
+
+        private static ScenarioAssetPlaceflowPhase ResolvePlaceflowPhase(bool toolWorkspaceOpen)
+        {
+            if (!toolWorkspaceOpen)
+                return ScenarioAssetPlaceflowPhase.Hidden;
+
+            return IsAnyPlacementActive()
+                ? ScenarioAssetPlaceflowPhase.Placement
+                : ScenarioAssetPlaceflowPhase.Browse;
+        }
+
+        private static bool IsBuildPlacementActive()
         {
             try
             {
                 return ScenarioBuildPlacementAuthoringService.Instance.HasActivePlacement;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool IsSceneSpritePlacementActive()
+        {
+            try
+            {
+                return ScenarioSceneSpritePlacementAuthoringService.Instance.HasActivePlacement;
             }
             catch
             {

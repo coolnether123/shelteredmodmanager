@@ -129,6 +129,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 BottomTrayCollapsedHeight);
         }
 
+        public static Rect BuildPlaceflowBrowserRect(Rect viewportRect)
+        {
+            float margin = viewportRect.width >= 900f && viewportRect.height >= 620f ? Margin : 8f;
+            return new Rect(
+                viewportRect.x + margin,
+                viewportRect.y + margin,
+                Math.Max(320f, viewportRect.width - (margin * 2f)),
+                Math.Max(220f, viewportRect.height - (margin * 2f)));
+        }
+
         public static Rect BuildEmptyInspectorChipRect(Rect contentRect, float inspectorWidth)
         {
             // TODO(centralize): Empty inspector chip should disappear with the right inspector.
