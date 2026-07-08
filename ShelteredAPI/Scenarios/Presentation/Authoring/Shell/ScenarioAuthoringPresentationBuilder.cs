@@ -668,17 +668,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 null,
                 removeDisabledReason)));
             items.Add(ActionItem(Action(
-                ScenarioAuthoringActionIds.ActionToolAssets,
-                "Place Asset",
-                "Open the asset placement browser for snapped scene sprites.",
-                scopeAllowed,
-                false,
-                "PL",
-                null,
-                null,
-                null,
-                scopedReason)));
-            items.Add(ActionItem(Action(
                 ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
                 "Edit Asset",
                 "Open the asset editor for this visual target.",

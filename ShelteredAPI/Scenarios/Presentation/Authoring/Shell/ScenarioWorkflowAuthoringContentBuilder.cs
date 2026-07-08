@@ -99,13 +99,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.TabStrip,
                 Items = new[]
                 {
-                    Item.Text("Domains filter palettes and click priority while selection stays available."),
+                    Item.Text("Use Build on the world tool rail for placement. Other tools keep their own focused authoring domains."),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolFamily, "Family", "Capture the current live family roster, stats, and traits.", true, activeTool == ScenarioAuthoringTool.Family, "FM", "Family roster and stats.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolInventory, "Inventory", "Edit native shelter storage as the scenario starting inventory.", true, activeTool == ScenarioAuthoringTool.Inventory, "IV", "Shelter storage.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolShelter, "Structure", "Place new shelter rooms, ladders, and lights with vanilla build ghosts.", true, activeTool == ScenarioAuthoringTool.Shelter, "ST", "Shelter layout editing.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "Place workbenches, shelter systems, and furniture or capture live spawned objects.", true, activeTool == ScenarioAuthoringTool.Objects, "OB", "Interactive shelter objects.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolWiring, "Walls & Wiring", "Apply room wall and wiring sprites to the selected shelter tile.", true, activeTool == ScenarioAuthoringTool.Wiring, "WW", "Room finish editing.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolAssets, "Assets", "Swap existing visuals or place new snapped scene sprites.", true, activeTool == ScenarioAuthoringTool.Assets, "AS", "Sprite replacements and scene art.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionToolWinLoss, "Win/Loss", "Author scenario outcome conditions.", true, activeTool == ScenarioAuthoringTool.WinLoss, "WL", "Scenario outcome rules."))
                 }
             };

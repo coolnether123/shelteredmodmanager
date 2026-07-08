@@ -297,19 +297,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             DrawPanel("ToolRail", rect, _panelColor, true, BaseDepth);
 
             float y = rect.y + 10f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Select, ScenarioAuthoringActionIds.ActionToolSelect, "SEL", "Select", "ToolSelect");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "OBJ", "Objects", "ToolObjects");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "STR", "Structure", "ToolStructure");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 78f), state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "WIR", "Walls\nWiring", "ToolWiring");
-            y += 84f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "AST", "Assets", "ToolAssets");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "WIN", "Win/Loss", "ToolWinLoss");
-            y += 72f;
-            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Family, ScenarioAuthoringActionIds.ActionToolPeople, "PPL", "People", "ToolPeople");
+            DrawToolButton(new Rect(rect.x + 8f, y, rect.width - 16f, 66f), state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "BLD", "Build", "ToolBuild");
             RegisterRect(rect);
         }
 

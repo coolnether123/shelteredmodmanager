@@ -226,11 +226,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 SceneSpritePlacement placement = definition.AssetReferences.SceneSpritePlacements[i];
                 items.Add(Item.ActionItem(BuildNavigationAction(
-                    ScenarioAuthoringActionIds.ActionToolAssets,
+                    ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Assets,
                     !string.IsNullOrEmpty(placement != null ? placement.SpriteId : null) ? placement.SpriteId : "Scene Sprite " + (i + 1).ToString(CultureInfo.InvariantCulture),
-                    "Open Art to edit scene sprite placements.",
+                    "Open Assets to review scene sprite placements.",
                     "ART",
-                    state != null && state.ActiveTool == ScenarioAuthoringTool.Assets)));
+                    state != null && state.ActiveStage == ScenarioStageKind.Assets)));
             }
             return new ScenarioAuthoringInspectorSection
             {
@@ -251,9 +251,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return BuildTargetAction(state, binding.gameObject, ScenarioAuthoringTargetKind.PlaceableObject, "OBJ", placement.ScenarioObjectId);
 
             return BuildNavigationAction(
-                ScenarioAuthoringActionIds.ActionToolObjects,
+                ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Bunker,
                 Item.Safe(label),
-                "Open Objects to review this draft placement at " + FormatVector(placement.Position) + " / " + placement.StartState + ".",
+                "Open World to review this draft placement at " + FormatVector(placement.Position) + " / " + placement.StartState + ".",
                 "OBJ",
                 false);
         }

@@ -91,14 +91,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         public ScenarioAuthoringToolButtonViewModel[] BuildToolButtons(ScenarioAuthoringState state)
         {
-            bool hasSelection = state != null && state.SelectedTarget != null;
             return new[]
             {
-                CreateToolButton(state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "Objects", "OBJ", "Filter palette and click priority to shelter objects."),
-                CreateToolButton(state, ScenarioAuthoringTool.Shelter, ScenarioAuthoringActionIds.ActionToolShelter, "Rooms", "ROOM", "Filter palette and click priority to rooms, ladders, lights, and structure."),
-                CreateToolButton(state, ScenarioAuthoringTool.Wiring, ScenarioAuthoringActionIds.ActionToolWiring, "Walls", "WALL", "Filter palette and click priority to wall and wiring layers."),
-                CreateToolButton(state, ScenarioAuthoringTool.Assets, ScenarioAuthoringActionIds.ActionToolAssets, "Art", "ART", hasSelection ? "Filter palette and click priority to scene art for the selection." : "Filter palette and click priority to snapped scene art."),
-                CreateToolButton(state, ScenarioAuthoringTool.WinLoss, ScenarioAuthoringActionIds.ActionToolWinLoss, "Victory", "WIN", "Filter the workspace to win and loss conditions.")
+                CreateToolButton(state, ScenarioAuthoringTool.Objects, ScenarioAuthoringActionIds.ActionToolObjects, "Build", "BLD", "Open the world-context asset browser for rooms, objects, walls, wiring, and scene art.")
             };
         }
 

@@ -96,27 +96,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             if (!hasTarget)
             {
-                actions.Add(new ScenarioAuthoringInspectorAction
-                {
-                    Id = ScenarioAuthoringActionIds.ActionToolAssets,
-                    Label = "Place Art",
-                    Hint = "Open the scenario art tray for snapped scene assets.",
-                    Enabled = true
-                });
-                actions.Add(DisabledAction("Pick Target", "Pick a live or authored object to edit object-specific rules. Legacy live-object import is available from the Objects tool workspace."));
+                actions.Add(DisabledAction("Pick Target", "Pick a live or authored object to edit object-specific rules. Use Build on the tool rail for placement."));
                 return actions.ToArray();
             }
 
-            if (!authoredTarget)
-            {
-                actions.Add(new ScenarioAuthoringInspectorAction
-                {
-                    Id = ScenarioAuthoringActionIds.ActionToolObjects,
-                    Label = "Objects",
-                    Hint = "Open the Objects workspace for advanced live-object import and draft placement tools.",
-                    Enabled = true
-                });
-            }
             actions.Add(new ScenarioAuthoringInspectorAction
             {
                 Id = ScenarioAuthoringActionIds.ActionSpriteSwapPickerOpen,
