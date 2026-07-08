@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Definitions;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
@@ -31,9 +32,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 return false;
             }
 
-            FamilySpawner.CharacterAttributes queuedAttributes;
-            if (!ScenarioFamilyMemberFactory.ScheduleRecruit(survivor.Survivor, arrivalDelay, out queuedAttributes, out message))
+            FamilySpawner.CharacterAttributes queuedAttributes = null;
+            string scheduleMessage = null;
+            string seamMessage;
+            bool scheduled;
+            if (!SeamGuard.Try<bool>(
+                "scenario.future-survivor.ask-to-join.schedule",
+                SeamRecoveryPolicy.RetryOnce,
+                delegate { return ScenarioFamilyMemberFactory.ScheduleRecruit(survivor.Survivor, arrivalDelay, out queuedAttributes, out scheduleMessage); },
+                false,
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out scheduled,
+                out seamMessage))
+            {
+                message = seamMessage;
                 return false;
+            }
+            if (!scheduled)
+            {
+                message = scheduleMessage;
+                return false;
+            }
 
             if (queuedAttributes != null)
             {

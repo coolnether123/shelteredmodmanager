@@ -9,6 +9,7 @@ using UnityEngine.SceneManagement;
 
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Infrastructure;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring
 {
@@ -119,7 +120,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Failed to skip " + (reason ?? "opening cutscene") + ": " + ex + ".");
+                RecordCutsceneFailure(
+                    "scenario.cutscene.skip",
+                    ex,
+                    "Opening cutscene controls unavailable - scenario editor still usable.",
+                    null);
             }
         }
 
@@ -201,9 +206,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             }
             catch (Exception ex)
             {
-                RestorePreview(_activePreview, null);
-                message = "Opening cutscene could not start. Make sure the shelter has an active survivor, then try again.";
-                MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Failed to play opening cutscene: " + ex + ".");
+                RecordCutsceneFailure(
+                    "scenario.cutscene.preview",
+                    ex,
+                    "Opening cutscene preview unavailable - scenario editor still usable.",
+                    delegate { RestorePreview(_activePreview, null); });
+                message = "Opening cutscene preview unavailable - scenario editor still usable.";
                 return true;
             }
         }
@@ -286,7 +294,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         private static Cutscene FindIntroCutscene(CutsceneManager manager)
         {
             FieldInfo field = typeof(CutsceneManager).GetField("cutscenes", InstancePrivate);
-            List<Cutscene> cutscenes = field != null ? field.GetValue(manager) as List<Cutscene> : null;
+            List<Cutscene> cutscenes = null;
+            if (field != null)
+            {
+                string message;
+                SeamGuard.Try<List<Cutscene>>(
+                    "scenario.cutscene.preview.cutscenes",
+                    SeamRecoveryPolicy.RetryOnce,
+                    delegate { return field.GetValue(manager) as List<Cutscene>; },
+                    null,
+                    "Opening cutscene preview unavailable - scenario editor still usable.",
+                    null,
+                    out cutscenes,
+                    out message);
+            }
             for (int i = 0; cutscenes != null && i < cutscenes.Count; i++)
             {
                 Cutscene cutscene = cutscenes[i];
@@ -405,7 +426,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ScenarioOpeningCutsceneAuthoring] Failed to restore panel input after opening cutscene preview: " + ex.Message + ".");
+                RecordCutsceneFailure(
+                    "scenario.cutscene.restore-panel-input",
+                    ex,
+                    "Opening cutscene preview restore degraded - scenario editor still usable.",
+                    null);
             }
         }
 
@@ -678,9 +703,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                     return;
 
                 if (dayBlocked)
-                    GameTimeCurrentDayField.SetValue(null, targetDay);
+                    SetStaticIntField(GameTimeCurrentDayField, targetDay);
                 if (dayBlocked || hourBlocked)
-                    GameTimeCurrentHourField.SetValue(null, targetHour);
+                    SetStaticIntField(GameTimeCurrentHourField, targetHour);
 
                 MMLog.WriteInfo("[ScenarioOpeningCutsceneAuthoring] Satisfied opening cutscene GameTime gate for preview. day "
                     + _originalGameDay + "->" + GameTime.Day + ", hour " + _originalGameHour + "->" + GameTime.Hour + ".");
@@ -700,10 +725,37 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                     return;
 
                 if (GameTimeCurrentDayField != null)
-                    GameTimeCurrentDayField.SetValue(null, _originalGameDay);
+                    SetStaticIntField(GameTimeCurrentDayField, _originalGameDay);
                 if (GameTimeCurrentHourField != null)
-                    GameTimeCurrentHourField.SetValue(null, _originalGameHour);
+                    SetStaticIntField(GameTimeCurrentHourField, _originalGameHour);
             }
+        }
+
+        private static void SetStaticIntField(FieldInfo field, int value)
+        {
+            if (field == null)
+                return;
+
+            string message;
+            SeamGuard.Run(
+                "scenario.cutscene.preview.field." + field.Name,
+                SeamRecoveryPolicy.RestoreState,
+                delegate { field.SetValue(null, value); },
+                "Opening cutscene preview unavailable - scenario editor still usable.",
+                null,
+                out message);
+        }
+
+        private static void RecordCutsceneFailure(string seamName, Exception ex, string playerMessage, Action recovery)
+        {
+            string message;
+            SeamGuard.Run(
+                seamName,
+                SeamRecoveryPolicy.RestoreState,
+                delegate { throw ex; },
+                playerMessage,
+                recovery,
+                out message);
         }
     }
 }

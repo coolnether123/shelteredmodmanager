@@ -6,6 +6,7 @@ using System.Reflection;
 using ModAPI.Core;
 using ShelteredAPI.Content.Compatibility;
 using ShelteredAPI.Content;
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Map;
@@ -27,6 +28,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private static readonly int DefaultHiddenUnlockItem = (int)ItemManager.ItemType.LockpickSet;
 
         public void Apply(ScenarioDefinition definition, ScenarioApplyResult result)
+        {
+            string message;
+            if (!SeamGuard.Run(
+                "scenario.map.projection",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { ApplyCore(definition, result); },
+                "Map projection unavailable - scenario still playable.",
+                null,
+                out message))
+            {
+                AddMessage(result, message);
+            }
+        }
+
+        private void ApplyCore(ScenarioDefinition definition, ScenarioApplyResult result)
         {
             if (definition == null || definition.Map == null || definition.Map.Locations == null || definition.Map.Locations.Count == 0)
                 return;

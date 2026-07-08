@@ -11,6 +11,7 @@ using ModAPI.Scenarios;
 using ModAPI.UI;
 using UnityEngine;
 
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
@@ -454,14 +455,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             if (type != NpcVisitor.NpcType.Joiner || __result == null || attribsOverride == null)
                 return;
 
-            try
-            {
-                BindingService.OnVisitorCreated(__result, attribsOverride);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioFutureSurvivorRecruitBinding] Visitor correlation hook failed: " + ex.Message);
-            }
+            string message;
+            SeamGuard.Run(
+                "scenario.future-survivor.ask-to-join.visitor-created",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { BindingService.OnVisitorCreated(__result, attribsOverride); },
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out message);
         }
 
         [HarmonyPatch(typeof(FamilyManager), "AdoptNpc")]
@@ -471,16 +472,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             if (!__result || npc == null)
                 return;
 
-            try
-            {
-                FamilyMember member = npc.GetComponent<FamilyMember>();
-                if (member != null)
-                    BindingService.OnNpcAdopted(npc, member);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioFutureSurvivorRecruitBinding] Adoption hook failed: " + ex.Message);
-            }
+            string message;
+            SeamGuard.Run(
+                "scenario.future-survivor.ask-to-join.adopt",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate
+                {
+                    FamilyMember member = npc.GetComponent<FamilyMember>();
+                    if (member != null)
+                        BindingService.OnNpcAdopted(npc, member);
+                },
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out message);
         }
 
         [HarmonyPatch(typeof(NpcVisitManager), "OnNpcFinished")]
@@ -490,14 +494,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
             if (npc == null)
                 return;
 
-            try
-            {
-                BindingService.OnVisitorFinished(npc);
-            }
-            catch (Exception ex)
-            {
-                MMLog.WriteWarning("[ScenarioFutureSurvivorRecruitBinding] Visitor-finished hook failed: " + ex.Message);
-            }
+            string message;
+            SeamGuard.Run(
+                "scenario.future-survivor.ask-to-join.visitor-finished",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { BindingService.OnVisitorFinished(npc); },
+                "Ask-to-join survivor binding unavailable - scenario still playable.",
+                null,
+                out message);
         }
     }
 

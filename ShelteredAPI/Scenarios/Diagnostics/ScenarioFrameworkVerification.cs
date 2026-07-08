@@ -5,6 +5,7 @@ using System.Xml;
 using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Content;
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
@@ -43,6 +44,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyInventoryProjectionReconciliation(result);
                 VerifyMapLootProjectionContracts(result);
                 VerifySchedulePolicyWindows(result);
+                VerifySeamGuardContracts(result);
             }
             catch (Exception ex)
             {
@@ -278,6 +280,49 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             action.Policy.JitterMinutes = 30;
             Assert(ScenarioSchedulePolicyEvaluator.Evaluate(action, due - 1, 0, 0, null, out reason) == ScenarioSchedulePolicyDecision.NotDue,
                 "Schedule jitter allowed execution before the base due time.", result);
+        }
+
+        private static void VerifySeamGuardContracts(ScenarioValidationResult result)
+        {
+            SeamGuard.ResetForTests();
+            try
+            {
+                bool recoveryFired = false;
+                string message;
+                bool ok = SeamGuard.Run(
+                    "verification.throwing-seam",
+                    SeamRecoveryPolicy.RestoreState,
+                    delegate { throw new InvalidOperationException("verification boom"); },
+                    "Verification seam unavailable - scenario still playable.",
+                    delegate { recoveryFired = true; },
+                    out message);
+
+                SeamHealthSnapshot snapshot = FindSeamSnapshot("verification.throwing-seam");
+                Assert(!ok, "SeamGuard should return false when the wrapped call throws.", result);
+                Assert(recoveryFired, "SeamGuard restore-state policy did not fire recovery.", result);
+                Assert(snapshot != null && snapshot.FailureCount == 1, "SeamGuard did not record the wrapped failure.", result);
+                Assert(snapshot != null && snapshot.Degraded, "SeamGuard did not mark the throwing seam degraded.", result);
+                Assert(string.Equals(message, "Verification seam unavailable - scenario still playable.", StringComparison.Ordinal),
+                    "SeamGuard did not return the editor-facing degradation message.", result);
+                Assert(SeamGuard.BuildSystemHealthLine().IndexOf("Verification seam unavailable", StringComparison.Ordinal) >= 0,
+                    "SeamGuard did not expose the degradation through the system health line.", result);
+            }
+            finally
+            {
+                SeamGuard.ResetForTests();
+            }
+        }
+
+        private static SeamHealthSnapshot FindSeamSnapshot(string name)
+        {
+            SeamHealthSnapshot[] snapshots = SeamGuard.GetHealthSnapshots();
+            for (int i = 0; snapshots != null && i < snapshots.Length; i++)
+            {
+                if (snapshots[i] != null && string.Equals(snapshots[i].Name, name, StringComparison.OrdinalIgnoreCase))
+                    return snapshots[i];
+            }
+
+            return null;
         }
 
         private static void VerifyDependencies(ScenarioValidationResult result)

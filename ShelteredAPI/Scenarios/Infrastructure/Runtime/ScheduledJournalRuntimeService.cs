@@ -11,6 +11,7 @@ using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Shared;
+using ShelteredAPI.Infrastructure;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
 {
@@ -88,20 +89,22 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
                 WrittenMinuteKeys.Add(writeKey);
             }
 
-            try
+            string seamMessage;
+            if (SeamGuard.Run(
+                "scenario.journal.insert",
+                SeamRecoveryPolicy.RetryOnce,
+                delegate { InsertJournalEntryMethod.Invoke(manager, new object[] { rendered, string.Empty, false }); },
+                "Journal entry unavailable - scenario still playable.",
+                null,
+                out seamMessage))
             {
-                InsertJournalEntryMethod.Invoke(manager, new object[] { rendered, string.Empty, false });
                 return true;
             }
-            catch (Exception ex)
-            {
-                Exception inner = ex is TargetInvocationException && ex.InnerException != null ? ex.InnerException : ex;
-                message = "Journal entry write failed: " + inner.Message;
-                MMLog.WriteWarning("[ScheduledJournalRuntime] " + message);
-                lock (WrittenMinuteKeys)
-                    WrittenMinuteKeys.Remove(writeKey);
-                return false;
-            }
+
+            message = seamMessage;
+            lock (WrittenMinuteKeys)
+                WrittenMinuteKeys.Remove(writeKey);
+            return false;
         }
 
         private static bool HasJournalEntry(JournalManager manager, string rendered)

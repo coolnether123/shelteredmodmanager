@@ -6,6 +6,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 
 using ShelteredAPI.Content.Compatibility;
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Effects;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Effects;
@@ -66,11 +67,26 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            object spawnInfo;
-            IList attributes;
-            IList carriedItems;
-            if (!TryCreateSpawnInfo(npcType, Math.Max(0f, ScenarioPropertyBag.GetFloat(effect.Properties, "arrivalDelaySeconds", 0f)), out spawnInfo, out attributes, out carriedItems, out message))
+            object spawnInfo = null;
+            IList attributes = null;
+            IList carriedItems = null;
+            string createMessage = null;
+            string seamMessage;
+            if (!SeamGuard.Run(
+                "scenario.world.npc-visit",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate
+                {
+                    if (!TryCreateSpawnInfo(npcType, Math.Max(0f, ScenarioPropertyBag.GetFloat(effect.Properties, "arrivalDelaySeconds", 0f)), out spawnInfo, out attributes, out carriedItems, out createMessage))
+                        throw new InvalidOperationException(createMessage);
+                },
+                "NPC visit bridge unavailable - scenario still playable.",
+                null,
+                out seamMessage))
+            {
+                message = seamMessage;
                 return false;
+            }
 
             int count = Math.Max(1, ScenarioPropertyBag.GetInt(effect.Properties, "count", 1));
             string characterId = ScenarioPropertyBag.GetString(effect.Properties, "characterId", null);
@@ -84,14 +100,34 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             AddItemStacks(carriedItems, ScenarioPropertyBag.GetString(effect.Properties, "tradeItems", null));
             AddItemStacks(carriedItems, ScenarioPropertyBag.GetString(effect.Properties, "lootItems", null));
 
-            IList pendingSpawns = NpcVisitPendingSpawnsField.GetValue(NpcVisitManager.Instance) as IList;
+            IList pendingSpawns = null;
+            SeamGuard.Try<IList>(
+                "scenario.world.npc-visit.pending-spawns",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { return NpcVisitPendingSpawnsField.GetValue(NpcVisitManager.Instance) as IList; },
+                null,
+                "NPC visit bridge unavailable - scenario still playable.",
+                null,
+                out pendingSpawns,
+                out seamMessage);
             if (pendingSpawns == null)
             {
                 message = "Sheltered NPC pending-spawn list is unavailable.";
                 return false;
             }
 
-            pendingSpawns.Add(spawnInfo);
+            if (!SeamGuard.Run(
+                "scenario.world.npc-visit.pending-spawns",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { pendingSpawns.Add(spawnInfo); },
+                "NPC visit bridge unavailable - scenario still playable.",
+                null,
+                out seamMessage))
+            {
+                message = seamMessage;
+                return false;
+            }
+
             message = "Queued WorldEvent " + npcType + " visit.";
             return true;
         }
@@ -116,7 +152,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 return false;
             }
 
-            breachMan.StartBreach();
+            string seamMessage;
+            if (!SeamGuard.Run(
+                "scenario.world.raid.start",
+                SeamRecoveryPolicy.RetryOnce,
+                delegate { breachMan.StartBreach(); },
+                "Raid bridge unavailable - scenario still playable.",
+                null,
+                out seamMessage))
+            {
+                message = seamMessage;
+                return false;
+            }
+
             ApplyRaidOverrides(breachMan.difficulty, effect);
             message = "Started WorldEvent raid through BreachMan.StartBreach.";
             return true;
@@ -268,12 +316,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         {
             if (BreachCanStartMethod == null)
                 return true;
-            try { return (bool)BreachCanStartMethod.Invoke(breachMan, new object[0]); }
-            catch (Exception ex)
+
+            bool canStart = true;
+            string message;
+            if (SeamGuard.Try<bool>(
+                "scenario.world.raid.can-start",
+                SeamRecoveryPolicy.RetryOnce,
+                delegate { return (bool)BreachCanStartMethod.Invoke(breachMan, new object[0]); },
+                true,
+                "Raid readiness bridge unavailable - scenario still playable.",
+                null,
+                out canStart,
+                out message))
             {
-                MMLog.WriteWarning("[ScheduledWorldEventRuntime] CanStartBreach reflection failed: " + ex.Message);
-                return true;
+                return canStart;
             }
+
+            return true;
         }
 
         private static void ApplyRaidOverrides(BreachMan.BreachDifficulty difficulty, ScenarioEffectDefinition effect)
@@ -321,9 +380,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         private static void StopShelterRadio()
         {
-            Obj_Radio radio;
-            if (ShelteredAPI.GameState.GameUtil.TryGetShelterRadio(out radio) && radio != null)
-                radio.StopBroadcasting();
+            Obj_Radio radio = null;
+            string message;
+            SeamGuard.Run(
+                "scenario.world.broadcast.radio",
+                SeamRecoveryPolicy.RetryOnce,
+                delegate
+                {
+                    if (ShelteredAPI.GameState.GameUtil.TryGetShelterRadio(out radio) && radio != null)
+                        radio.StopBroadcasting();
+                },
+                "Broadcast bridge unavailable - scenario still playable.",
+                null,
+                out message);
         }
     }
 }

@@ -6,6 +6,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Shared;
@@ -80,6 +81,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         }
 
         public static void Apply(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
+        {
+            string message;
+            if (!SeamGuard.Run(
+                "scenario.station-upgrade.apply",
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { ApplyCore(obj, placement, result); },
+                "Station upgrade projection unavailable - scenario still playable.",
+                null,
+                out message))
+            {
+                AddMessage(result, message);
+            }
+        }
+
+        private static void ApplyCore(Obj_Base obj, ObjectPlacement placement, ScenarioApplyResult result)
         {
             if (obj == null || placement == null || !IsStationObject(obj) || !HasStationProperties(placement))
                 return;
@@ -365,9 +381,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 SetField(generator, GeneratorFuelCapacityField, value);
                 if (GeneratorFuelField != null)
                 {
-                    float fuel = (float)GeneratorFuelField.GetValue(generator);
+                    float fuel = 0f;
+                    string message;
+                    SeamGuard.Try<float>(
+                        "scenario.station-upgrade.field." + GeneratorFuelField.Name,
+                        SeamRecoveryPolicy.DisableSeamAndDegrade,
+                        delegate { return (float)GeneratorFuelField.GetValue(generator); },
+                        0f,
+                        "Station upgrade projection unavailable - scenario still playable.",
+                        null,
+                        out fuel,
+                        out message);
                     if (fuel > value)
-                        GeneratorFuelField.SetValue(generator, value);
+                        SetField(generator, GeneratorFuelField, value);
                 }
                 return;
             }
@@ -414,7 +440,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 float generation = ClampFloat(value, 0f, 1000f);
                 SetField(tank, WaterTankGenerationField, generation);
                 if (WaterTankNextGenerationField != null && generation > 0f)
-                    WaterTankNextGenerationField.SetValue(tank, Time.time + GameTime.RealSecondsPerDay / generation);
+                    SetField(tank, WaterTankNextGenerationField, Time.time + GameTime.RealSecondsPerDay / generation);
             }
         }
 
@@ -498,7 +524,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             int maxIndex = 0;
             if (arrayField != null)
             {
-                Array array = arrayField.GetValue(obj) as Array;
+                Array array = null;
+                string message;
+                SeamGuard.Try<Array>(
+                    "scenario.station-upgrade.array." + arrayField.Name,
+                    SeamRecoveryPolicy.DisableSeamAndDegrade,
+                    delegate { return arrayField.GetValue(obj) as Array; },
+                    null,
+                    "Station upgrade projection unavailable - scenario still playable.",
+                    null,
+                    out array,
+                    out message);
                 if (array != null && array.Length > 0)
                     maxIndex = array.Length - 1;
             }
@@ -518,7 +554,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (target == null || field == null)
                 return;
 
-            float[] values = field.GetValue(target) as float[];
+            float[] values = null;
+            string message;
+            SeamGuard.Try<float[]>(
+                "scenario.station-upgrade.array." + field.Name,
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { return field.GetValue(target) as float[]; },
+                null,
+                "Station upgrade projection unavailable - scenario still playable.",
+                null,
+                out values,
+                out message);
             if (values == null || values.Length == 0)
                 return;
 
@@ -530,7 +576,17 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (target == null || field == null)
                 return;
 
-            int[] values = field.GetValue(target) as int[];
+            int[] values = null;
+            string message;
+            SeamGuard.Try<int[]>(
+                "scenario.station-upgrade.array." + field.Name,
+                SeamRecoveryPolicy.DisableSeamAndDegrade,
+                delegate { return field.GetValue(target) as int[]; },
+                null,
+                "Station upgrade projection unavailable - scenario still playable.",
+                null,
+                out values,
+                out message);
             if (values == null || values.Length == 0)
                 return;
 
@@ -540,7 +596,16 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private static void SetField(object target, FieldInfo field, object value)
         {
             if (target != null && field != null)
-                field.SetValue(target, value);
+            {
+                string message;
+                SeamGuard.Run(
+                    "scenario.station-upgrade.field." + field.Name,
+                    SeamRecoveryPolicy.DisableSeamAndDegrade,
+                    delegate { field.SetValue(target, value); },
+                    "Station upgrade projection unavailable - scenario still playable.",
+                    null,
+                    out message);
+            }
         }
 
         private static bool TryParsePath(string pathName, out UpgradeObject.PathEnum path)

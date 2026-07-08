@@ -9,6 +9,7 @@ using UnityEngine;
 using ShelteredAPI.Actors;
 using ShelteredAPI.Content;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -247,6 +248,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!string.IsNullOrEmpty(state.StatusMessage))
             {
                 sections.Add(_inspectorViewModelBuilder.BuildStatusSection(state.StatusMessage));
+            }
+            string seamHealth = SeamGuard.BuildSystemHealthLine();
+            if (!string.IsNullOrEmpty(seamHealth))
+            {
+                sections.Add(_inspectorViewModelBuilder.BuildStatusSection(seamHealth));
             }
 
             sections.Add(new ScenarioAuthoringInspectorSection

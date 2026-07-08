@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Infrastructure;
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
     internal sealed class StatusBarViewModelBuilder
     {
@@ -37,6 +38,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 entries.Add("Grid: " + (state != null && state.Settings != null && state.Settings.GetBool("visuals.show_grid", true) ? "On (32px)" : "Off"));
             if (placementStatus != null && placementStatus.PlacementActive)
                 entries.Add("Left-click place - Right-click/Esc cancel");
+            string seamHealth = SeamGuard.BuildSystemHealthLine();
+            if (!string.IsNullOrEmpty(seamHealth))
+                entries.Add(seamHealth);
             if (!string.IsNullOrEmpty(state != null ? state.StatusMessage : null))
                 entries.Add(FormatStatusMessage(state.StatusMessage));
             return entries.ToArray();

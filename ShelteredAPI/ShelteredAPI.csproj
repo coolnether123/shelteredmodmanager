@@ -95,6 +95,7 @@
     <Compile Include="Events\ShelteredUiLifecycleEventSink.cs" />
     <Compile Include="Events\UIEvents.cs" />
     <Compile Include="GameState\ManagerStateHelper.cs" />
+    <Compile Include="Infrastructure\SeamGuard.cs" />
     <Compile Include="Interactions\InteractionRegistry.cs" />
     <Compile Include="Characters\CharacterEffectSystem.cs" />
     <Compile Include="Characters\ShelteredCharacters.cs" />
