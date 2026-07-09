@@ -426,6 +426,8 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryScriptViewBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryStageDisclosure.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHomeProgressFacts.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMetadataAuthoringContent.cs" />

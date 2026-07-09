@@ -28,13 +28,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 string displayName = FormatDisplayName(character, i);
                 string linked = ScenarioCastMemberReferenceCatalog.ResolveDisplayName(definition, character.ActorRef, true, true, "No cast actor linked");
                 List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-                items.Add(ScenarioInspectorItemFactory.Property("Story character", characterId, "Internal CharacterId stays unchanged."));
-                items.Add(EditableProperty("Display name " + (i + 1).ToString(CultureInfo.InvariantCulture), displayName, "displayName", i, "Shown in story character pickers. CharacterId remains immutable."));
-                items.Add(EditableProperty("Preset " + (i + 1).ToString(CultureInfo.InvariantCulture), character.PresetId, "presetId", i, "Optional vanilla NPC preset id."));
-                items.Add(EditableProperty("Personality " + (i + 1).ToString(CultureInfo.InvariantCulture), character.Personality, "personality", i, "Optional vanilla personality id."));
-                items.Add(EditableProperty("Species " + (i + 1).ToString(CultureInfo.InvariantCulture), character.Species, "species", i, "Optional species override."));
+                // Real creator language first: the writer edits the character by name, not by a
+                // "Display name 1" debug stepper. Optional vanilla fields are labelled as optional,
+                // and the raw internal CharacterId drops to an Advanced row at the bottom.
+                items.Add(EditableProperty("Display name", displayName, "displayName", i, "The name writers see in pickers, dialogue, and the script view."));
+                items.Add(EditableProperty("Vanilla preset (optional)", character.PresetId, "presetId", i, "Leave blank unless you are cloning a specific vanilla NPC preset."));
+                items.Add(EditableProperty("Personality (optional)", character.Personality, "personality", i, "Leave blank to let the game pick a personality."));
+                items.Add(EditableProperty("Species (optional)", character.Species, "species", i, "Leave blank for the default human survivor."));
                 items.Add(ScenarioInspectorItemFactory.Property("Actor link", character.ActorRef != null ? linked : "None"));
                 AppendUsages(items, definition, ScenarioReferenceTargetKind.StoryCharacter, character.CharacterId, "Delete is available only after these references are cleared.");
+                items.Add(ScenarioInspectorItemFactory.Property("Advanced: internal id", characterId, "Stable CharacterId used by save files and references. It never changes."));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioStoryAuthoringActions.CharacterDelete(i),
                     "Remove Character",

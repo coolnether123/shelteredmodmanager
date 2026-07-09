@@ -431,6 +431,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Items = items.ToArray()
             });
 
+            // Read-only script of this stage's scene, so writers can read before they edit.
+            sections.Add(ScenarioStoryScriptViewBuilder.BuildStageScript(definition, stage, index));
+
+            // The verbose per-scene editing rows collapse by default: the script above is the
+            // readable summary, and the detailed steppers expand on demand to cut the wall.
             for (int i = 0; stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
                 sections.Add(BuildIntercomSection(definition, flow, stage, stage.IntercomStages[i], index, i, characterIds));
         }
@@ -442,9 +447,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ScenarioInspectorItemFactory.Property("Step id", Safe(intercom.Id)));
             items.Add(ScenarioInspectorItemFactory.Property("Routes", "Next " + FormatStageTarget(intercom.NextId) + " / Alt " + FormatStageTarget(intercom.AlternateNextId)));
             items.Add(ScenarioInspectorItemFactory.Property("Stage change", intercom.StageChange != null ? FormatStageTarget(intercom.StageChange.Id) + " after " + intercom.StageChange.DelayDays.ToString(CultureInfo.InvariantCulture) + " day(s)" : "No delayed next-stage transition."));
+            bool revealAdvancedRouting = ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage);
             AddIntercomIdActions(items, stage, stageIndex, intercomIndex);
             AddIntercomTargetActions(items, stage, intercom, stageIndex, intercomIndex, false, "Next");
-            AddIntercomTargetActions(items, stage, intercom, stageIndex, intercomIndex, true, "Alt");
+            if (revealAdvancedRouting)
+                AddIntercomTargetActions(items, stage, intercom, stageIndex, intercomIndex, true, "Alt");
             AddStageChangeTargetActions(items, flow, stageIndex, intercomIndex, intercom.StageChange != null ? intercom.StageChange.Id : null);
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.StageChangeDelay(stageIndex, intercomIndex, 1), "Stage Delay +", "Increase stage-change delay.", true, false, "SD+")));
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.StageChangeDelay(stageIndex, intercomIndex, -1), "Stage Delay -", "Decrease stage-change delay.", true, false, "SD-")));
@@ -455,7 +462,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(ScenarioStoryAuthoringActions.OptionAdd(stageIndex, intercomIndex), "Add Option", "Add a response option.", true, false, "O+")));
             for (int i = 0; intercom.Options != null && i < intercom.Options.Count; i++)
                 AddOptionActions(items, stage, intercom.Options[i], stageIndex, intercomIndex, i);
-            AddRandomRouteActions(items, stage, intercom, stageIndex, intercomIndex);
+            if (revealAdvancedRouting)
+                AddRandomRouteActions(items, stage, intercom, stageIndex, intercomIndex);
+            else
+                items.Add(ScenarioInspectorItemFactory.Text("Advanced routing (alternate and random routes) unlocks once this stage has a written dialogue line."));
             AddStoryItemActions(items, "Rewards", intercom.Items, false, stageIndex, intercomIndex);
             AddStoryItemActions(items, "Removals", intercom.ItemsToRemove, true, stageIndex, intercomIndex);
             AddMilestoneActions(items, intercom, stageIndex, intercomIndex);
@@ -477,8 +487,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new ScenarioAuthoringInspectorSection
             {
                 Id = "story_intercom_" + prefix.Replace('.', '_'),
-                Title = "Step " + (intercomIndex + 1).ToString(CultureInfo.InvariantCulture) + " / " + Safe(intercom.Id),
-                Expanded = true,
+                Title = "Edit Scene " + (intercomIndex + 1).ToString(CultureInfo.InvariantCulture) + " / " + Safe(intercom.Id),
+                Expanded = false,
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = items.ToArray()
             };

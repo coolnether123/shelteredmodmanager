@@ -414,7 +414,7 @@ Assert-Contains "scenario actor editor picker" $scenarioAuthoringPresentationBui
 Assert-Contains "scenario actor editor storage" $scenarioEventAuthoringService "ApplyConditionActorTarget.*condition\.ActorRef\s*=\s*ScenarioCastMemberReferenceCatalog\.CopyActorRef.*condition\.TargetId\s*=\s*candidate\.LegacyTargetId" "Picking a survivor condition cast member must store actor ref and preserve legacy target id."
 Assert-Contains "scenario actor editor storage" $scenarioEventAuthoringService "ApplyEffectActorTarget.*effect\.ActorRef\s*=\s*ScenarioCastMemberReferenceCatalog\.CopyActorRef.*effect\.TargetId\s*=\s*candidate\.LegacyTargetId.*effect\.SurvivorId\s*=\s*candidate\.LegacyTargetId" "Picking a future survivor effect cast member must store actor ref and preserve legacy survivor id."
 Assert-Contains "scenario actor story link" $scenarioStoryAuthoringService "ActionStoryCharacterActorPrefix.*ScenarioCharacters\[stageIndex\]\.ActorRef\s*=\s*ScenarioCastMemberReferenceCatalog\.CopyActorRef" "Story character actor linking must set only ScenarioNpcDefinition.ActorRef."
-Assert-Contains "scenario actor story link" $scenarioStoryCharacterActorLinkSectionBuilder "Internal CharacterId stays unchanged.*ActionStoryCharacterActorClearPrefix.*ScenarioCastMemberPickerBuilder\.BuildSection" "Story actor link UI must be explicit, clearable, and keep CharacterId flow intact."
+Assert-Contains "scenario actor story link" $scenarioStoryCharacterActorLinkSectionBuilder "Advanced: internal id.*It never changes.*ActionStoryCharacterActorClearPrefix.*ScenarioCastMemberPickerBuilder\.BuildSection" "Story actor link UI must be explicit, clearable, and keep CharacterId flow intact."
 Assert-Contains "scenario actor story labels" $scenarioStoryFocusedEditorDocumentBuilder "FormatCharacterLabel\(definition,\s*id\)" "Focused story editor must display actor-backed labels while preserving character ids as action tokens."
 Assert-Contains "scenario actor story labels" $scenarioQuestAuthoringContentBuilder "FormatCharacterLabel\(definition,\s*id\)" "Quest/story overview must display actor-backed labels while preserving character ids as action tokens."
 Assert-Contains "scenario actor timeline labels" $scenarioTimelineBuilder "ResolveDisplayName\(definition,\s*actorRef,\s*false,\s*true.*ActionFutureSurvivorEditorOpenPrefix" "Timeline survivor entries must use actor-backed names and deep-link future survivors to the cast editor."
@@ -580,6 +580,8 @@ $scenarioReferenceIndex = Read-RepoFile "ShelteredAPI\Scenarios\Domain\Validatio
 $scenarioStoryAuthoring = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs"
 $scenarioCharacterLinks = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs"
 $scenarioQuestContent = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs"
+$scenarioScriptView = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryScriptViewBuilder.cs"
+$scenarioStageDisclosure = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryStageDisclosure.cs"
 
 Assert-Contains "scenario reference index" $scenarioReferenceIndex "enum ScenarioReferenceTargetKind\s*\{\s*Stage.*IntercomStep.*StoryCharacter.*Milestone" "reference index must classify usages by target kind (stage, intercom step, story character, milestone)."
 Assert-Contains "scenario reference index" $scenarioReferenceIndex "public static List<ScenarioReferenceUsage> Collect\(ScenarioDefinition definition\)" "reference index must expose a single-pass collector over the definition."
@@ -615,6 +617,28 @@ Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "ScenarioRefer
 Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "ScenarioStoryFocusedEditorActions\.StageOpen\(usage\.NavStageIndex\)" "clicking a usage must navigate via the existing focused-editor open-stage seam."
 Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "AppendUsages\(items,\s*definition,\s*ScenarioReferenceTargetKind\.StoryCharacter,\s*character\.CharacterId" "story character editor must show its usages."
 Assert-Contains "scenario find usages ui" $scenarioQuestContent "AppendUsages\(items,\s*definition,\s*ScenarioReferenceTargetKind\.Stage,\s*stage\.Id" "story stage inspector must show its usages."
+
+# STORYUX: script read view builds speaker/line/reply/route rows and jumps to the focused editor.
+Assert-Contains "story script view" $scenarioScriptView "internal static class ScenarioStoryScriptViewBuilder" "a stage-scoped script-view builder must exist."
+Assert-Contains "story script view" $scenarioScriptView "public static ScenarioAuthoringInspectorSection BuildStageScript\(ScenarioDefinition definition,\s*ScenarioFlowStageDefinition stage,\s*int stageIndex\)" "script view must build a read-only section for one stage."
+Assert-Contains "story script view" $scenarioScriptView "public static string DescribeOptionRoute\(ScenarioFlowStageDefinition stage,\s*ScenarioDialogueOptionDefinition option\)" "script view must phrase where a player reply leads."
+Assert-Contains "story script view" $scenarioScriptView "Ends the conversation" "an empty reply route must read as ending the conversation."
+Assert-Contains "story script view" $scenarioScriptView "Continues to " "a reply pointing at another scene must read as continuing to it."
+Assert-Contains "story script view" $scenarioScriptView "Starts stage " "a stage-change outcome must read as starting the target stage."
+Assert-Contains "story script view" $scenarioScriptView "ScenarioCastPortraitResolver\.Resolve\(candidate\.Member\)" "script view must resolve a speaker portrait through the cast portrait resolver when available."
+Assert-Contains "story script view" $scenarioScriptView "ScenarioStoryFocusedEditorActions\.StageOpen\(stageIndex\)" "each script line must offer an Edit affordance that opens the focused stage editor."
+
+# STORYUX: progressive-disclosure rule is a testable pure helper wired into the story page.
+Assert-Contains "story stage disclosure" $scenarioStageDisclosure "public static bool HasBasicDialogue\(ScenarioFlowStageDefinition stage\)" "disclosure must decide whether a stage has basic dialogue content."
+Assert-Contains "story stage disclosure" $scenarioStageDisclosure "public static bool ShouldRevealAdvancedRouting\(ScenarioFlowStageDefinition stage\)" "disclosure must gate advanced routing behind basic dialogue content."
+Assert-Contains "story stage disclosure wiring" $scenarioQuestContent "ScenarioStoryScriptViewBuilder\.BuildStageScript\(definition, stage, index\)" "the story page must render the script read view per stage."
+Assert-Contains "story stage disclosure wiring" $scenarioQuestContent "ScenarioStoryStageDisclosure\.ShouldRevealAdvancedRouting\(stage\)" "the story page must hide advanced routing until basic dialogue exists."
+
+# STORYUX: humane story-character labels replace the 'Display name 1' debug steppers.
+Assert-Contains "story character labels" $scenarioCharacterLinks "EditableProperty\(""Display name"","  "the display-name field must use plain creator language, not a numbered stepper."
+Assert-Contains "story character labels" $scenarioCharacterLinks "Vanilla preset \(optional\)" "optional vanilla preset must be labelled as optional."
+Assert-Contains "story character labels" $scenarioCharacterLinks "Advanced: internal id" "the raw CharacterId must move to a secondary Advanced row."
+Assert-NotContains "story character labels" $scenarioCharacterLinks "EditableProperty\(""Display name "" \+" "numbered 'Display name N' debug labels must be gone."
 Assert-Contains "player queue facade" $shelteredQueues "GetPlayerQueue\(ActorId owner\).*SnapshotQueue\(ActorId owner\).*RestoreQueue\(PlayerQueueSnapshot snapshot\)" "ShelteredQueues must expose actor-first query, snapshot, and restore operations."
 Assert-Contains "player queue identities" $playerQueueContracts "public ActorId ActorId.*CloneActorId" "queue-owner identity must return copied actor identities."
 Assert-Contains "player queue DTO boundary" $playerQueueContracts "No live Job, Obj_Base, or FamilyMember reference is exposed" "queue entries must document their detached runtime boundary."
