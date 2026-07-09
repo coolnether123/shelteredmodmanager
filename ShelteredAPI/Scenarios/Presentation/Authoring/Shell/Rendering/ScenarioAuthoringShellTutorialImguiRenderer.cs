@@ -560,9 +560,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         }
 
         // A spotlight cutout only reads as a highlight when it frames a specific
-        // control. A "target" that covers most of the surface (e.g. the welcome
-        // step pointing at the whole Home window) is not a real spotlight, so we
-        // drop the cutout and fall back to a uniform dim with a centered card.
+        // control. Suppress targets covering at least 35% of the surface, or a
+        // broad target covering at least 60% width and 50% height. Requiring both
+        // axes for the latter keeps tall, narrow rail highlights intact.
         private static bool IsFullSurfaceSpotlightTarget(Rect targetRect, Rect availableRect)
         {
             if (targetRect.width <= 0f || targetRect.height <= 0f
@@ -573,7 +573,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             float coverX = targetRect.width / availableRect.width;
             float coverY = targetRect.height / availableRect.height;
-            return coverX >= 0.72f && coverY >= 0.6f;
+            return (coverX * coverY) >= 0.35f || (coverX >= 0.6f && coverY >= 0.5f);
         }
 
         // Size a tour/tutorial card button to its label using the button style's
