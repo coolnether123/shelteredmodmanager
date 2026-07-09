@@ -1105,6 +1105,24 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             XmlElement scenePlacements = Child(element, "SceneSpritePlacements");
             ReadSceneSpritePlacements(scenePlacements, result.SceneSpritePlacements);
 
+            XmlElement assetCredits = Child(element, "AssetCredits");
+            if (assetCredits != null)
+            {
+                XmlNodeList creditNodes = assetCredits.GetElementsByTagName("Credit");
+                for (int i = 0; i < creditNodes.Count; i++)
+                {
+                    XmlElement creditElement = creditNodes[i] as XmlElement;
+                    if (creditElement != null)
+                    {
+                        result.AssetCredits.Add(new ScenarioAssetCreditDefinition
+                        {
+                            RelativePath = AttributeOrChild(creditElement, "path", "Path"),
+                            Credit = AttributeOrChild(creditElement, "note", "Note")
+                        });
+                    }
+                }
+            }
+
             return result;
         }
 
@@ -1866,6 +1884,18 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             writer.WriteEndElement();
 
             WriteSceneSpritePlacements(writer, value.SceneSpritePlacements);
+            writer.WriteStartElement("AssetCredits");
+            for (int i = 0; value.AssetCredits != null && i < value.AssetCredits.Count; i++)
+            {
+                ScenarioAssetCreditDefinition credit = value.AssetCredits[i];
+                if (credit == null || string.IsNullOrEmpty(credit.RelativePath) || string.IsNullOrEmpty(credit.Credit))
+                    continue;
+                writer.WriteStartElement("Credit");
+                WriteAttribute(writer, "path", credit.RelativePath);
+                WriteAttribute(writer, "note", credit.Credit);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
             writer.WriteEndElement();
         }
 

@@ -168,14 +168,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         internal static List<string> CollectAssetPaths(ScenarioDefinition definition)
         {
             List<string> paths = new List<string>();
-            if (definition == null || definition.AssetReferences == null)
+            if (definition == null)
                 return paths;
             AssetReferencesDefinition assets = definition.AssetReferences;
-            for (int i = 0; assets.CustomSprites != null && i < assets.CustomSprites.Count; i++) AddUnique(paths, assets.CustomSprites[i] != null ? assets.CustomSprites[i].RelativePath : null);
-            for (int i = 0; assets.CustomIcons != null && i < assets.CustomIcons.Count; i++) AddUnique(paths, assets.CustomIcons[i] != null ? assets.CustomIcons[i].RelativePath : null);
-            for (int i = 0; assets.SpriteSwaps != null && i < assets.SpriteSwaps.Count; i++) AddUnique(paths, assets.SpriteSwaps[i] != null ? assets.SpriteSwaps[i].RelativePath : null);
-            for (int i = 0; assets.SceneSpritePlacements != null && i < assets.SceneSpritePlacements.Count; i++) AddUnique(paths, assets.SceneSpritePlacements[i] != null ? assets.SceneSpritePlacements[i].RelativePath : null);
-            for (int i = 0; assets.SpritePatches != null && i < assets.SpritePatches.Count; i++) AddUnique(paths, assets.SpritePatches[i] != null ? assets.SpritePatches[i].BaseRelativePath : null);
+            for (int i = 0; assets != null && assets.CustomSprites != null && i < assets.CustomSprites.Count; i++) AddUnique(paths, assets.CustomSprites[i] != null ? assets.CustomSprites[i].RelativePath : null);
+            for (int i = 0; assets != null && assets.CustomIcons != null && i < assets.CustomIcons.Count; i++) AddUnique(paths, assets.CustomIcons[i] != null ? assets.CustomIcons[i].RelativePath : null);
+            for (int i = 0; assets != null && assets.SpriteSwaps != null && i < assets.SpriteSwaps.Count; i++) AddUnique(paths, assets.SpriteSwaps[i] != null ? assets.SpriteSwaps[i].RelativePath : null);
+            for (int i = 0; assets != null && assets.SceneSpritePlacements != null && i < assets.SceneSpritePlacements.Count; i++) AddUnique(paths, assets.SceneSpritePlacements[i] != null ? assets.SceneSpritePlacements[i].RelativePath : null);
+            for (int i = 0; assets != null && assets.SpritePatches != null && i < assets.SpritePatches.Count; i++) AddUnique(paths, assets.SpritePatches[i] != null ? assets.SpritePatches[i].BaseRelativePath : null);
+            for (int i = 0; definition.FamilySetup != null && definition.FamilySetup.Members != null && i < definition.FamilySetup.Members.Count; i++)
+            {
+                FamilyMemberAppearanceConfig appearance = definition.FamilySetup.Members[i] != null ? definition.FamilySetup.Members[i].Appearance : null;
+                if (appearance == null) continue;
+                AddUnique(paths, appearance.HeadTexturePath);
+                AddUnique(paths, appearance.TorsoTexturePath);
+                AddUnique(paths, appearance.LegTexturePath);
+            }
             return paths;
         }
 
@@ -223,6 +231,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             text.AppendLine("Copy this scenario folder into <Sheltered game>\\mods\\<a loaded mod>\\Scenarios, then reopen the scenario book. Restart the game if the catalog was already cached.");
             AppendList(text, "REQUIRED MODS", requiredMods.ToArray(), "None declared.");
             AppendList(text, "KNOWN LIMITATIONS", limitations, "None reported by validation.");
+            AppendAssetCredits(text, definition);
             return text.ToString();
         }
 
@@ -243,6 +252,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 writer.WriteStartElement("KnownLimitations");
                 for (int i = 0; i < limitations.Length; i++) writer.WriteElementString("Limitation", limitations[i]);
                 writer.WriteEndElement();
+                writer.WriteStartElement("AssetCredits");
+                List<ScenarioAssetCreditDefinition> credits = definition.AssetReferences != null ? definition.AssetReferences.AssetCredits : null;
+                for (int i = 0; credits != null && i < credits.Count; i++)
+                {
+                    ScenarioAssetCreditDefinition credit = credits[i];
+                    if (!ShouldExportCredit(definition, credit)) continue;
+                    writer.WriteStartElement("Asset");
+                    writer.WriteAttributeString("path", credit.RelativePath);
+                    writer.WriteString(credit.Credit);
+                    writer.WriteEndElement();
+                }
+                writer.WriteEndElement();
                 writer.WriteEndElement();
             }
             return output.ToString();
@@ -253,6 +274,36 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             text.AppendLine(); text.AppendLine(heading);
             if (values == null || values.Length == 0) text.AppendLine(empty);
             else for (int i = 0; i < values.Length; i++) text.AppendLine("- " + values[i]);
+        }
+
+        private static void AppendAssetCredits(StringBuilder text, ScenarioDefinition definition)
+        {
+            List<ScenarioAssetCreditDefinition> credits = definition != null && definition.AssetReferences != null ? definition.AssetReferences.AssetCredits : null;
+            text.AppendLine();
+            text.AppendLine("ASSET CREDITS");
+            bool wrote = false;
+            for (int i = 0; credits != null && i < credits.Count; i++)
+            {
+                ScenarioAssetCreditDefinition credit = credits[i];
+                if (!ShouldExportCredit(definition, credit)) continue;
+                text.AppendLine("- " + credit.RelativePath + ": " + credit.Credit);
+                wrote = true;
+            }
+            if (!wrote) text.AppendLine("None provided.");
+        }
+
+        private static bool ShouldExportCredit(ScenarioDefinition definition, ScenarioAssetCreditDefinition credit)
+        {
+            if (credit == null || string.IsNullOrEmpty(credit.RelativePath) || string.IsNullOrEmpty(credit.Credit)) return false;
+            List<string> paths = CollectAssetPaths(definition);
+            for (int i = 0; i < paths.Count; i++)
+                if (string.Equals(NormalizeAssetPath(paths[i]), NormalizeAssetPath(credit.RelativePath), StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private static string NormalizeAssetPath(string path)
+        {
+            return (path ?? string.Empty).Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
         }
 
         private static string Safe(string value) { return string.IsNullOrEmpty(value) ? "Not provided." : value.Trim(); }

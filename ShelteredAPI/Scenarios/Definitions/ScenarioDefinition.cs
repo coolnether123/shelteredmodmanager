@@ -1120,6 +1120,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             SpritePatches = new List<SpritePatchDefinition>();
             SpriteSwaps = new List<SpriteSwapRule>();
             SceneSpritePlacements = new List<SceneSpritePlacement>();
+            AssetCredits = new List<ScenarioAssetCreditDefinition>();
         }
 
         public List<SpriteRef> CustomSprites { get; private set; }
@@ -1127,6 +1128,13 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public List<SpritePatchDefinition> SpritePatches { get; private set; }
         public List<SpriteSwapRule> SpriteSwaps { get; private set; }
         public List<SceneSpritePlacement> SceneSpritePlacements { get; private set; }
+        internal List<ScenarioAssetCreditDefinition> AssetCredits { get; private set; }
+    }
+
+    internal sealed class ScenarioAssetCreditDefinition
+    {
+        public string RelativePath { get; set; }
+        public string Credit { get; set; }
     }
 
     /// <summary>

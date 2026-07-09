@@ -18,12 +18,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
         private readonly ScenarioAssetPlacementContentBuilder _placementContentBuilder;
         private readonly ScenarioSelectedAssetEditorContentBuilder _editorContentBuilder;
+        private readonly ScenarioAssetInventoryContentBuilder _inventoryContentBuilder;
 
         public ScenarioAssetAuthoringContentBuilder(
             IScenarioAuthoringSectionHub sectionHub,
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioSpriteRuntimeResolver runtimeResolver,
-            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
+            ScenarioAssetInventoryService assetInventoryService)
         {
             _sectionHub = sectionHub;
             _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
@@ -33,6 +35,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 runtimeResolver,
                 weatherEffectSpriteCatalog);
             _editorContentBuilder = new ScenarioSelectedAssetEditorContentBuilder(sectionHub);
+            _inventoryContentBuilder = new ScenarioAssetInventoryContentBuilder(assetInventoryService);
         }
 
         public List<ScenarioAuthoringInspectorSection> BuildAssetPlacementSections(
@@ -68,7 +71,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioAuthoringState state,
             ScenarioEditorSession editorSession)
         {
-            return new ScenarioAssetBrowserCatalogContentBuilder(_sectionHub, _weatherEffectSpriteCatalog).Build(state, editorSession).ToArray();
+            List<ScenarioAuthoringInspectorSection> sections = _inventoryContentBuilder.Build(state, editorSession);
+            List<ScenarioAuthoringInspectorSection> catalog = new ScenarioAssetBrowserCatalogContentBuilder(_sectionHub, _weatherEffectSpriteCatalog).Build(state, editorSession);
+            for (int i = 0; i < catalog.Count; i++) sections.Add(catalog[i]);
+            return sections.ToArray();
         }
     }
 

@@ -50,6 +50,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifySeamGuardContracts(result);
                 ScenarioStarterTemplateVerification.Verify(result);
                 ScenarioTimelineUxVerification.Verify(result);
+                ScenarioAssetInventoryVerification.Verify(root, result);
             }
             catch (Exception ex)
             {

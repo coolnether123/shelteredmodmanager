@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 
 using ShelteredAPI.Scenarios.Application.Commands;
+using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -37,7 +38,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
             ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
             ScenarioMapDraftService mapDraftService,
-            ScenarioDraftSnapshotService snapshotService)
+            ScenarioDraftSnapshotService snapshotService,
+            ScenarioAssetInventoryMutationService assetInventoryMutations)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -59,7 +61,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 mapAuthoringRuntimeService,
                 storageAuthoringRuntimeService,
                 mapDraftService,
-                snapshotService));
+                snapshotService,
+                assetInventoryMutations));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -112,11 +115,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
             ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
             ScenarioMapDraftService mapDraftService,
-            ScenarioDraftSnapshotService snapshotService)
+            ScenarioDraftSnapshotService snapshotService,
+            ScenarioAssetInventoryMutationService assetInventoryMutations)
         {
             return new IScenarioCommandHandler[]
             {
-                new AssetBrowserCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, sectionHub.SpriteSwap, layoutService, weatherEffectSpriteCatalog),
+                new AssetBrowserCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, sectionHub.SpriteSwap, layoutService, weatherEffectSpriteCatalog, editorService, assetInventoryMutations),
                 new SpriteCommandHandler(sectionHub.SpriteSwap, selectionScopeService, layoutService, sectionHub.BuildPlacement),
                 new SceneSpriteCommandHandler(sectionHub.SceneSpritePlacement, sectionHub.BuildPlacement, selectionScopeService),
                 new BuildCommandHandler(sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement),

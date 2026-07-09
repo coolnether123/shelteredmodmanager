@@ -35,19 +35,25 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         private readonly ScenarioSpriteSwapAuthoringService _spriteSwap;
         private readonly ScenarioAuthoringLayoutService _layoutService;
         private readonly ScenarioWeatherEffectSpriteCatalogService _weatherEffectSpriteCatalog;
+        private readonly IScenarioEditorService _editorService;
+        private readonly ScenarioAssetInventoryMutationService _assetInventoryMutations;
 
         public AssetBrowserCommandHandler(
             ScenarioBuildPlacementAuthoringService buildPlacement,
             ScenarioSceneSpritePlacementAuthoringService sceneSpritePlacement,
             ScenarioSpriteSwapAuthoringService spriteSwap,
             ScenarioAuthoringLayoutService layoutService,
-            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog)
+            ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
+            IScenarioEditorService editorService,
+            ScenarioAssetInventoryMutationService assetInventoryMutations)
         {
             _buildPlacement = buildPlacement;
             _sceneSpritePlacement = sceneSpritePlacement;
             _spriteSwap = spriteSwap;
             _layoutService = layoutService;
             _weatherEffectSpriteCatalog = weatherEffectSpriteCatalog;
+            _editorService = editorService;
+            _assetInventoryMutations = assetInventoryMutations;
         }
 
         public bool TryHandle(ScenarioAuthoringState state, string actionId, out bool handled, out string message)
@@ -58,6 +64,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return false;
 
             handled = true;
+            if (actionId.StartsWith(ScenarioAssetInventoryActionIds.Prefix, StringComparison.Ordinal))
+                return HandleInventoryAction(state, actionId, out message);
+
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, StringComparison.Ordinal))
                 return SelectAsset(state, actionId, out message);
 
@@ -69,6 +78,51 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
 
             handled = false;
             return false;
+        }
+
+        private bool HandleInventoryAction(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            message = null;
+            if (_assetInventoryMutations == null)
+            {
+                message = "Asset inventory actions are unavailable.";
+                return false;
+            }
+
+            string token;
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.RelinkPrefix, out token))
+                return _assetInventoryMutations.RelinkMissing(_editorService != null ? _editorService.CurrentSession : null, state.ActiveScenarioFilePath, token, out message);
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.RemovePrefix, out token))
+                return _assetInventoryMutations.RemoveOrphan(_editorService != null ? _editorService.CurrentSession : null, state.ActiveScenarioFilePath, token, out message);
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.KeepPrefix, out token))
+                return _assetInventoryMutations.KeepOrphan(token, out message);
+            if (actionId.StartsWith(ScenarioAssetInventoryActionIds.CreditPrefix, StringComparison.Ordinal))
+                return SetAssetCredit(actionId, out message);
+            if (ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAssetInventoryActionIds.NavigatePrefix, out token))
+            {
+                if (_layoutService != null) _layoutService.SelectTool(state, ScenarioAuthoringTool.Assets);
+                message = token.StartsWith("placement:", StringComparison.Ordinal)
+                    ? "Opened the scene-art workspace for placement '" + token.Substring("placement:".Length) + "'. Select it in the hierarchy to edit it in-world."
+                    : "Opened the closest editor workspace for this asset reference.";
+                return true;
+            }
+
+            message = "Asset inventory action could not be decoded.";
+            return false;
+        }
+
+        private bool SetAssetCredit(string actionId, out string message)
+        {
+            string payload = actionId.Substring(ScenarioAssetInventoryActionIds.CreditPrefix.Length);
+            int separator = payload.IndexOf('.');
+            if (separator < 0)
+            {
+                message = "Asset credit update could not be decoded.";
+                return false;
+            }
+            string path = ScenarioAuthoringActionCodec.DecodeToken(payload.Substring(0, separator));
+            string credit = ScenarioAuthoringActionCodec.DecodeToken(payload.Substring(separator + 1));
+            return _assetInventoryMutations.SetCredit(_editorService != null ? _editorService.CurrentSession : null, path, credit, out message);
         }
 
         private static bool SelectAsset(ScenarioAuthoringState state, string actionId, out string message)

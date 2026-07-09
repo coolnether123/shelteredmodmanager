@@ -263,6 +263,7 @@
     <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioMapUxVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPackageUxVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioAssetInventoryVerification.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioLoader.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPipelineSmokeTest.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioPlacementDefinitions.cs" />
@@ -290,6 +291,8 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildDeletionAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioDraftMetadataEditService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPngImportService.cs" />
+    <Compile Include="Scenarios\Application\Assets\ScenarioAssetInventoryService.cs" />
+    <Compile Include="Scenarios\Application\Assets\ScenarioAssetInventoryMutationService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPublishExportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackagePlan.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPackageAuthoringPreferences.cs" />
@@ -427,6 +430,7 @@
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Inspector\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetInventoryContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationUtilities.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringInspectorItemFacade.cs" />

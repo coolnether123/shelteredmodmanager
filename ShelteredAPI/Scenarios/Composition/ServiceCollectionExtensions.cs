@@ -3,6 +3,7 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Core;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Bunker;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Conditions;
@@ -88,6 +89,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new PlacementGhostSessionService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSpritePatchAuthoringService(resolver.Get<SpritePatchBuilder>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioPngImportService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAssetInventoryService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAssetInventoryMutationService(resolver.Get<ScenarioAuthoringHistoryService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioApplyCoordinator(
@@ -247,7 +250,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioAuthoringSectionHub>(),
                     resolver.Get<ScenarioSelectionScopeService>(),
                     resolver.Get<ScenarioSpriteRuntimeResolver>(),
-                    resolver.Get<ScenarioWeatherEffectSpriteCatalogService>());
+                    resolver.Get<ScenarioWeatherEffectSpriteCatalogService>(),
+                    resolver.Get<ScenarioAssetInventoryService>());
             });
         }
 
