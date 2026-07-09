@@ -1747,7 +1747,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             RegisterInteractiveRegion(rect);
             Rect headerRect = new Rect(rect.x, rect.y, rect.width, 42f);
-            Rect footerRect = new Rect(rect.x, rect.yMax - 62f, rect.width, 62f);
+            Rect footerRect = new Rect(rect.x, rect.yMax - 132f, rect.width, 132f);
             Rect contentRect = new Rect(rect.x, headerRect.yMax + 8f, rect.width, Math.Max(120f, footerRect.y - headerRect.yMax - 14f));
             DrawSurvivorEditorHeader(headerRect, editor);
 
@@ -1866,6 +1866,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float rowStep = 28f;
             float rowHeight = 28f;
             float y = inner.y + 28f;
+            if (!string.IsNullOrEmpty(editor.SkillsLimitationText))
+            {
+                Rect limitationRect = new Rect(inner.x, y, inner.width, 46f);
+                GUI.Box(limitationRect, GUIContent.none, _uiContext.Styles.Field);
+                GUIStyle limitationStyle = new GUIStyle(_mutedTextStyle);
+                limitationStyle.wordWrap = true;
+                GUI.Label(new Rect(limitationRect.x + 8f, limitationRect.y + 5f, limitationRect.width - 16f, limitationRect.height - 10f), editor.SkillsLimitationText, limitationStyle);
+                y += 52f;
+            }
             for (int i = 0; editor.StatRows != null && i < editor.StatRows.Length; i++)
             {
                 DrawSurvivorStatRow(new Rect(inner.x, y, inner.width, rowHeight), editor.StatRows[i]);
@@ -2170,12 +2179,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             GUI.Box(rect, GUIContent.none, _uiContext.Styles.Section);
             Rect inner = Inset(rect, 8f);
+            GUIStyle disclosureStyle = new GUIStyle(_mutedTextStyle);
+            disclosureStyle.wordWrap = true;
+            float disclosureY = inner.y;
+            for (int i = 0; editor.UtilityDisclosureLines != null && i < editor.UtilityDisclosureLines.Length; i++)
+            {
+                string line = editor.UtilityDisclosureLines[i];
+                if (string.IsNullOrEmpty(line))
+                    continue;
+                GUI.Label(new Rect(inner.x, disclosureY, inner.width, 34f), line, disclosureStyle);
+                disclosureY += 34f;
+            }
+
             float closeWidth = 0f;
             for (int i = 0; editor.CloseActions != null && i < editor.CloseActions.Length; i++)
                 closeWidth += Math.Max(76f, MeasureButtonWidth(editor.CloseActions[i], false, 20f)) + 6f;
             closeWidth = Math.Max(0f, closeWidth - 6f);
 
-            Rect utilityRect = new Rect(inner.x, inner.y, Math.Max(120f, inner.width - closeWidth - 18f), inner.height);
+            Rect utilityRect = new Rect(inner.x, inner.y + 72f, Math.Max(120f, inner.width - closeWidth - 18f), Math.Max(28f, inner.height - 72f));
             DrawWrappedActionButtons(utilityRect, editor.UtilityActions, 28f, 6f, false);
 
             float x = inner.xMax - closeWidth;
@@ -2238,10 +2259,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawHomeHeadlineField(titleItem);
             GUILayout.Space(6f);
             DrawHomeStatusChips(chips);
-            if (pathItem != null)
+            if (pathItem != null || copyPath != null)
             {
                 GUILayout.Space(5f);
-                DrawHomeDraftPath(pathItem, copyPath);
+                bool showPath = pathItem != null && IsHomeAdvancedDetailsEnabled();
+                DrawHomeDraftPath(showPath ? pathItem : null, copyPath);
             }
             GUILayout.EndVertical();
         }
@@ -2416,8 +2438,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return ScenarioUiPillEmphasis.Default;
         }
 
+        private bool IsHomeAdvancedDetailsEnabled()
+        {
+            return _snapshot != null
+                && _snapshot.State != null
+                && _snapshot.State.Settings != null
+                && _snapshot.State.Settings.GetBool("debug.show_advanced_details", false);
+        }
+
         private void DrawHomeDraftPath(ScenarioAuthoringInspectorItem pathItem, ScenarioAuthoringInspectorAction copyPath)
         {
+            // Default header keeps the raw filesystem path out of sight; the Copy
+            // Path action stays available, and the full path is revealed only when
+            // the caller passes a non-null pathItem (Advanced details enabled).
+            if (pathItem == null)
+            {
+                if (copyPath == null)
+                    return;
+                float compactWidth = Mathf.Clamp(MeasureButtonWidth(copyPath, false, 22f), 88f, 160f);
+                Rect compactRow = GUILayoutUtility.GetRect(compactWidth, 26f, GUILayout.ExpandWidth(true), GUILayout.Height(26f));
+                DrawButton(new Rect(compactRow.x, compactRow.y, compactWidth, 24f), copyPath, false);
+                return;
+            }
+
             float rowLimit = GetSectionContentWidth();
             float copyWidth = copyPath != null ? Mathf.Clamp(MeasureButtonWidth(copyPath, false, 22f), 88f, 132f) : 0f;
             bool inlineCopy = copyPath == null || rowLimit - copyWidth - 12f >= 180f;
@@ -2560,14 +2603,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawChecklistItem(Rect rect, ScenarioAuthoringInspectorAction action, bool recommended)
         {
-            if (action == null)
+            if (action == null || _uiContext == null || _uiContext.Styles == null)
                 return;
 
-            bool complete = !action.Enabled && action.Label != null && action.Label.StartsWith("Done:", StringComparison.OrdinalIgnoreCase);
-            if (!complete)
+            // Every row renders as a single layer: a status chip on the left, then
+            // the item label. Done rows are inert; todo rows are click targets for
+            // the whole row. This avoids the earlier state split where todo rows
+            // were centered full-width buttons that collided with the chip layout.
+            string rawLabel = action.Label ?? string.Empty;
+            bool complete = !action.Enabled && rawLabel.StartsWith("Done:", StringComparison.OrdinalIgnoreCase);
+            string label = StripChecklistLabelPrefix(rawLabel);
+
+            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+
+            Rect chipRect = new Rect(rect.x + 8f, rect.y + 4f, 34f, rect.height - 8f);
+            ScenarioUiWidgets.DrawPill(
+                chipRect,
+                complete ? "OK" : "GO",
+                _uiContext.Styles,
+                complete ? ScenarioUiPillEmphasis.Success : ScenarioUiPillEmphasis.Active);
+
+            float labelX = chipRect.xMax + 10f;
+            Rect labelRect = new Rect(labelX, rect.y + 3f, Math.Max(20f, rect.xMax - labelX - 10f), rect.height - 6f);
+            GUI.Label(labelRect, label, complete ? _uiContext.Styles.PaperMutedText : _uiContext.Styles.PaperBodyText);
+
+            if (!complete && action.Enabled)
             {
-                DrawButton(rect, action, false);
-                if (recommended && _uiContext != null && _uiContext.Styles != null)
+                RegisterInteractiveRegion(rect);
+                if (!string.IsNullOrEmpty(action.Id))
+                    RegisterTourTarget("action:" + action.Id, rect);
+                if (DrawPlainButton(rect, GUIContent.none, _buttonContentStyle, true))
+                {
+                    ScenarioAuthoringBackendService.Instance.ExecuteAction(action.Id);
+                    if (Event.current != null)
+                        Event.current.Use();
+                }
+                if (recommended)
                 {
                     float pulse = 0.45f + (Mathf.Sin(Time.realtimeSinceStartup * 2.1f) * 0.20f);
                     Color oldColor = GUI.color;
@@ -2575,15 +2646,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
                     GUI.color = oldColor;
                 }
-                return;
             }
+        }
 
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
-            Rect markRect = new Rect(rect.x + 8f, rect.y + 4f, 32f, rect.height - 8f);
-            Rect textRect = new Rect(markRect.xMax + 8f, rect.y + 3f, rect.width - 48f, rect.height - 6f);
-            ScenarioUiWidgets.DrawPill(markRect, "OK", _uiContext.Styles, ScenarioUiPillEmphasis.Success);
-            string label = action.Label.Substring("Done:".Length).Trim();
-            GUI.Label(textRect, label, _uiContext.Styles.PaperBodyText);
+        private static string StripChecklistLabelPrefix(string label)
+        {
+            if (string.IsNullOrEmpty(label))
+                return string.Empty;
+
+            int colon = label.IndexOf(':');
+            return colon >= 0 && colon + 1 < label.Length ? label.Substring(colon + 1).Trim() : label.Trim();
         }
 
         private static ScenarioAuthoringInspectorAction FindAction(ScenarioAuthoringInspectorSection section, string actionId)

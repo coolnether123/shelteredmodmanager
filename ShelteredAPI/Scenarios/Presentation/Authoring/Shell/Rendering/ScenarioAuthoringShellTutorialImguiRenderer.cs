@@ -123,6 +123,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Rect targetRect = ResolveTutorialTargetRect(tutorial, topRect, statusRect, windowRects, shell);
+            if (IsFullSurfaceSpotlightTarget(targetRect, availableRect))
+                targetRect = ZeroRect();
             DrawSpotlightDimming(availableRect, targetRect, progress);
 
             if (targetRect.width > 0f && targetRect.height > 0f)
@@ -159,6 +161,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             Rect targetRect = ResolveTourTargetRect(tour.TargetId, topRect, statusRect, windowRects, shell);
+            if (IsFullSurfaceSpotlightTarget(targetRect, availableRect))
+                targetRect = ZeroRect();
             DrawSpotlightDimming(availableRect, targetRect, progress);
 
             if (targetRect.width > 0f && targetRect.height > 0f)
@@ -360,10 +364,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.Label(tour.Body ?? string.Empty, _textStyle);
             GUILayout.FlexibleSpace();
             GUILayout.BeginHorizontal();
-            DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tour.BackAction, false);
+            DrawTutorialCardButton(tour.BackAction, 72f, 150f, 30f);
             GUILayout.FlexibleSpace();
-            DrawButton(GUILayoutUtility.GetRect(76f, 30f, GUILayout.Width(76f), GUILayout.Height(30f)), tour.ExitAction, false);
-            DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tour.NextAction, false);
+            DrawTutorialCardButton(tour.ExitAction, 72f, 150f, 30f);
+            GUILayout.Space(6f);
+            DrawTutorialCardButton(tour.NextAction, 72f, 150f, 30f);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
@@ -493,6 +498,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new Rect(0f, 0f, 0f, 0f);
         }
 
+        // A spotlight cutout only reads as a highlight when it frames a specific
+        // control. A "target" that covers most of the surface (e.g. the welcome
+        // step pointing at the whole Home window) is not a real spotlight, so we
+        // drop the cutout and fall back to a uniform dim with a centered card.
+        private static bool IsFullSurfaceSpotlightTarget(Rect targetRect, Rect availableRect)
+        {
+            if (targetRect.width <= 0f || targetRect.height <= 0f
+                || availableRect.width <= 0f || availableRect.height <= 0f)
+            {
+                return false;
+            }
+
+            float coverX = targetRect.width / availableRect.width;
+            float coverY = targetRect.height / availableRect.height;
+            return coverX >= 0.72f && coverY >= 0.6f;
+        }
+
+        // Size a tour/tutorial card button to its label using the button style's
+        // own measurement so labels ("HELP", "SKIP TOUR", "KEEP GOING") never get
+        // clipped to an ellipsis at typical card widths.
+        private void DrawTutorialCardButton(ScenarioAuthoringInspectorAction action, float minWidth, float maxWidth, float height)
+        {
+            float width = action != null
+                ? Mathf.Clamp(MeasureButtonWidth(action, false, 24f), minWidth, maxWidth)
+                : minWidth;
+            DrawButton(GUILayoutUtility.GetRect(width, height, GUILayout.Width(width), GUILayout.Height(height)), action, false);
+        }
+
         private static Rect BuildStatusPlaytestRect(Rect statusRect)
         {
             const float rightControlsWidth = 528f;
@@ -568,17 +601,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginHorizontal();
             if (tutorial.SkipPromptVisible)
             {
-                DrawButton(GUILayoutUtility.GetRect(112f, 30f, GUILayout.Width(112f), GUILayout.Height(30f)), tutorial.SkipCancelAction, false);
+                DrawTutorialCardButton(tutorial.SkipCancelAction, 96f, 180f, 30f);
                 GUILayout.FlexibleSpace();
-                DrawButton(GUILayoutUtility.GetRect(112f, 30f, GUILayout.Width(112f), GUILayout.Height(30f)), tutorial.SkipAction, false);
+                DrawTutorialCardButton(tutorial.SkipAction, 96f, 180f, 30f);
             }
             else
             {
-                DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tutorial.BackAction, false);
+                DrawTutorialCardButton(tutorial.BackAction, 72f, 150f, 30f);
                 GUILayout.FlexibleSpace();
-                DrawButton(GUILayoutUtility.GetRect(70f, 28f, GUILayout.Width(70f), GUILayout.Height(28f)), tutorial.HelpAction, false);
-                DrawButton(GUILayoutUtility.GetRect(94f, 28f, GUILayout.Width(94f), GUILayout.Height(28f)), tutorial.SkipPromptAction, false);
-                DrawButton(GUILayoutUtility.GetRect(86f, 30f, GUILayout.Width(86f), GUILayout.Height(30f)), tutorial.NextAction, false);
+                DrawTutorialCardButton(tutorial.HelpAction, 64f, 150f, 28f);
+                GUILayout.Space(6f);
+                DrawTutorialCardButton(tutorial.SkipPromptAction, 84f, 170f, 28f);
+                GUILayout.Space(6f);
+                DrawTutorialCardButton(tutorial.NextAction, 72f, 150f, 30f);
             }
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
