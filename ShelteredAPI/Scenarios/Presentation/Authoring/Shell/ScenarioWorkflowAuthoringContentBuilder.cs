@@ -80,8 +80,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Item.Property("Undo Depth", history.UndoDepth.ToString()),
                     Item.Property("Redo Depth", history.RedoDepth.ToString()),
                     Item.Property("Clipboard", ScenarioSpriteSwapClipboard.Describe()),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Visual Edit (Ctrl+Z)", "Undo the last sprite swap visual edit.", canUndo, false, "UN", "Rewind the last authored visual change.")),
-                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryRedo, "Redo Visual Edit (Ctrl+Y)", "Redo the last undone visual edit.", canRedo, false, "RE", "Re-apply the last undone visual change.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Last Change (Ctrl+Z)", "Undo the most recent authored change in this workspace.", canUndo, false, "UN", "Rewind the last authored change.")),
+                    Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionHistoryRedo, "Redo Last Change (Ctrl+Y)", "Redo the most recently undone authored change in this workspace.", canRedo, false, "RE", "Re-apply the last undone authored change.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapCopy, "Copy Visual Swap (Ctrl+C)", "Copy the selected target's active sprite swap to the clipboard.", true, false, "CP", "Copy the selected visual rule.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapPaste, "Paste Visual Swap (Ctrl+V)", "Paste the clipboard sprite swap onto the selected target.", clipboardHasRule, clipboardHasRule, "PA", clipboardHasRule ? "Apply the copied visual rule to the current target." : "Clipboard is empty.")),
                     Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionSpriteSwapRevert, "Revert Visual Swap (Ctrl+R)", "Remove the selected target's sprite swap and restore its original sprite.", true, false, "RV", "Clear the authored visual swap."))

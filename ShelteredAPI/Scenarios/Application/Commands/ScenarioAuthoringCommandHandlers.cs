@@ -393,7 +393,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionShellTabMap:
                     return SetStage(state, ScenarioStageKind.Map, out message, "Map workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellTabTest:
-                    return SetStage(state, ScenarioStageKind.Test, out message, "Test workspace active.");
+                    return SetStage(state, ScenarioStageKind.Test, out message, "Test Console workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellTabPublish:
                     return SetStage(state, ScenarioStageKind.Publish, out message, "Package / Export workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellToggle:

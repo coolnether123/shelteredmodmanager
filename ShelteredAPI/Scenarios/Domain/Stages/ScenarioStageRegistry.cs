@@ -26,7 +26,7 @@ namespace ShelteredAPI.Scenarios.Domain.Stages{
             Register(new ScenarioStageDefinition(ScenarioStageKind.Quests, "Story", 4, ScenarioStageKind.None, true, true, "Quest authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Map, "Map", 5, ScenarioStageKind.None, true, true, "Map-facing scenario authoring."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Assets, "Assets", 6, ScenarioStageKind.None, true, true, "Full-page browser for placeable and editable scenario assets."));
-            Register(new ScenarioStageDefinition(ScenarioStageKind.Test, "Test", 7, ScenarioStageKind.None, true, true, "Playtest and live-apply workflow."));
+            Register(new ScenarioStageDefinition(ScenarioStageKind.Test, "Test Console", 7, ScenarioStageKind.None, true, true, "Playtest, safe time controls, and live execution logs."));
             Register(new ScenarioStageDefinition(ScenarioStageKind.Publish, "Package / Export", 8, ScenarioStageKind.None, true, true, "Validate and create a local package for sharing."));
         }
 

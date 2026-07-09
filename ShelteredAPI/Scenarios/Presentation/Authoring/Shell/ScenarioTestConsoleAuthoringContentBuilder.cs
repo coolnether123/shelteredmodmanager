@@ -4,11 +4,11 @@ using System.Globalization;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
-using ShelteredAPI.Scenarios.Presentation.Authoring.Timeline;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {

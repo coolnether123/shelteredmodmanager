@@ -584,6 +584,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith("build.delete", StringComparison.Ordinal)
                 || actionId.StartsWith("capture.", StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringClickWorldPrefix, StringComparison.Ordinal)
                 || actionId.IndexOf(".delete.", StringComparison.Ordinal) >= 0
                 || actionId.IndexOf(".remove.", StringComparison.Ordinal) >= 0;
         }

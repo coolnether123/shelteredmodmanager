@@ -337,7 +337,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             sections.Add(BuildQuestionSection("home_art", "How does it look?", "Browse, replace, and edit sprites.", facts.ArtBadge, "stage.select." + ScenarioStageKind.Assets, "Browse Assets", "ART", TutorialContent.TopicArtPixelEditor, TutorialContent.TourEditSprite));
             string playStartReason;
             bool canStartPlay = new ScenarioPlayStartReadiness().CanStartPlay(definition, out playStartReason);
-            sections.Add(BuildQuestionSection("home_test", "Ready to try it?", canStartPlay ? "Playtest your scenario live." : playStartReason, facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test", "TEST", TutorialContent.TopicTest, null, canStartPlay ? null : playStartReason));
+            sections.Add(BuildQuestionSection("home_test", "Ready to try it?", canStartPlay ? "Playtest your scenario live." : playStartReason, facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test Console", "TEST", TutorialContent.TopicTest, null, canStartPlay ? null : playStartReason));
             sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and package a local export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Package / Export", "FLAG", TutorialContent.TopicPublish, null));
         }
 

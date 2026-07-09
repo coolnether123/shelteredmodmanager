@@ -306,7 +306,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.Assets:
                     return "Assets";
                 case ScenarioStageKind.Test:
-                    return "Test";
+                    return "Test Console";
                 case ScenarioStageKind.Publish:
                     return "Package / Export";
                 default:

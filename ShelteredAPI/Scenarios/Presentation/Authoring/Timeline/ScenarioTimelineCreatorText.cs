@@ -9,7 +9,7 @@ using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 using ShelteredAPI.Scenarios.Shared;
 
-namespace ShelteredAPI.Scenarios.Presentation.Authoring.Timeline
+namespace ShelteredAPI.Scenarios.Application.Timeline
 {
     /// <summary>Single creator-language mapping for Timeline condition/effect names and summaries.</summary>
     internal static class ScenarioTimelineCreatorText

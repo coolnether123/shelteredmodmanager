@@ -13,6 +13,7 @@ using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Saves;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
 using ShelteredAPI.Scenarios.Application.Compatibility;
 using ShelteredAPI.Scenarios.Application.Runtime;
@@ -34,7 +35,6 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
-using ShelteredAPI.Scenarios.Presentation.Authoring.Timeline;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
 using ShelteredAPI.Scenarios.Shared;
@@ -2730,7 +2730,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> currentItems = BuildLiveSurvivorItems(definition);
             ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
             if (history != null && history.CanUndo)
-                currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Last Capture", "Restore the roster from before the last capture or edit snapshot.", true, false, "UN")));
+                currentItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryUndo, "Undo Last Change", "Restore the draft to before the most recent authored change.", true, false, "UN")));
 
             List<ScenarioAuthoringInspectorItem> startingItems = new List<ScenarioAuthoringInspectorItem>();
             startingItems.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionStartingSurvivorAdd, "Add Survivor", "Create a new editable starting survivor.", true, true, "S+")));
