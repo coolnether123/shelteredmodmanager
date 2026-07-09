@@ -214,6 +214,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 CleanupPendingDraftArtifacts(pending, reason);
         }
 
+        /// <summary>
+        /// Cancels a new draft that is still in its setup wizard.  The world can
+        /// already have reached an active authoring session before the author
+        /// presses Cancel, but the wizard has not committed its intent yet; in
+        /// that case the draft must be removed rather than treated as a normal
+        /// "close editor" operation.
+        /// </summary>
+        public bool CancelUncommittedWizardDraft(string draftId, string reason, out string message)
+        {
+            message = null;
+            ScenarioAuthoringSession pending;
+            ScenarioAuthoringSession active;
+            lock (_sync)
+            {
+                pending = _pendingSession;
+                active = _activeSession;
+            }
+
+            if (!string.IsNullOrEmpty(draftId)
+                && IsDraftAuthoringSession(pending)
+                && string.Equals(pending.DraftId, draftId, StringComparison.Ordinal))
+            {
+                CancelPendingDraft(reason, true);
+                message = "Canceled the scenario setup and discarded its draft.";
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(draftId)
+                && IsEditingDraftSession(active)
+                && string.Equals(active.DraftId, draftId, StringComparison.Ordinal))
+            {
+                if (!CloseActiveSessionToMainMenu(reason ?? "Canceled the scenario setup wizard."))
+                {
+                    message = "Cancel blocked: the draft could not be closed cleanly.";
+                    return false;
+                }
+
+                CleanupPendingDraftArtifacts(active, reason);
+                message = "Canceled the scenario setup and discarded its draft.";
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Discarded uncommitted setup-wizard draft '"
+                    + active.DraftId + "'.");
+                return true;
+            }
+
+            message = "Scenario setup is already closed.";
+            return true;
+        }
+
         private static ScenarioBaseGameMode ResolveDraftBaseMode(ScenarioInfo draftInfo)
         {
             if (draftInfo == null || string.IsNullOrEmpty(draftInfo.FilePath))

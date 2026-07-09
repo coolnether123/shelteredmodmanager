@@ -110,8 +110,28 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public void BeginExistingDraftLaunch(ScenarioAuthoringSession session)
         {
+            string draftId = session != null ? session.DraftId : null;
+
+            // Selecting another base in the setup wizard saves the current
+            // draft, then deliberately re-enters the normal existing-draft
+            // reload path.  That path comes through here before BeginReload.
+            // Do not accidentally demote the wizard to the plain loading
+            // overlay: the author still needs its name, base, and quick
+            // settings controls while that replacement world loads.
+            if (_wizardActive
+                && !string.IsNullOrEmpty(draftId)
+                && string.Equals(_activeDraftId, draftId, StringComparison.OrdinalIgnoreCase))
+            {
+                _activeDraftId = draftId;
+                _worldReady = false;
+                SetWizardStatus("Status: loading the selected scenario base.");
+                MMLog.WriteInfo("[ScenarioAuthoringEntryFlow] Preserved the setup wizard while reloading draft '"
+                    + draftId + "' from its selected base.");
+                return;
+            }
+
             _wizardActive = false;
-            _activeDraftId = session != null ? session.DraftId : null;
+            _activeDraftId = draftId;
             SetSnapshot(CreateLoadingSnapshot(
                 session,
                 "Status: game loading - reopening the existing draft."));
@@ -283,8 +303,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public void CancelWizard()
         {
             ScenarioAuthoringBootstrapService bootstrap = ScenarioAuthoringBootstrapService.Instance;
+            string draftId = _activeDraftId;
             _wizardActive = false;
             _worldReady = false;
+
+            string message;
+            if (bootstrap.CancelUncommittedWizardDraft(draftId, "Canceled the scenario setup wizard.", out message))
+                return;
 
             if (bootstrap.HasPendingDraftLaunch() && !bootstrap.IsEditingDraftActive())
             {
@@ -292,7 +317,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
-            string message;
             if (bootstrap.RequestCloseActiveSessionToMainMenu("Canceled the scenario setup wizard.", out message))
             {
                 SetSnapshot(CreateLoadingSnapshot(
