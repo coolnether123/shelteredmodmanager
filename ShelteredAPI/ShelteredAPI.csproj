@@ -260,6 +260,7 @@
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioStarterTemplateVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioMapUxVerification.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPackageUxVerification.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioLoader.cs" />
@@ -495,6 +496,9 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringSurfaceResolver.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringBaseModeReloadService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringEntryFlowService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Templates\ScenarioStarterTemplateBuilder.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Templates\ScenarioStarterTemplateCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Templates\ScenarioStarterTemplateDraftService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioOpeningCutsceneAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringValidationSnapshot.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioBuildPlacementAuthoringService.cs" />

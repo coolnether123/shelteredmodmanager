@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 using UnityEngine;
 using UnityEngine.UI;
 
+using ShelteredAPI.Scenarios.Application.Authoring.Templates;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Application.Selection;
 using ShelteredAPI.Scenarios.Composition;
@@ -44,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         internal const string BaseKeyStasis = "stasis";
         internal const string BaseKeySurrounded = "surrounded";
         internal const string BaseKeyCustomPrefix = "custom:";
+        internal const string BaseKeyTemplatePrefix = "template:";
 
         internal const string SettingSupplies = "supplies";
         internal const string SettingSuppressRaids = "raids";
@@ -366,6 +368,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
+            if (key.StartsWith(BaseKeyTemplatePrefix, StringComparison.Ordinal))
+            {
+                _dispatchedToken = _selectionToken;
+                ApplyStarterTemplate(editorSession, key.Substring(BaseKeyTemplatePrefix.Length));
+                return;
+            }
+
             ScenarioBaseGameMode mode = ResolveBaseMode(key);
             if (definition.BaseGameMode == mode)
             {
@@ -444,6 +453,31 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             SetWizardStatus(Safe(message, "Copying the custom scenario base..."));
+        }
+
+        private void ApplyStarterTemplate(ScenarioEditorSession editorSession, string templateKey)
+        {
+            string templateTitle;
+            string message;
+            bool applied = ScenarioStarterTemplateDraftService.TryApply(
+                editorSession,
+                templateKey,
+                _activeDraftId,
+                _baseModeReloadService,
+                out templateTitle,
+                out message);
+
+            if (!_wizardNameEdited && !string.IsNullOrEmpty(templateTitle))
+                _wizardName = templateTitle;
+
+            if (!applied || !IsReloadQueuedMessage(message))
+            {
+                _dispatchedToken = _selectionToken;
+                SetWizardStatus("Status: template blocked - " + Safe(message, "starter template reload failed."));
+                return;
+            }
+
+            SetWizardStatus(Safe(message, "Loading the starter template..."));
         }
 
         private void CommitWizardIntent()
@@ -551,6 +585,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 case BaseKeySurrounded:
                     return "Surrounded";
                 default:
+                    if (baseKey.StartsWith(BaseKeyTemplatePrefix, StringComparison.Ordinal))
+                    {
+                        ScenarioStarterTemplate template;
+                        if (ScenarioStarterTemplateCatalog.TryGet(baseKey.Substring(BaseKeyTemplatePrefix.Length), out template))
+                            return template.Title + " template";
+                    }
                     return "Custom copy";
             }
         }
@@ -654,6 +694,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             AddBaseCard(cards, BaseKeyStandard, "Standard", "BASE", "The classic survival start.", selectedKey);
             AddBaseCard(cards, BaseKeyStasis, "Stasis", "BASE", "The Stasis scenario world.", selectedKey);
             AddBaseCard(cards, BaseKeySurrounded, "Surrounded", "BASE", "The Surrounded scenario world.", selectedKey);
+            AddStarterTemplateCards(cards, selectedKey);
             AddCustomScenarioCards(cards, selectedKey);
             return cards.ToArray();
         }
@@ -665,11 +706,33 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Key = key,
                 Title = title,
                 Badge = badge,
+                Group = string.Empty,
                 Detail = detail,
                 Meta = string.Empty,
                 Enabled = true,
                 Selected = string.Equals(key, selectedKey, StringComparison.Ordinal)
             });
+        }
+
+        private static void AddStarterTemplateCards(List<ScenarioAuthoringEntryBaselineCard> cards, string selectedKey)
+        {
+            ScenarioStarterTemplate[] templates = ScenarioStarterTemplateCatalog.All();
+            for (int i = 0; i < templates.Length; i++)
+            {
+                ScenarioStarterTemplate template = templates[i];
+                string key = BaseKeyTemplatePrefix + template.Key;
+                cards.Add(new ScenarioAuthoringEntryBaselineCard
+                {
+                    Key = key,
+                    Title = template.Title,
+                    Badge = "START",
+                    Group = "Start from a template",
+                    Detail = template.BuildSummary(),
+                    Meta = "Teaches: " + template.Teaches,
+                    Enabled = true,
+                    Selected = string.Equals(key, selectedKey, StringComparison.Ordinal)
+                });
+            }
         }
 
         private void AddCustomScenarioCards(List<ScenarioAuthoringEntryBaselineCard> cards, string selectedKey)
@@ -712,6 +775,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     Key = key,
                     Title = Safe(entry.DisplayName, entry.ScenarioId),
                     Badge = "COPY",
+                    Group = "Copy an installed scenario",
                     Detail = Safe(summary, "No scenario summary provided."),
                     Meta = "Author: " + Safe(author, "unknown"),
                     Enabled = enabled,
@@ -801,6 +865,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private Text _loadingStatus;
             private Text _loadingFooter;
             private string _nameBuffer;
+            private string _lastSnapshotName;
             private bool _nameInitialized;
             private const string NameControlName = "ScenarioAuthoringWizard.NameField";
 
@@ -828,7 +893,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
 
                 if (snapshot == null || !snapshot.Visible || snapshot.Kind != ScenarioAuthoringEntryFlowKind.Wizard)
+                {
                     _nameInitialized = false;
+                    _lastSnapshotName = null;
+                }
             }
 
             private void OnGUI()
@@ -978,7 +1046,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (!_nameInitialized)
                 {
                     _nameBuffer = snapshot.Name ?? string.Empty;
+                    _lastSnapshotName = snapshot.Name ?? string.Empty;
                     _nameInitialized = true;
+                }
+                else if (!string.Equals(snapshot.Name ?? string.Empty, _lastSnapshotName ?? string.Empty, StringComparison.Ordinal)
+                    && !string.Equals(GUI.GetNameOfFocusedControl(), NameControlName, StringComparison.Ordinal))
+                {
+                    _nameBuffer = snapshot.Name ?? string.Empty;
+                    _lastSnapshotName = snapshot.Name ?? string.Empty;
                 }
                 GUI.SetNextControlName(NameControlName);
                 Rect nameRect = new Rect(inner.x, y, Mathf.Min(560f, inner.width), 30f);
@@ -991,7 +1066,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 y += 44f;
 
                 // Base selection
-                GUI.Label(new Rect(inner.x, y, inner.width, 26f), "Scenario base", _sectionStyle);
+                GUI.Label(new Rect(inner.x, y, inner.width, 26f), "Choose a starting point", _sectionStyle);
                 y += 30f;
                 float cardsBottom = DrawCards(new Rect(inner.x, y, inner.width, 0f), snapshot);
                 y = cardsBottom + 10f;
@@ -1015,15 +1090,37 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 int columns = 4;
                 float gap = 12f;
                 float cardWidth = Mathf.Max(200f, (area.width - (gap * (columns - 1))) / columns);
-                float cardHeight = 108f;
+                float cardHeight = 112f;
                 float bottom = area.y;
+                float cursorY = area.y;
+                int column = 0;
+                string group = null;
                 for (int i = 0; i < cards.Length; i++)
                 {
-                    int col = i % columns;
-                    int row = i / columns;
-                    Rect rect = new Rect(area.x + (col * (cardWidth + gap)), area.y + (row * (cardHeight + gap)), cardWidth, cardHeight);
-                    DrawCard(rect, cards[i]);
+                    ScenarioAuthoringEntryBaselineCard card = cards[i];
+                    string cardGroup = card != null ? card.Group ?? string.Empty : string.Empty;
+                    if (!string.Equals(group, cardGroup, StringComparison.Ordinal))
+                    {
+                        if (group != null)
+                            cursorY = bottom + gap;
+                        group = cardGroup;
+                        column = 0;
+                        if (!string.IsNullOrEmpty(group))
+                        {
+                            GUI.Label(new Rect(area.x, cursorY, area.width, 22f), group, _cardMetaStyle);
+                            cursorY += 24f;
+                        }
+                    }
+
+                    Rect rect = new Rect(area.x + (column * (cardWidth + gap)), cursorY, cardWidth, cardHeight);
+                    DrawCard(rect, card);
                     bottom = Mathf.Max(bottom, rect.yMax);
+                    column++;
+                    if (column == columns)
+                    {
+                        column = 0;
+                        cursorY = bottom + gap;
+                    }
                 }
 
                 return bottom;
@@ -1044,8 +1141,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Rect badgeRect = new Rect(rect.x + 10f, rect.y + 10f, 66f, 22f);
                 GUI.Box(badgeRect, card != null ? card.Badge ?? string.Empty : string.Empty, (enabled || selected) ? _uiContext.Styles.PillEmphasized : _uiContext.Styles.Pill);
                 GUI.Label(new Rect(rect.x + 86f, rect.y + 8f, rect.width - 96f, 26f), card != null ? card.Title ?? string.Empty : string.Empty, enabled ? _cardTitleStyle : _disabledTextStyle);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 40f, rect.width - 24f, 44f), card != null ? card.Detail ?? string.Empty : string.Empty, enabled ? _cardTextStyle : _disabledTextStyle);
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 84f, rect.width - 24f, 20f), card != null && !enabled ? card.DisabledReason ?? string.Empty : (card != null ? card.Meta ?? string.Empty : string.Empty), enabled ? _cardMetaStyle : _disabledTextStyle);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 40f, rect.width - 24f, 50f), card != null ? card.Detail ?? string.Empty : string.Empty, enabled ? _cardTextStyle : _disabledTextStyle);
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 90f, rect.width - 24f, 20f), card != null && !enabled ? card.DisabledReason ?? string.Empty : (card != null ? card.Meta ?? string.Empty : string.Empty), enabled ? _cardMetaStyle : _disabledTextStyle);
             }
 
             private void DrawCardStateOverlay(Rect rect, bool enabled, bool selected)
@@ -1299,6 +1396,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Key;
         public string Title;
         public string Badge;
+        public string Group;
         public string Detail;
         public string Meta;
         public bool Enabled;
@@ -1312,6 +1410,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 Key = Key,
                 Title = Title,
                 Badge = Badge,
+                Group = Group,
                 Detail = Detail,
                 Meta = Meta,
                 Enabled = Enabled,

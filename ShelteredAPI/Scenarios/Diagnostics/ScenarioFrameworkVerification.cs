@@ -48,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyMapLootProjectionContracts(result);
                 VerifySchedulePolicyWindows(result);
                 VerifySeamGuardContracts(result);
+                ScenarioStarterTemplateVerification.Verify(result);
                 ScenarioTimelineUxVerification.Verify(result);
             }
             catch (Exception ex)
