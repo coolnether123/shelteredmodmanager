@@ -2434,4 +2434,3 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
         }
     }
 }
-
