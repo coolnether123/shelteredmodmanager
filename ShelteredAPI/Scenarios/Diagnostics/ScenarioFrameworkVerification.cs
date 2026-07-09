@@ -7,6 +7,8 @@ using ModAPI.Scenarios;
 using ShelteredAPI.Content;
 using ShelteredAPI.Infrastructure;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Application.Authoring.Supplies;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Effects;
@@ -42,6 +44,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyAtomicScenarioWrites(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyInventoryProjectionReconciliation(result);
+                VerifySuppliesAuthoring(result);
                 VerifyMapLootProjectionContracts(result);
                 VerifySchedulePolicyWindows(result);
                 VerifySeamGuardContracts(result);
@@ -180,6 +183,74 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             }
 
             return 0;
+        }
+
+        private static void VerifySuppliesAuthoring(ScenarioValidationResult result)
+        {
+            // Preset apply produces the advertised stacks.
+            List<ItemEntry> balanced = ScenarioSuppliesPresetCatalog.BuildStacks(ScenarioSuppliesPresetCatalog.PresetBalanced);
+            Assert(FindQuantity(balanced, "Water") == 8, "Balanced preset did not advertise the expected water stack.", result);
+            Assert(FindQuantity(balanced, "Ration") == 8, "Balanced preset did not advertise the expected food stack.", result);
+            Assert(FindQuantity(balanced, "FirstAid") == 2, "Balanced preset did not advertise the expected first aid stack.", result);
+            List<ItemEntry> empty = ScenarioSuppliesPresetCatalog.BuildStacks(ScenarioSuppliesPresetCatalog.PresetEmpty);
+            Assert(empty.Count == 0, "Empty preset should advertise no stacks.", result);
+
+            // Preset apply is undoable via the authoring history snapshot mechanism.
+            ScenarioAuthoringHistoryService history = new ScenarioAuthoringHistoryService();
+            ScenarioDefinition definition = CreateDefinition("Scenario.SuppliesPreset");
+            definition.StartingInventory.Items.Clear();
+            history.RecordAuthoringChange(definition, "Apply Scarce loadout", ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+            List<ItemEntry> scarce = ScenarioSuppliesPresetCatalog.BuildStacks(ScenarioSuppliesPresetCatalog.PresetScarce);
+            for (int i = 0; i < scarce.Count; i++)
+                definition.StartingInventory.Items.Add(new ItemEntry { ItemId = scarce[i].ItemId, Quantity = scarce[i].Quantity });
+            Assert(definition.StartingInventory.Items.Count == scarce.Count && scarce.Count > 0, "Applying the Scarce preset did not populate the starting inventory.", result);
+            string undoDescription;
+            Assert(history.Undo(definition, out undoDescription), "Preset apply snapshot could not be undone.", result);
+            Assert(definition.StartingInventory.Items.Count == 0, "Undo did not restore the starting inventory to before the preset.", result);
+
+            // Duplicate merge and zero-quantity policy: duplicates sum, non-positive stacks drop.
+            List<ItemEntry> messy = new List<ItemEntry>();
+            messy.Add(new ItemEntry { ItemId = "Water", Quantity = 3 });
+            messy.Add(new ItemEntry { ItemId = "Ration", Quantity = 2 });
+            messy.Add(new ItemEntry { ItemId = "water", Quantity = 4 });
+            messy.Add(new ItemEntry { ItemId = "Wood", Quantity = 0 });
+            messy.Add(new ItemEntry { ItemId = "Metal", Quantity = -1 });
+            ScenarioSuppliesInventoryNormalizer.NormalizeResult normalize = ScenarioSuppliesInventoryNormalizer.Normalize(messy);
+            Assert(normalize.MergedStacks == 1, "Duplicate merge did not report the merged stack.", result);
+            Assert(normalize.RemovedStacks == 2, "Zero and negative quantity stacks were not removed.", result);
+            Assert(messy.Count == 2, "Normalize should leave exactly the merged water and food stacks.", result);
+            Assert(FindQuantity(messy, "Water") == 7, "Duplicate water stacks were not summed.", result);
+            Assert(FindQuantity(messy, "Wood") == 0, "Zero-quantity stack should be removed, not retained.", result);
+
+            // Balance math on a known fixture: 6 water, 2 food, 3 survivors, no medicine.
+            StartingInventoryDefinition fixture = new StartingInventoryDefinition();
+            fixture.Items.Add(new ItemEntry { ItemId = "Water", Quantity = 6 });
+            fixture.Items.Add(new ItemEntry { ItemId = "Ration", Quantity = 2 });
+            ScenarioSuppliesBalanceEstimator.BalanceEstimate estimate = ScenarioSuppliesBalanceEstimator.Estimate(fixture, 3);
+            Assert(estimate.WaterUnits == 6 && Approximately(estimate.WaterDays, 2.0), "Balance estimator computed the wrong water-days.", result);
+            Assert(estimate.FoodUnits == 2 && Approximately(estimate.FoodDays, 2.0 / 3.0), "Balance estimator computed the wrong food-days.", result);
+            Assert(!estimate.HasFirstAid && estimate.MedicineUnits == 0, "Balance estimator should report no medicine for the fixture.", result);
+            Assert(estimate.MissingEssentials.Contains("No first aid"), "Balance estimator should flag the missing first aid essential.", result);
+
+            StartingInventoryDefinition emptyFixture = new StartingInventoryDefinition();
+            ScenarioSuppliesBalanceEstimator.BalanceEstimate emptyEstimate = ScenarioSuppliesBalanceEstimator.Estimate(emptyFixture, 0);
+            Assert(emptyEstimate.SurvivorCount == ScenarioSuppliesBalanceEstimator.DefaultSurvivorCount, "Balance estimator should fall back to the default cast size.", result);
+            Assert(emptyEstimate.MissingEssentials.Count == 3, "Empty start should flag all three missing essentials.", result);
+        }
+
+        private static int FindQuantity(List<ItemEntry> items, string itemId)
+        {
+            for (int i = 0; items != null && i < items.Count; i++)
+            {
+                if (items[i] != null && string.Equals(items[i].ItemId, itemId, StringComparison.OrdinalIgnoreCase))
+                    return items[i].Quantity;
+            }
+            return 0;
+        }
+
+        private static bool Approximately(double left, double right)
+        {
+            return Math.Abs(left - right) < 0.001;
         }
 
         private static void VerifyMapLootProjectionContracts(ScenarioValidationResult result)

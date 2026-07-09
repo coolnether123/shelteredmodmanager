@@ -1256,11 +1256,28 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
+            if (TryOpenIndexedFocusedEditor(
+                state,
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionSuppliesPresetPreviewPrefix,
+                ScenarioAuthoringLocalActionIds.FocusedKindSuppliesPreset,
+                out pickerIndex))
+            {
+                message = "Review the starter loadout before applying.";
+                return true;
+            }
+
             bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
             if (changed)
             {
                 FocusGameplayEditor(state, _editorService.CurrentSession, actionId);
                 CloseInventoryPickerAfterSelection(state, actionId);
+                if (actionId != null && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, StringComparison.Ordinal) && state != null)
+                {
+                    state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
+                    state.FocusedEditorIsNew = false;
+                }
             }
             return changed;
         }

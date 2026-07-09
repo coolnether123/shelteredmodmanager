@@ -2336,6 +2336,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return BuildWorldEventItemPickerDocument(state, definition);
             if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, StringComparison.OrdinalIgnoreCase))
                 return BuildWorldEventFocusedEditorDocument(state, definition);
+            if (string.Equals(state.FocusedEditorKind, ScenarioAuthoringLocalActionIds.FocusedKindSuppliesPreset, StringComparison.OrdinalIgnoreCase))
+                return ScenarioSuppliesAuthoringContentBuilder.BuildPresetPreviewDocument(definition, state.FocusedEditorIndex);
 
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             string title = "Edit Timeline Entry";
@@ -2798,55 +2800,49 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static ScenarioAuthoringInspectorSection[] BuildStockpileWindowSections(ScenarioDefinition definition)
         {
-            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             StartingInventoryDefinition inventory = definition != null ? definition.StartingInventory : null;
-            bool overrideRandomStart = inventory != null && inventory.OverrideRandomStart;
             StorageSummary summary = BuildStorageSummary(inventory);
-            items.Add(ActionItem(Action(
-                ScenarioAuthoringActionIds.ActionInventoryStorageOpen,
-                "Open Shelter Storage",
-                "Open Sheltered's real shelter storage window. Discard and storage edits sync back to the draft automatically.",
-                true,
-                true,
-                "ST",
-                FormatStorageSummary(summary),
-                "VANILLA")));
-            items.Add(Property("Total Items", summary.TotalItems.ToString(CultureInfo.InvariantCulture), "Live InventoryManager total when available; draft total otherwise."));
-            items.Add(Property("Slots Used", summary.SlotsUsed.ToString(CultureInfo.InvariantCulture) + " / " + FormatStorageCapacity(summary), "Uses InventoryManager.GetTotalStackCount while the authoring world is live."));
-            items.Add(ActionItem(Action(ScenarioAuthoringLocalActionIds.ActionInventoryStartingAddAndPick, "Add Starting Item", "Add an editable item stack to shelter storage and choose its item.", true, true, "A+")));
-            items.Add(ActionItem(Action(
-                ScenarioAuthoringActionIds.ActionInventoryStartingOverrideToggle,
-                "Override Random Start",
-                "Toggle whether scenario apply suppresses the game's random starting item roll.",
-                true,
-                overrideRandomStart,
-                "OR",
-                overrideRandomStart ? "Vanilla random-start pool disabled on apply" : "Vanilla random-start pool still allowed on apply")));
+
+            // Authored start is the product: starting items, presets, and the balance check lead the page.
+            List<ScenarioAuthoringInspectorSection> sections =
+                ScenarioSuppliesAuthoringContentBuilder.BuildAuthoredFirstSections(definition);
 
             List<ScenarioAuthoringInspectorItem> scheduledItems = new List<ScenarioAuthoringInspectorItem>();
             scheduledItems.Add(ActionItem(Action(ScenarioAuthoringLocalActionIds.ActionInventoryScheduleAddAndPick, "Schedule Add", "Add an item stack at a specific day and hour and choose its item.", true, true, "A+")));
             scheduledItems.Add(ActionItem(Action(ScenarioAuthoringLocalActionIds.ActionInventoryScheduleRemoveAndPick, "Schedule Remove", "Remove an item stack at a specific day and hour and choose its item.", true, false, "R-")));
-
-            return new[]
+            sections.Add(new ScenarioAuthoringInspectorSection
             {
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "starting_stockpile",
-                    Title = "Shelter Storage",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
-                    Items = items.ToArray()
-                },
-                new ScenarioAuthoringInspectorSection
-                {
-                    Id = "scheduled_stockpile",
-                    Title = "Timed Item Changes",
-                    Expanded = true,
-                    Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
-                    Items = scheduledItems.ToArray(),
-                    InventorySlotGrid = BuildScheduledInventorySlotGrid(inventory)
-                }
-            };
+                Id = "scheduled_stockpile",
+                Title = "Timed Item Changes",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.InventorySlotGrid,
+                Items = scheduledItems.ToArray(),
+                InventorySlotGrid = BuildScheduledInventorySlotGrid(inventory)
+            });
+
+            // Live shelter storage is a reference; collapse it so it does not push the authored start down.
+            List<ScenarioAuthoringInspectorItem> referenceItems = new List<ScenarioAuthoringInspectorItem>();
+            referenceItems.Add(ActionItem(Action(
+                ScenarioAuthoringActionIds.ActionInventoryStorageOpen,
+                "Open Shelter Storage",
+                "Open Sheltered's real shelter storage window. Discard and storage edits sync back to the draft automatically.",
+                true,
+                false,
+                "ST",
+                FormatStorageSummary(summary),
+                "VANILLA")));
+            referenceItems.Add(Property("Total Items", summary.TotalItems.ToString(CultureInfo.InvariantCulture), "Live InventoryManager total when available; draft total otherwise."));
+            referenceItems.Add(Property("Slots Used", summary.SlotsUsed.ToString(CultureInfo.InvariantCulture) + " / " + FormatStorageCapacity(summary), "Uses InventoryManager.GetTotalStackCount while the authoring world is live."));
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "live_shelter_reference",
+                Title = "Live Shelter Inventory (Reference)",
+                Expanded = false,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = referenceItems.ToArray()
+            });
+
+            return sections.ToArray();
         }
 
 

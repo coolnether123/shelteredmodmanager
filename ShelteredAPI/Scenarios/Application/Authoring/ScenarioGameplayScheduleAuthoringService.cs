@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ModAPI.Scenarios;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Saves;
+using ShelteredAPI.Scenarios.Application.Authoring.Supplies;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -42,6 +43,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryStartingAdd, StringComparison.Ordinal))
                 return FinishStartingInventoryMutation(session, AddStartingInventoryItem(session, out message), "add starting item", ref message);
+            int presetIndex;
+            if (ScenarioAuthoringActionParser.TryIndex(actionId, ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, ScenarioSuppliesPresetCatalog.Count, out presetIndex))
+            {
+                bool presetChanged = ApplyStarterPreset(session, presetIndex, out message);
+                if (presetChanged)
+                    FinishStartingInventoryMutation(session, true, "apply starter loadout", ref message);
+                return true;
+            }
+            if (string.Equals(actionId, ScenarioAuthoringLocalActionIds.ActionSuppliesMergeDuplicates, StringComparison.Ordinal))
+            {
+                bool mergeChanged = MergeStartingInventoryDuplicates(session, out message);
+                if (mergeChanged)
+                    FinishStartingInventoryMutation(session, true, "merge duplicate starting items", ref message);
+                return true;
+            }
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleAdd, StringComparison.Ordinal))
                 return AddInventoryChange(session, ScenarioInventoryChangeKind.Add, out message);
             if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionInventoryScheduleRemove, StringComparison.Ordinal))
@@ -97,6 +113,55 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             inventory.Items.Add(entry);
             MarkInventoryDirty(session);
             message = "Added shelter storage item '" + entry.ItemId + "'.";
+            return true;
+        }
+
+        private static bool ApplyStarterPreset(ScenarioEditorSession session, int presetIndex, out string message)
+        {
+            message = null;
+            ScenarioSuppliesPresetCatalog.PresetInfo preset = ScenarioSuppliesPresetCatalog.ByIndex(presetIndex);
+            if (preset == null)
+            {
+                message = "Unknown starter loadout preset.";
+                return false;
+            }
+
+            ScenarioDefinition definition = session.WorkingDefinition;
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(definition, "Apply " + preset.DisplayName + " loadout", ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+
+            StartingInventoryDefinition inventory = EnsureInventory(definition);
+            List<ItemEntry> stacks = ScenarioSuppliesPresetCatalog.BuildStacks(preset);
+            inventory.Items.Clear();
+            for (int i = 0; i < stacks.Count; i++)
+                inventory.Items.Add(stacks[i]);
+            ScenarioSuppliesInventoryNormalizer.Normalize(inventory.Items);
+            if (inventory.Items.Count > 0)
+                inventory.OverrideRandomStart = true;
+
+            MarkInventoryDirty(session);
+            message = "Applied " + preset.DisplayName + " starter loadout (" + inventory.Items.Count + " stack(s)).";
+            return true;
+        }
+
+        private static bool MergeStartingInventoryDuplicates(ScenarioEditorSession session, out string message)
+        {
+            ScenarioDefinition definition = session.WorkingDefinition;
+            StartingInventoryDefinition inventory = EnsureInventory(definition);
+            if (!ScenarioSuppliesInventoryNormalizer.NeedsNormalize(inventory.Items))
+            {
+                message = "No duplicate or empty starting stacks to merge.";
+                return false;
+            }
+
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(definition, "Merge duplicate starting items", ScenarioDirtySection.Inventory, ScenarioEditCategory.Inventory);
+
+            ScenarioSuppliesInventoryNormalizer.NormalizeResult result = ScenarioSuppliesInventoryNormalizer.Normalize(inventory.Items);
+            MarkInventoryDirty(session);
+            message = "Merged " + result.MergedStacks + " duplicate stack(s) and removed " + result.RemovedStacks + " empty stack(s).";
             return true;
         }
 

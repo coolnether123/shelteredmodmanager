@@ -550,6 +550,10 @@
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesPresetCatalog.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesInventoryNormalizer.cs" />
+    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesBalanceEstimator.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioSuppliesAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringActions.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryFocusedEditorActions.cs" />
