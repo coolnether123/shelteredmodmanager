@@ -396,6 +396,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ScenarioInspectorItemFactory.Property("Stage title", DisplayStageTitle(stage, index)));
             items.Add(ScenarioInspectorItemFactory.Property("Advanced stage id", Safe(stage.Id)));
             items.Add(ScenarioInspectorItemFactory.Property("Warnings", CountStageIssues(storyIssues, index).ToString(CultureInfo.InvariantCulture), FirstStageIssue(storyIssues, index), CountStageIssues(storyIssues, index) > 0 ? "!" : "OK"));
+            ScenarioStoryCharacterActorLinkSectionBuilder.AppendUsages(items, definition, ScenarioReferenceTargetKind.Stage, stage.Id, "Removing this stage is blocked while references exist.");
             items.Add(ScenarioInspectorItemFactory.Property("Characters", stage.CharacterIds != null && stage.CharacterIds.Count > 0 ? string.Join(", ", stage.CharacterIds.ToArray()) : "No characters assigned - choose stage cast in the focused editor."));
             items.Add(ScenarioInspectorItemFactory.Property("Unanswered", FormatStageTarget(stage.UnansweredNextStage) + " / " + stage.UnansweredNextDays.ToString(CultureInfo.InvariantCulture) + " day(s)"));
             AddStageIdActions(items, flow, index);

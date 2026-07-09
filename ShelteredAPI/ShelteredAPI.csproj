@@ -243,6 +243,7 @@
     <Compile Include="Scenarios\Domain\Validation\IScenarioValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\MapValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ObjectStartStateValidationRule.cs" />
+    <Compile Include="Scenarios\Domain\Validation\ScenarioReferenceIndex.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationAnalyzer.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioStoryFlowValidationRule.cs" />
     <Compile Include="Scenarios\Domain\Validation\ScenarioConversationValidationRule.cs" />

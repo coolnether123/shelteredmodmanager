@@ -7,6 +7,7 @@ using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Validation;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 
@@ -72,11 +73,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             {
                 string id = flow.Stages[stageIndex] != null ? flow.Stages[stageIndex].Id : null;
                 string reason;
-                if (!CanRemoveStage(flow, id, out reason))
+                if (!CanRemoveStage(definition, id, out reason))
                 {
                     message = reason;
                     return true;
                 }
+                RecordUndo(session, "Remove story stage");
                 flow.Stages.RemoveAt(stageIndex);
                 MarkDirty(session);
                 message = "Removed story stage '" + (id ?? ("#" + stageIndex.ToString())) + "'.";
@@ -93,15 +95,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (ScenarioAuthoringActionParser.TrySignedIndex(actionId, ScenarioAuthoringActionIds.ActionStoryStageMovePrefix, flow.Stages.Count, out stageIndex, out delta))
                 return Move(flow.Stages, stageIndex, delta, session, "story stage", out message);
             if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryStageIdPrefix, flow.Stages.Count, out stageIndex, out token))
-            {
-                string oldId = flow.Stages[stageIndex].Id;
-                string newId = Decode(token);
-                flow.Stages[stageIndex].Id = newId;
-                ReplaceStageReferences(flow, oldId, newId);
-                MarkDirty(session);
-                message = "Renamed story stage to '" + newId + "'.";
-                return true;
-            }
+                return RenameStage(session, definition, flow, stageIndex, Decode(token), out message);
             if (ScenarioAuthoringActionParser.TryIndexToken(actionId, ScenarioAuthoringActionIds.ActionStoryStageCharacterTogglePrefix, flow.Stages.Count, out stageIndex, out token))
             {
                 Toggle(flow.Stages[stageIndex].CharacterIds, Decode(token));
@@ -131,10 +125,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
-            return TryHandleIntercom(session, flow, actionId, out message);
+            return TryHandleIntercom(session, definition, flow, actionId, out message);
         }
 
-        private static bool TryHandleIntercom(ScenarioEditorSession session, ScenarioFlowDefinition flow, string actionId, out string message)
+        private static bool TryHandleIntercom(ScenarioEditorSession session, ScenarioDefinition definition, ScenarioFlowDefinition flow, string actionId, out string message)
         {
             message = null;
             int stageIndex;
@@ -187,8 +181,16 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 && parsedIntercomIndex == resolvedIntercomIndex)
             {
                 string oldId = intercom.Id;
-                intercom.Id = Decode(token);
-                ReplaceIntercomReferences(resolvedStage, oldId, intercom.Id);
+                string newIntercomId = Decode(token);
+                string intercomReason;
+                if (!ValidateIntercomRename(resolvedStage, oldId, newIntercomId, out intercomReason))
+                {
+                    message = intercomReason;
+                    return true;
+                }
+                RecordUndo(session, "Rename intercom step");
+                intercom.Id = newIntercomId;
+                ScenarioReferenceIndex.RedirectReferences(definition, ScenarioReferenceTargetKind.IntercomStep, oldId, newIntercomId, resolvedStageIndex);
                 MarkDirty(session);
                 message = "Renamed intercom step to '" + intercom.Id + "'.";
                 return true;
@@ -581,6 +583,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return true;
             }
 
+            RecordUndo(session, "Remove story character");
             characters.RemoveAt(characterIndex);
             MarkDirty(session);
             message = "Removed story character '" + DisplayCharacterName(character) + "'.";
@@ -1042,49 +1045,112 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 target.Add(new ItemEntry { ItemId = source[i].ItemId, Quantity = source[i].Quantity });
         }
 
-        private static void ReplaceStageReferences(ScenarioFlowDefinition flow, string oldId, string newId)
+        // Safe stage rename: validate, record undo, move the declaration and every reference
+        // atomically. Reference re-pointing is delegated to the shared reference index so the
+        // set of "stage reference" shapes lives in exactly one place.
+        private static bool RenameStage(ScenarioEditorSession session, ScenarioDefinition definition, ScenarioFlowDefinition flow, int stageIndex, string newId, out string message)
         {
-            if (string.IsNullOrEmpty(oldId))
-                return;
-            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            ScenarioFlowStageDefinition stage = flow.Stages[stageIndex];
+            string oldId = stage != null ? stage.Id : null;
+            string reason;
+            if (!ValidateStageRename(flow, stageIndex, newId, out reason))
             {
-                ScenarioFlowStageDefinition stage = flow.Stages[i];
-                if (stage == null)
-                    continue;
-                if (string.Equals(stage.UnansweredNextStage, oldId, StringComparison.OrdinalIgnoreCase))
-                    stage.UnansweredNextStage = newId;
-                for (int s = 0; stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
-                    if (stage.IntercomStages[s] != null && stage.IntercomStages[s].StageChange != null && string.Equals(stage.IntercomStages[s].StageChange.Id, oldId, StringComparison.OrdinalIgnoreCase))
-                        stage.IntercomStages[s].StageChange.Id = newId;
+                message = reason;
+                return true;
             }
+
+            RecordUndo(session, "Rename story stage");
+            stage.Id = newId;
+            int updated = ScenarioReferenceIndex.RedirectReferences(definition, ScenarioReferenceTargetKind.Stage, oldId, newId, -1);
+            MarkDirty(session);
+            message = updated > 0
+                ? "Renamed story stage to '" + newId + "' and updated " + updated.ToString(CultureInfo.InvariantCulture) + " reference(s)."
+                : "Renamed story stage to '" + newId + "'.";
+            return true;
         }
 
-        private static bool CanRemoveStage(ScenarioFlowDefinition flow, string stageId, out string reason)
+        private static bool ValidateStageRename(ScenarioFlowDefinition flow, int stageIndex, string newId, out string reason)
+        {
+            reason = null;
+            string trimmed = newId != null ? newId.Trim() : string.Empty;
+            if (trimmed.Length == 0)
+            {
+                reason = "Story stage id cannot be empty.";
+                return false;
+            }
+            if (!IsValidId(trimmed))
+            {
+                reason = "Story stage id '" + trimmed + "' contains unsupported characters. Use letters, numbers, '_' or '-'.";
+                return false;
+            }
+            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            {
+                if (i == stageIndex || flow.Stages[i] == null)
+                    continue;
+                if (string.Equals(flow.Stages[i].Id, trimmed, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "Story stage id '" + trimmed + "' is already used by another stage.";
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool ValidateIntercomRename(ScenarioFlowStageDefinition stage, string oldId, string newId, out string reason)
+        {
+            reason = null;
+            string trimmed = newId != null ? newId.Trim() : string.Empty;
+            if (trimmed.Length == 0)
+            {
+                reason = "Encounter step id cannot be empty.";
+                return false;
+            }
+            if (!IsValidId(trimmed))
+            {
+                reason = "Encounter step id '" + trimmed + "' contains unsupported characters. Use letters, numbers, '_' or '-'.";
+                return false;
+            }
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                ScenarioIntercomStageDefinition step = stage.IntercomStages[i];
+                if (step == null || string.Equals(step.Id, oldId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (string.Equals(step.Id, trimmed, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = "Encounter step id '" + trimmed + "' is already used in this stage.";
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private static bool IsValidId(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (!(char.IsLetterOrDigit(c) || c == '_' || c == '-'))
+                    return false;
+            }
+            return true;
+        }
+
+        // Reference-aware delete guard: block removal while references exist and list them, using
+        // the shared reference index so the guard and Find Usages agree on what counts.
+        private static bool CanRemoveStage(ScenarioDefinition definition, string stageId, out string reason)
         {
             reason = null;
             if (string.IsNullOrEmpty(stageId))
                 return true;
 
-            List<string> references = new List<string>();
-            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
-            {
-                ScenarioFlowStageDefinition stage = flow.Stages[i];
-                string label = stage != null && !string.IsNullOrEmpty(stage.Id) ? stage.Id : "#" + i.ToString();
-                if (stage != null && string.Equals(stage.UnansweredNextStage, stageId, StringComparison.OrdinalIgnoreCase))
-                    references.Add(label + " unanswered route");
-                for (int s = 0; stage != null && stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
-                {
-                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[s];
-                    string intercomLabel = label + "/" + (intercom != null && !string.IsNullOrEmpty(intercom.Id) ? intercom.Id : "#" + s.ToString());
-                    if (intercom != null && intercom.StageChange != null && string.Equals(intercom.StageChange.Id, stageId, StringComparison.OrdinalIgnoreCase))
-                        references.Add(intercomLabel + " stage change");
-                }
-            }
-
-            if (references.Count == 0)
+            List<ScenarioReferenceUsage> usages = ScenarioReferenceIndex.FindUsages(definition, ScenarioReferenceTargetKind.Stage, stageId);
+            if (usages.Count == 0)
                 return true;
 
-            reason = "Cannot remove story stage '" + stageId + "' because it is referenced by: " + string.Join(", ", references.ToArray()) + ". Clear those references first.";
+            reason = "Cannot remove story stage '" + stageId + "' because it is referenced by: "
+                + DescribeUsages(usages) + ". Clear those references first.";
             return false;
         }
 
@@ -1094,60 +1160,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (string.IsNullOrEmpty(characterId))
                 return true;
 
-            List<string> references = new List<string>();
-            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
-            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
-            {
-                ScenarioFlowStageDefinition stage = flow.Stages[i];
-                string stageLabel = FormatStageReferenceLabel(stage, i);
-                if (Contains(stage != null ? stage.CharacterIds : null, characterId))
-                    references.Add(stageLabel + " stage cast");
-
-                for (int s = 0; stage != null && stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
-                {
-                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[s];
-                    string intercomLabel = stageLabel + "/" + FormatIntercomReferenceLabel(intercom, s);
-                    for (int d = 0; intercom != null && intercom.Dialogue != null && d < intercom.Dialogue.Count; d++)
-                    {
-                        ScenarioDialogueLineDefinition line = intercom.Dialogue[d];
-                        if (line != null && string.Equals(line.Character, characterId, StringComparison.OrdinalIgnoreCase))
-                            references.Add(intercomLabel + " dialogue " + (d + 1).ToString() + " speaker");
-                    }
-
-                    if (Contains(intercom != null ? intercom.CharacterIdsToRecruit : null, characterId))
-                        references.Add(intercomLabel + " recruit list");
-                }
-            }
-
-            if (references.Count == 0)
+            List<ScenarioReferenceUsage> usages = ScenarioReferenceIndex.FindUsages(definition, ScenarioReferenceTargetKind.StoryCharacter, characterId);
+            if (usages.Count == 0)
                 return true;
 
             reason = "Cannot remove story character '" + characterId + "' because it is referenced by: "
-                + string.Join(", ", references.ToArray())
-                + ". Open those story stage rows, clear the stage cast, dialogue speaker, or recruit toggle, then remove the character.";
+                + DescribeUsages(usages)
+                + ". Open those rows, clear the stage cast, dialogue speaker, recruit toggle, or conversation participant, then remove the character.";
             return false;
         }
 
-        private static void ReplaceIntercomReferences(ScenarioFlowStageDefinition stage, string oldId, string newId)
+        private static string DescribeUsages(List<ScenarioReferenceUsage> usages)
         {
-            if (string.IsNullOrEmpty(oldId))
-                return;
-            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            List<string> parts = new List<string>();
+            for (int i = 0; usages != null && i < usages.Count; i++)
             {
-                ScenarioIntercomStageDefinition step = stage.IntercomStages[i];
-                if (step == null)
-                    continue;
-                if (string.Equals(step.NextId, oldId, StringComparison.OrdinalIgnoreCase))
-                    step.NextId = newId;
-                if (string.Equals(step.AlternateNextId, oldId, StringComparison.OrdinalIgnoreCase))
-                    step.AlternateNextId = newId;
-                for (int r = 0; step.RandomizedNextIds != null && r < step.RandomizedNextIds.Count; r++)
-                    if (string.Equals(step.RandomizedNextIds[r], oldId, StringComparison.OrdinalIgnoreCase))
-                        step.RandomizedNextIds[r] = newId;
-                for (int o = 0; step.Options != null && o < step.Options.Count; o++)
-                    if (step.Options[o] != null && string.Equals(step.Options[o].NextId, oldId, StringComparison.OrdinalIgnoreCase))
-                        step.Options[o].NextId = newId;
+                ScenarioReferenceUsage usage = usages[i];
+                parts.Add(usage.OwnerLabel + " " + usage.DisplayLabel);
             }
+            return string.Join(", ", parts.ToArray());
+        }
+
+        private static void RecordUndo(ScenarioEditorSession session, string description)
+        {
+            if (session == null || session.WorkingDefinition == null)
+                return;
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null)
+                history.RecordAuthoringChange(session.WorkingDefinition, description, ScenarioDirtySection.Triggers, ScenarioEditCategory.Triggers);
         }
 
         private static string NextStageId(ScenarioFlowDefinition flow)
@@ -1216,20 +1256,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return "<unnamed>";
         }
 
-        private static string FormatStageReferenceLabel(ScenarioFlowStageDefinition stage, int index)
-        {
-            return stage != null && !string.IsNullOrEmpty(stage.Id)
-                ? stage.Id
-                : "stage #" + (index + 1).ToString();
-        }
-
-        private static string FormatIntercomReferenceLabel(ScenarioIntercomStageDefinition intercom, int index)
-        {
-            return intercom != null && !string.IsNullOrEmpty(intercom.Id)
-                ? intercom.Id
-                : "step #" + (index + 1).ToString();
-        }
-
         private static string FirstOtherIntercomId(ScenarioFlowStageDefinition stage, string current)
         {
             for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
@@ -1256,14 +1282,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
             values.Add(value);
-        }
-
-        private static bool Contains(List<string> values, string value)
-        {
-            for (int i = 0; values != null && i < values.Count; i++)
-                if (string.Equals(values[i], value, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
         }
 
         private static ScenarioConversationAuthoringDefinition EnsureConversations(ScenarioDefinition definition)

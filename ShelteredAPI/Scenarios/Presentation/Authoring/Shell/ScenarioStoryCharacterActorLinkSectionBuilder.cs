@@ -4,6 +4,7 @@ using System.Globalization;
 
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.Validation;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
@@ -33,7 +34,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 items.Add(EditableProperty("Personality " + (i + 1).ToString(CultureInfo.InvariantCulture), character.Personality, "personality", i, "Optional vanilla personality id."));
                 items.Add(EditableProperty("Species " + (i + 1).ToString(CultureInfo.InvariantCulture), character.Species, "species", i, "Optional species override."));
                 items.Add(ScenarioInspectorItemFactory.Property("Actor link", character.ActorRef != null ? linked : "None"));
-                items.Add(ScenarioInspectorItemFactory.Property("References", BuildReferenceSummary(definition, character.CharacterId), "Delete is available only after these references are cleared."));
+                AppendUsages(items, definition, ScenarioReferenceTargetKind.StoryCharacter, character.CharacterId, "Delete is available only after these references are cleared.");
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioStoryAuthoringActions.CharacterDelete(i),
                     "Remove Character",
@@ -127,45 +128,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return item;
         }
 
-        private static string BuildReferenceSummary(ScenarioDefinition definition, string characterId)
+        // Shared Find Usages affordance: a plain-language "Used in N places" line backed by the
+        // reference index, plus a clickable "Go to" action per usage that reuses the focused-editor
+        // navigation seam. Kept here so every editor surface renders references the same way.
+        internal static void AppendUsages(
+            List<ScenarioAuthoringInspectorItem> items,
+            ScenarioDefinition definition,
+            ScenarioReferenceTargetKind kind,
+            string id,
+            string hint)
         {
-            if (string.IsNullOrEmpty(characterId))
-                return "No references.";
+            const int MaxNavActions = 8;
+            List<ScenarioReferenceUsage> usages = ScenarioReferenceIndex.FindUsages(definition, kind, id);
+            string detail = usages.Count > 0 ? DescribeFirstUsages(usages) : "Nothing references this yet.";
+            items.Add(ScenarioInspectorItemFactory.Property(
+                "References",
+                ScenarioReferenceIndex.Summarize(usages.Count),
+                string.IsNullOrEmpty(hint) ? detail : detail + " " + hint,
+                usages.Count > 0 ? "USE" : "OK"));
 
-            int stageCast = 0;
-            int dialogue = 0;
-            int recruit = 0;
-            ScenarioFlowDefinition flow = definition != null ? definition.ScenarioFlow : null;
-            for (int i = 0; flow != null && flow.Stages != null && i < flow.Stages.Count; i++)
+            int shown = 0;
+            for (int i = 0; i < usages.Count && shown < MaxNavActions; i++)
             {
-                ScenarioFlowStageDefinition stage = flow.Stages[i];
-                if (Contains(stage != null ? stage.CharacterIds : null, characterId))
-                    stageCast++;
-
-                for (int s = 0; stage != null && stage.IntercomStages != null && s < stage.IntercomStages.Count; s++)
-                {
-                    ScenarioIntercomStageDefinition intercom = stage.IntercomStages[s];
-                    for (int d = 0; intercom != null && intercom.Dialogue != null && d < intercom.Dialogue.Count; d++)
-                    {
-                        ScenarioDialogueLineDefinition line = intercom.Dialogue[d];
-                        if (line != null && string.Equals(line.Character, characterId, StringComparison.OrdinalIgnoreCase))
-                            dialogue++;
-                    }
-
-                    if (Contains(intercom != null ? intercom.CharacterIdsToRecruit : null, characterId))
-                        recruit++;
-                }
+                ScenarioReferenceUsage usage = usages[i];
+                if (usage.NavStageIndex < 0)
+                    continue;
+                items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
+                    ScenarioStoryFocusedEditorActions.StageOpen(usage.NavStageIndex),
+                    "Go to: " + usage.OwnerLabel,
+                    "Open " + usage.OwnerLabel + " (" + usage.DisplayLabel + ") in the focused story editor.",
+                    true,
+                    false,
+                    "->")));
+                shown++;
             }
+        }
 
-            if (stageCast == 0 && dialogue == 0 && recruit == 0)
-                return "No references.";
-
-            return stageCast.ToString(CultureInfo.InvariantCulture)
-                + " stage cast, "
-                + dialogue.ToString(CultureInfo.InvariantCulture)
-                + " dialogue, "
-                + recruit.ToString(CultureInfo.InvariantCulture)
-                + " recruit reference(s).";
+        private static string DescribeFirstUsages(List<ScenarioReferenceUsage> usages)
+        {
+            const int MaxDescribed = 3;
+            List<string> parts = new List<string>();
+            for (int i = 0; i < usages.Count && i < MaxDescribed; i++)
+                parts.Add(usages[i].OwnerLabel + " " + usages[i].DisplayLabel);
+            string joined = string.Join("; ", parts.ToArray());
+            if (usages.Count > MaxDescribed)
+                joined += "; +" + (usages.Count - MaxDescribed).ToString(CultureInfo.InvariantCulture) + " more";
+            return joined + ".";
         }
 
         private static string FormatCharacterId(ScenarioNpcDefinition character, int index)
@@ -182,12 +190,5 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 : FormatCharacterId(character, index);
         }
 
-        private static bool Contains(List<string> values, string value)
-        {
-            for (int i = 0; values != null && i < values.Count; i++)
-                if (string.Equals(values[i], value, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            return false;
-        }
     }
 }

@@ -574,6 +574,47 @@ Assert-Contains "runtime timed work job" $runtimeTimedWorkJob "class RuntimeTime
 Assert-Contains "runtime timed work job" $runtimeTimedWorkJob "InteractionManager\.Instance\.SetInteractionProgress" "timed workstation jobs must surface progress through the vanilla interaction progress UI."
 
 Assert-Contains "player queue facade" $shelteredQueues "public static event Action<PlayerQueueChangedEventArgs> QueueChanged" "ShelteredQueues must expose queue change notifications."
+
+# === Scenario reference index (Find Usages / safe rename / reference-aware delete) ===
+$scenarioReferenceIndex = Read-RepoFile "ShelteredAPI\Scenarios\Domain\Validation\ScenarioReferenceIndex.cs"
+$scenarioStoryAuthoring = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs"
+$scenarioCharacterLinks = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs"
+$scenarioQuestContent = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs"
+
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "enum ScenarioReferenceTargetKind\s*\{\s*Stage.*IntercomStep.*StoryCharacter.*Milestone" "reference index must classify usages by target kind (stage, intercom step, story character, milestone)."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "public static List<ScenarioReferenceUsage> Collect\(ScenarioDefinition definition\)" "reference index must expose a single-pass collector over the definition."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "public static List<ScenarioReferenceUsage> FindUsages\(ScenarioDefinition definition,\s*ScenarioReferenceTargetKind kind,\s*string id,\s*int ownerStageScope\)" "reference index must expose stage-scoped usage lookup for stage-local intercom ids."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "public static int RedirectReferences\(ScenarioDefinition definition,\s*ScenarioReferenceTargetKind kind,\s*string oldId,\s*string newId,\s*int ownerStageScope\)" "reference index must repoint every matching reference for safe rename and return the count."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "public static string Summarize\(int count\)" "reference index must produce a plain-language usage summary."
+# Representative sample of each reference kind is collected.
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.Stage.*unanswered-call route" "index must collect stage unanswered-call routes as stage references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.Stage.*next-stage change" "index must collect intercom stage-change targets as stage references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.IntercomStep.*next-step route" "index must collect intercom next/alternate routes as intercom-step references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.IntercomStep.*response option.*route" "index must collect dialogue option routes as intercom-step references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.StoryCharacter.*stage cast" "index must collect stage cast as story-character references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.StoryCharacter.*dialogue line.*speaker" "index must collect dialogue speakers as story-character references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.StoryCharacter.*recruit list" "index must collect recruit lists as story-character references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.StoryCharacter.*participant slot" "index must collect conversation participants as story-character references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.Milestone.*milestone check" "index must collect milestone checks as milestone references."
+Assert-Contains "scenario reference index" $scenarioReferenceIndex "ScenarioReferenceTargetKind\.Milestone.*prerequisite milestone" "index must collect selection prerequisite milestones as milestone references."
+
+# Safe rename atomically updates references through the index and participates in undo.
+Assert-Contains "scenario safe rename" $scenarioStoryAuthoring "RecordUndo\(session,\s*""Rename story stage""\).*stage\.Id = newId;.*ScenarioReferenceIndex\.RedirectReferences\(definition,\s*ScenarioReferenceTargetKind\.Stage,\s*oldId,\s*newId" "stage rename must record undo then move the id and every stage reference atomically."
+Assert-Contains "scenario safe rename" $scenarioStoryAuthoring "RecordUndo\(session,\s*""Rename intercom step""\).*ScenarioReferenceIndex\.RedirectReferences\(definition,\s*ScenarioReferenceTargetKind\.IntercomStep,\s*oldId,\s*newIntercomId,\s*resolvedStageIndex\)" "intercom rename must record undo and repoint stage-scoped intercom references."
+Assert-Contains "scenario safe rename" $scenarioStoryAuthoring "ValidateStageRename\(flow,\s*stageIndex,\s*newId,\s*out reason\)" "stage rename must validate the new id (unique, non-empty, format) before applying."
+
+# Reference-aware delete blocks and reports usages through the index.
+Assert-Contains "scenario delete guard" $scenarioStoryAuthoring "ScenarioReferenceIndex\.FindUsages\(definition,\s*ScenarioReferenceTargetKind\.Stage,\s*stageId\)" "stage delete guard must count references through the shared index."
+Assert-Contains "scenario delete guard" $scenarioStoryAuthoring "ScenarioReferenceIndex\.FindUsages\(definition,\s*ScenarioReferenceTargetKind\.StoryCharacter,\s*characterId\)" "character delete guard must count references through the shared index."
+Assert-Contains "scenario delete guard" $scenarioStoryAuthoring "RecordUndo\(session,\s*""Remove story stage""\)" "stage delete must participate in undo."
+Assert-Contains "scenario delete guard" $scenarioStoryAuthoring "RecordUndo\(session,\s*""Remove story character""\)" "character delete must participate in undo."
+
+# Find Usages UI affordance reuses the navigation seam.
+Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "internal static void AppendUsages\(" "a shared Find Usages affordance must exist for editor surfaces."
+Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "ScenarioReferenceIndex\.Summarize\(usages\.Count\)" "Find Usages affordance must show a plain-language 'Used in N places' summary."
+Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "ScenarioStoryFocusedEditorActions\.StageOpen\(usage\.NavStageIndex\)" "clicking a usage must navigate via the existing focused-editor open-stage seam."
+Assert-Contains "scenario find usages ui" $scenarioCharacterLinks "AppendUsages\(items,\s*definition,\s*ScenarioReferenceTargetKind\.StoryCharacter,\s*character\.CharacterId" "story character editor must show its usages."
+Assert-Contains "scenario find usages ui" $scenarioQuestContent "AppendUsages\(items,\s*definition,\s*ScenarioReferenceTargetKind\.Stage,\s*stage\.Id" "story stage inspector must show its usages."
 Assert-Contains "player queue facade" $shelteredQueues "GetPlayerQueue\(ActorId owner\).*SnapshotQueue\(ActorId owner\).*RestoreQueue\(PlayerQueueSnapshot snapshot\)" "ShelteredQueues must expose actor-first query, snapshot, and restore operations."
 Assert-Contains "player queue identities" $playerQueueContracts "public ActorId ActorId.*CloneActorId" "queue-owner identity must return copied actor identities."
 Assert-Contains "player queue DTO boundary" $playerQueueContracts "No live Job, Obj_Base, or FamilyMember reference is exposed" "queue entries must document their detached runtime boundary."
