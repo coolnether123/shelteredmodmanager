@@ -426,6 +426,7 @@
     <Compile Include="Scenarios\Presentation\Inspector\InspectorViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Inspector\ScenarioModCompatibilityViewModelBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationUtilities.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringInspectorItemFacade.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioHierarchyAuthoringContentBuilder.cs" />
@@ -545,6 +546,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellVanillaInteractionAssistImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellAssetBrowserImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellPlacementHudImguiRenderer.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWorldHudImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMapOverlayImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellMapUxImguiRenderer.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellToolRailImguiRenderer.cs" />
@@ -822,3 +824,4 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
+

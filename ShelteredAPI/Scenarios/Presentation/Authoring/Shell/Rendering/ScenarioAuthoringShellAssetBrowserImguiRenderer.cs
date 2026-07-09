@@ -16,6 +16,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && string.Equals(window.Id, ScenarioAuthoringWindowIds.AssetBrowser, StringComparison.OrdinalIgnoreCase);
         }
 
+        private void UpdateAssetBrowserOpenState(string activeWorkspaceId, ScenarioAuthoringShellWindowViewModel[] windows)
+        {
+            bool open = string.Equals(activeWorkspaceId, ScenarioAuthoringWindowIds.AssetBrowser, StringComparison.OrdinalIgnoreCase);
+            ScenarioAuthoringShellWindowViewModel buildTools = FindWindow(windows, ScenarioAuthoringWindowIds.BuildTools);
+            open = open || (buildTools != null && buildTools.Visible && !buildTools.Collapsed && !IsAnyPlacementActive());
+            if (!open)
+                _assetBrowserDefaultResolved = false;
+        }
+
         private Rect DrawAssetBrowserWorkshopPage(Rect bodyRect, ScenarioAuthoringShellWindowViewModel window)
         {
             return DrawAssetBrowserWorkshopPage(bodyRect, window, false);
@@ -23,6 +32,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect DrawAssetBrowserWorkshopPage(Rect bodyRect, ScenarioAuthoringShellWindowViewModel window, bool armPlacementOnCardClick)
         {
+            if (!_assetBrowserDefaultResolved)
+            {
+                _assetBrowserCategoryFilter = ScenarioAssetBrowserUx.ResolveDefaultFilter(
+                    _snapshot != null ? _snapshot.State : null,
+                    window != null ? window.Sections : null);
+                _assetBrowserDefaultResolved = true;
+            }
+
             Rect searchRect = new Rect(bodyRect.x, bodyRect.y, bodyRect.width, 32f);
             DrawAssetBrowserSearch(searchRect);
 
@@ -75,31 +92,36 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             DrawChromePanel(rect, _rootPanelStyle);
             GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 16f));
-            GUILayout.Label("Categories", _sectionTitleStyle);
-            DrawAssetBrowserCategoryButton("All", CandidateFilterAll, CountAssetBrowserCandidates(window));
+            GUILayout.Label("Browse", _sectionTitleStyle);
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            DrawAssetBrowserCategoryButton("Favorites", "Starred assets", ScenarioAssetBrowserUx.FavoritesFilter, ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.FavoritesFilter));
+            DrawAssetBrowserCategoryButton("Recent", "Last 20 placed / used", ScenarioAssetBrowserUx.RecentFilter, ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.RecentFilter));
+            DrawAssetBrowserCategoryButton("All", "Entire catalog", CandidateFilterAll, CountAssetBrowserCandidates(window));
             for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
             {
                 ScenarioAuthoringInspectorSection section = window.Sections[i];
                 if (!IsAssetBrowserCandidateSection(section))
                     continue;
 
-                DrawAssetBrowserCategoryButton(section.Title, section.Id, CountCandidateActions(section));
+                ScenarioAssetBrowserUx.CategoryLabel label = ScenarioAssetBrowserUx.GetCategoryLabel(section);
+                DrawAssetBrowserCategoryButton(label.Primary, label.Secondary, section.Id, CountCandidateActions(section));
             }
             GUILayout.FlexibleSpace();
             GUILayout.EndArea();
         }
 
-        private void DrawAssetBrowserCategoryButton(string label, string filter, int count)
+        private void DrawAssetBrowserCategoryButton(string label, string secondary, string filter, int count)
         {
             bool active = string.Equals(_assetBrowserCategoryFilter, filter, StringComparison.OrdinalIgnoreCase)
                 || (string.IsNullOrEmpty(_assetBrowserCategoryFilter) && string.Equals(filter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase));
             string safeLabel = string.IsNullOrEmpty(label) ? "Assets" : label;
-            string display = safeLabel + "  " + count;
-            Rect rect = GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
+            string display = safeLabel + "  " + count + "\n" + (secondary ?? string.Empty);
+            Rect rect = GUILayoutUtility.GetRect(0f, 42f, GUILayout.ExpandWidth(true), GUILayout.Height(42f));
             string fitted;
             string fitTooltip;
             ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(display, Math.Max(0f, rect.width - 14f), _buttonStyle, out fitted, out fitTooltip);
-            if (DrawPlainButton(rect, new GUIContent(fitted, string.IsNullOrEmpty(fitTooltip) ? safeLabel : fitTooltip), active ? _activeButtonStyle : _buttonStyle, true))
+            string tooltip = safeLabel + (string.IsNullOrEmpty(secondary) ? string.Empty : " — " + secondary);
+            if (DrawPlainButton(rect, new GUIContent(fitted, string.IsNullOrEmpty(fitTooltip) ? tooltip : tooltip + "\n" + fitTooltip), active ? _activeButtonStyle : _buttonStyle, true))
                 _assetBrowserCategoryFilter = filter;
             GUILayout.Space(4f);
         }
@@ -122,7 +144,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (!IsAssetBrowserCandidateSection(section) || !AssetBrowserCategoryMatches(section))
                     continue;
 
-                int sectionVisibleCount = CountFilteredCandidateActions(section, _assetBrowserSearchText, CandidateFilterAll);
+                int sectionVisibleCount = CountVisibleAssetBrowserActions(section);
                 if (sectionVisibleCount == 0)
                     continue;
 
@@ -163,13 +185,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringInspectorItem item = section.Items[i];
                 if (item == null || item.Action == null)
                     continue;
-                if (!CandidateActionMatches(section, item.Action, _assetBrowserSearchText, CandidateFilterAll))
+                if (!IsVisibleAssetBrowserAction(section, item.Action))
                     continue;
 
                 Rect cardRect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
                 DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick);
                 count++;
-                if (count % columns == 0 && HasMoreVisibleCandidate(section, i + 1, _assetBrowserSearchText, CandidateFilterAll))
+                if (count % columns == 0 && HasMoreVisibleAssetBrowserAction(section, i + 1))
                 {
                     GUILayout.EndHorizontal();
                     GUILayout.Space(gap);
@@ -222,6 +244,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.Label(preview.Detail, _mutedTextStyle);
             GUILayout.Space(8f);
 
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            string selectedActionId = state != null ? state.AssetBrowserSelectedActionId : null;
+            bool favorite = ScenarioAssetBrowserUx.IsFavorite(state, selectedActionId);
+            Rect favoriteRect = GUILayoutUtility.GetRect(120f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
+            if (DrawPlainButton(
+                favoriteRect,
+                new GUIContent(favorite ? "★ Favorited" : "☆ Add Favorite", "Favorites are saved for this editor user."),
+                favorite ? _activeButtonStyle : _buttonStyle,
+                !string.IsNullOrEmpty(selectedActionId)))
+            {
+                ScenarioAssetBrowserUx.ToggleFavorite(state, selectedActionId);
+            }
+            GUILayout.Space(5f);
+
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
             {
                 ScenarioAuthoringInspectorItem item = section.Items[i];
@@ -258,7 +294,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             return string.IsNullOrEmpty(_assetBrowserCategoryFilter)
                 || string.Equals(_assetBrowserCategoryFilter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(_assetBrowserCategoryFilter, ScenarioAssetBrowserUx.FavoritesFilter, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(_assetBrowserCategoryFilter, ScenarioAssetBrowserUx.RecentFilter, StringComparison.OrdinalIgnoreCase)
                 || (section != null && string.Equals(section.Id, _assetBrowserCategoryFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private int CountVisibleAssetBrowserActions(ScenarioAuthoringInspectorSection section)
+        {
+            int count = 0;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = section.Items[i] != null ? section.Items[i].Action : null;
+                if (IsVisibleAssetBrowserAction(section, action))
+                    count++;
+            }
+            return count;
+        }
+
+        private bool IsVisibleAssetBrowserAction(ScenarioAuthoringInspectorSection section, ScenarioAuthoringInspectorAction action)
+        {
+            return CandidateActionMatches(section, action, _assetBrowserSearchText, CandidateFilterAll)
+                && ScenarioAssetBrowserUx.ActionMatches(
+                    _snapshot != null ? _snapshot.State : null,
+                    action,
+                    _assetBrowserCategoryFilter);
+        }
+
+        private bool HasMoreVisibleAssetBrowserAction(ScenarioAuthoringInspectorSection section, int startIndex)
+        {
+            for (int i = Math.Max(0, startIndex); section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorAction action = section.Items[i] != null ? section.Items[i].Action : null;
+                if (IsVisibleAssetBrowserAction(section, action))
+                    return true;
+            }
+            return false;
         }
 
         private static bool IsAssetBrowserCandidateSection(ScenarioAuthoringInspectorSection section)

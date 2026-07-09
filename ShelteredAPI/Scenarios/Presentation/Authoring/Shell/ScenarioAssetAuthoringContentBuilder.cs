@@ -203,8 +203,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (model == null)
                 return;
 
-            sections.Add(BuildSpriteCandidateSection("asset_browser_scene_vanilla", "Scene Sprites - Vanilla", model.VanillaCandidates, entries, state));
-            sections.Add(BuildSpriteCandidateSection("asset_browser_scene_scenario", "Scene Sprites - Scenario", model.ModdedCandidates, entries, state));
+            sections.Add(BuildSpriteCandidateSection("asset_browser_scene_vanilla", "Vanilla Sprites", model.VanillaCandidates, entries, state));
+            sections.Add(BuildSpriteCandidateSection("asset_browser_scene_scenario", "Scenario Sprites", model.ModdedCandidates, entries, state));
         }
 
         private static ScenarioAuthoringInspectorSection BuildSpriteCandidateSection(

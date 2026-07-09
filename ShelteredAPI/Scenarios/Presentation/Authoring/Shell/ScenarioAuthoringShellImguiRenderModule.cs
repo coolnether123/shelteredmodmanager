@@ -109,6 +109,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private string _assetBrowserSearchText = string.Empty;
         private string _assetBrowserCategoryFilter = CandidateFilterAll;
         private bool _assetBrowserSearchFocused;
+        private bool _assetBrowserDefaultResolved;
         private string _survivorTraitPickerKey;
         private string _survivorTraitPickerSearchText = string.Empty;
         private Rect _survivorTraitPickerButtonRect = RuntimeCompat.ZeroRect();
@@ -379,6 +380,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Dictionary<string, Rect> windowRects = ResolveWindowRects(contentRect, shell.Windows);
             RegisterWindowAnimationStates(shell.Windows, windowRects);
             string activeWorkspaceId = GetActiveWorkspaceId(shell.Windows);
+            UpdateAssetBrowserOpenState(activeWorkspaceId, shell.Windows);
             bool workshopSurface = IsWorkshopSurface(_snapshot.State, activeWorkspaceId);
             RegisterWindowVisualSurfaces(shell.Windows, windowRects, false);
             RegisterWindowVisualSurfaces(shell.Windows, windowRects, true);
@@ -403,6 +405,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 placementHudRect = BuildPlacementHudRect(scaledWidth, scaledHeight);
                 RegisterVisualSurface("placement.hud", placementHudRect);
             }
+            if (!workshopSurface && placementHudRect.width > 0f)
+                DrawPlacementGridOverlayCore(contentRect);
 
                 if (workshopSurface)
                 {
@@ -467,6 +471,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     DrawPlacementHudCore(placementHudRect, shell.Windows);
                 inputCapture.RegisterInteractiveRect(placementHudRect);
             }
+            if (!workshopSurface
+                && activeWorkspaceId == null
+                && shell.Help == null
+                && shell.FocusedEditorDocument == null
+                && shell.SpritePickerDocument == null)
+            {
+                DrawWorldInteractionLegendCore(scaledWidth, scaledHeight, placementHudRect);
+            }
+            if (!workshopSurface && placementHudRect.width > 0f)
+                DrawPlacementPointerAidCore(scaledWidth, scaledHeight);
 
             Rect windowMenuRect = RuntimeCompat.ZeroRect();
             // TODO(centralize): Window menu still exposes separate panel toggles. Re-home these

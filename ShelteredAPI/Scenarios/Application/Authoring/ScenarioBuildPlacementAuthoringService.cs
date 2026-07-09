@@ -42,6 +42,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             public string Guidance;
             public string Detail;
             public string TargetCell;
+            public string Footprint;
             public bool? CanPlace;
             public string ValidationReason;
         }
@@ -152,6 +153,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     model.TargetCell = validation.GridX.HasValue && validation.GridY.HasValue
                         ? validation.GridX.Value + "," + validation.GridY.Value
                         : "<none>";
+                    model.Footprint = BuildActiveFootprint();
                     model.CanPlace = validation.CanPlace;
                     model.ValidationReason = validation.Reason;
                 }
@@ -180,6 +182,26 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return model;
+        }
+
+        private string BuildActiveFootprint()
+        {
+            if (_activePlacement == null)
+                return "1 x 1 (1 cell)";
+
+            int width = 1;
+            int height = _activePlacement.Kind == PlacementSessionKind.Ladder ? 2 : 1;
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            if (_activePlacement.Kind == PlacementSessionKind.Object
+                && grid != null
+                && grid.grid_cell_width > 0.001f
+                && _activePlacement.ColliderWidth > 0.001f)
+            {
+                width = Math.Max(1, Mathf.CeilToInt(_activePlacement.ColliderWidth / grid.grid_cell_width));
+            }
+
+            int cells = width * height;
+            return width + " x " + height + " (" + cells + (cells == 1 ? " cell)" : " cells)");
         }
 
         public List<PaletteSectionModel> GetPaletteSections(ScenarioAuthoringState state, ScenarioEditorSession session)

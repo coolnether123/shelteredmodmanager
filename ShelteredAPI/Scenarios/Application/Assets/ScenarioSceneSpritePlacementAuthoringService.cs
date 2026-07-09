@@ -36,6 +36,14 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public int BlockedGameplayAssets;
         }
 
+        internal sealed class PointerAidModel
+        {
+            public string TargetCell;
+            public string Footprint;
+            public bool CanPlace;
+            public string Reason;
+        }
+
         private sealed class ActivePlacementSession
         {
             public ScenarioSpriteCatalogService.SpriteCandidate Candidate;
@@ -56,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
             public int? GridY;
             public bool CanPlace;
             public bool OverrideFit;
+            public string Reason;
         }
 
         private const string DefaultPlacementSortingLayerName = "Objects";
@@ -136,6 +145,23 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
         public bool HasActivePlacement
         {
             get { return _activePlacement != null && _activePlacement.PreviewObject != null; }
+        }
+
+        internal PointerAidModel GetPointerAidModel()
+        {
+            if (!HasActivePlacement || _activePlacement.LastResolution == null)
+                return null;
+
+            PlacementResolution resolution = _activePlacement.LastResolution;
+            return new PointerAidModel
+            {
+                TargetCell = resolution.GridX.HasValue && resolution.GridY.HasValue
+                    ? resolution.GridX.Value + "," + resolution.GridY.Value
+                    : "free",
+                Footprint = BuildFootprint(_activePlacement),
+                CanPlace = resolution.CanPlace,
+                Reason = resolution.Reason
+            };
         }
 
         public void Invalidate()
@@ -589,7 +615,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     GridX = null,
                     GridY = null,
                     CanPlace = insideBounds,
-                    OverrideFit = true
+                    OverrideFit = true,
+                    Reason = insideBounds ? "Valid free placement." : "Sprite footprint extends outside the shelter bounds."
                 };
             }
 
@@ -608,7 +635,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     GridX = null,
                     GridY = null,
                     CanPlace = false,
-                    OverrideFit = false
+                    OverrideFit = false,
+                    Reason = "No initialized shelter cell is under the pointer."
                 };
             }
 
@@ -623,7 +651,8 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                     GridX = preferredX,
                     GridY = preferredY,
                     CanPlace = true,
-                    OverrideFit = false
+                    OverrideFit = false,
+                    Reason = "Valid target."
                 };
             }
 
@@ -636,8 +665,45 @@ namespace ShelteredAPI.Scenarios.Application.Assets{
                 GridX = preferredX,
                 GridY = preferredY,
                 CanPlace = false,
-                OverrideFit = false
+                OverrideFit = false,
+                Reason = ResolveFitFailureReason(definition, session, grid, preferredX, preferredY)
             };
+        }
+
+        private static string ResolveFitFailureReason(
+            ScenarioDefinition definition,
+            ActivePlacementSession session,
+            ShelterRoomGrid grid,
+            int gridX,
+            int gridY)
+        {
+            ShelterRoomGrid.GridCell cell = grid != null ? grid.GetCell(gridX, gridY) : null;
+            if (!IsUsableBunkerCell(cell))
+                return "Scene sprites require a room, room-top, or surface cell.";
+            if (session == null || session.Candidate == null || session.Candidate.Sprite == null)
+                return "The selected sprite has no placeable preview footprint.";
+
+            Vector3 position = ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY);
+            Bounds bounds = CreateSpriteBounds(session.Candidate.Sprite, position);
+            if (!IsWithinGridBounds(grid, bounds))
+                return "Sprite footprint extends outside the shelter bounds.";
+            if (OverlapsExistingPlacement(definition, session.ExistingPlacementId, bounds, gridX, gridY))
+                return "Sprite footprint overlaps an existing scene placement.";
+            return "Scene sprite placement is blocked at this cell.";
+        }
+
+        private static string BuildFootprint(ActivePlacementSession session)
+        {
+            ShelterRoomGrid grid = ShelterRoomGrid.Instance;
+            Sprite sprite = session != null && session.Candidate != null ? session.Candidate.Sprite : null;
+            if (grid == null || sprite == null || grid.grid_cell_width <= 0.001f || grid.grid_cell_height <= 0.001f)
+                return "1 x 1 (1 cell)";
+
+            Bounds bounds = CreateSpriteBounds(sprite, Vector3.zero);
+            int width = Math.Max(1, Mathf.CeilToInt(bounds.size.x / grid.grid_cell_width));
+            int height = Math.Max(1, Mathf.CeilToInt(bounds.size.y / grid.grid_cell_height));
+            int cells = width * height;
+            return width + " x " + height + " (" + cells + (cells == 1 ? " cell)" : " cells)");
         }
 
         private static bool CanFitAt(

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$RepoRoot
 )
@@ -102,6 +102,9 @@ $scenarioApplyCoordinator = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure
 $scenarioInventoryApplyService = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Runtime\InventoryApplyService.cs"
 $scenarioAuthoringInventoryProjectionService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthoringInventoryProjectionService.cs"
 $scenarioCharacterEditorAuthoringService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioCharacterEditorAuthoringService.cs"
+$scenarioSurvivorAuthoringOperations = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioSurvivorAuthoringOperations.cs"
+$scenarioSurvivorTraitConflictRules = Read-RepoFile "ShelteredAPI\Scenarios\Domain\People\ScenarioSurvivorTraitConflictRules.cs"
+$scenarioValidator = Read-RepoFile "ShelteredAPI\Scenarios\Diagnostics\ScenarioValidator.cs"
 $scenarioActorAuthoringRegistry = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioActorAuthoringCapabilityRegistry.cs"
 $scenarioActorAuthoringStore = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioActorAuthoringFieldStore.cs"
 $scenarioDevActorAuthoringProvider = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioDevActorAuthoringCapabilityProvider.cs"
@@ -126,10 +129,16 @@ $scenarioFamilyMemberFactory = Read-RepoFile "ShelteredAPI\Scenarios\Infrastruct
 $scenarioFutureSurvivorRecruitBindingService = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Runtime\ScenarioFutureSurvivorRecruitBindingService.cs"
 $shelteredCustomScenarioPatches = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Harmony\ShelteredCustomScenarioPatches.cs"
 $scenarioVerification = Read-RepoFile "ShelteredAPI\Scenarios\Diagnostics\ScenarioFrameworkVerification.cs"
+$scenarioSuppliesPresetCatalog = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\Supplies\ScenarioSuppliesPresetCatalog.cs"
+$scenarioSuppliesInventoryNormalizer = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\Supplies\ScenarioSuppliesInventoryNormalizer.cs"
+$scenarioSuppliesBalanceEstimator = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\Supplies\ScenarioSuppliesBalanceEstimator.cs"
+$scenarioSuppliesContentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioSuppliesAuthoringContentBuilder.cs"
 $seamGuard = Read-RepoFile "ShelteredAPI\Infrastructure\SeamGuard.cs"
 $scenarioPlayStartReadiness = Read-RepoFile "ShelteredAPI\Scenarios\Application\Runtime\ScenarioPlayStartReadiness.cs"
 $scenarioAuthoringPresentationBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs"
 $scenarioAuthoringWindowRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs"
+$scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
+$scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
 $scenarioCastMemberPickerBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs"
 $scenarioStoryCharacterActorLinkSectionBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs"
 $scenarioStoryFocusedEditorDocumentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs"
@@ -381,12 +390,22 @@ Assert-Contains "survivor condition XML" $familyScenarioSerializer "WriteFamilyC
 Assert-Contains "survivor stat authoring" $scenarioFamilyMemberFactory "public const int StatMin = 1.*public const int StatMax = 20.*ClampStat" "Survivor stat editing must use the vanilla family authoring range of 1-20."
 Assert-Contains "survivor stat authoring" $scenarioCharacterEditorAuthoringService "stat_set\..*ScenarioFamilyMemberFactory\.ClampStat" "Survivor stat rows must support direct numeric entry through the character editor service."
 Assert-Contains "survivor trait picker" $scenarioAuthoringContracts "class ScenarioSurvivorTraitRowViewModel.*PickerKey.*PreviousAction.*NextAction.*PickerAction.*Options" "Survivor trait rows must expose picker metadata plus previous/next actions."
-Assert-Contains "survivor trait picker" $scenarioAuthoringPresentationBuilder "BuildTraitOptions\(.*GetTraitDescription.*HasOppositeTrait" "Survivor trait picker options must include effect descriptions and block paired vanilla conflicts."
+Assert-Contains "survivor trait picker" $scenarioAuthoringPresentationBuilder "BuildTraitOptions\(.*ScenarioSurvivorTraitConflictRules\.ConflictsWithSelection.*GetTraitDescription" "Survivor trait picker options must include effect descriptions and block paired vanilla conflicts through the shared rule source."
 Assert-Contains "survivor condition runtime" $scenarioFamilyMemberFactory "ApplyConditions\(FamilyMember member,\s*FamilyMemberConfig config\).*member\.stats\.hunger.*member\.stats\.thirst.*member\.stats\.fatigue.*member\.stats\.dirtiness.*member\.stats\.toilet.*member\.stats\.stress" "Runtime survivor materialization must apply authored BehaviourStat condition values."
 Assert-Contains "survivor condition runtime" $familyApplyService "ScenarioFamilyMemberFactory\.ApplyConditions\(member,\s*config\)" "Existing-family apply must route authored condition values through the shared runtime helper."
 Assert-Contains "survivor condition runtime" $scenarioFutureSurvivorRecruitBindingService "ScenarioFamilyMemberFactory\.ApplyConditions\(member,\s*pending\.Survivor != null \? pending\.Survivor\.Survivor : null\)" "Accepted ask-to-join recruits must receive authored starting condition values."
 Assert-Contains "survivor condition editor UI" $scenarioAuthoringPresentationBuilder "BuildSurvivorConditionRows\(.*ConditionIds.*condition_set" "Focused survivor editor view models must expose editable starting condition rows."
 Assert-Contains "survivor condition editor UI" $scenarioAuthoringWindowRenderer "DrawSurvivorConditionRow.*DrawSurvivorInlineTextField.*DrawSurvivorTraitPickerPopup" "Focused survivor editor renderer must draw condition direct-entry fields and the trait picker popup."
+Assert-Contains "survivor randomize declared scope" $scenarioSurvivorAuthoringOperations 'RandomizeDisclosure = "Randomizes: name, gender, age, appearance, stats, traits\. Keeps: story links, arrival settings, starting condition, skills, actor identity\."' "Randomize must tell creators exactly what changes and what remains linked."
+Assert-Contains "survivor randomize declared scope" $scenarioSurvivorAuthoringOperations "RandomizeDeclaredFields\(FamilyMemberConfig member\)(?:(?!member\.Conditions|member\.Skills|member\.ActorRef).)*member\.Gender.*member\.ExactAge.*member\.Name.*member\.Stats.*member\.Traits.*RandomizeAppearance\(member\)" "Randomize must touch only name, gender, age, appearance, stats, and traits, preserving condition, skills, and actor identity."
+Assert-Contains "survivor bulk action undo" $scenarioCharacterEditorAuthoringService 'RecordFamilyUndo\(session, "Randomize survivor"\).*RandomizeDeclaredFields' "Randomize must record a family history snapshot before mutation."
+Assert-Contains "survivor bulk action undo" $scenarioCharacterEditorAuthoringService 'RecordFamilyUndo\(session, "Duplicate starting survivor"\).*DuplicateMember' "Duplicate must record a family history snapshot before mutation."
+Assert-Contains "survivor duplicate fresh actor" $scenarioSurvivorAuthoringOperations "DuplicateMember\(FamilyMemberConfig source\).*copy\.ActorRef = null.*DuplicateFutureSurvivor.*copy\.ActorRef = null.*copy\.Survivor\.ActorRef = null" "Duplicate must never retain the source member or future-survivor actor reference."
+Assert-Contains "survivor duplicate fresh actor" $scenarioCharacterEditorAuthoringService "DuplicateFutureSurvivor\(survivor, survivors\).*EnsureFutureSurvivorRef\(session\.WorkingDefinition, duplicate, duplicateIndex\).*DuplicateMember\(config\).*EnsureStartingMemberRef\(session\.WorkingDefinition, duplicate, duplicateIndex\)" "Every duplicate must receive a newly resolved future or starting actor identity."
+Assert-Contains "survivor skills honesty" ($scenarioAuthoringPresentationBuilder + $scenarioAuthoringWindowRenderer) "Skills can't be authored yet - the game doesn't expose a stable way to save them\. Strengths and weaknesses below DO work\..*SkillsLimitationText" "The stats panel must plainly disclose that skill authoring is intentionally unavailable."
+Assert-Contains "survivor trait conflict source" $scenarioSurvivorTraitConflictRules "internal static class ScenarioSurvivorTraitConflictRules.*ConflictsWithSelection.*HasConflict" "Trait conflicts must have one shared selection and validation policy."
+Assert-Contains "survivor trait picker validator agreement" $scenarioAuthoringPresentationBuilder "ScenarioSurvivorTraitConflictRules\.ConflictsWithSelection" "The trait picker must consume the shared conflict policy."
+Assert-Contains "survivor trait picker validator agreement" $scenarioValidator "ScenarioSurvivorTraitConflictRules\.HasConflict" "Validation must consume the same conflict policy as the picker."
 Assert-Contains "actor-ref scenario XML" $scenarioSerializer "character\.ActorRef = ScenarioActorXmlSerializer\.ReadActorRef\(node\).*ReadActorComponents\(node,\s*character\.ActorComponents\).*condition\.ActorRef = ScenarioActorXmlSerializer\.ReadActorRef\(node\).*effect\.ActorRef = ScenarioActorXmlSerializer\.ReadActorRef\(node\)" "Scenario serializer must read actor refs for NPCs, conditions, and effects."
 Assert-Contains "actor-ref scenario XML" $scenarioSerializer "WriteActorRef\(writer,\s*character\.ActorRef\).*WriteActorComponents\(writer,\s*character\.ActorComponents\).*WriteActorRef\(writer,\s*condition\.ActorRef\).*WriteActorRef\(writer,\s*effect\.ActorRef\)" "Scenario serializer must write actor refs for NPCs, conditions, and effects."
 Assert-Contains "legacy actor load" $scenarioActorXmlSerializer "if \(element == null\)\s*return null" "Legacy XML without <Actor> must load without synthesizing serialized refs."
@@ -476,6 +495,41 @@ Assert-Contains "authoring inventory UI" $scenarioAuthoringPresentationBuilder "
 Assert-Contains "authoring inventory UI" $scenarioAuthoringPresentationBuilder "ActionInventoryStorageOpen" "Supplies UI must route starting inventory through the vanilla storage panel action."
 Assert-NotContains "authoring inventory UI" $scenarioAuthoringPresentationBuilder "Live Shelter Inventory - Native Storage|Starting Items - Written to Storage|Capture Current Stockpile" "Supplies UI must not expose the old live reference grid or capture button."
 
+Assert-Contains "supplies authored-first layout" $scenarioAuthoringPresentationBuilder "BuildAuthoredFirstSections\(definition\)" "Supplies window must lead with the authored-first sections."
+Assert-Contains "supplies authored-first layout" $scenarioAuthoringPresentationBuilder "Id = ""live_shelter_reference"".*Expanded = false" "Supplies live shelter inventory must be a collapsed reference section."
+Assert-Contains "supplies authored-first layout" $scenarioSuppliesContentBuilder "authored_starting_items.*starter_loadout_presets.*supplies_balance_check" "Authored-first sections must render starting items, presets, then the balance check."
+Assert-Contains "supplies preset preview" $scenarioSuppliesContentBuilder "BuildPresetPreviewDocument.*This preset sets.*ActionSuppliesPresetApplyPrefix.*ActionFocusedEditorCancel" "Preset apply must be previewed with its stacks and an explicit apply/cancel before mutating."
+Assert-Contains "supplies preset catalog" $scenarioSuppliesPresetCatalog "PresetScarce.*PresetBalanced.*PresetMedical.*PresetRepair.*PresetEmpty" "Starter loadout catalog must expose the scarce, balanced, medical, repair, and empty presets."
+Assert-Contains "supplies preset catalog" $scenarioSuppliesPresetCatalog "GetStableItemId\(stack\.Type\)" "Preset stacks must resolve stable catalog item ids from the vanilla item catalog."
+Assert-Contains "supplies normalizer policy" $scenarioSuppliesInventoryNormalizer "entry\.Quantity <= 0.*RemovedStacks\+\+.*existing\.Quantity \+= entry\.Quantity.*MergedStacks\+\+" "Normalizer must drop non-positive stacks and sum duplicate item ids."
+Assert-Contains "supplies balance estimator" $scenarioSuppliesBalanceEstimator "WaterPerSurvivorPerDay.*FoodPerSurvivorPerDay.*DefaultSurvivorCount = 4" "Balance estimator must state approximate per-survivor-per-day assumptions and a default cast size."
+Assert-Contains "supplies balance estimator" $scenarioSuppliesBalanceEstimator "MissingEssentials\.Add\(""No water""\).*MissingEssentials\.Add\(""No food""\).*MissingEssentials\.Add\(""No first aid""\)" "Balance estimator must flag missing water, food, and first aid essentials."
+Assert-Contains "supplies preset write-through" $scenarioGameplayScheduleAuthoringService "ApplyStarterPreset\(session.*RecordAuthoringChange.*Normalize\(inventory\.Items\).*FinishStartingInventoryMutation" "Preset apply must snapshot for undo, normalize, and write through to shelter storage."
+Assert-Contains "supplies verification" $scenarioVerification "VerifySuppliesAuthoring.*BuildStacks.*history\.Undo.*Normalize.*Estimate\(fixture, 3\)" "Scenario verification must cover preset stacks, undoability, duplicate merge, and balance math on a fixture."
+
+# BUILDUX: browser personalization is stored in the existing per-user settings document.
+Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "SerializeList\(IList<string> values\).*Uri\.EscapeDataString.*DeserializeList\(string value\).*Uri\.UnescapeDataString" "Favorites and recents must use a reversible encoding for arbitrary asset action ids."
+Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "FavoritesKey = ""asset_browser\.favorites"".*RecentKey = ""asset_browser\.recent"".*RecentLimit = 20.*settings\.Save\(state\.Settings\)" "Favorites and capped recents must round-trip through the editor settings store."
+Assert-Contains "asset browser contextual defaults" $scenarioAssetBrowserUx "FindSectionForAction\(sections, selectedActionId\).*ScenarioAuthoringTargetKind\.SceneSprite.*ScenarioAuthoringTargetKind\.Wall.*ScenarioAuthoringTargetKind\.PlaceableObject.*ScenarioStageKind\.BunkerBackground.*return RecentFilter" "Browser defaults must prefer the selected asset/target, then stage context, and finally Recent instead of All."
+
+$assetCategoryLabels = @([System.Text.RegularExpressions.Regex]::Matches($scenarioAssetBrowserUx, 'return Label\("([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value })
+$duplicateAssetCategoryLabels = @($assetCategoryLabels | Group-Object | Where-Object { $_.Count -gt 1 })
+if ($assetCategoryLabels.Count -lt 6 -or $duplicateAssetCategoryLabels.Count -gt 0) {
+    $failures.Add("asset browser category labels: short category names must be present and unique; source/subtype belongs in secondary text")
+}
+
+# BUILDUX: browser personalization is stored in the existing per-user settings document.
+Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "SerializeList\(IList<string> values\).*Uri\.EscapeDataString.*DeserializeList\(string value\).*Uri\.UnescapeDataString" "Favorites and recents must use a reversible encoding for arbitrary asset action ids."
+Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "FavoritesKey = ""asset_browser\.favorites"".*RecentKey = ""asset_browser\.recent"".*RecentLimit = 20.*settings\.Save\(state\.Settings\)" "Favorites and capped recents must round-trip through the editor settings store."
+Assert-Contains "asset browser contextual defaults" $scenarioAssetBrowserUx "FindSectionForAction\(sections, selectedActionId\).*ScenarioAuthoringTargetKind\.SceneSprite.*ScenarioAuthoringTargetKind\.Wall.*ScenarioAuthoringTargetKind\.PlaceableObject.*ScenarioStageKind\.BunkerBackground.*return RecentFilter" "Browser defaults must prefer the selected asset/target, then stage context, and finally Recent instead of All."
+
+$assetCategoryLabels = @([System.Text.RegularExpressions.Regex]::Matches($scenarioAssetBrowserUx, 'return Label\("([^"]+)"') |
+    ForEach-Object { $_.Groups[1].Value })
+$duplicateAssetCategoryLabels = @($assetCategoryLabels | Group-Object | Where-Object { $_.Count -gt 1 })
+if ($assetCategoryLabels.Count -lt 6 -or $duplicateAssetCategoryLabels.Count -gt 0) {
+    $failures.Add("asset browser category labels: short category names must be present and unique; source/subtype belongs in secondary text")
+}
 Assert-Contains "scenario runtime retry" $runtimeContracts "int CatalogRevision" "definition catalog service must expose a revision for same-session retry gating."
 Assert-Contains "scenario runtime retry" $runtimeOrchestrator "MarkApplyBlocked" "failed definition resolution must be tracked as blocked instead of applied."
 Assert-Contains "scenario runtime retry" $runtimeOrchestrator "CatalogRevision" "blocked scenario bindings must be reconsidered after catalog refresh."
@@ -659,3 +713,4 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host "ShelteredAPI contract tests passed."
+

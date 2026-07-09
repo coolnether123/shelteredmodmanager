@@ -60,7 +60,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
             x += actionWidth + actionGap;
 
-            DrawDisabledPlacementHudButton(new Rect(x, rect.y + 18f, actionWidth, 28f), "Rotate/Flip", "No orientation action is exposed for this asset.");
+            bool gridOn = _snapshot == null
+                || _snapshot.State == null
+                || _snapshot.State.Settings == null
+                || _snapshot.State.Settings.GetBool("visuals.show_grid", true);
+            string gridActionId = ScenarioAuthoringActionIds.ActionSettingTogglePrefix + "visuals.show_grid";
+            Rect gridRect = new Rect(x, rect.y + 18f, actionWidth, 28f);
+            RegisterTourTarget("action:" + gridActionId, gridRect);
+            if (DrawPlainButton(
+                gridRect,
+                new GUIContent(gridOn ? "Grid On" : "Grid Off", "Toggle the lightweight placement grid overlay."),
+                gridOn ? _activeButtonStyle : _buttonStyle,
+                true))
+            {
+                ScenarioAuthoringBackendService.Instance.ExecuteAction(gridActionId);
+                if (Event.current != null)
+                    Event.current.Use();
+            }
             x += actionWidth + actionGap;
 
             if (DrawPlacementHudButton(new Rect(x, rect.y + 18f, actionWidth, 28f), "Back", "Return to the full asset browser."))
@@ -77,12 +93,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool DrawPlacementHudButton(Rect rect, string label, string tooltip)
         {
             return DrawPlainButton(rect, new GUIContent(label, tooltip), _buttonStyle, true);
-        }
-
-        private void DrawDisabledPlacementHudButton(Rect rect, string label, string tooltip)
-        {
-            GUIStyle style = _uiContext != null && _uiContext.Styles != null ? _uiContext.Styles.ButtonDisabled : _buttonStyle;
-            DrawPlainButton(rect, new GUIContent(label, tooltip), style, false);
         }
 
         private void CancelActivePlacement()
