@@ -7,7 +7,6 @@ using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Timeline;
-using ShelteredAPI.Scenarios.Application.Timeline;
 
 namespace ShelteredAPI.Scenarios.Diagnostics
 {

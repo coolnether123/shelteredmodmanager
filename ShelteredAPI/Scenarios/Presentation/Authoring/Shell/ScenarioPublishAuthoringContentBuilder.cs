@@ -22,7 +22,6 @@ using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
-using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
