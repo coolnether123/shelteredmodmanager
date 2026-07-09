@@ -43,6 +43,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         private float _coordinateScale = 1f;
         private string _lastSignature;
         private bool _windowMenuOpen;
+        private bool _historyOpen;
+        private ScenarioDraftSnapshotInfo _historyRestoreCandidate;
+        private ScenarioDraftSnapshotInfo[] _historyRows = new ScenarioDraftSnapshotInfo[0];
 
         public string ModuleId
         {
@@ -197,6 +200,44 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
 
             if (shell.Settings != null)
                 DrawSettingsModal(shell.Settings, hudReserveRect);
+
+            if (_historyOpen)
+                DrawHistoryModal(hudReserveRect);
+        }
+
+        private void DrawHistoryModal(Rect reserveRect)
+        {
+            ScenarioDraftSnapshotService snapshots = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+            if (snapshots == null) return;
+            _historyRows = snapshots.ListSnapshots();
+            Rect rect = new Rect(reserveRect.x + 80f, reserveRect.y + 72f, Math.Min(760f, reserveRect.width - 160f), Math.Min(560f, reserveRect.height - 144f));
+            DrawPanel("HistoryModal", rect, _panelAltColor, true, BaseDepth + 40);
+            DrawLabel("HistoryTitle", rect, new Rect(18f, 14f, rect.width - 36f, 30f), "DRAFT HISTORY", 22, _titleColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            DrawLabel("HistoryManual", rect, new Rect(18f, 49f, rect.width - 36f, 22f), "Last manual save: " + snapshots.GetLastManualSaveText(), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            DrawButton(new Rect(rect.xMax - 106f, rect.y + 14f, 88f, 28f), CommandAction("editor.history.close", "Close", false), false, "HistoryClose");
+
+            if (_historyRestoreCandidate != null)
+            {
+                DrawLabel("HistoryConfirm", rect, new Rect(18f, 80f, rect.width - 36f, 42f), "Restore '" + _historyRestoreCandidate.Name + "'? Your current draft will be autosaved first, then this saved version will become the current draft. The manual save will not be changed until you save.", 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 44);
+                DrawButton(new Rect(rect.x + 18f, rect.y + 126f, 120f, 28f), CommandAction("editor.history.confirm_restore", "Restore", true), false, "HistoryRestoreConfirm");
+                DrawButton(new Rect(rect.x + 146f, rect.y + 126f, 98f, 28f), CommandAction("editor.history.cancel_restore", "Cancel", false), false, "HistoryRestoreCancel");
+                RegisterRect(rect);
+                return;
+            }
+
+            if (_historyRows.Length == 0)
+                DrawLabel("HistoryEmpty", rect, new Rect(18f, 94f, rect.width - 36f, 24f), "No autosaves or saved versions yet.", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            for (int i = 0; i < _historyRows.Length && i < 8; i++)
+            {
+                ScenarioDraftSnapshotInfo row = _historyRows[i];
+                float y = rect.y + 82f + i * 52f;
+                string kind = row.IsAutosave ? "AUTOSAVE" : "SAVED VERSION";
+                DrawLabel("HistoryRow" + i, rect, new Rect(18f, 82f + i * 52f, rect.width - 210f, 20f), kind + "  " + row.Name + " - " + row.AgeText, 14, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 44);
+                DrawLabel("HistorySummary" + i, rect, new Rect(18f, 102f + i * 52f, rect.width - 210f, 18f), row.ChangeSummary ?? string.Empty, 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
+                DrawButton(new Rect(rect.xMax - 184f, y + 8f, 76f, 26f), CommandAction("editor.history.restore." + i, "Restore", false), false, "HistoryRestore" + i);
+                DrawButton(new Rect(rect.xMax - 100f, y + 8f, 76f, 26f), CommandAction("editor.history.delete." + i, "Delete", false), false, "HistoryDelete" + i);
+            }
+            RegisterRect(rect);
         }
 
         private Rect DrawTopBar(Rect rect, ScenarioAuthoringShellViewModel shell)
@@ -349,6 +390,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 x += width + 8f;
             }
 
+            DrawButton(new Rect(rect.xMax - 382f, rect.y + 8f, 74f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionHistorySaveVersion, "Version", false), false, "StatusVersion");
+            DrawButton(new Rect(rect.xMax - 300f, rect.y + 8f, 72f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionHistoryShow, "History", false), false, "StatusHistory");
             DrawButton(new Rect(rect.xMax - 220f, rect.y + 8f, 72f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionSave, "Save", true), false, "StatusSave");
             DrawButton(new Rect(rect.xMax - 142f, rect.y + 8f, 86f, 30f), PlaytestAction(ScenarioAuthoringRuntimeGuards.IsPlaytesting() ? "Stop Test" : "Playtest"), false, "StatusPlaytest");
             DrawButton(new Rect(rect.xMax - 50f, rect.y + 8f, 42f, 30f), CommandAction(ScenarioAuthoringActionIds.ActionShellToggle, "X", false), false, "StatusHide");
@@ -893,6 +936,56 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             UIEventListener listener = UIEventListener.Get(go);
             listener.onClick = delegate(GameObject sender)
             {
+                if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionHistoryShow, StringComparison.Ordinal))
+                {
+                    _historyOpen = !_historyOpen;
+                    _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.close", StringComparison.Ordinal))
+                {
+                    _historyOpen = false;
+                    _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.cancel_restore", StringComparison.Ordinal))
+                {
+                    _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.confirm_restore", StringComparison.Ordinal))
+                {
+                    string error = null;
+                    ScenarioDraftSnapshotService history = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+                    bool restored = history != null && history.Restore(_historyRestoreCandidate, out error);
+                    ScenarioAuthoringBackendService.Instance.SetStatusMessage(restored ? "Saved version restored into the current draft. Save when you are ready." : "Restore failed: " + error);
+                    _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                int index;
+                if (TryGetHistoryRowIndex(actionId, "editor.history.restore.", out index))
+                {
+                    if (index >= 0 && index < _historyRows.Length) _historyRestoreCandidate = _historyRows[index];
+                    ForceRebuild();
+                    return;
+                }
+                if (TryGetHistoryRowIndex(actionId, "editor.history.delete.", out index))
+                {
+                    string error = null;
+                    ScenarioDraftSnapshotService history = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+                    bool deleted = index >= 0 && index < _historyRows.Length && history != null && history.Delete(_historyRows[index], out error);
+                    ScenarioAuthoringBackendService.Instance.SetStatusMessage(deleted ? "Saved snapshot deleted." : "Could not delete snapshot: " + error);
+                    ForceRebuild();
+                    return;
+                }
                 if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionShellToggleWindowMenu, StringComparison.Ordinal))
                 {
                     _windowMenuOpen = !_windowMenuOpen;
@@ -976,7 +1069,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 .Append(state.ActiveSelectionStackIndex).Append('|')
                 .Append(state.SelectionStackSignature).Append('|')
                 .Append(state.StatusMessage).Append('|')
-                .Append(_windowMenuOpen);
+                .Append(_windowMenuOpen).Append('|').Append(_historyOpen).Append('|')
+                .Append(_historyRestoreCandidate != null ? _historyRestoreCandidate.FilePath : string.Empty);
 
             AppendActions(builder, shell != null ? shell.Tabs : null);
             AppendActions(builder, shell != null ? shell.ToolbarActions : null);
@@ -1063,6 +1157,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 Enabled = true,
                 Emphasized = active
             };
+        }
+
+        private static bool TryGetHistoryRowIndex(string actionId, string prefix, out int index)
+        {
+            index = -1;
+            return actionId != null && actionId.StartsWith(prefix, StringComparison.Ordinal)
+                && int.TryParse(actionId.Substring(prefix.Length), out index);
         }
 
         private static ScenarioAuthoringInspectorAction PlaytestAction(string label)

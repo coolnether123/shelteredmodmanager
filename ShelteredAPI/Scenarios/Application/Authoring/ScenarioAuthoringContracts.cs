@@ -90,6 +90,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellTabPublish = "shell.tab.publish";
         public const string ActionShellTabShell = "shell.tab.shell";
         public const string ActionSave = "editor.save";
+        public const string ActionHistoryShow = "editor.history.show";
+        public const string ActionHistorySaveVersion = "editor.history.save_version";
         public const string ActionDraftCopyPath = "editor.draft.copy_path";
         public const string ActionDraftTitlePrefix = "editor.draft.title.";
         public const string ActionDraftDescriptionPrefix = "editor.draft.description.";

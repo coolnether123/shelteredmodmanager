@@ -36,7 +36,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
             ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
             ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
-            ScenarioMapDraftService mapDraftService)
+            ScenarioMapDraftService mapDraftService,
+            ScenarioDraftSnapshotService snapshotService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -57,7 +58,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 weatherEffectSpriteCatalog,
                 mapAuthoringRuntimeService,
                 storageAuthoringRuntimeService,
-                mapDraftService));
+                mapDraftService,
+                snapshotService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -109,7 +111,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioWeatherEffectSpriteCatalogService weatherEffectSpriteCatalog,
             ScenarioMapAuthoringRuntimeService mapAuthoringRuntimeService,
             ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
-            ScenarioMapDraftService mapDraftService)
+            ScenarioMapDraftService mapDraftService,
+            ScenarioDraftSnapshotService snapshotService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -134,6 +137,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioWinLossCommandHandler(editorService),
                 new ScenarioPublishCommandHandler(publishExportService),
+                new ScenarioDraftHistoryCommandHandler(snapshotService),
                 new SelectionCommandHandler(weatherEffectSpriteCatalog),
                 new ToolCommandHandler(layoutService)
             };

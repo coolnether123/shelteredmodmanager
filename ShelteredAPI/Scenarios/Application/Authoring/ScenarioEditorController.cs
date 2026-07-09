@@ -24,6 +24,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioSceneSpritePlacementEngine _sceneSpritePlacementEngine;
         private readonly ScenarioObjectIdentityAssignmentService _identityAssignmentService;
         private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioDraftSnapshotService _snapshotService;
         private readonly ScenarioPlayStartReadiness _playStartReadiness = new ScenarioPlayStartReadiness();
 
         public static ScenarioEditorController Instance
@@ -46,7 +47,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             IScenarioSpriteSwapEngine spriteSwapEngine,
             IScenarioSceneSpritePlacementEngine sceneSpritePlacementEngine,
             ScenarioObjectIdentityAssignmentService identityAssignmentService,
-            ScenarioActorResolver actorResolver)
+            ScenarioActorResolver actorResolver,
+            ScenarioDraftSnapshotService snapshotService)
         {
             _sessionStore = sessionStore;
             _serializer = serializer;
@@ -58,6 +60,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _sceneSpritePlacementEngine = sceneSpritePlacementEngine;
             _identityAssignmentService = identityAssignmentService;
             _actorResolver = actorResolver;
+            _snapshotService = snapshotService;
         }
 
         public ScenarioEditorSession EnterEditMode(ScenarioBaseGameMode baseMode)
@@ -87,6 +90,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 session.MarkDraftChanged(ScenarioDirtySection.Meta);
             }
             _sessionStore.Set(session, scenarioFilePath);
+
+            ScenarioDraftSnapshotInfo newerAutosave;
+            if (_snapshotService != null && _snapshotService.TryGetNewerAutosave(scenarioFilePath, out newerAutosave))
+                session.LoadWarning = "A newer autosave is available from " + newerAutosave.AgeText + ". Open History to review and restore it; your manual draft was not changed.";
 
             PauseForEditor();
             if (!string.IsNullOrEmpty(recoveryMessage))

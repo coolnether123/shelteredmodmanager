@@ -33,6 +33,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioAuthoringTutorialService _tutorialService;
         private readonly ScenarioAuthoringSetupStateService _setupStateService;
         private readonly ScenarioAuthoringShortcutRouter _shortcutRouter;
+        private readonly ScenarioDraftSnapshotService _snapshotService;
         private ScenarioAuthoringState _state = new ScenarioAuthoringState();
         private ScenarioAuthoringSession _activeSession;
 
@@ -68,7 +69,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioSelectionScopeService selectionScopeService,
             ScenarioAuthoringTutorialService tutorialService,
             ScenarioAuthoringSetupStateService setupStateService,
-            ScenarioAuthoringInputCaptureService inputCaptureService)
+            ScenarioAuthoringInputCaptureService inputCaptureService,
+            ScenarioDraftSnapshotService snapshotService)
         {
             _selectionService = selectionService;
             _sessionStore = sessionStore;
@@ -87,6 +89,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 commandService,
                 sectionHub,
                 inputCaptureService);
+            _snapshotService = snapshotService;
         }
 
         internal void SetActiveSession(ScenarioAuthoringSession session)
@@ -309,6 +312,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (snapshot == null || !snapshot.IsActive)
                 return;
 
+            if (_snapshotService != null)
+                _snapshotService.Tick();
+
             if (snapshot.ReloadPending)
             {
                 ScenarioHoverVisualService.Instance.Clear();
@@ -489,6 +495,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             ScenarioAuthoringContext context = BuildContext(snapshot, GetActiveSession());
             string beforeStatus = snapshot.StatusMessage;
+            if (_snapshotService != null && IsSafetySnapshotAction(actionId))
+            {
+                string autosaveError;
+                _snapshotService.TryAutosaveCurrent("major editor action", out autosaveError);
+            }
             ScenarioAuthoringActionExecutionResult result = _commandService.ExecuteWithResult(snapshot, actionId);
             bool changed = result != null && result.Result;
 
@@ -563,6 +574,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 || actionId.StartsWith("scenario.map.", StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix, StringComparison.Ordinal);
+        }
+
+        private static bool IsSafetySnapshotAction(string actionId)
+        {
+            if (string.IsNullOrEmpty(actionId)) return false;
+            return string.Equals(actionId, ScenarioAuthoringActionIds.ActionPlaytest, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchReloadPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioBaseModeAuthoringActions.ActionSwitchOnlyPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith("build.delete", StringComparison.Ordinal)
+                || actionId.StartsWith("capture.", StringComparison.Ordinal)
+                || actionId.IndexOf(".delete.", StringComparison.Ordinal) >= 0
+                || actionId.IndexOf(".remove.", StringComparison.Ordinal) >= 0;
         }
 
         internal bool UpdateWindowFrame(string windowId, float x, float y, float width, float height, bool persist)
