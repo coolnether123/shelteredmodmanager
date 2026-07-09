@@ -1394,6 +1394,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionWorldEventAdd, StringComparison.Ordinal))
                 SetFocusedEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent, definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
+            else if (actionId.StartsWith(ScenarioTimelinePresetService.ActionPrefix, StringComparison.Ordinal))
+                SetFocusedEditor(state, "scheduled_action", definition.ScheduledActions != null ? definition.ScheduledActions.Count - 1 : -1, true);
             else if (string.Equals(actionId, ScenarioAuthoringActionIds.ActionJournalEntryAdd, StringComparison.Ordinal))
                 SetFocusedEditor(state, "journal_entry", definition.Journal != null && definition.Journal.Entries != null ? definition.Journal.Entries.Count - 1 : -1, true);
         }

@@ -8,6 +8,7 @@ using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Timeline;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 {
@@ -154,7 +155,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             return string.Join(", ", values.ToArray());
         }
 
-        private static string Display(ScenarioScheduledActionDefinition action) { return !string.IsNullOrEmpty(action.Id) ? action.Id : "Scheduled action"; }
+        private static string Display(ScenarioScheduledActionDefinition action) { return ScenarioTimelineCreatorText.ScheduledActionName(null, action); }
         private static string FormatWhen(ScenarioScheduleTime time) { return time == null ? "Unscheduled" : "Day " + time.Day + " " + time.Hour.ToString("D2") + ":" + time.Minute.ToString("D2"); }
         private static long ToMinutes(ScenarioScheduleTime time) { return time == null ? long.MaxValue : (((long)Math.Max(1, time.Day) * 24L + Math.Max(0, time.Hour)) * 60L + Math.Max(0, time.Minute)); }
     }

@@ -22,6 +22,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Timeline;
 using ShelteredAPI.Scenarios.Shared;
 
 namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
@@ -762,7 +763,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private List<ScenarioAuthoringInspectorItem> BuildTimelineTrackItems(ScenarioAuthoringState state, ScenarioDefinition definition, List<ScenarioTimelineEntry> entries)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            AddTimelineAddActions(items);
+            AddTimelinePresetActions(items, definition);
 
             int lastDay = ResolveLastDay(entries);
             int visibleDayCount = Math.Max(5, lastDay + 2);
@@ -784,14 +785,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        private static void AddTimelineAddActions(List<ScenarioAuthoringInspectorItem> items)
+        private static void AddTimelinePresetActions(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition)
         {
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionWeatherScheduleAdd, "Weather", "Schedule rain, storms, or a weather restore on a scenario day.", true, true, "WE", "Add event")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Supply Change", "Create a timed supply, survivor, or quest-impacting change with effects, conditions, and repeat rules.", true, true, "A+", "Add event")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionWorldEventAdd, "World Event", "Schedule a typed visitor, raid, or radio outcome.", true, true, "WEV", "Add event")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionTriggerAddScheduled, "Timed Trigger", "Create a trigger that fires at a specific scenario time.", true, false, "TS", "Add event")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionFutureSurvivorAdd, "Arrival", "Create a survivor who arrives or asks to join later.", true, false, "FS", "Add event")));
-            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Quests, "Story Beats", "Open Story to author vanilla scenario stages and encounter beats.", true, false, "ST", "Story link")));
+            AddPreset(items, definition, "deliver_supplies", "Deliver supplies", "Add water and canned food at a scheduled time.", "IV");
+            AddPreset(items, definition, "change_weather", "Change weather", "Schedule a rain change using the runtime weather effect.", "WE");
+            AddPreset(items, definition, "visitor_arrives", "Visitor arrives", "Schedule a runtime-supported visitor event.", "SV");
+            AddPreset(items, definition, "journal_message", "Journal message", "Write a scheduled note into the in-game journal.", "JR");
+            AddPreset(items, definition, "start_quest", "Start quest", "Schedule the first authored quest. Add a quest first when this is unavailable.", "QT");
+            AddPreset(items, definition, "set_flag", "Set flag", "Set a milestone flag for later conditions.", "FL");
+            items.Add(Item.ActionItem(Item.Action(ScenarioAuthoringActionIds.ActionScheduledActionAdd, "Custom change", "Create an empty scheduled change when none of the common plans fit.", true, false, "A+", "Advanced")));
+        }
+
+        private static void AddPreset(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition, string presetId, string label, string hint, string icon)
+        {
+            bool enabled = ScenarioTimelinePresetService.CanCreate(definition, presetId);
+            ScenarioAuthoringInspectorAction action = Item.Action(ScenarioAuthoringActionIds.ActionTimelinePresetPrefix + presetId, label, hint, enabled, true, icon, "Preset");
+            if (!enabled)
+                action.DisabledReason = "This preset needs an authored quest first.";
+            items.Add(Item.ActionItem(action));
         }
 
         private static ScenarioAuthoringInspectorAction TimelineDayAction(int day, int count, string baseline)
@@ -819,9 +830,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             int day = entry != null && entry.When != null ? Math.Max(1, entry.When.Day) : 1;
             string time = FormatTimelineTime(entry != null ? entry.When : null);
             string domain = ResolveTimelineDomain(entry);
-            string label = BuildTimelineChipLabel(definition, entry);
+            string label = ScenarioTimelineCreatorText.TimelineSummary(definition, entry);
             string status = entry != null ? entry.Status.ToString() : "Pending";
-            string hint = "Day " + day.ToString(CultureInfo.InvariantCulture) + " " + time + ": " + label + ". Click to focus this authored entry.";
+            string hint = label + ". Click to open its focused editor.";
             if (entry != null && !string.IsNullOrEmpty(entry.Warning))
                 hint = hint + " " + entry.Warning;
 
@@ -834,7 +845,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             ScenarioAuthoringInspectorAction action = Item.Action(
                 ScenarioAuthoringActionIds.ActionTimelineEntryPrefix + (entry != null ? entry.Id : string.Empty),
-                time + " " + label,
+                label,
                 hint,
                 true,
                 emphasized,

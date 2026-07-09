@@ -9,6 +9,7 @@ using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Shared;
+using ShelteredAPI.Scenarios.Application.Timeline;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioEventAuthoringService
     {
@@ -32,6 +33,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 && (actionId.StartsWith("scenario.trigger.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.gate.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.action.", StringComparison.Ordinal)
+                    || actionId.StartsWith(ScenarioTimelinePresetService.ActionPrefix, StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.world_event.", StringComparison.Ordinal)
                     || actionId.StartsWith("scenario.journal.", StringComparison.Ordinal));
         }
@@ -46,6 +48,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             if (TryHandleVanillaSuppression(session, actionId, out message))
+                return true;
+            if (ScenarioTimelinePresetService.TryCreate(session, actionId, out message))
                 return true;
             if (_triggers.TryHandle(session, actionId, out message))
                 return true;

@@ -329,6 +329,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionJournalEntryWriterAnyPrefix = "scenario.journal.entry.writer_any.";
         public const string ActionJournalVanillaSuppressFirst = "scenario.journal.vanilla.suppress_first";
         public const string ActionJournalVanillaCategoryPrefix = "scenario.journal.vanilla.category.";
+        public const string ActionTimelinePresetPrefix = "scenario.timeline.preset.";
         public const string ActionTimelineDayPrefix = "scenario.timeline.day.";
         public const string ActionTimelineEntryPrefix = "scenario.timeline.entry.";
         public const string ActionSpriteSwapClear = "sprite_swap.clear";

@@ -33,6 +33,7 @@ using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Authoring.Windows;
+using ShelteredAPI.Scenarios.Presentation.Authoring.Timeline;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
 using ShelteredAPI.Scenarios.Presentation.Timeline;
 using ShelteredAPI.Scenarios.Shared;
@@ -2708,7 +2709,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "bunker " + effect.BunkerExpansionId;
             if (!string.IsNullOrEmpty(effect.TargetId))
                 return "target " + effect.TargetId;
-            return effect.Kind.ToString();
+            return ScenarioTimelineCreatorText.EffectName(effect.Kind);
         }
 
         private static ScenarioAuthoringInspectorSection[] BuildSurvivorWindowSections(
@@ -3860,7 +3861,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             string prefix = gateIndex.ToString(CultureInfo.InvariantCulture) + "." + conditionIndex.ToString(CultureInfo.InvariantCulture);
-            items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), condition.Kind + " / " + FormatConditionTarget(definition, condition)));
+            items.Add(Property("Condition " + (conditionIndex + 1).ToString(CultureInfo.InvariantCulture), ScenarioTimelineCreatorText.ConditionName(condition.Kind) + " / " + FormatConditionTarget(definition, condition), ScenarioTimelineCreatorText.ConditionAdvancedDetail(condition.Kind)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionKindPrefix + prefix, "Cycle Condition Kind", "Switch this gate condition to the next supported template.", true, false, "CK")));
             AddConditionTargetActions(items, definition, condition, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionGateConditionDeletePrefix + prefix, "Remove Condition", "Remove this gate condition.", true, false, "RM")));
@@ -3872,7 +3873,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
 
             string prefix = actionIndex.ToString(CultureInfo.InvariantCulture) + "." + effectIndex.ToString(CultureInfo.InvariantCulture);
-            items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), effect.Kind + " / " + FormatEffectTarget(definition, effect)));
+            items.Add(Property("Effect " + (effectIndex + 1).ToString(CultureInfo.InvariantCulture), ScenarioTimelineCreatorText.EffectName(effect.Kind) + " / " + FormatEffectTarget(definition, effect), ScenarioTimelineCreatorText.EffectAdvancedDetail(effect.Kind)));
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectKindPrefix + prefix, "Cycle Effect Kind", "Switch this effect to the next supported template.", true, false, "EK")));
             AddEffectTargetActions(items, definition, effect, prefix);
             items.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionEffectDeletePrefix + prefix, "Remove Effect", "Remove this scheduled action effect.", true, false, "RM")));
@@ -4610,6 +4611,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string FormatScheduledActionTypeLabel(string type)
         {
+            string creatorName = ScenarioTimelineCreatorText.EffectNameFromRaw(type);
+            if (!string.Equals(creatorName, type, StringComparison.Ordinal))
+                return creatorName;
             if (string.Equals(type, "Generic", StringComparison.OrdinalIgnoreCase))
                 return "Custom change";
             if (string.Equals(type, "Inventory", StringComparison.OrdinalIgnoreCase))
@@ -4663,7 +4667,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return "stat " + condition.StatId + ">=" + condition.StatValue.ToString(CultureInfo.InvariantCulture);
             if (!string.IsNullOrEmpty(condition.TraitId))
                 return "trait " + condition.TraitId;
-            return condition.Kind.ToString();
+            return ScenarioTimelineCreatorText.ConditionName(condition.Kind);
         }
 
         private static string FormatWorldEventEffect(ScenarioEffectDefinition effect)

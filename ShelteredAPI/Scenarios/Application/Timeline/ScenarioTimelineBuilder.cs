@@ -56,6 +56,7 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
             AddObjectActivations(definition, runtimeState, entries);
             AddJournal(definition, runtimeState, entries);
             AddScheduledActions(definition, runtimeState, entries);
+            ScenarioTimelineCollisionAnalyzer.ApplyWarnings(definition, entries);
             return entries;
         }
 
