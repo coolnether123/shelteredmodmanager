@@ -142,6 +142,7 @@ $seamGuard = Read-RepoFile "ShelteredAPI\Infrastructure\SeamGuard.cs"
 $scenarioPlayStartReadiness = Read-RepoFile "ShelteredAPI\Scenarios\Application\Runtime\ScenarioPlayStartReadiness.cs"
 $scenarioAuthoringPresentationBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs"
 $scenarioAuthoringWindowRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs"
+$scenarioAuthoringTutorialRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTutorialImguiRenderer.cs"
 $scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
 $scenarioCastMemberPickerBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs"
 $scenarioStoryCharacterActorLinkSectionBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs"
@@ -199,6 +200,14 @@ Assert-Contains "content ID stability" $contentRegistry "CustomItemTypeRange\s*=
 
 Assert-Contains "scenario XML round-trip" $scenarioSmoke "serializer\.ToXml\(definition\).*serializer\.FromXml\(xml\)" "smoke harness must serialize and deserialize the same scenario definition."
 Assert-Contains "scenario XML round-trip" $scenarioSmoke "ScenarioDefinitionComparer\.AreEquivalent" "round-trip smoke test must compare the original and deserialized definitions."
+
+# TOURCALM: unresolved, off-screen, and full-surface targets collapse to the
+# same no-target path before any border, pointer, click, or cutout is rendered.
+Assert-Contains "scenario tutorial no-target normalization" $scenarioAuthoringTutorialRenderer "NormalizeSpotlightTargetRect\(.*float\.IsNaN\(targetRect\.x\).*float\.IsInfinity\(targetRect\.height\).*!HasSpotlightTarget\(targetRect\).*!targetRect\.Overlaps\(availableRect\).*IsFullSurfaceSpotlightTarget\(targetRect, availableRect\).*return ZeroRect\(\)" "tutorial/tour targets that cannot identify a visible control must normalize to no target."
+Assert-Contains "scenario tutorial no-target draw gate" $scenarioAuthoringTutorialRenderer "bool hasTarget = HasSpotlightTarget\(targetRect\);.*if \(hasTarget\)\s*DrawSpotlightBorder.*if \(hasTarget\)\s*DrawSpotlightPointer" "highlight and pointer drawing must share the normalized has-target gate."
+Assert-Contains "scenario tutorial pointer overlap" $scenarioAuthoringTutorialRenderer "cardRect\.Overlaps\(targetRect\).*return;" "spotlight pointer lines must not draw through overlapping cards and controls."
+Assert-Contains "scenario tutorial calm pulse" $scenarioAuthoringTutorialRenderer "float pulse = 0\.70f \+ \(Mathf\.Sin\(Time\.realtimeSinceStartup \* 2\.1f\) \* 0\.15f\)" "spotlight breathing must stay slow and between 0.55 and 0.85 alpha."
+Assert-NotContains "scenario tutorial harsh field flash" $scenarioAuthoringTutorialRenderer "GUI\.Box\([^;]*Styles\.Field\)|Time\.realtimeSinceStartup \* 5f|new GUIStyle" "spotlight/card rendering must not use the filled Field box, fast flash, or per-frame GUIStyle allocation."
 Assert-Contains "scenario metadata contract" $scenarioSmoke "RunMetadataContract\(\)" "smoke harness must cover saved metadata reload."
 Assert-Contains "scenario metadata contract" $scenarioSmoke "Metadata placeholder validation contract failed" "smoke harness must cover placeholder metadata warnings."
 Assert-Contains "scenario metadata XML" $scenarioSerializer "Credits.*Tags" "scenario XML must persist credits and optional tags."

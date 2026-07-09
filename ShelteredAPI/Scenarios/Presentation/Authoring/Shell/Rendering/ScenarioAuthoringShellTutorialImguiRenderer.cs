@@ -122,26 +122,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!visible || progress <= 0.001f)
                 return;
 
-            Rect targetRect = ResolveTutorialTargetRect(tutorial, topRect, statusRect, windowRects, shell);
-            if (IsFullSurfaceSpotlightTarget(targetRect, availableRect))
-                targetRect = ZeroRect();
+            Rect targetRect = NormalizeSpotlightTargetRect(
+                ResolveTutorialTargetRect(tutorial, topRect, statusRect, windowRects, shell),
+                availableRect);
+            bool hasTarget = HasSpotlightTarget(targetRect);
             DrawSpotlightDimming(availableRect, targetRect, progress);
 
-            if (targetRect.width > 0f && targetRect.height > 0f)
+            if (hasTarget)
                 DrawSpotlightBorder(targetRect, progress);
 
             Rect calloutRect = BuildTutorialCalloutRect(availableRect, targetRect);
             calloutRect = ResolveTutorialCardRect("tutorial:" + (tutorial.StepId ?? tutorial.StepIndex.ToString()), calloutRect, availableRect);
             calloutRect = _animations.GetAnimatedRect("tutorial.card.rect", calloutRect, 0.18f);
             Rect animatedRect = new Rect(calloutRect.x, calloutRect.y - ((1f - progress) * 8f), calloutRect.width, calloutRect.height);
-            DrawSpotlightPointer(animatedRect, targetRect, progress);
+            if (hasTarget)
+                DrawSpotlightPointer(animatedRect, targetRect, progress);
             using (ScenarioUiGuiScope.Apply(progress, animatedRect, 1f))
                 DrawTutorialCallout(animatedRect, tutorial);
 
-            HandleSpotlightTargetClick(tutorial.TargetId, targetRect, true);
+            if (hasTarget)
+                HandleSpotlightTargetClick(tutorial.TargetId, targetRect, true);
             inputCapture.RegisterInteractiveRect(availableRect);
             inputCapture.RegisterInteractiveRect(calloutRect);
-            if (targetRect.width > 0f && targetRect.height > 0f)
+            if (hasTarget)
                 inputCapture.RegisterInteractiveRect(targetRect);
             inputCapture.SetPopupOpen(true);
         }
@@ -160,26 +163,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (!visible || progress <= 0.001f)
                 return;
 
-            Rect targetRect = ResolveTourTargetRect(tour.TargetId, topRect, statusRect, windowRects, shell);
-            if (IsFullSurfaceSpotlightTarget(targetRect, availableRect))
-                targetRect = ZeroRect();
+            Rect targetRect = NormalizeSpotlightTargetRect(
+                ResolveTourTargetRect(tour.TargetId, topRect, statusRect, windowRects, shell),
+                availableRect);
+            bool hasTarget = HasSpotlightTarget(targetRect);
             DrawSpotlightDimming(availableRect, targetRect, progress);
 
-            if (targetRect.width > 0f && targetRect.height > 0f)
+            if (hasTarget)
                 DrawSpotlightBorder(targetRect, progress);
 
             Rect calloutRect = BuildTutorialCalloutRect(availableRect, targetRect);
             calloutRect = ResolveTutorialCardRect("tour:" + (tour.TourId ?? string.Empty) + ":" + tour.StepIndex.ToString(), calloutRect, availableRect);
             calloutRect = _animations.GetAnimatedRect("tour.card.rect", calloutRect, 0.18f);
             Rect animatedRect = new Rect(calloutRect.x, calloutRect.y - ((1f - progress) * 8f), calloutRect.width, calloutRect.height);
-            DrawSpotlightPointer(animatedRect, targetRect, progress);
+            if (hasTarget)
+                DrawSpotlightPointer(animatedRect, targetRect, progress);
             using (ScenarioUiGuiScope.Apply(progress, animatedRect, 1f))
                 DrawTourCallout(animatedRect, tour);
 
-            HandleSpotlightTargetClick(tour.TargetId, targetRect, false);
+            if (hasTarget)
+                HandleSpotlightTargetClick(tour.TargetId, targetRect, false);
             inputCapture.RegisterInteractiveRect(availableRect);
             inputCapture.RegisterInteractiveRect(calloutRect);
-            if (targetRect.width > 0f && targetRect.height > 0f)
+            if (hasTarget)
                 inputCapture.RegisterInteractiveRect(targetRect);
             inputCapture.SetPopupOpen(true);
         }
@@ -274,7 +280,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private void DrawSpotlightDimming(Rect availableRect, Rect targetRect, float progress)
         {
             Color oldColor = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, 0.64f * progress);
+            GUI.color = new Color(0f, 0f, 0f, 0.50f * progress);
 
             if (targetRect.width <= 0f || targetRect.height <= 0f)
             {
@@ -283,7 +289,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
-            Rect cutout = new Rect(targetRect.x - 8f, targetRect.y - 8f, targetRect.width + 16f, targetRect.height + 16f);
+            Rect cutout = ExpandRect(targetRect, 4f);
             cutout.xMin = Mathf.Clamp(cutout.xMin, availableRect.xMin, availableRect.xMax);
             cutout.xMax = Mathf.Clamp(cutout.xMax, availableRect.xMin, availableRect.xMax);
             cutout.yMin = Mathf.Clamp(cutout.yMin, availableRect.yMin, availableRect.yMax);
@@ -298,8 +304,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawSpotlightPointer(Rect cardRect, Rect targetRect, float progress)
         {
-            if (targetRect.width <= 0f || targetRect.height <= 0f || cardRect.width <= 0f || cardRect.height <= 0f)
+            if (!HasSpotlightTarget(targetRect)
+                || cardRect.width <= 0f
+                || cardRect.height <= 0f
+                || cardRect.Overlaps(targetRect))
+            {
                 return;
+            }
 
             Vector2 from = ClosestPointOnRect(cardRect, targetRect.center);
             Vector2 to = ClosestPointOnRect(targetRect, cardRect.center);
@@ -346,12 +357,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawSpotlightBorder(Rect targetRect, float progress)
         {
-            Rect rect = new Rect(targetRect.x - 8f, targetRect.y - 8f, targetRect.width + 16f, targetRect.height + 16f);
-            float pulse = 0.75f + (Mathf.Sin(Time.realtimeSinceStartup * 5f) * 0.25f);
+            if (!HasSpotlightTarget(targetRect))
+                return;
+
+            Rect glowRect = ExpandRect(targetRect, 6f);
+            Rect borderRect = ExpandRect(targetRect, 4f);
+            // Match the calm OPEN/checklist breathing speed instead of the old
+            // 5-radian flash. The narrow alpha range never reaches full-bright.
+            float pulse = 0.70f + (Mathf.Sin(Time.realtimeSinceStartup * 2.1f) * 0.15f);
             Color oldColor = GUI.color;
+            GUI.color = new Color(0.98f, 0.78f, 0.28f, 0.16f * pulse * progress);
+            DrawRectOutline(glowRect, 2f);
             GUI.color = new Color(0.98f, 0.78f, 0.28f, pulse * progress);
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
+            DrawRectOutline(borderRect, 2f);
             GUI.color = oldColor;
+        }
+
+        private static void DrawRectOutline(Rect rect, float width)
+        {
+            GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, width), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.yMax - width, rect.width, width), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.x, rect.y + width, width, Math.Max(0f, rect.height - (width * 2f))), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(rect.xMax - width, rect.y + width, width, Math.Max(0f, rect.height - (width * 2f))), Texture2D.whiteTexture);
         }
 
         private void DrawTourCallout(Rect rect, ScenarioAuthoringTourViewModel tour)
@@ -498,6 +525,40 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return new Rect(0f, 0f, 0f, 0f);
         }
 
+        private static bool HasSpotlightTarget(Rect targetRect)
+        {
+            return targetRect.width > 0f && targetRect.height > 0f;
+        }
+
+        private static Rect NormalizeSpotlightTargetRect(Rect targetRect, Rect availableRect)
+        {
+            if (float.IsNaN(targetRect.x)
+                || float.IsNaN(targetRect.y)
+                || float.IsNaN(targetRect.width)
+                || float.IsNaN(targetRect.height)
+                || float.IsInfinity(targetRect.x)
+                || float.IsInfinity(targetRect.y)
+                || float.IsInfinity(targetRect.width)
+                || float.IsInfinity(targetRect.height)
+                || !HasSpotlightTarget(targetRect)
+                || !targetRect.Overlaps(availableRect)
+                || IsFullSurfaceSpotlightTarget(targetRect, availableRect))
+            {
+                return ZeroRect();
+            }
+
+            float xMin = Mathf.Max(targetRect.xMin, availableRect.xMin);
+            float xMax = Mathf.Min(targetRect.xMax, availableRect.xMax);
+            float yMin = Mathf.Max(targetRect.yMin, availableRect.yMin);
+            float yMax = Mathf.Min(targetRect.yMax, availableRect.yMax);
+            return new Rect(xMin, yMin, xMax - xMin, yMax - yMin);
+        }
+
+        private static Rect ExpandRect(Rect rect, float padding)
+        {
+            return new Rect(rect.x - padding, rect.y - padding, rect.width + (padding * 2f), rect.height + (padding * 2f));
+        }
+
         // A spotlight cutout only reads as a highlight when it frames a specific
         // control. A "target" that covers most of the surface (e.g. the welcome
         // step pointing at the whole Home window) is not a real spotlight, so we
@@ -531,17 +592,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             const float rightControlsWidth = 528f;
             float rightControlsX = Math.Max(statusRect.x + 220f, statusRect.xMax - rightControlsWidth);
             return new Rect(rightControlsX, statusRect.y + 9f, 120f, 28f);
-        }
-
-        private void DrawTutorialTargetHighlight(Rect targetRect, float progress)
-        {
-            Rect rect = new Rect(targetRect.x - 6f, targetRect.y - 6f, targetRect.width + 12f, targetRect.height + 12f);
-            Color oldColor = GUI.color;
-            GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.20f * progress);
-            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
-            GUI.color = new Color(0.882f, 0.784f, 0.588f, 0.95f * progress);
-            GUI.Box(rect, GUIContent.none, _uiContext.Styles.Field);
-            GUI.color = oldColor;
         }
 
         private static Rect BuildTutorialCalloutRect(Rect availableRect, Rect targetRect)
