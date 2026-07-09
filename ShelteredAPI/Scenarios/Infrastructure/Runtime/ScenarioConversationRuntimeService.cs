@@ -20,16 +20,19 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
         private readonly ScenarioActorResolver _actorResolver;
         private readonly ScenarioRuntimeStateService _stateService;
         private readonly ScenarioConditionEvaluatorRegistry _conditions;
+        private readonly ScenarioRuntimeExecutionLog _executionLog;
         private ScenarioDefinition _activeDefinition;
 
         public ScenarioConversationRuntimeService(
             ScenarioActorResolver actorResolver,
             ScenarioRuntimeStateService stateService,
-            ScenarioConditionEvaluatorRegistry conditions)
+            ScenarioConditionEvaluatorRegistry conditions,
+            ScenarioRuntimeExecutionLog executionLog)
         {
             _actorResolver = actorResolver;
             _stateService = stateService;
             _conditions = conditions;
+            _executionLog = executionLog;
         }
 
         public void Activate(ScenarioDefinition definition)
@@ -136,6 +139,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (_conditions != null && !_conditions.AreConditionsSatisfied(definition, conversation.Conditions, state, out reason))
             {
                 message = reason;
+                Record(conversation, ScenarioRuntimeExecutionLogOutcome.SkippedConditionFalse, reason, source);
                 return false;
             }
 
@@ -143,13 +147,23 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime
             if (!TryResolveParticipants(definition, conversation, initiator, partner, out participants, out message))
                 return false;
             if (!CanRun(conversation, state, out message))
+            {
+                Record(conversation, conversation != null && conversation.Trigger != null && conversation.Trigger.Once ? ScenarioRuntimeExecutionLogOutcome.OnceAlreadyConsumed : ScenarioRuntimeExecutionLogOutcome.SkippedConditionFalse, message, source);
                 return false;
+            }
 
             ScenarioConversationRunner runner = EnsureRunner();
             runner.Play(conversation, participants);
             RecordPlayed(conversation, state);
             message = "Started conversation '" + (conversation.Id ?? string.Empty) + "' from " + (source ?? "runtime") + ".";
+            Record(conversation, ScenarioRuntimeExecutionLogOutcome.Fired, null, source);
             return true;
+        }
+
+        private void Record(ScenarioConversationDefinition conversation, ScenarioRuntimeExecutionLogOutcome outcome, string condition, string source)
+        {
+            if (_executionLog != null && conversation != null)
+                _executionLog.Record(conversation.Id, conversation.Id, "Conversation", outcome, condition, source);
         }
 
         private bool TryResolveParticipants(

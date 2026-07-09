@@ -107,13 +107,15 @@ namespace ShelteredAPI.Scenarios.Composition{
             services.AddSingleton(delegate(IServiceResolver resolver) { return new BunkerApplyService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournalRepository(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeStateService(resolver.Get<ScenarioRuntimeExecutionJournalRepository>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionLog(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTestTimeAdvanceService(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioScoreSnapshotService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton<IScenarioScoreSnapshotService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioScoreSnapshotService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioRuntimeExecutionJournal(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioObjectStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioSceneSpriteStartStateApplyService(resolver.Get<ScenarioRuntimeStateService>()); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioMapProjectionApplyService(); });
-            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerRuntimeService(resolver.Get<ScenarioRuntimeStateService>()); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTriggerRuntimeService(resolver.Get<ScenarioRuntimeStateService>(), resolver.Get<ScenarioRuntimeExecutionLog>()); });
             services.AddSingleton<IScenarioTriggerRuntimeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioTriggerRuntimeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioQuestInstanceResolver(resolver.Get<IVanillaScenarioRuntime>()); });
             services.AddSingleton<IScenarioQuestInstanceResolver>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioQuestInstanceResolver>(); });
@@ -150,7 +152,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                 return new ScenarioConversationRuntimeService(
                     resolver.Get<ScenarioActorResolver>(),
                     resolver.Get<ScenarioRuntimeStateService>(),
-                    resolver.Get<ScenarioConditionEvaluatorRegistry>());
+                    resolver.Get<ScenarioConditionEvaluatorRegistry>(),
+                    resolver.Get<ScenarioRuntimeExecutionLog>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
@@ -197,7 +200,17 @@ namespace ShelteredAPI.Scenarios.Composition{
                         resolver.Get<ScenarioTriggerScheduledActionProvider>(),
                         resolver.Get<ScenarioConversationScheduledActionProvider>(),
                         resolver.Get<ScenarioLegacyScheduleActionProvider>()
-                    });
+                    },
+                    resolver.Get<ScenarioRuntimeExecutionLog>());
+            });
+            services.AddSingleton(delegate(IServiceResolver resolver)
+            {
+                return new ScenarioTestConsoleService(
+                    resolver.Get<ScenarioRuntimeExecutionLog>(),
+                    resolver.Get<ScenarioScheduleRuntimeCoordinator>(),
+                    resolver.Get<IScenarioTriggerRuntimeService>(),
+                    resolver.Get<ScenarioRuntimeStateService>(),
+                    resolver.Get<ScenarioTestTimeAdvanceService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

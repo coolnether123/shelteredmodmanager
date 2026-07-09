@@ -128,6 +128,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new CharacterEditorCommandHandler(characterEditorService, editorService),
                 new ScenarioStoryFocusedEditorCommandHandler(storyAuthoringService, editorService),
                 new StoryAuthoringCommandHandler(storyAuthoringService, editorService),
+                new ScenarioTestConsoleCommandHandler(editorService),
                 new EditorLifecycleCommandHandler(editorService, sectionHub.BuildPlacement, sectionHub.SceneSpritePlacement, baseModeReloadService),
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),

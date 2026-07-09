@@ -466,7 +466,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
             List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder);
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(_modDependencyDetector.BuildReport(definition));
-            return new[]
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>
             {
                 new ScenarioAuthoringInspectorSection
                 {
@@ -525,6 +525,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Items = compatibilityItems.ToArray()
                 }
             };
+            if (editorSession != null && editorSession.PlaytestState == ScenarioPlaytestState.Playtesting)
+                sections.AddRange(ScenarioTestConsoleAuthoringContentBuilder.Build(context));
+            return sections.ToArray();
         }
 
         private static List<ScenarioAuthoringInspectorItem> BuildPlaytestControlItems(

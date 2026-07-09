@@ -311,6 +311,7 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioMetadataAuthoringActions.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioMapAuthoringCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioStorageAuthoringCommandHandler.cs" />
+    <Compile Include="Scenarios\Application\Commands\ScenarioTestConsoleCommandHandler.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandDispatcher.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioCommandRegistration.cs" />
     <Compile Include="Scenarios\Application\Commands\ScenarioHelpCommandHandler.cs" />
@@ -322,6 +323,8 @@
     <Compile Include="Scenarios\Application\Map\ScenarioMapDraftService.cs" />
     <Compile Include="Scenarios\Application\Map\ScenarioMapRegionSelection.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeExecutionJournal.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeExecutionLog.cs" />
+    <Compile Include="Scenarios\Application\Runtime\ScenarioTestConsoleService.cs" />
     <Compile Include="Scenarios\Application\Runtime\ScenarioRuntimeStateService.cs" />
     <Compile Include="Scenarios\Application\Scheduling\IScenarioScheduledActionProvider.cs" />
     <Compile Include="Scenarios\Application\Scheduling\ScenarioDefinitionScheduledActionProvider.cs" />
@@ -425,6 +428,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioOverviewAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMetadataAuthoringContent.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioPublishAuthoringContentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioTestConsoleAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioQuestAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioScoringAuthoringSummary.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioWorkflowAuthoringContentBuilder.cs" />

@@ -11,10 +11,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal sealed class ScenarioTriggerRuntimeService : IScenarioTriggerRuntimeService, IScenarioEffectHandler, IScenarioConditionEvaluator
     {
         private readonly ScenarioRuntimeStateService _stateService;
+        private readonly ScenarioRuntimeExecutionLog _executionLog;
 
-        public ScenarioTriggerRuntimeService(ScenarioRuntimeStateService stateService)
+        public ScenarioTriggerRuntimeService(ScenarioRuntimeStateService stateService, ScenarioRuntimeExecutionLog executionLog)
         {
             _stateService = stateService;
+            _executionLog = executionLog;
         }
 
         public bool CanHandle(ScenarioEffectKind kind)
@@ -63,12 +65,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (state == null)
             {
                 message = "Scenario runtime state is not ready.";
+                Record(triggerId, ScenarioRuntimeExecutionLogOutcome.FailedWithError, message, source);
                 return false;
             }
 
             if (string.IsNullOrEmpty(triggerId))
             {
                 message = "Trigger id is missing.";
+                Record(triggerId, ScenarioRuntimeExecutionLogOutcome.FailedWithError, message, source);
                 return false;
             }
 
@@ -85,7 +89,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             record.FiredHour = GameTime.Hour;
             record.FiredMinute = GameTime.Minute;
             record.FireCount = Math.Max(0, record.FireCount) + 1;
+            Record(triggerId, source != null && source.IndexOf("manual", StringComparison.OrdinalIgnoreCase) >= 0 ? ScenarioRuntimeExecutionLogOutcome.ManuallyFired : ScenarioRuntimeExecutionLogOutcome.Fired, null, record.Source);
             return true;
+        }
+
+        private void Record(string triggerId, ScenarioRuntimeExecutionLogOutcome outcome, string conditionSummary, string detail)
+        {
+            if (_executionLog != null)
+                _executionLog.Record(triggerId, triggerId, "Trigger", outcome, conditionSummary, detail);
         }
 
         public bool HasFired(ScenarioRuntimeState state, string triggerId)

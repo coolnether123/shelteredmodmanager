@@ -102,6 +102,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionDraftVersionBumpMinor = "editor.draft.version.bump_minor";
         public const string ActionPlaytest = "editor.playtest.toggle";
         public const string ActionPlaytestRestart = "editor.playtest.restart";
+        public const string ActionTestConsoleHour = "editor.test_console.time.hour";
+        public const string ActionTestConsoleDay = "editor.test_console.time.day";
+        public const string ActionTestConsoleNextEvent = "editor.test_console.time.next_event";
+        public const string ActionTestConsoleFirePrefix = "editor.test_console.fire.";
+        public const string ActionTestConsoleStoryStagePrefix = "editor.test_console.story_stage.";
         public const string ActionScenarioSeedRandom = "editor.seed.random";
         public const string ActionScenarioSeedFixed = "editor.seed.fixed";
         public const string ActionScenarioSeedReroll = "editor.seed.reroll";
