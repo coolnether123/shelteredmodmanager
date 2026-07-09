@@ -25,6 +25,7 @@ using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Effects;
 using ShelteredAPI.Scenarios.Domain.Journal;
 using ShelteredAPI.Scenarios.Domain.Objects;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Stages;
@@ -3376,11 +3377,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 TextureRows = BuildSurvivorTextureRows(member, indexedPrefix),
                 ColorRows = BuildSurvivorColorRows(member, indexedPrefix),
                 StatRows = BuildSurvivorStatRows(member, indexedPrefix),
+                SkillsLimitationText = "Skills can't be authored yet - the game doesn't expose a stable way to save them. Strengths and weaknesses below DO work.",
                 TraitRows = BuildSurvivorTraitRows(member, indexedPrefix, strengthTrait, weaknessTrait),
                 ConditionRows = BuildSurvivorConditionRows(member, indexedPrefix),
+                UtilityDisclosureLines = new[]
+                {
+                    ScenarioSurvivorAuthoringOperations.RandomizeDisclosure,
+                    ScenarioSurvivorAuthoringOperations.DuplicateDisclosure
+                },
                 UtilityActions = new[]
                 {
-                    Action(indexedPrefix + "randomize_person", "Randomize Person", "Randomize name, body, stats, traits, textures, and colors using vanilla-style character creation rules.", true, false, "RND"),
+                    Action(indexedPrefix + "randomize_person", "Randomize", ScenarioSurvivorAuthoringOperations.RandomizeDisclosure, true, false, "RND"),
+                    Action(indexedPrefix + "duplicate_person", "Duplicate Person", ScenarioSurvivorAuthoringOperations.DuplicateDisclosure, true, false, "DUP"),
                     Action(indexedPrefix + "randomize_look", "Randomize Look", "Randomize head, top, bottom, and color choices.", true, false, "RLK", FormatAppearance(member)),
                     Action(indexedPrefix + "copy_identity", "Copy Selected Identity", "Copy name, gender, stats, traits, and appearance from the selected live family member.", canCopySelected, false, "ID", canCopySelected ? "Selected live family member" : null, null, null, copyReason),
                     Action(indexedPrefix + "copy_look", "Copy Selected Look", "Copy appearance from the currently selected live family member.", canCopySelected, false, "LK", FormatAppearance(member), null, null, copyReason),
@@ -3527,7 +3535,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 if (value == null || string.Equals(value.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                bool conflicts = HasOppositeTrait(member, strength, value);
+                bool conflicts = ScenarioSurvivorTraitConflictRules.ConflictsWithSelection(member, strength, value);
                 string id = value.ToString();
                 string label = FormatTraitName(id);
                 string description = GetTraitDescription(strength, id);
@@ -4327,41 +4335,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 + " is outside 1-20; showing "
                 + displayValue.ToString(CultureInfo.InvariantCulture)
                 + ".";
-        }
-
-        private static bool HasOppositeTrait(FamilyMemberConfig member, bool strength, object value)
-        {
-            if (member == null || member.Traits == null || value == null)
-                return false;
-
-            if (strength)
-            {
-                Traits.Weakness pairedWeakness;
-                if (!ScenarioFamilyMemberFactory.TryGetPairedWeakness((Traits.Strength)value, out pairedWeakness))
-                    return false;
-
-                for (int i = 0; i < member.Traits.Count; i++)
-                {
-                    Traits.Weakness weakness;
-                    if (ScenarioFamilyMemberFactory.TryParseWeaknessTrait(member.Traits[i], out weakness) && weakness == pairedWeakness)
-                        return true;
-                }
-
-                return false;
-            }
-
-            Traits.Strength pairedStrength;
-            if (!ScenarioFamilyMemberFactory.TryGetPairedStrength((Traits.Weakness)value, out pairedStrength))
-                return false;
-
-            for (int i = 0; i < member.Traits.Count; i++)
-            {
-                Traits.Strength existingStrength;
-                if (ScenarioFamilyMemberFactory.TryParseStrengthTrait(member.Traits[i], out existingStrength) && existingStrength == pairedStrength)
-                    return true;
-            }
-
-            return false;
         }
 
         private static string FormatTraitName(string id)
