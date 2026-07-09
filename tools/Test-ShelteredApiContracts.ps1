@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$RepoRoot
 )
@@ -137,7 +137,6 @@ $seamGuard = Read-RepoFile "ShelteredAPI\Infrastructure\SeamGuard.cs"
 $scenarioPlayStartReadiness = Read-RepoFile "ShelteredAPI\Scenarios\Application\Runtime\ScenarioPlayStartReadiness.cs"
 $scenarioAuthoringPresentationBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthoringPresentationBuilder.cs"
 $scenarioAuthoringWindowRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs"
-$scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
 $scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
 $scenarioCastMemberPickerBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs"
 $scenarioStoryCharacterActorLinkSectionBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs"
@@ -519,17 +518,6 @@ if ($assetCategoryLabels.Count -lt 6 -or $duplicateAssetCategoryLabels.Count -gt
     $failures.Add("asset browser category labels: short category names must be present and unique; source/subtype belongs in secondary text")
 }
 
-# BUILDUX: browser personalization is stored in the existing per-user settings document.
-Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "SerializeList\(IList<string> values\).*Uri\.EscapeDataString.*DeserializeList\(string value\).*Uri\.UnescapeDataString" "Favorites and recents must use a reversible encoding for arbitrary asset action ids."
-Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "FavoritesKey = ""asset_browser\.favorites"".*RecentKey = ""asset_browser\.recent"".*RecentLimit = 20.*settings\.Save\(state\.Settings\)" "Favorites and capped recents must round-trip through the editor settings store."
-Assert-Contains "asset browser contextual defaults" $scenarioAssetBrowserUx "FindSectionForAction\(sections, selectedActionId\).*ScenarioAuthoringTargetKind\.SceneSprite.*ScenarioAuthoringTargetKind\.Wall.*ScenarioAuthoringTargetKind\.PlaceableObject.*ScenarioStageKind\.BunkerBackground.*return RecentFilter" "Browser defaults must prefer the selected asset/target, then stage context, and finally Recent instead of All."
-
-$assetCategoryLabels = @([System.Text.RegularExpressions.Regex]::Matches($scenarioAssetBrowserUx, 'return Label\("([^"]+)"') |
-    ForEach-Object { $_.Groups[1].Value })
-$duplicateAssetCategoryLabels = @($assetCategoryLabels | Group-Object | Where-Object { $_.Count -gt 1 })
-if ($assetCategoryLabels.Count -lt 6 -or $duplicateAssetCategoryLabels.Count -gt 0) {
-    $failures.Add("asset browser category labels: short category names must be present and unique; source/subtype belongs in secondary text")
-}
 Assert-Contains "scenario runtime retry" $runtimeContracts "int CatalogRevision" "definition catalog service must expose a revision for same-session retry gating."
 Assert-Contains "scenario runtime retry" $runtimeOrchestrator "MarkApplyBlocked" "failed definition resolution must be tracked as blocked instead of applied."
 Assert-Contains "scenario runtime retry" $runtimeOrchestrator "CatalogRevision" "blocked scenario bindings must be reconsidered after catalog refresh."
@@ -713,4 +701,3 @@ if ($failures.Count -gt 0) {
 }
 
 Write-Host "ShelteredAPI contract tests passed."
-
