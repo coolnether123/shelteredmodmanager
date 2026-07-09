@@ -6,6 +6,7 @@ using UnityEngine;
 using ShelteredAPI.Content;
 using ModAPI.Core;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.UI.Internal.Settings;
 namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
@@ -400,109 +401,27 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
 
         public static bool TryParseStrengthTrait(string value, out Traits.Strength strength)
         {
-            strength = Traits.Strength.Max;
-            string trimmed = TrimTraitPrefix(value, "Strength:");
-            if (trimmed == null)
-                return false;
-
-            try
-            {
-                strength = (Traits.Strength)Enum.Parse(typeof(Traits.Strength), trimmed, true);
-                return strength != Traits.Strength.Max;
-            }
-            catch
-            {
-                return false;
-            }
+            return ScenarioSurvivorTraitConflictRules.TryParseStrength(value, out strength);
         }
 
         public static bool TryParseWeaknessTrait(string value, out Traits.Weakness weakness)
         {
-            weakness = Traits.Weakness.Max;
-            string trimmed = TrimTraitPrefix(value, "Weakness:");
-            if (trimmed == null)
-                return false;
-
-            try
-            {
-                weakness = (Traits.Weakness)Enum.Parse(typeof(Traits.Weakness), trimmed, true);
-                return weakness != Traits.Weakness.Max;
-            }
-            catch
-            {
-                return false;
-            }
+            return ScenarioSurvivorTraitConflictRules.TryParseWeakness(value, out weakness);
         }
 
         public static bool TryGetPairedWeakness(Traits.Strength strength, out Traits.Weakness weakness)
         {
-            weakness = Traits.Weakness.Max;
-            if (strength == Traits.Strength.Max)
-                return false;
-
-            int index = (int)strength;
-            if (index < 0 || index >= (int)Traits.Weakness.Max)
-                return false;
-
-            weakness = (Traits.Weakness)index;
-            return true;
+            return ScenarioSurvivorTraitConflictRules.TryGetPairedWeakness(strength, out weakness);
         }
 
         public static bool TryGetPairedStrength(Traits.Weakness weakness, out Traits.Strength strength)
         {
-            strength = Traits.Strength.Max;
-            if (weakness == Traits.Weakness.Max)
-                return false;
-
-            int index = (int)weakness;
-            if (index < 0 || index >= (int)Traits.Strength.Max)
-                return false;
-
-            strength = (Traits.Strength)index;
-            return true;
+            return ScenarioSurvivorTraitConflictRules.TryGetPairedStrength(weakness, out strength);
         }
 
         public static bool HasConflictingTraitPair(FamilyMemberConfig config, out Traits.Strength strength, out Traits.Weakness weakness)
         {
-            strength = Traits.Strength.Max;
-            weakness = Traits.Weakness.Max;
-            if (config == null || config.Traits == null)
-                return false;
-
-            for (int i = 0; i < config.Traits.Count; i++)
-            {
-                Traits.Strength candidateStrength;
-                if (!TryParseStrengthTrait(config.Traits[i], out candidateStrength))
-                    continue;
-
-                Traits.Weakness pairedWeakness;
-                if (!TryGetPairedWeakness(candidateStrength, out pairedWeakness))
-                    continue;
-
-                for (int j = 0; j < config.Traits.Count; j++)
-                {
-                    Traits.Weakness candidateWeakness;
-                    if (TryParseWeaknessTrait(config.Traits[j], out candidateWeakness) && candidateWeakness == pairedWeakness)
-                    {
-                        strength = candidateStrength;
-                        weakness = candidateWeakness;
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        }
-
-        private static string TrimTraitPrefix(string value, string prefix)
-        {
-            if (string.IsNullOrEmpty(value))
-                return null;
-
-            string trimmed = value.Trim();
-            return trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? trimmed.Substring(prefix.Length).Trim()
-                : trimmed;
+            return ScenarioSurvivorTraitConflictRules.HasConflict(config, out strength, out weakness);
         }
     }
 }

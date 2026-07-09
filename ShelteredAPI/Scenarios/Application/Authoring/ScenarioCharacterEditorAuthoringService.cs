@@ -5,6 +5,7 @@ using ModAPI.Scenarios;
 using UnityEngine;
 using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Infrastructure.Assets;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
@@ -24,6 +25,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private readonly ScenarioCharacterAppearanceService _appearanceService;
         private readonly ScenarioActorResolver _actorResolver;
+        private readonly ScenarioSurvivorAuthoringOperations _survivorOperations;
 
         public ScenarioCharacterEditorAuthoringService(
             ScenarioCharacterAppearanceService appearanceService,
@@ -31,6 +33,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             _appearanceService = appearanceService;
             _actorResolver = actorResolver;
+            _survivorOperations = new ScenarioSurvivorAuthoringOperations(appearanceService);
         }
 
         public bool TryHandleAction(ScenarioEditorSession session, ScenarioAuthoringState state, string actionId, out string message)
@@ -222,6 +225,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (_actorResolver != null)
                 _actorResolver.EnsureFutureSurvivorRef(session.WorkingDefinition, survivor, index);
 
+            if (string.Equals(memberCommand, "duplicate_person", StringComparison.Ordinal))
+            {
+                RecordFamilyUndo(session, "Duplicate future survivor");
+                FutureSurvivorDefinition duplicate = ScenarioSurvivorAuthoringOperations.DuplicateFutureSurvivor(survivor, survivors);
+                int duplicateIndex = index + 1;
+                survivors.Insert(duplicateIndex, duplicate);
+                if (_actorResolver != null)
+                    _actorResolver.EnsureFutureSurvivorRef(session.WorkingDefinition, duplicate, duplicateIndex);
+                MarkDirty(session);
+                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindFutureSurvivor, duplicateIndex, true);
+                message = "Duplicated future survivor with a new name and actor identity.";
+                return true;
+            }
+
             return HandleSingleMemberCommand(session, state, survivor.Survivor, memberCommand, "future survivor", out message);
         }
 
@@ -289,6 +306,20 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 if (_actorResolver != null)
                     _actorResolver.EnsureStartingMemberRef(session.WorkingDefinition, config, index);
                 members[index] = config;
+            }
+
+            if (string.Equals(memberCommand, "duplicate_person", StringComparison.Ordinal))
+            {
+                RecordFamilyUndo(session, "Duplicate starting survivor");
+                FamilyMemberConfig duplicate = ScenarioSurvivorAuthoringOperations.DuplicateMember(config);
+                int duplicateIndex = index + 1;
+                members.Insert(duplicateIndex, duplicate);
+                if (_actorResolver != null)
+                    _actorResolver.EnsureStartingMemberRef(session.WorkingDefinition, duplicate, duplicateIndex);
+                MarkDirty(session);
+                FocusSurvivorEditor(state, ScenarioAuthoringLocalActionIds.FocusedKindStartingSurvivor, duplicateIndex, true);
+                message = "Duplicated starting survivor with a new name and actor identity.";
+                return true;
             }
 
             return HandleSingleMemberCommand(session, state, config, memberCommand, label, out message);
@@ -452,15 +483,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             if (string.Equals(command, "randomize_person", StringComparison.Ordinal))
             {
-                RandomizePerson(config);
+                RecordFamilyUndo(session, "Randomize survivor");
+                _survivorOperations.RandomizeDeclaredFields(config);
                 MarkDirty(session);
-                message = "Randomized " + label + " like vanilla character creation.";
+                message = "Randomized " + label + ". Story links, arrival settings, conditions, skills, and actor identity were kept.";
                 return true;
             }
 
             if (string.Equals(command, "randomize_look", StringComparison.Ordinal))
             {
-                RandomizeLook(config);
+                RecordFamilyUndo(session, "Randomize survivor appearance");
+                _survivorOperations.RandomizeAppearance(config);
                 MarkDirty(session);
                 message = "Randomized " + label + " appearance.";
                 return true;
@@ -662,73 +695,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioCharacterAppearanceService.UpsertColor(config, part, next);
         }
 
-        private void RandomizePerson(FamilyMemberConfig config)
-        {
-            if (config == null)
-                return;
-
-            config.Gender = UnityEngine.Random.Range(0, 2) == 0 ? ScenarioGender.Male : ScenarioGender.Female;
-            EnsureAppearance(config);
-            config.Appearance.IsAdult = UnityEngine.Random.Range(0, 2) == 0;
-            config.ExactAge = config.Appearance.IsAdult.Value ? UnityEngine.Random.Range(18, 61) : UnityEngine.Random.Range(6, 18);
-            config.Name = NameGenerator.GetFirstName(config.Gender == ScenarioGender.Female ? NameGenerator.Gender.Female : NameGenerator.Gender.Male);
-
-            ScenarioFamilyMemberFactory.EnsureCoreStats(config);
-            for (int i = 0; config.Stats != null && i < config.Stats.Count; i++)
-            {
-                if (config.Stats[i] != null)
-                    config.Stats[i].Value = UnityEngine.Random.Range(10, 21);
-            }
-
-            config.Traits.Clear();
-            AddRandomTrait(config, true);
-            AddRandomTrait(config, false);
-            RandomizeConditions(config);
-            RandomizeLook(config);
-        }
-
-        private static void RandomizeConditions(FamilyMemberConfig config)
-        {
-            if (config == null)
-                return;
-
-            if (config.Conditions == null)
-                config.Conditions = new FamilyMemberConditionConfig();
-
-            List<int> offsets = new List<int> { -23, -13, 2, 11, 21 };
-            offsets.Shuffle<int>();
-            config.Conditions.Fatigue = ScenarioFamilyMemberFactory.ClampCondition(20 + UnityEngine.Random.Range(0, 11) + offsets[0]);
-            config.Conditions.Toilet = ScenarioFamilyMemberFactory.ClampCondition(25 + UnityEngine.Random.Range(0, 11) + offsets[1]);
-            config.Conditions.Dirtiness = ScenarioFamilyMemberFactory.ClampCondition(30 + UnityEngine.Random.Range(0, 11) + offsets[2]);
-            config.Conditions.Hunger = ScenarioFamilyMemberFactory.ClampCondition(35 + UnityEngine.Random.Range(0, 11) + offsets[3]);
-            config.Conditions.Thirst = ScenarioFamilyMemberFactory.ClampCondition(40 + UnityEngine.Random.Range(0, 11) + offsets[4]);
-            config.Conditions.Stress = 0;
-        }
-
-        private void RandomizeLook(FamilyMemberConfig config)
-        {
-            if (config == null)
-                return;
-
-            EnsureAppearance(config);
-            UpdateVanillaMesh(config, false);
-
-            if (_appearanceService != null)
-            {
-                config.Appearance.HeadTextureId = _appearanceService.RandomTextureId(config.Appearance.MeshId, ScenarioCharacterTexturePart.Head);
-                config.Appearance.TorsoTextureId = _appearanceService.RandomTextureId(config.Appearance.MeshId, ScenarioCharacterTexturePart.Torso);
-                config.Appearance.LegTextureId = _appearanceService.RandomTextureId(config.Appearance.MeshId, ScenarioCharacterTexturePart.Legs);
-                config.Appearance.HairColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Hair);
-                config.Appearance.SkinColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Skin);
-                config.Appearance.ShirtColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Shirt);
-                config.Appearance.PantsColorHex = _appearanceService.RandomColorHex(ScenarioCharacterColorPart.Pants);
-            }
-
-            config.Appearance.HeadTexturePath = null;
-            config.Appearance.TorsoTexturePath = null;
-            config.Appearance.LegTexturePath = null;
-        }
-
         private void SanitizeAppearanceTextures(FamilyMemberConfig config)
         {
             if (_appearanceService != null && config != null)
@@ -840,25 +806,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return false;
         }
 
-        private static void AddRandomTrait(FamilyMemberConfig config, bool strength)
-        {
-            Array values = Enum.GetValues(strength ? typeof(Traits.Strength) : typeof(Traits.Weakness));
-            if (values == null || values.Length == 0)
-                return;
-
-            for (int attempts = 0; attempts < values.Length * 2; attempts++)
-            {
-                object value = values.GetValue(UnityEngine.Random.Range(0, values.Length));
-                if (value == null || string.Equals(value.ToString(), "Max", StringComparison.OrdinalIgnoreCase))
-                    continue;
-                if (HasOppositeTrait(config, strength, value))
-                    continue;
-
-                config.Traits.Add((strength ? "Strength:" : "Weakness:") + value.ToString());
-                return;
-            }
-        }
-
         private static FamilySetupDefinition EnsureFamily(ScenarioDefinition definition)
         {
             if (definition.FamilySetup == null)
@@ -872,6 +819,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
 
             session.MarkDraftChanged(ScenarioDirtySection.Family, ScenarioEditCategory.Family);
+        }
+
+        private static void RecordFamilyUndo(ScenarioEditorSession session, string description)
+        {
+            ScenarioAuthoringHistoryService history = ScenarioAuthoringHistoryService.Instance;
+            if (history != null && session != null)
+                history.RecordAuthoringChange(session.WorkingDefinition, description, ScenarioDirtySection.Family, ScenarioEditCategory.Family);
         }
 
         private static string NextName(string current)
@@ -995,39 +949,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private static bool HasOppositeTrait(FamilyMemberConfig config, bool strength, object value)
         {
-            if (config == null || config.Traits == null || value == null)
-                return false;
-
-            if (strength)
-            {
-                Traits.Strength strengthValue = (Traits.Strength)value;
-                Traits.Weakness pairedWeakness;
-                if (!ScenarioFamilyMemberFactory.TryGetPairedWeakness(strengthValue, out pairedWeakness))
-                    return false;
-
-                for (int i = 0; i < config.Traits.Count; i++)
-                {
-                    Traits.Weakness weakness;
-                    if (ScenarioFamilyMemberFactory.TryParseWeaknessTrait(config.Traits[i], out weakness) && weakness == pairedWeakness)
-                        return true;
-                }
-            }
-            else
-            {
-                Traits.Weakness weaknessValue = (Traits.Weakness)value;
-                Traits.Strength pairedStrength;
-                if (!ScenarioFamilyMemberFactory.TryGetPairedStrength(weaknessValue, out pairedStrength))
-                    return false;
-
-                for (int i = 0; i < config.Traits.Count; i++)
-                {
-                    Traits.Strength existingStrength;
-                    if (ScenarioFamilyMemberFactory.TryParseStrengthTrait(config.Traits[i], out existingStrength) && existingStrength == pairedStrength)
-                        return true;
-                }
-            }
-
-            return false;
+            return ScenarioSurvivorTraitConflictRules.ConflictsWithSelection(config, strength, value);
         }
 
         private bool HandleModFieldCommand(

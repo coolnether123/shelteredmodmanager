@@ -571,6 +571,8 @@
     <Compile Include="Scenarios\Shared\ScenarioPropertyBag.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringActionCodec.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioAuthoringMutationHelpers.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioSurvivorAuthoringOperations.cs" />
+    <Compile Include="Scenarios\Domain\People\ScenarioSurvivorTraitConflictRules.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioEventAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioCharacterEditorAuthoringService.cs" />
     <Compile Include="Scenarios\Infrastructure\Runtime\ScenarioFamilyMemberFactory.cs" />

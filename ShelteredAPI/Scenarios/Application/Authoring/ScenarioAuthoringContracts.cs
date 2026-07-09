@@ -1337,8 +1337,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioSurvivorTextureRowViewModel[] TextureRows { get; set; }
         public ScenarioSurvivorColorRowViewModel[] ColorRows { get; set; }
         public ScenarioSurvivorStatRowViewModel[] StatRows { get; set; }
+        public string SkillsLimitationText { get; set; }
         public ScenarioSurvivorTraitRowViewModel[] TraitRows { get; set; }
         public ScenarioSurvivorConditionRowViewModel[] ConditionRows { get; set; }
+        public string[] UtilityDisclosureLines { get; set; }
         public ScenarioAuthoringInspectorAction[] UtilityActions { get; set; }
         public ScenarioAuthoringInspectorAction[] CloseActions { get; set; }
     }

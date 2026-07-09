@@ -14,6 +14,7 @@ using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Domain.Assets;
 using ShelteredAPI.Scenarios.Domain.Compatibility;
 using ShelteredAPI.Scenarios.Domain.Conditions;
+using ShelteredAPI.Scenarios.Domain.People;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Validation;
 using ShelteredAPI.Scenarios.Infrastructure.Runtime;
@@ -318,7 +319,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
 
             Traits.Strength strength;
             Traits.Weakness weakness;
-            if (ScenarioFamilyMemberFactory.HasConflictingTraitPair(member, out strength, out weakness))
+            if (ScenarioSurvivorTraitConflictRules.HasConflict(member, out strength, out weakness))
             {
                 result.AddWarning("Family survivor '" + survivorName + "' has conflicting trait pair: Strength:"
                     + strength + " and Weakness:" + weakness
