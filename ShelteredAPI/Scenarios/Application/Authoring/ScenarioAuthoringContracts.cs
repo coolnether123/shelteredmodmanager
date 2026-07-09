@@ -92,6 +92,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSave = "editor.save";
         public const string ActionDraftCopyPath = "editor.draft.copy_path";
         public const string ActionDraftTitlePrefix = "editor.draft.title.";
+        public const string ActionDraftDescriptionPrefix = "editor.draft.description.";
+        public const string ActionDraftAuthorPrefix = "editor.draft.author.";
+        public const string ActionDraftVersionPrefix = "editor.draft.version.";
+        public const string ActionDraftCreditsPrefix = "editor.draft.credits.";
+        public const string ActionDraftTagsPrefix = "editor.draft.tags.";
+        public const string ActionDraftIdPrefix = "editor.draft.id.";
+        public const string ActionDraftVersionBumpPatch = "editor.draft.version.bump_patch";
+        public const string ActionDraftVersionBumpMinor = "editor.draft.version.bump_minor";
         public const string ActionPlaytest = "editor.playtest.toggle";
         public const string ActionPlaytestRestart = "editor.playtest.restart";
         public const string ActionScenarioSeedRandom = "editor.seed.random";

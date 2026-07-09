@@ -308,7 +308,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.Test:
                     return "Test";
                 case ScenarioStageKind.Publish:
-                    return "Publish";
+                    return "Package / Export";
                 default:
                     return child ? "Layer" : "Workshop";
             }
@@ -341,7 +341,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.Test:
                     return "TEST";
                 case ScenarioStageKind.Publish:
-                    return "PUB";
+                    return "EXPORT";
                 default:
                     return "WORK";
             }
@@ -374,7 +374,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 case ScenarioStageKind.Test:
                     return "Apply the draft into the live shelter and test it.";
                 case ScenarioStageKind.Publish:
-                    return "Validate the scenario and prepare it for distribution.";
+                    return "Validate the scenario and create a local package for sharing.";
                 default:
                     return child ? "Switch world layer." : "Switch scenario workspace.";
             }

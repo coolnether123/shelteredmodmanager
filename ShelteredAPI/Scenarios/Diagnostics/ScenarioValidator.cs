@@ -60,6 +60,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             _pipeline = new ScenarioValidationPipeline(new IScenarioValidationRule[]
             {
                 new CoreScenarioRule(),
+                new ScenarioMetadataValidationRule(),
                 new ScenarioCharacterValidationRule(),
                 new ScenarioStoryFlowValidationRule(),
                 new ScenarioConversationValidationRule(),

@@ -39,6 +39,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = BuildIdentityItems(state, editorSession, definition)
             });
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "home_metadata",
+                Title = "Scenario Details",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false)
+            });
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "home_save_status",
+                Title = "Save & Export Status",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                Items = ScenarioMetadataAuthoringContent.BuildStatusItems(state != null ? state.ActiveScenarioFilePath : null)
+            });
             AddSetupChecklistSection(sections, state, definition);
             sections.Add(BuildBaseModeSection(definition, authoringSession));
             AddQuestionSections(sections, facts, definition);
@@ -55,6 +71,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             });
             if (showAdvancedDetails)
             {
+                sections.Add(new ScenarioAuthoringInspectorSection
+                {
+                    Id = "home_metadata_advanced",
+                    Title = "Advanced Metadata",
+                    Expanded = false,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = new[] { ScenarioMetadataAuthoringContent.BuildIdItem(definition) }
+                });
                 sections.Add(new ScenarioAuthoringInspectorSection
                 {
                     Id = "home_advanced",
@@ -314,7 +338,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string playStartReason;
             bool canStartPlay = new ScenarioPlayStartReadiness().CanStartPlay(definition, out playStartReason);
             sections.Add(BuildQuestionSection("home_test", "Ready to try it?", canStartPlay ? "Playtest your scenario live." : playStartReason, facts.PlaytestBadge, "stage.select." + ScenarioStageKind.Test, "Open Test", "TEST", TutorialContent.TopicTest, null, canStartPlay ? null : playStartReason));
-            sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Publish", "FLAG", TutorialContent.TopicPublish, null));
+            sections.Add(BuildQuestionSection("home_publish", "Ready to share it?", "Validate and package a local export.", facts.PublishBadge, "stage.select." + ScenarioStageKind.Publish, "Open Package / Export", "FLAG", TutorialContent.TopicPublish, null));
         }
 
         private static ScenarioAuthoringInspectorSection BuildQuestionSection(string id, string question, string answer, string badge, string actionId, string actionLabel, string iconText, string topicId, string tourId, string disabledReason = null)

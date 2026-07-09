@@ -55,6 +55,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
             List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(validation);
             List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(validation);
+            List<ScenarioAuthoringInspectorItem> metadataItems = new List<ScenarioAuthoringInspectorItem>(ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
+            metadataItems.AddRange(ScenarioMetadataAuthoringContent.BuildStatusItems(state != null ? state.ActiveScenarioFilePath : null));
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
@@ -67,8 +69,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 },
                 new ScenarioAuthoringInspectorSection
                 {
+                    Id = "publish_metadata",
+                    Title = "Scenario Metadata",
+                    Expanded = true,
+                    Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
+                    Items = metadataItems.ToArray()
+                },
+                new ScenarioAuthoringInspectorSection
+                {
                     Id = "publish_stage",
-                    Title = "Readiness",
+                    Title = "Package Readiness",
                     Expanded = true,
                     Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                     Items = new[]
@@ -76,7 +86,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         Item.Property("Scenario", Item.Safe(definition != null ? definition.DisplayName : null)),
                         Item.Property("Dirty Sections", Item.CountDirtyFlags(editorSession).ToString()),
                         Item.Property("Version", Item.Safe(definition != null ? definition.Version : null)),
-                        Item.Text("This window validates and packages local scenario XML. It does not upload to Steam Workshop.")
+                        Item.Text("This window creates a local package for sharing. It does not upload anywhere.")
                     }
                 },
                 new ScenarioAuthoringInspectorSection
@@ -230,6 +240,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static ScenarioAuthoringInspectorAction BuildIssueNavigationAction(ScenarioValidationIssue issue)
         {
+            string message = issue != null ? issue.Message : null;
+            if (!string.IsNullOrEmpty(message) && message.IndexOf("Scenario metadata", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return Item.Action(
+                    ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish,
+                    "Go To Metadata",
+                    "Open the package metadata form for this sharing detail.",
+                    true,
+                    true,
+                    "GO",
+                    issue.Severity.ToString());
+            }
             ScenarioStageKind stage = ResolveIssueStage(issue != null ? issue.Message : null);
             return Item.Action(
                 ScenarioAuthoringActionIds.ActionStageSelectPrefix + stage,

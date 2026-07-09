@@ -36,7 +36,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 || Contains(disabledReason, "error"))
                 return Item.Action(
                     ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish,
-                    "Open Publish",
+                    "Open Package / Export",
                     "Review validation blockers and fix them in their source pages.",
                     true,
                     false,
@@ -44,8 +44,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             return Item.Action(
                 ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Publish,
-                "Open Publish",
-                "Open the publish checks for the concrete fix.",
+                "Open Package / Export",
+                "Open the package checks for the concrete fix.",
                 true,
                 false,
                 "PUB");

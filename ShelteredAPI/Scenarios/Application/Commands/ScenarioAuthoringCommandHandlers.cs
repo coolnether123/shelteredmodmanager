@@ -395,7 +395,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionShellTabTest:
                     return SetStage(state, ScenarioStageKind.Test, out message, "Test workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellTabPublish:
-                    return SetStage(state, ScenarioStageKind.Publish, out message, "Publish workspace active.");
+                    return SetStage(state, ScenarioStageKind.Publish, out message, "Package / Export workspace active.");
                 case ScenarioAuthoringActionIds.ActionShellToggle:
                     state.ShellVisible = !state.ShellVisible;
                     message = state.ShellVisible ? "Authoring shell opened." : "Authoring shell hidden.";
@@ -1564,6 +1564,10 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 case ScenarioAuthoringActionIds.ActionFocusedEditorCancel:
                     return CloseFocusedEditor(state, true, out message);
                 default:
+                    bool metadataHandled;
+                    if (ScenarioMetadataAuthoringActions.TryHandle(actionId, _editorService != null ? _editorService.CurrentSession : null, out metadataHandled, out message))
+                        return true;
+
                     if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionDraftTitlePrefix, StringComparison.Ordinal))
                         return CommitDraftTitle(actionId, out message);
 

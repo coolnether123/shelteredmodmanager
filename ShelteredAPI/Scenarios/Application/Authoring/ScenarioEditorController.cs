@@ -265,8 +265,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             definition.Id = "com.author.scenario.new";
             definition.DisplayName = "New Custom Scenario";
             definition.Description = string.Empty;
-            definition.Author = "unknown";
-            definition.Version = "0.1.0";
+            definition.Author = ScenarioMetadataDefaults.DefaultAuthor;
+            definition.Version = ScenarioMetadataDefaults.DefaultVersion;
             definition.BaseGameMode = baseMode;
             definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
             return definition;

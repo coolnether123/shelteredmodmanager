@@ -365,10 +365,12 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
 
             XmlElement meta = Child(root, "Meta");
             definition.Id = ReadText(meta, "Id");
-            definition.DisplayName = ReadText(meta, "DisplayName");
+            definition.DisplayName = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "DisplayName"), ScenarioMetadataDefaults.DefaultTitle);
             definition.Description = ReadText(meta, "Description");
-            definition.Author = ReadText(meta, "Author");
-            definition.Version = ReadText(meta, "Version");
+            definition.Author = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "Author"), ScenarioMetadataDefaults.DefaultAuthor);
+            definition.Version = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "Version"), ScenarioMetadataDefaults.DefaultVersion);
+            definition.Credits = ReadText(meta, "Credits");
+            ReadStringList(Child(meta, "Tags"), "Tag", definition.Tags);
 
             XmlElement dependencies = Child(root, "Dependencies");
             if (dependencies != null)
@@ -1201,6 +1203,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteElement(writer, "Description", definition.Description);
             WriteElement(writer, "Author", definition.Author);
             WriteElement(writer, "Version", definition.Version);
+            WriteElement(writer, "Credits", definition.Credits);
+            WriteStringList(writer, "Tags", "Tag", definition.Tags);
             writer.WriteEndElement();
 
             writer.WriteStartElement("Dependencies");

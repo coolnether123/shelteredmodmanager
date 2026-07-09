@@ -78,6 +78,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
     {
         public ScenarioDefinition()
         {
+            Tags = new List<string>();
             Dependencies = new List<string>();
             ModDependencies = new List<ScenarioModDependencyDefinition>();
             BaseGameMode = ScenarioBaseGameMode.Survival;
@@ -107,6 +108,8 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public string Description { get; set; }
         public string Author { get; set; }
         public string Version { get; set; }
+        internal string Credits { get; set; }
+        internal List<string> Tags { get; private set; }
         public List<string> Dependencies { get; private set; }
         public List<ScenarioModDependencyDefinition> ModDependencies { get; private set; }
         public ScenarioBaseGameMode BaseGameMode { get; set; }

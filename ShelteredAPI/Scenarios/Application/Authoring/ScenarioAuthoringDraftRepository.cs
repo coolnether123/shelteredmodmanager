@@ -76,10 +76,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
                 ScenarioDefinition definition = new ScenarioDefinition();
                 definition.Id = scenarioId;
-                definition.DisplayName = "Untitled Scenario";
-                definition.Description = "Local scenario authoring draft.";
-                definition.Author = "SMM Authoring";
-                definition.Version = "0.1.0";
+                definition.DisplayName = ScenarioMetadataDefaults.DefaultTitle;
+                definition.Description = string.Empty;
+                definition.Author = ScenarioMetadataDefaults.DefaultAuthor;
+                definition.Version = ScenarioMetadataDefaults.DefaultVersion;
                 definition.BaseGameMode = baseMode;
                 definition.SelectionRules = ScenarioSelectionRulesDefinition.ForBaseMode(baseMode);
 
