@@ -56,6 +56,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return ClickWorldPosition(state, actionId, out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal))
                 return SelectAuthoredLocation(state, actionId, out message);
+            if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationDuplicatePrefix, StringComparison.Ordinal))
+                return BeginDuplicateLocation(state, actionId, out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationEditPrefix, StringComparison.Ordinal))
                 return EditLocationField(state, actionId, out message);
             if (actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix, StringComparison.Ordinal))
@@ -205,6 +207,9 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return PlaceAtGrid(state, gridX, gridY, centreX, centreY, out message);
             if (string.Equals(mode, "move", StringComparison.OrdinalIgnoreCase))
                 return MoveSelectedToGrid(state, gridX, gridY, centreX, centreY, out message);
+            string duplicateSourceId;
+            if (ScenarioMapLocationDuplicateService.TryReadSourceId(mode, out duplicateSourceId))
+                return DuplicateSelectedToGrid(state, duplicateSourceId, gridX, gridY, centreX, centreY, out message);
 
             MapLocationDefinition authored = _draftService != null
                 ? _draftService.FindLocationAtGrid(ScenarioEditorController.Instance.CurrentSession, gridX, gridY)
@@ -312,6 +317,76 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
             SelectAuthoredLocation(state, moved, out message);
             state.MapAuthoringMode = "select";
             message = "Moved authored map location " + moved.Id + ".";
+            state.StatusMessage = message;
+            if (_runtimeService != null)
+                _runtimeService.RefreshMarkers(state, session);
+            return true;
+        }
+
+        private bool BeginDuplicateLocation(ScenarioAuthoringState state, string actionId, out string message)
+        {
+            string id;
+            if (!ScenarioAuthoringActionCodec.TryDecodeTokenActionId(actionId, ScenarioAuthoringActionIds.ActionMapLocationDuplicatePrefix, out id))
+            {
+                message = "The location to duplicate could not be decoded.";
+                return false;
+            }
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            MapLocationDefinition source = _draftService != null ? _draftService.GetLocation(session, id) : null;
+            if (source == null || state.MapSelection == null || !state.MapSelection.Authored)
+            {
+                message = "Select an authored location before duplicating it.";
+                return false;
+            }
+            state.MapAuthoringMode = ScenarioMapLocationDuplicateService.BuildMode(source.Id);
+            message = "Choose a new target cell for the copy of " + source.Id + ". The source cell is not allowed.";
+            state.StatusMessage = message;
+            return true;
+        }
+
+        private bool DuplicateSelectedToGrid(
+            ScenarioAuthoringState state,
+            string sourceId,
+            int gridX,
+            int gridY,
+            float worldX,
+            float worldY,
+            out string message)
+        {
+            ScenarioEditorSession session = ScenarioEditorController.Instance.CurrentSession;
+            if (_draftService == null || session == null || session.WorkingDefinition == null)
+            {
+                message = "The map draft is not available.";
+                return false;
+            }
+            string placementReason = null;
+            if (_runtimeService == null || !_runtimeService.CanAuthorLocationAtGrid(gridX, gridY, out placementReason))
+            {
+                message = !string.IsNullOrEmpty(placementReason) ? placementReason : "Map locations can only be copied onto generated vanilla regions.";
+                return false;
+            }
+
+            RecordMapUndo(session, "Duplicate map location " + sourceId);
+            MapLocationDefinition copy;
+            string error;
+            if (!ScenarioMapLocationDuplicateService.TryDuplicateAtGrid(
+                session.WorkingDefinition.Map,
+                sourceId,
+                gridX,
+                gridY,
+                worldX,
+                worldY,
+                out copy,
+                out error))
+            {
+                message = error;
+                return false;
+            }
+
+            ScenarioAuthoringMutation.MarkDirty(session, ScenarioDirtySection.Map, ScenarioEditCategory.Map);
+            SelectAuthoredLocation(state, copy, out message);
+            state.MapAuthoringMode = "select";
+            message = "Placed copy " + copy.Id + " at a new cell.";
             state.StatusMessage = message;
             if (_runtimeService != null)
                 _runtimeService.RefreshMarkers(state, session);
@@ -594,7 +669,8 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapAuthoringSelectLocationPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationEditPrefix, StringComparison.Ordinal)
                 || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationTogglePrefix, StringComparison.Ordinal)
-                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, StringComparison.Ordinal);
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationCycleIconPrefix, StringComparison.Ordinal)
+                || actionId.StartsWith(ScenarioAuthoringActionIds.ActionMapLocationDuplicatePrefix, StringComparison.Ordinal);
         }
 
         private static bool ValidateLocationField(string field, string value, out string error)

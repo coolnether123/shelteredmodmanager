@@ -33,7 +33,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private Rect BuildMapAuthoringLeftDockRect(float scaledWidth, float scaledHeight)
         {
-            float width = scaledWidth < 1100f ? 92f : 108f;
+            float width = scaledWidth < 1100f ? 160f : 184f;
             float height = Mathf.Max(280f, scaledHeight - (Margin * 2f));
             return new Rect(Margin, Margin, width, height);
         }
@@ -59,6 +59,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             y = DrawModeTab(inner.x, y + 6f, inner.width, "Place", "PL", ScenarioAuthoringActionIds.ActionMapAuthoringModePlace, state != null && state.MapAuthoringMode == "place", true);
             bool canMove = selection != null && selection.Authored;
             y = DrawModeTab(inner.x, y + 6f, inner.width, "Move", "MV", ScenarioAuthoringActionIds.ActionMapAuthoringModeMove, state != null && state.MapAuthoringMode == "move", canMove);
+            DrawMapAuthoringLegend(inner, y + 14f);
 
             Rect closeRect = new Rect(inner.x, inner.yMax - 30f, inner.width, 28f);
             DrawButton(closeRect, new ScenarioAuthoringInspectorAction
@@ -145,6 +146,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             DrawOverlayToggle(selection, id, "visibleAtStart", "Visible", selection.VisibleOnMap);
             DrawOverlayToggle(selection, id, "discoveredAtStart", "Discovered", selection.Discovered);
             DrawOverlayToggle(selection, id, "hiddenUntilDiscovered", "Hidden Until Discovery", selection.HiddenUntilDiscovered);
+            DrawMapUxSelectionDetails(selection, state);
             GUILayout.Space(8f);
             GUILayout.Label("Mode: " + FormatOverlayMode(state), _mutedTextStyle);
         }
@@ -219,7 +221,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private static string FormatOverlayMode(ScenarioAuthoringState state)
         {
-            return state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select";
+            string mode = state != null && !string.IsNullOrEmpty(state.MapAuthoringMode) ? state.MapAuthoringMode : "select";
+            string sourceId;
+            return ScenarioMapLocationDuplicateService.TryReadSourceId(mode, out sourceId) ? "duplicate — choose a new cell" : mode;
         }
 
         private static string FormatOverlayFlags(ScenarioMapRegionSelection selection)

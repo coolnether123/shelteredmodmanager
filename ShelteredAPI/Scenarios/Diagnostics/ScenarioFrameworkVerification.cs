@@ -43,6 +43,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyInventoryProjectionReconciliation(result);
                 VerifyMapLootProjectionContracts(result);
+                ScenarioMapUxVerification.Verify(result);
                 VerifySchedulePolicyWindows(result);
                 VerifySeamGuardContracts(result);
                 ScenarioTimelineUxVerification.Verify(result);

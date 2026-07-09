@@ -215,6 +215,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             }
 
             Dictionary<string, bool> live = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            ScenarioMapAuthoringMarkerFilter.ApplyVanillaRegionFilter();
             for (int i = 0; i < map.Locations.Count; i++)
             {
                 MapLocationDefinition location = map.Locations[i];
@@ -232,7 +233,10 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (sprite != null)
                 {
                     bool selected = string.Equals(state.MapSelectedLocationId, location.Id, StringComparison.OrdinalIgnoreCase);
-                    sprite.color = selected ? new Color(1f, 0.86f, 0.15f, 1f) : new Color(0.25f, 0.95f, 1f, 1f);
+                    string placementReason;
+                    bool placementBlocked = !CanAuthorLocationAtGrid(location.GridX, location.GridY, out placementReason);
+                    float alpha = ScenarioMapAuthoringFilterState.ResolveAuthoredMarkerAlpha(map, location, placementBlocked);
+                    sprite.color = selected ? new Color(1f, 0.86f, 0.15f, alpha) : new Color(0.25f, 0.95f, 1f, alpha);
                     sprite.depth = Math.Max(sprite.depth, 25);
                 }
             }
@@ -242,6 +246,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public void CleanupMarkers()
         {
+            ScenarioMapAuthoringMarkerFilter.RestoreVanillaRegionColors();
             foreach (GameObject marker in _markers.Values)
             {
                 if (marker != null)

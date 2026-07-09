@@ -424,6 +424,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionMapLocationEditPrefix = "scenario.map.location.edit.";
         public const string ActionMapLocationTogglePrefix = "scenario.map.location.toggle.";
         public const string ActionMapLocationCycleIconPrefix = "scenario.map.location.icon_next.";
+        public const string ActionMapLocationDuplicatePrefix = "scenario.map.location.duplicate.";
         public const string ActionInventoryStorageOpen = "scenario.inventory.storage.open_real";
         public const string ActionInventoryStorageClose = "scenario.inventory.storage.close_real";
         public const string ActionVanillaInteractionReturnEditor = "shell.vanilla_interaction.return_editor";

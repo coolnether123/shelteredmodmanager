@@ -226,12 +226,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             MapLocationDefinition location,
             MapLootTableDefinition table)
         {
+            return PlanLootRolls(definition, location, table, ModRandom.CurrentSeed);
+        }
+
+        internal static List<MapLootProjectionEntry> PlanLootRolls(
+            ScenarioDefinition definition,
+            MapLocationDefinition location,
+            MapLootTableDefinition table,
+            int masterSeed)
+        {
             List<MapLootProjectionEntry> result = new List<MapLootProjectionEntry>();
             List<MapLootEntryDefinition> candidates = new List<MapLootEntryDefinition>();
             if (table == null || table.Entries == null)
                 return result;
 
-            int seed = BuildLootSeed(definition, location, table);
+            int seed = BuildLootSeed(definition, location, table, masterSeed);
             ModRandomStream random = new ModRandomStream(seed);
             bool weighted = HasWeightedEntries(table);
             int totalWeightedPicks = 0;
@@ -304,12 +313,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             int openGroundChance = table != null && table.OpenGroundChance >= 0 ? table.OpenGroundChance : (location != null ? location.Danger : -1);
             if (openGroundChance >= 0)
                 region.chanceOfOpenGroundEncounter = ClampPercent(openGroundChance);
-            if (table != null && table.SearchNpcRevealChance >= 0)
-                region.chanceThatSearchRevealsNpcs = ClampPercent(table.SearchNpcRevealChance);
-            if (table != null && table.AnimalEncounterChance >= 0)
-                region.chanceThatEncounterIsAnimal = ClampPercent(table.AnimalEncounterChance);
-            if (table != null && table.FactionEncounterChance >= 0 && MapRegionFactionEncounterChanceField != null)
-                MapRegionFactionEncounterChanceField.SetValue(region, ClampPercent(table.FactionEncounterChance));
+            ScenarioMapProjectionFieldCatalog.ApplyEncounterFields(region, table, MapRegionFactionEncounterChanceField);
 
             if (table != null && table.Entries != null && table.Entries.Count > 0)
                 AddMessage(result, "Map location '" + Safe(location.Id) + "' projected encounter chance fields from table '"
@@ -440,9 +444,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             return id != null && InventoryHelper.ResolveItemType(id, out type);
         }
 
-        private static int BuildLootSeed(ScenarioDefinition definition, MapLocationDefinition location, MapLootTableDefinition table)
+        private static int BuildLootSeed(ScenarioDefinition definition, MapLocationDefinition location, MapLootTableDefinition table, int masterSeed)
         {
-            int masterSeed = ModRandom.CurrentSeed;
             string key = "map-loot-v1|"
                 + masterSeed.ToString(CultureInfo.InvariantCulture) + "|"
                 + Safe(definition != null ? definition.Id : null) + "|"
