@@ -104,8 +104,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 bool changed = _sceneSpritePlacement != null && _sceneSpritePlacement.TryHandleAction(state, sourceActionId, out handled, out message);
                 if (changed && _buildPlacement != null)
                     _buildPlacement.Reset();
-                if (changed)
-                    ScenarioAssetBrowserUx.RecordRecent(state, sourceActionId);
                 return changed;
             }
 
@@ -116,8 +114,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 bool changed = _buildPlacement != null && _buildPlacement.TryHandleAction(state, sourceActionId, out handled, out message);
                 if (changed && _sceneSpritePlacement != null)
                     _sceneSpritePlacement.Reset();
-                if (changed)
-                    ScenarioAssetBrowserUx.RecordRecent(state, sourceActionId);
                 return changed;
             }
 
@@ -162,8 +158,6 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 _layoutService.BeginPixelEditorFocus(state);
                 changed |= _layoutService.SetWindowOpen(state, ScenarioAuthoringWindowIds.PixelEditor, true);
             }
-            if (changed)
-                ScenarioAssetBrowserUx.RecordRecent(state, sourceActionId);
             return changed;
         }
 
@@ -1262,11 +1256,28 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                 return true;
             }
 
+            if (TryOpenIndexedFocusedEditor(
+                state,
+                actionId,
+                ScenarioAuthoringLocalActionIds.ActionSuppliesPresetPreviewPrefix,
+                ScenarioAuthoringLocalActionIds.FocusedKindSuppliesPreset,
+                out pickerIndex))
+            {
+                message = "Review the starter loadout before applying.";
+                return true;
+            }
+
             bool changed = _service.TryHandleAction(_editorService.CurrentSession, actionId, out message);
             if (changed)
             {
                 FocusGameplayEditor(state, _editorService.CurrentSession, actionId);
                 CloseInventoryPickerAfterSelection(state, actionId);
+                if (actionId != null && actionId.StartsWith(ScenarioAuthoringLocalActionIds.ActionSuppliesPresetApplyPrefix, StringComparison.Ordinal) && state != null)
+                {
+                    state.FocusedEditorKind = null;
+                    state.FocusedEditorIndex = -1;
+                    state.FocusedEditorIsNew = false;
+                }
             }
             return changed;
         }
