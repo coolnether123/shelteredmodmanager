@@ -118,13 +118,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Emphasized = false,
                 DisabledReason = reloadPending ? reloadReason : null
             };
+            ScenarioAuthoringInspectorAction consoleAction = new ScenarioAuthoringInspectorAction
+            {
+                Id = ScenarioAuthoringActionIds.ActionStageSelectPrefix + ScenarioStageKind.Test,
+                Label = "Test Console",
+                Hint = "Open live time controls, Fire Now actions, and the execution log.",
+                Enabled = !reloadPending,
+                Emphasized = true,
+                DisabledReason = reloadPending ? reloadReason : null
+            };
 
             float rightPadding = 16f;
             float stopWidth = Math.Max(132f, MeasureButtonWidth(stopAction, false, 34f));
             float restartWidth = Math.Max(104f, MeasureButtonWidth(restartAction, false, 34f));
+            float consoleWidth = Math.Max(132f, MeasureButtonWidth(consoleAction, false, 34f));
             Rect stopRect = new Rect(rect.xMax - stopWidth - rightPadding, rect.y + 8f, stopWidth, 30f);
             Rect restartRect = new Rect(stopRect.x - restartWidth - 8f, rect.y + 8f, restartWidth, 30f);
-            float statusRight = restartRect.x - 14f;
+            Rect consoleRect = new Rect(restartRect.x - consoleWidth - 8f, rect.y + 8f, consoleWidth, 30f);
+            float statusRight = consoleRect.x - 14f;
 
             float x = rect.x + 26f;
             if (reloadPending)
@@ -143,6 +154,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             DrawButton(restartRect, restartAction, false);
+            DrawButton(consoleRect, consoleAction, false);
             DrawButton(stopRect, stopAction, false);
 
             string message = reloadPending ? reloadReason : null;

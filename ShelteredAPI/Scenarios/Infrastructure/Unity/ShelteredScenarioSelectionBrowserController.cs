@@ -1279,8 +1279,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 {
                     UIFlowGuard.BlockSlotClicksToggle(true);
                     ShelteredCustomScenarioRuntimeState.BlockSlotClicksBriefly();
-                    if (panel != null)
-                        UIUtil.PushClickBlocker(panel.transform, 99999);
                 }
                 else if (panel != null)
                 {

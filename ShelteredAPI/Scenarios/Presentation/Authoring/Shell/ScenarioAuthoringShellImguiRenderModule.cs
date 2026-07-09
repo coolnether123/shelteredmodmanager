@@ -319,7 +319,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     return;
                 }
 
-                if (ScenarioAuthoringRuntimeGuards.IsPlaytesting())
+                if (ScenarioAuthoringRuntimeGuards.IsPlaytesting()
+                    && (_snapshot.State == null || _snapshot.State.ActiveStage != ScenarioStageKind.Test))
                 {
                     Rect playtestStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
                     if (chromeProgress > ChromeInteractionThreshold && playtestStatusRect.width > 0f && playtestStatusRect.height > 0f)
