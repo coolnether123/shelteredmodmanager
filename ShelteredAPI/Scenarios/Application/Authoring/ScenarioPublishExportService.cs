@@ -7,7 +7,6 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
-using ShelteredAPI.Scenarios.Infrastructure.Persistence;
 using ShelteredAPI.Scenarios.Infrastructure.Serialization;
 
 namespace ShelteredAPI.Scenarios.Application.Authoring{
@@ -19,8 +18,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly IScenarioEditorService _editorService;
         private readonly IScenarioDefinitionSerializer _serializer;
         private readonly IScenarioDefinitionValidator _validator;
+        private readonly ScenarioPackagePlanner _planner;
+        private readonly ScenarioPackageInstaller _installer;
         private readonly object _sync = new object();
         private ScenarioPublishExportResult _lastResult;
+        private ScenarioPackageInstallResult _lastInstallResult;
 
         public ScenarioPublishExportService(
             IScenarioEditorService editorService,
@@ -31,6 +33,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _editorService = editorService;
             _serializer = serializer;
             _validator = validator;
+            _planner = new ScenarioPackagePlanner(serializer);
+            _installer = new ScenarioPackageInstaller(serializer, catalog);
         }
 
         public ScenarioPublishExportResult LastResult
@@ -43,6 +47,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
         }
+
+        public ScenarioPackageInstallResult LastInstallResult { get { lock (_sync) { return _lastInstallResult; } } }
 
         public ScenarioPublishExportResult ExportActiveDraft(ScenarioAuthoringState state)
         {
@@ -66,8 +72,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 exportFilePath = Path.Combine(exportRoot, ScenarioDefinitionSerializer.DefaultFileName);
                 if (File.Exists(exportFilePath))
                     replacedTimestampUtc = File.GetLastWriteTimeUtc(exportFilePath);
-                _serializer.Save(definition, exportFilePath);
-                CopyReferencedAssets(definition, state != null ? state.ActiveScenarioFilePath : null, exportRoot);
+                ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(state != null ? state.ActiveScenarioFilePath : null);
+                ScenarioPackagePlan plan = _planner.Build(
+                    definition,
+                    state != null ? state.ActiveScenarioFilePath : null,
+                    exportRoot,
+                    preferences.IncludeReadme,
+                    validation);
+                plan.Write();
             }
             catch (Exception ex)
             {
@@ -95,6 +107,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             return Remember(ScenarioPublishExportResult.Succeeded(exportFilePath, exportRoot, CountWarnings(exportedValidation), replacedTimestampUtc));
         }
+
+        public ScenarioPackagePlan PreviewActiveDraft(ScenarioAuthoringState state)
+        {
+            ScenarioDefinition definition = GetActiveDefinition();
+            if (definition == null)
+                return null;
+            string scenarioPath = state != null ? state.ActiveScenarioFilePath : null;
+            ScenarioValidationResult validation = Validate(definition, scenarioPath);
+            ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(scenarioPath);
+            return _planner.Build(definition, scenarioPath, ResolveExportRoot(definition), preferences.IncludeReadme, validation);
+        }
+
+        public ScenarioPackageInstallResult InstallLastExport(bool overwriteConfirmed)
+        {
+            ScenarioPublishExportResult last = LastResult;
+            if (last == null || !last.Success || string.IsNullOrEmpty(last.ArtifactRootPath))
+                return RememberInstall(new ScenarioPackageInstallResult { Message = "Create a validated export before installing it." });
+            return RememberInstall(_installer.Install(last.ArtifactRootPath, null, overwriteConfirmed));
+        }
+
+        private ScenarioPackageInstallResult RememberInstall(ScenarioPackageInstallResult result) { lock (_sync) { _lastInstallResult = result; return result; } }
 
         private ScenarioPublishExportResult Remember(ScenarioPublishExportResult result)
         {
@@ -130,113 +163,6 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string modRoot = ResolveExportModRoot();
             string scenarioFolder = BuildSafeFolderName(!string.IsNullOrEmpty(definition.Id) ? definition.Id : definition.DisplayName);
             return Path.Combine(Path.Combine(modRoot, ExportRootFolder), scenarioFolder);
-        }
-
-        private static void CopyReferencedAssets(ScenarioDefinition definition, string sourceScenarioFilePath, string exportRoot)
-        {
-            if (definition == null || definition.AssetReferences == null || string.IsNullOrEmpty(exportRoot))
-                return;
-
-            List<string> relativePaths = new List<string>();
-            AddAssetReferencePaths(definition, relativePaths);
-            if (relativePaths.Count == 0)
-                return;
-
-            string draftRoot = !string.IsNullOrEmpty(sourceScenarioFilePath) ? Path.GetDirectoryName(sourceScenarioFilePath) : null;
-            string assetsRoot = ScenarioAuthoringStoragePaths.GetAssetsRootPath();
-            for (int i = 0; i < relativePaths.Count; i++)
-                CopyAssetIfFound(relativePaths[i], draftRoot, assetsRoot, exportRoot);
-        }
-
-        private static void AddAssetReferencePaths(ScenarioDefinition definition, List<string> paths)
-        {
-            if (definition.AssetReferences.CustomSprites != null)
-            {
-                for (int i = 0; i < definition.AssetReferences.CustomSprites.Count; i++)
-                    AddRelativePath(paths, definition.AssetReferences.CustomSprites[i] != null ? definition.AssetReferences.CustomSprites[i].RelativePath : null);
-            }
-
-            if (definition.AssetReferences.CustomIcons != null)
-            {
-                for (int i = 0; i < definition.AssetReferences.CustomIcons.Count; i++)
-                    AddRelativePath(paths, definition.AssetReferences.CustomIcons[i] != null ? definition.AssetReferences.CustomIcons[i].RelativePath : null);
-            }
-
-            if (definition.AssetReferences.SpriteSwaps != null)
-            {
-                for (int i = 0; i < definition.AssetReferences.SpriteSwaps.Count; i++)
-                    AddRelativePath(paths, definition.AssetReferences.SpriteSwaps[i] != null ? definition.AssetReferences.SpriteSwaps[i].RelativePath : null);
-            }
-
-            if (definition.AssetReferences.SceneSpritePlacements != null)
-            {
-                for (int i = 0; i < definition.AssetReferences.SceneSpritePlacements.Count; i++)
-                    AddRelativePath(paths, definition.AssetReferences.SceneSpritePlacements[i] != null ? definition.AssetReferences.SceneSpritePlacements[i].RelativePath : null);
-            }
-
-            if (definition.AssetReferences.SpritePatches != null)
-            {
-                for (int i = 0; i < definition.AssetReferences.SpritePatches.Count; i++)
-                    AddRelativePath(paths, definition.AssetReferences.SpritePatches[i] != null ? definition.AssetReferences.SpritePatches[i].BaseRelativePath : null);
-            }
-        }
-
-        private static void AddRelativePath(List<string> paths, string relativePath)
-        {
-            if (paths == null || string.IsNullOrEmpty(relativePath) || Path.IsPathRooted(relativePath))
-                return;
-
-            for (int i = 0; i < paths.Count; i++)
-            {
-                if (string.Equals(paths[i], relativePath, StringComparison.OrdinalIgnoreCase))
-                    return;
-            }
-
-            paths.Add(relativePath);
-        }
-
-        private static void CopyAssetIfFound(string relativePath, string draftRoot, string assetsRoot, string exportRoot)
-        {
-            string source = ResolveSourceAsset(relativePath, draftRoot, assetsRoot);
-            if (string.IsNullOrEmpty(source) || !File.Exists(source))
-                return;
-
-            string destination = ResolveExportAssetPath(exportRoot, relativePath);
-            if (string.IsNullOrEmpty(destination))
-                return;
-
-            string directory = Path.GetDirectoryName(destination);
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
-            File.Copy(source, destination, true);
-        }
-
-        private static string ResolveSourceAsset(string relativePath, string draftRoot, string assetsRoot)
-        {
-            string source = ResolveContainedPath(draftRoot, relativePath);
-            if (!string.IsNullOrEmpty(source) && File.Exists(source))
-                return source;
-            source = ResolveContainedPath(assetsRoot, relativePath);
-            return !string.IsNullOrEmpty(source) && File.Exists(source) ? source : null;
-        }
-
-        private static string ResolveExportAssetPath(string exportRoot, string relativePath)
-        {
-            return ResolveContainedPath(exportRoot, relativePath);
-        }
-
-        private static string ResolveContainedPath(string root, string relativePath)
-        {
-            if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(relativePath) || Path.IsPathRooted(relativePath))
-                return null;
-
-            string fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            string fullPath = Path.GetFullPath(Path.Combine(fullRoot, relativePath));
-            if (string.Equals(fullPath, fullRoot, StringComparison.OrdinalIgnoreCase))
-                return fullPath;
-
-            string rootedPrefix = fullRoot + Path.DirectorySeparatorChar;
-            return fullPath.StartsWith(rootedPrefix, StringComparison.OrdinalIgnoreCase) ? fullPath : null;
         }
 
         private static string ResolveExportModRoot()
@@ -366,7 +292,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         public static ScenarioPublishExportResult Succeeded(string artifactPath, string artifactRootPath, int warningCount, DateTime? replacedTimestampUtc)
         {
-            string message = "Export package created and validated. To install or share it, copy this folder into any mod's Scenarios directory.";
+            string message = "Package ready. Export contents were created and validated; install locally or share the folder.";
             if (replacedTimestampUtc.HasValue)
             {
                 message += " Replaced previous export from "

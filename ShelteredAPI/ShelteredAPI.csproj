@@ -260,6 +260,7 @@
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionMetadataCache.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioDefinitionSerializer.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioFrameworkVerification.cs" />
+    <Compile Include="Scenarios\Diagnostics\ScenarioPackageUxVerification.cs" />
     <Compile Include="Scenarios\Infrastructure\Serialization\ScenarioLoader.cs" />
     <Compile Include="Scenarios\Diagnostics\ScenarioPipelineSmokeTest.cs" />
     <Compile Include="Scenarios\Definitions\ScenarioPlacementDefinitions.cs" />
@@ -288,6 +289,9 @@
     <Compile Include="Scenarios\Application\Authoring\ScenarioDraftMetadataEditService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPngImportService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioPublishExportService.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackagePlan.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackageAuthoringPreferences.cs" />
+    <Compile Include="Scenarios\Application\Authoring\ScenarioPackageInstaller.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioSpritePatchAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\StructurePlacementService.cs" />
     <Compile Include="Scenarios\Application\Authoring\Tutorial\ScenarioAuthoringTutorialService.cs" />
@@ -550,10 +554,6 @@
     <Compile Include="Scenarios\Presentation\Authoring\Windows\ScenarioAuthoringWindowRegistry.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioGridSnapService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioGameplayScheduleAuthoringService.cs" />
-    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesPresetCatalog.cs" />
-    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesInventoryNormalizer.cs" />
-    <Compile Include="Scenarios\Application\Authoring\Supplies\ScenarioSuppliesBalanceEstimator.cs" />
-    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioSuppliesAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringService.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryAuthoringActions.cs" />
     <Compile Include="Scenarios\Application\Authoring\ScenarioStoryFocusedEditorActions.cs" />
