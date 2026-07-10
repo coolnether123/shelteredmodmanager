@@ -301,7 +301,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect hudReserveRect = ScenarioAuthoringShellLayout.BuildHudReserveRect(scaledWidth);
                 Rect topRect = ScenarioAuthoringShellLayout.BuildTopBarRect(scaledWidth, hudReserveRect);
                 Rect statusRect = ScenarioAuthoringShellLayout.BuildStatusRect(scaledWidth, scaledHeight);
-                float chromeProgress = _animations.GetChromeProgress(ShellChromeAnimationKey, !HasMajorWindowOpen(shell.Windows));
+                // The workshop's top chrome is the persistent navigation surface.  Major
+                // workspaces (notably Home at compact resolutions) must not animate it
+                // away, or the user loses the only visible route between editor areas.
+                float chromeProgress = _animations.GetChromeProgress(ShellChromeAnimationKey, true);
                 if (_snapshot.State != null && _snapshot.State.ReloadPending)
                 {
                     Rect playtestStatusRect = DrawStatusBarCore(statusRect, shell, chromeProgress);
