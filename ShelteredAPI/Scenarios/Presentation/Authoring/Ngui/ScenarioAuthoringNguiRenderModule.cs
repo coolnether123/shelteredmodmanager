@@ -669,7 +669,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             DrawPanel("PlaytestStrip", rect, _statusColor, false, BaseDepth);
             if (reloadPending)
             {
-                DrawLabel("PlaytestState", rect, new Rect(18f, 13f, Math.Max(120f, rect.width - 380f), 20f), "Restarting playtest...", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
+                DrawLabel("PlaytestState", rect, new Rect(18f, 13f, Math.Max(120f, rect.width - 380f), 20f), "Restarting playtest", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 4);
             }
             else
             {
@@ -766,7 +766,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 return value ?? string.Empty;
             if (max <= 3)
                 return value.Substring(0, max);
-            return value.Substring(0, max - 3) + "...";
+            return value;
         }
 
         private void DrawDocumentModal(string id, ScenarioAuthoringInspectorDocument document, Rect hudReserveRect, float preferredWidth, float preferredHeight)
@@ -1338,7 +1338,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         {
             if (string.IsNullOrEmpty(text) || text.Length <= max)
                 return text ?? string.Empty;
-            return text.Substring(0, Math.Max(0, max - 3)) + "...";
+            return text;
         }
 
         private sealed class RowModel

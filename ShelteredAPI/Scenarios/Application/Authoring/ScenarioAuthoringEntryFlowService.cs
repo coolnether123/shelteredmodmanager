@@ -401,7 +401,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
-            SetWizardStatus(Safe(message, "Loading the selected base..."));
+            SetWizardStatus(Safe(message, "Loading the selected base"));
         }
 
         private void ApplyCustomScenario(ScenarioEditorSession editorSession, string scenarioId)
@@ -452,7 +452,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
-            SetWizardStatus(Safe(message, "Copying the custom scenario base..."));
+            SetWizardStatus(Safe(message, "Copying the custom scenario base"));
         }
 
         private void ApplyStarterTemplate(ScenarioEditorSession editorSession, string templateKey)
@@ -477,7 +477,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
-            SetWizardStatus(Safe(message, "Loading the starter template..."));
+            SetWizardStatus(Safe(message, "Loading the starter template"));
         }
 
         private void CommitWizardIntent()
@@ -1229,7 +1229,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     Color old = GUI.color;
                     GUI.color = new Color(1f, 1f, 1f, 0.55f);
-                    GUI.Box(openRect, "Preparing editor...", _openButtonStyle);
+                    GUI.Box(openRect, "Preparing editor", _openButtonStyle);
                     GUI.color = old;
                 }
             }

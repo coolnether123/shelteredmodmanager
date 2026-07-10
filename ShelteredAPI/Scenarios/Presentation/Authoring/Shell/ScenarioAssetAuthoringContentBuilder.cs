@@ -295,6 +295,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                         Detail = target.Group,
                         Hint = target.Source + " | Texture: " + ScenarioInspectorItemFactory.Safe(target.TextureName),
                         PreviewSprite = target.PreviewSprite,
+                        PreviewTint = target.PreviewTint,
+                        HasPreviewTint = target.HasPreviewTint,
                         Enabled = true,
                         Active = state != null
                             && state.SelectedTarget != null
@@ -339,7 +341,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ScenarioInspectorItemFactory.Text(selected.Label, selected.Hint, selected.Descriptor, selected.Descriptor, selected.PreviewSprite, true));
+            ScenarioAuthoringInspectorItem previewItem = ScenarioInspectorItemFactory.Text(selected.Label, selected.Hint, selected.Descriptor, selected.Descriptor, selected.PreviewSprite, true);
+            previewItem.PreviewTint = selected.PreviewTint;
+            previewItem.HasPreviewTint = selected.HasPreviewTint;
+            items.Add(previewItem);
             items.Add(ScenarioInspectorItemFactory.Property("Category", selected.Category));
             items.Add(ScenarioInspectorItemFactory.Property("Source", ScenarioInspectorItemFactory.Safe(selected.Detail)));
             items.Add(ScenarioInspectorItemFactory.Property("Action", ResolveActionSummary(selected)));
@@ -381,7 +386,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool selected = entry != null
                 && state != null
                 && string.Equals(state.AssetBrowserSelectedActionId, entry.SourceActionId, StringComparison.Ordinal);
-            return ScenarioInspectorItemFactory.Action(
+            ScenarioAuthoringInspectorAction action = ScenarioInspectorItemFactory.Action(
                 ScenarioAuthoringActionCodec.BuildTokenActionId(ScenarioAuthoringActionIds.ActionAssetBrowserSelectPrefix, entry != null ? entry.SourceActionId : null),
                 entry != null ? entry.Label : "<asset>",
                 entry != null ? entry.Hint : null,
@@ -391,6 +396,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 entry != null ? entry.Detail : null,
                 entry != null ? entry.Descriptor : null,
                 entry != null ? entry.PreviewSprite : null);
+            if (entry != null)
+            {
+                action.PreviewTint = entry.PreviewTint;
+                action.HasPreviewTint = entry.HasPreviewTint;
+            }
+            return action;
         }
 
         private static BrowserAssetEntry FindEntry(List<BrowserAssetEntry> entries, string sourceActionId)
@@ -448,6 +459,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             public string Detail;
             public string Hint;
             public Sprite PreviewSprite;
+            public Color PreviewTint;
+            public bool HasPreviewTint;
             public bool Enabled;
             public bool Active;
             public bool CanPlace;

@@ -88,7 +88,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
 
             string fitted;
             string tooltip;
-            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(label ?? string.Empty, Math.Max(0f, rect.width - 10f), box, out fitted, out tooltip);
+            ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(label ?? string.Empty, Math.Max(0f, rect.width - 10f), box, out fitted, out tooltip);
             GUI.Box(rect, new GUIContent(fitted, tooltip), box);
         }
 
@@ -122,6 +122,11 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
 
         public static void DrawSpritePreviewFrame(Rect rect, Sprite sprite, ScenarioUiStyleSheet styles, bool emphasized)
         {
+            DrawSpritePreviewFrame(rect, sprite, styles, emphasized, Color.white);
+        }
+
+        public static void DrawSpritePreviewFrame(Rect rect, Sprite sprite, ScenarioUiStyleSheet styles, bool emphasized, Color tint)
+        {
             if (styles == null)
                 return;
 
@@ -141,7 +146,10 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit.Widgets{
                 textureRect.height / texture.height);
 
             Rect fitted = FitRect(rect, textureRect.width, textureRect.height, styles.Theme.Metrics.PaddingXs);
+            Color previous = GUI.color;
+            GUI.color = new Color(previous.r * tint.r, previous.g * tint.g, previous.b * tint.b, previous.a * tint.a);
             GUI.DrawTextureWithTexCoords(fitted, texture, uv, true);
+            GUI.color = previous;
         }
 
         /// <summary>

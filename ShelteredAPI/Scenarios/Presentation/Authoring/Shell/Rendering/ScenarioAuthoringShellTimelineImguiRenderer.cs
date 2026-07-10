@@ -66,7 +66,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect readingRect = new Rect(rect.x + 12f, rect.y + 8f, rect.width - 24f, 20f);
             string fittedReading;
             string readingTooltip;
-            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(reading, readingRect.width, _textStyle, out fittedReading, out readingTooltip);
+            ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(reading, readingRect.width, _textStyle, out fittedReading, out readingTooltip);
             GUI.Label(readingRect, new GUIContent(fittedReading, readingTooltip), _textStyle);
 
             Rect chartRect = new Rect(rect.x + 12f, rect.y + 33f, rect.width - 24f, 48f);
@@ -127,7 +127,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             DrawTimelineAddFlow(section, false);
             float availableWidth = GetSectionContentWidth();
-            float dayWidth = availableWidth >= 720f ? 156f : 132f;
+            float dayWidth = MeasureTimelineDayWidth(days, chips, availableWidth >= 720f ? 156f : 132f);
             int maxLanes = Math.Max(1, MaxTimelineChipLaneCount(days, chips));
             float trackHeight = Mathf.Clamp(86f + (maxLanes * 34f), 158f, 242f);
             Rect viewportRect = GUILayoutUtility.GetRect(availableWidth, trackHeight, GUILayout.ExpandWidth(true), GUILayout.Height(trackHeight));
@@ -185,6 +185,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             SetWindowScrollPosition("timeline.track", scroll);
         }
 
+        private float MeasureTimelineDayWidth(TimelineDayInfo[] days, TimelineChipInfo[] chips, float minimum)
+        {
+            float width = minimum;
+            for (int i = 0; days != null && i < days.Length; i++)
+                width = Math.Max(width, ScenarioUiMeasuredLabel.Width(days[i] != null ? days[i].Baseline : null, _mutedTextStyle, 22f));
+            for (int i = 0; chips != null && i < chips.Length; i++)
+                width = Math.Max(width, ScenarioUiMeasuredLabel.Width(chips[i] != null && chips[i].Action != null ? chips[i].Action.Label : null, _textStyle, 66f));
+            return Math.Min(320f, width);
+        }
+
         private void DrawTimelineAxis(Rect canvasRect, TimelineDayInfo[] days, TimelineChipInfo[] chips, float dayWidth)
         {
             Rect rulerRect = new Rect(canvasRect.x, canvasRect.y, canvasRect.width, 42f);
@@ -217,7 +227,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 string fitted;
                 string tooltip;
-                ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(baseline, rect.width - 16f, _mutedTextStyle, out fitted, out tooltip);
+                ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(baseline, rect.width - 16f, _mutedTextStyle, out fitted, out tooltip);
                 GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 16f), new GUIContent(fitted, tooltip), _mutedTextStyle);
             }
         }
@@ -275,7 +285,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect labelRect = new Rect(rect.x + 27f, rect.y + 5f, rect.width - 58f, 18f);
             string fittedLabel;
             string labelTooltip;
-            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(chip.Action.Label ?? string.Empty, labelRect.width, _textStyle, out fittedLabel, out labelTooltip);
+            ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(chip.Action.Label ?? string.Empty, labelRect.width, _textStyle, out fittedLabel, out labelTooltip);
             GUI.Label(labelRect, new GUIContent(fittedLabel, labelTooltip), _textStyle);
             if (!string.IsNullOrEmpty(chip.Action.Badge))
                 ScenarioUiWidgets.DrawPill(new Rect(rect.xMax - 28f, rect.y + 5f, 23f, 18f), chip.Action.Badge, _uiContext.Styles, ResolveTimelineStatusEmphasis(chip.Status));

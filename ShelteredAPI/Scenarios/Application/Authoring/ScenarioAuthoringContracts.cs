@@ -1261,6 +1261,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Badge { get; set; }
         public string IconText { get; set; }
         public Sprite PreviewSprite { get; set; }
+        public Color PreviewTint { get; set; }
+        public bool HasPreviewTint { get; set; }
         public bool Enabled { get; set; }
         public bool Emphasized { get; set; }
         public string DisabledReason { get; set; }
@@ -1313,6 +1315,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string Badge { get; set; }
         public string IconText { get; set; }
         public Sprite PreviewSprite { get; set; }
+        public Color PreviewTint { get; set; }
+        public bool HasPreviewTint { get; set; }
         public bool Emphasized { get; set; }
         public bool Editable { get; set; }
         public string HoverHint { get; set; }

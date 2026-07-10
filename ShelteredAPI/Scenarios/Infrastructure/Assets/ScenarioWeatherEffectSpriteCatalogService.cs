@@ -31,6 +31,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             public string Source;
             public string TextureName;
             public Sprite PreviewSprite;
+            public Color PreviewTint;
+            public bool HasPreviewTint;
         }
 
         public List<WeatherEffectSpriteTarget> GetTargets()
@@ -160,6 +162,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     continue;
 
                 Sprite preview = ScenarioSpriteReferenceLibrary.CreateFullTextureSprite(texture, texture.name);
+                Color tint;
+                bool hasTint = TryResolveParticleTint(renderer, material, out tint);
                 AddTarget(
                     byPath,
                     renderer.transform,
@@ -168,7 +172,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     source,
                     ScenarioSpriteTargetComponentKind.ParticleSystemRenderer,
                     preview,
-                    !string.IsNullOrEmpty(texture.name) ? texture.name : "<particle texture>");
+                    !string.IsNullOrEmpty(texture.name) ? texture.name : "<particle texture>",
+                    tint,
+                    hasTint);
             }
         }
 
@@ -179,6 +185,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             string effectName,
             string source)
         {
+            Color tint;
+            bool hasTint = TryResolveSpriteTint(renderer, out tint);
             AddTarget(
                 byPath,
                 renderer != null ? renderer.transform : null,
@@ -187,7 +195,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 source,
                 ScenarioSpriteTargetComponentKind.SpriteRenderer,
                 renderer != null ? renderer.sprite : null,
-                renderer != null && renderer.sprite != null && renderer.sprite.texture != null ? renderer.sprite.texture.name : null);
+                renderer != null && renderer.sprite != null && renderer.sprite.texture != null ? renderer.sprite.texture.name : null,
+                tint,
+                hasTint);
         }
 
         private static void AddTarget(
@@ -198,7 +208,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
             string source,
             ScenarioSpriteTargetComponentKind componentKind,
             Sprite preview,
-            string textureName)
+            string textureName,
+            Color previewTint,
+            bool hasPreviewTint)
         {
             if (byPath == null || transform == null || preview == null)
                 return;
@@ -215,6 +227,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                 Source = source,
                 TextureName = textureName,
                 PreviewSprite = preview,
+                PreviewTint = previewTint,
+                HasPreviewTint = hasPreviewTint,
                 Target = new ScenarioAuthoringTarget
                 {
                     Id = targetId,
@@ -231,6 +245,53 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Assets{
                     SupportsReplace = true
                 }
             };
+        }
+
+        private static bool TryResolveParticleTint(ParticleSystemRenderer renderer, Material material, out Color tint)
+        {
+            tint = Color.white;
+            bool found = TryResolveMaterialTint(material, out tint);
+            ParticleSystem particles = renderer != null ? renderer.GetComponent<ParticleSystem>() : null;
+            if (particles != null)
+            {
+                tint = Multiply(tint, particles.startColor);
+                found = true;
+            }
+            return found;
+        }
+
+        private static bool TryResolveSpriteTint(SpriteRenderer renderer, out Color tint)
+        {
+            tint = Color.white;
+            if (renderer == null)
+                return false;
+
+            Color materialTint;
+            bool foundMaterial = TryResolveMaterialTint(renderer.sharedMaterial, out materialTint);
+            tint = Multiply(renderer.color, foundMaterial ? materialTint : Color.white);
+            return foundMaterial || renderer.color != Color.white;
+        }
+
+        private static bool TryResolveMaterialTint(Material material, out Color tint)
+        {
+            tint = Color.white;
+            if (material == null)
+                return false;
+
+            string[] colorProperties = { "_TintColor", "_Color" };
+            for (int i = 0; i < colorProperties.Length; i++)
+            {
+                if (!material.HasProperty(colorProperties[i]))
+                    continue;
+                tint = material.GetColor(colorProperties[i]);
+                return true;
+            }
+            return false;
+        }
+
+        private static Color Multiply(Color left, Color right)
+        {
+            return new Color(left.r * right.r, left.g * right.g, left.b * right.b, left.a * right.a);
         }
 
         private static string BuildTransformPath(Transform transform)

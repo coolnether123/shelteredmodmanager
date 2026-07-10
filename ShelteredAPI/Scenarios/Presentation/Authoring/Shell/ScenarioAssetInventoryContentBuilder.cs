@@ -108,7 +108,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 items.Add(ScenarioInspectorItemFactory.Text("This sprite will show as missing in game."));
                 items.Add(ScenarioInspectorItemFactory.ActionItem(ScenarioInspectorItemFactory.Action(
                     ScenarioAssetInventoryActionIds.RelinkPrefix + ScenarioAuthoringActionCodec.EncodeToken(asset.RelativePath),
-                    "Relink...",
+                    "Relink Asset",
                     "Use the newest replacement file from the scenario Imports folder and update every matching reference atomically.",
                     true, false, "LINK")));
             }

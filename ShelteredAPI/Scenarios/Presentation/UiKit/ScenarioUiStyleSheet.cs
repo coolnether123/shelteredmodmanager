@@ -49,6 +49,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
         public GUIStyle Menu { get; private set; }
         public GUIStyle Card { get; private set; }
         public GUIStyle Field { get; private set; }
+        public GUIStyle SearchField { get; private set; }
         public GUIStyle Divider { get; private set; }
 
         // Pill / badge surfaces
@@ -148,6 +149,7 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             Menu         = BuildBox(panelRaisedCorner, padMd);
             Card         = BuildBox(accentNeutralCorner, CardSurfacePadding);
             Field        = BuildField(panelInsetCorner, accentHoverCorner, palette.TextBody, metrics, padSm, padXs);
+            SearchField  = BuildField(accentNeutralCorner, accentActiveCorner, palette.TextOnLight, metrics, padMd, padXs);
             Divider      = BuildBox(BorderSubtleTexture, 0);
 
             Pill           = BuildPill(accentNeutralCorner, palette.TextOnLight, metrics, pillPadX);
@@ -296,55 +298,13 @@ namespace ShelteredAPI.Scenarios.Presentation.UiKit{
             return size.x + Math.Max(0f, extraPadding) + ResolveHorizontalPadding(style);
         }
 
-        public static string FitLabelWithEllipsis(string label, float maxWidth, GUIStyle style)
-        {
-            if (string.IsNullOrEmpty(label) || style == null)
-                return label ?? string.Empty;
-
-            if (style.CalcSize(new GUIContent(label)).x <= maxWidth)
-                return label;
-
-            const string ellipsis = "...";
-            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
-            if (ellipsisWidth >= maxWidth)
-                return string.Empty;
-
-            int low = 0;
-            int high = label.Length;
-            while (low < high)
-            {
-                int mid = (low + high + 1) / 2;
-                string candidate = BuildEllipsisCandidate(label, mid, ellipsis);
-                if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
-                    low = mid;
-                else
-                    high = mid - 1;
-            }
-
-            return BuildEllipsisCandidate(label, low, ellipsis);
-        }
-
-        public static bool TryFitLabelWithTooltip(string label, float maxWidth, GUIStyle style, out string fitted, out string tooltip)
+        public static bool PreserveLabelWithOverflowTooltip(string label, float maxWidth, GUIStyle style, out string fitted, out string tooltip)
         {
             string safeLabel = label ?? string.Empty;
-            fitted = FitLabelWithEllipsis(safeLabel, maxWidth, style);
-            bool shortened = !string.Equals(fitted, safeLabel, StringComparison.Ordinal);
-            tooltip = shortened ? safeLabel : string.Empty;
-            return shortened;
-        }
-
-        private static string BuildEllipsisCandidate(string label, int length, string ellipsis)
-        {
-            if (string.IsNullOrEmpty(label) || length <= 0)
-                return ellipsis;
-
-            int safeLength = Math.Min(length, label.Length);
-            string prefix = label.Substring(0, safeLength).TrimEnd();
-            int wordBoundary = Math.Max(prefix.LastIndexOf(' '), Math.Max(prefix.LastIndexOf('/'), prefix.LastIndexOf('-')));
-            if (wordBoundary >= 6 && safeLength < label.Length)
-                prefix = prefix.Substring(0, wordBoundary).TrimEnd();
-
-            return prefix + ellipsis;
+            fitted = safeLabel;
+            bool overflows = style != null && style.CalcSize(new GUIContent(safeLabel)).x > maxWidth;
+            tooltip = overflows ? safeLabel : string.Empty;
+            return overflows;
         }
 
         private static float ResolveHorizontalPadding(GUIStyle style)

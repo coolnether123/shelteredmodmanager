@@ -46,9 +46,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float contentY = searchRect.yMax + 8f;
             float contentHeight = Math.Max(100f, bodyRect.yMax - contentY);
             bool compact = bodyRect.width < 980f;
-            float railWidth = compact ? 138f : 172f;
             float detailWidth = compact ? 252f : 312f;
             detailWidth = Math.Min(detailWidth, Math.Max(220f, bodyRect.width * 0.30f));
+            float railWidth = MeasureAssetBrowserRailWidth(window, compact);
+            railWidth = Math.Min(railWidth, Math.Max(compact ? 138f : 172f, bodyRect.width - detailWidth - 250f));
             Rect railRect = new Rect(bodyRect.x, contentY, railWidth, contentHeight);
             Rect detailRect = new Rect(bodyRect.xMax - detailWidth, contentY, detailWidth, contentHeight);
             Rect gridRect = new Rect(railRect.xMax + 10f, contentY, Math.Max(220f, detailRect.x - railRect.xMax - 20f), contentHeight);
@@ -64,23 +65,28 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.BeginArea(rect);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Search", _mutedTextStyle, GUILayout.Width(54f), GUILayout.Height(28f));
-            Rect searchRect = GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+            Rect searchRect = GUILayoutUtility.GetRect(0f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
             bool searchTopmost = IsInteractiveVisualTopmost(searchRect);
             string nextSearchText;
             if (searchTopmost)
             {
                 GUI.SetNextControlName("asset_browser_search");
-                nextSearchText = GUI.TextField(searchRect, _assetBrowserSearchText ?? string.Empty, _uiContext.Styles.Field);
+                nextSearchText = GUI.TextField(searchRect, _assetBrowserSearchText ?? string.Empty, _uiContext.Styles.SearchField);
             }
             else
             {
                 nextSearchText = _assetBrowserSearchText ?? string.Empty;
-                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.Field);
+                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.SearchField);
             }
             if (!string.Equals(nextSearchText, _assetBrowserSearchText ?? string.Empty, StringComparison.Ordinal))
                 _assetBrowserSearchText = nextSearchText;
+            DrawSearchPlaceholder(searchRect, _assetBrowserSearchText, "Filter assets");
+            Event current = Event.current;
+            if (searchTopmost && ((current != null && searchRect.Contains(current.mousePosition)) || string.Equals(GUI.GetNameOfFocusedControl(), "asset_browser_search", StringComparison.Ordinal)))
+                DrawFieldFocusBorder(searchRect);
 
-            Rect clearRect = GUILayoutUtility.GetRect(68f, 28f, GUILayout.Width(68f), GUILayout.Height(28f));
+            float clearWidth = ScenarioUiMeasuredLabel.Width("Clear", _buttonStyle, 18f);
+            Rect clearRect = GUILayoutUtility.GetRect(clearWidth, 30f, GUILayout.Width(clearWidth), GUILayout.Height(30f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
                 _assetBrowserSearchText = string.Empty;
             GUILayout.EndHorizontal();
@@ -115,13 +121,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool active = string.Equals(_assetBrowserCategoryFilter, filter, StringComparison.OrdinalIgnoreCase)
                 || (string.IsNullOrEmpty(_assetBrowserCategoryFilter) && string.Equals(filter, CandidateFilterAll, StringComparison.OrdinalIgnoreCase));
             string safeLabel = string.IsNullOrEmpty(label) ? "Assets" : label;
-            string display = safeLabel + "  " + count + "\n" + (secondary ?? string.Empty);
-            Rect rect = GUILayoutUtility.GetRect(0f, 42f, GUILayout.ExpandWidth(true), GUILayout.Height(42f));
-            string fitted;
-            string fitTooltip;
-            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(display, Math.Max(0f, rect.width - 14f), _buttonStyle, out fitted, out fitTooltip);
+            string display = safeLabel + "  " + count;
+            Rect rect = GUILayoutUtility.GetRect(0f, 32f, GUILayout.ExpandWidth(true), GUILayout.Height(32f));
             string tooltip = safeLabel + (string.IsNullOrEmpty(secondary) ? string.Empty : " — " + secondary);
-            if (DrawPlainButton(rect, new GUIContent(fitted, string.IsNullOrEmpty(fitTooltip) ? tooltip : tooltip + "\n" + fitTooltip), active ? _activeButtonStyle : _buttonStyle, true))
+            if (DrawPlainButton(rect, new GUIContent(display, tooltip), active ? _activeButtonStyle : _buttonStyle, true))
                 _assetBrowserCategoryFilter = filter;
             GUILayout.Space(4f);
         }
@@ -189,7 +192,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     continue;
 
                 Rect cardRect = GUILayoutUtility.GetRect(cardWidth, cardHeight, GUILayout.Width(cardWidth), GUILayout.Height(cardHeight));
-                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick);
+                DrawCandidateCard(cardRect, item.Action, armPlacementOnCardClick, true);
                 count++;
                 if (count % columns == 0 && HasMoreVisibleAssetBrowserAction(section, i + 1))
                 {
@@ -237,26 +240,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect previewRect = GUILayoutUtility.GetRect(160f, 160f, GUILayout.ExpandWidth(true), GUILayout.Height(160f));
             float previewSize = Math.Min(160f, previewRect.width);
             Rect centeredPreview = new Rect(previewRect.x + ((previewRect.width - previewSize) * 0.5f), previewRect.y, previewSize, previewSize);
-            DrawSpritePreview(centeredPreview, preview.PreviewSprite, true);
+            DrawSpritePreview(centeredPreview, preview.PreviewSprite, true, preview.HasPreviewTint ? preview.PreviewTint : Color.white);
             GUILayout.Space(8f);
             GUILayout.Label(ShortenToFit(preview.Value ?? string.Empty, GetSectionContentWidth(), _smallTitleStyle), _smallTitleStyle);
             if (!string.IsNullOrEmpty(preview.Detail))
                 GUILayout.Label(preview.Detail, _mutedTextStyle);
             GUILayout.Space(8f);
-
-            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
-            string selectedActionId = state != null ? state.AssetBrowserSelectedActionId : null;
-            bool favorite = ScenarioAssetBrowserUx.IsFavorite(state, selectedActionId);
-            Rect favoriteRect = GUILayoutUtility.GetRect(120f, 30f, GUILayout.ExpandWidth(true), GUILayout.Height(30f));
-            if (DrawPlainButton(
-                favoriteRect,
-                new GUIContent(favorite ? "★ Favorited" : "☆ Add Favorite", "Favorites are saved for this editor user."),
-                favorite ? _activeButtonStyle : _buttonStyle,
-                !string.IsNullOrEmpty(selectedActionId)))
-            {
-                ScenarioAssetBrowserUx.ToggleFavorite(state, selectedActionId);
-            }
-            GUILayout.Space(5f);
 
             for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
             {
@@ -349,6 +338,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             return count;
+        }
+
+        private float MeasureAssetBrowserRailWidth(ScenarioAuthoringShellWindowViewModel window, bool compact)
+        {
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            float width = compact ? 138f : 172f;
+            width = Math.Max(width, ScenarioUiMeasuredLabel.Width("Favorites  " + ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.FavoritesFilter), _buttonStyle, 18f));
+            width = Math.Max(width, ScenarioUiMeasuredLabel.Width("Recent  " + ScenarioAssetBrowserUx.CountMatches(window, state, ScenarioAssetBrowserUx.RecentFilter), _buttonStyle, 18f));
+            width = Math.Max(width, ScenarioUiMeasuredLabel.Width("All  " + CountAssetBrowserCandidates(window), _buttonStyle, 18f));
+            for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
+            {
+                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                if (!IsAssetBrowserCandidateSection(section))
+                    continue;
+                ScenarioAssetBrowserUx.CategoryLabel label = ScenarioAssetBrowserUx.GetCategoryLabel(section);
+                width = Math.Max(width, ScenarioUiMeasuredLabel.Width(label.Primary + "  " + CountCandidateActions(section), _buttonStyle, 18f));
+            }
+            return width;
         }
     }
 }
