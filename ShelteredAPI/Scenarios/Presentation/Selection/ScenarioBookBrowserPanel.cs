@@ -65,7 +65,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             if (_instance != null)
+            {
+                // A previous close can still be pending Unity destruction. Hide
+                // that root synchronously so it cannot masquerade as this browser.
+                _instance.SetActive(false);
                 Destroy(_instance);
+                _instance = null;
+            }
 
             GameObject root = FieldManualWindowChrome.CreateOverlayRoot(OverlayName, OverlayDepth, "ScenarioBookBrowser_Root");
             _instance = root;
@@ -795,25 +801,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             _isClosing = true;
+            // The static reference can be cleared by a deferred prior teardown.
+            // This component's root is the authoritative object that must leave
+            // the hierarchy before renderer disposal releases its visible chrome.
+            GameObject root = gameObject;
+            _instance = null;
             if (_dataSource != null)
                 _dataSource.CancelRefreshes();
             if (restoreUnderlyingPanel)
                 RestoreUnderlyingPanel();
+            root.SetActive(false);
             if (_renderer != null)
             {
                 _renderer.Dispose();
                 _renderer = null;
             }
 
-            if (_instance != null)
-            {
-                // Destroy is deferred until Unity's end-of-frame cleanup.  Hide first
-                // so an immediate reopen cannot mistake this closing overlay for a
-                // live browser and return a contradictory visible:false envelope.
-                _instance.SetActive(false);
-                Destroy(_instance);
-            }
-            _instance = null;
+            Destroy(root);
         }
 
         private void OnDestroy()
