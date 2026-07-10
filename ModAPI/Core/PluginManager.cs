@@ -585,8 +585,12 @@ namespace ModAPI.Core
                 return;
             }
 
-            MMLog.WriteInfo("Sliced plugin activation scheduled for " + preparedMods.Count + " mod(s).");
-            runner.Enqueue(delegate { ActivateNextPreparedModBatch(state); });
+            // This callback is already executing on PluginRunner.Update.  Run the
+            // first batch now rather than requiring a second Unity frame: some
+            // installs can pause immediately after startup while unfocused, which
+            // otherwise leaves every plugin prepared but never activated.
+            MMLog.WriteInfo("Sliced plugin activation starting for " + preparedMods.Count + " mod(s).");
+            ActivateNextPreparedModBatch(state);
         }
 
         private void ActivateNextPreparedModBatch(PreparedModActivationState state)
