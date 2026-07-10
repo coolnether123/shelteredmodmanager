@@ -50,6 +50,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionShellCloseSettings = "shell.settings.close";
         public const string ActionShellOpenHelp = "shell.help.open";
         public const string ActionShellCloseHelp = "shell.help.close";
+        public const string ActionShellToggleGlobalSearch = "shell.search.toggle";
+        public const string ActionShellCloseGlobalSearch = "shell.search.close";
+        public const string ActionShellOpenShortcuts = "shell.shortcuts.open";
+        public const string ActionShellHelpShowPages = "shell.help.view.pages";
         public const string ActionShellSettingsReset = "shell.settings.reset";
         public const string ActionTutorialNext = "tutorial.next";
         public const string ActionTutorialBack = "tutorial.back";
@@ -692,7 +696,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string SearchText { get; set; }
         public bool SettingsWindowOpen { get; set; }
         public bool HelpWindowOpen { get; set; }
+        public bool HelpShortcutsView { get; set; }
         public bool WindowMenuOpen { get; set; }
+        public bool GlobalSearchOpen { get; set; }
         public ScenarioSpriteSwapPickerState SpriteSwapPicker { get; set; }
         public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
         public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
@@ -756,7 +762,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 SearchText = SearchText,
                 SettingsWindowOpen = SettingsWindowOpen,
                 HelpWindowOpen = HelpWindowOpen,
+                HelpShortcutsView = HelpShortcutsView,
                 WindowMenuOpen = WindowMenuOpen,
+                GlobalSearchOpen = GlobalSearchOpen,
                 SpriteSwapPicker = SpriteSwapPicker != null ? SpriteSwapPicker.Copy() : null,
                 Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot(),
                 SetupState = SetupState != null ? SetupState.Copy() : new ScenarioAuthoringSetupState()
@@ -1153,10 +1161,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public string TopicId { get; set; }
         public string Body { get; set; }
         public ScenarioAuthoringInspectorAction[] HeaderActions { get; set; }
+        public ScenarioAuthoringInspectorAction[] ViewTabs { get; set; }
         public ScenarioAuthoringInspectorAction[] TopicActions { get; set; }
         public ScenarioAuthoringInspectorAction PreviousAction { get; set; }
         public ScenarioAuthoringInspectorAction NextAction { get; set; }
         public ScenarioAuthoringInspectorAction ReplayAction { get; set; }
+        // Non-null when the help window is showing the Keyboard Shortcuts view.
+        public ScenarioAuthoringShortcutOverlayViewModel Shortcuts { get; set; }
+    }
+
+    internal sealed class ScenarioAuthoringShortcutOverlayViewModel
+    {
+        public string ActiveContextTitle { get; set; }
+        public ScenarioAuthoringShortcutGroupViewModel[] Groups { get; set; }
+    }
+
+    internal sealed class ScenarioAuthoringShortcutGroupViewModel
+    {
+        public string Title { get; set; }
+        public bool IsActiveContext { get; set; }
+        public ScenarioAuthoringShortcutRowViewModel[] Rows { get; set; }
+    }
+
+    internal sealed class ScenarioAuthoringShortcutRowViewModel
+    {
+        public string KeyChord { get; set; }
+        public string Description { get; set; }
     }
 
     internal sealed class ScenarioAuthoringTourViewModel

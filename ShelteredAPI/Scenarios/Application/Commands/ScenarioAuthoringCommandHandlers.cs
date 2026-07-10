@@ -496,10 +496,24 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     message = "Editor settings opened.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellOpenHelp:
-                    if (state.HelpWindowOpen)
+                    if (state.HelpWindowOpen && !state.HelpShortcutsView)
                         return false;
                     state.HelpWindowOpen = true;
+                    state.HelpShortcutsView = false;
                     message = "Workshop help opened.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellOpenShortcuts:
+                    if (state.HelpWindowOpen && state.HelpShortcutsView)
+                        return false;
+                    state.HelpWindowOpen = true;
+                    state.HelpShortcutsView = true;
+                    message = "Keyboard shortcuts opened.";
+                    return true;
+                case ScenarioAuthoringActionIds.ActionShellHelpShowPages:
+                    if (!state.HelpWindowOpen || !state.HelpShortcutsView)
+                        return false;
+                    state.HelpShortcutsView = false;
+                    message = "Workshop help pages shown.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellOpenTimeline:
                 case ScenarioAuthoringActionIds.ActionShellOpenCalendar:
@@ -516,6 +530,7 @@ namespace ShelteredAPI.Scenarios.Application.Commands{
                     if (!state.HelpWindowOpen)
                         return false;
                     state.HelpWindowOpen = false;
+                    state.HelpShortcutsView = false;
                     message = "Workshop help closed.";
                     return true;
                 case ScenarioAuthoringActionIds.ActionShellSettingsReset:

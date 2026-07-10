@@ -722,6 +722,43 @@ Assert-Contains "player queue safe restore" $playerQueueRuntime "CanReplaceEmpty
 Assert-Contains "player queue safe restore" $playerQueueRuntime "IsSafelyRestorableType.*Job_GoToLocation" "queue restore must restrict reconstructed vanilla work to safe job shapes."
 Assert-Contains "player queue event bridge" $playerQueuePatches "PatchPolicy\(PatchDomain\.Characters,\s*""PlayerQueueChanges"".*JobQueue.*AddJob.*JobQueue.*RemoveAt.*JobQueue.*ForceClear" "vanilla player-queue mutations must feed the facade event bridge."
 
+# DRAFTROWS: draft rows carry base mode / relative times / validation / recovery facts,
+# destructive confirmations name the draft and state the export fact, and interrupted
+# launches sit in a labelled "Needs attention" section instead of among real scenarios.
+$scenarioBookDraftFacts = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Selection\ScenarioBookDraftFacts.cs"
+$scenarioBookDataSource = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Selection\ScenarioBookBrowserDataSource.cs"
+$scenarioBookRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Selection\ScenarioBookBrowserRenderer.cs"
+$scenarioBookPanel = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs"
+$scenarioPublishExport = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioPublishExportService.cs"
+$scenarioDraftRepository = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthoringDraftRepository.cs"
+
+Assert-Contains "draft row facts base mode" $scenarioBookDraftFacts "case ScenarioBaseGameMode\.Surrounded: return ""Surrounded"";.*case ScenarioBaseGameMode\.Stasis: return ""Stasis"";.*default: return ""Standard"";" "base mode label must map Surrounded/Stasis and default Survival to Standard."
+Assert-Contains "draft row facts relative time" $scenarioBookDraftFacts "ScenarioDraftSnapshotService\.FormatAge" "relative last-edited/export text must reuse the shared FormatAge helper."
+Assert-Contains "draft row facts recovery flag" $scenarioBookDraftFacts "HasUnsavedRecovery.*File\.GetLastWriteTimeUtc\(files\[i\]\) > manualUtc" "recovery flag must be set when an autosave is newer than the last manual save."
+Assert-Contains "draft row facts validation summary" $scenarioBookDraftFacts "error\(s\).*warning\(s\).*return ""OK"";" "validation summary must report errors, warnings, or OK."
+Assert-Contains "draft row facts assembly" $scenarioBookDraftFacts "facts\.BaseModeLabel = BaseModeLabel\(.*facts\.LastEditedText = ResolveLastEdited\(.*facts\.HasRecoveryData = HasUnsavedRecovery\(" "cheap row facts must assemble base mode, last-edited time, and recovery flag."
+Assert-Contains "draft detail facts export" $scenarioBookDraftFacts "ScenarioPublishExportService\.TryGetExistingExportInfo\(entry\.ScenarioId, entry\.DisplayName" "detail facts must resolve last-export state for the selected draft."
+Assert-Contains "draft detail facts validation" $scenarioBookDraftFacts "ScenarioAuthoringValidationSnapshot\.Evaluate\(validator, definition, scenarioFilePath\)" "detail facts must compute validation lazily for the selected draft."
+
+Assert-Contains "draft delete confirmation naming" $scenarioBookDraftFacts "Delete '"" \+ name \+ ""'" "delete confirmation text must name the draft."
+Assert-Contains "draft delete confirmation export fact" $scenarioBookDraftFacts "Its exported package is kept.*No exported package exists for this draft" "delete confirmation must state whether an exported package is kept."
+Assert-Contains "draft delete confirmation recovery fact" $scenarioBookDraftFacts "Unsaved recovery data.*will be removed with the draft" "delete confirmation must state whether recovery data is lost."
+
+Assert-Contains "export existing info helper" $scenarioPublishExport "internal static bool TryGetExistingExportInfo\(string scenarioId, string displayName, out string exportRoot, out DateTime lastWriteUtc\)" "export service must expose a session-free last-export probe reusing the export path convention."
+Assert-Contains "draft slot path helper" $scenarioDraftRepository "internal static string GetDraftScenarioFilePath\(int slot\)" "draft repository must resolve a draft's scenario.xml by slot without enumerating all drafts."
+
+Assert-Contains "draft row detail wiring" $scenarioBookDataSource "baseMode \+ "" base, edited "" \+ edited \+ recovery" "draft rows must show base mode, relative edit time, and a recovery marker."
+Assert-Contains "draft row recovery badge" $scenarioBookDataSource "if \(facts != null && facts\.HasRecoveryData\)\s*return ""Recovery"";" "draft rows with unsaved recovery data must badge as Recovery."
+Assert-Contains "recovery needs-attention grouping" $scenarioBookDataSource "AddPublishedScenarioRows\(rows\);.*AddRecoveryRows\(rows\);" "recovery rows must trail the normal type cards, not sit between them."
+Assert-Contains "recovery needs-attention header" $scenarioBookDataSource "Title = ""Needs attention""" "recovery rows must be grouped under a labelled Needs attention section."
+
+Assert-Contains "draft detail pane facts" $scenarioBookRenderer "BuildDraftFacts\(root, model != null \? model\.Facts : null\)" "the draft detail pane must render the assembled draft facts."
+
+Assert-Contains "confirmation localize routing" $scenarioBookPanel "MessageBox\.Show\(MessageBoxButtons\.YesNo_Buttons, message,.*, null, null, localize\)" "confirmations must pass an explicit localize flag so custom draft messages render verbatim."
+Assert-Contains "draft delete non-localized message" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildDeleteMessage\(draftName, facts\);\s*localize = false;" "draft deletes must use the built draft-named message without localization."
+Assert-Contains "duplicate confirmation" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildDuplicateMessage\(draftName, facts\)" "duplicate must confirm with a draft-named message."
+Assert-Contains "rename confirmation" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildRenameMessage\(draftName, model\.DraftId, facts\)" "renaming a draft file must confirm with a draft-named message."
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

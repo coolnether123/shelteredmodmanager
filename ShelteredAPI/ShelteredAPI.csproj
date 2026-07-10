@@ -638,6 +638,7 @@
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteSwapRenderer.cs" />
     <Compile Include="Scenarios\Infrastructure\Assets\ScenarioSpriteSwapService.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserActionService.cs" />
+    <Compile Include="Scenarios\Presentation\Selection\ScenarioBookDraftFacts.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserDataSource.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserModels.cs" />
     <Compile Include="Scenarios\Presentation\Selection\ScenarioBookBrowserPanel.cs" />
