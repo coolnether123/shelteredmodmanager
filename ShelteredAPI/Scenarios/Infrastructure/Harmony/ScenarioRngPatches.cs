@@ -12,19 +12,30 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
     internal static class ScenarioRngPatches
     {
         private static bool _installed;
-        private static readonly string[] TierOneTypes = new string[]
+        // Generated from phase6_rngsweep.md Tier 1.  Each entry is a catalogued declaring
+        // method, never a broad type scan; the IL precheck below is a second drift guard.
+        private static readonly string[] TargetMethodManifest = new string[]
         {
-            "DiceRoll", "RandomStatGenerator", "CharacterMeshOptions", "EncounterGenerator",
-            "WeatherManager", "NpcVisitManager", "FamilySpawner", "ExplorationParty",
-            "CombatAI_Worm", "CombatAIAggressive", "CombatAIBear", "CombatAIDebug", "CombatAIDog",
-            "CombatAIGeneric", "CombatAIMutant", "CombatAISurroundedBoss", "CombatAIWolf"
+            "BreachMan|ResetSpawnTime,EnterStage_FamilySheltering,EnterStage_MainPhase,EnterStage_Breached",
+            "BreachMan_Stasis|EnterStage_MainPhase", "BreachMan_Surrounded|EnterStage_MainPhase",
+            "CharacterMeshOptions|GetRandomStasisMutantCharacterPreset,GetRandomTexture,Randomize_DontCallThisOutsideOfCharacterMeshOptions",
+            "CombatAI_Worm|GetNextAction", "CombatAIAggressive|GetNextAction", "CombatAIBear|GetNextAction", "CombatAIDebug|GetNextAction", "CombatAIDog|GetNextAction", "CombatAIGeneric|GetNextAction", "CombatAIMutant|GetNextAction", "CombatAISurroundedBoss|GetNextAction", "CombatAIWolf|GetNextAction",
+            "Companion_Scientist|SetRandomState", "CompanionAnimal|GetRandomState", "DialogueStageOpening|State_WaitFade", "DialogueStageQuest|QuestStage_Randomizer,QuestStage_EndEncounter",
+            "DiceRoll|d2,d3,d4,d6,d8,d10,d12,d20,d100", "EncounterCharacter|SetupFromInspector,SetAppearance,RandomiseCurrentAnimation,MeleeAttack,Subdue,UpdateState_Throwing,UpdateState_Shooting,GetRandomBackpackItem", "EncounterDialoguePanel|OnShow",
+            "EncounterGenerator|GenerateNPCs,GetRandomStasisEncounter,SetupCharacter", "EncounterLogic|AttackRoll_Melee,AttackRoll_Special,DamageRoll", "EncounterManager|OverrideTradeItems,StartEncounter_EditorDebug", "EncounterTypeBias|GetRandomEncounterType,GetUnbiasedRandomEncounterType",
+            "ExpeditionMap|CreateMap,CreateStasisMap,FindClearSpace,FindRandomEmptyPlaceForMutantSwarm,FindSpaceContainingRegions,FindSuitablePlaceForMutantSwarm,GenerateMountains,GenerateRandomRegions,GenerateWoodland,GetRandomCommonItemType,PlaceBuildingsNearToShelter,PlaceBuildingsNearToShelter_Remaining,PlaceHousingEstates,PlaceItemsAtStartLocations,PlaceLargeLocations,PlaceLoneBuildings,PlaceMediumLocations,PlaceRecyclingBuildings,PlaceReservoirsAndShacks,PlaceRestaurants,PlaceSmallLocations,PlaceSpecialLocationItems,PlaceStasisHiddenMapItems,PlaceStasisMapItems,PlaceStasisSpecialMapItems,StampIntoScratchpad,StampMutantSwarmOnToStasisMap",
+            "ExplorationParty|Begin_Finished,CreateRadioDialogParametersForQuery,NpcEncounter_Premature_AutoResolve,OpenGroundEncounterCheck,Update_EncounteredNPCs_Start,Update_OpenGroundNpcEncounter_Start,Update_ReportingDiversions_Start,Update_SearchingLocation", "FactionMan|GetFactionCharacterInfo", "FamilyManager|GetRandomLeaveSpeech", "FamilySpawner|SetUpStasisMutant", "Illness_Radiation|UpdateIllness", "InventoryManager|AddRandomStartingItems", "ItemDefinition_Combat|GetAnimInfo", "Job_LeaveShelter|DoFakeInteraction", "JournalInterpreter_Combat|CreateJournalEntry", "MapRegion|AttemptToDiscoverItems,GenerateRandomItems", "NameGenerator|GetFirstName,GetPetName,GetSurname",
+            "NpcDialogueScenario|QuestStage_Randomizer", "NpcVisitManager|CreateNpcVisitor,GetRandomExitPosition,GetRandomNpcColor,GetRandomPersonality,GetRandomStasisSpawnNPCType,ResetBinManSpawnTimer,ResetSpawnTimer,ResetWormsSpawnTimer,SpawnNpc,SpawnNpcs,SpawnStasisWorms,StartShelterBreach,UpdateStasis,UpdateSurvivial", "NpcVisitor|BreachAction_TryStealFood,BreachAction_TryStealItems,BreachAction_TryStealWater,BreachAction_TryToDrainPower,ChooseBreachAction,FindFoodToEat,FindPowerToDrain,Initialize,PickNextBreachState,SetUpBreachDifficultyValues,SpawnLootItems,SpawnTraderItems,Start,UpdateBreacher_MovingToNextDoor,UpdateBreacher_MovingToTarget,UpdateIntercom_StartPunish,UpdateMutantLurker_Moving,UpdateMutantLurker_StartDamagingFilter,UpdateMutantLurker_Vomiting,UpdateMutantLurker_Waiting,UpdatePasserby,UpdateWorm_ChangingFloor,UpdateWorm_DrainingPower,UpdateWorm_EatingFood,UpdateWorm_Entering,UpdateWorm_Loitering,UpdateWorm_WaitForCombat",
+            "Obj_AntiBreachTrap|OnTrapTriggered", "Obj_CryoBank|AddEmbryo", "Obj_ItemBin|RemoveRandomItems", "Obj_OxygenFilter|Start", "Obj_RatTrap|UseTrap", "Obj_SnareTrap|UseTrap", "Obj_WaterFilter|Start", "ObjectManager|RandomlyBreakSomething,SetNextRandomBreakageTime", "PartyMember|DropCarriedItems", "PestManager|NibbleStuff,SpawnPest,StartManager,UpdateManager", "PsychoState|Initialize,TriggerPsycho", "QuestLibrary|GetRandomAvailableQuest,GetRandomAvailableScenario", "QuestManager|AddPendingScenarioStage,SetMissingFamilyMemberSpawnDate,UpdateNextQuestSpawnTime", "RandomStatGenerator|GetRandomCharisma,GetRandomDexterity,GetRandomIntelligence,GetRandomPerception,GetRandomStrength", "RelocationManager|SpawnNewFamilyMembers,SpawnNewLayout,SpawnNewPet", "SettlementNameGenerator|GenerateName", "WeatherManager|ChooseNewRandomWeather,StartManager", "WildlifeManager|Awake,SpawnRandomWildlife,SpawnSurroundedWildlife,UpdateManager"
         };
         private static readonly MethodInfo RangeII = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(int), typeof(int) });
         private static readonly MethodInfo RangeFF = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(float), typeof(float) });
         private static readonly MethodInfo Value = AccessTools.PropertyGetter(typeof(UnityEngine.Random), "value");
+        private static readonly MethodInfo InitState = AccessTools.Method(typeof(UnityEngine.Random), "InitState", new Type[] { typeof(int) });
         private static readonly MethodInfo BridgeII = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int) });
         private static readonly MethodInfo BridgeFF = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(float), typeof(float) });
         private static readonly MethodInfo BridgeValue = AccessTools.Method(typeof(ModRandomBridge), "Value");
+        private static readonly MethodInfo BridgeInitState = AccessTools.Method(typeof(ModRandomBridge), "InitScenarioState", new Type[] { typeof(int) });
 
         public static void Install()
         {
@@ -32,29 +43,34 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
             _installed = true;
             HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("ShelteredModManager.ScenarioRngPatch");
             int patched = 0;
-            for (int i = 0; i < TierOneTypes.Length; i++)
+            for (int i = 0; i < TargetMethodManifest.Length; i++)
             {
-                Type type = AccessTools.TypeByName(TierOneTypes[i]);
+                string[] manifest = TargetMethodManifest[i].Split('|');
+                Type type = AccessTools.TypeByName(manifest[0]);
                 if (type == null)
                 {
-                    MMLog.WriteWarning("[ScenarioRngPatch] SKIP type mismatch: " + TierOneTypes[i]);
+                    MMLog.WriteWarning("[ScenarioRngPatch] SKIP type mismatch: " + manifest[0]);
                     continue;
                 }
-
-                MethodInfo[] methods = type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-                for (int j = 0; j < methods.Length; j++)
+                string[] names = manifest[1].Split(',');
+                for (int j = 0; j < names.Length; j++)
                 {
-                    MethodInfo target = methods[j];
-                    if (target == null || target.IsAbstract || target.ContainsGenericParameters) continue;
-                    try
+                    MethodInfo[] methods = type.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+                    bool found = false;
+                    for (int k = 0; k < methods.Length; k++)
                     {
-                        harmony.Patch(target, transpiler: new HarmonyMethod(typeof(ScenarioRngPatches), "RngTranspiler"));
-                        patched++;
+                        MethodInfo target = methods[k];
+                        if (target == null || target.Name != names[j] || target.IsAbstract || target.ContainsGenericParameters) continue;
+                        found = true;
+                        if (!ContainsRedirectableRngCall(target))
+                        {
+                            MMLog.WriteWarning("[ScenarioRngPatch] SKIP catalog drift/no RNG call: " + type.FullName + "." + target.Name);
+                            continue;
+                        }
+                        try { harmony.Patch(target, transpiler: new HarmonyMethod(typeof(ScenarioRngPatches), "RngTranspiler")); patched++; }
+                        catch (Exception ex) { MMLog.WriteWarning("[ScenarioRngPatch] SKIP method mismatch: " + type.FullName + "." + target.Name + " :: " + ex.Message); }
                     }
-                    catch (Exception ex)
-                    {
-                        MMLog.WriteWarning("[ScenarioRngPatch] SKIP method mismatch: " + type.FullName + "." + target.Name + " :: " + ex.Message);
-                    }
+                    if (!found) MMLog.WriteWarning("[ScenarioRngPatch] SKIP method missing: " + type.FullName + "." + names[j]);
                 }
             }
             MMLog.WriteInfo("[ScenarioRngPatch] Installed first tier-1 batches; methods=" + patched + ".");
@@ -67,7 +83,26 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                 t.ReplaceCalls(RangeII).Optional().WithCall(BridgeII, "RNG int Range redirect");
                 t.ReplaceCalls(RangeFF).Optional().WithCall(BridgeFF, "RNG float Range redirect");
                 t.ReplaceCalls(Value).Optional().WithCall(BridgeValue, "RNG value redirect");
+                t.ReplaceCalls(InitState).Optional().WithCall(BridgeInitState, "RNG scenario-owned InitState redirect");
             });
+        }
+
+        private static bool ContainsRedirectableRngCall(MethodBase target)
+        {
+            try
+            {
+                foreach (CodeInstruction instruction in PatchProcessor.GetOriginalInstructions(target))
+                {
+                    MethodInfo call = instruction.operand as MethodInfo;
+                    if (call == RangeII || call == RangeFF || call == Value || call == InitState)
+                        return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioRngPatch] SKIP IL inspection failure: " + target.DeclaringType.FullName + "." + target.Name + " :: " + ex.Message);
+            }
+            return false;
         }
     }
 }

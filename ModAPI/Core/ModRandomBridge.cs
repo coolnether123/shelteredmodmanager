@@ -33,6 +33,22 @@ namespace ModAPI.Core
             return _scenarioFixedSeedActive ? ModRandom.Range(0f, 1f) : Random.value;
         }
 
+        /// <summary>
+        /// Redirect target for the map generator's global Unity RNG reset. A fixed scenario resets
+        /// only its owned stream; vanilla retains the original global-state behaviour.
+        /// </summary>
+        public static void InitScenarioState(int seed)
+        {
+            if (_scenarioFixedSeedActive)
+            {
+                ModRandom.ResetForSaveSeed(seed);
+                MMLog.WriteInfo("[ModRandomBridge] Map generator reset scenario-owned stream seed=" + seed + ".");
+                return;
+            }
+
+            Random.InitState(seed);
+        }
+
         public static Vector2 InsideUnitCircle()
         {
             return _scenarioFixedSeedActive ? SampleInsideUnitCircle() : Random.insideUnitCircle;
