@@ -422,7 +422,10 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool DeleteDraft(string draftId, string reason)
         {
             if (string.IsNullOrEmpty(draftId))
+            {
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused draft delete because the draft id was empty.");
                 return false;
+            }
 
             lock (_sync)
             {
@@ -457,6 +460,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                                 }
 
                                 saveDeleted = _saveLibrary.Delete(DraftStorageScenarioId, saveId);
+                                if (!saveDeleted)
+                                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to delete virtual save for draft '"
+                                        + draftId + "'. slot=" + slot + ".");
                             }
                         }
 
@@ -475,6 +481,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 }
             }
 
+            MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused draft delete because no matching draft definition was found. draft='"
+                + draftId + "'.");
             return false;
         }
 
