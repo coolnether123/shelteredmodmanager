@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Reflection;
 
 namespace ModAPI.Core
 {
@@ -7,6 +8,7 @@ namespace ModAPI.Core
     public static class ModRandomBridge
     {
         private static volatile bool _scenarioFixedSeedActive;
+        private static readonly MethodInfo UnityInitState = typeof(Random).GetMethod("InitState", new System.Type[] { typeof(int) });
 
         public static bool ScenarioFixedSeedActive { get { return _scenarioFixedSeedActive; } }
 
@@ -46,7 +48,10 @@ namespace ModAPI.Core
                 return;
             }
 
-            Random.InitState(seed);
+            // Compile against older Unity profiles too; the catalogued call exists only on
+            // game builds exposing this member, which ScenarioRngPatches verifies first.
+            if (UnityInitState != null)
+                UnityInitState.Invoke(null, new object[] { seed });
         }
 
         public static Vector2 InsideUnitCircle()

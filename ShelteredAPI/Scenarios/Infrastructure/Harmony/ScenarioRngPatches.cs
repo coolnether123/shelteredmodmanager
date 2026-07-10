@@ -83,7 +83,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                 t.ReplaceCalls(RangeII).Optional().WithCall(BridgeII, "RNG int Range redirect");
                 t.ReplaceCalls(RangeFF).Optional().WithCall(BridgeFF, "RNG float Range redirect");
                 t.ReplaceCalls(Value).Optional().WithCall(BridgeValue, "RNG value redirect");
-                t.ReplaceCalls(InitState).Optional().WithCall(BridgeInitState, "RNG scenario-owned InitState redirect");
+                if (InitState != null)
+                    t.ReplaceCalls(InitState).Optional().WithCall(BridgeInitState, "RNG scenario-owned InitState redirect");
             });
         }
 
