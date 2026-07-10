@@ -97,6 +97,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionSave = "editor.save";
         public const string ActionHistoryShow = "editor.history.show";
         public const string ActionHistorySaveVersion = "editor.history.save_version";
+        public const string ActionHistoryClose = "editor.history.close";
+        public const string ActionHistoryConfirmRestore = "editor.history.confirm_restore";
+        public const string ActionHistoryConfirmDelete = "editor.history.confirm_delete";
+        public const string ActionHistoryCancelRestore = "editor.history.cancel_restore";
+        public const string ActionHistoryCancelDelete = "editor.history.cancel_delete";
+        public const string ActionHistoryRestorePrefix = "editor.history.restore.";
+        public const string ActionHistoryDeletePrefix = "editor.history.delete.";
         public const string ActionDraftCopyPath = "editor.draft.copy_path";
         public const string ActionDraftTitlePrefix = "editor.draft.title.";
         public const string ActionDraftDescriptionPrefix = "editor.draft.description.";
@@ -641,6 +648,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScrollStates = new List<ScenarioAuthoringPanelScrollState>();
             Settings = new ScenarioAuthoringSettingsSnapshot();
             SetupState = new ScenarioAuthoringSetupState();
+            HistoryRestoreCandidateIndex = -1;
+            HistoryDeleteCandidateIndex = -1;
         }
 
         public bool IsActive { get; set; }
@@ -701,6 +710,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public bool HelpShortcutsView { get; set; }
         public bool WindowMenuOpen { get; set; }
         public bool GlobalSearchOpen { get; set; }
+        public bool HistoryWindowOpen { get; set; }
+        public int HistoryRestoreCandidateIndex { get; set; }
+        public int HistoryDeleteCandidateIndex { get; set; }
         public ScenarioSpriteSwapPickerState SpriteSwapPicker { get; set; }
         public List<ScenarioAuthoringWindowState> WindowStates { get; private set; }
         public List<ScenarioAuthoringPanelScrollState> ScrollStates { get; private set; }
@@ -767,6 +779,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 HelpShortcutsView = HelpShortcutsView,
                 WindowMenuOpen = WindowMenuOpen,
                 GlobalSearchOpen = GlobalSearchOpen,
+                HistoryWindowOpen = HistoryWindowOpen,
+                HistoryRestoreCandidateIndex = HistoryRestoreCandidateIndex,
+                HistoryDeleteCandidateIndex = HistoryDeleteCandidateIndex,
                 SpriteSwapPicker = SpriteSwapPicker != null ? SpriteSwapPicker.Copy() : null,
                 Settings = Settings != null ? Settings.Copy() : new ScenarioAuthoringSettingsSnapshot(),
                 SetupState = SetupState != null ? SetupState.Copy() : new ScenarioAuthoringSetupState()

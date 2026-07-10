@@ -92,12 +92,13 @@ namespace ShelteredAPI.Scenarios.Application.Timeline{
                 return;
             }
 
-            if (entry.Kind != ScenarioTimelineEntryKind.WorldEvent
-                || !string.Equals(entry.SourceKind, "scheduled_action", System.StringComparison.OrdinalIgnoreCase)
+            if (!string.Equals(entry.SourceKind, "scheduled_action", System.StringComparison.OrdinalIgnoreCase)
                 || entry.SourceIndex < 0)
                 return;
 
-            state.FocusedEditorKind = ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent;
+            state.FocusedEditorKind = entry.Kind == ScenarioTimelineEntryKind.WorldEvent
+                ? ScenarioAuthoringLocalActionIds.FocusedKindWorldEvent
+                : "scheduled_action";
             state.FocusedEditorIndex = entry.SourceIndex;
             state.FocusedEditorIsNew = false;
         }

@@ -137,7 +137,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 WindowMenuActions = _stageNavigationBuilder.BuildWindowMenuActions(state, _windowRegistry),
                 Windows = windows.ToArray(),
                 SpritePickerDocument = BuildSpritePickerDocument(state, editorSession),
-                FocusedEditorDocument = BuildFocusedEditorDocument(state, editorSession, definition, _captureService),
+                FocusedEditorDocument = state != null && state.HistoryWindowOpen
+                    ? BuildHistoryDocument(state)
+                    : BuildFocusedEditorDocument(state, editorSession, definition, _captureService),
                 CustomSpriteEditor = _assetAuthoringContentBuilder.BuildCustomEditorModel(state),
                 Settings = state.SettingsWindowOpen ? BuildSettingsViewModel(state) : null,
                 Help = state != null && state.HelpWindowOpen && _helpAuthoringContentBuilder != null ? _helpAuthoringContentBuilder.Build(state) : null,
@@ -148,6 +150,76 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
             _shellChromeBuilder.ApplyShellChrome(viewModel, state, editorSession, session);
             return viewModel;
+        }
+
+        private static ScenarioAuthoringInspectorDocument BuildHistoryDocument(ScenarioAuthoringState state)
+        {
+            ScenarioDraftSnapshotService snapshots = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+            ScenarioDraftSnapshotInfo[] rows = snapshots != null ? snapshots.ListSnapshots() : new ScenarioDraftSnapshotInfo[0];
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            List<ScenarioAuthoringInspectorItem> recovery = new List<ScenarioAuthoringInspectorItem>();
+            recovery.Add(Fact("Last manual save", snapshots != null ? snapshots.GetLastManualSaveText() : "Unavailable", "A restore always autosaves the current working draft first."));
+            recovery.Add(Text("Autosaves are retained for recovery; named versions stay until you delete them."));
+            recovery.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistorySaveVersion, "Create Named Version", "Save a protected version of the current draft with a timestamped name.", true, true, "VER")));
+            sections.Add(FactSection("history_recovery", "RECOVERY", recovery));
+
+            int restoreIndex = state != null ? state.HistoryRestoreCandidateIndex : -1;
+            int deleteIndex = state != null ? state.HistoryDeleteCandidateIndex : -1;
+            int candidateIndex = restoreIndex >= 0 ? restoreIndex : deleteIndex;
+            if (candidateIndex >= 0 && candidateIndex < rows.Length && rows[candidateIndex] != null)
+            {
+                bool restoring = restoreIndex >= 0;
+                ScenarioDraftSnapshotInfo candidate = rows[candidateIndex];
+                List<ScenarioAuthoringInspectorItem> confirmation = new List<ScenarioAuthoringInspectorItem>();
+                confirmation.Add(Text(restoring
+                    ? "Restore '" + candidate.Name + "'? The current draft is autosaved first. Your manual save remains unchanged until you choose Save."
+                    : "Delete '" + candidate.Name + "'? This removes only that history entry; the current draft and manual save are unchanged."));
+                confirmation.Add(ActionItem(Action(
+                    restoring ? ScenarioAuthoringActionIds.ActionHistoryConfirmRestore : ScenarioAuthoringActionIds.ActionHistoryConfirmDelete,
+                    restoring ? "Restore Draft" : "Delete Version",
+                    restoring ? "Restore this protected snapshot into the working draft." : "Permanently remove only this history snapshot.",
+                    true,
+                    true,
+                    restoring ? "RS" : "DEL")));
+                confirmation.Add(ActionItem(Action(
+                    restoring ? ScenarioAuthoringActionIds.ActionHistoryCancelRestore : ScenarioAuthoringActionIds.ActionHistoryCancelDelete,
+                    "Cancel",
+                    "Return to the saved-draft list.",
+                    true,
+                    false,
+                    "CL")));
+                sections.Add(ActionSection("history_confirmation", restoring ? "RESTORE SAVED DRAFT?" : "DELETE SAVED DRAFT?", confirmation));
+            }
+            else
+            {
+                List<ScenarioAuthoringInspectorItem> autosaves = new List<ScenarioAuthoringInspectorItem>();
+                List<ScenarioAuthoringInspectorItem> versions = new List<ScenarioAuthoringInspectorItem>();
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    ScenarioDraftSnapshotInfo row = rows[i];
+                    if (row == null)
+                        continue;
+
+                    List<ScenarioAuthoringInspectorItem> target = row.IsAutosave ? autosaves : versions;
+                    target.Add(Property(row.Name + " - " + row.AgeText, string.IsNullOrEmpty(row.ChangeSummary) ? "Protected draft snapshot" : row.ChangeSummary, "Restore first protects the current draft with an autosave."));
+                    target.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryRestorePrefix + i.ToString(CultureInfo.InvariantCulture), "Restore", "Restore this saved draft after first autosaving the current working draft.", true, false, "RS")));
+                    target.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionHistoryDeletePrefix + i.ToString(CultureInfo.InvariantCulture), "Delete", "Remove only this history entry.", true, false, "DEL")));
+                }
+                if (autosaves.Count == 0)
+                    autosaves.Add(Text("No autosaves yet. Autosaves appear after edits and before a restore."));
+                if (versions.Count == 0)
+                    versions.Add(Text("No named versions yet. Use Create Named Version to protect this draft."));
+                sections.Add(ActionSection("history_autosaves", "AUTOSAVES", autosaves));
+                sections.Add(ActionSection("history_versions", "NAMED VERSIONS", versions));
+            }
+
+            return new ScenarioAuthoringInspectorDocument
+            {
+                Title = "Draft History",
+                Subtitle = "Restore a protected draft without overwriting your last manual save.",
+                HeaderActions = BuildModalCloseHeaderActions(ScenarioAuthoringActionIds.ActionHistoryClose, "Close draft history."),
+                Sections = sections.ToArray()
+            };
         }
 
         private ScenarioAuthoringTourViewModel BuildTourViewModel()
