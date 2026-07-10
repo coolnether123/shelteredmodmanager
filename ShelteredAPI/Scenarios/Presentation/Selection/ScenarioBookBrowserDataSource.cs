@@ -462,7 +462,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Kind = ScenarioBookRowKind.Scenario,
                 Type = selectedType,
                 Scenario = entry,
-                Title = Safe(entry != null ? entry.DisplayName : null, entry != null ? entry.ScenarioId : null),
+                Title = BuildScenarioTitle(entry),
                 Detail = entry != null && entry.Source == ScenarioCatalogSource.Draft
                     ? BuildDraftScenarioDetail(entry, draftSave, draftFacts)
                     : BuildScenarioDetail(entry),
@@ -731,7 +731,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Kind = ScenarioBookRowKind.Scenario,
                     Type = ScenarioBookType.Published,
                     Scenario = entry,
-                    Title = Safe(entry.DisplayName, entry.ScenarioId),
+                    Title = BuildScenarioTitle(entry),
                     Detail = Safe(entry.Description, BuildScenarioDetail(entry)),
                     Badge = BuildScenarioBadge(entry),
                     IsLocked = !entry.CanStart
@@ -752,12 +752,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (entry == null)
                 return string.Empty;
 
+            string package = entry.IsModded
+                ? "Package ID: " + Safe(entry.ScenarioId, "unknown") + "\n"
+                : string.Empty;
             string owner = entry.Source == ScenarioCatalogSource.Vanilla
                 ? "vanilla"
                 : (!string.IsNullOrEmpty(entry.OwnerModId) ? entry.OwnerModId : "local");
             string mode = entry.BaseGameMode.ToString();
             string state = entry.CanStart ? "Ready" : "Locked";
-            return owner + " - " + mode + " - " + state;
+            return package + owner + " - " + mode + " - " + state;
+        }
+
+        private static string BuildScenarioTitle(ScenarioCatalogEntry entry)
+        {
+            if (entry == null)
+                return string.Empty;
+
+            string name = Safe(entry.DisplayName, entry.ScenarioId);
+            if (!entry.IsModded)
+                return name;
+
+            string version = Safe(entry.Version, "unknown");
+            string author = Safe(entry.Author, "unknown");
+            return name + " - v" + version + " by " + author;
         }
 
         private static string BuildDraftScenarioDetail(ScenarioCatalogEntry entry, SaveEntry draftSave, ScenarioBookDraftFactsModel facts)

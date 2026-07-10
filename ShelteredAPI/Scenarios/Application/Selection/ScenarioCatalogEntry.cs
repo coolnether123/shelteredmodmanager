@@ -30,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
         public string DisplayName { get; set; }
         public string Description { get; set; }
         public string Version { get; set; }
+        public string Author { get; set; }
         public string OwnerModId { get; set; }
         public int Order { get; set; }
         public int SaveCount { get; set; }
