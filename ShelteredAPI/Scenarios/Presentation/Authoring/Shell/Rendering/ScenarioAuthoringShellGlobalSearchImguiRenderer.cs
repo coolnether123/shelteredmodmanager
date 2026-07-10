@@ -129,10 +129,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             GUI.Label(new Rect(inner.x, inner.y, inner.width, 22f), "FIND ANYTHING", _sectionTitleStyle);
             float fieldY = inner.y + 30f;
-            Rect fieldRect = new Rect(inner.x, fieldY, inner.width, 30f);
+            Rect fieldRect = new Rect(inner.x, fieldY, inner.width, 34f);
 
             GUI.SetNextControlName(GlobalSearchControlName);
-            GUIStyle fieldStyle = new GUIStyle(GUI.skin.textField);
+            GUIStyle fieldStyle = new GUIStyle(_uiContext.Styles.SearchField);
             fieldStyle.fontSize = 14;
             fieldStyle.alignment = TextAnchor.MiddleLeft;
             string typed = GUI.TextField(fieldRect, _globalSearchText ?? string.Empty, fieldStyle);
@@ -150,9 +150,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             _globalSearchFocused = string.Equals(GUI.GetNameOfFocusedControl(), GlobalSearchControlName, StringComparison.Ordinal);
+            Event current = Event.current;
+            if (_globalSearchFocused || (current != null && fieldRect.Contains(current.mousePosition)))
+                DrawFieldFocusBorder(fieldRect);
 
-            if (string.IsNullOrEmpty(_globalSearchText))
-                GUI.Label(new Rect(fieldRect.x + 8f, fieldRect.y, fieldRect.width - 16f, fieldRect.height), "Type a command, stage, character, help topic...", _mutedTextStyle);
+            DrawSearchPlaceholder(fieldRect, _globalSearchText, "Commands, stages, characters, and help topics");
 
             float footerHeight = 22f;
             float listY = fieldRect.yMax + 10f;
@@ -326,7 +328,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private Rect DrawTopBarGlobalSearchButton(Rect windowMenuButtonRect, Rect animatedRect, bool compact)
         {
             _globalSearchButtonRect = RuntimeCompat.ZeroRect();
-            float width = compact ? 68f : 118f;
+            string label = compact ? "Find" : "Find (Ctrl+K)";
+            float width = Mathf.Max(compact ? 68f : 118f, ScenarioUiMeasuredLabel.Width(label, _uiContext.Styles.SearchField, compact ? 12f : 18f));
             float height = windowMenuButtonRect.height > 0f ? windowMenuButtonRect.height : 28f;
             float y = windowMenuButtonRect.height > 0f ? windowMenuButtonRect.y : animatedRect.y + 8f;
             float right = windowMenuButtonRect.width > 0f
@@ -339,9 +342,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             Rect rect = new Rect(x, y, width, height);
             bool open = _snapshot != null && _snapshot.State != null && _snapshot.State.GlobalSearchOpen;
             GUIContent content = new GUIContent(
-                compact ? "Find" : "Find (Ctrl+K)",
+                label,
                 "Search commands and scenario elements (Ctrl+K).");
-            if (DrawPlainButton(rect, content, open ? _activeButtonStyle : _buttonStyle, true))
+            if (DrawPlainButton(rect, content, open ? _activeButtonStyle : _uiContext.Styles.SearchField, true))
             {
                 ScenarioAuthoringBackendService.Instance.ExecuteAction(ScenarioAuthoringActionIds.ActionShellToggleGlobalSearch);
                 if (Event.current != null)
@@ -349,7 +352,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
 
             _globalSearchButtonRect = rect;
+            Event current = Event.current;
+            if (open || (current != null && rect.Contains(current.mousePosition)))
+                DrawFieldFocusBorder(rect);
             return rect;
+        }
+
+        private void DrawSearchPlaceholder(Rect rect, string value, string placeholder)
+        {
+            if (!string.IsNullOrEmpty(value) || _uiContext == null || _uiContext.Styles == null)
+                return;
+
+            GUIStyle placeholderStyle = new GUIStyle(_uiContext.Styles.SearchField);
+            Color ink = _uiContext.Styles.Theme.Palette.TextOnLight;
+            placeholderStyle.normal.background = null;
+            placeholderStyle.normal.textColor = new Color(ink.r, ink.g, ink.b, 0.62f);
+            placeholderStyle.hover.background = null;
+            placeholderStyle.focused.background = null;
+            placeholderStyle.active.background = null;
+            GUI.Label(rect, placeholder ?? string.Empty, placeholderStyle);
         }
     }
 }

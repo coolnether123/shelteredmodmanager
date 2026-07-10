@@ -150,6 +150,11 @@ $scenarioAuthoringPresentationBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Pr
 $scenarioAuthoringWindowRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellWindowImguiRenderer.cs"
 $scenarioAuthoringTutorialRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellTutorialImguiRenderer.cs"
 $scenarioAssetBrowserUx = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetBrowserUx.cs"
+$scenarioAssetBrowserRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellAssetBrowserImguiRenderer.cs"
+$scenarioGlobalSearchRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellGlobalSearchImguiRenderer.cs"
+$scenarioAssetAuthoringContent = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetAuthoringContentBuilder.cs"
+$scenarioWeatherEffectCatalog = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Assets\ScenarioWeatherEffectSpriteCatalogService.cs"
+$scenarioUiStyleSheet = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\UiKit\ScenarioUiStyleSheet.cs"
 $scenarioCastMemberPickerBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs"
 $scenarioStoryCharacterActorLinkSectionBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs"
 $scenarioStoryFocusedEditorDocumentBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs"
@@ -537,6 +542,13 @@ Assert-Contains "supplies verification" $scenarioVerification "VerifySuppliesAut
 Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "SerializeList\(IList<string> values\).*Uri\.EscapeDataString.*DeserializeList\(string value\).*Uri\.UnescapeDataString" "Favorites and recents must use a reversible encoding for arbitrary asset action ids."
 Assert-Contains "asset browser persistence round-trip" $scenarioAssetBrowserUx "FavoritesKey = ""asset_browser\.favorites"".*RecentKey = ""asset_browser\.recent"".*RecentLimit = 20.*settings\.Save\(state\.Settings\)" "Favorites and capped recents must round-trip through the editor settings store."
 Assert-Contains "asset browser contextual defaults" $scenarioAssetBrowserUx "FindSectionForAction\(sections, selectedActionId\).*ScenarioAuthoringTargetKind\.SceneSprite.*ScenarioAuthoringTargetKind\.Wall.*ScenarioAuthoringTargetKind\.PlaceableObject.*ScenarioStageKind\.BunkerBackground.*return RecentFilter" "Browser defaults must prefer the selected asset/target, then stage context, and finally Recent instead of All."
+Assert-Contains "asset browser card favorite star" $scenarioAuthoringWindowRenderer "HandleAssetFavoriteStarInput.*ToggleFavorite\(state, sourceActionId\).*current\.Use\(\).*BuildAssetFavoriteStarRect.*cardRect\.x \+ 5f.*cardRect\.yMax - 29f" "Every browser card must expose a bottom-left favorite star whose click is consumed before card selection or placement."
+Assert-NotContains "asset browser card favorite star" $scenarioAssetBrowserRenderer "Add Favorite|Favorited" "The detail-pane favorite button must stay retired so the card star is the only favorite affordance."
+Assert-Contains "weather effect preview tint" $scenarioWeatherEffectCatalog "PreviewTint = previewTint.*TryResolveParticleTint.*particles\.startColor.*TryResolveSpriteTint.*renderer\.color.*TryResolveMaterialTint.*_TintColor.*_Color" "Weather previews must derive tint from material color, particle start color, and sprite-renderer color."
+Assert-Contains "weather effect preview tint" ($scenarioAssetAuthoringContent + $scenarioAuthoringWindowRenderer) "PreviewTint = target\.PreviewTint.*HasPreviewTint = target\.HasPreviewTint.*DrawSpritePreview\(previewRect, action\.PreviewSprite, action\.Emphasized, action\.HasPreviewTint" "Weather tint metadata must reach asset cards and the shared preview renderer."
+Assert-Contains "readable search fields" $scenarioUiStyleSheet "SearchField\s*=\s*BuildField\(accentNeutralCorner, accentActiveCorner, palette\.TextOnLight" "Search inputs must use a light parchment field with dark palette ink and a distinct focused surface."
+Assert-Contains "readable search fields" ($scenarioGlobalSearchRenderer + $scenarioAssetBrowserRenderer) "Styles\.SearchField.*DrawSearchPlaceholder.*DrawFieldFocusBorder" "Global and asset browser search fields must share readable placeholder and focus treatment."
+Assert-NotContains "ellipsis-free measured labels" $scenarioUiStyleSheet 'FitLabelWithEllipsis|const string ellipsis|"\.\.\."' "The shared measured-label helper must never synthesize truncation dots."
 
 $assetCategoryLabels = @([System.Text.RegularExpressions.Regex]::Matches($scenarioAssetBrowserUx, 'return Label\("([^"]+)"') |
     ForEach-Object { $_.Groups[1].Value })

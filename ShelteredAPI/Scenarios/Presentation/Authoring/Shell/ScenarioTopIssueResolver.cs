@@ -41,7 +41,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             // Prefer the playtest fix resolver only where it recognized a specific,
             // crisp blocker (Open Cast / Save Draft); otherwise fall back to the
-            // publish issue rows for stage-specific "Go To ..." navigation.
+            // publish issue rows for stage-specific navigation actions.
             ScenarioAuthoringInspectorAction fix = ScenarioPlaytestFixActionResolver.BuildFixAction(issue.Message);
             if (fix != null && IsSpecificPlaytestFix(fix.Id))
                 return fix;

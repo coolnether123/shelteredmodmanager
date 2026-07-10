@@ -105,8 +105,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (state == null || !state.WorldLoading)
                 return RuntimeCompat.ZeroRect();
 
-            string status = string.IsNullOrEmpty(state.WorldLoadingStatus) ? "Loading game..." : state.WorldLoadingStatus;
-            string label = compact ? "Loading game..." : ShortenToFit(status, 260f, _statusStyle);
+            string status = string.IsNullOrEmpty(state.WorldLoadingStatus) ? "Loading game" : state.WorldLoadingStatus;
+            string label = compact ? "Loading game" : ShortenToFit(status, 260f, _statusStyle);
             float width = compact ? 132f : Mathf.Clamp(ScenarioUiMeasuredLabel.Width(label, _statusStyle, 28f), 148f, 280f);
             Rect rect = new Rect(animatedRect.xMax - width - 10f, animatedRect.y + (compact ? 36f : 8f), width, compact ? 24f : 28f);
             GUI.Box(rect, label, _statusStyle);

@@ -163,7 +163,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string fittedLabel = string.Empty;
             string fitTooltip = string.Empty;
             if (!chromeGlyph)
-                ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle, out fittedLabel, out fitTooltip);
+                ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(action.Label ?? string.Empty, ResolveButtonContentWidth(rect, drawStyle, tab), drawStyle, out fittedLabel, out fitTooltip);
             if (!string.IsNullOrEmpty(fitTooltip))
                 tooltip = string.IsNullOrEmpty(tooltip) ? fitTooltip : tooltip + "\n" + fitTooltip;
             GUIContent content = new GUIContent(fittedLabel, tooltip);

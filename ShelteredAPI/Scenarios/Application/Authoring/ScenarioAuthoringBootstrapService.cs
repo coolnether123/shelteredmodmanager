@@ -514,7 +514,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     {
                         _lastPendingBlockingReason = blockingReason;
                         if (_backend != null)
-                            _backend.SetWorldLoadingStatus("Loading game... " + blockingReason);
+                            _backend.SetWorldLoadingStatus("Loading game — " + blockingReason);
                         if (_entryFlowService != null)
                             _entryFlowService.SetLoadingStatus("Status: world loading - " + blockingReason);
                         MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId + "' is waiting for world readiness. Reason="
@@ -650,7 +650,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _worldLoadingShellDraftId = pending.DraftId;
             }
 
-            string status = "Loading game... waiting for the shelter world to finish loading.";
+            string status = "Loading game — waiting for the shelter world to finish loading.";
             _backend.BeginWorldLoadingSession(pending, status);
             if (_entryFlowService != null)
                 _entryFlowService.MarkEditorReady(pending, false);
@@ -871,7 +871,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _warmupDraftId = pending.DraftId;
                 _warmupElapsedSeconds = 0f;
                 if (_backend != null)
-                    _backend.SetWorldLoadingStatus("Loading game... shelter ready, letting the first moments settle.");
+                    _backend.SetWorldLoadingStatus("Loading game — shelter ready, letting the first moments settle.");
                 if (_entryFlowService != null)
                     _entryFlowService.SetLoadingStatus("Status: world ready - letting the shelter settle before opening tools.");
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId

@@ -140,7 +140,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             float x = rect.x + 26f;
             if (reloadPending)
             {
-                DrawStatusLabel(new Rect(x, rect.y + 14f, Math.Max(80f, statusRight - x), 20f), "Restarting playtest...", true);
+                DrawStatusLabel(new Rect(x, rect.y + 14f, Math.Max(80f, statusRight - x), 20f), "Restarting playtest", true);
             }
             else
             {

@@ -139,7 +139,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
 
             string status = string.IsNullOrEmpty(statusMessage)
-                ? "Loading game..."
+                ? "Loading game"
                 : statusMessage;
             lock (_sync)
             {
@@ -187,7 +187,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     return;
 
                 string status = string.IsNullOrEmpty(statusMessage)
-                    ? "Loading game..."
+                    ? "Loading game"
                     : statusMessage;
                 _state.WorldLoadingStatus = status;
                 _state.StatusMessage = status;
@@ -493,7 +493,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (snapshot.WorldLoading && IsWorldDependentAction(actionId))
             {
                 string reason = string.IsNullOrEmpty(snapshot.WorldLoadingStatus)
-                    ? "Loading game... world actions are disabled until the shelter is ready."
+                    ? "Loading game — world actions are disabled until the shelter is ready."
                     : snapshot.WorldLoadingStatus;
                 return ScenarioAuthoringActionExecutionResult.Failure(actionId, reason, reason);
             }

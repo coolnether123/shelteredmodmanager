@@ -415,14 +415,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Imgui{
                 {
                     ScenarioAuthoringInspectorItem item = properties[i];
                     Rect rowRect = GUILayoutUtility.GetRect(0f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
-                    float editWidth = 34f;
+                    float editWidth = Mathf.Max(44f, _runtime.MiniButtonStyle.CalcSize(new GUIContent("Edit")).x + 12f);
                     DrawInspectorPropertyRow(
                         new Rect(rowRect.x, rowRect.y, rowRect.width - editWidth - 6f, rowRect.height),
                         item != null ? item.Label : string.Empty,
                         item != null ? item.Value : string.Empty);
 
                     GUI.enabled = target != null;
-                    if (GUI.Button(new Rect(rowRect.xMax - editWidth, rowRect.y + 2f, editWidth, 24f), "...", _runtime.MiniButtonStyle))
+                    if (GUI.Button(new Rect(rowRect.xMax - editWidth, rowRect.y + 2f, editWidth, 24f), "Edit", _runtime.MiniButtonStyle))
                         OpenInspectorTargetMenu(target);
                     GUI.enabled = true;
                 }
@@ -1146,7 +1146,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Imgui{
             if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
                 return value ?? string.Empty;
 
-            return value.Substring(0, Math.Max(0, maxLength - 3)) + "...";
+            return value;
         }
 
         private Rect ToBrowserScreenRect(Rect localRect)

@@ -1558,7 +1558,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             string status = state != null && !string.IsNullOrEmpty(state.WorldLoadingStatus)
                 ? state.WorldLoadingStatus
-                : "Loading game... world actions are disabled until the shelter is ready.";
+                : "Loading game — world actions are disabled until the shelter is ready.";
             return new[]
             {
                 new ScenarioAuthoringInspectorSection
@@ -5057,7 +5057,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             string value = Safe(text);
             if (value.Length <= 72)
                 return value;
-            return value.Substring(0, 69) + "...";
+            return value;
         }
 
         private static bool ContainsJournalCategory(JournalVanillaPolicyDefinition policy, ScenarioJournalVanillaCategory category)
@@ -5353,7 +5353,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (value.Length <= 64)
                 return value;
 
-            return value.Substring(0, 61) + "...";
+            return value;
         }
 
         private static string FormatClockTime()
