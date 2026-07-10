@@ -410,18 +410,30 @@ signature regression fails loudly rather than silently corrupting RNG.
 
 ### Determinism contract for fixed custom scenarios
 
-When `ModRandomBridge.ScenarioFixedSeedActive` is true, redirected Unity RNG calls draw
-from the scenario-owned `ModRandom` stream. `ExpeditionMap.CreateMap` and
-`CreateStasisMap` reset that stream through `InitScenarioState(seed)`. Consequently, a
-fresh generation run whose patched call order is the same produces the same generated
-map fields for the same seed; a different seed produces a different stream. Compare only
-generation-immutable map fields (grid coordinate, generated region/topography/category),
-not visibility, discovery, encounter chance, or item counts: those fields are gameplay
-state and can change after generation.
+When `ModRandomBridge.ScenarioFixedSeedActive` is true, the bridge captures the scenario's
+fixed seed as the root of eight isolated streams: `map`, `characters`, `encounters`,
+`weather`, `visits`, `combat`, `items`, and `misc`. Each stream seed is a stable FNV-1a
+composition of `(scenarioFixedSeed, domainName)`. The manifest transpiler assigns a whole
+declaring-type batch to one domain and emits the domain name at each redirected call site.
+Draw-order changes in another domain therefore cannot perturb the current domain.
 
-This is deliberately not a promise that every possible game outcome is order-independent.
+`ExpeditionMap.CreateMap` and `CreateStasisMap` still redirect their vanilla
+`Random.InitState(randomSeed)` calls through `InitScenarioState(int)`, but the active-gate
+path deliberately ignores that argument. Vanilla initializes `ExpeditionMap.randomSeed`
+from `DateTime.Now.Ticks` when it is zero, so accepting it would replace the fixed scenario
+root on every entry. The bridge instead resets only the `map` sub-stream from the captured
+scenario seed and logs the scenario seed, derived domain seed, and reset origin. Gate
+activation resets and logs all eight domains, making replay boundaries auditable.
+
+Consequently, real fresh or restart generation produces the same immutable map tuple
+`(gridX, gridY, regionName, topography, category)` for the same fixed seed, while a
+different fixed seed selects different domain streams. Do not include visibility,
+discovery, encounter chance, or item counts in the map identity; those fields are mutable
+gameplay state.
+
 The retained `ProceduralTile.rnd` System.Random field and initializer rows outside the
-catalogued redirect scope remain vanilla-owned. A restart is a regeneration proof only
-when the route actually invokes map creation; a shell transition alone does not establish
-that fact. With the gate inactive, every bridge member delegates to Unity unchanged,
-including `InitState`, so normal vanilla games retain Unity's global RNG behavior.
+catalogued redirect scope remain vanilla-owned. Isolation is per declared domain, not a
+promise that ordering changes within one domain are irrelevant. A restart is a
+regeneration proof only when the route actually invokes map creation. With the gate
+inactive, every bridge target calls Unity directly, including `InitState`, so normal
+vanilla games retain the original global RNG behavior.

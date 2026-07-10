@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using HarmonyLib;
@@ -32,9 +33,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         private static readonly MethodInfo RangeFF = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(float), typeof(float) });
         private static readonly MethodInfo Value = AccessTools.PropertyGetter(typeof(UnityEngine.Random), "value");
         private static readonly MethodInfo InitState = AccessTools.Method(typeof(UnityEngine.Random), "InitState", new Type[] { typeof(int) });
-        private static readonly MethodInfo BridgeII = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int) });
-        private static readonly MethodInfo BridgeFF = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(float), typeof(float) });
-        private static readonly MethodInfo BridgeValue = AccessTools.Method(typeof(ModRandomBridge), "Value");
+        private static readonly MethodInfo BridgeDomainII = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int), typeof(string) });
+        private static readonly MethodInfo BridgeDomainFF = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(float), typeof(float), typeof(string) });
+        private static readonly MethodInfo BridgeDomainValue = AccessTools.Method(typeof(ModRandomBridge), "Value", new Type[] { typeof(string) });
         private static readonly MethodInfo BridgeInitState = AccessTools.Method(typeof(ModRandomBridge), "InitScenarioState", new Type[] { typeof(int) });
 
         public static void Install()
@@ -78,14 +79,62 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
 
         public static IEnumerable<CodeInstruction> RngTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original, ILGenerator generator)
         {
+            string domain = GetDomainName(original == null ? null : original.DeclaringType);
             return FluentTranspiler.Execute(instructions, original, generator, FluentTranspiler.BuildProfile.Runtime, delegate(FluentTranspiler t)
             {
-                t.ReplaceCalls(RangeII).Optional().WithCall(BridgeII, "RNG int Range redirect");
-                t.ReplaceCalls(RangeFF).Optional().WithCall(BridgeFF, "RNG float Range redirect");
-                t.ReplaceCalls(Value).Optional().WithCall(BridgeValue, "RNG value redirect");
+                RedirectDomainCalls(t, RangeII, BridgeDomainII, domain);
+                RedirectDomainCalls(t, RangeFF, BridgeDomainFF, domain);
+                RedirectDomainCalls(t, Value, BridgeDomainValue, domain);
                 if (InitState != null)
                     t.ReplaceCalls(InitState).Optional().WithCall(BridgeInitState, "RNG scenario-owned InitState redirect");
             });
+        }
+
+        private static void RedirectDomainCalls(FluentTranspiler transpiler, MethodInfo source, MethodInfo replacement, string domain)
+        {
+            if (source == null || replacement == null) return;
+            List<int> callIndices = transpiler.Instructions()
+                .Select((instruction, index) => new { instruction, index })
+                .Where(entry => entry.instruction != null && entry.instruction.Calls(source))
+                .Select(entry => entry.index)
+                .ToList();
+
+            // Work backwards so each insertion leaves all remaining absolute indices stable.
+            for (int i = callIndices.Count - 1; i >= 0; i--)
+            {
+                int callIndex = callIndices[i];
+                transpiler.MoveTo(callIndex).InsertBefore(OpCodes.Ldstr, domain);
+                transpiler.ReplaceAtWithCall(callIndex + 1, replacement);
+            }
+        }
+
+        private static string GetDomainName(Type declaringType)
+        {
+            string typeName = declaringType == null ? string.Empty : declaringType.Name;
+            if (typeName == "ExpeditionMap" || typeName == "RelocationManager" || typeName == "SettlementNameGenerator") return "map";
+
+            if (typeName == "CharacterMeshOptions" || typeName == "Companion_Scientist" || typeName == "CompanionAnimal"
+                || typeName == "FactionMan" || typeName == "FamilyManager" || typeName == "FamilySpawner"
+                || typeName == "NameGenerator" || typeName == "RandomStatGenerator") return "characters";
+
+            if (typeName == "DialogueStageOpening" || typeName == "DialogueStageQuest" || typeName == "EncounterCharacter"
+                || typeName == "EncounterGenerator" || typeName == "EncounterManager" || typeName == "EncounterTypeBias"
+                || typeName == "ExplorationParty" || typeName == "NpcDialogueScenario" || typeName == "QuestLibrary"
+                || typeName == "QuestManager") return "encounters";
+
+            if (typeName == "WeatherManager") return "weather";
+
+            if (typeName.StartsWith("BreachMan", StringComparison.Ordinal) || typeName == "Job_LeaveShelter"
+                || typeName == "NpcVisitManager" || typeName == "NpcVisitor") return "visits";
+
+            if (typeName.StartsWith("CombatAI", StringComparison.Ordinal) || typeName == "DiceRoll"
+                || typeName == "EncounterLogic" || typeName == "JournalInterpreter_Combat") return "combat";
+
+            if (typeName == "InventoryManager" || typeName == "ItemDefinition_Combat" || typeName == "MapRegion"
+                || typeName.StartsWith("Obj_", StringComparison.Ordinal) || typeName == "ObjectManager"
+                || typeName == "PartyMember") return "items";
+
+            return "misc";
         }
 
         private static bool ContainsRedirectableRngCall(MethodBase target)
