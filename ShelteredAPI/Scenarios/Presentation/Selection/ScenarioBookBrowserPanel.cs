@@ -475,7 +475,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             try
             {
-                return ScenarioBookDraftFacts.BuildDetailFacts(scenario);
+                if (_dataSource != null)
+                    _dataSource.BeginDraftFactsRefreshAsync(scenario);
+                return ScenarioBookDraftFacts.BuildImmediateDetailFacts(scenario);
             }
             catch (Exception ex)
             {
@@ -585,9 +587,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             };
         }
 
-        // Detail-pane facts (validation, export, recovery) are computed lazily for the
-        // one selected draft and cached so background catalog refreshes do not re-run
-        // validation on every re-render.
+        // The click frame publishes cheap facts immediately. Full filesystem,
+        // deserialization, and validation facts are versioned through the data source.
         private ScenarioBookDraftFactsModel GetSelectedDraftFacts()
         {
             if (_selectedScenario == null)
@@ -596,8 +597,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_draftFactsCache != null && ReferenceEquals(_draftFactsCacheScenario, _selectedScenario))
                 return _draftFactsCache;
 
-            _draftFactsCache = ScenarioBookDraftFacts.BuildDetailFacts(_selectedScenario);
+            _draftFactsCache = ScenarioBookDraftFacts.BuildImmediateDetailFacts(_selectedScenario);
             _draftFactsCacheScenario = _selectedScenario;
+            if (_dataSource != null)
+                _dataSource.BeginDraftFactsRefreshAsync(_selectedScenario);
             return _draftFactsCache;
         }
 
@@ -605,6 +608,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             _draftFactsCache = null;
             _draftFactsCacheScenario = null;
+            if (_dataSource != null)
+                _dataSource.InvalidateDraftFactsRefresh();
         }
 
         private void HandleDraftDetailsSaved(ScenarioBookDraftEditorModel model)
@@ -731,6 +736,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         {
             if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
             {
+                InvalidateDraftFactsCache();
                 _selectedScenario = null;
                 _view = _selectedType == ScenarioBookType.Published || _selectedScenarioOpenedDirectlyFromType
                     ? ScenarioBookBrowserViewKind.Types
@@ -896,6 +902,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             bool changed = _dataSource.ApplyLatestSnapshot();
             changed = _dataSource.ApplyLatestSaveRows() || changed;
+            ScenarioCatalogEntry factsScenario;
+            ScenarioBookDraftFactsModel facts;
+            if (_dataSource.ApplyLatestDraftFacts(out factsScenario, out facts))
+            {
+                if (facts != null && ReferenceEquals(factsScenario, _selectedScenario))
+                {
+                    _draftFactsCache = facts;
+                    _draftFactsCacheScenario = factsScenario;
+                    changed = true;
+                }
+            }
             if (!changed)
                 return;
 

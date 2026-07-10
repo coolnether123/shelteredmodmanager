@@ -29,6 +29,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private readonly IScenarioSelectionCatalogService _catalog;
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly object _saveRefreshSync = new object();
+        private readonly object _draftFactsRefreshSync = new object();
         private ScenarioCatalogEntry[] _entries = new ScenarioCatalogEntry[0];
         private int _appliedVersion;
         private string _lastRefreshError;
@@ -39,6 +40,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private int _saveRefreshVersion;
         private int _appliedSaveRefreshVersion;
         private int _saveRefreshRequestVersion;
+        private bool _draftFactsRefreshRunning;
+        private ScenarioCatalogEntry _draftFactsRefreshScenario;
+        private ScenarioCatalogEntry _draftFactsResultScenario;
+        private ScenarioBookDraftFactsModel _draftFactsResult;
+        private int _draftFactsRefreshVersion;
+        private int _appliedDraftFactsRefreshVersion;
+        private int _draftFactsRefreshRequestVersion;
         private bool _cancelled;
 
         public ScenarioBookBrowserDataSource(IScenarioSelectionCatalogService catalog, IScenarioSaveLibrary saveLibrary)
@@ -129,6 +137,52 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             });
         }
 
+        public void BeginDraftFactsRefreshAsync(ScenarioCatalogEntry entry)
+        {
+            if (entry == null || entry.Source != ScenarioCatalogSource.Draft)
+                return;
+
+            int requestVersion;
+            lock (_draftFactsRefreshSync)
+            {
+                if (_draftFactsRefreshRunning && ReferenceEquals(_draftFactsRefreshScenario, entry))
+                    return;
+
+                _draftFactsRefreshRunning = true;
+                _draftFactsRefreshScenario = entry;
+                _draftFactsResultScenario = null;
+                _draftFactsResult = null;
+                requestVersion = ++_draftFactsRefreshRequestVersion;
+            }
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                ScenarioBookDraftFactsModel facts = null;
+                try
+                {
+                    facts = ScenarioBookDraftFacts.BuildDetailFacts(entry);
+                }
+                catch (Exception ex)
+                {
+                    MMLog.WriteWarning("[ScenarioBookBrowser] Background draft facts failed for "
+                        + entry.ScenarioId + ": " + ex.Message);
+                }
+                finally
+                {
+                    lock (_draftFactsRefreshSync)
+                    {
+                        if (!_cancelled && requestVersion == _draftFactsRefreshRequestVersion)
+                        {
+                            _draftFactsResultScenario = entry;
+                            _draftFactsResult = facts;
+                            _draftFactsRefreshVersion++;
+                            _draftFactsRefreshRunning = false;
+                        }
+                    }
+                }
+            });
+        }
+
         public static void BeginSharedRefreshAsync(IScenarioSelectionCatalogService catalog)
         {
             int requestVersion;
@@ -207,6 +261,34 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
         }
 
+        public bool ApplyLatestDraftFacts(out ScenarioCatalogEntry scenario, out ScenarioBookDraftFactsModel facts)
+        {
+            scenario = null;
+            facts = null;
+            lock (_draftFactsRefreshSync)
+            {
+                if (_draftFactsRefreshVersion == _appliedDraftFactsRefreshVersion)
+                    return false;
+
+                _appliedDraftFactsRefreshVersion = _draftFactsRefreshVersion;
+                scenario = _draftFactsResultScenario;
+                facts = _draftFactsResult;
+                return true;
+            }
+        }
+
+        public void InvalidateDraftFactsRefresh()
+        {
+            lock (_draftFactsRefreshSync)
+            {
+                _draftFactsRefreshRequestVersion++;
+                _draftFactsRefreshRunning = false;
+                _draftFactsRefreshScenario = null;
+                _draftFactsResultScenario = null;
+                _draftFactsResult = null;
+            }
+        }
+
         public bool IsRefreshRunning
         {
             get
@@ -228,6 +310,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _saveRefreshRows = null;
                 _saveRefreshError = null;
             }
+
+            InvalidateDraftFactsRefresh();
         }
 
         public bool HasEntries

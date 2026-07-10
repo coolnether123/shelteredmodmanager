@@ -7,6 +7,12 @@ using ShelteredAPI.Scenarios.Definitions;
 
 namespace ShelteredAPI.Scenarios.Infrastructure.Serialization
 {
+    internal delegate bool ScenarioDefinitionRecoveryLoader(
+        string filePath,
+        out ScenarioDefinition definition,
+        out string recoveryMessage,
+        out bool recovered);
+
     internal sealed class ScenarioDefinitionMetadata
     {
         public ScenarioInfo Info;
@@ -94,6 +100,62 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization
         }
 
         public static bool TryLoad(
+            ScenarioDefinitionSerializer serializer,
+            string filePath,
+            string ownerModId,
+            ScenarioDefinitionRecoveryLoader recoveryLoader,
+            out ScenarioDefinitionMetadata metadata,
+            out string recoveryMessage,
+            out bool recovered)
+        {
+            if (serializer == null)
+                serializer = new ScenarioDefinitionSerializer();
+
+            metadata = null;
+            recoveryMessage = null;
+            recovered = false;
+            if (recoveryLoader == null || string.IsNullOrEmpty(filePath))
+                return false;
+
+            string fullPath;
+            long lastWriteTicks;
+            long length;
+            if (!TryGetFileStamp(filePath, out fullPath, out lastWriteTicks, out length))
+                return false;
+
+            string key;
+            if (TryGetCachedMetadata(fullPath, ownerModId, lastWriteTicks, length, out key, out metadata))
+                return true;
+
+            ScenarioDefinition definition;
+            try
+            {
+                definition = serializer.LoadUncached(filePath);
+            }
+            catch
+            {
+                if (!recoveryLoader(filePath, out definition, out recoveryMessage, out recovered) || definition == null)
+                    return false;
+
+                // Recovery may replace the primary XML. Never publish its metadata
+                // under the stamp captured for the unreadable pre-recovery file.
+                Invalidate(fullPath);
+                if (!TryGetFileStamp(fullPath, out fullPath, out lastWriteTicks, out length))
+                {
+                    metadata = BuildMetadata(definition, filePath, ownerModId);
+                    return metadata != null;
+                }
+
+                key = fullPath + "|" + (ownerModId ?? string.Empty);
+            }
+
+            ScenarioDefinitionMetadata loaded = BuildMetadata(definition, fullPath, ownerModId);
+            Publish(key, lastWriteTicks, length, loaded);
+            metadata = loaded;
+            return metadata != null;
+        }
+
+        public static bool TryLoad(
             IScenarioDefinitionSerializer serializer,
             string filePath,
             string ownerModId,
@@ -128,35 +190,55 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization
             if (!TryGetFileStamp(filePath, out fullPath, out lastWriteTicks, out length))
                 return false;
 
-            string key = fullPath + "|" + (ownerModId ?? string.Empty);
-            lock (Sync)
-            {
-                CacheEntry cached;
-                if (Entries.TryGetValue(key, out cached)
-                    && cached != null
-                    && cached.LastWriteTicks == lastWriteTicks
-                    && cached.Length == length)
-                {
-                    metadata = cached.Metadata;
-                    return metadata != null;
-                }
-            }
+            string key;
+            if (TryGetCachedMetadata(fullPath, ownerModId, lastWriteTicks, length, out key, out metadata))
+                return true;
 
             ScenarioDefinition definition = loadDefinition();
             ScenarioDefinitionMetadata loaded = BuildMetadata(definition, fullPath, ownerModId);
+            Publish(key, lastWriteTicks, length, loaded);
 
+            metadata = loaded;
+            return metadata != null;
+        }
+
+        private static bool TryGetCachedMetadata(
+            string fullPath,
+            string ownerModId,
+            long lastWriteTicks,
+            long length,
+            out string key,
+            out ScenarioDefinitionMetadata metadata)
+        {
+            key = fullPath + "|" + (ownerModId ?? string.Empty);
+            metadata = null;
+            lock (Sync)
+            {
+                CacheEntry cached;
+                if (!Entries.TryGetValue(key, out cached)
+                    || cached == null
+                    || cached.LastWriteTicks != lastWriteTicks
+                    || cached.Length != length)
+                {
+                    return false;
+                }
+
+                metadata = cached.Metadata;
+                return metadata != null;
+            }
+        }
+
+        private static void Publish(string key, long lastWriteTicks, long length, ScenarioDefinitionMetadata metadata)
+        {
             lock (Sync)
             {
                 Entries[key] = new CacheEntry
                 {
                     LastWriteTicks = lastWriteTicks,
                     Length = length,
-                    Metadata = loaded
+                    Metadata = metadata
                 };
             }
-
-            metadata = loaded;
-            return metadata != null;
         }
 
         private static bool TryGetFileStamp(string filePath, out string fullPath, out long lastWriteTicks, out long length)
