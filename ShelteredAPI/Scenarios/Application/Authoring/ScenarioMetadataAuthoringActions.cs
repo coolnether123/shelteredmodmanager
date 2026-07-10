@@ -35,6 +35,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 definition.Description = value.Trim();
                 return Changed(session, "Scenario description updated.", out handled, out message);
             }
+            if (TryDecode(actionId, ScenarioAuthoringActionIds.ActionDraftGoalPrefix, out value))
+            {
+                definition.Goal = value.Trim();
+                return Changed(session, "Scenario goal updated.", out handled, out message);
+            }
             if (TryDecode(actionId, ScenarioAuthoringActionIds.ActionDraftAuthorPrefix, out value))
             {
                 definition.Author = value.Trim();

@@ -8,6 +8,7 @@ using ShelteredAPI.Hooks;
 using ShelteredAPI.Scenarios.Application.Assets;
 using ShelteredAPI.Scenarios.Application.Map;
 using ShelteredAPI.Scenarios.Domain.Stages;
+using ShelteredAPI.Scenarios.Domain.Story;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal interface IScenarioAuthoringBackend
     {
@@ -99,6 +100,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public const string ActionDraftCopyPath = "editor.draft.copy_path";
         public const string ActionDraftTitlePrefix = "editor.draft.title.";
         public const string ActionDraftDescriptionPrefix = "editor.draft.description.";
+        public const string ActionDraftGoalPrefix = "editor.draft.goal.";
         public const string ActionDraftAuthorPrefix = "editor.draft.author.";
         public const string ActionDraftVersionPrefix = "editor.draft.version.";
         public const string ActionDraftCreditsPrefix = "editor.draft.credits.";
@@ -1276,6 +1278,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         public ScenarioSurvivorEditorViewModel SurvivorEditor { get; set; }
         public ScenarioSurvivorModFieldRowViewModel[] ModFieldRows { get; set; }
         public ScenarioInventorySlotGridViewModel InventorySlotGrid { get; set; }
+        // Non-null on the Story Map section: the visual story graph the Story Map renders.
+        public ScenarioStoryGraphModel StoryMap { get; set; }
     }
 
     internal enum ScenarioAuthoringInspectorItemKind

@@ -367,6 +367,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             definition.Id = ReadText(meta, "Id");
             definition.DisplayName = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "DisplayName"), ScenarioMetadataDefaults.DefaultTitle);
             definition.Description = ReadText(meta, "Description");
+            definition.Goal = ReadText(meta, "Goal");
             definition.Author = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "Author"), ScenarioMetadataDefaults.DefaultAuthor);
             definition.Version = ScenarioMetadataDefaults.ForLoad(ReadText(meta, "Version"), ScenarioMetadataDefaults.DefaultVersion);
             definition.Credits = ReadText(meta, "Credits");
@@ -1219,6 +1220,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Serialization{
             WriteElement(writer, "Id", definition.Id);
             WriteElement(writer, "DisplayName", definition.DisplayName);
             WriteElement(writer, "Description", definition.Description);
+            if (!string.IsNullOrEmpty(definition.Goal))
+                WriteElement(writer, "Goal", definition.Goal);
             WriteElement(writer, "Author", definition.Author);
             WriteElement(writer, "Version", definition.Version);
             WriteElement(writer, "Credits", definition.Credits);

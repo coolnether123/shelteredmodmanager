@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using ModAPI.Scenarios;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Application.Authoring;
@@ -106,6 +107,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool canOpenTest = string.IsNullOrEmpty(playtestDisabledReason);
             int dirtyCount = Item.CountDirtyFlags(editorSession);
             items.Add(EditableProperty("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
+            items.Add(BuildGoalItem(definition));
+            items.Add(BuildVictoryItem(definition));
             items.Add(Item.ActionItem(Item.Action(
                 ScenarioAuthoringActionIds.ActionSave,
                 dirtyCount == 0 ? "Saved" : "Unsaved changes",
@@ -120,6 +123,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true,
                 false,
                 validation != null && validation.ErrorCount > 0 ? "!" : "OK")));
+            ScenarioValidationIssue topIssue = ScenarioTopIssueResolver.ResolveTopIssue(validation);
+            if (topIssue != null)
+            {
+                items.Add(Item.Text("Next: " + topIssue.Message));
+                ScenarioAuthoringInspectorAction nextAction = ScenarioTopIssueResolver.BuildNextAction(topIssue);
+                if (nextAction != null)
+                    items.Add(Item.ActionItem(nextAction));
+            }
             ScenarioAuthoringInspectorAction testAction = Item.Action(
                 "stage.select." + ScenarioStageKind.Test,
                 playtestLabel,
@@ -155,6 +166,38 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 "CP",
                 draftPath)));
             return items.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorItem BuildGoalItem(ScenarioDefinition definition)
+        {
+            ScenarioAuthoringInspectorItem item = Item.Property("Goal", Item.Safe(definition != null ? definition.Goal : null));
+            item.Editable = true;
+            item.HoverHint = "What is the player trying to do? One line, shown to players and in the export README.";
+            item.Action = Item.Action(
+                ScenarioAuthoringActionIds.ActionDraftGoalPrefix,
+                "Commit Goal",
+                "Update the scenario goal players read.",
+                true,
+                false,
+                "GL");
+            return item;
+        }
+
+        private static ScenarioAuthoringInspectorItem BuildVictoryItem(ScenarioDefinition definition)
+        {
+            ScenarioAuthoringInspectorItem item = Item.Property("Victory", FormatVictorySummary(definition));
+            item.HoverHint = "The victory condition backing the goal above. Author intent (Goal) versus implementation (Victory).";
+            return item;
+        }
+
+        internal static string FormatVictorySummary(ScenarioDefinition definition)
+        {
+            WinLossConditionsDefinition winLoss = definition != null ? definition.WinLossConditions : null;
+            int wins = winLoss != null && winLoss.WinConditions != null ? winLoss.WinConditions.Count : 0;
+            int losses = winLoss != null && winLoss.LossConditions != null ? winLoss.LossConditions.Count : 0;
+            if (wins + losses == 0)
+                return "No victory condition - scenario runs forever";
+            return wins.ToString(CultureInfo.InvariantCulture) + " win / " + losses.ToString(CultureInfo.InvariantCulture) + " loss condition(s)";
         }
 
         private static ScenarioAuthoringValidationSnapshot GetCachedValidation(

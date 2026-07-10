@@ -58,6 +58,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics
             AssertPackageMatchesPlan(preview, result);
             string readme = File.ReadAllText(Path.Combine(exportRoot, ScenarioPackagePlanner.ReadmeFileName));
             Assert(readme.IndexOf("DESCRIPTION", StringComparison.Ordinal) >= 0
+                && readme.IndexOf("GOAL", StringComparison.Ordinal) >= 0
                 && readme.IndexOf("INSTALLATION", StringComparison.Ordinal) >= 0
                 && readme.IndexOf("REQUIRED MODS", StringComparison.Ordinal) >= 0
                 && readme.IndexOf("KNOWN LIMITATIONS", StringComparison.Ordinal) >= 0,
