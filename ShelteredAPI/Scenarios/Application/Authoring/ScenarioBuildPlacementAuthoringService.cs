@@ -1491,7 +1491,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return;
             }
 
-            if (!HasNeighborRoom(cell))
+            if (!IsRoomGridCellValid(cell))
             {
                 result.CanPlace = false;
                 result.Reason = "Rooms must sit on dirt next to an existing room.";
@@ -1598,6 +1598,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             return false;
+        }
+
+        // This is intentionally the single structural rule used by both the
+        // interactive ghost commit and external candidate discovery.  The
+        // latter reaches it through the harness' reflection seam because the
+        // authoring service remains internal to the product assembly.
+        public static bool IsRoomGridCellValid(ShelterRoomGrid.GridCell cell)
+        {
+            return cell != null
+                && cell.type == ShelterRoomGrid.CellType.Dirt
+                && HasNeighborRoom(cell);
         }
 
         private static bool IsRoomOrTop(ShelterRoomGrid.GridCell cell)
