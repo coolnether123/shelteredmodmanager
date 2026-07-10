@@ -6,6 +6,7 @@ using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Composition;
 using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Authoring.Tutorial;
+using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Stages;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -183,7 +184,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             WinLossConditionsDefinition winLoss = definition != null ? definition.WinLossConditions : null;
             int wins = winLoss != null && winLoss.WinConditions != null ? winLoss.WinConditions.Count : 0;
             int losses = winLoss != null && winLoss.LossConditions != null ? winLoss.LossConditions.Count : 0;
-            if (wins + losses == 0)
+            if (!ScenarioPacingAnalysisService.HasAuthoredEndCondition(definition))
                 return "No victory condition - scenario runs forever";
             return wins.ToString(CultureInfo.InvariantCulture) + " win / " + losses.ToString(CultureInfo.InvariantCulture) + " loss condition(s)";
         }

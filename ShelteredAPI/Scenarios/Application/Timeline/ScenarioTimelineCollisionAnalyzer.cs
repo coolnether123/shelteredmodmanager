@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 
 using ShelteredAPI.Scenarios.Definitions;
+using ShelteredAPI.Scenarios.Application.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Effects;
+using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Domain.Timeline;
 
 namespace ShelteredAPI.Scenarios.Application.Timeline
@@ -16,9 +18,12 @@ namespace ShelteredAPI.Scenarios.Application.Timeline
             for (int i = 0; entries != null && i < entries.Count; i++)
             {
                 ScenarioTimelineEntry entry = entries[i];
-                if (entry == null || entry.When == null)
+                int day;
+                int hour;
+                int minute;
+                if (entry == null || !TryNormalizeTime(entry.When, out day, out hour, out minute))
                     continue;
-                string key = entry.When.Day + ":" + entry.When.Hour + ":" + entry.When.Minute;
+                string key = day + ":" + hour + ":" + minute;
                 List<ScenarioTimelineEntry> group;
                 if (!atTime.TryGetValue(key, out group))
                 {
@@ -39,6 +44,33 @@ namespace ShelteredAPI.Scenarios.Application.Timeline
                 for (int i = 0; i < group.Count; i++)
                     AppendWarning(group[i], warning);
             }
+        }
+
+        /// <summary>Returns the same normalized scenario day used to group collision candidates.</summary>
+        internal static bool TryGetScenarioDay(ScenarioScheduleTime time, out int day)
+        {
+            int hour;
+            int minute;
+            return TryNormalizeTime(time, out day, out hour, out minute);
+        }
+
+        private static bool TryNormalizeTime(ScenarioScheduleTime time, out int day, out int hour, out int minute)
+        {
+            day = 0;
+            hour = 0;
+            minute = 0;
+            if (time == null)
+                return false;
+
+            long totalMinutes = ScenarioSchedulePolicyEvaluator.ToGameMinutes(time.Day, time.Hour, time.Minute);
+            if (totalMinutes < (24L * 60L))
+                return false;
+
+            day = (int)(totalMinutes / (24L * 60L));
+            long minutesInDay = totalMinutes % (24L * 60L);
+            hour = (int)(minutesInDay / 60L);
+            minute = (int)(minutesInDay % 60L);
+            return true;
         }
 
         private static string FindInventoryOrderingWarning(ScenarioDefinition definition, List<ScenarioTimelineEntry> group)
