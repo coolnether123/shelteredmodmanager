@@ -143,6 +143,48 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return changed;
         }
 
+        // Explicit selection seam for trusted integration tooling. It deliberately
+        // reuses the same target adapters and ApplySelection path as world clicks.
+        public bool TrySelectRuntimeObject(ScenarioAuthoringState state, GameObject gameObject, out ScenarioAuthoringTarget target, out string message)
+        {
+            target = null;
+            message = null;
+            if (state == null)
+            {
+                message = "Scenario authoring is not active.";
+                return false;
+            }
+            if (gameObject == null)
+            {
+                message = "The requested world object was not found.";
+                return false;
+            }
+
+            ScenarioAuthoringTargetContext context = new ScenarioAuthoringTargetContext
+            {
+                GameObject = gameObject,
+                WorldPoint = gameObject.transform.position
+            };
+            if (!_adapterRegistry.TryCreateTarget(context, out target) || target == null)
+            {
+                message = "The requested world object is not editable.";
+                return false;
+            }
+            if (IsGlobalBackdropTarget(state, target) || !_scopeService.CanSelectTargetForCurrentStage(state, target))
+            {
+                message = "The requested world object is outside the current authoring scope.";
+                target = null;
+                return false;
+            }
+
+            state.HoveredTarget = target.Copy();
+            ApplySelection(state, target);
+            ScenarioHoverVisualService.Instance.UpdateFromState(state);
+            ScenarioAuthoringSelectionMenuService.Instance.Sync(state);
+            message = state.StatusMessage;
+            return true;
+        }
+
         private static bool IsVanillaInteractionRightClickCandidate()
         {
             if (!UnityEngine.Input.GetMouseButtonDown(1)
