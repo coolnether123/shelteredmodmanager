@@ -239,6 +239,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             string draftStorageScenarioId,
             SaveEntry draftStartupSave,
             SaveManager.SaveType virtualSaveType,
+            ScenarioBaseGameMode baseGameMode,
             string launchTargetLabel,
             out string error)
         {
@@ -258,7 +259,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             string directSceneName;
-            if (TryGetAuthoringLaunchScene(virtualSaveType, out directSceneName))
+            if (TryGetAuthoringLaunchScene(baseGameMode, out directSceneName))
             {
                 if (!BeginDirectSceneTransition(directSceneName, launchTargetLabel, virtualSaveType))
                 {
@@ -622,22 +623,6 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             }
 
             return TryGetDirectLaunchScene(baseGameMode, out sceneName);
-        }
-
-        private static bool TryGetAuthoringLaunchScene(SaveManager.SaveType saveType, out string sceneName)
-        {
-            switch (saveType)
-            {
-                case SaveManager.SaveType.SlotSurrounded:
-                    sceneName = "ShelterScene_Surrounded";
-                    return true;
-                case SaveManager.SaveType.SlotStasis:
-                    sceneName = "ShelterScene_Stasis";
-                    return true;
-                default:
-                    sceneName = null;
-                    return false;
-            }
         }
 
         private static bool BeginDirectSceneTransition(

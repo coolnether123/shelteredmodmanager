@@ -882,6 +882,18 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             private void Update()
             {
                 ScenarioAuthoringEntryFlowSnapshot snapshot = _owner != null ? _owner.GetSnapshot() : null;
+                // The IMGUI name field may consume Escape before OnGUI reaches
+                // BlockInput. Poll the frame input too so cancelling remains
+                // reliable while that field owns focus or the world is loading.
+                if (snapshot != null
+                    && snapshot.Visible
+                    && snapshot.Kind == ScenarioAuthoringEntryFlowKind.Wizard
+                    && UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+                {
+                    _owner.CancelWizard();
+                    return;
+                }
+
                 if (_owner != null)
                     _owner.TickWizard();
 

@@ -165,6 +165,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                     draftStartupSave,
                     launchSaveType,
+                    entry.BaseGameMode,
                     "authoring draft '" + entry.ScenarioId + "'",
                     out error))
             {
@@ -222,6 +223,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                         draftStartupSave,
                         launchSaveType,
+                        draft.BaseMode,
                         "authoring draft '" + draft.DraftId + "'",
                         out error);
                 if (!queued)

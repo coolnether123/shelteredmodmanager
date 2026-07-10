@@ -205,7 +205,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             string headerTitle,
             string headerDetail,
             Action<ScenarioBookDraftEditorModel> save,
-            Action openDraft)
+            Action openDraft,
+            Action deleteDraft)
         {
             if (_pagedList == null)
                 return;
@@ -216,7 +217,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _draftDescriptionInput = null;
 
             _pagedList.AddRow(BuildHeader(_pagedList.ContentRoot, headerTitle, headerDetail), HeaderHeight);
-            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft), 390);
+            _pagedList.AddRow(BuildDraftEditor(_pagedList.ContentRoot, model, save, openDraft, deleteDraft), 390);
             _pagedList.Layout(6);
 
             if (_navigator != null)
@@ -744,7 +745,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             GameObject parent,
             ScenarioBookDraftEditorModel model,
             Action<ScenarioBookDraftEditorModel> save,
-            Action openDraft)
+            Action openDraft,
+            Action deleteDraft)
         {
             GameObject root = _ui.CreateChild(parent, "ScenarioBookDraftEditor", Vector3.zero);
             _ui.CreateLabel(root, "IdLabel", "Draft File Name",
@@ -781,6 +783,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 {
                     if (openDraft != null)
                         openDraft();
+                });
+            _chrome.Buttons.Build(root, "DeleteDraft", "Delete Draft",
+                new Vector3(300f, -86f, 0f), 178, 44, 17, delegate
+                {
+                    if (deleteDraft != null)
+                        deleteDraft();
                 });
 
             return root;
