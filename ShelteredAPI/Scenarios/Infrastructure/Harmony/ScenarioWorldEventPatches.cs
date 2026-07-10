@@ -77,6 +77,9 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony{
 
         private static bool StartBroadcastingPrefix(Obj_Radio radio)
         {
+            if (ScenarioWorldEventRuntimeState.IsDispatchingAuthoredRadioBroadcast)
+                return true;
+
             if (!ScenarioWorldEventRuntimeState.SuppressRadioBroadcastOdds)
                 return true;
 

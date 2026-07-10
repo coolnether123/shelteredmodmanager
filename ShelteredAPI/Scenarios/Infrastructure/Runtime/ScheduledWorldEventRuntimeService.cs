@@ -181,19 +181,11 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             }
 
             if (string.Equals(outcome, "Trader", StringComparison.OrdinalIgnoreCase))
-            {
-                ScenarioPropertyBag.Set(effect.Properties, "eventType", "NpcVisit");
-                ScenarioPropertyBag.Set(effect.Properties, "npcType", "Trader");
-                return ScheduleNpcVisit(definition, effect, out message);
-            }
+                return StartShelterRadioBroadcast(true, out message);
 
             if (string.Equals(outcome, "Recruit", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(outcome, "Joiner", StringComparison.OrdinalIgnoreCase))
-            {
-                ScenarioPropertyBag.Set(effect.Properties, "eventType", "NpcVisit");
-                ScenarioPropertyBag.Set(effect.Properties, "npcType", "Joiner");
-                return ScheduleNpcVisit(definition, effect, out message);
-            }
+                return StartShelterRadioBroadcast(false, out message);
 
             message = "Unknown broadcast outcome '" + (outcome ?? string.Empty) + "'.";
             return false;
@@ -393,6 +385,52 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
                 "Broadcast bridge unavailable - scenario still playable.",
                 null,
                 out message);
+        }
+
+        private static bool StartShelterRadioBroadcast(bool trader, out string message)
+        {
+            message = null;
+            Obj_Radio radio = null;
+            if (!ShelteredAPI.GameState.GameUtil.TryGetShelterRadio(out radio) || radio == null)
+            {
+                message = "Shelter radio is not ready; world event broadcast will retry later.";
+                return false;
+            }
+            if (radio.broadcasting || radio.scanning)
+            {
+                message = "Shelter radio is already in use; world event broadcast will retry later.";
+                return false;
+            }
+
+            string seamMessage;
+            if (!SeamGuard.Run(
+                "scenario.world.broadcast.radio",
+                SeamRecoveryPolicy.RetryOnce,
+                delegate
+                {
+                    ScenarioWorldEventRuntimeState.BeginAuthoredRadioBroadcastDispatch();
+                    try
+                    {
+                        if (trader)
+                            radio.StartBroadcastingForTraders();
+                        else
+                            radio.StartBroadcastingForRecruits();
+                    }
+                    finally
+                    {
+                        ScenarioWorldEventRuntimeState.EndAuthoredRadioBroadcastDispatch();
+                    }
+                },
+                "Broadcast bridge unavailable - scenario still playable.",
+                null,
+                out seamMessage))
+            {
+                message = seamMessage;
+                return false;
+            }
+
+            message = "Forced WorldEvent radio broadcast: " + (trader ? "Trader" : "Recruit") + ".";
+            return true;
         }
     }
 }
