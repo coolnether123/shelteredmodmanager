@@ -143,6 +143,22 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (!_draftRepository.TryGetDraftSaveEntry(draftId, out startupSave) || startupSave == null)
                 return null;
 
+            // Map construction occurs during the scene load, before the authoring session and
+            // runtime binding are restored. Prime the fixed-seed gate at the queue boundary so
+            // redirected map calls own that generation rather than arriving after it.
+            try
+            {
+                ScenarioDefinition preloadDefinition = new ScenarioDefinitionSerializer().Load(draftInfo.FilePath);
+                string seedMessage;
+                ScenarioSeedPolicy.TryApplyForScenario(preloadDefinition, "authoring preload", out seedMessage);
+            }
+            catch (Exception ex)
+            {
+                ModRandomBridge.SetScenarioFixedSeedActive(false);
+                MMLog.WriteWarning("[ScenarioAuthoringBootstrap] Could not prime draft RNG policy for '"
+                    + draftId + "': " + ex.Message);
+            }
+
             ScenarioBaseGameMode baseMode = ResolveDraftBaseMode(draftInfo);
             lock (_sync)
             {
@@ -209,6 +225,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             ClearLaunchRedirects(pending, reason);
+            ModRandomBridge.SetScenarioFixedSeedActive(false);
             if (clearedActiveShell)
                 _backend.ClearActiveSession(reason ?? "Pending draft canceled.");
             if (_entryFlowService != null)

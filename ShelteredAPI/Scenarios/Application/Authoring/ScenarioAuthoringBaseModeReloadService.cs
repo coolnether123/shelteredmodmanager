@@ -86,6 +86,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             return QueueSavedDraftReload(
                 draftId,
+                definition,
                 draftStartupSave,
                 ScenarioSelectionIds.GetDefaultSaveType(newBaseMode),
                 newBaseMode,
@@ -138,7 +139,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
             SaveManager.SaveType launchSaveType = ScenarioSelectionIds.GetDefaultSaveType(definition.BaseGameMode);
             ScenarioBackendWorldMaterializer.StoreCurrentWorld(definition);
-            return QueueSavedDraftReload(draftId, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, false, validation, out message);
+            return QueueSavedDraftReload(draftId, definition, draftStartupSave, launchSaveType, definition.BaseGameMode, "for playtest restart", true, false, false, false, validation, out message);
         }
 
         public bool SaveAndReloadBaseline(
@@ -178,6 +179,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             string reloadLabel = string.IsNullOrEmpty(label) ? "from the selected baseline" : label;
             return QueueSavedDraftReload(
                 draftId,
+                definition,
                 draftStartupSave,
                 launchSaveType,
                 reloadMode,
@@ -328,6 +330,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private bool QueueSavedDraftReload(
             string draftId,
+            ScenarioDefinition definition,
             SaveEntry draftStartupSave,
             SaveManager.SaveType launchSaveType,
             ScenarioBaseGameMode baseMode,
@@ -377,6 +380,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 ? "Restarting playtest. Reloading authoring world " + label + "."
                 : "Reloading authoring world " + label + ".";
             bootstrap.RequestReloadActiveSession(pending, reloadReason);
+            if (reenterPlaytest)
+            {
+                // RequestReloadActiveSession closes the current playtest, which correctly disables
+                // the gate. Re-prime it after that close and before Unity constructs the new map.
+                string seedMessage;
+                ScenarioSeedPolicy.TryApplyForScenario(definition, "preload playtest restart", out seedMessage);
+            }
             message = "Scenario draft saved. Reloading world " + label + "." + FormatValidationSuffix(validation);
             return true;
         }
