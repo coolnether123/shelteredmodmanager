@@ -732,7 +732,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                     Type = ScenarioBookType.Published,
                     Scenario = entry,
                     Title = BuildScenarioTitle(entry),
-                    Detail = Safe(entry.Description, BuildScenarioDetail(entry)),
+                    Detail = Safe(entry.Description, string.Empty) + "\n" + BuildScenarioDetail(entry),
                     Badge = BuildScenarioBadge(entry),
                     IsLocked = !entry.CanStart
                 });
