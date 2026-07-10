@@ -2318,19 +2318,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 AddScheduledActionCastPickerSections(sections, definition, action, state.FocusedEditorIndex);
 
                 bool hasConditions = !string.IsNullOrEmpty(action.GateId) || (action.ConditionRefs != null && action.ConditionRefs.Count > 0);
-                if (hasConditions)
-                {
-                    List<ScenarioAuthoringInspectorItem> conditions = new List<ScenarioAuthoringInspectorItem>();
-                    conditions.Add(Property("Gate", condition, "The entry fires only while this gate passes."));
-                    conditions.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Cycle Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "CN", condition)));
-                    for (int c = 0; action.ConditionRefs != null && c < action.ConditionRefs.Count; c++)
-                        conditions.Add(Property("Condition " + (c + 1).ToString(CultureInfo.InvariantCulture), ScenarioTimelineCreatorText.ConditionName(action.ConditionRefs[c].Kind), FormatConditionTarget(definition, action.ConditionRefs[c])));
-                    sections.Add(ActionSection("focused_action_conditions", "CONDITIONS", conditions));
-                }
+                List<ScenarioAuthoringInspectorItem> conditions = new List<ScenarioAuthoringInspectorItem>();
+                conditions.Add(Property("Gate", condition, "The entry fires only while this gate passes."));
+                conditions.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), hasConditions ? "Cycle Condition" : "Add Condition", "Attach the next authored condition, or clear it when the list wraps.", true, !string.IsNullOrEmpty(action.GateId), "CN", condition)));
+                if (!hasConditions)
+                    conditions.Add(Text("No condition yet. This scheduled change fires on its clock time."));
+                for (int c = 0; action.ConditionRefs != null && c < action.ConditionRefs.Count; c++)
+                    conditions.Add(Property("Condition " + (c + 1).ToString(CultureInfo.InvariantCulture), ScenarioTimelineCreatorText.ConditionName(action.ConditionRefs[c].Kind), FormatConditionTarget(definition, action.ConditionRefs[c])));
+                sections.Add(ActionSection("focused_action_conditions", "CONDITIONS", conditions));
 
                 List<ScenarioAuthoringInspectorItem> advanced = new List<ScenarioAuthoringInspectorItem>();
-                if (!hasConditions)
-                    advanced.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionGatePrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Add Condition", "Attach the first authored condition gate.", true, false, "CN")));
                 advanced.Add(Property("Repeat", repeat, "Whether the scheduled change can fire more than once."));
                 advanced.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionRepeatPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture), "Toggle Repeat", "Switch this change between once-only and repeatable execution.", true, action.Policy != null && action.Policy.Repeatable, "RP")));
                 advanced.Add(ActionItem(Action(ScenarioAuthoringActionIds.ActionScheduledActionCooldownPrefix + state.FocusedEditorIndex.ToString(CultureInfo.InvariantCulture) + ".30", "Cooldown +30m", "Increase repeat cooldown by 30 game minutes.", true, false, "C+")));
