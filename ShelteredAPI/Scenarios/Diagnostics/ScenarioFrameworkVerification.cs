@@ -42,6 +42,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifySecureXmlParsing(result);
                 VerifyScenarioSaveIdGuards(result);
                 VerifyAtomicScenarioWrites(root, result);
+                VerifyDraftDeleteDurability(root, result);
                 VerifyMissingDefinitionRefreshRetry(result);
                 VerifyInventoryProjectionReconciliation(result);
                 VerifySuppliesAuthoring(result);
@@ -577,6 +578,36 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 || afterFailureXml.IndexOf("Updated Atomic Scenario", StringComparison.Ordinal) >= 0,
                 "Failed atomic scenario save did not leave the previous scenario.xml intact.", result);
             Assert(originalXml.IndexOf("Original Atomic Scenario", StringComparison.Ordinal) >= 0, "Verification setup failed to capture the original XML.", result);
+        }
+
+        private static void VerifyDraftDeleteDurability(string root, ScenarioValidationResult result)
+        {
+            string draftsRoot = Path.Combine(root, "DraftDeleteDurability");
+            string fixtureDraft = Path.Combine(draftsRoot, "Slot_7");
+            string preservedDraft = Path.Combine(draftsRoot, "Slot_23");
+            string historyRoot = Path.Combine(fixtureDraft, ".history");
+            Directory.CreateDirectory(historyRoot);
+            Directory.CreateDirectory(preservedDraft);
+            File.WriteAllText(Path.Combine(fixtureDraft, ScenarioDefinitionSerializer.DefaultFileName), "fixture scenario");
+            File.WriteAllText(Path.Combine(fixtureDraft, ScenarioDefinitionSerializer.DefaultFileName + ".bak"), "fixture backup");
+            File.WriteAllText(Path.Combine(historyRoot, "autosave.xml"), "fixture autosave");
+            File.WriteAllText(Path.Combine(preservedDraft, ScenarioDefinitionSerializer.DefaultFileName), "keepsake scenario");
+
+            bool deleted = ScenarioAuthoringDraftRepository.DeleteDraftDirectory(draftsRoot, fixtureDraft);
+            Assert(deleted, "Fixture draft delete did not report durable success.", result);
+            Assert(!Directory.Exists(fixtureDraft), "Deleted fixture draft folder remains in the draft root.", result);
+            Assert(!File.Exists(Path.Combine(fixtureDraft, ScenarioDefinitionSerializer.DefaultFileName)), "Deleted fixture scenario.xml remains on disk.", result);
+            Assert(!File.Exists(Path.Combine(fixtureDraft, ScenarioDefinitionSerializer.DefaultFileName + ".bak")), "Deleted fixture scenario.xml.bak remains on disk.", result);
+            Assert(!File.Exists(Path.Combine(historyRoot, "autosave.xml")), "Deleted fixture autosave history remains on disk.", result);
+            Assert(Directory.Exists(preservedDraft), "Draft delete touched an unrelated Slot_23 fixture.", result);
+
+            // A restart-safe catalog simulation deliberately performs a fresh disk
+            // scan: a deleted draft must have neither a catalog source file nor a
+            // quarantined scenario.xml that could be rediscovered by a future scan.
+            string[] remainingScenarioFiles = Directory.GetFiles(draftsRoot, ScenarioDefinitionSerializer.DefaultFileName, SearchOption.AllDirectories);
+            Assert(remainingScenarioFiles.Length == 1
+                && string.Equals(remainingScenarioFiles[0], Path.Combine(preservedDraft, ScenarioDefinitionSerializer.DefaultFileName), StringComparison.OrdinalIgnoreCase),
+                "Fresh draft catalog scan rediscovered deleted fixture data.", result);
         }
 
         private static void VerifyMissingDefinitionRefreshRetry(ScenarioValidationResult result)
