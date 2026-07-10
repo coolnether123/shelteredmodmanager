@@ -138,6 +138,28 @@ var src = AccessTools.Method(typeof(UnityEngine.Random), "Range", new[]{ typeof(
 t.ReplaceCalls(src).WithCall(bridgeRangeIntInt);
 ```
 
+**Canonical vs legacy.** `t.ForCall(...).ReplaceAllWith(...)` / `t.ReplaceCalls(mi).WithCall(mi)` are the
+canonical redirects. The older `t.RedirectCall(...)`, `t.RedirectCallAll(...)`, and
+`t.ReplaceAllCalls(...)` are now marked `[Obsolete]` (**warning only** — nothing is removed) and
+forward to the canonical implementation, so the two paths cannot drift. Migrate call sites at your
+convenience.
+
+**Batch / manifest-driven redirects that append a tag argument.** When you redirect the *same* call
+across many methods and each redirect must pass an extra constant (e.g. a domain/stream tag) to the
+replacement, use the batch helper instead of hand-walking indices:
+
+```csharp
+// Redirects every UnityEngine.Random.Range(int,int) to Bridge.Range(int,int,string), pushing "map"
+// as the trailing argument at each site. Also handles generic call sites: when the source is a
+// generic method definition, each site's type arguments are applied to the replacement.
+t.RedirectCallsAppendingLiteral(RangeII, BridgeRangeWithDomain, "map");
+t.RedirectCallsAppendingLiteral(ShuffleDef, BridgeShuffleDef, "map");   // generic ExtensionMethods.Shuffle<T>
+```
+
+Every matched site is signature-validated (original stack shape + the literal's type) **before** any IL
+is mutated; a mismatch returns `UnsafeMatch` and leaves the stream untouched. Supported literal kinds:
+string, bool, integral types, char, float, double, long.
+
 ### 4.2 Wrap the return value of a call
 
 ```csharp
@@ -440,3 +462,77 @@ promise that ordering changes within one domain are irrelevant. A restart is a
 regeneration proof only when the route actually invokes map creation. With the gate
 inactive, every bridge target calls Unity directly, including `InitState`, so normal
 vanilla games retain the original global RNG behavior.
+
+---
+
+## 10. Internal file map
+
+The framework grew by iteration; this is the map from file to responsibility, grouped by role. All
+files live in `ModAPI/Harmony/Transpilers/` unless noted.
+
+**Core chain (the fluent session):**
+- `FluentTranspiler.cs` — the session type: `Execute`/`For`/`Build`, the `Find*`/`Match*` primitives,
+  `Insert*`/`Replace*`/`Remove`, structural `ReplaceSequence`/`ReplaceAll`/`ReplaceAllPatterns`, and
+  the legacy `ReplaceAllCalls` shim.
+- `FluentTranspilerExecution.cs` — `ExecuteOrOriginal` (guaranteed fallback to original IL on throw).
+- `FluentTranspiler_Features.cs` — the linter and feature helpers layered on the session.
+- `FluentTranspilerFormatting.cs` — `FormatMethod`/type formatting shared by every diagnostic.
+
+**Recipes (intent → validated edit):**
+- `FluentTranspilerCallRecipes.cs` — `ForCall`/`ReplaceCalls` (canonical redirects) and the batch
+  `RedirectCallsAppendingLiteral` helper.
+- `FluentTranspilerReturnRecipes.cs`, `FluentTranspilerWrapRecipes.cs`,
+  `FluentTranspilerGuardRecipes.cs`, `FluentTranspilerClampRecipes.cs`,
+  `FluentTranspilerRangeCheckRecipes.cs`, `FluentTranspilerFieldRecipes.cs` — one file per recipe family.
+- `IntentAPI.cs` — the plain-English intent shims (`ChangeConstant`, `RemoveCall`, `InjectBeforeCall`,
+  and the now-`[Obsolete]` `RedirectCall`/`RedirectCallAll`).
+- `UnityPatterns.cs`, `AdvancedExtensions.cs`, `ControlFlowExtensions.cs` — Unity/opcode/control-flow
+  convenience selectors.
+
+**Matching / discovery:**
+- `FluentTranspilerPatterns.cs` — pattern/sequence matching building blocks.
+- `CartographerExtensions.cs` — anchor scoring (`MapAnchors`/`ExportAnchors`, O(n)).
+- `MatchIntent` (in `FluentTranspiler_Features.cs`) — intent matching with nearest-anchor suggestions.
+
+**Safety:**
+- `TranspilerSafetyPolicy.cs` — reads `ModPrefs`, classifies critical warnings, resolves build profiles.
+- `StackSentinel.cs` — basic-block stack analysis (`Validate`/`Analyze`).
+- `FluentTranspilerRecipeValidation.cs` — pre-mutation signature/shape validation shared by all recipes,
+  plus `FluentRecipeUtility` (method resolution, literal-load building, search-start indexing).
+
+**Diagnostics:**
+- `TranspilerDebugger.cs` — snapshots and diff rendering.
+- `FluentTranspilerCompatibilityExtensions.cs` — `FluentReplacementResult`, `Succeeded()`, and the
+  predicate-based `ReplaceMatching*`/`ReplaceAt*` primitives the recipes build on.
+
+**Integration / test:**
+- `CooperativePatcher.cs` — multi-mod ordering/conflict/quarantine.
+- `TranspilerTestHarness.cs` — off-game pass/fail cases + `RunAllHarnessCases`/`AssertAllHarnessCasesPass`.
+- `ModAPI/Inspector/RuntimeILInspector.cs` — the in-game F10 live IL dump (simulates other mods'
+  transpilers against a throwaway `ILGenerator` so label/local-declaring patches don't fault).
+
+## 11. Naming glossary (one verb, one meaning)
+
+Internal and public verbs are used consistently; when authoring or reviewing, hold to these meanings:
+
+| Verb | Meaning |
+| --- | --- |
+| **Find*** | Move the cursor to the next instruction matching a shape; records a soft failure on miss, never throws. |
+| **Match*** | Same intent as `Find*` for a call/field/opcode; the `MethodInfo` overloads also record a soft failure on miss. |
+| **MapAnchors / ExportAnchors** | Rank stable anchor points; do not move the cursor or edit IL. |
+| **MatchIntent** | Assert a short sequence still exists; on miss, suggest the nearest surviving anchor. |
+| **Replace* / RedirectCalls*** | Mutate IL. Recipes validate the hook signature before mutating and return a `FluentReplacementResult`. |
+| **Validate*** | Pure predicate in `FluentTranspilerRecipeValidation`; returns bool + a warning, never mutates. |
+
+"Locate" is not a framework verb — use `Find*`/`Match*`. Prefer `Find*`/`Match*` (soft-failing) over
+raw index math; when you must use an absolute index (`MoveTo`/`ReplaceAt`), recompute it from a fresh
+`Instructions()` snapshot after any insert/remove.
+
+## 12. Note on the round-one "known limitations"
+
+The placeholders FLUENTREVIEW deliberately left are resolved:
+- `CaptureLocal("name")` now refuses honestly with a soft failure (net35 exposes no local names to a
+  transpiler); numeric indices work as before.
+- `FindIfStatement` dropped its placeholder `Nop` seek and soft-fails clearly when no branch is found.
+- `RuntimeILInspector` simulates transpilers against a real throwaway `ILGenerator` instead of `null`.
+- `Build` runs `StackSentinel.Analyze` once for the (rare) explicit stack expectations instead of twice.

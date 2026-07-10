@@ -213,7 +213,13 @@ namespace ModAPI.Inspector
                         // To simulate, we need instances of transpiler methods.
                         // Harmony stores them as Patch objects with MethodInfo.
                         // We can manually invoke them.
-                        
+
+                        // A throwaway ILGenerator so transpilers that declare locals or define labels
+                        // during simulation succeed instead of NullReferenceException-ing on a null
+                        // generator. The generator is never emitted; only DefineLabel/DeclareLocal are
+                        // exercised, which any ILGenerator supports.
+                        ILGenerator simGenerator = CreateSimulationGenerator();
+
                         foreach (var tr in patchInfo.Transpilers)
                         {
                             try
@@ -229,7 +235,7 @@ namespace ModAPI.Inspector
                                     if (typeof(IEnumerable<CodeInstruction>).IsAssignableFrom(pType))
                                         args[i] = codes;
                                     else if (pType == typeof(ILGenerator))
-                                        args[i] = null; // We don't have a generator for simulation, usually. This might crash some transpilers.
+                                        args[i] = simGenerator; // real generator; supports label/local declaration
                                     else if (pType == typeof(MethodBase))
                                         args[i] = method;
                                 }
@@ -256,6 +262,28 @@ namespace ModAPI.Inspector
             {
                 _statusMessage = "Error getting IL: " + ex.Message;
                 _displayedIL = null;
+            }
+        }
+
+        // Produces a real but throwaway ILGenerator for transpiler simulation, so patches that
+        // declare locals or define labels do not throw on a null generator. Returns null only if
+        // the runtime refuses to create a DynamicMethod, in which case simulation degrades to the
+        // previous best-effort (label/local-using transpilers may still fail, caught per-transpiler).
+        private static ILGenerator CreateSimulationGenerator()
+        {
+            try
+            {
+                var dynamicMethod = new DynamicMethod(
+                    "RuntimeILInspector_Simulation",
+                    typeof(void),
+                    Type.EmptyTypes,
+                    typeof(RuntimeILInspector).Module,
+                    true);
+                return dynamicMethod.GetILGenerator();
+            }
+            catch
+            {
+                return null;
             }
         }
     }
