@@ -84,31 +84,21 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
             string domain = GetDomainName(original == null ? null : original.DeclaringType);
             return FluentTranspiler.Execute(instructions, original, generator, FluentTranspiler.BuildProfile.Runtime, delegate(FluentTranspiler t)
             {
-                RedirectDomainCalls(t, RangeII, BridgeDomainII, domain);
-                RedirectDomainCalls(t, RangeFF, BridgeDomainFF, domain);
-                RedirectDomainCalls(t, Value, BridgeDomainValue, domain);
-                RedirectDomainShuffleCalls(t, domain);
+                // The framework's batch redirect helper does the per-site index walk, the domain-tag
+                // insert, the back-to-front application, and (for Shuffle) the per-call-site generic
+                // instantiation — all signature-validated before any IL is mutated. Missing Epic/Steam
+                // members resolve to null at load; skip those, never fatal.
+                if (RangeII != null && BridgeDomainII != null)
+                    t.RedirectCallsAppendingLiteral(RangeII, BridgeDomainII, domain, "RNG Range(int,int)");
+                if (RangeFF != null && BridgeDomainFF != null)
+                    t.RedirectCallsAppendingLiteral(RangeFF, BridgeDomainFF, domain, "RNG Range(float,float)");
+                if (Value != null && BridgeDomainValue != null)
+                    t.RedirectCallsAppendingLiteral(Value, BridgeDomainValue, domain, "RNG value");
+                if (ExtensionShuffle != null && BridgeDomainShuffle != null)
+                    t.RedirectCallsAppendingLiteral(ExtensionShuffle, BridgeDomainShuffle, domain, "RNG Shuffle<T>");
                 if (InitState != null)
                     t.ReplaceCalls(InitState).Optional().WithCall(BridgeInitState, "RNG scenario-owned InitState redirect");
             });
-        }
-
-        private static void RedirectDomainCalls(FluentTranspiler transpiler, MethodInfo source, MethodInfo replacement, string domain)
-        {
-            if (source == null || replacement == null) return;
-            List<int> callIndices = transpiler.Instructions()
-                .Select((instruction, index) => new { instruction, index })
-                .Where(entry => entry.instruction != null && entry.instruction.Calls(source))
-                .Select(entry => entry.index)
-                .ToList();
-
-            // Work backwards so each insertion leaves all remaining absolute indices stable.
-            for (int i = callIndices.Count - 1; i >= 0; i--)
-            {
-                int callIndex = callIndices[i];
-                transpiler.MoveTo(callIndex).InsertBefore(OpCodes.Ldstr, domain);
-                transpiler.ReplaceAtWithCall(callIndex + 1, replacement);
-            }
         }
 
         private static string GetDomainName(Type declaringType)
@@ -138,32 +128,6 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                 || typeName == "PartyMember") return "items";
 
             return "misc";
-        }
-
-        private static void RedirectDomainShuffleCalls(FluentTranspiler transpiler, string domain)
-        {
-            if (ExtensionShuffle == null || BridgeDomainShuffle == null) return;
-            List<int> callIndices = transpiler.Instructions()
-                .Select((instruction, index) => new { instruction, index })
-                .Where(entry => entry.instruction != null && IsGenericCall(entry.instruction, ExtensionShuffle))
-                .Select(entry => entry.index)
-                .ToList();
-
-            for (int i = callIndices.Count - 1; i >= 0; i--)
-            {
-                int callIndex = callIndices[i];
-                MethodInfo sourceCall = transpiler.Instructions().ElementAt(callIndex).operand as MethodInfo;
-                if (sourceCall == null || !sourceCall.IsGenericMethod) continue;
-                MethodInfo replacement = BridgeDomainShuffle.MakeGenericMethod(sourceCall.GetGenericArguments());
-                transpiler.MoveTo(callIndex).InsertBefore(OpCodes.Ldstr, domain);
-                transpiler.ReplaceAtWithCall(callIndex + 1, replacement);
-            }
-        }
-
-        private static bool IsGenericCall(CodeInstruction instruction, MethodInfo genericDefinition)
-        {
-            MethodInfo call = instruction.operand as MethodInfo;
-            return call != null && call.IsGenericMethod && call.GetGenericMethodDefinition() == genericDefinition;
         }
 
         private static MethodInfo ResolveGenericMethod(Type type, string name, int parameterCount)

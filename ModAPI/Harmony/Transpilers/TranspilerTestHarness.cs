@@ -126,6 +126,49 @@ namespace ModAPI.Harmony
             results.AddRange(RunIntentionalFailureDiagnosticCases());
             results.AddRange(RunRecipeSignatureSafetyHarnessCases());
             results.Add(RngFacadeRedirectHarnessCase());
+            results.AddRange(RunDomainRedirectHarnessCases());
+            return results.ToReadOnlyList();
+        }
+
+        /// <summary>
+        /// Guards the batch domain-redirect helper (<c>RedirectCallsAppendingLiteral</c>) used by the
+        /// RNG manifest: it must push the tag literal and redirect on a matching signature, and refuse
+        /// (leaving IL intact) when the replacement signature does not account for the appended argument.
+        /// </summary>
+        public static IReadOnlyList<string> RunDomainRedirectHarnessCases()
+        {
+            var results = new List<string>();
+            MethodInfo unityRange = AccessTools.Method(typeof(UnityEngine.Random), "Range", new Type[] { typeof(int), typeof(int) });
+            MethodInfo bridgeDomainRange = AccessTools.Method(typeof(Core.ModRandomBridge), "Range", new Type[] { typeof(int), typeof(int), typeof(string) });
+            MethodInfo bridgeDomainValue = AccessTools.Method(typeof(Core.ModRandomBridge), "Value", new Type[] { typeof(string) });
+
+            // Positive: exact redirect appending the domain literal.
+            var positive = FromInstructions(
+                new CodeInstruction(OpCodes.Ldc_I4_0),
+                new CodeInstruction(OpCodes.Ldc_I4_5),
+                new CodeInstruction(OpCodes.Call, unityRange),
+                new CodeInstruction(OpCodes.Ret));
+            FluentReplacementResult positiveResult = positive.RedirectCallsAppendingLiteral(unityRange, bridgeDomainRange, "map", "harness domain redirect");
+            var positiveInstrs = positive.Instructions().ToList();
+            bool tagPushed = positiveInstrs.Any(i => i != null && i.opcode == OpCodes.Ldstr && Equals(i.operand, "map"));
+            bool redirected = positiveInstrs.Any(i => i != null && i.Calls(bridgeDomainRange));
+            results.Add(positiveResult == FluentReplacementResult.PatternReplaced && tagPushed && redirected
+                ? "PASS domain redirect appends tag and redirects"
+                : $"FAIL domain redirect appends tag and redirects: result={positiveResult}, tagPushed={tagPushed}, redirected={redirected}");
+
+            // Negative: replacement signature does not account for the appended argument; must refuse
+            // (UnsafeMatch) and leave the original call intact.
+            var negative = FromInstructions(
+                new CodeInstruction(OpCodes.Ldc_I4_0),
+                new CodeInstruction(OpCodes.Ldc_I4_5),
+                new CodeInstruction(OpCodes.Call, unityRange),
+                new CodeInstruction(OpCodes.Ret));
+            FluentReplacementResult negativeResult = negative.RedirectCallsAppendingLiteral(unityRange, bridgeDomainValue, "map", "harness domain redirect negative");
+            bool originalIntact = negative.Instructions().Any(i => i != null && i.Calls(unityRange));
+            results.Add(negativeResult == FluentReplacementResult.UnsafeMatch && originalIntact
+                ? "PASS domain redirect refuses wrong signature"
+                : $"FAIL domain redirect refuses wrong signature: result={negativeResult}, originalIntact={originalIntact}");
+
             return results.ToReadOnlyList();
         }
 
