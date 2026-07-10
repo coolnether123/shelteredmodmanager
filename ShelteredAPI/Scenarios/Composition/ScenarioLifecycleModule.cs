@@ -15,7 +15,8 @@ namespace ShelteredAPI.Scenarios.Composition{
             {
                 return new ShelteredScenarioRuntimeBindingManager(
                     resolver.Get<IScenarioStateManager>(),
-                    resolver.Get<IScenarioRuntimeBindingPersistence>());
+                    resolver.Get<IScenarioRuntimeBindingPersistence>(),
+                    resolver.Get<IVanillaScenarioRuntime>());
             });
             services.AddSingleton<IScenarioRuntimeBindingService>(delegate(IServiceResolver resolver) { return resolver.Get<ShelteredScenarioRuntimeBindingManager>(); });
             services.AddSingleton(delegate(IServiceResolver resolver)

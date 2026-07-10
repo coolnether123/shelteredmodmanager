@@ -154,6 +154,8 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
             // A quest carrier belongs to the just-stopped live world.  Leaving
             // its id on the active binding makes a subsequent apply reuse it.
+            // Keep the binding active: it identifies the still-open authoring
+            // session, while only the carrier is world-scoped.
             InvalidateCompletionCarrier();
             MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Playtest ended; authoring pause restored.");
         }
@@ -164,7 +166,6 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
             if (binding == null)
                 return;
 
-            binding.IsActive = false;
             binding.ScenarioQuestInstanceId = null;
             _runtimeBindingService.SetBinding(binding);
         }
@@ -199,7 +200,23 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 && existingBinding.IsActive
                 && existingBinding.ScenarioQuestInstanceId.HasValue)
             {
-                return true;
+                QuestInstance existingInstance;
+                string existingReason;
+                if (_vanillaRuntime.TryGetQuestInstance(existingBinding.ScenarioQuestInstanceId.Value, out existingInstance, out existingReason)
+                    && existingInstance != null
+                    && existingInstance.definition != null
+                    && existingInstance.definition.IsScenario()
+                    && string.Equals(existingInstance.definition.id, session.WorkingDefinition.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                // Instance ids are local to a loaded world.  A persisted id is
+                // only a hint; discard it before creating this world's carrier.
+                existingBinding.ScenarioQuestInstanceId = null;
+                _runtimeBindingService.SetBinding(existingBinding);
+                MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Discarded unavailable playtest Scenario QuestInstance "
+                    + "for '" + session.WorkingDefinition.Id + "'. " + (existingReason ?? "Carrier did not match the active draft."));
             }
 
             EnsureRuntimeBinding(session);
