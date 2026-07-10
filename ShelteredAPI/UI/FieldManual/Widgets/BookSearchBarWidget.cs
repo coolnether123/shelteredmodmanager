@@ -44,6 +44,19 @@ namespace ShelteredAPI.UI.FieldManual.Widgets
 
         public bool HasFocus { get { return _hasFocus; } }
 
+        public void SetVisible(bool visible)
+        {
+            if (_inputRoot == null)
+                return;
+
+            Transform root = _inputRoot.transform.parent;
+            if (root != null)
+                root.gameObject.SetActive(visible);
+
+            if (!visible)
+                _hasFocus = false;
+        }
+
         public GameObject Build(GameObject parent, string name, Vector3 localPosition, string placeholder)
         {
             GameObject root = _ui.CreateChild(parent, name, localPosition);

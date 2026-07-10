@@ -10,7 +10,7 @@ namespace Manager.Core.Models
         private DateTime? _uploadedAtUtc;
 
         public string Id { get; set; }
-        public string UpdateGroupId { get; set; }
+        public string ModFileId { get; set; }
         public int FileId { get; set; }
         public string Name { get; set; }
         public string Version { get; set; }

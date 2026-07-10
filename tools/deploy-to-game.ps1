@@ -64,7 +64,21 @@ try {
     foreach ($target in @($targetSmm, $targetMods)) {
         if (-not (Test-Path $target)) { New-Item -ItemType Directory -Path $target -Force | Out-Null }
     }
+
+    # Deployment must not replace machine-local preferences or DPAPI-protected
+    # credentials with build-machine staging files. Preserve their exact bytes
+    # across the recursive SMM copy.
+    $localSettings = @{}
+    foreach ($relativePath in @('bin\mod_manager.ini', 'bin\manager_options.json')) {
+        $settingsPath = Join-Path $targetSmm $relativePath
+        if (Test-Path -LiteralPath $settingsPath) {
+            $localSettings[$settingsPath] = [IO.File]::ReadAllBytes($settingsPath)
+        }
+    }
     Copy-Item -Path (Join-Path $distSmm '*') -Destination $targetSmm -Recurse -Force
+    foreach ($settingsPath in $localSettings.Keys) {
+        [IO.File]::WriteAllBytes($settingsPath, $localSettings[$settingsPath])
+    }
     Copy-Item -Path (Join-Path $sourceMods '*') -Destination $targetMods -Recurse -Force
     Copy-Item -Path (Join-Path $repoRoot "libs\$proxyArchitecture\winhttp.dll") -Destination (Join-Path $gameRoot 'winhttp.dll') -Force
     Copy-Item -Path (Join-Path $repoRoot 'libs\doorstop_config.ini') -Destination (Join-Path $gameRoot 'doorstop_config.ini') -Force

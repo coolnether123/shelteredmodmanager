@@ -924,6 +924,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private string GetSearchFilter()
         {
+            // Detail spreads intentionally hide search; keep the list filter intact
+            // for Back navigation without silently applying it to save rows.
+            if (_view == ScenarioBookBrowserViewKind.Saves || _view == ScenarioBookBrowserViewKind.DraftDetails)
+                return string.Empty;
+
             return _renderer != null ? _renderer.SearchFilter : string.Empty;
         }
 

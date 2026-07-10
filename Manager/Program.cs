@@ -5,19 +5,54 @@ using System.Reflection;
 using System.IO;
 using System.Threading;
 using System.Net;
+using Manager.Core.Services;
 
 namespace Manager
 {
     static class Program
     {
+        private const string InstanceMutexName = @"Local\ShelteredModManager.ManagerGUI";
+        private static Mutex _instanceMutex;
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            string nexusLink = null;
+            for (int i = 0; args != null && i < args.Length; i++)
+            {
+                if (string.Equals(args[i], "--nxm", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    nexusLink = args[++i];
+                    break;
+                }
+                if (args[i] != null && args[i].StartsWith("nxm://", StringComparison.OrdinalIgnoreCase))
+                {
+                    nexusLink = args[i];
+                    break;
+                }
+            }
+
             try
             {
+                if (!string.IsNullOrEmpty(nexusLink))
+                    NexusProtocolHandlerService.RestorePreviousHandler();
+
+                bool createdNew;
+                _instanceMutex = new Mutex(true, InstanceMutexName, out createdNew);
+                if (!createdNew)
+                {
+                    if (!string.IsNullOrEmpty(nexusLink))
+                    {
+                        string relayError;
+                        if (!NexusProtocolHandlerService.EnqueueForRunningManager(nexusLink, out relayError))
+                            MessageBox.Show(relayError, "Sheltered Mod Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    return;
+                }
+
                 ConfigureNetworkSecurity();
                 AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
 
@@ -32,7 +67,7 @@ namespace Manager
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                Application.Run(new MainForm());
+                Application.Run(new MainForm(nexusLink));
             }
             catch (Exception ex)
             {
@@ -46,6 +81,16 @@ namespace Manager
                         MessageBoxIcon.Error);
                 }
                 catch { }
+            }
+            finally
+            {
+                if (_instanceMutex != null)
+                {
+                    try { _instanceMutex.ReleaseMutex(); }
+                    catch { }
+                    _instanceMutex.Close();
+                    _instanceMutex = null;
+                }
             }
         }
 

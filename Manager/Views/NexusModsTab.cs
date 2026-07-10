@@ -108,6 +108,104 @@ namespace Manager.Views
             RefreshHeaderText();
         }
 
+        public void HandleNxmLinkAsync(string rawLink)
+        {
+            NexusNxmLink link;
+            string parseError;
+            if (!NexusNxmLink.TryParse(rawLink, out link, out parseError))
+            {
+                FinishInstallWithError("Nexus authorization failed: " + parseError);
+                return;
+            }
+            if (_settings == null || _nexusService == null || !_settings.EnableNexusIntegration)
+            {
+                FinishInstallWithError("Nexus authorization failed: Nexus features are disabled or unavailable.");
+                return;
+            }
+            if (string.IsNullOrEmpty(_settings.NexusApiKey))
+            {
+                FinishInstallWithError("Nexus authorization failed: Add your personal Nexus API key in Settings first.");
+                return;
+            }
+            if (!_settings.IsModsPathValid)
+            {
+                FinishInstallWithError("Nexus authorization failed: The Mods folder is not configured.");
+                return;
+            }
+            if (!string.Equals(link.GameDomain, GetGameDomain(), StringComparison.OrdinalIgnoreCase))
+            {
+                FinishInstallWithError("Nexus authorization failed: This Manager only handles downloads for " + GetGameDomain() + ".");
+                return;
+            }
+            if (link.UserId > 0 && _accountStatus != null && _accountStatus.UserId > 0 && link.UserId != _accountStatus.UserId)
+            {
+                FinishInstallWithError("Nexus authorization failed: The browser download belongs to a different Nexus account than the configured API key.");
+                return;
+            }
+
+            ModItem localMod;
+            _installedByNexusKey.TryGetValue(BuildNexusKey(link.GameDomain, link.ModId), out localMod);
+            NexusInstallTargetContext targetContext = NexusInstallTargetContext.FromInstalledMod(localMod);
+            _installSelectedButton.Enabled = false;
+            EmitActivity("Nexus website authorization received. Resolving the requested file.");
+
+            ThreadPool.QueueUserWorkItem(delegate
+            {
+                string error;
+                NexusRemoteMod mod = _nexusService.GetModByDomainAndId(link.GameDomain, link.ModId, out error);
+                if (!string.IsNullOrEmpty(error) || mod == null)
+                {
+                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Could not resolve mod metadata."));
+                    return;
+                }
+
+                List<NexusRemoteModFile> files = _nexusService.GetModFiles(link.GameDomain, link.ModId, out error);
+                NexusRemoteModFile requestedFile = null;
+                for (int i = 0; files != null && i < files.Count; i++)
+                {
+                    if (files[i] != null && files[i].FileId == link.FileId)
+                    {
+                        requestedFile = files[i];
+                        break;
+                    }
+                }
+                if (!string.IsNullOrEmpty(error) || requestedFile == null)
+                {
+                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Nexus did not return the authorized file."));
+                    return;
+                }
+
+                string downloadUrl = _nexusService.GetDownloadUrlWithAuthorization(
+                    link.GameDomain,
+                    link.ModId,
+                    link.FileId,
+                    _settings.NexusApiKey,
+                    link.DownloadKey,
+                    link.Expires,
+                    out error);
+                if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
+                {
+                    FinishInstallWithError(RewriteDirectDownloadError(error));
+                    return;
+                }
+
+                NexusInstallResult result = _installService.DownloadAndInstall(
+                    downloadUrl,
+                    _settings.ModsPath,
+                    mod,
+                    requestedFile,
+                    targetContext,
+                    out error);
+                if (result == null || !string.IsNullOrEmpty(error))
+                {
+                    FinishInstallWithError("Install failed: " + (!string.IsNullOrEmpty(error) ? error : "Unknown install error."));
+                    return;
+                }
+
+                FinishInstallSuccess(mod, result);
+            });
+        }
+
         private void InitializeComponent()
         {
             SuspendLayout();
@@ -686,6 +784,55 @@ namespace Manager.Views
                     return;
                 }
 
+                if (_accountStatus != null &&
+                    _accountStatus.DirectDownloadAvailability == NexusDirectDownloadAvailability.Limited)
+                {
+                    try
+                    {
+                        BeginInvoke((MethodInvoker)delegate
+                        {
+                            string explanation =
+                                "Nexus requires a short-lived website authorization for non-premium downloads." + Environment.NewLine + Environment.NewLine +
+                                "Sheltered Mod Manager will temporarily receive the next nxm:// link, then immediately restore your previous Nexus link handler. The temporary registration also expires automatically after 15 minutes." + Environment.NewLine + Environment.NewLine +
+                                "Continue to the selected file on Nexus Mods?";
+                            if (MessageBox.Show(this, explanation, "Authorize Nexus download", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes)
+                            {
+                                _installSelectedButton.Enabled = true;
+                                EmitActivity("Install canceled before Nexus website authorization.");
+                                return;
+                            }
+
+                            string registrationError;
+                            if (!NexusProtocolHandlerService.BeginTemporaryCapture(Application.ExecutablePath, out registrationError))
+                            {
+                                _installSelectedButton.Enabled = true;
+                                FinishInstallWithError(registrationError);
+                                return;
+                            }
+
+                            string authorizationPage = selected.GetPageUrl() + "?tab=files&file_id=" + file.FileId;
+                            try
+                            {
+                                System.Diagnostics.Process.Start(authorizationPage);
+                                _installSelectedButton.Enabled = true;
+                                EmitActivity("Nexus authorization opened. Click Mod Manager Download on the website; the previous nxm handler will be restored automatically.");
+                                _detailsPanel.ShowMod(CreateStatusMod("Waiting for Nexus", "Click Mod Manager Download for the selected file in your browser. SMM will continue automatically when Nexus returns the authorized link."));
+                            }
+                            catch (Exception ex)
+                            {
+                                NexusProtocolHandlerService.RestorePreviousHandler();
+                                _installSelectedButton.Enabled = true;
+                                FinishInstallWithError("Could not open the Nexus authorization page: " + ex.Message);
+                            }
+                        });
+                    }
+                    catch
+                    {
+                        FinishInstallWithError("Could not start Nexus website authorization.");
+                    }
+                    return;
+                }
+
                 string downloadUrl = _nexusService.GetDownloadUrl(selected.GameDomain, selected.ModId, file.FileId, _settings.NexusApiKey, out error);
                 if (!string.IsNullOrEmpty(error) || string.IsNullOrEmpty(downloadUrl))
                 {
@@ -700,22 +847,27 @@ namespace Manager.Views
                     return;
                 }
 
-                if (IsDisposed || Disposing)
-                    return;
-                try
-                {
-                    BeginInvoke((MethodInvoker)delegate
-                    {
-                        _installSelectedButton.Enabled = true;
-                        EmitActivity("Install complete: " + selected.Name + " -> " + result.InstalledPath);
-                        if (!string.IsNullOrEmpty(result.VerificationSummary))
-                            EmitActivity("Install verified: " + result.VerificationSummary);
-                        if (InstallCompleted != null)
-                            InstallCompleted();
-                    });
-                }
-                catch { }
+                FinishInstallSuccess(selected, result);
             });
+        }
+
+        private void FinishInstallSuccess(NexusRemoteMod mod, NexusInstallResult result)
+        {
+            if (IsDisposed || Disposing)
+                return;
+            try
+            {
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    _installSelectedButton.Enabled = true;
+                    EmitActivity("Install complete: " + mod.Name + " -> " + result.InstalledPath);
+                    if (!string.IsNullOrEmpty(result.VerificationSummary))
+                        EmitActivity("Install verified: " + result.VerificationSummary);
+                    if (InstallCompleted != null)
+                        InstallCompleted();
+                });
+            }
+            catch { }
         }
 
         private NexusRemoteModFile SelectInstallFile(
@@ -750,15 +902,15 @@ namespace Manager.Views
         {
             if (requestedChoice == NexusInstallFileChoice.Prerelease)
                 return includePrereleaseFiles
-                    ? "Install failed: No beta/prerelease manager-downloadable file was returned."
+                    ? "Install failed: No active beta/prerelease file was returned."
                     : "Install failed: Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
 
             if (requestedChoice == NexusInstallFileChoice.Stable)
-                return "Install failed: No stable manager-downloadable file was returned.";
+                return "Install failed: No active stable file was returned.";
 
             return includePrereleaseFiles
-                ? "Install failed: No manager-downloadable file was returned."
-                : "Install failed: No stable manager-downloadable file was returned. Enable Nexus beta/prerelease files in Developer Options to install prerelease files.";
+                ? "Install failed: No active Nexus file was returned."
+                : "Install failed: No active stable file was returned. Enable Nexus beta/prerelease files in Settings to install prerelease files.";
         }
 
         private NexusInstallFileChoice PromptForPrereleaseInstall(NexusRemoteMod mod, NexusRemoteModFile prereleaseFile, NexusRemoteModFile stableFile)
@@ -1201,7 +1353,7 @@ namespace Manager.Views
                 case NexusDirectDownloadAvailability.Available:
                     return string.Empty;
                 case NexusDirectDownloadAvailability.Limited:
-                    return "Direct install: limited by Nexus policy";
+                    return "Direct install: Nexus website authorization required";
                 case NexusDirectDownloadAvailability.Unavailable:
                     return "Direct install: unavailable";
                 default:
