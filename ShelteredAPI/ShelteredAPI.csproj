@@ -441,6 +441,7 @@
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapAuthoringContentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioMapLocationEditorSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryFocusedEditorDocumentBuilder.cs" />
+    <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioWorldEventFocusedEditorDocumentBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioCastMemberPickerBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryCharacterActorLinkSectionBuilder.cs" />
     <Compile Include="Scenarios\Presentation\Authoring\Shell\ScenarioStoryScriptViewBuilder.cs" />

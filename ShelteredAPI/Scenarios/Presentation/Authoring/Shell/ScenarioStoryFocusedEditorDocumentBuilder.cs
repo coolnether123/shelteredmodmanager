@@ -28,19 +28,29 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioStoryFlowIssue[] issues = new ScenarioStoryFlowValidationAnalyzer().Analyze(definition);
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
             sections.Add(BuildIdentitySection(definition, stage, state.FocusedEditorIndex, issues));
-            sections.Add(BuildIgnoredCallSection(definition, stage, state.FocusedEditorIndex));
+            sections.Add(BuildWhenSection(definition, stage, state.FocusedEditorIndex));
             sections.Add(BuildCastSection(definition, stage, state.FocusedEditorIndex));
             ScenarioStoryCharacterActorLinkSectionBuilder.AppendSections(sections, definition);
 
+            if (stage.IntercomStages == null || stage.IntercomStages.Count == 0)
+                sections.Add(Section("story_focused_empty", "WHAT / ENCOUNTER STEPS", ScenarioAuthoringInspectorSectionLayout.ActionStrip, new List<ScenarioAuthoringInspectorItem>
+                {
+                    Text("No encounter steps yet - this stage has nothing to show the player."),
+                    ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(state.FocusedEditorIndex), "Add Encounter Step", "Write the first scene in this stage.", true, true, "I+"))
+                }));
             for (int i = 0; stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
             {
                 ScenarioIntercomStageDefinition intercom = stage.IntercomStages[i];
-                sections.Add(BuildEncounterSection(definition, stage, intercom, state.FocusedEditorIndex, i, issues));
+                sections.Add(BuildEncounterHeaderSection(definition, stage, intercom, state.FocusedEditorIndex, i, issues));
+                sections.Add(BuildDialogueSection(definition, stage, intercom, state.FocusedEditorIndex, i));
+                sections.Add(BuildConditionsSection(intercom, state.FocusedEditorIndex, i));
+                if (ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage))
+                    sections.Add(BuildAdvancedRoutingSection(definition, stage, intercom, state.FocusedEditorIndex, i));
                 sections.Add(BuildOutcomeSection(definition, intercom, state.FocusedEditorIndex, i));
             }
 
-            sections.Add(BuildStageToolsSection(state.FocusedEditorIndex, stage));
-            sections.Add(BuildFooterSection());
+            sections.Add(BuildAdvancedStageSection(definition, stage, state.FocusedEditorIndex));
+            sections.Add(BuildFooterSection(state.FocusedEditorIndex, stage));
 
             document = new ScenarioAuthoringInspectorDocument
             {
@@ -55,17 +65,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorSection BuildIdentitySection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex, ScenarioStoryFlowIssue[] issues)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Text(BuildStageSummary(definition, stage)));
             items.Add(Property("Author title", DisplayStageTitle(stage, stageIndex), "Stored as the first encounter step's stage description key."));
+            items.Add(Property("Kind", "Story stage", "A day-granular chapter in the vanilla scenario flow.", "STAGE"));
+            ScenarioStoryCharacterActorLinkSectionBuilder.AppendUsages(items, definition, ScenarioReferenceTargetKind.Stage, stage.Id, "Removing this stage is blocked while references exist.");
             items.Add(Property("Timing", "Day-granular", "Vanilla stages advance by day; delayed transitions use whole days."));
             items.Add(Property("Encounter type", PrimaryEncounterType(stage), "Type of the first encounter step."));
             items.Add(Property("Warnings", CountStageIssues(issues, stageIndex).ToString(CultureInfo.InvariantCulture), FirstStageIssue(issues, stageIndex)));
             items.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.StageTitle(stageIndex, "stage_" + (stageIndex + 1).ToString(CultureInfo.InvariantCulture) + "_title"), "Use Generated Title", "Fill the title key with a stage-specific label.", true, false, "TT")));
-            items.Add(Property("Advanced internal id", Empty(stage.Id, "Internal stage id is blank - use an id action before publishing.")));
-            AddStageIdActions(items, definition != null ? definition.ScenarioFlow : null, stageIndex);
-            return Section("story_focused_identity", "Stage Identity", ScenarioAuthoringInspectorSectionLayout.FactGrid, items);
+            return Section("story_focused_identity", "STAGE", ScenarioAuthoringInspectorSectionLayout.FactGrid, items);
         }
 
-        private static ScenarioAuthoringInspectorSection BuildIgnoredCallSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex)
+        private static ScenarioAuthoringInspectorSection BuildWhenSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(Property("If the player never answers", FormatIgnoredCall(stage), "Vanilla can keep the stage active when no explicit route is selected."));
@@ -75,7 +86,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageUnansweredDelay(stageIndex, 1), "Delay +", "Increase ignored-call delay by one day.", true, false, "D+")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageUnansweredDelay(stageIndex, -1), "Delay -", "Decrease ignored-call delay by one day.", true, false, "D-")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StagePunish(stageIndex), "Toggle Punishment", "Toggle vanilla punishment for unanswered visited NPCs.", true, stage.PunishOnUnanswered, "PU")));
-            return Section("story_focused_ignored", "Ignored Call Behavior", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            return Section("story_focused_when", "WHEN / IGNORED CALL", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
         private static ScenarioAuthoringInspectorSection BuildCastSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex)
@@ -89,10 +100,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 bool selected = Contains(stage.CharacterIds, id);
                 items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageCharacterToggle(stageIndex, id), FormatCharacterLabel(definition, id), selected ? "Remove this character from the stage." : "Add this character to the stage.", true, selected, "CH")));
             }
-            return Section("story_focused_cast", "Cast Picker", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            return Section("story_focused_cast", "WHAT / CAST", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
-        private static ScenarioAuthoringInspectorSection BuildEncounterSection(
+        private static ScenarioAuthoringInspectorSection BuildEncounterHeaderSection(
             ScenarioDefinition definition,
             ScenarioFlowStageDefinition stage,
             ScenarioIntercomStageDefinition intercom,
@@ -102,17 +113,41 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             string label = "Step " + (intercomIndex + 1).ToString(CultureInfo.InvariantCulture);
+            items.Add(Text(BuildIntercomSummary(definition, stage, intercom)));
             items.Add(Property("Encounter step", label, CountIntercomIssues(issues, stageIndex, intercomIndex).ToString(CultureInfo.InvariantCulture) + " warning(s)", WarningBadge(CountIntercomIssues(issues, stageIndex, intercomIndex))));
-            items.Add(Property("Advanced step id", Empty(intercom != null ? intercom.Id : null, "Internal encounter-step id is blank.")));
-            items.Add(Property("Branching type", Empty(intercom != null ? intercom.Type : null, "No type stored - vanilla will use its default."), "Use exact vanilla branch type names."));
-            AddIntercomTypeActions(items, stageIndex, intercomIndex, intercom != null ? intercom.Type : null);
+            items.Add(Property("Kind", "Intercom step", "One scene inside this story stage.", "STEP"));
+            ScenarioStoryCharacterActorLinkSectionBuilder.AppendUsages(items, definition, ScenarioReferenceTargetKind.IntercomStep, intercom != null ? intercom.Id : null, "Removing this step is blocked while references exist.");
+            return Section("story_focused_encounter_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), label.ToUpperInvariant(), ScenarioAuthoringInspectorSectionLayout.FactGrid, items);
+        }
 
+        private static ScenarioAuthoringInspectorSection BuildDialogueSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             AddDialogueItems(items, definition, stage, intercom, stageIndex, intercomIndex);
             AddOptionItems(items, stage, intercom, stageIndex, intercomIndex);
+            return Section("story_focused_dialogue_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "WHAT / DIALOGUE & CHOICES", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildConditionsSection(ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            bool hasRequired = intercom != null && intercom.Items != null && intercom.Items.Count > 0;
+            if (!hasRequired)
+                items.Add(Text("No required items - every player can reach this step."));
+            AddStoryItemActions(items, "Check required items", intercom != null ? intercom.Items : null, false, stageIndex, intercomIndex);
+            return Section("story_focused_conditions_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "CONDITIONS", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildAdvancedRoutingSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(Property("Internal step id", Empty(intercom != null ? intercom.Id : null, "Internal encounter-step id is blank.")));
+            items.Add(Property("Branching type", Empty(intercom != null ? intercom.Type : null, "No type stored - vanilla will use its default."), "Use exact vanilla branch type names."));
+            AddIntercomTypeActions(items, stageIndex, intercomIndex, intercom != null ? intercom.Type : null);
             AddIntercomRoutePicker(items, stage, intercom, stageIndex, intercomIndex, false, "Success route");
             AddIntercomRoutePicker(items, stage, intercom, stageIndex, intercomIndex, true, "Failure / alternate route");
             AddStageChangePicker(items, definition, intercom, stageIndex, intercomIndex);
-            return Section("story_focused_encounter_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), label + " Encounter Setup", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            return Section("story_focused_advanced_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "ADVANCED / ROUTING", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
         private static ScenarioAuthoringInspectorSection BuildOutcomeSection(ScenarioDefinition definition, ScenarioIntercomStageDefinition intercom, int stageIndex, int intercomIndex)
@@ -122,7 +157,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Property("End behavior", Empty(end != null ? end.Type : null, "No explicit end behavior stored - vanilla default applies."), "Use RewardItems, EnterTrade, EnterRecruit, Combat, or NothingHappens."));
             AddEndTypeActions(items, stageIndex, intercomIndex, end != null ? end.Type : null);
 
-            AddStoryItemActions(items, "Check required items", intercom != null ? intercom.Items : null, false, stageIndex, intercomIndex);
             AddStoryItemActions(items, "Swap/remove items", intercom != null ? intercom.ItemsToRemove : null, true, stageIndex, intercomIndex);
             AddEndOptionItemActions(items, "End reward items", end != null ? end.RewardItems : null, true, stageIndex, intercomIndex);
             items.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.TradeOverride(stageIndex, intercomIndex), "Toggle Trade Override", "Use authored trade items instead of vanilla generated trade items.", true, end != null && end.OverrideTradeItems, "TR")));
@@ -130,31 +164,32 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             AddRecruitActions(items, definition, intercom, stageIndex, intercomIndex);
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.EndCompleteQuest(stageIndex, intercomIndex), "Complete Quest", "Mark this vanilla quest complete when the encounter ends.", true, end != null && end.CompleteQuest, "CQ")));
             items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.EndCompleteScenario(stageIndex, intercomIndex), end != null && end.CompleteParentScenario ? "Clear Complete Scenario" : "Complete Scenario unavailable", "Use Victory conditions to complete the authored scenario.", end != null && end.CompleteParentScenario, false, "VC")));
-            return Section("story_focused_outcome_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "Outcomes, Rewards, Trades, Recruit", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            return Section("story_focused_outcome_" + stageIndex.ToString(CultureInfo.InvariantCulture) + "_" + intercomIndex.ToString(CultureInfo.InvariantCulture), "WHAT / OUTCOMES", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
-        private static ScenarioAuthoringInspectorSection BuildStageToolsSection(int stageIndex, ScenarioFlowStageDefinition stage)
+        private static ScenarioAuthoringInspectorSection BuildAdvancedStageSection(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, int stageIndex)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(stageIndex), "Add Encounter Step", "Add another vanilla encounter step inside this stage.", true, false, "I+")));
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDuplicate(stageIndex), "Duplicate Stage", "Copy this stage and its encounter setup.", true, false, "CP")));
-            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDelete(stageIndex), "Remove Stage", "Remove this stage if nothing references it.", true, false, "RM")));
-            if (stage != null && stage.IntercomStages != null)
-            {
-                for (int i = 0; i < stage.IntercomStages.Count; i++)
-                {
-                    items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDuplicate(stageIndex, i), "Duplicate Step " + (i + 1).ToString(CultureInfo.InvariantCulture), "Copy this encounter step.", true, false, "CP")));
-                    items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDelete(stageIndex, i), "Remove Step " + (i + 1).ToString(CultureInfo.InvariantCulture), "Remove this encounter step.", true, false, "RM")));
-                }
-            }
-            return Section("story_focused_tools", "Stage Tools", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
+            items.Add(Property("Internal stage id", Empty(stage != null ? stage.Id : null, "Internal stage id is blank - assign one before publishing.")));
+            AddStageIdActions(items, definition != null ? definition.ScenarioFlow : null, stageIndex);
+            if (!ScenarioStoryStageDisclosure.ShouldRevealAdvancedRouting(stage))
+                items.Add(Text("Advanced step routing appears after this stage has its first written dialogue line."));
+            return Section("story_focused_advanced", "ADVANCED", ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
-        private static ScenarioAuthoringInspectorSection BuildFooterSection()
+        private static ScenarioAuthoringInspectorSection BuildFooterSection(int stageIndex, ScenarioFlowStageDefinition stage)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             items.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.ActionSave, "Save", "Close this story editor and keep the stage.", true, true, "SV")));
             items.Add(ActionItem(Action(ScenarioStoryFocusedEditorActions.ActionCancel, "Cancel", "Close this story editor. A newly-created stage is discarded.", true, false, "CL")));
+            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomAdd(stageIndex), "Add Encounter Step", "Add another vanilla encounter step inside this stage.", true, false, "I+")));
+            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDuplicate(stageIndex), "Duplicate Stage", "Copy this stage and its encounter setup.", true, false, "CP")));
+            items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.StageDelete(stageIndex), "Remove Stage", "Remove this stage if nothing references it.", true, false, "RM")));
+            for (int i = 0; stage != null && stage.IntercomStages != null && i < stage.IntercomStages.Count; i++)
+            {
+                items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDuplicate(stageIndex, i), "Duplicate Step " + (i + 1).ToString(CultureInfo.InvariantCulture), "Copy this encounter step.", true, false, "CP")));
+                items.Add(ActionItem(Action(ScenarioStoryAuthoringActions.IntercomDelete(stageIndex, i), "Remove Step " + (i + 1).ToString(CultureInfo.InvariantCulture), "Remove this encounter step.", true, false, "RM")));
+            }
             return Section("story_focused_footer", string.Empty, ScenarioAuthoringInspectorSectionLayout.ActionStrip, items);
         }
 
@@ -396,6 +431,24 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return !string.IsNullOrEmpty(intercom != null ? intercom.Id : null)
                 ? intercom.Id
                 : "Step " + (index + 1).ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string BuildStageSummary(ScenarioDefinition definition, ScenarioFlowStageDefinition stage)
+        {
+            if (stage == null || stage.IntercomStages == null || stage.IntercomStages.Count == 0)
+                return "This stage has no encounter steps yet.";
+            ScenarioIntercomStageDefinition first = stage.IntercomStages[0];
+            return "Starts with '" + DisplayIntercomTitle(first, 0) + "'. When that scene ends: "
+                + ScenarioStoryScriptViewBuilder.DescribeStepEnding(definition, stage, first) + ".";
+        }
+
+        private static string BuildIntercomSummary(ScenarioDefinition definition, ScenarioFlowStageDefinition stage, ScenarioIntercomStageDefinition intercom)
+        {
+            int dialogue = intercom != null && intercom.Dialogue != null ? intercom.Dialogue.Count : 0;
+            int options = intercom != null && intercom.Options != null ? intercom.Options.Count : 0;
+            return dialogue.ToString(CultureInfo.InvariantCulture) + " spoken line(s), "
+                + options.ToString(CultureInfo.InvariantCulture) + " player choice(s). When this scene ends: "
+                + ScenarioStoryScriptViewBuilder.DescribeStepEnding(definition, stage, intercom) + ".";
         }
 
         private static string PrimaryEncounterType(ScenarioFlowStageDefinition stage)
