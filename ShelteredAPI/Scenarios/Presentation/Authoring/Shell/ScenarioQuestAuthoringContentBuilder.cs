@@ -30,11 +30,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
 
             sections.Add(BuildStoryOverviewSection(definition, snapshot, storyIssues));
+            sections.Add(BuildStoryMapSection(definition, storyIssues));
             sections.Add(BuildStoryToolsSection(definition));
             ScenarioStoryCharacterActorLinkSectionBuilder.AppendSections(sections, definition);
             AppendConversationSections(sections, definition);
             sections.Add(BuildStageFlowSection(definition, storyIssues));
-            sections.Add(BuildStoryMapSection(definition, storyIssues));
             AppendStoryStageSections(sections, definition, storyIssues);
             sections.Add(BuildSideQuestIntroSection(snapshot));
             sections.Add(BuildToolsSection(snapshot));
