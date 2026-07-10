@@ -4,6 +4,7 @@ using ModAPI.Core;
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Conditions;
 using ShelteredAPI.Scenarios.Application.Runtime;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Conditions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
@@ -14,6 +15,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         private readonly IScenarioWinLossConditionAdapter _conditionAdapter;
         private readonly ScenarioConditionEvaluatorRegistry _conditionEvaluator;
         private readonly IVanillaScenarioRuntime _vanillaRuntime;
+        private readonly ScenarioRuntimeExecutionLog _executionLog;
         private ScenarioDefinition _definition;
         private ScenarioRuntimeBinding _binding;
         private string _lastBlockedReason;
@@ -22,12 +24,14 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             IScenarioQuestInstanceResolver questInstanceResolver,
             IScenarioWinLossConditionAdapter conditionAdapter,
             ScenarioConditionEvaluatorRegistry conditionEvaluator,
-            IVanillaScenarioRuntime vanillaRuntime)
+            IVanillaScenarioRuntime vanillaRuntime,
+            ScenarioRuntimeExecutionLog executionLog)
         {
             _questInstanceResolver = questInstanceResolver;
             _conditionAdapter = conditionAdapter;
             _conditionEvaluator = conditionEvaluator;
             _vanillaRuntime = vanillaRuntime;
+            _executionLog = executionLog;
         }
 
         public void Initialize(ScenarioDefinition definition, ScenarioRuntimeBinding binding)
@@ -112,9 +116,34 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             state.ScenarioOutcome = success ? "Win" : "Loss";
             state.ScenarioOutcomeConditionId = condition != null ? condition.Id : null;
             UpdateScoreSnapshotOutcome(state, success);
+            if (_executionLog != null)
+            {
+                _executionLog.Record(
+                    condition != null ? condition.Id : "scenario-outcome",
+                    success ? "Victory" : "Defeat",
+                    "Scenario outcome",
+                    ScenarioRuntimeExecutionLogOutcome.Fired,
+                    condition != null ? condition.Type : null,
+                    success ? "Vanilla scenario completed successfully." : "Vanilla scenario failed.");
+            }
             MMLog.WriteInfo("[ScenarioWinLoss] Resolved scenario QuestInstance " + instance.id.ToString()
                 + " as " + state.ScenarioOutcome
                 + " via condition '" + (state.ScenarioOutcomeConditionId ?? string.Empty) + "'.");
+            ReturnAuthoringPlaytestToEditor();
+        }
+
+        private static void ReturnAuthoringPlaytestToEditor()
+        {
+            try
+            {
+                ScenarioEditorController editor = ScenarioEditorController.Instance;
+                if (editor != null && editor.CurrentSession != null)
+                    editor.EndPlaytest();
+            }
+            catch (Exception ex)
+            {
+                MMLog.WriteWarning("[ScenarioWinLoss] Outcome resolved, but authoring return could not be completed: " + ex.Message);
+            }
         }
 
         private static void UpdateScoreSnapshotOutcome(ScenarioRuntimeState state, bool success)
