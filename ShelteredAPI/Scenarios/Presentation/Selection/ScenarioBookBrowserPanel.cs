@@ -811,6 +811,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _dataSource.CancelRefreshes();
             if (restoreUnderlyingPanel)
                 RestoreUnderlyingPanel();
+            else
+            {
+                // The selection panel is being unloaded.  Its suppressed chrome
+                // must stay suppressed: restoring it from OnDestroy would call
+                // SetActive(true) while Unity is destroying the old scene.
+                _underlyingSuppression = null;
+                _adapter = null;
+            }
             // EnsureOverlayPanel owns the named UI Root/ShelteredAPI_ScenarioBookBrowser
             // parent. Hiding only this child leaves an active empty overlay that the
             // harness and the next hub click can mistake for a live book.
