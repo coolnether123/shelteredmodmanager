@@ -37,6 +37,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
         private static readonly MethodInfo BridgeDomainFF = AccessTools.Method(typeof(ModRandomBridge), "Range", new Type[] { typeof(float), typeof(float), typeof(string) });
         private static readonly MethodInfo BridgeDomainValue = AccessTools.Method(typeof(ModRandomBridge), "Value", new Type[] { typeof(string) });
         private static readonly MethodInfo BridgeInitState = AccessTools.Method(typeof(ModRandomBridge), "InitScenarioState", new Type[] { typeof(int) });
+        private static readonly MethodInfo ExtensionShuffle = ResolveGenericMethod(AccessTools.TypeByName("ExtensionMethods"), "Shuffle", 1);
+        private static readonly MethodInfo BridgeDomainShuffle = ResolveGenericMethod(typeof(ModRandomBridge), "Shuffle", 2);
 
         public static void Install()
         {
@@ -85,6 +87,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                 RedirectDomainCalls(t, RangeII, BridgeDomainII, domain);
                 RedirectDomainCalls(t, RangeFF, BridgeDomainFF, domain);
                 RedirectDomainCalls(t, Value, BridgeDomainValue, domain);
+                RedirectDomainShuffleCalls(t, domain);
                 if (InitState != null)
                     t.ReplaceCalls(InitState).Optional().WithCall(BridgeInitState, "RNG scenario-owned InitState redirect");
             });
@@ -135,6 +138,45 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Harmony
                 || typeName == "PartyMember") return "items";
 
             return "misc";
+        }
+
+        private static void RedirectDomainShuffleCalls(FluentTranspiler transpiler, string domain)
+        {
+            if (ExtensionShuffle == null || BridgeDomainShuffle == null) return;
+            List<int> callIndices = transpiler.Instructions()
+                .Select((instruction, index) => new { instruction, index })
+                .Where(entry => entry.instruction != null && IsGenericCall(entry.instruction, ExtensionShuffle))
+                .Select(entry => entry.index)
+                .ToList();
+
+            for (int i = callIndices.Count - 1; i >= 0; i--)
+            {
+                int callIndex = callIndices[i];
+                MethodInfo sourceCall = transpiler.Instructions().ElementAt(callIndex).operand as MethodInfo;
+                if (sourceCall == null || !sourceCall.IsGenericMethod) continue;
+                MethodInfo replacement = BridgeDomainShuffle.MakeGenericMethod(sourceCall.GetGenericArguments());
+                transpiler.MoveTo(callIndex).InsertBefore(OpCodes.Ldstr, domain);
+                transpiler.ReplaceAtWithCall(callIndex + 1, replacement);
+            }
+        }
+
+        private static bool IsGenericCall(CodeInstruction instruction, MethodInfo genericDefinition)
+        {
+            MethodInfo call = instruction.operand as MethodInfo;
+            return call != null && call.IsGenericMethod && call.GetGenericMethodDefinition() == genericDefinition;
+        }
+
+        private static MethodInfo ResolveGenericMethod(Type type, string name, int parameterCount)
+        {
+            if (type == null) return null;
+            MethodInfo[] methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            for (int i = 0; i < methods.Length; i++)
+            {
+                MethodInfo method = methods[i];
+                if (method.Name == name && method.IsGenericMethodDefinition && method.GetParameters().Length == parameterCount)
+                    return method;
+            }
+            return null;
         }
 
         private static bool ContainsRedirectableRngCall(MethodBase target)

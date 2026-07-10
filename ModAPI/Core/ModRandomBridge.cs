@@ -91,6 +91,39 @@ namespace ModAPI.Core
             }
         }
 
+        internal static void Shuffle<T>(IList<T> list, string domainName)
+        {
+            if (list == null) return;
+            int count = list.Count;
+            if (!_scenarioFixedSeedActive)
+            {
+                // Match the vanilla ExtensionMethods.Shuffle loop exactly, including its
+                // Range(0, count) bound, while continuing to draw from Unity's global stream.
+                while (count > 1)
+                {
+                    count--;
+                    int unityIndex = Random.Range(0, count);
+                    T unityValue = list[unityIndex];
+                    list[unityIndex] = list[count];
+                    list[count] = unityValue;
+                }
+                return;
+            }
+
+            lock (DomainLock)
+            {
+                ModRandomStream stream = GetDomainStreamLocked(domainName, "first-shuffle-draw");
+                while (count > 1)
+                {
+                    count--;
+                    int index = stream.Range(0, count);
+                    T value = list[index];
+                    list[index] = list[count];
+                    list[count] = value;
+                }
+            }
+        }
+
         /// <summary>
         /// Redirect target for the map generator's global Unity RNG reset. A fixed scenario resets
         /// only its owned stream; vanilla retains the original global-state behaviour.
