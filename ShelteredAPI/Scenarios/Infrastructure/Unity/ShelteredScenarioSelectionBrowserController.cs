@@ -75,6 +75,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             public int LastLoggedPagingPage = -1;
             public int LastLoggedPagingTotalPages = -1;
             public int LastLoggedPagingScenarioCount = -1;
+            public int ScenarioCount;
             public string LastLoggedScenarioTextKey;
             public readonly List<UIButton> OriginalButtons = new List<UIButton>();
             public readonly List<UIButton> CustomButtons = new List<UIButton>();
@@ -319,9 +320,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (selectionPanel != null)
                     selectionPanel.m_inputEnabled = false;
 
-                RefreshDefinitionCatalogSafely();
-                CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
-                UpdatePagingUi(state, scenarios.Length);
+                UpdatePagingUi(state, state.ScenarioCount);
 
                 if (UnityEngine.Input.GetKeyDown(KeyCode.RightArrow))
                     TryChangePage(panel, state, 1);
@@ -338,7 +337,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                         scenarioHighScore,
                         stasisScoreLabelsRoot,
                         HubLabel,
-                        BuildBrowserDescription(state, scenarios.Length));
+                        BuildBrowserDescription(state, state.ScenarioCount));
                 }
             }
             catch
@@ -442,6 +441,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
             RefreshDefinitionCatalogSafely();
             CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
+            state.ScenarioCount = scenarios.Length;
             ClampPage(state, scenarios.Length);
             ScenarioListEntry[] entries = BuildVisibleEntries(state, scenarios);
             MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Preparing custom mode contents. panel=" + panel.GetInstanceID()
