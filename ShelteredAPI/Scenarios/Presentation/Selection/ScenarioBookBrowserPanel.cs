@@ -443,6 +443,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             try
             {
+                MMLog.WriteInfo("[ScenarioBookBrowser] Confirmation close resolved. response=" + response + ".");
                 if (response == 1 && onConfirmed != null)
                     onConfirmed();
             }
@@ -673,6 +674,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (_deletePromptActive || scenario == null)
                 return;
 
+            MMLog.WriteInfo("[ScenarioBookBrowser] Draft delete confirmation opened. draft='" + scenario.ScenarioId + "'.");
+
             ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(scenario);
             string draftName = Safe(scenario.DisplayName, scenario.ScenarioId);
             bool localize;
@@ -680,8 +683,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             localize = false;
             BeginConfirmation(message, localize, delegate
             {
+                MMLog.WriteInfo("[ScenarioBookBrowser] Draft delete confirmation accepted. draft='" + scenario.ScenarioId + "'.");
                 string status;
                 bool deleted = _actions.DeleteDraft(scenario, out status);
+                MMLog.WriteInfo("[ScenarioBookBrowser] Draft delete callback completed. draft='" + scenario.ScenarioId
+                    + "' deleted=" + deleted + " status='" + status + "'.");
                 SetStatus(status);
                 if (deleted)
                 {

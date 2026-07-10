@@ -318,15 +318,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             status = null;
             if (entry == null || entry.Source != ScenarioCatalogSource.Draft)
             {
+                MMLog.WriteWarning("[ScenarioBookBrowserActionService] Refused draft delete because the selected entry was not a draft.");
                 status = "Select a draft scenario first.";
                 return false;
             }
 
+            MMLog.WriteInfo("[ScenarioBookBrowserActionService] Deleting draft '" + entry.ScenarioId + "'.");
             _saveLibrary.ClearQueuedNewGameSave(_launchCoordinator.GetVirtualSaveType(entry));
             bool deleted = ScenarioAuthoringDraftRepository.Instance.DeleteDraft(entry.ScenarioId, "Scenario browser draft delete.");
             if (deleted)
                 ScenarioBookBrowserDataSource.BeginSharedRefreshAsync(ScenarioCompositionRoot.Resolve<IScenarioSelectionCatalogService>());
             status = deleted ? "Draft deleted." : "Draft delete failed.";
+            MMLog.WriteInfo("[ScenarioBookBrowserActionService] Draft delete completed. draft='" + entry.ScenarioId
+                + "' deleted=" + deleted + " status='" + status + "'.");
             return deleted;
         }
 
