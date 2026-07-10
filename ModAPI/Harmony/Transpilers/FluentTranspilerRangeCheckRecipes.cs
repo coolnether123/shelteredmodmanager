@@ -1166,7 +1166,7 @@ namespace ModAPI.Harmony
 
             if (_argumentIndex < 0)
             {
-                _transpiler.AddWarning($"ForArgument received invalid argument index {_argumentIndex}.");
+                _transpiler.AddWarning($"ForArgument received invalid argument index {_argumentIndex}. Fix: pass a non-negative index to ForArgument(...) (0 = the first argument, which is 'this' for an instance method).");
                 return false;
             }
 
@@ -1291,7 +1291,7 @@ namespace ModAPI.Harmony
 
             if (_argumentIndex < 0)
             {
-                _transpiler.AddWarning($"ForArgument received invalid argument index {_argumentIndex}.");
+                _transpiler.AddWarning($"ForArgument received invalid argument index {_argumentIndex}. Fix: pass a non-negative index to ForArgument(...) (0 = the first argument, which is 'this' for an instance method).");
                 return FluentReplacementResult.Failed;
             }
 

@@ -93,7 +93,7 @@ namespace ModAPI.Harmony
 
             if (transpiler == null || argumentIndex < 0)
             {
-                transpiler?.AddWarning($"InClamp received invalid argument index {argumentIndex}.");
+                transpiler?.AddWarning($"InClamp received invalid argument index {argumentIndex}. Fix: pass a non-negative argument index to ForArgument(...) (0 = the first argument, which is 'this' for an instance method) before InClamp.");
                 return false;
             }
 
