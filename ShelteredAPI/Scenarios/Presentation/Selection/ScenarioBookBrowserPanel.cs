@@ -75,6 +75,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             browser.Initialise(root);
         }
 
+        /// <summary>
+        /// Routes the vanilla scenario-selection cancel seam into the live book when
+        /// it owns the foreground.  The book suppresses that panel's input while it
+        /// is open, so letting cancel continue to vanilla would leave the overlay
+        /// orphaned behind a changed menu state.
+        /// </summary>
+        internal static bool TryHandleCancel()
+        {
+            if (_instance == null || !_instance.activeInHierarchy)
+                return false;
+
+            ScenarioBookBrowserPanel browser = _instance.GetComponent<ScenarioBookBrowserPanel>();
+            if (browser == null || browser._isClosing)
+                return false;
+
+            browser.BackOrClose();
+            return true;
+        }
+
         private void Initialise(GameObject root)
         {
             _adapter.SetInputEnabled(false);

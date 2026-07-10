@@ -377,6 +377,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         public bool HandleCancel(ScenarioSelectionPanel panel, List<UIButton> scenarioButtons)
         {
+            if (ScenarioBookBrowserPanel.TryHandleCancel())
+            {
+                MMLog.WriteInfo("[ShelteredCustomScenarioSelection] Cancel routed to scenario book. panel="
+                    + (panel != null ? panel.GetInstanceID().ToString() : "<null>") + ".");
+                return false;
+            }
+
             BrowserPanelState state = GetExistingState(panel);
             if (state == null || !state.IsCustomMode)
             {
