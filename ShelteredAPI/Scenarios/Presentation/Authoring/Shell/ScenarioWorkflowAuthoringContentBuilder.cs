@@ -261,6 +261,64 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             };
         }
 
+        public ScenarioAuthoringInspectorSection[] BuildVictorySections(ScenarioAuthoringState state, ScenarioDefinition definition)
+        {
+            WinLossConditionsDefinition winLoss = definition != null ? definition.WinLossConditions : null;
+            int winCount = winLoss != null && winLoss.WinConditions != null ? winLoss.WinConditions.Count : 0;
+            int lossCount = winLoss != null && winLoss.LossConditions != null ? winLoss.LossConditions.Count : 0;
+            List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+
+            List<ScenarioAuthoringInspectorItem> overview = new List<ScenarioAuthoringInspectorItem>();
+            overview.Add(Item.Property("Win Conditions", winCount.ToString(CultureInfo.InvariantCulture)));
+            overview.Add(Item.Property("Loss Conditions", lossCount.ToString(CultureInfo.InvariantCulture)));
+            if (winCount + lossCount == 0)
+                overview.Add(Item.Text("No victory condition - the scenario runs indefinitely until the player quits."));
+            overview.Add(Item.ActionItem(Item.Action(ScenarioWinLossAuthoringActionIds.AddWin, "Add Victory Condition", "Create a runtime-backed win condition.", definition != null, false, "W+")));
+            overview.Add(Item.ActionItem(Item.Action(ScenarioWinLossAuthoringActionIds.AddLoss, "Add Failure Condition", "Create a runtime-backed loss condition.", definition != null, false, "L+")));
+            sections.Add(VictorySection("victory_overview", "Victory Rules", ScenarioAuthoringInspectorSectionLayout.Summary, overview));
+
+            List<ScenarioAuthoringInspectorItem> wins = new List<ScenarioAuthoringInspectorItem>();
+            AddConditionList(wins, winLoss != null ? winLoss.WinConditions : null, true);
+            if (winCount == 0)
+                wins.Add(Item.Text("No win conditions yet. Add one above to let the run end in victory."));
+            sections.Add(VictorySection("victory_wins", "Win Conditions", ScenarioAuthoringInspectorSectionLayout.PropertyList, wins));
+
+            List<ScenarioAuthoringInspectorItem> losses = new List<ScenarioAuthoringInspectorItem>();
+            AddConditionList(losses, winLoss != null ? winLoss.LossConditions : null, false);
+            if (lossCount == 0)
+                losses.Add(Item.Text("No failure conditions yet. Add one above to let the run be lost."));
+            sections.Add(VictorySection("victory_losses", "Failure Conditions", ScenarioAuthoringInspectorSectionLayout.PropertyList, losses));
+
+            ScenarioScoringAuthoringSummary.Summary scoring = ScenarioScoringAuthoringSummary.Build(definition);
+            List<ScenarioAuthoringInspectorItem> score = new List<ScenarioAuthoringInspectorItem>();
+            score.Add(Item.Property("Scoring", scoring.IsEnabled ? "Enabled" : "Disabled"));
+            score.Add(Item.Property("Score Label", scoring.ScoreLabel));
+            score.Add(Item.Property("Score Categories", scoring.CategoryCount.ToString(CultureInfo.InvariantCulture)));
+            score.Add(Item.Property("Score Rules", scoring.RuleCount.ToString(CultureInfo.InvariantCulture)));
+            sections.Add(VictorySection("victory_scoring", "Scoring", ScenarioAuthoringInspectorSectionLayout.PropertyList, score));
+
+            if (ShowAdvancedDetails(state))
+            {
+                List<ScenarioAuthoringInspectorItem> reference = new List<ScenarioAuthoringInspectorItem>();
+                AddSupportedConditionSummary(reference);
+                sections.Add(VictorySection("victory_reference", "Runtime Reference", ScenarioAuthoringInspectorSectionLayout.NoteList, reference));
+            }
+
+            return sections.ToArray();
+        }
+
+        private static ScenarioAuthoringInspectorSection VictorySection(string id, string title, ScenarioAuthoringInspectorSectionLayout layout, List<ScenarioAuthoringInspectorItem> items)
+        {
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = id,
+                Title = title,
+                Expanded = true,
+                Layout = layout,
+                Items = items.ToArray()
+            };
+        }
+
         private static void AddVictoryAuthoringItems(List<ScenarioAuthoringInspectorItem> items, ScenarioDefinition definition)
         {
             WinLossConditionsDefinition winLoss = definition != null ? definition.WinLossConditions : null;

@@ -1741,18 +1741,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             if (state != null && state.ActiveTool == ScenarioAuthoringTool.WinLoss)
             {
-                return new[]
-                {
-                    _workflowAuthoringContentBuilder.BuildToolSection(
-                        state,
-                        editorSession,
-                        ScenarioAuthoringTool.WinLoss,
-                        definition,
-                        state.SelectedTarget,
-                        false,
-                        false,
-                        null)
-                };
+                return _workflowAuthoringContentBuilder.BuildVictorySections(state, definition);
             }
 
             return _timelineAuthoringContentBuilder.Build(new ScenarioAuthoringWindowContentContext(state, editorSession, session, definition));
@@ -5276,7 +5265,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             sections.Sort(delegate(ScenarioAuthoringSettingsSectionViewModel left, ScenarioAuthoringSettingsSectionViewModel right)
             {
-                return string.Compare(left.Title, right.Title, StringComparison.OrdinalIgnoreCase);
+                int rankCompare = SettingsSectionRank(left != null ? left.Title : null).CompareTo(SettingsSectionRank(right != null ? right.Title : null));
+                if (rankCompare != 0)
+                    return rankCompare;
+                return string.Compare(left != null ? left.Title : null, right != null ? right.Title : null, StringComparison.OrdinalIgnoreCase);
             });
 
             return new ScenarioAuthoringSettingsViewModel
@@ -5309,6 +5301,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             return definition != null
                 && string.Equals(definition.Section, "Advanced", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int SettingsSectionRank(string title)
+        {
+            if (string.IsNullOrEmpty(title))
+                return 50;
+            if (string.Equals(title, "Shell", StringComparison.OrdinalIgnoreCase))
+                return 0;
+            if (string.Equals(title, "Layout", StringComparison.OrdinalIgnoreCase))
+                return 1;
+            if (string.Equals(title, "Visuals", StringComparison.OrdinalIgnoreCase))
+                return 2;
+            if (string.Equals(title, "Input", StringComparison.OrdinalIgnoreCase))
+                return 3;
+            if (string.Equals(title, "Sprite Tools", StringComparison.OrdinalIgnoreCase))
+                return 4;
+            if (string.Equals(title, "Advanced", StringComparison.OrdinalIgnoreCase))
+                return 99;
+            return 50;
         }
 
         private static float ParseSettingNumber(ScenarioAuthoringSettingDefinition definition, string value)
