@@ -201,6 +201,12 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
             if (string.Equals(scenario.OwnerModId, ScenarioAuthoringDraftRepository.DraftOwnerId, StringComparison.OrdinalIgnoreCase))
                 return true;
 
+            // A published package can intentionally retain the authored draft's
+            // scenario id. Its loaded mod owner is the authoritative source, so
+            // do not hide that package merely because the local draft remains.
+            if (!string.IsNullOrEmpty(scenario.OwnerModId))
+                return false;
+
             try
             {
                 ScenarioInfo ignored;
