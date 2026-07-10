@@ -381,10 +381,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (ScenarioFeatureToggles.IsCustomScenarioEditorEnabled())
                 rows.Add(BuildTypeRow(ScenarioBookType.Draft, "Draft Scenarios", "Authoring workspace for unfinished scenarios, not normal play content."));
 
-            AddRecoveryRows(rows);
             rows.Add(BuildTypeRow(ScenarioBookType.Surrounded, "Surrounded", "Scenario saves and custom content built on the Surrounded rule set."));
             rows.Add(BuildTypeRow(ScenarioBookType.Stasis, "Stasis", "Scenario saves and custom content built on the Stasis rule set."));
             AddPublishedScenarioRows(rows);
+
+            // Interrupted launches and leftover redirects are exceptional, so they trail
+            // the normal type cards under their own labelled "Needs attention" section
+            // instead of sitting between real scenarios.
+            AddRecoveryRows(rows);
             return rows;
         }
 
@@ -443,10 +447,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private ScenarioBookRowModel BuildScenarioRow(ScenarioBookType selectedType, ScenarioCatalogEntry entry)
         {
             SaveEntry draftSave = null;
+            ScenarioBookDraftFactsModel draftFacts = null;
             if (entry != null && entry.Source == ScenarioCatalogSource.Draft)
             {
                 try { ScenarioAuthoringDraftRepository.Instance.TryGetDraftSaveEntry(entry.ScenarioId, out draftSave); }
                 catch { draftSave = null; }
+
+                string draftFilePath = ScenarioAuthoringDraftRepository.GetDraftScenarioFilePath(draftSave != null ? draftSave.absoluteSlot : 0);
+                draftFacts = ScenarioBookDraftFacts.BuildRowFacts(entry, draftSave, draftFilePath);
             }
 
             return new ScenarioBookRowModel
@@ -456,10 +464,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Scenario = entry,
                 Title = Safe(entry != null ? entry.DisplayName : null, entry != null ? entry.ScenarioId : null),
                 Detail = entry != null && entry.Source == ScenarioCatalogSource.Draft
-                    ? BuildDraftScenarioDetail(entry, draftSave)
+                    ? BuildDraftScenarioDetail(entry, draftSave, draftFacts)
                     : BuildScenarioDetail(entry),
                 Badge = entry != null && entry.Source == ScenarioCatalogSource.Draft
-                    ? BuildDraftScenarioBadge(draftSave)
+                    ? BuildDraftScenarioBadge(draftSave, draftFacts)
                     : BuildScenarioBadge(entry),
                 IsLocked = entry == null || !entry.CanStart
             };
@@ -596,8 +604,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (IsLaunchFlowPending())
                 return;
 
-            AddRecoveryRows(rows, PlatformSaveProxy.NextSave, PlatformSaveProxy._nextSaveLock, "queued startup save");
-            AddRecoveryRows(rows, PlatformSaveProxy.NextLoad, PlatformSaveProxy._nextLoadLock, "queued load target");
+            List<ScenarioBookRowModel> recoveryRows = new List<ScenarioBookRowModel>();
+            AddRecoveryRows(recoveryRows, PlatformSaveProxy.NextSave, PlatformSaveProxy._nextSaveLock, "queued startup save");
+            AddRecoveryRows(recoveryRows, PlatformSaveProxy.NextLoad, PlatformSaveProxy._nextLoadLock, "queued load target");
+
+            if (recoveryRows.Count == 0)
+                return;
+
+            rows.Add(new ScenarioBookRowModel
+            {
+                Kind = ScenarioBookRowKind.Empty,
+                Title = "Needs attention",
+                Detail = "A previous scenario launch was interrupted. Clear or resume these leftover redirects; no save or draft files are deleted.",
+                Badge = string.Empty
+            });
+            rows.AddRange(recoveryRows);
         }
 
         private static bool IsLaunchFlowPending()
@@ -739,17 +760,20 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             return owner + " - " + mode + " - " + state;
         }
 
-        private static string BuildDraftScenarioDetail(ScenarioCatalogEntry entry, SaveEntry draftSave)
+        private static string BuildDraftScenarioDetail(ScenarioCatalogEntry entry, SaveEntry draftSave, ScenarioBookDraftFactsModel facts)
         {
             string description = Safe(entry != null ? entry.Description : null, "Local scenario authoring draft.");
-            string modified = BuildDraftModifiedLabel(draftSave);
-            string slot = draftSave != null && draftSave.absoluteSlot > 0 ? "slot " + draftSave.absoluteSlot.ToString(CultureInfo.InvariantCulture) : "slot ?";
-            string id = entry != null ? Safe(entry.ScenarioId, draftSave != null ? draftSave.id : null) : (draftSave != null ? draftSave.id : "unknown");
-            return description + "\nLast touched " + modified + " - " + slot + " - id " + id;
+            string baseMode = facts != null ? facts.BaseModeLabel : ScenarioBookDraftFacts.BaseModeLabel(entry != null ? entry.BaseGameMode : ScenarioBaseGameMode.Survival);
+            string edited = facts != null ? facts.LastEditedText : BuildDraftModifiedLabel(draftSave);
+            string recovery = facts != null && facts.HasRecoveryData ? " - unsaved recovery" : string.Empty;
+            return description + "\n" + baseMode + " base, edited " + edited + recovery;
         }
 
-        private static string BuildDraftScenarioBadge(SaveEntry draftSave)
+        private static string BuildDraftScenarioBadge(SaveEntry draftSave, ScenarioBookDraftFactsModel facts)
         {
+            if (facts != null && facts.HasRecoveryData)
+                return "Recovery";
+
             if (draftSave != null && draftSave.absoluteSlot > 0)
                 return "Slot " + draftSave.absoluteSlot.ToString(CultureInfo.InvariantCulture);
 

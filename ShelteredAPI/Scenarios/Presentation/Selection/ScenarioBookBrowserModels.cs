@@ -56,6 +56,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         public string DraftId;
         public string DisplayName;
         public string Description;
+        public ScenarioBookDraftFactsModel Facts;
     }
 
     internal sealed class ScenarioBookSaveDetailModel

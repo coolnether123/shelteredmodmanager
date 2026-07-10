@@ -656,6 +656,17 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
         }
 
+        // Resolves the on-disk scenario.xml for a draft save slot without enumerating
+        // every draft. Book rows already hold the draft's absolute slot, so this keeps
+        // per-row recovery/history checks O(1).
+        internal static string GetDraftScenarioFilePath(int slot)
+        {
+            if (slot <= 0)
+                return null;
+
+            return Path.Combine(Path.Combine(GetDraftsRootPath(), "Slot_" + slot), ScenarioDefinitionSerializer.DefaultFileName);
+        }
+
         private static string GetDraftsRootPath()
         {
             return GetScenarioRootPath(false);
