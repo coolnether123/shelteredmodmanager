@@ -203,7 +203,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         _dataSource.GetHeaderTitle(_view, _selectedType, _selectedScenario),
                         _dataSource.GetHeaderDetail(_view, _selectedType, _selectedScenario),
                         HandleDraftDetailsSaved,
-                        HandleDraftOpenRequested);
+                        HandleDraftOpenRequested,
+                        HandleDraftDeleteRequested);
                 }
                 else
                 {
@@ -320,10 +321,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             bool localize;
             if (row.Kind == ScenarioBookRowKind.DeleteDraft)
             {
-                ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(row.Scenario);
-                string draftName = row.Scenario != null ? Safe(row.Scenario.DisplayName, row.Scenario.ScenarioId) : "this draft";
-                message = ScenarioBookDraftFacts.BuildDeleteMessage(draftName, facts);
-                localize = false;
+                BeginDraftDeleteConfirmation(row.Scenario);
+                return;
             }
             else
             {
@@ -337,10 +336,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 bool deleted = false;
                 try
                 {
-                    if (row.Kind == ScenarioBookRowKind.DeleteDraft)
-                        deleted = _actions.DeleteDraft(row.Scenario, out status);
-                    else
-                        deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
+                    deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
                 }
                 catch (Exception ex)
                 {
@@ -665,6 +661,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private void HandleDraftOpenRequested()
         {
             RunLaunchAction(delegate(out string status) { return _actions.OpenDraft(_selectedScenario, out status); });
+        }
+
+        private void HandleDraftDeleteRequested()
+        {
+            BeginDraftDeleteConfirmation(_selectedScenario);
+        }
+
+        private void BeginDraftDeleteConfirmation(ScenarioCatalogEntry scenario)
+        {
+            if (_deletePromptActive || scenario == null)
+                return;
+
+            ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(scenario);
+            string draftName = Safe(scenario.DisplayName, scenario.ScenarioId);
+            bool localize;
+            string message = ScenarioBookDraftFacts.BuildDeleteMessage(draftName, facts);
+            localize = false;
+            BeginConfirmation(message, localize, delegate
+            {
+                string status;
+                bool deleted = _actions.DeleteDraft(scenario, out status);
+                SetStatus(status);
+                if (deleted)
+                {
+                    if (ReferenceEquals(_selectedScenario, scenario))
+                        BackOrClose();
+                    StartDataRefresh("Refreshing scenarios...");
+                }
+            });
         }
 
         private void RunLaunchAction(ScenarioBookLaunchAction action)

@@ -827,6 +827,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                         ScenarioAuthoringDraftRepository.DraftStorageScenarioId,
                         draftStartupSave,
                         launchSaveType,
+                        draft.BaseMode,
                         "authoring draft '" + id + "'",
                         out draftError))
                 {
