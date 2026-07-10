@@ -88,6 +88,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioDefinitionSerializer>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthoringSetupStateService(); });
+            services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioAuthorTestChecklistService(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {
                 return new ScenarioAuthoringTutorialService(
@@ -100,7 +101,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioEditorService>(),
                     resolver.Get<IScenarioDefinitionSerializer>(),
                     resolver.Get<IScenarioDefinitionValidator>(),
-                    resolver.Get<IScenarioDefinitionCatalogService>());
+                    resolver.Get<IScenarioDefinitionCatalogService>(),
+                    resolver.Get<ScenarioAuthorTestChecklistService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioTargetClassifier(); });
             services.AddSingleton(delegate(IServiceResolver resolver)
@@ -179,7 +181,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioStorageAuthoringRuntimeService>(),
                     resolver.Get<ScenarioMapDraftService>(),
                     resolver.Get<ScenarioDraftSnapshotService>(),
-                    resolver.Get<ScenarioAssetInventoryMutationService>());
+                    resolver.Get<ScenarioAssetInventoryMutationService>(),
+                    resolver.Get<ScenarioAuthorTestChecklistService>());
             });
             services.AddSingleton(delegate(IServiceResolver resolver)
             {

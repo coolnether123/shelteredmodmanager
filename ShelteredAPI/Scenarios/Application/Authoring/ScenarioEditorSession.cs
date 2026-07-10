@@ -31,7 +31,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         Triggers = 16,
         WinLoss = 32,
         Assets = 64,
-        Map = 128
+        Map = 128,
+        AuthorTestChecklist = 256
     }
 
     /// <summary>
@@ -83,6 +84,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         {
             HasAppliedToCurrentWorld = true;
             AppliedDraftRevision = DraftRevision;
+        }
+
+        public void MarkChecklistChanged()
+        {
+            if (DirtyFlags == null)
+                DirtyFlags = new List<ScenarioDirtySection>();
+            if (!DirtyFlags.Contains(ScenarioDirtySection.AuthorTestChecklist))
+                DirtyFlags.Add(ScenarioDirtySection.AuthorTestChecklist);
         }
     }
 }

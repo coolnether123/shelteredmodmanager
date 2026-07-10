@@ -104,10 +104,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         internal const string ManifestFileName = "scenario-package.xml";
 
         private readonly IScenarioDefinitionSerializer _serializer;
+        private readonly ScenarioAuthorTestChecklistService _testChecklistService;
 
         public ScenarioPackagePlanner(IScenarioDefinitionSerializer serializer)
+            : this(serializer, new ScenarioAuthorTestChecklistService())
+        {
+        }
+
+        public ScenarioPackagePlanner(
+            IScenarioDefinitionSerializer serializer,
+            ScenarioAuthorTestChecklistService testChecklistService)
         {
             _serializer = serializer;
+            _testChecklistService = testChecklistService ?? new ScenarioAuthorTestChecklistService();
         }
 
         public ScenarioPackagePlan Build(
@@ -217,7 +226,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             return warnings.ToArray();
         }
 
-        private static string BuildReadme(ScenarioDefinition definition, List<string> requiredMods, string[] limitations)
+        private string BuildReadme(ScenarioDefinition definition, List<string> requiredMods, string[] limitations)
         {
             StringBuilder text = new StringBuilder();
             text.AppendLine(definition.DisplayName ?? "Untitled Scenario");
@@ -230,6 +239,9 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
                 text.AppendLine("Victory condition: " + victory);
             text.AppendLine();
             text.AppendLine("AUTHOR"); text.AppendLine(Safe(definition.Author));
+            string honestyLine = _testChecklistService.BuildReadmeHonestyLine(definition);
+            if (!string.IsNullOrEmpty(honestyLine))
+                text.AppendLine(honestyLine);
             text.AppendLine("VERSION"); text.AppendLine(Safe(definition.Version));
             text.AppendLine("CREDITS"); text.AppendLine(Safe(definition.Credits)); text.AppendLine();
             text.AppendLine("INSTALLATION");

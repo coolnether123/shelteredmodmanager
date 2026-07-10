@@ -80,6 +80,12 @@ $scenarioAssetInventoryMutations = Read-RepoFile "ShelteredAPI\Scenarios\Applica
 $scenarioAssetInventoryVerification = Read-RepoFile "ShelteredAPI\Scenarios\Diagnostics\ScenarioAssetInventoryVerification.cs"
 $scenarioAssetInventoryContent = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAssetInventoryContentBuilder.cs"
 $scenarioPackagePlan = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioPackagePlan.cs"
+$scenarioAuthorTestChecklistModel = Read-RepoFile "ShelteredAPI\Scenarios\Definitions\ScenarioAuthorTestChecklist.cs"
+$scenarioAuthorTestChecklistService = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthorTestChecklistService.cs"
+$scenarioAuthorTestChecklistSerializer = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Serialization\AuthorTestChecklistScenarioSectionSerializer.cs"
+$scenarioAuthorTestChecklistSection = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioAuthorTestChecklistSectionBuilder.cs"
+$scenarioAuthorTestChecklistVerification = Read-RepoFile "ShelteredAPI\Scenarios\Diagnostics\ScenarioAuthorTestChecklistVerification.cs"
+$scenarioPlaytestOrchestrator = Read-RepoFile "ShelteredAPI\Scenarios\Application\Runtime\ScenarioPlaytestOrchestrator.cs"
 $scenarioJournalDefinition = Read-RepoFile "ShelteredAPI\Scenarios\Domain\Journal\JournalDefinition.cs"
 $scenarioJournalProvider = Read-RepoFile "ShelteredAPI\Scenarios\Application\Scheduling\ScenarioJournalScheduledActionProvider.cs"
 $scheduledJournalRuntime = Read-RepoFile "ShelteredAPI\Scenarios\Infrastructure\Runtime\ScheduledJournalRuntimeService.cs"
@@ -831,6 +837,19 @@ Assert-Contains "scenario goal edit command" $scenarioMetadataActions "ActionDra
 Assert-Contains "scenario goal home card" $scenarioOverviewAuthoringContentBuilder "ActionDraftGoalPrefix.*FormatVictorySummary" "Home identity card must show the editable goal beside its victory condition."
 Assert-Contains "scenario goal readme" $scenarioPackagePlan "AppendLine\(""GOAL""\).*definition\.Goal.*Victory condition: " "export README must include the goal and, when present, the victory condition."
 Assert-Contains "scenario goal verification" $scenarioVerification "VerifyWizInfoContent.*goalRoundTrip\.Goal == withGoal\.Goal.*ScenarioContentSummary\.Build\(fixture\).*ScenarioTopIssueResolver\.ResolveTopIssue" "framework verification must cover goal round-trip, installed-copy summary, and top-issue ranking."
+
+# TESTCHECKLIST: per-draft author testing evidence, editor-known verification seams,
+# non-blocking Test/Export UI, and conditional README honesty output.
+Assert-Contains "test checklist fixed model" $scenarioAuthorTestChecklistService 'Started a playtest.*Saved and reloaded during play.*Reached each ending/outcome.*Verified required mods list.*Installed the exported package and played it' "the author checklist must retain all five fixed product-review steps."
+Assert-Contains "test checklist internal model" $scenarioAuthorTestChecklistModel 'internal sealed class ScenarioAuthorTestChecklistItem.*bool Checked.*string Note.*DateTime\? CheckedUtc.*ScenarioAuthorTestVerificationSource Source' "checklist entries must be internal and retain checked state, note, timestamp, and verification source."
+Assert-Contains "test checklist XML backward compatibility" $scenarioSerializer 'checklistSerializer\.Read\(Child\(root, "AuthorTestChecklist"\)\).*checklistSerializer\.Write\(writer, definition\.AuthorTestChecklist\)' "scenario XML must read an absent checklist as empty and write authored checklist content."
+Assert-Contains "test checklist XML item round-trip" $scenarioAuthorTestChecklistSerializer 'checkedUtc.*source.*Note.*DateTime\.TryParse' "checklist XML must round-trip source, UTC check date, and optional note."
+Assert-Contains "test checklist playtest auto-check" $scenarioPlaytestOrchestrator 'PlaytestState = ScenarioPlaytestState\.Playtesting;.*MarkPlaytestStarted\(session\)' "a successfully started playtest must mark the editor-verified checklist seam."
+Assert-Contains "test checklist reinstall auto-check" $scenarioPublishExport 'result != null && result\.Success.*MarkExportReinstalled' "a successful publish.export.install action must mark the editor-verified reinstall seam."
+Assert-Contains "test checklist Test UI" $scenarioAuthorTestChecklistSection 'VERIFIED BY THE EDITOR.*SELF-ATTESTED.*Editable = true.*Title = "Did you test it\?"' "the Test-stage card must show editable notes and visually distinguish editor verification from self-attestation."
+Assert-Contains "test checklist Export UI" $scenarioAuthorTestChecklistSection 'of 5 test steps done.*Export is still allowed; completing the author test checklist is encouraged' "the export summary must report progress and encourage completion without blocking."
+Assert-Contains "test checklist README honesty" $scenarioPackagePlan 'BuildReadmeHonestyLine\(definition\).*if \(!string\.IsNullOrEmpty\(honestyLine\)\).*AppendLine\(honestyLine\)' "PACKAGEUX README output must add the honesty line only when the checklist supplies one."
+Assert-Contains "test checklist executable contracts" $scenarioAuthorTestChecklistVerification 'XML without AuthorTestChecklist.*MarkPlaytestStarted.*MarkExportReinstalled.*README omitted the conditional author-verification line.*README included an honesty line for an empty checklist' "framework verification must cover backward compatibility, round-trip/auto-check behavior, and conditional README output."
 
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)

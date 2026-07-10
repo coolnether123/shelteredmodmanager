@@ -30,6 +30,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private readonly ScenarioModDependencyDetector _modDependencyDetector;
         private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
+        private readonly ScenarioAuthorTestChecklistSectionBuilder _testChecklistSectionBuilder;
 
         public ScenarioPublishAuthoringContentBuilder(
             ScenarioTimelineBuilder timelineBuilder,
@@ -39,6 +40,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineBuilder = timelineBuilder;
             _modDependencyDetector = modDependencyDetector;
             _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
+            _testChecklistSectionBuilder = new ScenarioAuthorTestChecklistSectionBuilder(new ScenarioAuthorTestChecklistService());
         }
 
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Publish; } }
@@ -57,7 +59,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             bool showAdvanced = state != null
                 && state.Settings != null
                 && state.Settings.GetBool("debug.show_advanced_details", false);
-            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(validation, showAdvanced);
+            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(definition, validation, showAdvanced);
             List<ScenarioAuthoringInspectorItem> packageItems = BuildPackagePreviewItems(state, validation);
             List<ScenarioAuthoringInspectorItem> metadataItems = new List<ScenarioAuthoringInspectorItem>(ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
             metadataItems.AddRange(ScenarioMetadataAuthoringContent.BuildStatusItems(state != null ? state.ActiveScenarioFilePath : null));
@@ -227,9 +229,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioAuthoringValidationSnapshot validation, bool showAdvanced)
+        internal List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioDefinition definition, ScenarioAuthoringValidationSnapshot validation, bool showAdvanced)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(_testChecklistSectionBuilder.BuildExportSummary(definition));
             int errors = validation != null ? validation.ErrorCount : 1;
             bool canExport = errors == 0;
             items.Add(Item.ActionItem(Item.Action(
@@ -538,6 +541,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private readonly ScenarioTimelineBuilder _timelineBuilder;
         private readonly ScenarioModDependencyDetector _modDependencyDetector;
         private readonly ScenarioModCompatibilityViewModelBuilder _modCompatibilityViewModelBuilder;
+        private readonly ScenarioAuthorTestChecklistSectionBuilder _testChecklistSectionBuilder;
 
         public ScenarioRuntimeTestAuthoringContentBuilder(
             ScenarioTimelineBuilder timelineBuilder,
@@ -547,6 +551,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             _timelineBuilder = timelineBuilder;
             _modDependencyDetector = modDependencyDetector;
             _modCompatibilityViewModelBuilder = modCompatibilityViewModelBuilder;
+            _testChecklistSectionBuilder = new ScenarioAuthorTestChecklistSectionBuilder(new ScenarioAuthorTestChecklistService());
         }
 
         public ScenarioAuthoringWindowContentKind ContentKind { get { return ScenarioAuthoringWindowContentKind.Scenario; } }
@@ -574,6 +579,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     Layout = ScenarioAuthoringInspectorSectionLayout.Summary,
                     Items = controlItems.ToArray()
                 },
+                _testChecklistSectionBuilder.BuildTestSection(definition),
                 new ScenarioAuthoringInspectorSection
                 {
                     Id = "test_run_settings",

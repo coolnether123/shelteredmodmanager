@@ -39,7 +39,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
             ScenarioMapDraftService mapDraftService,
             ScenarioDraftSnapshotService snapshotService,
-            ScenarioAssetInventoryMutationService assetInventoryMutations)
+            ScenarioAssetInventoryMutationService assetInventoryMutations,
+            ScenarioAuthorTestChecklistService testChecklistService)
         {
             _dispatcher = new ScenarioCommandDispatcher(CreateHandlers(
                 captureService,
@@ -62,7 +63,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 storageAuthoringRuntimeService,
                 mapDraftService,
                 snapshotService,
-                assetInventoryMutations));
+                assetInventoryMutations,
+                testChecklistService));
         }
 
         public bool Execute(ScenarioAuthoringState state, string actionId)
@@ -116,7 +118,8 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioStorageAuthoringRuntimeService storageAuthoringRuntimeService,
             ScenarioMapDraftService mapDraftService,
             ScenarioDraftSnapshotService snapshotService,
-            ScenarioAssetInventoryMutationService assetInventoryMutations)
+            ScenarioAssetInventoryMutationService assetInventoryMutations,
+            ScenarioAuthorTestChecklistService testChecklistService)
         {
             return new IScenarioCommandHandler[]
             {
@@ -140,6 +143,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 new EventAuthoringCommandHandler(eventAuthoringService, editorService),
                 new GameplayScheduleCommandHandler(sectionHub.GameplaySchedule, editorService),
                 new ScenarioWinLossCommandHandler(editorService),
+                new ScenarioAuthorTestChecklistCommandHandler(editorService, testChecklistService),
                 new ScenarioPublishCommandHandler(publishExportService),
                 new ScenarioDraftHistoryCommandHandler(snapshotService),
                 new SelectionCommandHandler(weatherEffectSpriteCatalog),

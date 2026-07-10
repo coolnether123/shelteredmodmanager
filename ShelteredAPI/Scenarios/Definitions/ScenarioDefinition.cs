@@ -101,6 +101,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
             Journal = new JournalDefinition();
             Conversations = new ScenarioConversationAuthoringDefinition();
             VanillaSuppression = new ScenarioVanillaSuppressionDefinition();
+            AuthorTestChecklist = new ScenarioAuthorTestChecklist();
         }
 
         public string Id { get; set; }
@@ -135,6 +136,7 @@ namespace ShelteredAPI.Scenarios.Definitions{
         public JournalDefinition Journal { get; set; }
         public ScenarioConversationAuthoringDefinition Conversations { get; set; }
         public ScenarioVanillaSuppressionDefinition VanillaSuppression { get; set; }
+        internal ScenarioAuthorTestChecklist AuthorTestChecklist { get; set; }
     }
 
     public sealed class ScenarioVanillaSuppressionDefinition
