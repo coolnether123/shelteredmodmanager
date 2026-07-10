@@ -1235,7 +1235,14 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 bool clicked = GUI.Button(rect, "OPEN SCENARIO EDITOR", _openButtonStyle);
                 GUI.color = old;
                 if (clicked)
+                {
+                    // IMGUI can dispatch the pointer event which opens the
+                    // editor before its focused text field has emitted a blur.
+                    // Push the pending buffer explicitly so the transition
+                    // always commits the name the author can see.
+                    _owner.SetWizardName(_nameBuffer ?? string.Empty);
                     _owner.OpenWizardEditor();
+                }
             }
 
             private void DrawBackdrop()

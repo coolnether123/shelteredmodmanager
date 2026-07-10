@@ -171,6 +171,15 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                 SlotManifest manifest = _dependencies.CreateDependencyManifest(scenario);
                 ScenarioDependencyVerificationState dependencyState = _dependencies.VerifyDependencies(scenario);
                 ScenarioBaseGameMode baseGameMode = ResolveBaseGameMode(scenario);
+                string author = null;
+                ScenarioDefinition loadedDefinition;
+                string loadedScenarioPath;
+                ScenarioValidationResult ignoredValidation;
+                if (_definitions.TryLoadDefinition(scenario.Id, out loadedDefinition, out loadedScenarioPath, out ignoredValidation)
+                    && loadedDefinition != null)
+                {
+                    author = loadedDefinition.Author;
+                }
                 entries.Add(new ScenarioCatalogEntry
                 {
                     ScenarioId = scenario.Id,
@@ -182,6 +191,7 @@ namespace ShelteredAPI.Scenarios.Application.Selection{
                     DisplayName = scenario.DisplayName,
                     Description = scenario.Description,
                     Version = scenario.Version,
+                    Author = author,
                     OwnerModId = scenario.OwnerModId,
                     Order = scenario.Order,
                     SaveCount = _saveLibrary.CountSaves(scenario.Id),
