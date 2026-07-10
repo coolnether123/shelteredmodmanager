@@ -911,6 +911,26 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 return CompleteRoomPlacement(ScenarioEditorController.Instance.CurrentSession, _activePlacement.Ghost, out message);
             }
 
+            // Crafting ghosts also use the screen-driven OnTryPlacement gate,
+            // which reports the armed ghost itself as a collision for an
+            // explicit grid commit.  The semantic route has already resolved
+            // the destination cell, so keep the normal spawn and draft
+            // recording path while applying the same room-cell prerequisite.
+            if (_activePlacement.Kind == PlacementSessionKind.Object)
+            {
+                ShelterRoomGrid.GridCell objectCell = grid.GetCell(gridX, gridY);
+                if (!IsRoomOrTop(objectCell))
+                {
+                    message = "This object must be placed in a Room or RoomTop cell.";
+                    return true;
+                }
+
+                return CompleteObjectPlacement(
+                    ScenarioEditorController.Instance.CurrentSession,
+                    _activePlacement.Ghost as Obj_CraftingGhost,
+                    out message);
+            }
+
             return TryCompletePlacement(ScenarioEditorController.Instance.CurrentSession, out message);
         }
 
