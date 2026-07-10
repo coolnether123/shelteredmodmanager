@@ -671,6 +671,7 @@
     <Compile Include="Scenarios\Diagnostics\ScenarioValidatorImpl.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ScenarioWorldReady.cs" />
     <Compile Include="Scenarios\Infrastructure\Harmony\ShelteredCustomScenarioPatches.cs" />
+    <Compile Include="Scenarios\Infrastructure\Harmony\ScenarioRngPatches.cs" />
     <Compile Include="Scenarios\Infrastructure\Unity\ShelteredScenarioRuntimeBindingManager.cs" />
     <Compile Include="Scenarios\Registration\ScenarioEventHub.cs" />
     <Compile Include="Scenarios\Registration\ScenarioRecord.cs" />

@@ -189,6 +189,7 @@
     <Compile Include="Core\PluginContextImpl.cs" />
     <Compile Include="Core\PrefixedLogger.cs" />
     <Compile Include="Core\ModRandom.cs" />
+    <Compile Include="Core\ModRandomBridge.cs" />
     <Compile Include="Core\ModRandomState.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Reflection\Safe.cs" />

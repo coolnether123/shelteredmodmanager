@@ -11,7 +11,11 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         {
             message = null;
             if (definition == null || !definition.SeedOverride.HasValue)
+            {
+                // Random-seed scenarios deliberately retain Unity's shared RNG state.
+                ModRandomBridge.SetScenarioFixedSeedActive(false);
                 return false;
+            }
 
             long rawSeed = definition.SeedOverride.Value;
             if (rawSeed < int.MinValue || rawSeed > int.MaxValue)
@@ -24,6 +28,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
             int seed = (int)rawSeed;
             ModRandom.ResetForSaveSeed(seed);
+            ModRandomBridge.SetScenarioFixedSeedActive(true);
             message = "Fixed scenario seed applied to ModRandom: " + seed.ToString(CultureInfo.InvariantCulture) + ".";
             MMLog.WriteInfo("[ScenarioSeedPolicy] Applied fixed ModRandom seed " + seed.ToString(CultureInfo.InvariantCulture)
                 + " for scenario '" + (definition.Id ?? string.Empty) + "' reason=" + (reason ?? string.Empty) + ".");
