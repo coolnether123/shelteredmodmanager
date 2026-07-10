@@ -81,17 +81,18 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                     return notReady;
                 }
             }
-            bool staleLiveWorld = session.HasUnappliedDraftChanges;
-            bool reusedLiveWorld = session.HasAppliedToCurrentWorld;
+            // A Begin request which reaches this point is not an active playtest
+            // (the active case returned above).  It is therefore the normal
+            // fresh-start path and must apply the current draft, irrespective of
+            // any latch/revision residue from an earlier stopped world.
+            //
+            // In particular, do not interpret a revision mismatch as a reason to
+            // refuse a paused start: that mismatch is exactly why this new world
+            // needs an apply.  EndPlaytest clears this state in the usual path;
+            // the reset here also recovers safely from a stale session snapshot.
+            session.ResetStoppedPlaytestWorld();
+            InvalidateCompletionCarrier();
             ScenarioApplyResult result;
-            if (staleLiveWorld)
-            {
-                result = new ScenarioApplyResult();
-                result.AddMessage("Playtest not restarted: the running world predates recent draft edits. Save is allowed, but stop and restart the scenario from the authoring launch flow before verifying those edits.");
-                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest start blocked because the live world is stale. draftRevision="
-                    + session.DraftRevision + ", appliedDraftRevision=" + session.AppliedDraftRevision + ".");
-                return result;
-            }
 
             // The scheduled runtime resolves authored end conditions through the
             // vanilla scenario QuestInstance.  A playtest is not entered through
@@ -106,47 +107,39 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 return spawnBlocked;
             }
 
-            if (!reusedLiveWorld)
+            try
             {
-                try
-                {
-                    string seedMessage;
-                    ScenarioSeedPolicy.TryApplyForScenario(session.WorkingDefinition, "playtest", out seedMessage);
-                    result = _applier.ApplyAll(session.WorkingDefinition, scenarioFilePath);
-                    if (!string.IsNullOrEmpty(seedMessage))
-                        result.AddMessage(seedMessage);
-                }
-                catch (Exception ex)
-                {
-                    result = new ScenarioApplyResult();
-                    result.AddMessage("Playtest apply failed: " + ex.Message);
-                    MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest apply failed: " + ex);
-                    return result;
-                }
-
-                if (result == null)
-                {
-                    result = new ScenarioApplyResult();
-                    result.AddMessage("Playtest apply returned no result.");
-                    MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest apply returned null for scenario '"
-                        + session.WorkingDefinition.Id + "'.");
-                    return result;
-                }
-
-                session.MarkAppliedToCurrentWorld();
+                string seedMessage;
+                ScenarioSeedPolicy.TryApplyForScenario(session.WorkingDefinition, "playtest", out seedMessage);
+                result = _applier.ApplyAll(session.WorkingDefinition, scenarioFilePath);
+                if (!string.IsNullOrEmpty(seedMessage))
+                    result.AddMessage(seedMessage);
             }
-            else
+            catch (Exception ex)
             {
                 result = new ScenarioApplyResult();
-                result.AddMessage("Playtest resumed without reapplying scenario changes; the current live shelter already matches the authoring draft.");
+                result.AddMessage("Playtest apply failed: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest apply failed: " + ex);
+                return result;
             }
+
+            if (result == null)
+            {
+                result = new ScenarioApplyResult();
+                result.AddMessage("Playtest apply returned no result.");
+                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest apply returned null for scenario '"
+                    + session.WorkingDefinition.Id + "'.");
+                return result;
+            }
+
+            session.MarkAppliedToCurrentWorld();
 
             session.PlaytestState = ScenarioPlaytestState.Playtesting;
             if (_testChecklistService != null)
                 _testChecklistService.MarkPlaytestStarted(session);
             _pauseService.ReleasePause("Scenario authoring released simulation.");
             MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Playtest started for scenario '" + session.WorkingDefinition.Id
-                + "'. Messages=" + result.Messages.Length + ", reusedLiveWorld=" + reusedLiveWorld + ".");
+                + "'. Messages=" + result.Messages.Length + ", appliedDraftRevision=" + session.AppliedDraftRevision + ".");
             return result;
         }
 
@@ -161,14 +154,19 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
             // A quest carrier belongs to the just-stopped live world.  Leaving
             // its id on the active binding makes a subsequent apply reuse it.
-            ScenarioRuntimeBinding binding = _runtimeBindingService.CurrentBinding;
-            if (binding != null)
-            {
-                binding.IsActive = false;
-                binding.ScenarioQuestInstanceId = null;
-                _runtimeBindingService.SetBinding(binding);
-            }
+            InvalidateCompletionCarrier();
             MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Playtest ended; authoring pause restored.");
+        }
+
+        private void InvalidateCompletionCarrier()
+        {
+            ScenarioRuntimeBinding binding = _runtimeBindingService.CurrentBinding;
+            if (binding == null)
+                return;
+
+            binding.IsActive = false;
+            binding.ScenarioQuestInstanceId = null;
+            _runtimeBindingService.SetBinding(binding);
         }
 
         private void EnsureRuntimeBinding(ScenarioEditorSession session)
