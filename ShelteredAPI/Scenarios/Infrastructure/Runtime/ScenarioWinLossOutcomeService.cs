@@ -49,25 +49,32 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             if (!string.IsNullOrEmpty(state.ScenarioOutcome))
                 return;
 
+            ConditionDef condition;
+            string reason;
+            if (TryFindSatisfied(_definition.WinLossConditions.LossConditions, state, out condition, out reason))
+            {
+                ResolveSatisfiedOutcome(state, false, condition);
+                return;
+            }
+
+            if (TryFindSatisfied(_definition.WinLossConditions.WinConditions, state, out condition, out reason))
+                ResolveSatisfiedOutcome(state, true, condition);
+            else if (!string.IsNullOrEmpty(reason))
+                LogBlocked(reason);
+        }
+
+        private void ResolveSatisfiedOutcome(ScenarioRuntimeState state, bool success, ConditionDef condition)
+        {
             QuestInstance instance;
             string reason;
             if (!_questInstanceResolver.TryResolve(_binding, out instance, out reason))
             {
                 LogBlocked(reason);
+                ReturnAuthoringPlaytestToEditor();
                 return;
             }
 
-            ConditionDef condition;
-            if (TryFindSatisfied(_definition.WinLossConditions.LossConditions, state, out condition, out reason))
-            {
-                Resolve(instance, state, false, condition);
-                return;
-            }
-
-            if (TryFindSatisfied(_definition.WinLossConditions.WinConditions, state, out condition, out reason))
-                Resolve(instance, state, true, condition);
-            else if (!string.IsNullOrEmpty(reason))
-                LogBlocked(reason);
+            Resolve(instance, state, success, condition);
         }
 
         private bool TryFindSatisfied(List<ConditionDef> conditions, ScenarioRuntimeState state, out ConditionDef satisfied, out string reason)

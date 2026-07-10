@@ -38,11 +38,15 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
         internal ShelteredScenarioRuntimeBindingManager(
             IScenarioStateManager stateManager,
-            IScenarioRuntimeBindingPersistence persistence)
+            IScenarioRuntimeBindingPersistence persistence,
+            IVanillaScenarioRuntime vanillaRuntime)
         {
             _stateManager = stateManager;
             _persistence = persistence;
+            _vanillaRuntime = vanillaRuntime;
         }
+
+        private readonly IVanillaScenarioRuntime _vanillaRuntime;
 
         public void EnsureHooked()
         {
@@ -100,6 +104,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             try
             {
                 ScenarioRuntimeBinding loaded = _persistence.Load(data);
+                InvalidateUnavailableCompletionCarrier(loaded);
                 SetBinding(loaded);
                 if (loaded != null && loaded.IsConvertedToNormalSave)
                     MMLog.WriteInfo("[ShelteredScenarioRuntimeBinding] Save is converted to normal; scenario logic is disabled.");
@@ -118,6 +123,28 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
             // must start unbound unless the scenario/editor startup flow explicitly
             // creates a new binding later in that flow.
             SetBinding(null);
+        }
+
+        private void InvalidateUnavailableCompletionCarrier(ScenarioRuntimeBinding binding)
+        {
+            if (binding == null || !binding.ScenarioQuestInstanceId.HasValue || _vanillaRuntime == null)
+                return;
+
+            QuestInstance instance;
+            string reason;
+            if (_vanillaRuntime.TryGetQuestInstance(binding.ScenarioQuestInstanceId.Value, out instance, out reason)
+                && instance != null
+                && instance.definition != null
+                && instance.definition.IsScenario()
+                && (string.IsNullOrEmpty(binding.ScenarioId)
+                    || string.Equals(instance.definition.id, binding.ScenarioId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            binding.ScenarioQuestInstanceId = null;
+            MMLog.WriteInfo("[ShelteredScenarioRuntimeBinding] Invalidated unavailable persisted Scenario QuestInstance. "
+                + (reason ?? "Carrier did not match the active binding."));
         }
 
     }
