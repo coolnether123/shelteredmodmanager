@@ -517,22 +517,27 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
 
         private ScenarioInfo LoadInfoWithRecovery(string filePath)
         {
-            ScenarioDefinition definition;
+            ScenarioDefinitionMetadata metadata;
             string recoveryMessage;
             bool recovered;
-            if (!_serializer.TryLoadWithRecovery(filePath, out definition, out recoveryMessage, out recovered))
+            if (!ScenarioDefinitionMetadataCache.TryLoad(
+                _serializer,
+                filePath,
+                DraftOwnerId,
+                _serializer.TryLoadWithRecovery,
+                out metadata,
+                out recoveryMessage,
+                out recovered)
+                || metadata == null
+                || metadata.Info == null)
+            {
                 throw new IOException(string.IsNullOrEmpty(recoveryMessage) ? "Scenario XML could not be loaded." : recoveryMessage);
+            }
 
             if (recovered)
                 MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] " + recoveryMessage);
 
-            return new ScenarioInfo(
-                definition.Id,
-                definition.DisplayName,
-                definition.Author,
-                definition.Version,
-                filePath,
-                DraftOwnerId);
+            return metadata.Info;
         }
 
         private static bool ScenarioIdExistsOutsideDrafts(string scenarioId)

@@ -22,6 +22,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         public bool HasHistory;
         public bool HasExport;
         public string LastExportText;
+        public bool DetailComputed;
         public bool ValidationComputed;
         public bool ValidationAvailable;
         public int ErrorCount;
@@ -119,15 +120,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         }
 
         // Richer facts for the single selected draft: adds validation and export state.
+        public static ScenarioBookDraftFactsModel BuildImmediateDetailFacts(ScenarioCatalogEntry entry)
+        {
+            ScenarioBookDraftFactsModel facts = new ScenarioBookDraftFactsModel();
+            facts.ValidationSummary = "Checking draft...";
+            string ignored;
+            ApplyImmediateDetailFacts(facts, entry, out ignored);
+            return facts;
+        }
+
+        // Full detail facts are pure managed/file-system work and may be built on a worker.
         public static ScenarioBookDraftFactsModel BuildDetailFacts(ScenarioCatalogEntry entry)
         {
             ScenarioBookDraftFactsModel facts = new ScenarioBookDraftFactsModel();
+            facts.ValidationSummary = "Checking draft...";
+            string scenarioFilePath;
+            ApplyImmediateDetailFacts(facts, entry, out scenarioFilePath);
             if (entry == null)
                 return facts;
 
-            facts.BaseModeLabel = BaseModeLabel(entry.BaseGameMode);
-
-            string scenarioFilePath = ResolveDraftFilePath(entry);
             if (!string.IsNullOrEmpty(scenarioFilePath))
             {
                 try
@@ -145,16 +156,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
 
             ApplyExportFacts(facts, entry);
             ApplyValidationFacts(facts, entry, scenarioFilePath);
+            facts.DetailComputed = true;
             return facts;
+        }
+
+        private static void ApplyImmediateDetailFacts(
+            ScenarioBookDraftFactsModel facts,
+            ScenarioCatalogEntry entry,
+            out string scenarioFilePath)
+        {
+            scenarioFilePath = null;
+            if (facts == null || entry == null)
+                return;
+
+            facts.BaseModeLabel = BaseModeLabel(entry.BaseGameMode);
+            scenarioFilePath = ResolveDraftFilePath(entry);
+            try
+            {
+                if (!string.IsNullOrEmpty(scenarioFilePath) && File.Exists(scenarioFilePath))
+                    facts.LastEditedText = RelativeTime(File.GetLastWriteTimeUtc(scenarioFilePath));
+            }
+            catch
+            {
+            }
         }
 
         public static string BuildDeleteMessage(string draftName, ScenarioBookDraftFactsModel facts)
         {
             string name = string.IsNullOrEmpty(draftName) ? "this draft" : draftName;
-            string export = facts != null && facts.HasExport
+            string export = facts != null && !facts.DetailComputed
+                ? "Export status is still being checked."
+                : facts != null && facts.HasExport
                 ? "Its exported package is kept" + FormatExportSuffix(facts) + "."
                 : "No exported package exists for this draft.";
-            string recovery = facts != null && facts.HasRecoveryData
+            string recovery = facts != null && !facts.DetailComputed
+                ? "Recovery history is still being checked."
+                : facts != null && facts.HasRecoveryData
                 ? "Unsaved recovery data (a newer autosave) will be removed with the draft."
                 : (facts != null && facts.HasHistory
                     ? "Its autosave history will be removed with the draft."
@@ -165,7 +202,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         public static string BuildDuplicateMessage(string draftName, ScenarioBookDraftFactsModel facts)
         {
             string name = string.IsNullOrEmpty(draftName) ? "this draft" : draftName;
-            string export = facts != null && facts.HasExport
+            string export = facts != null && !facts.DetailComputed
+                ? "The original's export status is still being checked."
+                : facts != null && facts.HasExport
                 ? "The original's exported package is kept and is not copied."
                 : "No exported package exists for this draft.";
             return "Duplicate '" + name + "'?\nA separate editable copy is created. " + export;
@@ -175,7 +214,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection
         {
             string name = string.IsNullOrEmpty(draftName) ? "this draft" : draftName;
             string target = string.IsNullOrEmpty(newFileName) ? "a new file name" : "'" + newFileName + "'";
-            string export = facts != null && facts.HasExport
+            string export = facts != null && !facts.DetailComputed
+                ? "The existing export status is still being checked."
+                : facts != null && facts.HasExport
                 ? "The existing exported package keeps its current name until you export again."
                 : "No exported package exists for this draft.";
             return "Rename '" + name + "' file to " + target + "?\n" + export;
