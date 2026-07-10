@@ -697,6 +697,51 @@ Assert-Contains "story stage disclosure" $scenarioStageDisclosure "public static
 Assert-Contains "story stage disclosure wiring" $scenarioQuestContent "ScenarioStoryScriptViewBuilder\.BuildStageScript\(definition, stage, index\)" "the story page must render the script read view per stage."
 Assert-Contains "story stage disclosure wiring" $scenarioQuestContent "ScenarioStoryStageDisclosure\.ShouldRevealAdvancedRouting\(stage\)" "the story page must hide advanced routing until basic dialogue exists."
 
+# === STORYGRAPH: primary visual story map (graph model + deterministic layout + renderer) ===
+$scenarioStoryGraphModel = Read-RepoFile "ShelteredAPI\Scenarios\Domain\Story\ScenarioStoryGraphModel.cs"
+$scenarioStoryGraphBuilder = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioStoryGraphBuilder.cs"
+$scenarioStoryMapRenderer = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\Rendering\ScenarioAuthoringShellStoryMapImguiRenderer.cs"
+
+# Model shape: stage vs terminal nodes, problem status, edges, and layout positions.
+Assert-Contains "story graph model" $scenarioStoryGraphModel "enum ScenarioStoryGraphNodeKind\s*\{\s*Stage.*Terminal" "the graph model must distinguish primary stage nodes from terminal outcome leaves."
+Assert-Contains "story graph model" $scenarioStoryGraphModel "enum ScenarioStoryGraphNodeStatus\s*\{\s*Ok.*Unreachable.*Broken" "nodes must carry the shared flow problems (unreachable / broken)."
+Assert-Contains "story graph model" $scenarioStoryGraphModel "class ScenarioStoryGraphEdge" "the model must expose route edges between nodes."
+Assert-Contains "story graph model" $scenarioStoryGraphModel "class ScenarioStoryGraphModel" "the model must expose the whole graph (nodes, edges, canvas size)."
+Assert-Contains "story graph model" $scenarioStoryGraphModel "float X" "layout must record a deterministic X position per node."
+Assert-Contains "story graph model" $scenarioStoryGraphModel "float Y" "layout must record a deterministic Y position per node."
+
+# Builder reuses the shared traversal logic instead of writing a third walker.
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "internal static class ScenarioStoryGraphBuilder" "a story graph model builder must exist."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "public static ScenarioStoryGraphModel Build\(ScenarioDefinition definition, ScenarioStoryFlowIssue\[\] issues\)" "the builder must accept the shared analyzer issues (or run them itself) to build the model."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "new ScenarioStoryFlowValidationAnalyzer\(\)\.Analyze\(definition\)" "problems and reachability must come from the shared story-flow analyzer, not a new walker."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioReferenceIndex\.Collect\(definition\)" "stage-to-stage route edges must come from the shared reference index (Find Usages)."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioReferenceTargetKind\.Stage" "edges must be built from stage-target references (unanswered routes and stage changes)."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioStoryScriptViewBuilder\.DescribeStepEnding" "hover tooltips must reuse the STORYUX route phrasing."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioStoryFocusedEditorActions\.StageOpen\(i\)" "clicking a stage node must navigate through the shared open-stage seam."
+
+# Terminal outcome leaves.
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "Ends conversation" "dead-end stages must produce an 'ends conversation' terminal leaf."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "Recruits survivor" "recruiting stages must produce a recruit terminal leaf."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "Ends scenario" "scenario-completing stages must produce an end-scenario terminal leaf."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioStoryGraphNodeStatus\.Unreachable" "unreachable stages must be flagged on their node status."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "ScenarioStoryGraphEdgeStatus\.Broken" "routes to missing stages must be flagged as broken edges."
+
+# Deterministic layered layout (BFS depth = column, siblings stacked, capped node count).
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "MaxStageNodes = 50" "the layout must cap the node count for readability."
+Assert-Contains "story graph builder" $scenarioStoryGraphBuilder "kids\.Sort\(\)" "BFS must process children in a deterministic order so layout is stable."
+
+# Wiring: the story page publishes a 'story_map' section carrying the model.
+Assert-Contains "story map wiring" $scenarioQuestContent "ScenarioStoryGraphBuilder\.Build\(definition, storyIssues\)" "the story page must build the story map model from the shared analyzer issues."
+Assert-Contains "story map wiring" $scenarioQuestContent "Id = ""story_map""" "the story map must render as a dedicated 'story_map' section."
+Assert-Contains "story map wiring" $scenarioQuestContent "StoryMap = model" "the section must carry the built story graph model for the renderer."
+
+# Renderer draws the visual map: detects the section, draws arrowed edges and a legend.
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "IsStoryMapSection" "the renderer must detect the story map section by id."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapSection" "the renderer must draw the story map surface."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapArrow" "edges must be drawn with arrowheads."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "DrawStoryMapLegend" "the map must show a legend."
+Assert-Contains "story map renderer" $scenarioStoryMapRenderer "ScenarioAuthoringBackendService\.Instance\.ExecuteAction\(node\.NavActionId\)" "clicking a node must execute its navigation action."
+
 # STORYUX: humane story-character labels replace the 'Display name 1' debug steppers.
 Assert-Contains "story character labels" $scenarioCharacterLinks "EditableProperty\(""Display name"","  "the display-name field must use plain creator language, not a numbered stepper."
 Assert-Contains "story character labels" $scenarioCharacterLinks "Vanilla preset \(optional\)" "optional vanilla preset must be labelled as optional."

@@ -7,6 +7,7 @@ using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Timeline;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Validation;
+using ShelteredAPI.Scenarios.Domain.Story;
 using ShelteredAPI.Scenarios.Domain.Scheduling;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 using ShelteredAPI.Scenarios.Presentation.Inspector;
@@ -33,6 +34,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioStoryCharacterActorLinkSectionBuilder.AppendSections(sections, definition);
             AppendConversationSections(sections, definition);
             sections.Add(BuildStageFlowSection(definition, storyIssues));
+            sections.Add(BuildStoryMapSection(definition, storyIssues));
             AppendStoryStageSections(sections, definition, storyIssues);
             sections.Add(BuildSideQuestIntroSection(snapshot));
             sections.Add(BuildToolsSection(snapshot));
@@ -104,6 +106,25 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.FactGrid,
                 Items = items.ToArray()
+            };
+        }
+
+        private static ScenarioAuthoringInspectorSection BuildStoryMapSection(ScenarioDefinition definition, ScenarioStoryFlowIssue[] storyIssues)
+        {
+            // The primary authoring graph: stages, routes, and problems built from the shared
+            // flow analyzer + reference index, laid out deterministically. The renderer keys off
+            // the section id "story_map" and draws the carried model.
+            ScenarioStoryGraphModel model = ScenarioStoryGraphBuilder.Build(definition, storyIssues);
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(ScenarioInspectorItemFactory.Text("Story Map shows every stage and how it connects. Click a stage to open its focused editor."));
+            return new ScenarioAuthoringInspectorSection
+            {
+                Id = "story_map",
+                Title = "Story Map",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.Default,
+                Items = items.ToArray(),
+                StoryMap = model
             };
         }
 
