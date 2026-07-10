@@ -805,12 +805,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             // This component's root is the authoritative object that must leave
             // the hierarchy before renderer disposal releases its visible chrome.
             GameObject root = gameObject;
+            GameObject overlay = root.transform.parent != null ? root.transform.parent.gameObject : root;
             _instance = null;
             if (_dataSource != null)
                 _dataSource.CancelRefreshes();
             if (restoreUnderlyingPanel)
                 RestoreUnderlyingPanel();
-            root.SetActive(false);
+            // EnsureOverlayPanel owns the named UI Root/ShelteredAPI_ScenarioBookBrowser
+            // parent. Hiding only this child leaves an active empty overlay that the
+            // harness and the next hub click can mistake for a live book.
+            overlay.SetActive(false);
             if (_renderer != null)
             {
                 _renderer.Dispose();
