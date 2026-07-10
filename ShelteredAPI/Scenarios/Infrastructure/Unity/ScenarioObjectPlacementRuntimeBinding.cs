@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using ShelteredAPI.Hooks;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Definitions;
 namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal sealed class ScenarioObjectPlacementRuntimeBinding : MonoBehaviour
@@ -47,6 +48,37 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                 if (string.Equals(binding.ScenarioObjectId, idOrBindingKey, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(binding.RuntimeBindingKey, idOrBindingKey, StringComparison.OrdinalIgnoreCase))
                     return binding;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Finds the vanilla object restored with an authoring backing save for a
+        /// placement record.  Runtime bindings are not serialized by the game, so
+        /// the draft's stable source-object id and type/position fallback are both
+        /// needed after a scene reload.
+        /// </summary>
+        public static Obj_Base FindExistingWorldObject(ObjectManager manager, ObjectPlacement placement)
+        {
+            if (manager == null || placement == null)
+                return null;
+
+            List<Obj_Base> worldObjects;
+            try
+            {
+                worldObjects = manager.GetAllObjects();
+            }
+            catch
+            {
+                return null;
+            }
+
+            for (int i = 0; worldObjects != null && i < worldObjects.Count; i++)
+            {
+                Obj_Base candidate = worldObjects[i];
+                if (candidate != null && ScenarioBunkerDraftService.MatchesPlacement(placement, candidate))
+                    return candidate;
             }
 
             return null;
