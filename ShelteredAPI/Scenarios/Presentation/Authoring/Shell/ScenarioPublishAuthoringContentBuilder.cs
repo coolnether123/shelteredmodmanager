@@ -54,7 +54,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> compatibilityItems = _modCompatibilityViewModelBuilder.BuildItems(compatibilityReport);
             List<ScenarioAuthoringInspectorItem> timelineItems = BuildTimelineItems(definition, GetRuntimeState(), _timelineBuilder);
             List<ScenarioAuthoringInspectorItem> validationItems = BuildValidationItems(validation, state != null ? state.ActiveScenarioFilePath : null);
-            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(validation);
+            bool showAdvanced = state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+            List<ScenarioAuthoringInspectorItem> exportItems = BuildExportItems(validation, showAdvanced);
             List<ScenarioAuthoringInspectorItem> packageItems = BuildPackagePreviewItems(state, validation);
             List<ScenarioAuthoringInspectorItem> metadataItems = new List<ScenarioAuthoringInspectorItem>(ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
             metadataItems.AddRange(ScenarioMetadataAuthoringContent.BuildStatusItems(state != null ? state.ActiveScenarioFilePath : null));
@@ -224,7 +227,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return items;
         }
 
-        internal static List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioAuthoringValidationSnapshot validation)
+        internal static List<ScenarioAuthoringInspectorItem> BuildExportItems(ScenarioAuthoringValidationSnapshot validation, bool showAdvanced)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             int errors = validation != null ? validation.ErrorCount : 1;
@@ -260,14 +263,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
             items.Add(Item.Property("Last Export", last.Success ? "Validated" : last.Blocked ? "Blocked" : "Failed"));
             items.Add(Item.Property("When", last.FormatTimestamp()));
-            if (!string.IsNullOrEmpty(last.ArtifactPath))
+            if (showAdvanced && !string.IsNullOrEmpty(last.ArtifactPath))
                 items.Add(Item.Property("Artifact", last.ArtifactPath));
             if (!string.IsNullOrEmpty(last.ArtifactRootPath))
             {
-                items.Add(Item.Property("Share Folder", last.ArtifactRootPath));
-                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.OpenLastExportFolder, "Open Export Folder", "Open the last export folder in Windows Explorer.", true, false, "OP", last.ArtifactRootPath)));
-                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.CopyLastExportPath, "Copy Path", "Copy the last export folder path to the clipboard.", true, false, "CP", last.ArtifactRootPath)));
-                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.InstallLastExport, "Install this export locally", "Copy this validated package into ShelteredAPI/Scenarios and refresh the scenario catalog.", last.Success, true, "IN")));
+                if (showAdvanced)
+                {
+                    items.Add(Item.Property("Share Folder", last.ArtifactRootPath));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.OpenLastExportFolder, "Open Export Folder", "Open the last export folder in Windows Explorer.", true, false, "OP", last.ArtifactRootPath)));
+                    items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.CopyLastExportPath, "Copy Path", "Copy the last export folder path to the clipboard.", true, false, "CP", last.ArtifactRootPath)));
+                }
+                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.InstallLastExport, "Install this export locally", "Copy this validated package into ShelteredAPI/Scenarios and refresh the scenario catalog.", last.Success, false, "IN")));
                 ScenarioPackageInstallResult install = GetLastInstallResult();
                 if (install != null && install.ConfirmationRequired)
                     items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ConfirmInstallOverwrite, "Confirm same-ID replacement", install.Message, true, true, "!!")));
@@ -282,7 +288,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             ScenarioPackageAuthoringPreferences preferences = ScenarioPackageAuthoringPreferences.Load(state != null ? state.ActiveScenarioFilePath : null);
-            items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ToggleReadme, "README.txt: " + (preferences.IncludeReadme ? "Included" : "Excluded"), "Toggle the human-readable install guide in the package.", true, false, "RD")));
             ScenarioPackagePlan plan = null;
             try
             {
@@ -293,16 +298,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 items.Add(Item.Text("Preview unavailable: " + ex.Message));
             }
-            if (plan == null) return items;
-            items.Add(Item.Property("Files", plan.Entries.Count.ToString(CultureInfo.InvariantCulture)));
-            items.Add(Item.Property("Total package size", FormatBytes(plan.TotalSize)));
-            items.Add(Item.Property("Declared mod dependencies", plan.DeclaredMods.Count.ToString(CultureInfo.InvariantCulture)));
-            for (int i = 0; i < plan.Entries.Count; i++) items.Add(Item.Property(plan.Entries[i].RelativePath, FormatBytes(plan.Entries[i].Size)));
-            for (int i = 0; i < plan.DeclaredMods.Count; i++) items.Add(Item.Property("Declared mod", plan.DeclaredMods[i]));
-            if (plan.Problems.Count == 0) items.Add(Item.Text("Pre-flight passed: package contents are accounted for."));
-            else for (int i = 0; i < plan.Problems.Count; i++) items.Add(Item.Property("Problem", plan.Problems[i]));
+            if (plan == null)
+            {
+                items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ToggleReadme, "README.txt: " + (preferences.IncludeReadme ? "Included" : "Excluded"), "Toggle the human-readable install guide in the package.", true, false, "RD")));
+                return items;
+            }
+            items.Add(Item.Property("FILE COUNT", plan.Entries.Count.ToString(CultureInfo.InvariantCulture)));
+            for (int i = 0; i < plan.Entries.Count; i++) items.Add(Item.Property("FILE", plan.Entries[i].RelativePath, FormatBytes(plan.Entries[i].Size)));
+            items.Add(Item.Property("TOTAL", FormatBytes(plan.TotalSize)));
+            if (plan.DeclaredMods.Count == 0) items.Add(Item.Property("DEPENDENCY", "No external mod dependencies declared"));
+            else for (int i = 0; i < plan.DeclaredMods.Count; i++) items.Add(Item.Property("DEPENDENCY", plan.DeclaredMods[i]));
+            if (plan.Problems.Count == 0) items.Add(Item.Property("PREFLIGHT", "Ready", "Package contents are accounted for."));
+            else for (int i = 0; i < plan.Problems.Count; i++) items.Add(Item.Property("PROBLEM", plan.Problems[i]));
             int accepted = validation != null ? preferences.CountAccepted(validation.Result) : 0;
-            items.Add(Item.Text(accepted.ToString(CultureInfo.InvariantCulture) + " warnings accepted by author."));
+            items.Add(Item.Property("ACCEPTED", accepted.ToString(CultureInfo.InvariantCulture) + " author-accepted warning" + (accepted == 1 ? string.Empty : "s")));
+            items.Add(Item.ActionItem(Item.Action(ScenarioPublishActionIds.ToggleReadme, "README.txt: " + (preferences.IncludeReadme ? "Included" : "Excluded"), "Toggle the human-readable install guide in the package.", true, false, "RD")));
             return items;
         }
 

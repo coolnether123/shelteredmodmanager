@@ -36,11 +36,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 state != null ? state.ActiveScenarioFilePath : null);
 
             List<ScenarioAuthoringInspectorItem> summary = new List<ScenarioAuthoringInspectorItem>();
-            summary.Add(ScenarioInspectorItemFactory.Property("Referenced files", CountState(inventory, ScenarioAssetInventoryState.Available, ScenarioAssetInventoryState.Missing).ToString(CultureInfo.InvariantCulture)));
-            summary.Add(ScenarioInspectorItemFactory.Property("Total asset payload", FormatBytes(inventory.TotalPayloadSize)));
+            int missing = CountState(inventory, ScenarioAssetInventoryState.Missing);
+            int orphan = CountState(inventory, ScenarioAssetInventoryState.Orphan);
+            int large = CountLarge(inventory);
+            summary.Add(ScenarioInspectorItemFactory.Property("Files", inventory.Items.Count.ToString(CultureInfo.InvariantCulture)));
+            summary.Add(ScenarioInspectorItemFactory.Property("Payload", FormatBytes(inventory.TotalPayloadSize)));
+            summary.Add(ScenarioInspectorItemFactory.Property("Warnings", (missing + orphan + large).ToString(CultureInfo.InvariantCulture)));
             summary.Add(ScenarioInspectorItemFactory.Property("Payload warning threshold", "25 MB"));
             if (inventory.PayloadWarning)
                 summary.Add(ScenarioInspectorItemFactory.Text("Large asset payload: packages above 25 MB take longer to export, install, and load."));
+            if (missing > 0 || orphan > 0 || large > 0)
+                summary.Add(ScenarioInspectorItemFactory.Text(FormatWarningSummary(missing, orphan, large)));
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "asset_inventory_summary",
@@ -63,23 +69,39 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
                 return sections;
             }
 
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "asset_inventory_filters",
+                Title = "Filter",
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = new[]
+                {
+                    ScenarioInspectorItemFactory.Text("all"),
+                    ScenarioInspectorItemFactory.Text("missing"),
+                    ScenarioInspectorItemFactory.Text("orphan"),
+                    ScenarioInspectorItemFactory.Text("large")
+                }
+            });
+
             for (int i = 0; i < inventory.Items.Count; i++)
-                sections.Add(BuildItemSection(inventory.Items[i], i));
+                sections.Add(BuildItemSection(inventory.Items[i], i, ShowAdvanced(state)));
             return sections;
         }
 
-        private static ScenarioAuthoringInspectorSection BuildItemSection(ScenarioAssetInventoryItem asset, int index)
+        private static ScenarioAuthoringInspectorSection BuildItemSection(ScenarioAssetInventoryItem asset, int index, bool showAdvanced)
         {
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
             ScenarioAuthoringInspectorItem file = ScenarioInspectorItemFactory.Property("File name", asset.FileName ?? asset.RelativePath);
-            file.Detail = asset.RelativePath;
+            file.Detail = showAdvanced ? asset.RelativePath : null;
             file.PreviewSprite = asset.Thumbnail;
-            file.Badge = BuildBadge(asset.State);
+            file.Badge = BuildBadge(asset.State, asset.IsLarge);
             file.Emphasized = asset.State != ScenarioAssetInventoryState.Available;
             items.Add(file);
             items.Add(ScenarioInspectorItemFactory.Property("Dimensions", asset.Width > 0 && asset.Height > 0 ? asset.Width.ToString(CultureInfo.InvariantCulture) + " x " + asset.Height.ToString(CultureInfo.InvariantCulture) + " px" : "Unknown"));
             items.Add(ScenarioInspectorItemFactory.Property("File size", asset.State == ScenarioAssetInventoryState.Missing ? "Missing" : FormatBytes(asset.Size)));
             items.Add(ScenarioInspectorItemFactory.Property("Source", FormatSource(asset.Source)));
+            items.Add(ScenarioInspectorItemFactory.Property("References", asset.References.Count.ToString(CultureInfo.InvariantCulture)));
 
             if (asset.State == ScenarioAssetInventoryState.Missing)
             {
@@ -142,7 +164,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
             return new ScenarioAuthoringInspectorSection
             {
-                Id = "asset_inventory_file_" + index.ToString(CultureInfo.InvariantCulture),
+                Id = "asset_inventory_file_" + FilterToken(asset) + "_" + index.ToString(CultureInfo.InvariantCulture),
                 Title = asset.FileName ?? "Asset file",
                 Expanded = asset.State != ScenarioAssetInventoryState.Available,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
@@ -150,20 +172,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
             };
         }
 
-        private static int CountState(ScenarioAssetInventory inventory, ScenarioAssetInventoryState first, ScenarioAssetInventoryState second)
+        private static bool ShowAdvanced(ScenarioAuthoringState state)
+        {
+            return state != null
+                && state.Settings != null
+                && state.Settings.GetBool("debug.show_advanced_details", false);
+        }
+
+        private static string FilterToken(ScenarioAssetInventoryItem asset)
+        {
+            if (asset == null) return "available";
+            if (asset.State == ScenarioAssetInventoryState.Missing) return "missing";
+            if (asset.State == ScenarioAssetInventoryState.Orphan) return "orphan";
+            return asset.IsLarge ? "large" : "available";
+        }
+
+        private static int CountState(ScenarioAssetInventory inventory, ScenarioAssetInventoryState state)
         {
             int count = 0;
-            for (int i = 0; inventory != null && i < inventory.Items.Count; i++) if (inventory.Items[i].State == first || inventory.Items[i].State == second) count++;
+            for (int i = 0; inventory != null && i < inventory.Items.Count; i++) if (inventory.Items[i].State == state) count++;
             return count;
         }
 
-        private static string BuildBadge(ScenarioAssetInventoryState state)
+        private static int CountLarge(ScenarioAssetInventory inventory)
+        {
+            int count = 0;
+            for (int i = 0; inventory != null && i < inventory.Items.Count; i++) if (inventory.Items[i].IsLarge) count++;
+            return count;
+        }
+
+        private static string FormatWarningSummary(int missing, int orphan, int large)
+        {
+            List<string> parts = new List<string>();
+            if (missing > 0) parts.Add(missing.ToString(CultureInfo.InvariantCulture) + " missing");
+            if (orphan > 0) parts.Add(orphan.ToString(CultureInfo.InvariantCulture) + " orphaned");
+            if (large > 0) parts.Add(large.ToString(CultureInfo.InvariantCulture) + " large");
+            return "Review: " + string.Join(", ", parts.ToArray()) + ".";
+        }
+
+        private static string BuildBadge(ScenarioAssetInventoryState state, bool large)
         {
             switch (state)
             {
                 case ScenarioAssetInventoryState.Missing: return "MISSING";
                 case ScenarioAssetInventoryState.Orphan: return "ORPHAN";
-                default: return "READY";
+                default: return large ? "LARGE" : "READY";
             }
         }
 
@@ -171,9 +224,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
         {
             switch (source)
             {
-                case ScenarioAssetInventorySource.VanillaReplacement: return "vanilla-replacement";
-                case ScenarioAssetInventorySource.PixelEdited: return "pixel-edited";
-                default: return "imported";
+                case ScenarioAssetInventorySource.VanillaReplacement: return "Vanilla replacement";
+                case ScenarioAssetInventorySource.PixelEdited: return "Pixel edited";
+                default: return "Imported";
             }
         }
 

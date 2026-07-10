@@ -45,6 +45,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
         private bool _windowMenuOpen;
         private bool _historyOpen;
         private ScenarioDraftSnapshotInfo _historyRestoreCandidate;
+        private ScenarioDraftSnapshotInfo _historyDeleteCandidate;
         private ScenarioDraftSnapshotInfo[] _historyRows = new ScenarioDraftSnapshotInfo[0];
 
         public string ModuleId
@@ -210,34 +211,67 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
             ScenarioDraftSnapshotService snapshots = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
             if (snapshots == null) return;
             _historyRows = snapshots.ListSnapshots();
-            Rect rect = new Rect(reserveRect.x + 80f, reserveRect.y + 72f, Math.Min(760f, reserveRect.width - 160f), Math.Min(560f, reserveRect.height - 144f));
+            float width = Math.Min(880f, reserveRect.width - 64f);
+            float height = Math.Min(570f, reserveRect.height - 48f);
+            Rect rect = new Rect(reserveRect.x + ((reserveRect.width - width) * 0.5f), reserveRect.y + ((reserveRect.height - height) * 0.5f), width, height);
             DrawPanel("HistoryModal", rect, _panelAltColor, true, BaseDepth + 40);
-            DrawLabel("HistoryTitle", rect, new Rect(18f, 14f, rect.width - 36f, 30f), "DRAFT HISTORY", 22, _titleColor, NGUIText.Alignment.Left, BaseDepth + 44);
-            DrawLabel("HistoryManual", rect, new Rect(18f, 49f, rect.width - 36f, 22f), "Last manual save: " + snapshots.GetLastManualSaveText(), 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
-            DrawButton(new Rect(rect.xMax - 106f, rect.y + 14f, 88f, 28f), CommandAction("editor.history.close", "Close", false), false, "HistoryClose");
+            DrawLabel("HistoryTitle", rect, new Rect(18f, 14f, rect.width - 72f, 30f), "DRAFT HISTORY", 22, _titleColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            DrawLabel("HistorySubtitle", rect, new Rect(18f, 42f, rect.width - 72f, 20f), "Restore a protected draft without overwriting your last manual save.", 13, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
+            DrawButton(new Rect(rect.xMax - 46f, rect.y + 14f, 28f, 28f), CommandAction("editor.history.close", "X", false), false, "HistoryClose");
 
-            if (_historyRestoreCandidate != null)
+            if (_historyRestoreCandidate != null || _historyDeleteCandidate != null)
             {
-                DrawLabel("HistoryConfirm", rect, new Rect(18f, 80f, rect.width - 36f, 42f), "Restore '" + _historyRestoreCandidate.Name + "'? Your current draft will be autosaved first, then this saved version will become the current draft. The manual save will not be changed until you save.", 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 44);
-                DrawButton(new Rect(rect.x + 18f, rect.y + 126f, 120f, 28f), CommandAction("editor.history.confirm_restore", "Restore", true), false, "HistoryRestoreConfirm");
-                DrawButton(new Rect(rect.x + 146f, rect.y + 126f, 98f, 28f), CommandAction("editor.history.cancel_restore", "Cancel", false), false, "HistoryRestoreCancel");
+                bool restoring = _historyRestoreCandidate != null;
+                ScenarioDraftSnapshotInfo candidate = restoring ? _historyRestoreCandidate : _historyDeleteCandidate;
+                Rect confirm = new Rect(rect.x + 18f, rect.y + 78f, rect.width - 36f, 166f);
+                DrawPanel("HistoryConfirmPanel", confirm, _panelColor, false, BaseDepth + 42);
+                DrawLabel("HistoryConfirmTitle", confirm, new Rect(16f, 14f, confirm.width - 32f, 28f), restoring ? "RESTORE SAVED DRAFT?" : "DELETE SAVED DRAFT?", 18, restoring ? _titleColor : new Color(0.95f, 0.62f, 0.48f, 1f), NGUIText.Alignment.Left, BaseDepth + 46);
+                string confirmation = restoring
+                    ? "Restore '" + candidate.Name + "'? The current draft is autosaved first. This becomes the working draft, while your manual save stays unchanged until you choose Save."
+                    : "Delete '" + candidate.Name + "'? This removes only this history entry. The current draft and manual save are not changed.";
+                DrawLabel("HistoryConfirm", confirm, new Rect(16f, 48f, confirm.width - 32f, 54f), confirmation, 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 46);
+                string confirmAction = restoring ? "editor.history.confirm_restore" : "editor.history.confirm_delete";
+                string cancelAction = restoring ? "editor.history.cancel_restore" : "editor.history.cancel_delete";
+                DrawButton(new Rect(confirm.x + 16f, confirm.y + 116f, 126f, 32f), CommandAction(confirmAction, restoring ? "Restore draft" : "Delete version", true), false, "HistoryConfirmPrimary");
+                DrawButton(new Rect(confirm.x + 150f, confirm.y + 116f, 94f, 32f), CommandAction(cancelAction, "Cancel", false), false, "HistoryConfirmCancel");
                 RegisterRect(rect);
                 return;
             }
 
-            if (_historyRows.Length == 0)
-                DrawLabel("HistoryEmpty", rect, new Rect(18f, 94f, rect.width - 36f, 24f), "No autosaves or saved versions yet.", 14, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
-            for (int i = 0; i < _historyRows.Length && i < 8; i++)
+            Rect recovery = new Rect(rect.x + 18f, rect.y + 72f, rect.width - 36f, 58f);
+            DrawPanel("HistoryRecovery", recovery, _panelColor, false, BaseDepth + 42);
+            DrawLabel("HistoryRecoveryTitle", recovery, new Rect(14f, 8f, 116f, 20f), "RECOVERY", 14, _titleColor, NGUIText.Alignment.Left, BaseDepth + 46);
+            DrawLabel("HistoryManual", recovery, new Rect(132f, 8f, recovery.width - 146f, 20f), "Last manual save: " + snapshots.GetLastManualSaveText(), 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 46);
+            DrawLabel("HistoryRecoveryHelp", recovery, new Rect(14f, 31f, recovery.width - 28f, 18f), "Every restore first creates a recovery autosave of the draft you have open now.", 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 46);
+
+            float gap = 12f;
+            float groupWidth = (rect.width - 36f - gap) * 0.5f;
+            Rect autosaves = new Rect(rect.x + 18f, rect.y + 142f, groupWidth, rect.height - 160f);
+            Rect versions = new Rect(autosaves.xMax + gap, autosaves.y, groupWidth, autosaves.height);
+            DrawHistoryGroup(autosaves, "AUTOSAVES", true, "Autosaves appear after edits and before a restore. Up to five recent copies are kept.");
+            DrawHistoryGroup(versions, "NAMED VERSIONS", false, "Named versions stay here until you delete them. Use Version in the status bar to create one.");
+            RegisterRect(rect);
+        }
+
+        private void DrawHistoryGroup(Rect group, string title, bool autosave, string emptyHelp)
+        {
+            DrawPanel("HistoryGroup" + (autosave ? "Auto" : "Named"), group, _panelColor, false, BaseDepth + 42);
+            DrawLabel("HistoryGroupTitle" + (autosave ? "Auto" : "Named"), group, new Rect(14f, 10f, group.width - 28f, 22f), title, 15, _titleColor, NGUIText.Alignment.Left, BaseDepth + 46);
+            int shown = 0;
+            for (int i = 0; i < _historyRows.Length && shown < 5; i++)
             {
                 ScenarioDraftSnapshotInfo row = _historyRows[i];
-                float y = rect.y + 82f + i * 52f;
-                string kind = row.IsAutosave ? "AUTOSAVE" : "SAVED VERSION";
-                DrawLabel("HistoryRow" + i, rect, new Rect(18f, 82f + i * 52f, rect.width - 210f, 20f), kind + "  " + row.Name + " - " + row.AgeText, 14, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 44);
-                DrawLabel("HistorySummary" + i, rect, new Rect(18f, 102f + i * 52f, rect.width - 210f, 18f), row.ChangeSummary ?? string.Empty, 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 44);
-                DrawButton(new Rect(rect.xMax - 184f, y + 8f, 76f, 26f), CommandAction("editor.history.restore." + i, "Restore", false), false, "HistoryRestore" + i);
-                DrawButton(new Rect(rect.xMax - 100f, y + 8f, 76f, 26f), CommandAction("editor.history.delete." + i, "Delete", false), false, "HistoryDelete" + i);
+                if (row == null || row.IsAutosave != autosave) continue;
+                float localY = 38f + (shown * 58f);
+                DrawLabel("HistoryRow" + i, group, new Rect(14f, localY, group.width - 160f, 20f), row.Name + "  -  " + row.AgeText, 13, _bodyColor, NGUIText.Alignment.Left, BaseDepth + 46);
+                DrawLabel("HistorySummary" + i, group, new Rect(14f, localY + 22f, group.width - 160f, 28f), string.IsNullOrEmpty(row.ChangeSummary) ? "Protected draft snapshot" : row.ChangeSummary, 11, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 46);
+                float buttonY = group.y + localY + 8f;
+                DrawButton(new Rect(group.xMax - 142f, buttonY, 64f, 28f), CommandAction("editor.history.restore." + i, "Restore", false), false, "HistoryRestore" + i);
+                DrawButton(new Rect(group.xMax - 72f, buttonY, 58f, 28f), CommandAction("editor.history.delete." + i, "Delete", false), false, "HistoryDelete" + i);
+                shown++;
             }
-            RegisterRect(rect);
+            if (shown == 0)
+                DrawLabel("HistoryEmpty" + (autosave ? "Auto" : "Named"), group, new Rect(14f, 44f, group.width - 28f, 58f), emptyHelp, 12, _mutedColor, NGUIText.Alignment.Left, BaseDepth + 46);
         }
 
         private Rect DrawTopBar(Rect rect, ScenarioAuthoringShellViewModel shell)
@@ -940,6 +974,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 {
                     _historyOpen = !_historyOpen;
                     _historyRestoreCandidate = null;
+                    _historyDeleteCandidate = null;
                     ForceRebuild();
                     return;
                 }
@@ -948,6 +983,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 {
                     _historyOpen = false;
                     _historyRestoreCandidate = null;
+                    _historyDeleteCandidate = null;
                     ForceRebuild();
                     return;
                 }
@@ -955,6 +991,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 if (string.Equals(actionId, "editor.history.cancel_restore", StringComparison.Ordinal))
                 {
                     _historyRestoreCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
+                if (string.Equals(actionId, "editor.history.cancel_delete", StringComparison.Ordinal))
+                {
+                    _historyDeleteCandidate = null;
                     ForceRebuild();
                     return;
                 }
@@ -970,19 +1013,35 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                     return;
                 }
 
+                if (string.Equals(actionId, "editor.history.confirm_delete", StringComparison.Ordinal))
+                {
+                    string error = null;
+                    ScenarioDraftSnapshotService history = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
+                    bool deleted = history != null && history.Delete(_historyDeleteCandidate, out error);
+                    ScenarioAuthoringBackendService.Instance.SetStatusMessage(deleted ? "Saved history entry deleted." : "Could not delete history entry: " + error);
+                    _historyDeleteCandidate = null;
+                    ForceRebuild();
+                    return;
+                }
+
                 int index;
                 if (TryGetHistoryRowIndex(actionId, "editor.history.restore.", out index))
                 {
-                    if (index >= 0 && index < _historyRows.Length) _historyRestoreCandidate = _historyRows[index];
+                    if (index >= 0 && index < _historyRows.Length)
+                    {
+                        _historyRestoreCandidate = _historyRows[index];
+                        _historyDeleteCandidate = null;
+                    }
                     ForceRebuild();
                     return;
                 }
                 if (TryGetHistoryRowIndex(actionId, "editor.history.delete.", out index))
                 {
-                    string error = null;
-                    ScenarioDraftSnapshotService history = ScenarioCompositionRoot.Resolve<ScenarioDraftSnapshotService>();
-                    bool deleted = index >= 0 && index < _historyRows.Length && history != null && history.Delete(_historyRows[index], out error);
-                    ScenarioAuthoringBackendService.Instance.SetStatusMessage(deleted ? "Saved snapshot deleted." : "Could not delete snapshot: " + error);
+                    if (index >= 0 && index < _historyRows.Length)
+                    {
+                        _historyDeleteCandidate = _historyRows[index];
+                        _historyRestoreCandidate = null;
+                    }
                     ForceRebuild();
                     return;
                 }
@@ -1070,7 +1129,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Ngui{
                 .Append(state.SelectionStackSignature).Append('|')
                 .Append(state.StatusMessage).Append('|')
                 .Append(_windowMenuOpen).Append('|').Append(_historyOpen).Append('|')
-                .Append(_historyRestoreCandidate != null ? _historyRestoreCandidate.FilePath : string.Empty);
+                .Append(_historyRestoreCandidate != null ? _historyRestoreCandidate.FilePath : string.Empty).Append('|')
+                .Append(_historyDeleteCandidate != null ? _historyDeleteCandidate.FilePath : string.Empty);
 
             AppendActions(builder, shell != null ? shell.Tabs : null);
             AppendActions(builder, shell != null ? shell.ToolbarActions : null);

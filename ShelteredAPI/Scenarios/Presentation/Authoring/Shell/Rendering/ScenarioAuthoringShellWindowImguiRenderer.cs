@@ -2741,6 +2741,9 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 return;
             }
 
+            if (TryDrawNewWindowsSection(section, compactInspector))
+                return;
+
             GUILayout.BeginVertical(_uiContext.Styles.Section);
             if (!string.IsNullOrEmpty(section.Title))
                 GUILayout.Label(section.Title, _sectionTitleStyle);
