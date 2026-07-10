@@ -667,21 +667,21 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 {
                     Key = SettingSupplies,
                     Label = "Override random starting supplies",
-                    Detail = "Start from your authored inventory instead of vanilla random supplies.",
+                    Detail = "On: shelter starts with only your authored supplies; vanilla's random opening stockpile is skipped.",
                     On = GetSetting(SettingSupplies)
                 },
                 new ScenarioAuthoringEntrySettingToggle
                 {
                     Key = SettingSuppressRaids,
                     Label = "Suppress raids",
-                    Detail = "Stop vanilla raid events from spawning in this scenario.",
+                    Detail = "On: raiders never breach or attack this shelter.",
                     On = GetSetting(SettingSuppressRaids)
                 },
                 new ScenarioAuthoringEntrySettingToggle
                 {
                     Key = SettingSuppressVisitors,
                     Label = "Suppress random visitors",
-                    Detail = "Stop vanilla wandering visitors from arriving.",
+                    Detail = "On: wandering NPC visitors never arrive at the shelter.",
                     On = GetSetting(SettingSuppressVisitors)
                 }
             };
@@ -763,9 +763,12 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 else if (!hasEditableDefinition)
                     disabledReason = "No editable scenario definition is available to copy.";
 
-                string summary = editableDefinition != null && !string.IsNullOrEmpty(editableDefinition.Description)
-                    ? editableDefinition.Description
-                    : entry.Description;
+                // Show what the copy actually includes (world/cast/story/timeline/
+                // map/assets/mods) so authors know before committing. Fall back to
+                // the catalog description only when the definition cannot be read.
+                string detail = editableDefinition != null
+                    ? ScenarioContentSummary.Build(editableDefinition).ToCardLine()
+                    : Safe(entry.Description, "No scenario summary provided.");
                 string author = editableDefinition != null && !string.IsNullOrEmpty(editableDefinition.Author)
                     ? editableDefinition.Author
                     : entry.OwnerModId;
@@ -776,7 +779,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                     Title = Safe(entry.DisplayName, entry.ScenarioId),
                     Badge = "COPY",
                     Group = "Copy an installed scenario",
-                    Detail = Safe(summary, "No scenario summary provided."),
+                    Detail = detail,
                     Meta = "Author: " + Safe(author, "unknown"),
                     Enabled = enabled,
                     Selected = string.Equals(key, selectedKey, StringComparison.Ordinal),

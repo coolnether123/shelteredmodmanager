@@ -323,7 +323,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return (value / (1024d * 1024d)).ToString("0.0", CultureInfo.InvariantCulture) + " MB";
         }
 
-        private static ScenarioAuthoringInspectorAction BuildIssueNavigationAction(ScenarioValidationIssue issue)
+        internal static ScenarioAuthoringInspectorAction BuildIssueNavigationAction(ScenarioValidationIssue issue)
         {
             string message = issue != null ? issue.Message : null;
             if (!string.IsNullOrEmpty(message) && message.IndexOf("Scenario metadata", StringComparison.OrdinalIgnoreCase) >= 0)

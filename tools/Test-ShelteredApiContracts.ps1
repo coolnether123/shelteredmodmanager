@@ -759,6 +759,34 @@ Assert-Contains "draft delete non-localized message" $scenarioBookPanel "Scenari
 Assert-Contains "duplicate confirmation" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildDuplicateMessage\(draftName, facts\)" "duplicate must confirm with a draft-named message."
 Assert-Contains "rename confirmation" $scenarioBookPanel "ScenarioBookDraftFacts\.BuildRenameMessage\(draftName, model\.DraftId, facts\)" "renaming a draft file must confirm with a draft-named message."
 
+# WIZINFO: wizard quick-setting explanations, installed-copy content summary,
+# top-issue "next" surfacing on Home, and the optional scenario goal field.
+$scenarioEntryFlow = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioAuthoringEntryFlowService.cs"
+$scenarioContentSummary = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioContentSummary.cs"
+$scenarioTopIssueResolver = Read-RepoFile "ShelteredAPI\Scenarios\Presentation\Authoring\Shell\ScenarioTopIssueResolver.cs"
+$scenarioMetadataActions = Read-RepoFile "ShelteredAPI\Scenarios\Application\Authoring\ScenarioMetadataAuthoringActions.cs"
+
+Assert-Contains "wizard toggle explanations" $scenarioEntryFlow "Key = SettingSupplies.*?Detail = ""On: shelter starts with only your authored supplies" "supplies quick-setting must state its concrete consequence tied to its toggle."
+Assert-Contains "wizard toggle explanations" $scenarioEntryFlow "Key = SettingSuppressRaids.*?Detail = ""On: raiders never breach or attack this shelter\.""" "suppress-raids quick-setting must state raiders never attack."
+Assert-Contains "wizard toggle explanations" $scenarioEntryFlow "Key = SettingSuppressVisitors.*?Detail = ""On: wandering NPC visitors never arrive at the shelter\.""" "suppress-visitors quick-setting must state visitors never arrive."
+
+Assert-Contains "installed-copy content summary" $scenarioContentSummary "public int WorldChanges.*public int Cast.*public int StoryStages.*public int TimelineEntries.*public int MapLocations.*public int AssetFiles.*public int RequiredMods" "content summary must derive world/cast/story/timeline/map/assets/mods from the definition."
+Assert-Contains "installed-copy content summary" $scenarioContentSummary "ScenarioPackagePlanner\.CollectAssetPaths\(definition\)" "content summary asset-file count must reuse the package asset enumeration."
+Assert-Contains "installed-copy content summary wiring" $scenarioEntryFlow "ScenarioContentSummary\.Build\(editableDefinition\)\.ToCardLine\(\)" "the copy-an-installed-scenario card must show the derived content summary before creating."
+
+Assert-Contains "home top-issue ranking" $scenarioTopIssueResolver "Severity == ScenarioIssueSeverity\.Error.*return issues\[i\].*Severity == ScenarioIssueSeverity\.Warning.*return issues\[i\]" "top-issue ranking must return blocking errors before advisory warnings."
+Assert-Contains "home top-issue reuse" $scenarioTopIssueResolver "ScenarioPlaytestFixActionResolver\.BuildFixAction\(issue\.Message\).*ScenarioPublishAuthoringContentBuilder\.BuildIssueNavigationAction\(issue\)" "top-issue fix action must reuse the playtest fix resolver and the publish issue-row navigation."
+Assert-Contains "home top-issue reuse" $scenarioPublishAuthoringContentBuilder "internal static ScenarioAuthoringInspectorAction BuildIssueNavigationAction" "publish issue-row navigation must be shareable as one source of truth."
+Assert-Contains "home top-issue surfacing" $scenarioOverviewAuthoringContentBuilder "ScenarioTopIssueResolver\.ResolveTopIssue\(validation\).*Next: " "Home must surface the single highest-priority issue with a Next line."
+
+Assert-Contains "scenario goal field" $scenarioDefinitionModel "public string Goal \{ get; set; \}" "ScenarioDefinition must expose the optional Goal field."
+Assert-Contains "scenario goal XML round-trip" $scenarioSerializer "definition\.Goal = ReadText\(meta, ""Goal""\)" "serializer must read the optional <Goal> element."
+Assert-Contains "scenario goal XML round-trip" $scenarioSerializer "WriteElement\(writer, ""Goal"", definition\.Goal\)" "serializer must write the optional <Goal> element."
+Assert-Contains "scenario goal edit command" $scenarioMetadataActions "ActionDraftGoalPrefix.*definition\.Goal = value\.Trim\(\)" "metadata command handler must commit goal edits."
+Assert-Contains "scenario goal home card" $scenarioOverviewAuthoringContentBuilder "ActionDraftGoalPrefix.*FormatVictorySummary" "Home identity card must show the editable goal beside its victory condition."
+Assert-Contains "scenario goal readme" $scenarioPackagePlan "AppendLine\(""GOAL""\).*definition\.Goal.*Victory condition: " "export README must include the goal and, when present, the victory condition."
+Assert-Contains "scenario goal verification" $scenarioVerification "VerifyWizInfoContent.*goalRoundTrip\.Goal == withGoal\.Goal.*ScenarioContentSummary\.Build\(fixture\).*ScenarioTopIssueResolver\.ResolveTopIssue" "framework verification must cover goal round-trip, installed-copy summary, and top-issue ranking."
+
 if ($failures.Count -gt 0) {
     Write-Host ("ShelteredAPI contract tests failed: " + $failures.Count)
     foreach ($failure in $failures) {

@@ -224,6 +224,11 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
             text.AppendLine(new string('=', Math.Max(3, (definition.DisplayName ?? "Scenario").Length)));
             text.AppendLine();
             text.AppendLine("DESCRIPTION"); text.AppendLine(Safe(definition.Description)); text.AppendLine();
+            text.AppendLine("GOAL"); text.AppendLine(Safe(definition.Goal));
+            string victory = FormatVictorySummary(definition);
+            if (!string.IsNullOrEmpty(victory))
+                text.AppendLine("Victory condition: " + victory);
+            text.AppendLine();
             text.AppendLine("AUTHOR"); text.AppendLine(Safe(definition.Author));
             text.AppendLine("VERSION"); text.AppendLine(Safe(definition.Version));
             text.AppendLine("CREDITS"); text.AppendLine(Safe(definition.Credits)); text.AppendLine();
@@ -307,6 +312,19 @@ namespace ShelteredAPI.Scenarios.Application.Authoring
         }
 
         private static string Safe(string value) { return string.IsNullOrEmpty(value) ? "Not provided." : value.Trim(); }
+
+        // Only returns text when the scenario actually declares an end state, so the
+        // README shows the victory beside the goal only when one exists.
+        private static string FormatVictorySummary(ScenarioDefinition definition)
+        {
+            WinLossConditionsDefinition winLoss = definition != null ? definition.WinLossConditions : null;
+            int wins = winLoss != null && winLoss.WinConditions != null ? winLoss.WinConditions.Count : 0;
+            int losses = winLoss != null && winLoss.LossConditions != null ? winLoss.LossConditions.Count : 0;
+            if (wins + losses == 0)
+                return null;
+            return wins.ToString(System.Globalization.CultureInfo.InvariantCulture) + " win / "
+                + losses.ToString(System.Globalization.CultureInfo.InvariantCulture) + " loss condition(s)";
+        }
 
         private static void AddUnique(List<string> paths, string relativePath)
         {

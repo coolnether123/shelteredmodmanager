@@ -48,6 +48,7 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
                 VerifyMapLootProjectionContracts(result);
                 VerifySchedulePolicyWindows(result);
                 VerifySeamGuardContracts(result);
+                VerifyWizInfoContent(result);
                 ScenarioStarterTemplateVerification.Verify(result);
                 ScenarioTimelineUxVerification.Verify(result);
                 ScenarioAssetInventoryVerification.Verify(root, result);
@@ -724,6 +725,72 @@ namespace ShelteredAPI.Scenarios.Diagnostics{
             }
 
             return false;
+        }
+
+        private static void VerifyWizInfoContent(ScenarioValidationResult result)
+        {
+            ScenarioDefinitionSerializer serializer = new ScenarioDefinitionSerializer();
+
+            // Goal field XML round-trip + backward compatibility.
+            ScenarioDefinition withGoal = new ScenarioDefinition();
+            withGoal.Id = "wizinfo.goal";
+            withGoal.Goal = "Reach the surface before day 30.";
+            ScenarioDefinition goalRoundTrip = serializer.FromXml(serializer.ToXml(withGoal));
+            Assert(goalRoundTrip != null && goalRoundTrip.Goal == withGoal.Goal, "Scenario goal did not survive XML round-trip.", result);
+
+            ScenarioDefinition noGoal = new ScenarioDefinition();
+            noGoal.Id = "wizinfo.nogoal";
+            string legacyXml = serializer.ToXml(noGoal);
+            Assert(legacyXml.IndexOf("<Goal", StringComparison.Ordinal) < 0, "Absent scenario goal must not be written to XML (backward compatible).", result);
+            ScenarioDefinition legacyReload = serializer.FromXml(legacyXml);
+            Assert(legacyReload != null && string.IsNullOrEmpty(legacyReload.Goal), "Scenario without a goal must load with an empty goal.", result);
+
+            // Installed-copy content summary derived from a fixture definition.
+            ScenarioDefinition fixture = new ScenarioDefinition();
+            fixture.Id = "wizinfo.summary";
+            fixture.FamilySetup.Members.Add(new FamilyMemberConfig());
+            fixture.FamilySetup.Members.Add(new FamilyMemberConfig());
+            fixture.ScenarioCharacters.Add(new ScenarioNpcDefinition());
+            fixture.BunkerEdits.ObjectPlacements.Add(new ObjectPlacement());
+            fixture.ScenarioFlow.Stages.Add(new ScenarioFlowStageDefinition());
+            fixture.ScheduledActions.Add(new ScenarioScheduledActionDefinition());
+            fixture.Map.Locations.Add(new ShelteredAPI.Scenarios.Domain.Map.MapLocationDefinition());
+            fixture.AssetReferences.CustomSprites.Add(new SpriteRef { Id = "s", RelativePath = "Assets\\a.png" });
+            fixture.ModDependencies.Add(new ScenarioModDependencyDefinition { ModId = "Req.Mod", Kind = ScenarioModDependencyKind.Required });
+
+            ScenarioContentSummary summary = ScenarioContentSummary.Build(fixture);
+            Assert(summary.WorldChanges == 1, "Content summary world-change count is wrong.", result);
+            Assert(summary.Cast == 3, "Content summary cast count is wrong.", result);
+            Assert(summary.StoryStages == 1, "Content summary story-stage count is wrong.", result);
+            Assert(summary.TimelineEntries == 1, "Content summary timeline count is wrong.", result);
+            Assert(summary.MapLocations == 1, "Content summary map-location count is wrong.", result);
+            Assert(summary.AssetFiles == 1, "Content summary asset-file count is wrong.", result);
+            Assert(summary.RequiredMods == 1, "Content summary required-mod count is wrong.", result);
+            Assert(summary.ToCardLine().IndexOf("3 cast members", StringComparison.Ordinal) >= 0, "Content summary card line is malformed.", result);
+
+            // Top-issue ranking: blocking error wins over warnings regardless of order.
+            ScenarioValidationResult mixed = new ScenarioValidationResult();
+            mixed.AddWarning("First warning about supplies.");
+            mixed.AddError("Add at least one starting survivor.");
+            mixed.AddWarning("Second warning about assets.");
+            ScenarioAuthoringValidationSnapshot mixedSnapshot = ScenarioAuthoringValidationSnapshot.Evaluate(new StubValidator(mixed), fixture, null);
+            ScenarioValidationIssue top = ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioTopIssueResolver.ResolveTopIssue(mixedSnapshot);
+            Assert(top != null && top.Severity == ScenarioIssueSeverity.Error, "Top issue must rank the blocking error first.", result);
+            Assert(ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioTopIssueResolver.BuildNextAction(top) != null, "Top issue must resolve to a fix action.", result);
+
+            ScenarioValidationResult warningsOnly = new ScenarioValidationResult();
+            warningsOnly.AddWarning("Earliest warning.");
+            warningsOnly.AddWarning("Later warning.");
+            ScenarioAuthoringValidationSnapshot warnSnapshot = ScenarioAuthoringValidationSnapshot.Evaluate(new StubValidator(warningsOnly), fixture, null);
+            ScenarioValidationIssue topWarning = ShelteredAPI.Scenarios.Presentation.Authoring.Shell.ScenarioTopIssueResolver.ResolveTopIssue(warnSnapshot);
+            Assert(topWarning != null && topWarning.Message == "Earliest warning.", "Warning-only ranking must return the first warning.", result);
+        }
+
+        private sealed class StubValidator : IScenarioDefinitionValidator
+        {
+            private readonly ScenarioValidationResult _result;
+            public StubValidator(ScenarioValidationResult result) { _result = result; }
+            public ScenarioValidationResult Validate(ScenarioDefinition definition, string scenarioFilePath) { return _result; }
         }
 
         private static void Assert(bool condition, string message, ScenarioValidationResult result)
