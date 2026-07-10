@@ -2760,6 +2760,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 DrawTimelineTrackSection(section);
             }
+            else if (IsPacingSection(section))
+            {
+                DrawPacingSection(section);
+            }
             else if (IsStoryMapSection(section))
             {
                 DrawStoryMapSection(section);

@@ -565,6 +565,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             List<ScenarioAuthoringInspectorItem> controlItems = BuildPlaytestControlItems(editorSession, definition, validation);
             List<ScenarioAuthoringInspectorItem> runSettingItems = BuildRunSettingItems(definition);
             List<ScenarioAuthoringInspectorItem> preflightItems = ScenarioPublishAuthoringContentBuilder.BuildValidationItems(validation);
+            ScenarioPacingAuthoringSectionBuilder.AddPreflightGuidance(preflightItems, definition, _timelineBuilder);
             List<ScenarioAuthoringInspectorItem> resultItems = BuildPlaytestResultItems(editorSession);
             List<ScenarioAuthoringInspectorItem> journalItems = BuildRuntimeJournalItems();
             List<ScenarioAuthoringInspectorItem> pendingItems = ScenarioPublishAuthoringContentBuilder.BuildTimelineItems(definition, ScenarioPublishAuthoringContentBuilder.GetRuntimeState(), _timelineBuilder);
@@ -850,6 +851,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
                 Items = BuildTimelineTrackItems(state, definition, entries).ToArray()
             });
+
+            sections.Add(ScenarioPacingAuthoringSectionBuilder.BuildTimelineSection(definition, _timelineBuilder));
 
             sections.Add(new ScenarioAuthoringInspectorSection
             {

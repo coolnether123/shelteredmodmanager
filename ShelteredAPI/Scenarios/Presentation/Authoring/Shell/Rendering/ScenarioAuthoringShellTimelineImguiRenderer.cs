@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using ModAPI.Scenarios;
 using UnityEngine;
 
@@ -14,6 +15,99 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private const string TimelineTrackSectionId = "timeline_workshop_track";
         private const string TimelineDayMetadataPrefix = "timeline-day|";
         private const string TimelineChipMetadataPrefix = "timeline-chip|";
+
+        private bool IsPacingSection(ScenarioAuthoringInspectorSection section)
+        {
+            return section != null
+                && string.Equals(section.Id, ScenarioPacingAuthoringSectionBuilder.SectionId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void DrawPacingSection(ScenarioAuthoringInspectorSection section)
+        {
+            ScenarioAuthoringInspectorItem readingItem = null;
+            ScenarioAuthoringInspectorItem densityItem = null;
+            List<ScenarioAuthoringInspectorItem> callouts = new List<ScenarioAuthoringInspectorItem>();
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null)
+                    continue;
+                if (string.Equals(item.Label, "Reading", StringComparison.OrdinalIgnoreCase))
+                    readingItem = item;
+                else if (string.Equals(item.Label, ScenarioPacingAuthoringSectionBuilder.DensityLabel, StringComparison.OrdinalIgnoreCase))
+                    densityItem = item;
+                else if (item.Kind == ScenarioAuthoringInspectorItemKind.Text)
+                    callouts.Add(item);
+            }
+
+            string[] densityParts = densityItem != null && !string.IsNullOrEmpty(densityItem.Value)
+                ? densityItem.Value.Split(',')
+                : new string[0];
+            int[] counts = new int[densityParts.Length];
+            int maxCount = 1;
+            for (int i = 0; i < densityParts.Length; i++)
+            {
+                int count;
+                counts[i] = int.TryParse(densityParts[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out count) ? Math.Max(0, count) : 0;
+                maxCount = Math.Max(maxCount, counts[i]);
+            }
+
+            float width = GetSectionContentWidth();
+            float calloutHeight = callouts.Count * 22f;
+            float height = 102f + calloutHeight + (densityItem != null && !string.IsNullOrEmpty(densityItem.Detail) ? 18f : 0f);
+            Rect rect = GUILayoutUtility.GetRect(width, height, GUILayout.ExpandWidth(true), GUILayout.Height(height));
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.79f, 0.70f, 0.53f, 0.32f);
+            ScenarioUiAtlasSkin.DrawCornerCutTexture(rect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
+            ScenarioUiAtlasSkin.DrawCornerCutBorder(rect, _uiContext.Styles.BorderStrongTexture, _uiContext.Styles.BorderSubtleTexture);
+
+            string reading = readingItem != null ? readingItem.Value : "No authored pacing data yet.";
+            Rect readingRect = new Rect(rect.x + 12f, rect.y + 8f, rect.width - 24f, 20f);
+            string fittedReading;
+            string readingTooltip;
+            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(reading, readingRect.width, _textStyle, out fittedReading, out readingTooltip);
+            GUI.Label(readingRect, new GUIContent(fittedReading, readingTooltip), _textStyle);
+
+            Rect chartRect = new Rect(rect.x + 12f, rect.y + 33f, rect.width - 24f, 48f);
+            if (counts.Length > 0)
+            {
+                float gap = counts.Length > 20 ? 2f : 3f;
+                float barWidth = Math.Max(2f, (chartRect.width - (gap * (counts.Length - 1))) / counts.Length);
+                for (int i = 0; i < counts.Length; i++)
+                {
+                    float ratio = counts[i] > 0 ? (float)counts[i] / (float)maxCount : 0f;
+                    float barHeight = counts[i] > 0 ? Math.Max(4f, 34f * ratio) : 2f;
+                    Rect barRect = new Rect(chartRect.x + (i * (barWidth + gap)), chartRect.yMax - 12f - barHeight, barWidth, barHeight);
+                    GUI.color = counts[i] > 0
+                        ? new Color(0.58f, 0.38f, 0.15f, 0.88f)
+                        : new Color(0.43f, 0.35f, 0.25f, 0.28f);
+                    GUI.DrawTexture(barRect, Texture2D.whiteTexture);
+                    GUI.color = oldColor;
+                    if (i == 0 || (i + 1) % 5 == 0 || i == counts.Length - 1)
+                    {
+                        GUIStyle dayStyle = new GUIStyle(_mutedTextStyle);
+                        dayStyle.alignment = TextAnchor.UpperCenter;
+                        dayStyle.fontSize = Math.Min(dayStyle.fontSize, 10);
+                        GUI.Label(new Rect(barRect.x - 3f, chartRect.yMax - 11f, barRect.width + 6f, 14f), (i + 1).ToString(CultureInfo.InvariantCulture), dayStyle);
+                    }
+                }
+            }
+
+            float y = rect.y + 83f;
+            if (densityItem != null && !string.IsNullOrEmpty(densityItem.Detail))
+            {
+                GUI.Label(new Rect(rect.x + 12f, y, rect.width - 24f, 17f), densityItem.Detail, _mutedTextStyle);
+                y += 18f;
+            }
+            for (int i = 0; i < callouts.Count; i++)
+            {
+                GUIStyle calloutStyle = new GUIStyle(callouts[i].Emphasized ? _textStyle : _mutedTextStyle);
+                calloutStyle.fontStyle = callouts[i].Emphasized ? FontStyle.Bold : FontStyle.Normal;
+                GUI.Label(new Rect(rect.x + 12f, y, rect.width - 24f, 20f), callouts[i].Value ?? string.Empty, calloutStyle);
+                y += 22f;
+            }
+        }
 
         private bool IsTimelineTrackSection(ScenarioAuthoringInspectorSection section)
         {

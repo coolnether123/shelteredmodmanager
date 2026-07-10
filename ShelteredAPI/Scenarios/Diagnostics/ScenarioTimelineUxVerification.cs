@@ -48,6 +48,67 @@ namespace ShelteredAPI.Scenarios.Diagnostics
                 if (entries[i] != null && !string.IsNullOrEmpty(entries[i].Warning) && entries[i].Warning.IndexOf("Adds and removes Water", StringComparison.Ordinal) >= 0)
                     collisionFound = true;
             Assert(collisionFound, "Timeline collision analysis did not warn about same-time add/remove ordering.", result);
+
+            VerifyPacingAnalysis(result);
+        }
+
+        private static void VerifyPacingAnalysis(ScenarioValidationResult result)
+        {
+            ScenarioDefinition definition = new ScenarioDefinition();
+            AddFixtureAction(definition, "opening_1", 1);
+            AddFixtureAction(definition, "opening_2", 1);
+            AddFixtureAction(definition, "opening_3", 1);
+            AddFixtureAction(definition, "opening_4", 2);
+            AddFixtureAction(definition, "opening_5", 2);
+            ScenarioConversationDefinition conversation = new ScenarioConversationDefinition { Id = "late_story" };
+            conversation.Trigger.Source = ScenarioConversationTriggerSource.Timeline;
+            conversation.Trigger.Time.Day = 9;
+            definition.Conversations.Conversations.Add(conversation);
+            FutureSurvivorDefinition arrival = new FutureSurvivorDefinition { Id = "late_arrival" };
+            arrival.Arrival.Day = 9;
+            definition.FamilySetup.FutureSurvivors.Add(arrival);
+            ScenarioScheduledActionDefinition finalWorldEvent = AddFixtureAction(definition, "final_world_event", 10);
+            finalWorldEvent.Effects.Add(new ScenarioEffectDefinition { Kind = ScenarioEffectKind.WorldEvent, TargetId = "finale" });
+
+            ScenarioPacingAnalysis analysis = new ScenarioPacingAnalysisService(new ScenarioTimelineBuilder()).Analyze(definition);
+            Assert(analysis.TotalAuthoredHappenings == 8
+                    && analysis.GetCount(1) == 3
+                    && analysis.GetCount(2) == 2
+                    && analysis.GetCount(9) == 2
+                    && analysis.GetCount(10) == 1,
+                "Pacing density counts drifted from the authored fixture.", result);
+            Assert(analysis.FirstAuthoredDay == 1
+                    && analysis.LastAuthoredDay == 10
+                    && analysis.LongestQuietDayCount == 6
+                    && analysis.LongestQuietStartDay == 3
+                    && analysis.LongestQuietEndDay == 8,
+                "Pacing quiet-stretch analysis drifted from the authored fixture.", result);
+            Assert(analysis.BusiestCount == 3
+                    && analysis.BusiestDays.Length == 1
+                    && analysis.BusiestDays[0] == 1,
+                "Pacing busiest-day analysis drifted from the authored fixture.", result);
+            Assert(string.Equals(analysis.Reading, "Busy start (5 events days 1-2), quiet days 3-8, nothing after day 10", StringComparison.Ordinal),
+                "Pacing creator reading drifted from the authored fixture.", result);
+            Assert(!string.IsNullOrEmpty(analysis.QuietCallout)
+                    && analysis.QuietCallout.IndexOf("6 quiet days in a row", StringComparison.Ordinal) >= 0,
+                "Pacing quiet guidance did not describe the fixture gap.", result);
+            Assert(!string.IsNullOrEmpty(analysis.EndingCallout)
+                    && analysis.EndingCallout.IndexOf("Nothing authored after day 10", StringComparison.Ordinal) >= 0,
+                "Pacing ending guidance did not describe an open-ended fixture.", result);
+
+            definition.WinLossConditions.WinConditions.Add(new ConditionDef { Id = "survive", Type = "SurviveDays" });
+            ScenarioPacingAnalysis ended = new ScenarioPacingAnalysisService(new ScenarioTimelineBuilder()).Analyze(definition);
+            Assert(string.IsNullOrEmpty(ended.EndingCallout),
+                "Pacing ending guidance remained after the fixture gained an end condition.", result);
+        }
+
+        private static ScenarioScheduledActionDefinition AddFixtureAction(ScenarioDefinition definition, string id, int day)
+        {
+            ScenarioScheduledActionDefinition action = new ScenarioScheduledActionDefinition { Id = id, ActionType = "Fixture" };
+            action.DueTime.Day = day;
+            action.DueTime.Hour = 8;
+            definition.ScheduledActions.Add(action);
+            return action;
         }
 
         private static void Assert(bool condition, string message, ScenarioValidationResult result)
