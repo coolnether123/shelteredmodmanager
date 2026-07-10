@@ -85,6 +85,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private bool _windowMenuOpen;
         private readonly Dictionary<string, Vector2> _windowScrollPositions = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _pixelEditorGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _homeGroupExpanded = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         private Vector2 _settingsScrollPosition = Vector2.zero;
         private string _dragWindowId;
         private FloatingWindowDragMode _dragMode = FloatingWindowDragMode.None;

@@ -1564,15 +1564,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (searchTopmost)
             {
                 GUI.SetNextControlName(controlName);
-                nextSearchText = GUI.TextField(searchRect, searchText ?? string.Empty, _uiContext.Styles.Field);
+                nextSearchText = GUI.TextField(searchRect, searchText ?? string.Empty, _uiContext.Styles.SearchField);
             }
             else
             {
                 nextSearchText = searchText ?? string.Empty;
-                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.Field);
+                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.SearchField);
             }
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
                 searchText = nextSearchText;
+            DrawSearchPlaceholder(searchRect, searchText, "Filter choices");
+            if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
+                DrawFieldFocusBorder(searchRect);
 
             Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
@@ -1607,15 +1610,18 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (searchTopmost)
             {
                 GUI.SetNextControlName(controlName);
-                nextSearchText = GUI.TextField(searchRect, searchText ?? string.Empty, _uiContext.Styles.Field);
+                nextSearchText = GUI.TextField(searchRect, searchText ?? string.Empty, _uiContext.Styles.SearchField);
             }
             else
             {
                 nextSearchText = searchText ?? string.Empty;
-                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.Field);
+                GUI.Box(searchRect, nextSearchText, _uiContext.Styles.SearchField);
             }
             if (!string.Equals(nextSearchText, searchText ?? string.Empty, StringComparison.Ordinal))
                 searchText = nextSearchText;
+            DrawSearchPlaceholder(searchRect, searchText, "Filter choices");
+            if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), controlName, StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
+                DrawFieldFocusBorder(searchRect);
 
             Rect clearRect = GUILayoutUtility.GetRect(64f, 26f, GUILayout.Width(64f), GUILayout.Height(26f));
             if (DrawPlainButton(clearRect, new GUIContent("Clear"), _buttonStyle, true))
@@ -1640,71 +1646,59 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !string.Equals(window.Title, "Test", StringComparison.OrdinalIgnoreCase);
         }
 
+        // Softened Home landing: one calm reading order of orient -> create ->
+        // refine -> share. Orientation (title, save state, one "what next"
+        // element) leads; the question cards read as a lighter table of
+        // contents grouped into bands; every secondary panel (base, details,
+        // status) collapses to a one-line summary that expands on click so the
+        // first screenful never slams the reader with everything at once.
         private void DrawHomeWorkshopPage(ScenarioAuthoringShellWindowViewModel window)
         {
             ScenarioAuthoringInspectorSection identity = FindSection(window, "home_identity");
+            ScenarioAuthoringInspectorSection next = FindSection(window, "home_next");
             ScenarioAuthoringInspectorSection setup = FindSection(window, "home_setup_checklist");
             ScenarioAuthoringInspectorSection baseMode = FindSection(window, "home_base_mode");
+            ScenarioAuthoringInspectorSection details = FindSection(window, "home_metadata");
+            ScenarioAuthoringInspectorSection status = FindSection(window, "home_save_status");
             ScenarioAuthoringInspectorSection quickActions = FindSection(window, "home_quick_actions");
             ScenarioAuthoringInspectorSection advanced = FindSection(window, "home_advanced");
 
+            // ORIENT.
             if (identity != null)
             {
                 DrawHomeIdentityHeader(identity);
-                GUILayout.Space(8f);
-            }
-
-            if (setup != null || baseMode != null)
-            {
-                float contentWidth = GetSectionContentWidth();
-                bool twoColumns = contentWidth >= 760f && setup != null && baseMode != null;
-                float columnGap = 10f;
-                float columnWidth = twoColumns ? (contentWidth - columnGap) * 0.5f : contentWidth;
-                if (twoColumns)
-                    GUILayout.BeginHorizontal();
-
-                if (setup != null)
-                {
-                    if (twoColumns)
-                        GUILayout.BeginVertical(GUILayout.Width(columnWidth));
-                    float previousContentWidth = _activeContentWidth;
-                    if (twoColumns)
-                        _activeContentWidth = Math.Max(120f, columnWidth);
-                    DrawHomeSetupChecklist(setup);
-                    if (twoColumns)
-                        _activeContentWidth = previousContentWidth;
-                    if (twoColumns)
-                        GUILayout.EndVertical();
-                }
-
-                if (twoColumns)
-                    GUILayout.Space(columnGap);
-
-                if (baseMode != null)
-                {
-                    if (twoColumns)
-                        GUILayout.BeginVertical(GUILayout.Width(columnWidth));
-                    float previousContentWidth = _activeContentWidth;
-                    if (twoColumns)
-                        _activeContentWidth = Math.Max(120f, columnWidth);
-                    DrawHomeBaseSelector(baseMode);
-                    if (twoColumns)
-                        _activeContentWidth = previousContentWidth;
-                    if (twoColumns)
-                        GUILayout.EndVertical();
-                }
-
-                if (twoColumns)
-                    GUILayout.EndHorizontal();
-
                 GUILayout.Space(10f);
             }
 
-            DrawHomeQuestionGrid(window);
+            // ORIENT: exactly one primary "what next" element. While the setup
+            // checklist is present (draft incomplete) it is the guidance; once
+            // it auto-hides on completion the "what next" callout takes over.
+            if (setup != null)
+            {
+                DrawHomeSetupChecklist(setup);
+                GUILayout.Space(14f);
+            }
+            else if (next != null)
+            {
+                DrawHomeNextCallout(next);
+                GUILayout.Space(14f);
+            }
+
+            // CREATE -> REFINE -> SHARE bands of question cards.
+            DrawHomeQuestionBands(window);
+
+            // Progressive disclosure of secondary panels, collapsed at rest.
+            GUILayout.Space(14f);
+            if (baseMode != null)
+                DrawHomeCollapsibleGroup("home.group.base", "Scenario base", BuildBaseModeSummary(baseMode), false, baseMode, DrawHomeBaseSelectorBody);
+            if (details != null)
+                DrawHomeCollapsibleGroup("home.group.details", "Scenario details", BuildDetailsSummary(details), false, details, DrawHomeDetailsBody);
+            if (status != null)
+                DrawHomeCollapsibleGroup("home.group.status", "Save & export status", BuildStatusSummary(status), false, status, DrawHomeStatusBody);
 
             if (quickActions != null)
             {
-                GUILayout.Space(8f);
+                GUILayout.Space(10f);
                 DrawSection(quickActions);
             }
 
@@ -1713,6 +1707,161 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 GUILayout.Space(8f);
                 DrawSection(advanced);
             }
+        }
+
+        // Renders a collapsible Home panel: a full-width toggle bar showing the
+        // group title and, while collapsed, a one-line summary. Modeled on the
+        // pixel editor's group-header pattern so the collapse behaviour stays
+        // consistent with the rest of the editor.
+        private void DrawHomeCollapsibleGroup(
+            string key,
+            string title,
+            string summary,
+            bool defaultExpanded,
+            ScenarioAuthoringInspectorSection section,
+            Action<ScenarioAuthoringInspectorSection> drawBody)
+        {
+            bool expanded = GetHomeGroupExpanded(key, defaultExpanded);
+            Rect rect = GUILayoutUtility.GetRect(120f, 28f, GUILayout.ExpandWidth(true), GUILayout.Height(28f));
+            string glyph = expanded ? "v " : "> ";
+            string header = string.IsNullOrEmpty(summary) || expanded
+                ? glyph + title
+                : glyph + title + "  -  " + summary;
+            string hint = expanded ? "Collapse " + title + "." : "Expand " + title + ".";
+            if (DrawPlainButton(rect, new GUIContent(header, hint), expanded ? _activeButtonStyle : _buttonStyle, true))
+            {
+                _homeGroupExpanded[key] = !expanded;
+                if (Event.current != null)
+                    Event.current.Use();
+                expanded = !expanded;
+            }
+            DrawButtonAnimationOverlay(rect, key, true, IsInteractiveHoverAllowed(rect), IsInteractiveMouseDownAllowed(rect));
+            if (expanded && drawBody != null)
+            {
+                GUILayout.Space(4f);
+                drawBody(section);
+            }
+            GUILayout.Space(8f);
+        }
+
+        private bool GetHomeGroupExpanded(string key, bool defaultExpanded)
+        {
+            bool expanded;
+            if (_homeGroupExpanded.TryGetValue(key, out expanded))
+                return expanded;
+
+            _homeGroupExpanded[key] = defaultExpanded;
+            return defaultExpanded;
+        }
+
+        // The "what next" callout: leads with the guidance line, then a quiet
+        // row of the fix / test / help actions beneath it.
+        private void DrawHomeNextCallout(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Card);
+            GUIStyle guidanceStyle = new GUIStyle(_sectionTitleStyle);
+            guidanceStyle.wordWrap = true;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.Action != null)
+                    continue;
+                string text = item.Value ?? item.Label ?? string.Empty;
+                if (!string.IsNullOrEmpty(text))
+                    GUILayout.Label(text, guidanceStyle);
+            }
+
+            float rowLimit = GetSectionContentWidth();
+            float rowWidth = 0f;
+            bool rowOpen = false;
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item == null || item.Action == null)
+                    continue;
+                if (!rowOpen)
+                {
+                    GUILayout.Space(6f);
+                    GUILayout.BeginHorizontal();
+                    rowOpen = true;
+                }
+                float width = Mathf.Clamp(MeasureButtonWidth(item.Action, false, 20f), 94f, Math.Min(300f, rowLimit));
+                if (rowWidth > 0f && rowWidth + width > rowLimit)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(4f);
+                    GUILayout.BeginHorizontal();
+                    rowWidth = 0f;
+                }
+                Rect rect = GUILayoutUtility.GetRect(width, 30f, GUILayout.Width(width), GUILayout.Height(30f));
+                DrawButton(rect, item.Action, false);
+                GUILayout.Space(6f);
+                rowWidth += width + 6f;
+            }
+            if (rowOpen)
+                GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
+        }
+
+        private static string BuildBaseModeSummary(ScenarioAuthoringInspectorSection section)
+        {
+            // The first enabled/selected base option label doubles as the
+            // current base name; the "OK" icon marks the selected option.
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item != null && item.Action != null && string.Equals(item.Action.IconText, "OK", StringComparison.OrdinalIgnoreCase))
+                    return item.Action.Label ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        private static string BuildDetailsSummary(ScenarioAuthoringInspectorSection section)
+        {
+            string author = FindHomePropertyValue(section, "Author");
+            string version = FindHomePropertyValue(section, "Version");
+            if (!string.IsNullOrEmpty(author) && !string.IsNullOrEmpty(version))
+                return "by " + author + "  -  v" + version;
+            if (!string.IsNullOrEmpty(author))
+                return "by " + author;
+            if (!string.IsNullOrEmpty(version))
+                return "v" + version;
+            return string.Empty;
+        }
+
+        private static string BuildStatusSummary(ScenarioAuthoringInspectorSection section)
+        {
+            string saved = FindHomePropertyValue(section, "Last Saved");
+            return string.IsNullOrEmpty(saved) ? string.Empty : "saved " + saved;
+        }
+
+        private static string FindHomePropertyValue(ScenarioAuthoringInspectorSection section, string label)
+        {
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+            {
+                ScenarioAuthoringInspectorItem item = section.Items[i];
+                if (item != null && string.Equals(item.Label, label, StringComparison.OrdinalIgnoreCase))
+                    return item.Value ?? string.Empty;
+            }
+            return string.Empty;
+        }
+
+        private void DrawHomeBaseSelectorBody(ScenarioAuthoringInspectorSection section)
+        {
+            DrawHomeBaseSelectorControls(section);
+        }
+
+        private void DrawHomeDetailsBody(ScenarioAuthoringInspectorSection section)
+        {
+            DrawMetadataFormSection(section, false);
+        }
+
+        private void DrawHomeStatusBody(ScenarioAuthoringInspectorSection section)
+        {
+            GUILayout.BeginVertical(_uiContext.Styles.Card);
+            for (int i = 0; section != null && section.Items != null && i < section.Items.Length; i++)
+                DrawItem(section.Items[i], false);
+            GUILayout.EndVertical();
         }
 
         private static ScenarioAuthoringInspectorSection FindSection(ScenarioAuthoringShellWindowViewModel window, string id)
@@ -2034,12 +2183,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (searchTopmost)
             {
                 GUI.SetNextControlName("survivor_trait_picker_search");
-                _survivorTraitPickerSearchText = GUI.TextField(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.Field);
+                _survivorTraitPickerSearchText = GUI.TextField(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.SearchField);
             }
             else
             {
-                GUI.Box(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.Field);
+                GUI.Box(searchRect, _survivorTraitPickerSearchText ?? string.Empty, _uiContext.Styles.SearchField);
             }
+            DrawSearchPlaceholder(searchRect, _survivorTraitPickerSearchText, "Filter traits");
+            if (searchTopmost && (string.Equals(GUI.GetNameOfFocusedControl(), "survivor_trait_picker_search", StringComparison.Ordinal) || (Event.current != null && searchRect.Contains(Event.current.mousePosition))))
+                DrawFieldFocusBorder(searchRect);
 
             float y = searchRect.yMax + 8f;
             int drawn = 0;
@@ -2384,7 +2536,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 tooltip = string.Empty;
             string fitted;
             string fitTooltip;
-            ScenarioUiMeasuredLabel.TryFitLabelWithTooltip(action.Label ?? string.Empty, Math.Max(0f, rect.width - 14f), style, out fitted, out fitTooltip);
+            ScenarioUiMeasuredLabel.PreserveLabelWithOverflowTooltip(action.Label ?? string.Empty, Math.Max(0f, rect.width - 14f), style, out fitted, out fitTooltip);
             if (!string.IsNullOrEmpty(fitTooltip))
                 tooltip = string.IsNullOrEmpty(tooltip) ? fitTooltip : tooltip + "\n" + fitTooltip;
             GUIContent content = new GUIContent(fitted, tooltip);
@@ -2482,9 +2634,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             }
         }
 
-        private void DrawHomeBaseSelector(ScenarioAuthoringInspectorSection section)
+        // Controls-only base selector body (no leading label); the collapsible
+        // group header supplies the title on Home.
+        private void DrawHomeBaseSelectorControls(ScenarioAuthoringInspectorSection section)
         {
-            DrawHomeSectionLabel(section.Title ?? "Scenario Base");
             GUILayout.BeginVertical(_uiContext.Styles.Card);
             List<ScenarioAuthoringInspectorAction> actions = new List<ScenarioAuthoringInspectorAction>();
             string hint = null;
@@ -2595,12 +2748,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             GUILayout.EndVertical();
         }
 
-        private void DrawHomeSectionLabel(string title)
-        {
-            GUILayout.Label(title ?? string.Empty, _sectionTitleStyle);
-            GUILayout.Space(3f);
-        }
-
         private void DrawChecklistItem(Rect rect, ScenarioAuthoringInspectorAction action, bool recommended)
         {
             if (action == null || _uiContext == null || _uiContext.Styles == null)
@@ -2670,17 +2817,51 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             return null;
         }
 
-        private void DrawHomeQuestionGrid(ScenarioAuthoringShellWindowViewModel window)
+        // Question cards read as a light table of contents. They are grouped
+        // into three quietly labelled bands so the reading order (create ->
+        // refine -> share) is legible without a wall of undifferentiated tiles.
+        private static readonly string[] HomeCreateBandIds = { "home_world", "home_people", "home_inventory" };
+        private static readonly string[] HomeRefineBandIds = { "home_events", "home_art" };
+        private static readonly string[] HomeShareBandIds = { "home_test", "home_publish" };
+
+        private void DrawHomeQuestionBands(ScenarioAuthoringShellWindowViewModel window)
+        {
+            bool drewCreate = DrawHomeQuestionBand(window, "Create", HomeCreateBandIds, false);
+            bool drewRefine = DrawHomeQuestionBand(window, "Refine", HomeRefineBandIds, drewCreate);
+            DrawHomeQuestionBand(window, "Share", HomeShareBandIds, drewCreate || drewRefine);
+        }
+
+        private bool DrawHomeQuestionBand(
+            ScenarioAuthoringShellWindowViewModel window,
+            string bandLabel,
+            string[] ids,
+            bool precededByBand)
         {
             List<ScenarioAuthoringInspectorSection> questions = new List<ScenarioAuthoringInspectorSection>();
-            for (int i = 0; window != null && window.Sections != null && i < window.Sections.Length; i++)
+            for (int i = 0; ids != null && i < ids.Length; i++)
             {
-                ScenarioAuthoringInspectorSection section = window.Sections[i];
+                ScenarioAuthoringInspectorSection section = FindSection(window, ids[i]);
                 if (IsHomeQuestionSection(section))
                     questions.Add(section);
             }
 
             if (questions.Count == 0)
+                return false;
+
+            if (precededByBand)
+                GUILayout.Space(12f);
+            if (!string.IsNullOrEmpty(bandLabel))
+            {
+                GUILayout.Label(bandLabel, _mutedTextStyle);
+                GUILayout.Space(4f);
+            }
+            DrawHomeQuestionCards(questions);
+            return true;
+        }
+
+        private void DrawHomeQuestionCards(List<ScenarioAuthoringInspectorSection> questions)
+        {
+            if (questions == null || questions.Count == 0)
                 return;
 
             float availableWidth = GetSectionContentWidth();
@@ -2893,6 +3074,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 && !string.IsNullOrEmpty(section.Id)
                 && section.Id.StartsWith("home_", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(section.Id, "home_identity", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(section.Id, "home_next", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(section.Id, "home_setup_checklist", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(section.Id, "home_base_mode", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(section.Id, "home_advanced", StringComparison.OrdinalIgnoreCase)
@@ -3388,7 +3570,15 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
 
         private void DrawCandidateCard(Rect rect, ScenarioAuthoringInspectorAction action, bool armPlacementOnAssetBrowserClick)
         {
+            DrawCandidateCard(rect, action, armPlacementOnAssetBrowserClick, false);
+        }
+
+        private void DrawCandidateCard(Rect rect, ScenarioAuthoringInspectorAction action, bool armPlacementOnAssetBrowserClick, bool showFavoriteToggle)
+        {
             if (action == null)
+                return;
+
+            if (showFavoriteToggle && HandleAssetFavoriteStarInput(rect, action))
                 return;
 
             GUIStyle style = !action.Enabled ? _uiContext.Styles.ButtonDisabled : (action.Emphasized ? _activeButtonStyle : _buttonStyle);
@@ -3409,7 +3599,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             {
                 float previewSize = Mathf.Clamp(rect.height - 12f, 44f, 70f);
                 Rect previewRect = new Rect(rect.x + 6f, rect.y + 6f, previewSize, previewSize);
-                DrawSpritePreview(previewRect, action.PreviewSprite, action.Emphasized);
+                DrawSpritePreview(previewRect, action.PreviewSprite, action.Emphasized, action.HasPreviewTint ? action.PreviewTint : Color.white);
                 textRect = new Rect(previewRect.xMax + 10f, rect.y + 8f, rect.width - previewRect.width - 22f, rect.height - 16f);
             }
             else
@@ -3434,6 +3624,53 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 Rect badgeRect = new Rect(textRect.x, rect.yMax - 22f, Mathf.Max(52f, badgeSize.x + 16f), 18f);
                 ScenarioUiWidgets.DrawPill(badgeRect, action.Badge, _uiContext.Styles, action.Emphasized ? ScenarioUiPillEmphasis.Active : ScenarioUiPillEmphasis.Default);
             }
+            if (showFavoriteToggle)
+                DrawAssetFavoriteStar(rect, action);
+        }
+
+        private bool HandleAssetFavoriteStarInput(Rect cardRect, ScenarioAuthoringInspectorAction action)
+        {
+            string sourceActionId = ScenarioAssetBrowserUx.DecodeSourceActionId(action != null ? action.Id : null);
+            Event current = Event.current;
+            Rect starRect = BuildAssetFavoriteStarRect(cardRect);
+            if (string.IsNullOrEmpty(sourceActionId)
+                || current == null
+                || current.button != 0
+                || current.type != EventType.MouseDown
+                || !starRect.Contains(current.mousePosition)
+                || !IsInteractiveVisualTopmost(starRect))
+                return false;
+
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            ScenarioAssetBrowserUx.ToggleFavorite(state, sourceActionId);
+            current.Use();
+            return true;
+        }
+
+        private void DrawAssetFavoriteStar(Rect cardRect, ScenarioAuthoringInspectorAction action)
+        {
+            string sourceActionId = ScenarioAssetBrowserUx.DecodeSourceActionId(action != null ? action.Id : null);
+            if (string.IsNullOrEmpty(sourceActionId))
+                return;
+
+            ScenarioAuthoringState state = _snapshot != null ? _snapshot.State : null;
+            bool favorite = ScenarioAssetBrowserUx.IsFavorite(state, sourceActionId);
+            Rect starRect = BuildAssetFavoriteStarRect(cardRect);
+            GUIStyle style = new GUIStyle(_buttonContentStyle);
+            style.alignment = TextAnchor.MiddleCenter;
+            style.fontSize = 19;
+            Color previous = GUI.color;
+            Color starColor = favorite
+                ? _uiContext.Styles.Theme.Palette.TextTitle
+                : new Color(0.77f, 0.72f, 0.63f, 0.72f);
+            GUI.color = new Color(previous.r * starColor.r, previous.g * starColor.g, previous.b * starColor.b, previous.a * starColor.a);
+            GUI.Label(starRect, new GUIContent(favorite ? "\u2605" : "\u2606", favorite ? "Remove from Favorites" : "Add to Favorites"), style);
+            GUI.color = previous;
+        }
+
+        private static Rect BuildAssetFavoriteStarRect(Rect cardRect)
+        {
+            return new Rect(cardRect.x + 5f, cardRect.yMax - 29f, 26f, 24f);
         }
 
         private static void ExecuteCandidateCardAction(ScenarioAuthoringInspectorAction action, bool armPlacementOnAssetBrowserClick)
@@ -4175,6 +4412,11 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioUiWidgets.DrawSpritePreviewFrame(rect, sprite, _uiContext.Styles, emphasized);
         }
 
+        private void DrawSpritePreview(Rect rect, Sprite sprite, bool emphasized, Color tint)
+        {
+            ScenarioUiWidgets.DrawSpritePreviewFrame(rect, sprite, _uiContext.Styles, emphasized, tint);
+        }
+
         private static void DrawTextureFitted(Rect rect, Texture texture, float padding)
         {
             if (texture == null)
@@ -4207,12 +4449,12 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
                 return value ?? string.Empty;
 
-            return value.Substring(0, Math.Max(0, maxLength - 3)) + "...";
+            return value;
         }
 
         private static string ShortenToFit(string value, float maxWidth, GUIStyle style)
         {
-            return ScenarioUiMeasuredLabel.FitLabelWithEllipsis(value, maxWidth, style);
+            return value ?? string.Empty;
         }
 
         private static string MiddleTruncate(string value, float maxWidth, GUIStyle style)
@@ -4222,16 +4464,16 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             if (style.CalcSize(new GUIContent(value)).x <= maxWidth)
                 return value;
 
-            const string ellipsis = "...";
-            float ellipsisWidth = style.CalcSize(new GUIContent(ellipsis)).x;
-            if (ellipsisWidth >= maxWidth)
+            const string separator = " / ";
+            float separatorWidth = style.CalcSize(new GUIContent(separator)).x;
+            if (separatorWidth >= maxWidth)
                 return string.Empty;
 
             int left = Math.Min(12, value.Length);
             int right = Math.Min(18, Math.Max(0, value.Length - left));
             while (left + right > 0)
             {
-                string candidate = value.Substring(0, left) + ellipsis + value.Substring(value.Length - right);
+                string candidate = value.Substring(0, left) + separator + value.Substring(value.Length - right);
                 if (style.CalcSize(new GUIContent(candidate)).x <= maxWidth)
                     return candidate;
 
@@ -4245,7 +4487,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                     break;
             }
 
-            return ScenarioUiMeasuredLabel.FitLabelWithEllipsis(value, maxWidth, style);
+            return value;
         }
 
         private Rect DrawSettingsWindow(

@@ -31,28 +31,47 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             ScenarioDefinition definition = editorSession != null ? editorSession.WorkingDefinition : null;
             ScenarioScoringAuthoringSummary.Summary scoring = ScenarioScoringAuthoringSummary.Build(definition);
             ScenarioHomeProgressFacts facts = ScenarioHomeProgressFacts.Build(definition, editorSession);
+            ScenarioAuthoringValidationSnapshot validation = GetCachedValidation(state, editorSession, definition);
             bool showAdvancedDetails = state != null && state.Settings != null && state.Settings.GetBool("debug.show_advanced_details", false);
             List<ScenarioAuthoringInspectorSection> sections = new List<ScenarioAuthoringInspectorSection>();
+            // ORIENT: a calm identity header that carries only the title and, at
+            // rest, the two most load-bearing status chips (save state + draft
+            // health). Everything else that used to crowd this card now lives in
+            // the "what next" callout or the collapsible detail groups below.
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "home_identity",
                 Title = string.Empty,
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = BuildIdentityItems(state, editorSession, definition)
+                Items = BuildIdentityItems(state, editorSession, definition, validation)
             });
+            // ORIENT: the single "what to do next" element. The renderer shows
+            // this only when the setup checklist is gone, so the two never fight
+            // for the reader's attention on landing.
+            sections.Add(new ScenarioAuthoringInspectorSection
+            {
+                Id = "home_next",
+                Title = string.Empty,
+                Expanded = true,
+                Layout = ScenarioAuthoringInspectorSectionLayout.ActionStrip,
+                Items = BuildNextItems(editorSession, definition, validation)
+            });
+            // REFINE (progressive disclosure): identity/metadata details, now
+            // including author intent (Goal) and its Victory backing. Rendered
+            // collapsed on landing behind a one-line summary.
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "home_metadata",
-                Title = "Scenario Details",
+                Title = "Scenario details",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
-                Items = ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false)
+                Items = BuildDetailItems(definition)
             });
             sections.Add(new ScenarioAuthoringInspectorSection
             {
                 Id = "home_save_status",
-                Title = "Save & Export Status",
+                Title = "Save & export status",
                 Expanded = true,
                 Layout = ScenarioAuthoringInspectorSectionLayout.PropertyList,
                 Items = ScenarioMetadataAuthoringContent.BuildStatusItems(state != null ? state.ActiveScenarioFilePath : null)
@@ -97,18 +116,17 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
         private static ScenarioAuthoringInspectorItem[] BuildIdentityItems(
             ScenarioAuthoringState state,
             ScenarioEditorSession editorSession,
-            ScenarioDefinition definition)
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation)
         {
+            // At-rest the header carries the title plus exactly two chips: the
+            // save state and the draft-health summary. Test readiness, the next
+            // fix, and help moved into the "what next" callout so the first
+            // screenful stays calm.
             List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
-            ScenarioAuthoringValidationSnapshot validation = GetCachedValidation(state, editorSession, definition);
             string validationLabel = FormatValidationChip(validation);
-            string playtestDisabledReason;
-            string playtestLabel = FormatPlaytestReadiness(editorSession, validation, definition, out playtestDisabledReason);
-            bool canOpenTest = string.IsNullOrEmpty(playtestDisabledReason);
             int dirtyCount = Item.CountDirtyFlags(editorSession);
             items.Add(EditableProperty("Title", Item.Safe(definition != null ? definition.DisplayName : null)));
-            items.Add(BuildGoalItem(definition));
-            items.Add(BuildVictoryItem(definition));
             items.Add(Item.ActionItem(Item.Action(
                 ScenarioAuthoringActionIds.ActionSave,
                 dirtyCount == 0 ? "Saved" : "Unsaved changes",
@@ -123,6 +141,22 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true,
                 false,
                 validation != null && validation.ErrorCount > 0 ? "!" : "OK")));
+            return items.ToArray();
+        }
+
+        // The single primary "what to do next" element. Leads with the top
+        // outstanding issue (or an on-track note), then offers the fix, the
+        // Test entry, and draft-health help. The renderer only surfaces this
+        // once the setup checklist is complete, so the two never compete.
+        private static ScenarioAuthoringInspectorItem[] BuildNextItems(
+            ScenarioEditorSession editorSession,
+            ScenarioDefinition definition,
+            ScenarioAuthoringValidationSnapshot validation)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            string playtestDisabledReason;
+            string playtestLabel = FormatPlaytestReadiness(editorSession, validation, definition, out playtestDisabledReason);
+            bool canOpenTest = string.IsNullOrEmpty(playtestDisabledReason);
             ScenarioValidationIssue topIssue = ScenarioTopIssueResolver.ResolveTopIssue(validation);
             if (topIssue != null)
             {
@@ -130,6 +164,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 ScenarioAuthoringInspectorAction nextAction = ScenarioTopIssueResolver.BuildNextAction(topIssue);
                 if (nextAction != null)
                     items.Add(Item.ActionItem(nextAction));
+            }
+            else if (canOpenTest)
+            {
+                items.Add(Item.Text("You're on track. Playtest whenever you're ready, or open Publish to package."));
+            }
+            else
+            {
+                items.Add(Item.Text("Next: " + playtestDisabledReason));
             }
             ScenarioAuthoringInspectorAction testAction = Item.Action(
                 "stage.select." + ScenarioStageKind.Test,
@@ -150,10 +192,21 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
             items.Add(Item.ActionItem(Item.Action(
                 ScenarioAuthoringActionIds.ActionHelpOpenTopicPrefix + TutorialContent.TopicPublish,
                 "What Draft Health Means",
-                "Open publish, validation, and export guidance for this card.",
+                "Open publish, validation, and export guidance.",
                 true,
                 false,
                 "HP")));
+            return items.ToArray();
+        }
+
+        // The collapsed "Scenario details" group: author intent (Goal) and its
+        // Victory backing lead, followed by the shared metadata form fields.
+        private static ScenarioAuthoringInspectorItem[] BuildDetailItems(ScenarioDefinition definition)
+        {
+            List<ScenarioAuthoringInspectorItem> items = new List<ScenarioAuthoringInspectorItem>();
+            items.Add(BuildGoalItem(definition));
+            items.Add(BuildVictoryItem(definition));
+            items.AddRange(ScenarioMetadataAuthoringContent.BuildEditableItems(definition, false));
             return items.ToArray();
         }
 

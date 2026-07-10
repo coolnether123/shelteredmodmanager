@@ -62,8 +62,14 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell
 
         private void DrawMetadataFormSection(ScenarioAuthoringInspectorSection section)
         {
+            DrawMetadataFormSection(section, true);
+        }
+
+        private void DrawMetadataFormSection(ScenarioAuthoringInspectorSection section, bool drawTitle)
+        {
             GUILayout.BeginVertical(_uiContext.Styles.Section);
-            GUILayout.Label(section.Title ?? "Scenario details", _sectionTitleStyle);
+            if (drawTitle)
+                GUILayout.Label(section.Title ?? "Scenario details", _sectionTitleStyle);
             ScenarioAuthoringInspectorItem version = FindProperty(section, "Version");
             for (int i = 0; section.Items != null && i < section.Items.Length; i++)
             {
