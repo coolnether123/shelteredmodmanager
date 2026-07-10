@@ -97,6 +97,16 @@ namespace ShelteredAPI.Scenarios.Definitions{
             if (!_definitionReader.TryLoad(scenarioId, out definition, out scenarioFilePath, out validation))
                 throw new InvalidOperationException("Scenario XML failed validation: " + FormatValidationIssues(validation));
 
+            return BuildScenarioDef(definition);
+        }
+
+        // Shared by installed-scenario launch and authoring playtest so both paths
+        // produce the same vanilla ScenarioDef carrier for completion handling.
+        internal static ScenarioDef BuildScenarioDef(ScenarioDefinition definition)
+        {
+            if (definition == null)
+                throw new ArgumentNullException("definition");
+
             ShelteredScenarioDefBuilder builder = new ShelteredScenarioDefBuilder()
                 .SetId(definition.Id)
                 .SetNameKey(!string.IsNullOrEmpty(definition.DisplayName) ? definition.DisplayName : definition.Id)

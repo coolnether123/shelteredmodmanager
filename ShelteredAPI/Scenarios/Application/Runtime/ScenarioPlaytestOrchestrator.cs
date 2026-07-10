@@ -4,6 +4,7 @@ using ModAPI.Scenarios;
 
 using ShelteredAPI.Content;
 using ShelteredAPI.Scenarios.Application.Authoring;
+using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Domain.Runtime;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
 namespace ShelteredAPI.Scenarios.Application.Runtime{
@@ -13,17 +14,20 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
         private readonly IScenarioPauseService _pauseService;
         private readonly ScenarioAuthorTestChecklistService _testChecklistService;
+        private readonly IVanillaScenarioRuntime _vanillaRuntime;
 
         public ScenarioPlaytestOrchestrator(
             IScenarioApplier applier,
             IScenarioRuntimeBindingService runtimeBindingService,
             IScenarioPauseService pauseService,
-            ScenarioAuthorTestChecklistService testChecklistService)
+            ScenarioAuthorTestChecklistService testChecklistService,
+            IVanillaScenarioRuntime vanillaRuntime)
         {
             _applier = applier;
             _runtimeBindingService = runtimeBindingService;
             _pauseService = pauseService;
             _testChecklistService = testChecklistService;
+            _vanillaRuntime = vanillaRuntime;
         }
 
         public ScenarioApplyResult BeginPlaytest(ScenarioEditorSession session, string scenarioFilePath)
@@ -89,6 +93,19 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 return result;
             }
 
+            // The scheduled runtime resolves authored end conditions through the
+            // vanilla scenario QuestInstance.  A playtest is not entered through
+            // the normal pending-scenario launch path, so create and bind that
+            // carrier here before applying the scheduled runtime.
+            string spawnReason;
+            if (!EnsureScenarioQuestInstance(session, out spawnReason))
+            {
+                ScenarioApplyResult spawnBlocked = new ScenarioApplyResult();
+                spawnBlocked.AddMessage("Playtest could not start because its scenario completion carrier could not be created. " + spawnReason);
+                MMLog.WriteWarning("[ScenarioPlaytestOrchestrator] Playtest blocked: " + spawnReason);
+                return spawnBlocked;
+            }
+
             if (!reusedLiveWorld)
             {
                 try
@@ -124,7 +141,6 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 result.AddMessage("Playtest resumed without reapplying scenario changes; the current live shelter already matches the authoring draft.");
             }
 
-            EnsureRuntimeBinding(session);
             session.PlaytestState = ScenarioPlaytestState.Playtesting;
             if (_testChecklistService != null)
                 _testChecklistService.MarkPlaytestStarted(session);
@@ -156,6 +172,57 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
                 DayCreated = GameTime.Day,
                 LastEditorSaveTick = Environment.TickCount
             });
+        }
+
+        private bool EnsureScenarioQuestInstance(ScenarioEditorSession session, out string reason)
+        {
+            reason = null;
+            if (_vanillaRuntime == null)
+            {
+                reason = "Vanilla scenario runtime is unavailable.";
+                return false;
+            }
+
+            ScenarioRuntimeBinding existingBinding = _runtimeBindingService.CurrentBinding;
+            if (existingBinding != null
+                && existingBinding.IsActive
+                && existingBinding.ScenarioQuestInstanceId.HasValue)
+            {
+                return true;
+            }
+
+            EnsureRuntimeBinding(session);
+            ScenarioDef scenarioDef;
+            try
+            {
+                scenarioDef = ScenarioDefinitionService.BuildScenarioDef(session.WorkingDefinition);
+            }
+            catch (Exception ex)
+            {
+                reason = "ScenarioDef build failed: " + ex.Message;
+                return false;
+            }
+
+            QuestInstance instance;
+            if (!_vanillaRuntime.TrySpawnScenario(scenarioDef, out instance, out reason) || instance == null)
+            {
+                if (string.IsNullOrEmpty(reason))
+                    reason = "QuestManager did not return a Scenario QuestInstance.";
+                return false;
+            }
+
+            ScenarioRuntimeBinding binding = _runtimeBindingService.CurrentBinding;
+            if (binding == null)
+            {
+                reason = "Scenario binding disappeared while the completion carrier was being created.";
+                return false;
+            }
+
+            binding.ScenarioQuestInstanceId = instance.id;
+            _runtimeBindingService.SetBinding(binding);
+            MMLog.WriteInfo("[ScenarioPlaytestOrchestrator] Bound playtest Scenario QuestInstance "
+                + instance.id.ToString() + " for '" + session.WorkingDefinition.Id + "'.");
+            return true;
         }
     }
 }

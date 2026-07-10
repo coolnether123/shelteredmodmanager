@@ -180,7 +180,8 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<IScenarioQuestInstanceResolver>(),
                     resolver.Get<IScenarioWinLossConditionAdapter>(),
                     resolver.Get<ScenarioConditionEvaluatorRegistry>(),
-                    resolver.Get<IVanillaScenarioRuntime>());
+                    resolver.Get<IVanillaScenarioRuntime>(),
+                    resolver.Get<ScenarioRuntimeExecutionLog>());
             });
             services.AddSingleton<IScenarioWinLossOutcomeService>(delegate(IServiceResolver resolver) { return resolver.Get<ScenarioWinLossOutcomeService>(); });
             services.AddSingleton(delegate(IServiceResolver resolver) { return new ScenarioDefinitionScheduledActionProvider(); });
