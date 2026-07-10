@@ -172,6 +172,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
 
                 RefreshDefinitionCatalogSafely();
                 CustomScenarioInfo[] scenarios = ShelteredCustomScenarioService.Instance.List();
+                state.ScenarioCount = scenarios.Length;
                 UIButton sourceButton = scenarioButtons[scenarioButtons.Count - 1];
                 if (sourceButton == null || sourceButton.gameObject == null)
                     return;

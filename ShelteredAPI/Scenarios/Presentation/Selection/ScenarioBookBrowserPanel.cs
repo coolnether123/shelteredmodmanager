@@ -715,7 +715,10 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
             }
 
-            Close();
+            // A successful launch starts the loading transition synchronously.  Do not
+            // reactivate the vanilla selection panel after that point: Unity may already
+            // be destroying it as part of the scene handoff.
+            Close(false);
         }
 
         private void RunBrowserAction(ScenarioBookLaunchAction action)
@@ -764,13 +767,19 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
         private void Close()
         {
+            Close(true);
+        }
+
+        private void Close(bool restoreUnderlyingPanel)
+        {
             if (_isClosing)
                 return;
 
             _isClosing = true;
             if (_dataSource != null)
                 _dataSource.CancelRefreshes();
-            RestoreUnderlyingPanel();
+            if (restoreUnderlyingPanel)
+                RestoreUnderlyingPanel();
             if (_renderer != null)
             {
                 _renderer.Dispose();
@@ -778,7 +787,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
 
             if (_instance != null)
+            {
+                // Destroy is deferred until Unity's end-of-frame cleanup.  Hide first
+                // so an immediate reopen cannot mistake this closing overlay for a
+                // live browser and return a contradictory visible:false envelope.
+                _instance.SetActive(false);
                 Destroy(_instance);
+            }
             _instance = null;
         }
 
@@ -811,7 +826,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 }
 
                 if (_adapter != null)
+                {
                     _adapter.SetInputEnabled(true);
+                    // OnDestroy can follow Close in the same frame.  Clearing this
+                    // reference makes restoration one-shot, avoiding SetActive while
+                    // the vanilla panel is being torn down during a launch transition.
+                    _adapter = null;
+                }
             }
             catch
             {
