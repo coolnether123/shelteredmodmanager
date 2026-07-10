@@ -3,6 +3,7 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
     internal static class ScenarioWorldEventRuntimeState
     {
         private static ScenarioDefinition _definition;
+        private static int _authoredRadioBroadcastDispatches;
 
         public static void Bind(ScenarioDefinition definition)
         {
@@ -37,6 +38,26 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
         public static bool SuppressRadioBroadcastOdds
         {
             get { return Suppression != null && Suppression.RadioBroadcastOdds; }
+        }
+
+        /// <summary>
+        /// Lets a scheduled authored radio event use the same vanilla broadcast
+        /// method as a survivor interaction while radio-odds suppression is active.
+        /// </summary>
+        public static bool IsDispatchingAuthoredRadioBroadcast
+        {
+            get { return _authoredRadioBroadcastDispatches > 0; }
+        }
+
+        public static void BeginAuthoredRadioBroadcastDispatch()
+        {
+            _authoredRadioBroadcastDispatches++;
+        }
+
+        public static void EndAuthoredRadioBroadcastDispatch()
+        {
+            if (_authoredRadioBroadcastDispatches > 0)
+                _authoredRadioBroadcastDispatches--;
         }
     }
 }
