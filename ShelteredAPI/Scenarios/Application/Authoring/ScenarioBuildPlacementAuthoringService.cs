@@ -893,6 +893,24 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
 
             UpdateGhostPosition(ScenarioGridSnapService.GetCellCenterWorldPosition(gridX, gridY));
+            // A semantic grid commit already names the exact grid cell.  Room
+            // candidates are advertised from IsRoomGridCellValid, but the
+            // vanilla ghost's screen-input OnTryPlacement check can reject the
+            // snapped center before FinishCraft_Room sees that same cell.  Use
+            // the shared structural predicate for this explicit room commit,
+            // then retain the normal room completion/FinishCraft/draft path.
+            if (_activePlacement.Kind == PlacementSessionKind.Room)
+            {
+                ShelterRoomGrid.GridCell roomCell = grid.GetCell(gridX, gridY);
+                if (!IsRoomGridCellValid(roomCell))
+                {
+                    message = "Rooms must sit on dirt next to an existing room.";
+                    return true;
+                }
+
+                return CompleteRoomPlacement(ScenarioEditorController.Instance.CurrentSession, _activePlacement.Ghost, out message);
+            }
+
             return TryCompletePlacement(ScenarioEditorController.Instance.CurrentSession, out message);
         }
 
