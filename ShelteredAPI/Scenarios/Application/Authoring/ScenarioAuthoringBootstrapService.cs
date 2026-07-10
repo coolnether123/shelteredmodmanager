@@ -27,6 +27,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
         private readonly ScenarioAuthoringMenuService _menuService;
         private readonly ScenarioAuthoringPresentationService _presentation;
         private readonly IScenarioEditorService _editorService;
+        private readonly IScenarioApplier _scenarioApplier;
         private readonly IScenarioSaveLibrary _saveLibrary;
         private readonly IScenarioRuntimeBindingService _runtimeBindingService;
         private readonly ScenarioAuthoringCaptureService _captureService;
@@ -51,6 +52,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             ScenarioAuthoringMenuService menuService,
             ScenarioAuthoringPresentationService presentation,
             IScenarioEditorService editorService,
+            IScenarioApplier scenarioApplier,
             IScenarioSaveLibrary saveLibrary,
             IScenarioRuntimeBindingService runtimeBindingService,
             ScenarioAuthoringCaptureService captureService,
@@ -62,6 +64,7 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             _menuService = menuService;
             _presentation = presentation;
             _editorService = editorService;
+            _scenarioApplier = scenarioApplier;
             _saveLibrary = saveLibrary;
             _runtimeBindingService = runtimeBindingService;
             _captureService = captureService;
@@ -565,6 +568,23 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 + (editorSession != null && editorSession.WorkingDefinition != null ? editorSession.WorkingDefinition.Id : "<null>") + ".");
             CaptureBaseDefaultFamilyIfRequested(pending, editorSession);
             AutoPopulateStartingCastIfRequested(pending, editorSession);
+            if (!pending.ReenterPlaytestAfterBootstrap
+                && editorSession != null
+                && editorSession.WorkingDefinition != null
+                && _scenarioApplier != null)
+            {
+                // The serializer restores the selected backend world into the editor model,
+                // but loading a base-mode save creates a fresh live shelter. Apply only after
+                // the target scene passed ScenarioWorldReady and its warmup so authored rooms
+                // and objects exist in the authoring world before the shell becomes interactive.
+                ScenarioApplyResult authoringApply = _scenarioApplier.ApplyAll(
+                    editorSession.WorkingDefinition,
+                    pending.ScenarioFilePath);
+                editorSession.MarkAppliedToCurrentWorld();
+                MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Materialized authored backend world for draft '"
+                    + pending.DraftId + "' in authoring bootstrap. BunkerChanges="
+                    + (authoringApply != null ? authoringApply.BunkerChanges : 0) + ".");
+            }
             ActivateScenarioBinding(pending);
             ClearLaunchRedirects(pending, "Authoring bootstrap completed.");
             bool worldLoadingShellOpen = string.Equals(_worldLoadingShellDraftId, pending.DraftId, StringComparison.Ordinal);

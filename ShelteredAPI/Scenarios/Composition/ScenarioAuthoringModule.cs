@@ -228,6 +228,7 @@ namespace ShelteredAPI.Scenarios.Composition{
                     resolver.Get<ScenarioAuthoringMenuService>(),
                     resolver.Get<ScenarioAuthoringPresentationService>(),
                     resolver.Get<IScenarioEditorService>(),
+                    resolver.Get<IScenarioApplier>(),
                     resolver.Get<IScenarioSaveLibrary>(),
                     resolver.Get<IScenarioRuntimeBindingService>(),
                     resolver.Get<ScenarioAuthoringCaptureService>(),
