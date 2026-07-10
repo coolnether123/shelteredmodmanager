@@ -16,9 +16,13 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
     internal static class ScenarioInventoryItemCatalog
     {
         private static readonly Dictionary<string, Sprite> SpriteCache = new Dictionary<string, Sprite>(StringComparer.OrdinalIgnoreCase);
+        private static List<ScenarioInventoryItemCatalogEntry> CachedEntries;
 
         public static List<ScenarioInventoryItemCatalogEntry> Build()
         {
+            if (CachedEntries != null)
+                return CachedEntries;
+
             List<ItemManager.ItemType> types = BuildDefinedTypes();
             List<ScenarioInventoryItemCatalogEntry> entries = new List<ScenarioInventoryItemCatalogEntry>();
             for (int i = 0; i < types.Count; i++)
@@ -35,7 +39,8 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Unity{
                     right != null ? right.DisplayName : null,
                     StringComparison.OrdinalIgnoreCase);
             });
-            return entries;
+            CachedEntries = entries;
+            return CachedEntries;
         }
 
         public static ScenarioInventoryItemCatalogEntry Resolve(string itemId)

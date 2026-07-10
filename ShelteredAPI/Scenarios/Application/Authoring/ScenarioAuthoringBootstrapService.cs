@@ -20,7 +20,7 @@ using ShelteredAPI.Scenarios.Presentation.Authoring.Shell;
 namespace ShelteredAPI.Scenarios.Application.Authoring{
     internal sealed class ScenarioAuthoringBootstrapService
     {
-        private const float DraftWarmupSeconds = 2f;
+        private const float DraftReadinessFloorSeconds = 0.5f;
         private readonly object _sync = new object();
         private readonly ScenarioAuthoringBackendService _backend;
         private readonly ScenarioAuthoringDraftRepository _draftRepository;
@@ -888,13 +888,13 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                 _warmupDraftId = pending.DraftId;
                 _warmupElapsedSeconds = 0f;
                 if (_backend != null)
-                    _backend.SetWorldLoadingStatus("Loading game — shelter ready, letting the first moments settle.");
+                    _backend.SetWorldLoadingStatus("Loading game — shelter ready, completing a brief readiness floor.");
                 if (_entryFlowService != null)
-                    _entryFlowService.SetLoadingStatus("Status: world ready - letting the shelter settle before opening tools.");
+                    _entryFlowService.SetLoadingStatus("Status: world ready - confirming readiness before opening tools.");
                 MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId
-                    + "' world is ready. Letting the shelter run for "
-                    + DraftWarmupSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
-                    + " seconds before authoring pause.");
+                    + "' world readiness signals are satisfied. Allowing a minimum "
+                    + DraftReadinessFloorSeconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                    + " seconds of simulation before the final readiness check and authoring pause.");
             }
 
             float warmupDelta = Time.deltaTime;
@@ -903,13 +903,34 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             if (warmupDelta > 0f)
                 _warmupElapsedSeconds += warmupDelta;
 
-            if (_warmupElapsedSeconds < DraftWarmupSeconds)
+            if (_warmupElapsedSeconds < DraftReadinessFloorSeconds)
                 return false;
 
+            // ScenarioWorldReady covers the scene transition plus the vanilla managers that
+            // authoring immediately reads or mutates (map, grid, family, inventory, objects,
+            // quests, interaction, and UI). Re-evaluate after the short multi-frame floor so
+            // a readiness regression cannot be hidden by the elapsed-time gate.
+            string blockingReason;
+            if (!ScenarioWorldReady.Evaluate(out blockingReason))
+            {
+                if (!string.Equals(_lastPendingBlockingReason, blockingReason, StringComparison.Ordinal))
+                {
+                    _lastPendingBlockingReason = blockingReason;
+                    if (_backend != null)
+                        _backend.SetWorldLoadingStatus("Loading game — " + blockingReason);
+                    if (_entryFlowService != null)
+                        _entryFlowService.SetLoadingStatus("Status: world readiness changed - " + blockingReason);
+                    MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId
+                        + "' readiness changed during the brief simulation floor. Reason=" + blockingReason + ".");
+                }
+
+                return false;
+            }
+
             MMLog.WriteInfo("[ScenarioAuthoringBootstrap] Draft '" + pending.DraftId
-                + "' warmup completed after "
+                + "' readiness-based warmup completed after "
                 + _warmupElapsedSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)
-                + " seconds of running simulation. Loading editor session.");
+                + " seconds of running simulation with all world-readiness signals satisfied. Loading editor session.");
             return true;
         }
 
