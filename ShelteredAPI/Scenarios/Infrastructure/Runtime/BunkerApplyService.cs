@@ -6,6 +6,7 @@ using ModAPI.Core;
 using ModAPI.Scenarios;
 using UnityEngine;
 using ShelteredAPI.Content;
+using ShelteredAPI.Scenarios.Application.Authoring;
 using ShelteredAPI.Scenarios.Application.Runtime;
 using ShelteredAPI.Scenarios.Definitions;
 using ShelteredAPI.Scenarios.Infrastructure.Unity;
@@ -221,6 +222,29 @@ namespace ShelteredAPI.Scenarios.Infrastructure.Runtime{
             {
                 AddBunkerMessage(result, "Object placement #" + index + " skipped because ObjectManager has no prefab for " + objectType + ".");
                 return null;
+            }
+
+            // Authoring uses a real vanilla placement to give the author immediate
+            // feedback.  That object is consequently present when its backing save
+            // is loaded again.  Adopt it instead of replaying the same record: a
+            // replay here used to create a second, overlapping object after a mode
+            // round-trip.
+            Obj_Base persisted = ScenarioObjectPlacementRuntimeBinding.FindExistingWorldObject(manager, placement);
+            if (persisted != null)
+            {
+                ScenarioObjectPlacementRuntimeBinding.Attach(persisted.gameObject, placement, persisted, index);
+                if (forceMaterialize)
+                {
+                    persisted.EnableObject();
+                    persisted.selectable = true;
+                    persisted.gameObject.SetActive(true);
+                }
+                else
+                {
+                    ScenarioObjectStartStateApplyService.ApplyToObject(persisted, placement, result);
+                }
+                AddBunkerMessage(result, "Object placement #" + index + " adopted persisted " + objectType + " instead of spawning a duplicate.");
+                return persisted;
             }
 
             int level = ScenarioPropertyBag.GetInt(placement.CustomProperties, "level", 1);
