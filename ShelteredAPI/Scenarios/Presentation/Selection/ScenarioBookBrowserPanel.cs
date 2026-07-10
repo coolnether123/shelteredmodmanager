@@ -36,6 +36,8 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
         private bool _deletePromptActive;
         private List<Collider> _deletePromptDisabledColliders;
         private ScenarioBrowserPanelAdapter.ScenarioBrowserSuppressionHandle _underlyingSuppression;
+        private ScenarioBookDraftFactsModel _draftFactsCache;
+        private ScenarioCatalogEntry _draftFactsCacheScenario;
 
         private IScenarioSelectionCatalogService Catalog
         {
@@ -282,7 +284,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                         RunLaunchAction(delegate(out string status) { return _actions.CreateDraftInteractive(out status); });
                         break;
                     case ScenarioBookRowKind.DuplicateDraft:
-                        RunBrowserAction(delegate(out string status) { ModAPI.Scenarios.ScenarioInfo duplicate; return _actions.DuplicateDraft(row.Scenario, out duplicate, out status); });
+                        HandleDuplicateSelected(row);
                         break;
                     case ScenarioBookRowKind.DeleteDraft:
                         HandleDeleteSelected(row);
@@ -314,15 +316,114 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             if (row == null || (row.Kind == ScenarioBookRowKind.LoadSave && (row.Scenario == null || row.Save == null)))
                 return;
 
+            string message;
+            bool localize;
+            if (row.Kind == ScenarioBookRowKind.DeleteDraft)
+            {
+                ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(row.Scenario);
+                string draftName = row.Scenario != null ? Safe(row.Scenario.DisplayName, row.Scenario.ScenarioId) : "this draft";
+                message = ScenarioBookDraftFacts.BuildDeleteMessage(draftName, facts);
+                localize = false;
+            }
+            else
+            {
+                message = "Text.UI.DeleteSave";
+                localize = true;
+            }
+
+            BeginConfirmation(message, localize, delegate
+            {
+                string status = null;
+                bool deleted = false;
+                try
+                {
+                    if (row.Kind == ScenarioBookRowKind.DeleteDraft)
+                        deleted = _actions.DeleteDraft(row.Scenario, out status);
+                    else
+                        deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
+                }
+                catch (Exception ex)
+                {
+                    status = "Delete failed: " + ex.Message;
+                    MMLog.WriteWarning("[ScenarioBookBrowser] Delete action threw: " + ex.Message);
+                }
+
+                SetStatus(status);
+                if (deleted)
+                    StartDataRefresh("Refreshing scenarios...");
+            });
+        }
+
+        private void HandleDuplicateSelected(ScenarioBookRowModel row)
+        {
+            if (_deletePromptActive || row == null || row.Scenario == null)
+                return;
+
+            ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(row.Scenario);
+            string draftName = Safe(row.Scenario.DisplayName, row.Scenario.ScenarioId);
+            BeginConfirmation(ScenarioBookDraftFacts.BuildDuplicateMessage(draftName, facts), false, delegate
+            {
+                string status = null;
+                bool changed = false;
+                try
+                {
+                    ModAPI.Scenarios.ScenarioInfo duplicate;
+                    changed = _actions.DuplicateDraft(row.Scenario, out duplicate, out status);
+                }
+                catch (Exception ex)
+                {
+                    status = "Duplicate failed: " + ex.Message;
+                    MMLog.WriteWarning("[ScenarioBookBrowser] Duplicate action threw: " + ex.Message);
+                }
+
+                SetStatus(status);
+                if (changed)
+                    StartDataRefresh("Refreshing scenarios...");
+            });
+        }
+
+        private void HandleRecoveryCleanupSelected(ScenarioBookRowModel row)
+        {
+            if (_deletePromptActive || row == null)
+                return;
+
+            BeginConfirmation("Clear this leftover redirect?\nNo save or draft files are deleted.", false, delegate
+            {
+                string status = null;
+                bool cleared = false;
+                try
+                {
+                    cleared = _actions.CleanupRecovery(row, out status);
+                }
+                catch (Exception ex)
+                {
+                    status = "Recovery cleanup failed: " + ex.Message;
+                    MMLog.WriteWarning("[ScenarioBookBrowser] Recovery cleanup action threw: " + ex.Message);
+                }
+
+                SetStatus(status);
+                if (cleared)
+                    StartDataRefresh("Refreshing scenarios...");
+            });
+        }
+
+        // Shared two-step confirmation used by delete, duplicate, and rename so every
+        // destructive/identity change goes through the same input-guard and
+        // click-release protection.
+        private void BeginConfirmation(string message, bool localize, Action onConfirmed)
+        {
+            if (_deletePromptActive)
+                return;
+
             _deletePromptActive = true;
             DisableBrowserCollidersForDeletePrompt();
             UIFlowGuard.BlockSlotClicksForFrames(2);
             try
             {
-                MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "Text.UI.DeleteSave", new MessageBoxResponse(delegate(int response)
+                MessageBox.Show(MessageBoxButtons.YesNo_Buttons, message, new MessageBoxResponse(delegate(int response)
                 {
-                    StartCoroutine(ResolveDeletePromptAfterClickRelease(row, response));
-                }));
+                    StartCoroutine(ResolveConfirmationAfterClickRelease(onConfirmed, response));
+                }), null, null, localize);
             }
             catch
             {
@@ -331,7 +432,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             }
         }
 
-        private IEnumerator ResolveDeletePromptAfterClickRelease(ScenarioBookRowModel row, int response)
+        private IEnumerator ResolveConfirmationAfterClickRelease(Action onConfirmed, int response)
         {
             UIFlowGuard.BlockSlotClicksToggle(true);
             UIFlowGuard.BlockSlotClicksForFrames(2);
@@ -346,34 +447,13 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
 
             try
             {
-                if (response == 1)
-                {
-                    string status = null;
-                    bool deleted = false;
-                    try
-                    {
-                        if (row.Kind == ScenarioBookRowKind.DeleteDraft)
-                            deleted = _actions.DeleteDraft(row.Scenario, out status);
-                        else
-                            deleted = _actions.DeleteSave(row.Scenario, row.Save, out status);
-                    }
-                    catch (Exception ex)
-                    {
-                        status = "Delete failed: " + ex.Message;
-                        MMLog.WriteWarning("[ScenarioBookBrowser] Delete action threw: " + ex.Message);
-                    }
-
-                    SetStatus(status);
-                    if (deleted)
-                    {
-                        StartDataRefresh("Refreshing scenarios...");
-                    }
-                }
+                if (response == 1 && onConfirmed != null)
+                    onConfirmed();
             }
             catch (Exception ex)
             {
-                SetStatus("Delete failed: " + ex.Message);
-                MMLog.WriteWarning("[ScenarioBookBrowser] Delete prompt resolution failed: " + ex.Message);
+                SetStatus("Action failed: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioBookBrowser] Confirmation resolution failed: " + ex.Message);
             }
 
             yield return null;
@@ -388,73 +468,23 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
             _deletePromptActive = false;
         }
 
-        private void HandleRecoveryCleanupSelected(ScenarioBookRowModel row)
+        private ScenarioBookDraftFactsModel ResolveDraftFactsFor(ScenarioCatalogEntry scenario)
         {
-            if (_deletePromptActive || row == null)
-                return;
+            if (scenario == null)
+                return null;
 
-            _deletePromptActive = true;
-            DisableBrowserCollidersForDeletePrompt();
-            UIFlowGuard.BlockSlotClicksForFrames(2);
-            try
-            {
-                MessageBox.Show(MessageBoxButtons.YesNo_Buttons, "Text.UI.DeleteSave", new MessageBoxResponse(delegate(int response)
-                {
-                    StartCoroutine(ResolveRecoveryCleanupPromptAfterClickRelease(row, response));
-                }));
-            }
-            catch
-            {
-                ReleaseDeletePromptGuard();
-                throw;
-            }
-        }
-
-        private IEnumerator ResolveRecoveryCleanupPromptAfterClickRelease(ScenarioBookRowModel row, int response)
-        {
-            UIFlowGuard.BlockSlotClicksToggle(true);
-            UIFlowGuard.BlockSlotClicksForFrames(2);
-
-            yield return null;
-            while (UnityEngine.Input.GetMouseButton(0)
-                || UnityEngine.Input.GetMouseButton(1)
-                || UnityEngine.Input.GetMouseButton(2))
-            {
-                yield return null;
-            }
+            if (_draftFactsCache != null && ReferenceEquals(_draftFactsCacheScenario, scenario))
+                return _draftFactsCache;
 
             try
             {
-                if (response == 1)
-                {
-                    string status = null;
-                    bool cleared = false;
-                    try
-                    {
-                        cleared = _actions.CleanupRecovery(row, out status);
-                    }
-                    catch (Exception ex)
-                    {
-                        status = "Recovery cleanup failed: " + ex.Message;
-                        MMLog.WriteWarning("[ScenarioBookBrowser] Recovery cleanup action threw: " + ex.Message);
-                    }
-
-                    SetStatus(status);
-                    if (cleared)
-                    {
-                        StartDataRefresh("Refreshing scenarios...");
-                    }
-                }
+                return ScenarioBookDraftFacts.BuildDetailFacts(scenario);
             }
             catch (Exception ex)
             {
-                SetStatus("Recovery cleanup failed: " + ex.Message);
-                MMLog.WriteWarning("[ScenarioBookBrowser] Recovery cleanup prompt resolution failed: " + ex.Message);
+                MMLog.WriteWarning("[ScenarioBookBrowser] Draft facts resolution failed: " + ex.Message);
+                return null;
             }
-
-            yield return null;
-            UIFlowGuard.BlockSlotClicksForFrames(1);
-            ReleaseDeletePromptGuard();
         }
 
         private void DisableBrowserCollidersForDeletePrompt()
@@ -528,6 +558,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 return;
 
             _selectedScenario = scenario;
+            InvalidateDraftFactsCache();
             _view = scenario.Source == ScenarioCatalogSource.Draft
                 ? ScenarioBookBrowserViewKind.DraftDetails
                 : ScenarioBookBrowserViewKind.Saves;
@@ -552,11 +583,57 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 Scenario = _selectedScenario,
                 DraftId = _selectedScenario != null ? Safe(_selectedScenario.ScenarioId, string.Empty) : string.Empty,
                 DisplayName = _selectedScenario != null ? Safe(_selectedScenario.DisplayName, _selectedScenario.ScenarioId) : string.Empty,
-                Description = _selectedScenario != null ? (_selectedScenario.Description ?? string.Empty) : string.Empty
+                Description = _selectedScenario != null ? (_selectedScenario.Description ?? string.Empty) : string.Empty,
+                Facts = GetSelectedDraftFacts()
             };
         }
 
+        // Detail-pane facts (validation, export, recovery) are computed lazily for the
+        // one selected draft and cached so background catalog refreshes do not re-run
+        // validation on every re-render.
+        private ScenarioBookDraftFactsModel GetSelectedDraftFacts()
+        {
+            if (_selectedScenario == null)
+                return null;
+
+            if (_draftFactsCache != null && ReferenceEquals(_draftFactsCacheScenario, _selectedScenario))
+                return _draftFactsCache;
+
+            _draftFactsCache = ScenarioBookDraftFacts.BuildDetailFacts(_selectedScenario);
+            _draftFactsCacheScenario = _selectedScenario;
+            return _draftFactsCache;
+        }
+
+        private void InvalidateDraftFactsCache()
+        {
+            _draftFactsCache = null;
+            _draftFactsCacheScenario = null;
+        }
+
         private void HandleDraftDetailsSaved(ScenarioBookDraftEditorModel model)
+        {
+            if (model == null)
+                return;
+
+            bool isRename = _selectedScenario != null
+                && !string.IsNullOrEmpty(model.DraftId)
+                && !string.Equals(model.DraftId, _selectedScenario.ScenarioId, StringComparison.OrdinalIgnoreCase);
+
+            if (isRename)
+            {
+                ScenarioBookDraftFactsModel facts = ResolveDraftFactsFor(_selectedScenario);
+                string draftName = Safe(_selectedScenario.DisplayName, _selectedScenario.ScenarioId);
+                BeginConfirmation(ScenarioBookDraftFacts.BuildRenameMessage(draftName, model.DraftId, facts), false, delegate
+                {
+                    ApplyDraftDetailsSaved(model);
+                });
+                return;
+            }
+
+            ApplyDraftDetailsSaved(model);
+        }
+
+        private void ApplyDraftDetailsSaved(ScenarioBookDraftEditorModel model)
         {
             if (model == null)
                 return;
@@ -578,6 +655,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 _selectedScenario.OwnerModId = updatedInfo.OwnerModId;
             }
 
+            InvalidateDraftFactsCache();
             StartDataRefresh("Refreshing draft details...");
             ClearPreparedPages();
             SetStatus(status);

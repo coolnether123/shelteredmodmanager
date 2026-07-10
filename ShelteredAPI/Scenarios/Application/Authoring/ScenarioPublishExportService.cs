@@ -156,6 +156,32 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             }
         }
 
+        // Reports whether a validated export folder already exists for a draft identity,
+        // reusing the same export-path convention as ExportActiveDraft so the scenario
+        // book can surface "last export" facts without an active editor session.
+        internal static bool TryGetExistingExportInfo(string scenarioId, string displayName, out string exportRoot, out DateTime lastWriteUtc)
+        {
+            exportRoot = null;
+            lastWriteUtc = DateTime.MinValue;
+            try
+            {
+                string modRoot = ResolveExportModRoot();
+                string scenarioFolder = BuildSafeFolderName(!string.IsNullOrEmpty(scenarioId) ? scenarioId : displayName);
+                exportRoot = Path.Combine(Path.Combine(modRoot, ExportRootFolder), scenarioFolder);
+                string exportFilePath = Path.Combine(exportRoot, ScenarioDefinitionSerializer.DefaultFileName);
+                if (File.Exists(exportFilePath))
+                {
+                    lastWriteUtc = File.GetLastWriteTimeUtc(exportFilePath);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
         private static string ResolveExportRoot(ScenarioDefinition definition)
         {
             string modRoot = ResolveExportModRoot();

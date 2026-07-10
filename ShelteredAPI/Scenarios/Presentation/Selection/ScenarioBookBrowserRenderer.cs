@@ -768,11 +768,7 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 new Vector3(LeftPageX, -126f, 0f), DraftInputWidth, 190,
                 model != null ? model.Description : string.Empty, true);
 
-            UILabel detail = _ui.CreateLabel(root, "DraftDetail", "Local draft metadata is written back to scenario.xml.",
-                new Vector3(300f, 118f, 0f), 16, _chrome.Palette.InkFaded,
-                RightPageWidth - 28, 70, NGUIText.Alignment.Center, UIWidget.Pivot.Center, _ui.NextDepth());
-            detail.multiLine = true;
-            detail.overflowMethod = UILabel.Overflow.ShrinkContent;
+            BuildDraftFacts(root, model != null ? model.Facts : null);
 
             _chrome.Buttons.Build(root, "SaveDraftDetails", "Save Details",
                 new Vector3(300f, 30f, 0f), 178, 44, 17, delegate
@@ -788,6 +784,42 @@ namespace ShelteredAPI.Scenarios.Presentation.Selection{
                 });
 
             return root;
+        }
+
+        private void BuildDraftFacts(GameObject root, ScenarioBookDraftFactsModel facts)
+        {
+            _ui.CreateLabel(root, "DraftFactsHeading", "Draft status",
+                new Vector3(96f, 168f, 0f), 17, _chrome.Palette.Ink,
+                RightPageWidth - 20, 24, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+
+            float y = 140f;
+            BuildDraftFactLine(root, "BaseMode", "Base mode: " + FactValue(facts != null ? facts.BaseModeLabel : null, "Standard"), y); y -= 22f;
+            BuildDraftFactLine(root, "Edited", "Last edited: " + FactValue(facts != null ? facts.LastEditedText : null, "unknown"), y); y -= 22f;
+            BuildDraftFactLine(root, "Validation", "Validation: " + FactValue(facts != null ? facts.ValidationSummary : null, "Not checked"), y); y -= 22f;
+            BuildDraftFactLine(root, "Export", "Last export: " + (facts != null && facts.HasExport ? FactValue(facts.LastExportText, "exported") : "none yet"), y); y -= 22f;
+            BuildDraftFactLine(root, "Recovery", "Recovery data: " + BuildRecoveryValue(facts), y);
+        }
+
+        private void BuildDraftFactLine(GameObject root, string key, string text, float y)
+        {
+            UILabel line = _ui.CreateLabel(root, "DraftFact_" + key, text,
+                new Vector3(96f, y, 0f), 15, _chrome.Palette.InkFaded,
+                RightPageWidth - 12, 22, NGUIText.Alignment.Left, UIWidget.Pivot.Left, _ui.NextDepth());
+            line.overflowMethod = UILabel.Overflow.ShrinkContent;
+        }
+
+        private static string BuildRecoveryValue(ScenarioBookDraftFactsModel facts)
+        {
+            if (facts == null)
+                return "none";
+            if (facts.HasRecoveryData)
+                return "unsaved autosave present";
+            return facts.HasHistory ? "history saved" : "none";
+        }
+
+        private static string FactValue(string value, string fallback)
+        {
+            return string.IsNullOrEmpty(value) ? fallback : value;
         }
 
         private UIInput CreateTextInput(GameObject parent, string name, Vector3 localPosition, int width, int height, string value, bool multiLine)
