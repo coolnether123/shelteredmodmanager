@@ -436,20 +436,38 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
                             continue;
 
                         int slot = TryParseSlotNumber(files[i]);
-                        bool saveDeleted = false;
+                        // A draft has two owned persistence surfaces: the authoring
+                        // definition folder and its reserved virtual save slot.  Do
+                        // not let a stale save entry select an arbitrary directory.
+                        // The scenario definition above is the authority for both
+                        // the draft id and slot before either surface is mutated.
+                        bool saveDeleted = true;
                         if (slot > 0)
                         {
                             string saveId = DraftStorageScenarioId + "_" + slot;
-                            saveDeleted = _saveLibrary.Delete(DraftStorageScenarioId, saveId);
+                            SaveEntry saveEntry = _saveLibrary.Get(DraftStorageScenarioId, saveId);
+                            if (saveEntry != null)
+                            {
+                                if (saveEntry.absoluteSlot != slot
+                                    || !string.Equals(saveEntry.scenarioId, DraftStorageScenarioId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused to delete mismatched virtual save for draft '"
+                                        + draftId + "'. expectedSlot=" + slot + " actualSlot=" + saveEntry.absoluteSlot
+                                        + " actualScenarioId=" + (saveEntry.scenarioId ?? string.Empty) + ".");
+                                    return false;
+                                }
+
+                                saveDeleted = _saveLibrary.Delete(DraftStorageScenarioId, saveId);
+                            }
                         }
 
                         string draftRoot = Path.GetDirectoryName(files[i]);
                         ScenarioDefinitionMetadataCache.InvalidateUnder(draftRoot);
-                        bool draftDeleted = DeleteDraftDirectory(draftRoot);
+                        bool draftDeleted = DeleteDraftDirectory(GetDraftsRootPath(), draftRoot);
                         MMLog.WriteInfo("[ScenarioAuthoringDraftRepository] Deleted pending draft '" + draftId + "'. slot=" + slot
                             + " saveDeleted=" + saveDeleted + " draftDeleted=" + draftDeleted
                             + " reason=" + (reason ?? "unspecified") + ".");
-                        return saveDeleted || draftDeleted;
+                        return saveDeleted && draftDeleted;
                     }
                     catch (Exception ex)
                     {
@@ -685,32 +703,54 @@ namespace ShelteredAPI.Scenarios.Application.Authoring{
             return path;
         }
 
-        private static bool DeleteDraftDirectory(string draftRoot)
+        // This is also used by ScenarioFrameworkVerification.  It accepts the
+        // drafts root explicitly so the fixture can prove that a deleted draft is
+        // absent from a fresh on-disk catalog scan without relying on Unity paths.
+        internal static bool DeleteDraftDirectory(string draftsRoot, string draftRoot)
         {
             if (string.IsNullOrEmpty(draftRoot) || !Directory.Exists(draftRoot))
                 return false;
 
             try
             {
-                string parent = Path.GetDirectoryName(draftRoot);
-                if (string.IsNullOrEmpty(parent))
+                string root = Path.GetFullPath(draftsRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string source = Path.GetFullPath(draftRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                string parent = Path.GetDirectoryName(source);
+                string name = Path.GetFileName(source);
+                int slot;
+                if (string.IsNullOrEmpty(parent)
+                    || !string.Equals(parent, root, StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrEmpty(name)
+                    || !name.StartsWith("Slot_", StringComparison.OrdinalIgnoreCase)
+                    || !int.TryParse(name.Substring(5), out slot)
+                    || slot <= 0)
+                {
+                    MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Refused unsafe draft-directory delete. root='"
+                        + (draftsRoot ?? string.Empty) + "' draftRoot='" + (draftRoot ?? string.Empty) + "'.");
                     return false;
+                }
 
-                string trashRoot = Path.Combine(parent, "_trash");
+                // A same-volume move is the recovery boundary: a crash can leave a
+                // quarantined draft, but it cannot leave a catalog-visible partial
+                // slot.  We then purge the quarantine copy so confirmed deletion
+                // does not accumulate scenario.xml, backups, or history files.
+                string trashRoot = Path.Combine(root, "_trash");
                 if (!Directory.Exists(trashRoot))
                     Directory.CreateDirectory(trashRoot);
 
-                string name = Path.GetFileName(draftRoot) + "_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-                string deletedPath = Path.Combine(trashRoot, name);
+                string quarantineName = name + "_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+                string deletedPath = Path.Combine(trashRoot, quarantineName);
                 while (Directory.Exists(deletedPath))
-                    deletedPath = Path.Combine(trashRoot, name + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
+                    deletedPath = Path.Combine(trashRoot, quarantineName + "_" + Guid.NewGuid().ToString("N").Substring(0, 6));
 
-                Directory.Move(draftRoot, deletedPath);
+                Directory.Move(source, deletedPath);
+                Directory.Delete(deletedPath, true);
                 return true;
             }
             catch (Exception ex)
             {
-                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to quarantine draft directory '" + draftRoot + "': " + ex.Message);
+                MMLog.WriteWarning("[ScenarioAuthoringDraftRepository] Failed to durably delete draft directory '" + draftRoot
+                    + "'. Any moved copy remains quarantined and is not catalog-visible: " + ex.Message);
                 return false;
             }
         }
