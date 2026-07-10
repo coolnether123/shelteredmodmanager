@@ -154,17 +154,6 @@ namespace ShelteredAPI.Scenarios.Presentation.Authoring.Shell{
                 true,
                 false,
                 "HP")));
-            ScenarioAuthoringInspectorItem pathItem = Item.Property("Draft Path", !string.IsNullOrEmpty(draftPath) ? draftPath : "No draft file is active.");
-            pathItem.HoverHint = draftPath;
-            items.Add(pathItem);
-            items.Add(Item.ActionItem(Item.Action(
-                ScenarioAuthoringActionIds.ActionDraftCopyPath,
-                "Copy Path",
-                !string.IsNullOrEmpty(draftPath) ? "Copy the full draft path to the clipboard." : "No draft path is active.",
-                !string.IsNullOrEmpty(draftPath),
-                false,
-                "CP",
-                draftPath)));
             return items.ToArray();
         }
 
