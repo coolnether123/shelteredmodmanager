@@ -51,6 +51,7 @@ namespace Manager
         // State
         private AppSettings _settings;
         private Timer _restartPollTimer;
+        private Timer _nexusProtocolPollTimer;
         private Panel headerPanel;
         private GameSetupTab _gameSetupTab;
         private bool _windowPlacementInitialized;
@@ -59,6 +60,7 @@ namespace Manager
         private bool _startupNexusUpdateAnnouncementsPending = true;
         private int _nexusAccountRequestToken;
         private string _startupPreviousInstalledModApiVersion;
+        private readonly string _startupNexusLink;
         private const string APP_VERSION = AppVersionInfo.Display;
         private static readonly System.Collections.Generic.Dictionary<string, string> KnownModIdMigrations =
             new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -69,7 +71,13 @@ namespace Manager
             };
 
         public MainForm()
+            : this(null)
         {
+        }
+
+        public MainForm(string startupNexusLink)
+        {
+            _startupNexusLink = startupNexusLink;
             InitializeServices();
             InitializeComponent();
             InitializeCustomResources();
@@ -600,8 +608,40 @@ namespace Manager
 
             // Start restart poll timer
             StartRestartPollTimer();
+            StartNexusProtocolPolling();
 
             BeginInvoke((MethodInvoker)ShowReleaseNoticeIfNeeded);
+            if (!string.IsNullOrEmpty(_startupNexusLink))
+                BeginInvoke((MethodInvoker)delegate { HandleNexusProtocolLink(_startupNexusLink); });
+        }
+
+        private void StartNexusProtocolPolling()
+        {
+            if (_nexusProtocolPollTimer != null)
+                return;
+
+            _nexusProtocolPollTimer = new Timer();
+            _nexusProtocolPollTimer.Interval = 750;
+            _nexusProtocolPollTimer.Tick += delegate
+            {
+                IList<string> links = NexusProtocolHandlerService.DequeuePendingLinks();
+                for (int i = 0; i < links.Count; i++)
+                    HandleNexusProtocolLink(links[i]);
+            };
+            _nexusProtocolPollTimer.Start();
+        }
+
+        private void HandleNexusProtocolLink(string rawLink)
+        {
+            if (_nexusTab == null)
+                return;
+
+            if (_tabControl != null && _nexusPage != null)
+                _tabControl.SelectedTab = _nexusPage;
+            if (WindowState == FormWindowState.Minimized)
+                WindowState = FormWindowState.Normal;
+            Activate();
+            _nexusTab.HandleNxmLinkAsync(rawLink);
         }
 
         private void ShowReleaseNoticeIfNeeded()
@@ -695,6 +735,13 @@ namespace Manager
                 _restartPollTimer.Stop();
                 _restartPollTimer.Dispose();
             }
+            if (_nexusProtocolPollTimer != null)
+            {
+                _nexusProtocolPollTimer.Stop();
+                _nexusProtocolPollTimer.Dispose();
+                _nexusProtocolPollTimer = null;
+            }
+            NexusProtocolHandlerService.RestorePreviousHandler();
         }
 
         private void TabControl_SelectedIndexChanged(object sender, EventArgs e)

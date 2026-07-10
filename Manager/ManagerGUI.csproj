@@ -108,6 +108,7 @@
     <Compile Include="Core\Models\NexusRemoteMod.cs" />
     <Compile Include="Core\Models\NexusRemoteModFile.cs" />
     <Compile Include="Core\Models\NexusAccountStatus.cs" />
+    <Compile Include="Core\Models\NexusNxmLink.cs" />
     <Compile Include="Core\Models\NexusUploadDraft.cs" />
     <!-- Core Services -->
     <Compile Include="Core\Security\NexusApiKeyProtector.cs" />
@@ -123,6 +124,7 @@
     <Compile Include="Core\Services\NexusReleaseClassifier.cs" />
     <Compile Include="Core\Services\NexusVersionComparer.cs" />
     <Compile Include="Core\Services\NexusRequestHeaders.cs" />
+    <Compile Include="Core\Services\NexusProtocolHandlerService.cs" />
     <Compile Include="Core\Services\NexusModsService.cs" />
     <Compile Include="Core\Services\NexusUploadDraftService.cs" />
     <Compile Include="Core\Services\NexusUploadOwnershipService.cs" />

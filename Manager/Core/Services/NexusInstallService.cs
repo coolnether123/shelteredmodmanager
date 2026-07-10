@@ -217,7 +217,10 @@ namespace Manager.Core.Services
             {
                 if (Directory.Exists(targetPath))
                 {
-                    var backupRoot = Path.Combine(binRoot, "_smm_backup");
+                    // Directory.Move is atomic only within one volume. Keep the
+                    // rollback copy beside the configured mods so a Manager on
+                    // another drive can still update the game safely.
+                    var backupRoot = Path.Combine(modsPath, "_smm_backup");
                     if (!Directory.Exists(backupRoot))
                         Directory.CreateDirectory(backupRoot);
 
