@@ -92,6 +92,7 @@ namespace ShelteredAPI.Scenarios.Lifecycle{
             }
 
             _stateManager.SetCustomScenarioState(CustomScenarioState.None(), "custom-scenario", "State cleared.");
+            ModRandomBridge.SetScenarioFixedSeedActive(false);
             if (hadState)
                 _events.RaiseCleared(previousInfo);
         }

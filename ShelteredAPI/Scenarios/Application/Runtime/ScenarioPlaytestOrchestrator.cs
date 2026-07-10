@@ -145,6 +145,7 @@ namespace ShelteredAPI.Scenarios.Application.Runtime{
 
         public void EndPlaytest(ScenarioEditorSession session)
         {
+            ModRandomBridge.SetScenarioFixedSeedActive(false);
             _pauseService.EnsurePaused("Scenario authoring active.");
             if (session != null)
             {
